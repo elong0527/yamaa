@@ -1540,8 +1540,10 @@ fn public_root_result_refuses_limited_or_contradictory_whole_attempts_before_out
     assert!(matches!(
         producer_result::prepare_classified(&attempt, report_id(), 1, &[]),
         Err(producer_result::Error::Report(ProjectionError::Report(
-            Error::OutputLimit
-        )))
+            Error::ResourceLimit(refusal)
+        ))) if refusal.resource == "report_retained_bytes"
+            && refusal.limit == 6
+            && refusal.actual.is_some_and(|actual| actual > refusal.limit)
     ));
     attempt.graph.nodes.swap(0, 1);
     assert!(matches!(
@@ -1745,8 +1747,10 @@ fn classified_graph_reports_keep_actual_host_causes_and_authored_origins_without
         assert!(matches!(
             attempt_report_classified(&attempt, report_id(), 1, &facts),
             Err(ProjectionError::Report(
-                yamaa_adapters::specification_report::Error::OutputLimit
-            ))
+                yamaa_adapters::specification_report::Error::ResourceLimit(refusal)
+            )) if refusal.resource == "report_retained_bytes"
+                && refusal.limit == 6
+                && refusal.actual.is_some_and(|actual| actual > refusal.limit)
         ));
     }
 }
@@ -2120,14 +2124,22 @@ fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier
     assert!(!first.accepted());
     assert_eq!(first.graph.nodes.len(), 1);
     assert!(matches!(
-        first.graph.nodes[0].output,
-        Err(CompleteError::Report(Error::OutputLimit))
+        &first.graph.nodes[0].output,
+        Err(CompleteError::Report(Error::ResourceLimit(refusal)))
+            if refusal.resource == "report_retained_bytes" && refusal.limit == 6
     ));
     assert_eq!(activation.trace.len(), 6);
-    assert_eq!(
-        attempt_report(&first, report_id(), 16_777_216).unwrap()["error"]["code"],
-        "output_limit"
-    );
+    let report = attempt_report(&first, report_id(), 16_777_216).unwrap();
+    assert_eq!(report["error"]["stage"], "report");
+    assert_eq!(report["error"]["code"], "output_limit");
+    assert!(report["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|finding| {
+            finding["context"]["resource"] == "report_retained_bytes"
+                && finding["context"]["limit"] == 6
+        }));
     limits.engine.report_bytes = 8192;
     let later = build.build_reported(&mut activation, report_id(), limits);
     assert!(!later.accepted());
@@ -2141,8 +2153,9 @@ fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier
         .artifact()
         .is_some());
     assert!(matches!(
-        later.graph.nodes[1].output,
-        Err(CompleteError::Report(Error::OutputLimit))
+        &later.graph.nodes[1].output,
+        Err(CompleteError::Report(Error::ResourceLimit(refusal)))
+            if refusal.resource == "report_retained_bytes" && refusal.limit == 49_152
     ));
     let value = attempt_report(&later, report_id(), 16_777_216).unwrap();
     assert_eq!(value["outcome"], "failure");
@@ -2158,7 +2171,8 @@ fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier
     assert_eq!(original.bytes(), b"ID,VALUE\n1,1.23\n2,2.35\n");
     assert!(matches!(
         attempt_report(&later, report_id(), 1),
-        Err(ProjectionError::Report(Error::OutputLimit))
+        Err(ProjectionError::Report(Error::ResourceLimit(refusal)))
+            if refusal.resource == "report_retained_bytes" && refusal.limit == 6
     ));
     assert_eq!(original.bytes(), b"ID,VALUE\n1,1.23\n2,2.35\n");
     assert!(!study.0.join("generated").exists());
@@ -2230,7 +2244,10 @@ fn report_context_pointer_and_table_count_admission_precede_table_authority_and_
     };
     assert!(matches!(
         report.select(node, &fake, 16_777_216),
-        Err(Error::OutputLimit)
+        Err(Error::ResourceLimit(refusal))
+            if refusal.resource == "report_cells"
+                && refusal.limit == yamaa_engine::capacity::REPORT_CELLS
+                && refusal.actual.is_none()
     ));
     assert_eq!(reads.get(), 0);
     assert!(matches!(report.failure(), Err(Error::InvalidObservation)));
@@ -2310,8 +2327,10 @@ fn a_larger_caller_budget_cannot_bypass_retained_formatter_admission_before_iden
     assert!(matches!(
         attempt.graph.nodes[0].output,
         Err(CompleteError::Report(
-            yamaa_adapters::specification_report::Error::OutputLimit
-        ))
+            yamaa_adapters::specification_report::Error::ResourceLimit(ref refusal)
+        )) if refusal.resource == "report_retained_bytes"
+            && refusal.limit == yamaa_engine::capacity::REPORT_RETAINED_BYTES
+            && refusal.actual.is_some_and(|actual| actual > refusal.limit)
     ));
     assert_eq!(
         attempt.graph.nodes[0].dataset.sources[0]

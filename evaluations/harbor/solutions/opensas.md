@@ -1,13 +1,13 @@
 # opensas reference solutions
 
-The `result.sas` programs prepare all 145 prompted derivation benchmarks for
+The `result.sas` programs prepare all 148 prompted derivation benchmarks for
 execution with the existing [opensas v0.6.6 release](https://github.com/kirha-ai/opensas/releases/tag/v0.6.6).
 Each program reads `/app/input` and writes the CSV files requested by its full
 prompt to `/app/output`. The race/ethnicity solution writes both DM and SUPPDM.
 Identifiers are read as character values to preserve leading zeros; numeric
 measurements and sequence variables use explicit numeric input.
 
-The Harbor opensas track executes the 142 confident native CSV cases with the
+The Harbor opensas track executes the 145 confident native CSV cases with the
 existing opensas v0.6.6 release. The image installs an unmodified release
 executable; these programs do not implement or modify an execution engine. Benchmarks
 without derivation prompts, including yamaa specification rejection cases,
@@ -52,6 +52,12 @@ column types, keys and tolerances.
 | Parquet input staged as CSV | 1 matching case, randomization |
 | Changed inputs against the existing Python references | 143 of 144 match; the same whitespace mismatch remains |
 | Reduced-subject inputs against the Python references | 142 of 142 checked match; 2 single-subject cases skipped |
+
+These retained preparation counts cover the original 137-case collection and
+the eight PK/QT additions; they do not claim measurements of the three cases
+admitted on main in between. The current collection contains 148 sources and
+145 executable native CSV cases. The Linux v0.6.6 reference check now matches
+all 145 executable cases against their original goldens.
 
 The eight PK/QT cases of #2297 were checked the same way on 2026-10-14
 with the same release asset, and the counts above include them: their

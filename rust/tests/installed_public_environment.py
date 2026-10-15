@@ -309,6 +309,24 @@ class PublicEnvironment(unittest.TestCase):
         self.assertIsNone(failed._native.observations())
         self.assertFalse(Path("outputs/ids.csv").exists())
 
+    def test_matching_budget_has_the_same_owner_and_bound_with_and_without_environment(self):
+        os.chdir(self.directory)
+        truth = TRUTH["regex_budget"]
+        Path("spec.yaml").write_text(truth["specification"])
+        Path("input.csv").write_text(truth["source"])
+        Path("environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
+        for environment in (None, "environment.yaml"):
+            failed = yamaa.domain("spec.yaml", environment=environment)
+            self.assertIsNone(failed.output)
+            rows = failed.issues.to_dicts()
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["condition"], truth["condition"])
+            self.assertEqual(rows[0]["spec_paths"], truth["paths"])
+            self.assertEqual(json.loads(rows[0]["context"]), truth["context"])
+            with self.assertRaises(yamaa.DomainError):
+                failed.save()
+            self.assertFalse(Path("output.csv").exists())
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="yamaa-public-environment-")
         self.addCleanup(self.temporary.cleanup)

@@ -26,6 +26,7 @@ on:
       - '.github/scripts/ci/native_matrix.py'
       - '.github/scripts/ci/test_native_matrix.py'
       - '.github/scripts/commands/**'
+      - '.github/scripts/yaml-validation/fixtures/**'
       - 'Makefile'
 
 concurrency:

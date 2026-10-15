@@ -27,15 +27,46 @@ pub struct Limits {
 pub(super) enum Error {
     Malformed,
     Limit,
+    ResourceLimit {
+        resource: &'static str,
+        limit: usize,
+        actual: Option<usize>,
+    },
     Unavailable(i64),
     Profile(profile::Error),
     OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
+}
+impl From<framing::Error> for Error {
+    fn from(error: framing::Error) -> Self {
+        match error {
+            framing::Error::Malformed => Self::Malformed,
+            framing::Error::Limit => Self::Limit,
+            framing::Error::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            } => Self::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            },
+        }
+    }
 }
 impl From<compact::Error> for Error {
     fn from(error: compact::Error) -> Self {
         match error {
             compact::Error::Malformed => Self::Malformed,
             compact::Error::Limit => Self::Limit,
+            compact::Error::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            } => Self::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            },
         }
     }
 }
@@ -44,6 +75,15 @@ impl From<compression::Error> for Error {
         match error {
             compression::Error::Malformed => Self::Malformed,
             compression::Error::Limit => Self::Limit,
+            compression::Error::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            } => Self::ResourceLimit {
+                resource,
+                limit,
+                actual,
+            },
             compression::Error::Unavailable(codec) => Self::Unavailable(codec),
         }
     }
@@ -92,7 +132,18 @@ fn read_interpreted(bytes: &[u8], limits: Limits, odm: bool) -> Result<Decoded, 
             })
             .collect::<Vec<_>>();
         let binding = yamaa_core::odm_source::bind_fields(&fields)
-            .map_err(|_| Error::Limit)?
+            .map_err(|error| {
+                let yamaa_core::odm_source::AdmissionError::MetadataLimit {
+                    resource,
+                    limit,
+                    actual,
+                } = error;
+                Error::ResourceLimit {
+                    resource,
+                    limit,
+                    actual,
+                }
+            })?
             .map_err(Error::OdmFields)?;
         let stored = binding.stored().map(|root| {
             columns
@@ -113,19 +164,27 @@ fn read_interpreted(bytes: &[u8], limits: Limits, odm: bool) -> Result<Decoded, 
         if let framing::Payload::DataV1 { values, .. } | framing::Payload::DataV2 { values, .. } =
             page.payload
         {
-            actual_values = actual_values.checked_add(values).ok_or(Error::Limit)?;
+            actual_values = actual_values
+                .checked_add(values)
+                .ok_or(Error::ResourceLimit {
+                    resource: "array_elements",
+                    limit: limits.array_elements,
+                    actual: None,
+                })?;
         }
     }
     let row_count =
         usize::try_from(metadata.file_metadata().num_rows()).map_err(|_| Error::Malformed)?;
     let arrow = ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
         .map_err(|_| Error::Malformed)?;
-    if actual_values > limits.array_elements
-        || row_count
-            .checked_mul(columns.len())
-            .is_none_or(|n| n > limits.array_elements)
-    {
-        return Err(Error::Limit);
+    for actual in [Some(actual_values), row_count.checked_mul(columns.len())] {
+        if actual.is_none_or(|actual| actual > limits.array_elements) {
+            return Err(Error::ResourceLimit {
+                resource: "array_elements",
+                limit: limits.array_elements,
+                actual,
+            });
+        }
     }
     let arrow_schema = schema::normalize(arrow.schema(), hint.as_ref());
     // Determine retention only. Profile errors remain deferred until every
@@ -225,7 +284,11 @@ fn read_interpreted(bytes: &[u8], limits: Limits, odm: bool) -> Result<Decoded, 
         arrays.push(array);
     }
     if limits.batches == 0 {
-        return Err(Error::Limit);
+        return Err(Error::ResourceLimit {
+            resource: "batches",
+            limit: limits.batches,
+            actual: Some(1),
+        });
     }
     // Normalization can make a required stored float missing. The language's
     // typed table admits missing values for every column, regardless of storage.
@@ -238,7 +301,11 @@ fn read_interpreted(bytes: &[u8], limits: Limits, odm: bool) -> Result<Decoded, 
     ));
     let batch = RecordBatch::try_new(output_schema, arrays).map_err(|_| Error::Malformed)?;
     if batch.get_array_memory_size() > limits.retained_bytes {
-        return Err(Error::Limit);
+        return Err(Error::ResourceLimit {
+            resource: "retained_bytes",
+            limit: limits.retained_bytes,
+            actual: Some(batch.get_array_memory_size()),
+        });
     }
     Ok(Decoded {
         schema,
@@ -283,7 +350,11 @@ fn odm_decoded(
         arrays.push(Arc::new(StringArray::from(strings)));
     }
     if limits.batches == 0 {
-        return Err(Error::Limit);
+        return Err(Error::ResourceLimit {
+            resource: "batches",
+            limit: limits.batches,
+            actual: Some(1),
+        });
     }
     let output_schema = Arc::new(arrow_schema::Schema::new(
         FIELDS
@@ -293,7 +364,11 @@ fn odm_decoded(
     ));
     let batch = RecordBatch::try_new(output_schema, arrays).map_err(|_| Error::Malformed)?;
     if batch.get_array_memory_size() > limits.retained_bytes {
-        return Err(Error::Limit);
+        return Err(Error::ResourceLimit {
+            resource: "retained_bytes",
+            limit: limits.retained_bytes,
+            actual: Some(batch.get_array_memory_size()),
+        });
     }
     Ok(Decoded {
         schema,

@@ -6,7 +6,7 @@
 # the same question. Metrics are computed from the listed tasks only.
 # What each prompt tier keeps is in evaluations/harbor/prompts/README.md;
 # rows rank by complete task pass rate first; cell accuracy is secondary.
-# This board covers the 142 confident derivation cases on brief prompts;
+# This board covers the 134 confident derivation cases on brief prompts;
 # exclusions are in build.py OPENSAS_EXCLUSIONS. Each task requires `/app/output/result.sas`.
 grading_protocol: "4"
 image_reference: yamaa-harbor-agent-opensas:0.8
@@ -14,6 +14,7 @@ verifier_image_reference: yamaa-harbor-verifier-opensas:0.8
 package: yamaa/yamaa-sdtm-adam-brief-opensas
 tasks:
   - adam-adae-death-brief-opensas
+  - adam-adae-exposure-adjusted-incidence-brief-opensas
   - adam-adae-occurrence-flags-brief-opensas
   - adam-adae-onset-emergence-brief-opensas
   - adam-adae-partial-dates-brief-opensas
@@ -34,14 +35,11 @@ tasks:
   - adam-adcm-atc-classes-brief-opensas
   - adam-adcm-on-treatment-brief-opensas
   - adam-adeg-derived-intervals-brief-opensas
-  - adam-adeg-placebo-corrected-change-brief-opensas
-  - adam-adeg-replicate-qtc-average-brief-opensas
-  - adam-adeg-time-matched-baseline-brief-opensas
-  - adam-adeg-time-matched-concentration-brief-opensas
   - adam-adex-cumulative-dose-brief-opensas
   - adam-adex-dose-reduction-brief-opensas
   - adam-adex-uncollected-brief-opensas
   - adam-adfa-fever-brief-opensas
+  - adam-adice-governing-event-brief-opensas
   - adam-adlb-bds-brief-opensas
   - adam-adlb-closest-visit-brief-opensas
   - adam-adlb-end-of-treatment-brief-opensas
@@ -54,10 +52,6 @@ tasks:
   - adam-adlbc-row-window-brief-opensas
   - adam-adlbc-window-chain-brief-opensas
   - adam-adoe-study-eye-brief-opensas
-  - adam-adpp-accumulation-ratio-brief-opensas
-  - adam-adpp-carryover-exclusion-brief-opensas
-  - adam-adpp-comparison-sets-brief-opensas
-  - adam-adpp-dose-normalized-brief-opensas
   - adam-adqs-missed-visit-locf-brief-opensas
   - adam-adqs-multi-scale-scoring-brief-opensas
   - adam-adqs-subscale-score-brief-opensas
@@ -101,6 +95,7 @@ tasks:
   - adam-advs-prior-result-brief-opensas
   - adam-advs-window-table-brief-opensas
   - adam-advs-windows-brief-opensas
+  - ars-ae-incidence-results-brief-opensas
   - bimo-clinsite-site-level-brief-opensas
   - sdtm-ae-coding-brief-opensas
   - sdtm-ae-meddra-hierarchy-brief-opensas
@@ -165,7 +160,7 @@ harbor:
   name: sdtm-adam-v5-brief-opensas
   title: yamaa derivation v5, brief prompts (opensas)
   description: >-
-    The 142 confident yamaa derivation benchmarks, including BIMO, solved with opensas v0.6.6.
+    The 134 confident yamaa derivation benchmarks, including BIMO, solved with opensas v0.6.6.
     An agent gets the opensas system prompt, the benchmark's brief prompt (the
     full prompt without its rules) and input datasets, with no internet but
     the model's API. A task passes when its output matches every golden

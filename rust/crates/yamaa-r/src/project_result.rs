@@ -21,6 +21,7 @@ pub(crate) mod platform {
         pub(crate) attempt: Rc<HeldAttempt>,
         pub(crate) formatted: Option<BuildResult>,
         pub(crate) refusal: &'static str,
+        pub(crate) refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
     }
     thread_local! {
         static RESULTS: RefCell<BTreeMap<usize, Weak<HeldResult>>> = const { RefCell::new(BTreeMap::new()) };
@@ -125,6 +126,7 @@ pub(crate) mod platform {
         let mut projections = Vec::new();
         let mut budget = yamaa_adapters::specification_check::MAX_ISSUE_BYTES;
         let mut refusal = "";
+        let mut refusal_details = None;
         for failure in &failures {
             let projection = match failure {
                 HostError::Host(condition) => ordinary(condition, formatter, false),
@@ -148,6 +150,18 @@ pub(crate) mod platform {
                         .and_then(|charge| budget.checked_sub(charge))
                     else {
                         refusal = "report_limit";
+                        refusal_details = Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                            "diagnostic_bytes",
+                            yamaa_adapters::specification_check::MAX_ISSUE_BYTES,
+                            text.len()
+                                .checked_mul(12)
+                                .and_then(|n| n.checked_add(128))
+                                .and_then(|charge| {
+                                    (yamaa_adapters::specification_check::MAX_ISSUE_BYTES - budget)
+                                        .checked_add(charge)
+                                }),
+                            Vec::new(),
+                        ));
                         break;
                     };
                     budget = remaining;
@@ -178,6 +192,12 @@ pub(crate) mod platform {
             ) {
                 Ok(result) => Some(result),
                 Err(error) => {
+                    if let project_report::Error::Report(
+                        yamaa_adapters::specification_report::Error::ResourceLimit(details),
+                    ) = &error
+                    {
+                        refusal_details = Some(details.clone());
+                    }
                     refusal = match error {
                         project_report::Error::Opaque(_) => "opaque_host",
                         project_report::Error::Boundary(_) => "activation_boundary",
@@ -185,6 +205,9 @@ pub(crate) mod platform {
                         project_report::Error::Execution(_) => "execution_boundary",
                         project_report::Error::Report(
                             yamaa_adapters::specification_report::Error::OutputLimit,
+                        ) => "report_limit",
+                        project_report::Error::Report(
+                            yamaa_adapters::specification_report::Error::ResourceLimit(_),
                         ) => "report_limit",
                         project_report::Error::Report(_) => "report_refusal",
                     };
@@ -198,6 +221,7 @@ pub(crate) mod platform {
             attempt,
             formatted,
             refusal,
+            refusal_details,
         }
     }
     pub(super) fn status(handle: Robj) -> std::result::Result<Robj, String> {

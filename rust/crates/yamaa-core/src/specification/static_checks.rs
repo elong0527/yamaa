@@ -7,7 +7,9 @@ fn charge(used: &mut usize, amount: usize) -> Result<(), PrepareError> {
     *used = used
         .checked_add(amount)
         .filter(|&n| n <= 16_777_216)
-        .ok_or(PrepareError::Limit("check_declaration_diagnostics"))?;
+        .ok_or_else(|| {
+            PrepareError::limit("check_declaration_diagnostics", 16_777_216, None, None)
+        })?;
     Ok(())
 }
 fn context_bytes(
@@ -154,7 +156,7 @@ impl PreparedSpecification {
         };
         collect(&mut findings).map_err(|error| match error {
             BindError::Internal => PrepareError::Internal,
-            _ => PrepareError::Limit("check_declaration_diagnostics"),
+            _ => PrepareError::limit("check_declaration_diagnostics", 16_777_216, None, None),
         })?;
         let mut bytes = 0usize;
         for finding in findings {

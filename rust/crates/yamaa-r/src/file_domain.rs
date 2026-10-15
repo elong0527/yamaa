@@ -146,7 +146,10 @@ impl RuntimePort for Runtime<'_> {
             );
             let result = match formatted.formatted {
                 Some(result) => file_application::Domain::from_project(result, &project),
-                None => Err(file_application::rejected("build", formatted.refusal)),
+                None => Err(formatted.refusal_details.as_ref().map_or_else(
+                    || file_application::rejected("build", formatted.refusal),
+                    |details| details.issues("build", formatted.refusal),
+                )),
             };
             let outcome = if result.is_ok() {
                 Outcome::Succeeded

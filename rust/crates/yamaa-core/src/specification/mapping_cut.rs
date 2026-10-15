@@ -12,7 +12,9 @@ pub(super) struct Declaration {
 }
 fn admission<T>(result: Result<T, AdmissionError>) -> Result<T, PrepareError> {
     result.map_err(|error| match error {
-        AdmissionError::Limit => PrepareError::Limit("mapping_cut_metadata"),
+        AdmissionError::Limit => {
+            PrepareError::limit("mapping_cut_metadata", 16_777_216, None, None)
+        }
         AdmissionError::Diagnostic(finding) => {
             PrepareError::Invalid(vec![PreflightFinding::Scalar(finding)])
         }

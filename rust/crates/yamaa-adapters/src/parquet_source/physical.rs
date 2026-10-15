@@ -21,6 +21,7 @@ fn collect<T: DataType>(
     descriptor: &ColumnDescriptor,
     (rows, levels, keep): (usize, usize, bool),
     budget: &mut usize,
+    initial_budget: usize,
     shapes: &[shape::List],
     size: impl Fn(&T::T) -> usize,
 ) -> Result<Vec<Option<T::T>>, Error> {
@@ -76,10 +77,15 @@ fn collect<T: DataType>(
             } else {
                 None
             };
-            let charge = 32usize
-                .checked_add(value.as_ref().map_or(0, &size))
-                .ok_or(Error::Limit)?;
-            *budget = budget.checked_sub(charge).ok_or(Error::Limit)?;
+            let charge = 32usize.checked_add(value.as_ref().map_or(0, &size));
+            let actual = charge.and_then(|charge| (initial_budget - *budget).checked_add(charge));
+            *budget = charge.and_then(|charge| budget.checked_sub(charge)).ok_or(
+                Error::ResourceLimit {
+                    resource: "retained_bytes",
+                    limit: initial_budget,
+                    actual,
+                },
+            )?;
             result.push(value);
         }
         if values.next().is_some() {
@@ -129,6 +135,7 @@ pub(super) fn read(
                         descriptor,
                         (rows, levels, keep[index]),
                         &mut budget,
+                        retained_bytes,
                         &shapes[index],
                         $size,
                     )?;
@@ -154,6 +161,7 @@ pub(super) fn read(
                         descriptor,
                         (rows, levels, false),
                         &mut budget,
+                        retained_bytes,
                         &shapes[index],
                         |_| 0,
                     )?;
@@ -164,6 +172,7 @@ pub(super) fn read(
                         descriptor,
                         (rows, levels, false),
                         &mut budget,
+                        retained_bytes,
                         &shapes[index],
                         |_| 0,
                     )?;
@@ -174,6 +183,7 @@ pub(super) fn read(
                         descriptor,
                         (rows, levels, false),
                         &mut budget,
+                        retained_bytes,
                         &shapes[index],
                         |_| 0,
                     )?;
@@ -184,6 +194,7 @@ pub(super) fn read(
                         descriptor,
                         (rows, levels, false),
                         &mut budget,
+                        retained_bytes,
                         &shapes[index],
                         |_| 0,
                     )?;
@@ -204,4 +215,37 @@ pub(super) fn read(
         }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow_array::{Int64Array, RecordBatch};
+    use arrow_schema::{DataType as ArrowType, Field, Schema};
+    use parquet::arrow::ArrowWriter;
+    use std::sync::Arc;
+
+    #[test]
+    fn retained_quota_reports_complete_prefix_and_refuses_before_next_value() {
+        let schema = Arc::new(Schema::new(vec![Field::new("N", ArrowType::Int64, false)]));
+        let batch =
+            RecordBatch::try_new(schema.clone(), vec![Arc::new(Int64Array::from(vec![1, 2]))])
+                .unwrap();
+        let mut bytes = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut bytes, schema.clone(), None).unwrap();
+        writer.write(&batch).unwrap();
+        writer.close().unwrap();
+        for (limit, actual) in [(31, 32), (32, 64), (63, 64)] {
+            assert_eq!(
+                read(&bytes, &[true], limit, &schema).unwrap_err(),
+                Error::ResourceLimit {
+                    resource: "retained_bytes",
+                    limit,
+                    actual: Some(actual),
+                }
+            );
+        }
+        let result = read(&bytes, &[true], 64, &schema).unwrap();
+        assert!(matches!(&result[0], Column::Int64(values) if values == &[Some(1), Some(2)]));
+    }
 }

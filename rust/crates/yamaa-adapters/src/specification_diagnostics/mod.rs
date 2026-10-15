@@ -185,14 +185,28 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
         json!({"status":"rejected","stage":"ingest","code":code})
     } else if let Ok(Some(diagnostics)) = projected {
         json!({"status":"invalid","diagnostics":diagnostics})
+    } else if let Some(refusal) = match error {
+        Error::ResourceLimit(refusal) => Some(refusal.clone()),
+        _ => source.and_then(|source| crate::resource_diagnostics::source(error, source)),
+    } {
+        let code = match error {
+            Error::Source(TextTableError::Csv(_)) => "csv_limit",
+            Error::Source(TextTableError::Table(_)) => "table_limit",
+            Error::ParquetSource(_) => "parquet_limit",
+            _ => "source_limit",
+        };
+        let mut outcome = json!({"status":"rejected","stage":"ingest","code":code,"resource":refusal.resource,"limit":refusal.limit,"spec_paths":refusal.spec_paths});
+        if let Some(actual) = refusal.actual {
+            outcome["actual"] = json!(actual);
+        }
+        outcome
     } else if let Error::Prepare(PrepareError::Unsupported(features)) = error {
         json!({"status":"unsupported","features":features.iter().map(|f| json!({"operation":f.operation,"spec_path":f.path})).collect::<Vec<_>>()})
+    } else if let Error::Prepare(error) = error {
+        preparation_outcome(error)
     } else {
         let (stage, code) = match error {
-            Error::Prepare(PrepareError::Limit(_)) => ("prepare", "compiler_limit"),
-            Error::Prepare(PrepareError::Numeric { .. }) => ("prepare", "numeric_policy"),
-            Error::Prepare(PrepareError::OutputSchema(_)) => ("prepare", "output_schema"),
-            Error::Prepare(_) => ("prepare", "internal"),
+            Error::Prepare(_) => unreachable!("preparation errors handled above"),
             Error::Source(TextTableError::Csv(csv_source::Error::Limit { .. })) => {
                 ("ingest", "csv_limit")
             }
@@ -218,6 +232,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             Error::Bind(_) => ("bind", "internal"),
             Error::Execution(error) if error.is_internal() => ("execute", "internal"),
             Error::Execution(_) => ("execute", "execution_boundary"),
+            Error::ResourceLimit(_) => ("ingest", "source_limit"),
             Error::Sources(_) => ("ingest", "source_collection_boundary"),
             Error::OdmFields(_) | Error::OdmValues(_) => ("ingest", "odm_projection_boundary"),
         };
@@ -226,14 +241,93 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
     json!({"protocol":"specification/prototype","outcome":outcome}).to_string()
 }
 
+/// The same compiler failure facts are used by plain and environment routes.
+pub(crate) fn preparation_outcome(error: &PrepareError) -> Value {
+    if let PrepareError::Limit(limit) = error {
+        let mut outcome = json!({"status":"rejected","stage":"prepare","code":"compiler_limit",
+            "resource":limit.resource,"limit":limit.limit,"spec_paths":limit.spec_paths});
+        if let Some(actual) = limit.actual {
+            outcome["actual"] = json!(actual);
+        }
+        return outcome;
+    }
+    if let PrepareError::Numeric { path, error } = error {
+        use yamaa_core::{
+            numeric_compiler::CompileError,
+            numeric_parser::{ParseError, ParseResource},
+        };
+        let bound = match error {
+            CompileError::ResolutionLimit { limit, required } => {
+                Some(("resolutions", *limit, Some(*required)))
+            }
+            CompileError::Parse(ParseError::Limit {
+                resource, limit, ..
+            }) => {
+                let resource = match resource {
+                    ParseResource::Bytes => "bytes",
+                    ParseResource::Tokens => "tokens",
+                    ParseResource::Nodes => "nodes",
+                    ParseResource::Depth => "depth",
+                };
+                Some((resource, *limit, None))
+            }
+            _ => None,
+        };
+        if let Some((resource, limit, actual)) = bound {
+            let mut outcome = json!({"status":"rejected","stage":"prepare","code":"numeric_policy",
+                "resource":resource,"limit":limit,"spec_paths":[path]});
+            if let Some(actual) = actual {
+                outcome["actual"] = json!(actual);
+            }
+            return outcome;
+        }
+    }
+    let code = match error {
+        PrepareError::Numeric { .. } => "numeric_policy",
+        PrepareError::OutputSchema(_) => "output_schema",
+        _ => "internal",
+    };
+    json!({"status":"rejected","stage":"prepare","code":code})
+}
+pub(crate) fn compiler_failure(error: &PrepareError) -> crate::file_application::Failure {
+    crate::file_application::preparation_failure(
+        json!({"protocol":"specification/prototype","outcome":preparation_outcome(error)})
+            .to_string(),
+    )
+}
+
 fn capture_response(outcome: Value) -> String {
     crate::yaml_diagnostics::encode_outcome("specification/prototype", outcome, 16_777_216)
         .unwrap_or_else(|_| json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":"diagnostic_context_limit"}}).to_string())
+}
+pub(super) fn decoder_limit(limit: &crate::yaml_decode::ResourceLimit, stage: &str) -> Value {
+    let mut outcome = json!({"status":"resource_limit","stage":stage,"phase":"yaml_decode",
+        "resource":limit.resource,"limit":limit.limit});
+    if let Some(actual) = limit.actual {
+        outcome["actual"] = json!(actual);
+    }
+    outcome
 }
 /// Preparation exposes semantic context, never an arbitrary dump of source bytes.
 /// Findings resolve against the retained schema/pass input or the shared YAML decoder.
 pub fn capture_failure(error: &crate::specification_source::Error) -> String {
     use crate::specification_source::Error;
+    if let Error::Decode {
+        error: crate::yaml_decode::DecodeFailure::Limit(limit),
+        ..
+    } = error
+    {
+        return capture_response(decoder_limit(limit, "capture"));
+    }
+    let resource = match error {
+        Error::Normalize(error) => crate::schema_outcomes::normalization(error.clone()).ok(),
+        Error::Validation(error) => crate::schema_outcomes::validation(*error).ok(),
+        _ => None,
+    };
+    if let Some(mut outcome) = resource.filter(|outcome| outcome["status"] == "resource_limit") {
+        outcome["stage"] = json!("capture");
+        return capture_response(outcome);
+    }
     if let Error::Decode { identity, error } = error {
         if let Some(diagnostics) = crate::yaml_diagnostics::capture_diagnostics(error, identity) {
             return capture_response(json!({"status":"invalid","diagnostics":diagnostics}));
@@ -298,4 +392,48 @@ pub(crate) fn captured_findings(
         source_context,
         budget,
     )
+}
+
+#[cfg(test)]
+mod resource_refusal_tests {
+    use super::*;
+    #[test]
+    fn capture_preserves_nondefault_decoder_and_normalization_bounds() {
+        use crate::specification_source::Error;
+        use yamaa_core::schema::{NormalizationError, NormalizationResource};
+        for (error, phase, resource, bound) in [
+            (
+                Error::Decode {
+                    identity: "spec.yaml".into(),
+                    error: crate::yaml_decode::DecodeFailure::Limit(
+                        crate::yaml_decode::ResourceLimit {
+                            resource: "events",
+                            limit: 7,
+                            actual: Some(8),
+                        },
+                    ),
+                },
+                "yaml_decode",
+                "events",
+                7,
+            ),
+            (
+                Error::Normalize(NormalizationError::Limit {
+                    resource: NormalizationResource::Nodes,
+                    limit: 3,
+                }),
+                "normalization",
+                "nodes",
+                3,
+            ),
+        ] {
+            let value: Value = serde_json::from_str(&capture_failure(&error)).unwrap();
+            let outcome = &value["outcome"];
+            assert_eq!(outcome["status"], "resource_limit");
+            assert_eq!(outcome["stage"], "capture");
+            assert_eq!(outcome["phase"], phase);
+            assert_eq!(outcome["resource"], resource);
+            assert_eq!(outcome["limit"], bound);
+        }
+    }
 }

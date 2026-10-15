@@ -14,6 +14,7 @@ verifier_image_reference: yamaa-harbor-verifier-r:0.8
 package: yamaa/yamaa-sdtm-adam-conventions-r
 tasks:
   - adam-adae-death-conventions-r
+  - adam-adae-exposure-adjusted-incidence-conventions-r
   - adam-adae-occurrence-flags-conventions-r
   - adam-adae-onset-emergence-conventions-r
   - adam-adae-partial-dates-conventions-r
@@ -34,14 +35,11 @@ tasks:
   - adam-adcm-atc-classes-conventions-r
   - adam-adcm-on-treatment-conventions-r
   - adam-adeg-derived-intervals-conventions-r
-  - adam-adeg-placebo-corrected-change-conventions-r
-  - adam-adeg-replicate-qtc-average-conventions-r
-  - adam-adeg-time-matched-baseline-conventions-r
-  - adam-adeg-time-matched-concentration-conventions-r
   - adam-adex-cumulative-dose-conventions-r
   - adam-adex-dose-reduction-conventions-r
   - adam-adex-uncollected-conventions-r
   - adam-adfa-fever-conventions-r
+  - adam-adice-governing-event-conventions-r
   - adam-adlb-bds-conventions-r
   - adam-adlb-closest-visit-conventions-r
   - adam-adlb-end-of-treatment-conventions-r
@@ -54,10 +52,6 @@ tasks:
   - adam-adlbc-row-window-conventions-r
   - adam-adlbc-window-chain-conventions-r
   - adam-adoe-study-eye-conventions-r
-  - adam-adpp-accumulation-ratio-conventions-r
-  - adam-adpp-carryover-exclusion-conventions-r
-  - adam-adpp-comparison-sets-conventions-r
-  - adam-adpp-dose-normalized-conventions-r
   - adam-adqs-missed-visit-locf-conventions-r
   - adam-adqs-multi-scale-scoring-conventions-r
   - adam-adqs-subscale-score-conventions-r
@@ -103,6 +97,7 @@ tasks:
   - adam-advs-prior-result-conventions-r
   - adam-advs-window-table-conventions-r
   - adam-advs-windows-conventions-r
+  - ars-ae-incidence-results-conventions-r
   - bimo-clinsite-site-level-conventions-r
   - sdtm-ae-coding-conventions-r
   - sdtm-ae-meddra-hierarchy-conventions-r
@@ -167,7 +162,7 @@ harbor:
   name: sdtm-adam-v5-conventions-r
   title: yamaa derivation v5, conventions prompts (R)
   description: >-
-    Every buildable yamaa derivation benchmark, including BIMO (144 tasks), solved in R.
+    Every buildable yamaa derivation benchmark, including BIMO and ARS (139 tasks), solved in R.
     An agent gets the R system prompt, the benchmark's conventions prompt
     (the full prompt with its rules cut down to the sponsor's conventions)
     and input datasets, with no internet but the model's API. A task passes

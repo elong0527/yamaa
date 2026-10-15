@@ -15,7 +15,10 @@ class PerformanceSelection(unittest.TestCase):
         source = (root / ".github/workflows/performance.yml").read_text()
         push = re.search(r"(?ms)^  push:\n(.*?)(?=^  \S|\Z)", source).group(1)
         branches = re.search(r"(?m)^    branches: \[(.*?)\]$", push).group(1)
-        self.assertEqual(branches, "qualification/issue-1998")
+        self.assertEqual(
+            branches,
+            "qualification/issue-1998, qualification/issue-2288-linux-performance",
+        )
         patterns = [
             ast.literal_eval(value) for value in re.findall(r"(?m)^      - (.+)$", push)
         ]
@@ -79,3 +82,16 @@ class PerformanceSelection(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertFalse(selected(path), "evidence commit would recollect")
+
+    def test_linux_scope_retains_native_admission_and_excludes_legacy_baselines(self):
+        root = Path(__file__).resolve().parents[3]
+        source = (root / ".github/workflows/performance.yml").read_text()
+        self.assertIn("refs/heads/qualification/issue-2288-linux-performance", source)
+        self.assertIn("options: [full-matrix, linux-installed]", source)
+        self.assertEqual(source.count('--collection-scope "${COLLECTION_SCOPE}"'), 2)
+        self.assertIn("--collection-scope linux-installed --check-collection", source)
+        self.assertEqual(source.count("if: env.COLLECTION_SCOPE == 'full-matrix'"), 5)
+        self.assertIn("needs: [native, python, r]", source)
+        self.assertIn("admit_performance_native.py", source)
+        self.assertIn("r-version: '4.6.1'", source)
+        self.assertIn("--source-bundle source.bundle", source)

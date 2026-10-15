@@ -5,7 +5,7 @@ use yamaa_core::{
 };
 use yamaa_engine::dataset::{
     Assignment, DatasetExecution, DatasetPlan, ExecutionBudget, ExecutionError, Expression,
-    RowMode, RowTemplate, SecondarySource,
+    Resource, RowMode, RowTemplate, SecondarySource,
 };
 
 struct Source {
@@ -83,31 +83,65 @@ fn source_shape_refusals_precede_reads_and_do_not_spend_future_budgets() {
     let secondary = Source::new(2, 1);
     let plan = plan(&source, 1);
     let budget = ExecutionBudget::default();
-    for tiny in [
-        ExecutionBudget {
-            max_sources: 1,
-            ..budget
-        },
-        ExecutionBudget {
-            max_decoded_cells: 3,
-            ..budget
-        },
-        ExecutionBudget {
-            max_columns: 0,
-            ..budget
-        },
-        ExecutionBudget {
-            execution: yamaa_engine::dataset::Limits {
-                source_rows: 3,
-                ..budget.execution
+    for (tiny, resource, limit, required) in [
+        (
+            ExecutionBudget {
+                max_sources: 1,
+                ..budget
             },
-            ..budget
-        },
+            Resource::SourceCount,
+            1,
+            Some(2),
+        ),
+        (
+            ExecutionBudget {
+                max_decoded_cells: 3,
+                ..budget
+            },
+            Resource::SourceCells,
+            3,
+            Some(4),
+        ),
+        (
+            ExecutionBudget {
+                max_columns: 0,
+                ..budget
+            },
+            Resource::SourceColumns,
+            0,
+            Some(1),
+        ),
+        (
+            ExecutionBudget {
+                execution: yamaa_engine::dataset::Limits {
+                    source_rows: 3,
+                    ..budget.execution
+                },
+                ..budget
+            },
+            Resource::SourceRows,
+            3,
+            Some(4),
+        ),
     ] {
         let result = plan
             .execute_with_budget(&source, &[&secondary], tiny)
             .result;
-        assert!(matches!(*result.unwrap_err(), ExecutionError::Capacity));
+        let expected = if resource == Resource::SourceColumns {
+            ExecutionError::SourceLimit {
+                resource,
+                limit,
+                required,
+                source_index: 0,
+            }
+        } else {
+            ExecutionError::Limit {
+                resource,
+                limit,
+                required,
+            }
+        };
+        assert_eq!(*result.unwrap_err(), expected);
         assert_eq!(source.reads.get(), 0);
         assert_eq!(secondary.reads.get(), 0);
     }
@@ -124,6 +158,62 @@ fn source_shape_refusals_precede_reads_and_do_not_spend_future_budgets() {
 }
 
 #[test]
+fn secondary_width_refusal_retains_only_the_refused_source_coordinate() {
+    let primary = Source::new(1, 1);
+    let narrow = Source::new(1, 1);
+    let wide = Source::new(1, 2);
+    let plan = DatasetPlan::new_with_sources(
+        primary.schema.clone(),
+        [&narrow, &wide]
+            .into_iter()
+            .enumerate()
+            .map(|(index, source)| SecondarySource {
+                name: format!("S{index}"),
+                schema: source.schema.clone(),
+            })
+            .collect(),
+        primary.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![Assignment {
+                column: 0,
+                expression: Expression::Source(0),
+                path: "columns.C0".into(),
+            }],
+            filter: None,
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    let result = plan.execute_with_budget(
+        &primary,
+        &[&narrow, &wide],
+        ExecutionBudget {
+            max_columns: 1,
+            ..ExecutionBudget::default()
+        },
+    );
+    assert_eq!(
+        *result.result.unwrap_err(),
+        ExecutionError::SourceLimit {
+            resource: Resource::SourceColumns,
+            limit: 1,
+            required: Some(2),
+            source_index: 2,
+        }
+    );
+    assert_eq!(primary.reads.get(), 0);
+    assert_eq!(narrow.reads.get(), 0);
+    assert_eq!(wide.reads.get(), 0);
+    assert!(plan
+        .execute_with_budget(&primary, &[&narrow, &wide], ExecutionBudget::default())
+        .result
+        .is_ok());
+}
+
+#[test]
 fn bounded_column_width_admits_1024_and_refuses_1025_before_cell_reads() {
     for width in [1_024, 1_025] {
         let source = Source::new(1, width);
@@ -137,7 +227,7 @@ fn bounded_column_width_admits_1024_and_refuses_1025_before_cell_reads() {
             );
             assert_eq!(source.reads.get(), 1_024);
         } else {
-            assert!(matches!(*result.unwrap_err(), ExecutionError::Capacity));
+            assert!(matches!(*result.unwrap_err(), ExecutionError::Limit { .. }));
             assert_eq!(source.reads.get(), 0);
         }
     }
@@ -152,14 +242,14 @@ fn checked_multiplication_and_combined_addition_refuse_overflow_before_reads() {
     let result = plan(&source, 0)
         .execute_with_budget(&source, &[], budget)
         .result;
-    assert!(matches!(*result.unwrap_err(), ExecutionError::Capacity));
+    assert!(matches!(*result.unwrap_err(), ExecutionError::Limit { .. }));
     assert_eq!(source.reads.get(), 0);
     let source = Source::new(usize::MAX, 1);
     let secondary = Source::new(1, 1);
     let result = plan(&source, 1)
         .execute_with_budget(&source, &[&secondary], budget)
         .result;
-    assert!(matches!(*result.unwrap_err(), ExecutionError::Capacity));
+    assert!(matches!(*result.unwrap_err(), ExecutionError::Limit { .. }));
     assert_eq!(source.reads.get(), 0);
     assert_eq!(secondary.reads.get(), 0);
 }
@@ -170,6 +260,50 @@ fn longitudinal_row_quota_still_refuses_the_next_record() {
     let result = plan(&source, 0)
         .execute_with_budget(&source, &[], ExecutionBudget::longitudinal())
         .result;
-    assert!(matches!(*result.unwrap_err(), ExecutionError::Capacity));
+    assert!(matches!(*result.unwrap_err(), ExecutionError::Limit { .. }));
+    assert_eq!(source.reads.get(), 0);
+}
+
+#[test]
+fn wider_output_refusal_names_output_columns_without_attributing_it_to_input() {
+    let source = Source::new(1, 1);
+    let output = Source::new(1, 2);
+    let plan = DatasetPlan::new(
+        source.schema.clone(),
+        output.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![
+                Assignment {
+                    column: 0,
+                    expression: Expression::Source(0),
+                    path: "columns.C0".into(),
+                },
+                Assignment {
+                    column: 1,
+                    expression: Expression::Literal(Value::Int(1)),
+                    path: "columns.C1".into(),
+                },
+            ],
+            filter: None,
+        }],
+        vec![],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    let result = plan
+        .execute_with_budget(
+            &source,
+            &[],
+            ExecutionBudget {
+                max_columns: 1,
+                ..ExecutionBudget::bounded()
+            },
+        )
+        .result;
+    assert!(
+        matches!(*result.unwrap_err(), ExecutionError::ScopedLimit { resource: Resource::OutputColumns, limit: 1, required: Some(2), spec_paths } if spec_paths == ["output.columns"])
+    );
     assert_eq!(source.reads.get(), 0);
 }

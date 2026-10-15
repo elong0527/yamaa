@@ -14,6 +14,7 @@ verifier_image_reference: yamaa-harbor-verifier-python:0.8
 package: yamaa/yamaa-sdtm-adam-conventions-python
 tasks:
   - adam-adae-death-conventions-python
+  - adam-adae-exposure-adjusted-incidence-conventions-python
   - adam-adae-occurrence-flags-conventions-python
   - adam-adae-onset-emergence-conventions-python
   - adam-adae-partial-dates-conventions-python
@@ -34,14 +35,11 @@ tasks:
   - adam-adcm-atc-classes-conventions-python
   - adam-adcm-on-treatment-conventions-python
   - adam-adeg-derived-intervals-conventions-python
-  - adam-adeg-placebo-corrected-change-conventions-python
-  - adam-adeg-replicate-qtc-average-conventions-python
-  - adam-adeg-time-matched-baseline-conventions-python
-  - adam-adeg-time-matched-concentration-conventions-python
   - adam-adex-cumulative-dose-conventions-python
   - adam-adex-dose-reduction-conventions-python
   - adam-adex-uncollected-conventions-python
   - adam-adfa-fever-conventions-python
+  - adam-adice-governing-event-conventions-python
   - adam-adlb-bds-conventions-python
   - adam-adlb-closest-visit-conventions-python
   - adam-adlb-end-of-treatment-conventions-python
@@ -54,10 +52,6 @@ tasks:
   - adam-adlbc-row-window-conventions-python
   - adam-adlbc-window-chain-conventions-python
   - adam-adoe-study-eye-conventions-python
-  - adam-adpp-accumulation-ratio-conventions-python
-  - adam-adpp-carryover-exclusion-conventions-python
-  - adam-adpp-comparison-sets-conventions-python
-  - adam-adpp-dose-normalized-conventions-python
   - adam-adqs-missed-visit-locf-conventions-python
   - adam-adqs-multi-scale-scoring-conventions-python
   - adam-adqs-subscale-score-conventions-python
@@ -103,6 +97,7 @@ tasks:
   - adam-advs-prior-result-conventions-python
   - adam-advs-window-table-conventions-python
   - adam-advs-windows-conventions-python
+  - ars-ae-incidence-results-conventions-python
   - bimo-clinsite-site-level-conventions-python
   - sdtm-ae-coding-conventions-python
   - sdtm-ae-meddra-hierarchy-conventions-python
@@ -167,7 +162,7 @@ harbor:
   name: sdtm-adam-v5-conventions-python
   title: yamaa derivation v5, conventions prompts (Python)
   description: >-
-    Every buildable yamaa derivation benchmark, including BIMO (144 tasks), solved in
+    Every buildable yamaa derivation benchmark, including BIMO and ARS (139 tasks), solved in
     Python. An agent gets the Python system prompt, the benchmark's
     conventions prompt (the full prompt with its rules cut down to the
     sponsor's conventions) and input datasets, with no internet but the

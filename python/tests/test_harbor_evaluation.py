@@ -97,7 +97,7 @@ def test_every_sdtm_and_adam_benchmark_has_its_prompts_with_the_evaluation():
     # a real benchmark. The allowed prefixes stay explicit so a future
     # negative-* benchmark with a prompt directory fails loudly instead
     # of slipping through.
-    prompted_prefixes = ("sdtm-", "adam-", "bimo-")
+    prompted_prefixes = ("sdtm-", "adam-", "bimo-", "ars-")
     assert all(name.startswith(prompted_prefixes) for name in PROMPTED)
     assert set(positive) <= set(PROMPTED)
     assert set(PROMPTED) <= {p.name for p in benchmarks.iterdir() if p.is_dir()}
@@ -601,22 +601,25 @@ def _board_named(name: str) -> dict:
     raise AssertionError(f"no leaderboard {name!r}")
 
 
-BOARD_VERSIONS = ("v4", "v5")  # v4 frozen with its history; v5 is current
-
-
-def _board_name(language: str, tier: str, version: str = BOARD_VERSIONS[-1]) -> str:
+def _board_name(language: str, tier: str) -> str:
     if tier == "full":
-        return f"sdtm-adam-{version}-{language}"
-    return f"sdtm-adam-{version}-{tier}-{language}"
+        return f"sdtm-adam-v4-{language}"
+    return f"sdtm-adam-v4-{tier}-{language}"
 
 
 def test_each_language_has_a_board_per_prompt_tier():
     boards = {b["harbor"]["name"]: b for b in leaderboard.load_leaderboards()}
+    populations = json.loads(
+        (HARBOR / "leaderboards/task-populations.json").read_text()
+    )
+    versions = {name.split("-")[2] for name in boards}
+    assert versions == set(populations)
+    assert "v4" in versions
     assert set(boards) == {
-        _board_name(language, tier, version)
+        _board_name(language, tier).replace("-v4-", f"-{version}-")
+        for version in versions
         for language in build.LANGUAGES
         for tier in build.TIERS
-        for version in BOARD_VERSIONS
     }
     buildable = []
     for benchmark in PROMPTED:
@@ -625,16 +628,21 @@ def test_each_language_has_a_board_per_prompt_tier():
         except build.BuildError:
             continue
         buildable.append(benchmark)
-    for language in LANGUAGES:
-        for tier in build.TIERS:
-            board = boards[_board_name(language, tier)]
-            assert sorted(board["tasks"]) == sorted(
-                build.task_name(b, language, tier) for b in buildable
-            )
-            assert board["harbor"]["rank_by"][0]["accessor"] == "metrics.reward"
-            for version in BOARD_VERSIONS[:-1]:
-                frozen = boards[_board_name(language, tier, version)]
-                assert set(frozen["tasks"]) <= set(board["tasks"])
+    # A board's task list is immutable. Newly admitted benchmarks can be
+    # evaluated before a successor board is assembled; they do not change
+    # the historical boards' populations or their scores.
+    for version in versions:
+        population = set(populations[version])
+        assert len(population) == len(populations[version])
+        assert population <= set(buildable)
+        for language in LANGUAGES:
+            for tier in build.TIERS:
+                name = _board_name(language, tier).replace("-v4-", f"-{version}-")
+                board = boards[name]
+                assert sorted(board["tasks"]) == sorted(
+                    build.task_name(b, language, tier) for b in population
+                )
+                assert board["harbor"]["rank_by"][0]["accessor"] == "metrics.reward"
 
 
 def _on(run: dict, board: dict) -> dict:
@@ -685,7 +693,7 @@ def test_a_row_names_its_variant_and_a_job_may_not_mix_them(tmp_path):
 
 def test_each_board_names_its_language_and_tier_dataset():
     for board in leaderboard.load_leaderboards():
-        # sdtm-adam-v<N>-<language> or sdtm-adam-v<N>-<tier>-<language>
+        # sdtm-adam-v4-<language> or sdtm-adam-v4-<tier>-<language>
         parts = board["harbor"]["name"].split("-")
         language, tier = parts[-1], parts[3] if len(parts) == 5 else "full"
         assert board["grading_protocol"] == build.GRADING_PROTOCOL

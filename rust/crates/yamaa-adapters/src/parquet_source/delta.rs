@@ -46,9 +46,13 @@ impl<'a> Cursor<'a> {
     }
 }
 
-fn bound(value: usize, maximum: usize) -> Result<(), Error> {
+fn bound(value: usize, maximum: usize, resource: &'static str) -> Result<(), Error> {
     if value > maximum {
-        Err(Error::Limit)
+        Err(Error::ResourceLimit {
+            resource,
+            limit: maximum,
+            actual: Some(value),
+        })
     } else {
         Ok(())
     }
@@ -57,8 +61,12 @@ fn length(value: i64) -> Result<usize, Error> {
     usize::try_from(value).map_err(|_| Error::Malformed)
 }
 fn charge(used: &mut usize, value: usize, maximum: usize) -> Result<(), Error> {
-    *used = used.checked_add(value).ok_or(Error::Limit)?;
-    bound(*used, maximum)
+    *used = used.checked_add(value).ok_or(Error::ResourceLimit {
+        resource: "expanded_bytes",
+        limit: maximum,
+        actual: None,
+    })?;
+    bound(*used, maximum, "expanded_bytes")
 }
 
 /// Visit only admitted values, retaining no per-block allocation. Return the
@@ -76,7 +84,7 @@ pub(super) fn scan(
     let block = cursor.count()?;
     let miniblocks = cursor.count()?;
     let count = cursor.count()?;
-    bound(count, maximum_values)?;
+    bound(count, maximum_values, "delta_values")?;
     if block == 0
         || !block.is_multiple_of(128)
         || miniblocks == 0
@@ -181,7 +189,11 @@ pub(super) fn admit(
                     if prefix > previous {
                         return Err(Error::Malformed);
                     }
-                    previous = prefix.checked_add(suffix).ok_or(Error::Limit)?;
+                    previous = prefix.checked_add(suffix).ok_or(Error::ResourceLimit {
+                        resource: "expanded_bytes",
+                        limit: limits.reconstructed_bytes,
+                        actual: None,
+                    })?;
                     charge(&mut reconstructed, previous, limits.reconstructed_bytes)?;
                     charge(&mut stored, suffix, limits.reconstructed_bytes)?;
                     index += 1;
@@ -281,9 +293,18 @@ mod tests {
         }
         let mut huge = vec![128, 1, 4];
         unsigned(u64::MAX, &mut huge);
+        let expected = if usize::BITS == 64 {
+            Error::ResourceLimit {
+                resource: "delta_values",
+                limit: 1024,
+                actual: Some(usize::MAX),
+            }
+        } else {
+            Error::Limit
+        };
         assert_eq!(
             scan(&huge, 64, 1024, |_| panic!("not admitted")),
-            Err(Error::Limit)
+            Err(expected)
         );
         for bytes in [
             vec![0, 1, 1, 0],
@@ -346,7 +367,11 @@ mod tests {
                     ..limits()
                 }
             ),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit {
+                resource: "expanded_bytes",
+                limit: 17,
+                actual: Some(18),
+            })
         );
         let mut bad = progression(1, 0, 1); // first value cannot have a prefix
         bad.extend(progression(0, 0, 1));

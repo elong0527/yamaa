@@ -510,7 +510,7 @@ class PublicConformance(unittest.TestCase):
     def test_corpus_inventory_has_all_entries_and_approved_exclusions(self):
         corpus = judge.plan(ROOT.parent / "benchmarks")
         names = {e["name"]: e for e in corpus["examples"]}
-        self.assertEqual(len(names), 326)
+        self.assertEqual(len(names), 329)
         self.assertEqual(len(names["sdtm-dm-race-ethnicity"]["entries"]["python"]), 2)
         self.assertEqual(
             names["schema-inheritance"]["entries"]["r"][0]["specification"],
@@ -531,18 +531,18 @@ class PublicConformance(unittest.TestCase):
             self.assertEqual(example["variants"]["python"], example["variants"]["r"])
             for variant in example["variants"]["python"]:
                 kinds[variant["kind"]] += 1
-        # The counts reviewed in #2291 (317 / 99), plus the eight PK/QT entries
-        # of #2297: one empty child per active entry, and 104 key-order-eligible
-        # positive entries.
+        # One empty child per entry; the eight PK/QT cases add five
+        # key-order-eligible positive entries to the current main population.
         self.assertEqual(
             kinds,
-            {"empty_child": 325, "key_order_control": 104, "key_order_permuted": 104},
+            {"empty_child": 329, "key_order_control": 105, "key_order_permuted": 105},
         )
         expectations = judge.load_metamorphic_expectations(ROOT.parent / "benchmarks")
         names = {e["name"] for e in corpus["examples"]}
-        # 47 as reviewed in #2291, minus three dependency-cycle entries fixed
-        # in #2293 and three empty-child first-issue entries fixed in #2292.
-        self.assertEqual(len(expectations), 41)
+        # #2190 fixes the 40 missing-handler empty children. The reviewed
+        # forward-reference ordering exception remains permanent.
+        self.assertEqual(len(expectations), 1)
+        self.assertTrue(expectations[("negative-forward-reference", "empty_child")]["permanent"])
         for (benchmark, check), item in expectations.items():
             self.assertIn(benchmark, names)
             self.assertIn(check, {"empty_child", "key_order"})

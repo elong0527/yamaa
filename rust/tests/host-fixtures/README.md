@@ -42,11 +42,14 @@ the same typed bindings through their installed public entry points.
 The `original-specifications.temporal_arithmetic` vectors likewise share
 PK relative times, civil shifts, duration parsing/formatting, static refusals,
 range failures and reached `invalid` handler counts across Rust, Python and R.
+The `original-specifications.inheritance_nulls` cases share authored layers,
+missing-lookup CSV bytes, reached `no_match` counts and refusal conditions for
+introducing null values, empty children and inherited clears in both hosts.
 
 ## Public conformance mapping
 
-The existing public-conformance plan owns 326 authored benchmark names, including
-324 active cases. Its runtime observations, saved outputs and independent golden
+The existing public-conformance plan owns 329 authored benchmark names, including
+327 active cases. Its runtime observations, saved outputs and independent golden
 comparison remain the complete public benchmark gate. The following supplemental
 controls reuse those same independently authored source/report owners while
 adding host or private lifecycle assertions:

@@ -546,7 +546,16 @@ fn activation_prefix<E>(attempt: &NativeAttempt<E>, budget: &mut Budget) -> Resu
     let value =
         activation::activation_with_limit(held, observed, maximum).map_err(
             |error| match error {
-                activation::Error::Limit => Error::OutputLimit,
+                activation::Error::Limit {
+                    resource,
+                    limit,
+                    actual,
+                } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                    resource,
+                    limit,
+                    actual,
+                    Vec::new(),
+                )),
                 _ => Error::InvalidObservation,
             },
         )?;
@@ -625,6 +634,14 @@ fn decoded_finding(
     let DecodeError::Codec(error) = error else {
         return Ok(false);
     };
+    if let Some(refusal) = crate::resource_diagnostics::source(error, source) {
+        push_diagnostic(
+            budget,
+            findings,
+            &refusal.diagnostic("ingest", "source_limit"),
+        )?;
+        return Ok(true);
+    }
     if matches!(
         error,
         crate::specification_run::Error::OdmFields(_)
@@ -799,8 +816,20 @@ fn failed_observations<'a, E>(
                         }
                         &[]
                     }
-                    _ => {
-                        portable = false;
+                    other => {
+                        if let Some(refusal) = crate::resource_diagnostics::execution(
+                            other,
+                            view.compiled().sources(),
+                            view.compiled().driver_index(),
+                        ) {
+                            push_diagnostic(
+                                budget,
+                                &mut diagnostics,
+                                &refusal.diagnostic("execute", "execution_limit"),
+                            )?;
+                        } else {
+                            portable = false;
+                        }
                         &[]
                     }
                 },
@@ -899,9 +928,78 @@ fn failed_observations<'a, E>(
                 }
             }
         }
+        Err(PortError::Run(error)) => {
+            if let Some(refusal) =
+                crate::resource_diagnostics::run_limit(error, view.compiled().sources())
+            {
+                push_diagnostic(
+                    budget,
+                    &mut diagnostics,
+                    &refusal.diagnostic("ingest", "source_limit"),
+                )?;
+            } else {
+                portable = false;
+            }
+        }
         _ => portable = false,
     }
     match &node.output {
+        Err(yamaa_engine::specification_output::CompleteError::Report(Error::ResourceLimit(
+            refusal,
+        ))) => {
+            budget.entries(16)?;
+            value["error"] = json!({"stage":"report","code":"output_limit"});
+            push_diagnostic(
+                budget,
+                &mut diagnostics,
+                &refusal.diagnostic("output", "output_limit"),
+            )?;
+        }
+        Err(yamaa_engine::specification_output::CompleteError::Encode(
+            crate::file_producer_build::CodecError::Csv(crate::csv_artifact::Error::Limit {
+                limit,
+                actual,
+                decimal_formatting,
+            }),
+        )) => {
+            let refusal = crate::resource_diagnostics::Refusal::new(
+                "output_bytes",
+                *limit,
+                *actual,
+                vec![if *decimal_formatting {
+                    "output.decimals"
+                } else {
+                    "output.path"
+                }
+                .into()],
+            );
+            push_diagnostic(
+                budget,
+                &mut diagnostics,
+                &refusal.diagnostic("output", "output_limit"),
+            )?;
+        }
+        Err(yamaa_engine::specification_output::CompleteError::Encode(
+            crate::file_producer_build::CodecError::Parquet(
+                crate::parquet_artifact::Error::Limit {
+                    resource,
+                    limit,
+                    actual,
+                },
+            ),
+        )) => {
+            let refusal = crate::resource_diagnostics::Refusal::new(
+                resource,
+                *limit,
+                *actual,
+                vec!["output.path".into()],
+            );
+            push_diagnostic(
+                budget,
+                &mut diagnostics,
+                &refusal.diagnostic("output", "output_limit"),
+            )?;
+        }
         Err(yamaa_engine::specification_output::CompleteError::Report(error)) => {
             budget.entries(16)?;
             value["error"] = json!({"stage":"report","code":match error { Error::OutputLimit => "output_limit", _ => "projection_refused" }});
@@ -1174,7 +1272,7 @@ mod tests {
         let mut findings = vec![];
         assert!(matches!(
             decoded_finding(&mut Budget::new(1), &mut findings, &source, &error),
-            Err(Error::OutputLimit)
+            Err(Error::ResourceLimit(refusal)) if refusal.resource == "report_retained_bytes" && refusal.limit == 6
         ));
         assert!(findings.is_empty());
         assert!(decoded_finding(&mut Budget::new(65536), &mut findings, &source, &error).unwrap());

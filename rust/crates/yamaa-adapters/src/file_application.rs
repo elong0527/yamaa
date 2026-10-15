@@ -26,6 +26,27 @@ pub fn rejected(stage: &str, code: &str) -> Failure {
             .expect("application issue"),
     ]
 }
+pub(crate) fn resource_rejected(
+    stage: &str,
+    code: &str,
+    resource: &str,
+    limit: usize,
+    actual: Option<usize>,
+    paths: Vec<String>,
+) -> Failure {
+    vec![
+        Issue::from_core(yamaa_core::application_issue::resource_rejected(
+            stage, code, resource, limit, actual, paths,
+        ))
+        .expect("application resource issue"),
+    ]
+}
+fn report_failure(stage: &str, code: &str, error: &specification_report::Error) -> Failure {
+    match error {
+        specification_report::Error::ResourceLimit(refusal) => refusal.issues(stage, code),
+        _ => rejected(stage, code),
+    }
+}
 pub(crate) fn classified_resource(diagnostic: &yamaa_core::diagnostic::Diagnostic) -> Failure {
     vec![Issue::from_core(diagnostic.clone()).expect("classified resource finding")]
 }
@@ -122,10 +143,53 @@ pub(crate) fn preparation_failure(message: String) -> Failure {
             }
             issues
         }
-        Some("rejected") => rejected(
-            outcome["stage"].as_str().unwrap_or("prepare"),
-            outcome["code"].as_str().unwrap_or("preparation_boundary"),
-        ),
+        Some("rejected" | "resource_limit") => {
+            let stage = outcome["stage"].as_str().unwrap_or("prepare");
+            let code = if outcome["status"] == "resource_limit" {
+                "resource_limit"
+            } else {
+                outcome["code"].as_str().unwrap_or("preparation_boundary")
+            };
+            let (Some(resource), Some(limit)) =
+                (outcome["resource"].as_str(), outcome["limit"].as_u64())
+            else {
+                return rejected(stage, code);
+            };
+            let Ok(limit) = usize::try_from(limit) else {
+                return rejected("prepare", "issue_projection");
+            };
+            let actual = outcome["actual"]
+                .as_u64()
+                .and_then(|v| usize::try_from(v).ok());
+            let paths = outcome["spec_paths"]
+                .as_array()
+                .map(|paths| {
+                    paths
+                        .iter()
+                        .map(|path| path.as_str().map(String::from))
+                        .collect::<Option<Vec<_>>>()
+                })
+                .unwrap_or_else(|| Some(Vec::new()));
+            let Some(paths) = paths else {
+                return rejected("prepare", "issue_projection");
+            };
+            let mut issues = resource_rejected(stage, code, resource, limit, actual, paths);
+            if let Some(phase) = outcome["phase"].as_str() {
+                for issue in &mut issues {
+                    let mut context: Value =
+                        serde_json::from_str(&issue.context).expect("resource context");
+                    context["phase"] = serde_json::json!(phase);
+                    issue.context = context.to_string();
+                }
+            }
+            if !crate::issue_rows::within_limit(
+                &issues,
+                crate::specification_check::MAX_ISSUE_BYTES,
+            ) {
+                return rejected("prepare", "issue_limit");
+            }
+            issues
+        }
         _ => rejected("prepare", "preparation_boundary"),
     }
 }
@@ -204,7 +268,7 @@ impl Domain {
                 }
                 result
                     .reject_host_output()
-                    .map_err(|_| rejected("build", "result_projection"))?;
+                    .map_err(|error| report_failure("build", "result_projection", &error))?;
                 None
             }
         };
@@ -320,8 +384,9 @@ impl Domain {
         })();
         let (report, mut artifacts) = match report {
             Ok(report) => report,
-            Err(_) => {
-                self.publication_issues = rejected("output", "publication_report_limit");
+            Err(error) => {
+                self.publication_issues =
+                    report_failure("output", "publication_report_limit", &error);
                 return if failed { Err(FailedBuild) } else { Ok(false) };
             }
         };
@@ -563,7 +628,7 @@ impl RuntimePort for Native<'_> {
                     base_directory: self.identity.base_directory,
                 },
             )
-            .map_err(|_| rejected("build", "result_projection"))?;
+            .map_err(|error| report_failure("build", "result_projection", &error))?;
             Domain::from_build(result, |field| {
                 if field == "path" {
                     prepared.publication_target()
@@ -1008,6 +1073,12 @@ mod tests {
             .save_with(1, |_, _, _| panic!("refused report entered publisher"))
             .unwrap());
         assert_eq!(result.publication_attempt.entered, 0);
+        let issues = result.issues();
+        let issue = issues.last().unwrap();
+        let context: Value = serde_json::from_str(&issue.context).unwrap();
+        assert_eq!(context["code"], "publication_report_limit");
+        assert_eq!(context["resource"], "report_retained_bytes");
+        assert_eq!(context["limit"], 6);
         for name in ["adsl-checks.csv", "adsl-warnings.csv", "adsl.csv"] {
             assert!(!study.0.join(name).exists());
         }

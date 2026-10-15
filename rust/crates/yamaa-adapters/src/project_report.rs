@@ -404,9 +404,13 @@ pub fn build_result<'a, C, E>(
     }
     let activation = crate::project_activation_observations::activation(run, &attempt.activation)
         .map_err(|error| match error {
-        crate::project_activation_observations::Error::Limit => {
-            Error::Report(report::Error::OutputLimit)
-        }
+        crate::project_activation_observations::Error::Limit {
+            resource,
+            limit,
+            actual,
+        } => Error::Report(report::Error::ResourceLimit(
+            crate::resource_diagnostics::Refusal::new(resource, limit, actual, Vec::new()),
+        )),
         _ => invalid(),
     })?;
     let boundary = match &attempt.boundary {
@@ -568,12 +572,24 @@ pub fn build_result<'a, C, E>(
                                 checked_records(run, completed, "verification", &id)?;
                             verifications.extend(checks);
                             diagnostics.extend(findings);
-                            let outcome = crate::dataset_result::semantic_condition(other)
-                                .map_err(|_| Error::Execution(other))?;
-                            if outcome["status"] != "condition" {
-                                return Err(Error::Execution(other));
+                            if let Some(refusal) = crate::resource_diagnostics::execution(
+                                other,
+                                run.compiled().sources(),
+                                run.compiled().driver_index(),
+                            ) {
+                                diagnostics.push(
+                                    refusal
+                                        .value("execute", "execution_limit")
+                                        .ok_or_else(invalid)?,
+                                );
+                            } else {
+                                let outcome = crate::dataset_result::semantic_condition(other)
+                                    .map_err(|_| Error::Execution(other))?;
+                                if outcome["status"] != "condition" {
+                                    return Err(Error::Execution(other));
+                                }
+                                diagnostics.push(report::condition(run, &outcome)?);
                             }
-                            diagnostics.push(report::condition(run, &outcome)?);
                         }
                     },
                 }
@@ -631,10 +647,12 @@ pub fn build_result<'a, C, E>(
                     }
                     PortError::Run(failure) => {
                         let findings = match failure {
-                            RunError::Decode(error) => crate::specification_diagnostics::findings(
-                                error,
-                                Some(run.compiled().source()),
-                            ),
+                            RunError::Decode(error) => {
+                                crate::resource_diagnostics::source_findings(
+                                    error,
+                                    run.compiled().source(),
+                                )
+                            }
                             RunError::Bind(error) => crate::specification_diagnostics::binding(
                                 error,
                                 run.compiled().source(),
@@ -645,9 +663,8 @@ pub fn build_result<'a, C, E>(
                                     let source =
                                         run.compiled().sources().get(*index).ok_or_else(invalid)?;
                                     findings.extend(
-                                        crate::specification_diagnostics::findings(
-                                            ingestion,
-                                            Some(source),
+                                        crate::resource_diagnostics::source_findings(
+                                            ingestion, source,
                                         )
                                         .ok_or(Error::Source(error))?,
                                     );
@@ -669,7 +686,13 @@ pub fn build_result<'a, C, E>(
                                         .collect()
                                 })
                             }
-                            _ => None,
+                            _ => crate::resource_diagnostics::run_limit(
+                                failure,
+                                run.compiled().sources(),
+                            )
+                            .and_then(|refusal| {
+                                Some(vec![refusal.value("ingest", "source_limit")?])
+                            }),
                         }
                         .ok_or(Error::Source(error))?;
                         diagnostics.extend(findings);

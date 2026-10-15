@@ -14,6 +14,7 @@ verifier_image_reference: yamaa-harbor-verifier-r:0.8
 package: yamaa/yamaa-sdtm-adam-brief-r
 tasks:
   - adam-adae-death-brief-r
+  - adam-adae-exposure-adjusted-incidence-brief-r
   - adam-adae-occurrence-flags-brief-r
   - adam-adae-onset-emergence-brief-r
   - adam-adae-partial-dates-brief-r
@@ -34,14 +35,11 @@ tasks:
   - adam-adcm-atc-classes-brief-r
   - adam-adcm-on-treatment-brief-r
   - adam-adeg-derived-intervals-brief-r
-  - adam-adeg-placebo-corrected-change-brief-r
-  - adam-adeg-replicate-qtc-average-brief-r
-  - adam-adeg-time-matched-baseline-brief-r
-  - adam-adeg-time-matched-concentration-brief-r
   - adam-adex-cumulative-dose-brief-r
   - adam-adex-dose-reduction-brief-r
   - adam-adex-uncollected-brief-r
   - adam-adfa-fever-brief-r
+  - adam-adice-governing-event-brief-r
   - adam-adlb-bds-brief-r
   - adam-adlb-closest-visit-brief-r
   - adam-adlb-end-of-treatment-brief-r
@@ -54,10 +52,6 @@ tasks:
   - adam-adlbc-row-window-brief-r
   - adam-adlbc-window-chain-brief-r
   - adam-adoe-study-eye-brief-r
-  - adam-adpp-accumulation-ratio-brief-r
-  - adam-adpp-carryover-exclusion-brief-r
-  - adam-adpp-comparison-sets-brief-r
-  - adam-adpp-dose-normalized-brief-r
   - adam-adqs-missed-visit-locf-brief-r
   - adam-adqs-multi-scale-scoring-brief-r
   - adam-adqs-subscale-score-brief-r
@@ -103,6 +97,7 @@ tasks:
   - adam-advs-prior-result-brief-r
   - adam-advs-window-table-brief-r
   - adam-advs-windows-brief-r
+  - ars-ae-incidence-results-brief-r
   - bimo-clinsite-site-level-brief-r
   - sdtm-ae-coding-brief-r
   - sdtm-ae-meddra-hierarchy-brief-r
@@ -167,7 +162,7 @@ harbor:
   name: sdtm-adam-v5-brief-r
   title: yamaa derivation v5, brief prompts (R)
   description: >-
-    Every buildable yamaa derivation benchmark, including BIMO (144 tasks), solved in R.
+    Every buildable yamaa derivation benchmark, including BIMO and ARS (139 tasks), solved in R.
     An agent gets the R system prompt, the benchmark's brief prompt (the
     full prompt without its rules) and input datasets, with no internet but
     the model's API. A task passes when its output matches every golden

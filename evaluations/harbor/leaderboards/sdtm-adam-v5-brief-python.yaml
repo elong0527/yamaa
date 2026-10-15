@@ -14,6 +14,7 @@ verifier_image_reference: yamaa-harbor-verifier-python:0.8
 package: yamaa/yamaa-sdtm-adam-brief-python
 tasks:
   - adam-adae-death-brief-python
+  - adam-adae-exposure-adjusted-incidence-brief-python
   - adam-adae-occurrence-flags-brief-python
   - adam-adae-onset-emergence-brief-python
   - adam-adae-partial-dates-brief-python
@@ -34,14 +35,11 @@ tasks:
   - adam-adcm-atc-classes-brief-python
   - adam-adcm-on-treatment-brief-python
   - adam-adeg-derived-intervals-brief-python
-  - adam-adeg-placebo-corrected-change-brief-python
-  - adam-adeg-replicate-qtc-average-brief-python
-  - adam-adeg-time-matched-baseline-brief-python
-  - adam-adeg-time-matched-concentration-brief-python
   - adam-adex-cumulative-dose-brief-python
   - adam-adex-dose-reduction-brief-python
   - adam-adex-uncollected-brief-python
   - adam-adfa-fever-brief-python
+  - adam-adice-governing-event-brief-python
   - adam-adlb-bds-brief-python
   - adam-adlb-closest-visit-brief-python
   - adam-adlb-end-of-treatment-brief-python
@@ -54,10 +52,6 @@ tasks:
   - adam-adlbc-row-window-brief-python
   - adam-adlbc-window-chain-brief-python
   - adam-adoe-study-eye-brief-python
-  - adam-adpp-accumulation-ratio-brief-python
-  - adam-adpp-carryover-exclusion-brief-python
-  - adam-adpp-comparison-sets-brief-python
-  - adam-adpp-dose-normalized-brief-python
   - adam-adqs-missed-visit-locf-brief-python
   - adam-adqs-multi-scale-scoring-brief-python
   - adam-adqs-subscale-score-brief-python
@@ -103,6 +97,7 @@ tasks:
   - adam-advs-prior-result-brief-python
   - adam-advs-window-table-brief-python
   - adam-advs-windows-brief-python
+  - ars-ae-incidence-results-brief-python
   - bimo-clinsite-site-level-brief-python
   - sdtm-ae-coding-brief-python
   - sdtm-ae-meddra-hierarchy-brief-python
@@ -167,7 +162,7 @@ harbor:
   name: sdtm-adam-v5-brief-python
   title: yamaa derivation v5, brief prompts (Python)
   description: >-
-    Every buildable yamaa derivation benchmark, including BIMO (144 tasks), solved in
+    Every buildable yamaa derivation benchmark, including BIMO and ARS (139 tasks), solved in
     Python. An agent gets the Python system prompt, the benchmark's brief
     prompt (the full prompt without its rules) and input datasets, with no
     internet but the model's API. A task passes when its output matches

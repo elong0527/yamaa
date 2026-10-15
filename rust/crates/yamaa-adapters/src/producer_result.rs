@@ -142,14 +142,18 @@ impl RootResult {
             )?;
             Ok::<_, ReportError>((value, fields))
         })();
-        if admitted.is_err() {
-            self.issues.extend(crate::file_application::rejected(
-                "output",
-                "publication_report_limit",
-            ));
-            return Ok(false);
-        }
-        let (mut value, mut fields) = admitted.expect("admitted publication report");
+        let (mut value, mut fields) = match admitted {
+            Ok(report) => report,
+            Err(error) => {
+                self.issues.extend(match error {
+                    ReportError::ResourceLimit(refusal) => {
+                        refusal.issues("output", "publication_report_limit")
+                    }
+                    _ => crate::file_application::rejected("output", "publication_report_limit"),
+                });
+                return Ok(false);
+            }
+        };
         let mut attempt = crate::producer_publication::Attempt::default();
         publication.save_into(limits, &mut attempt);
         use yamaa_engine::producer_publication::Failure;
@@ -275,11 +279,13 @@ impl RootResult {
         })();
         let (mut value, mut fields) = match report {
             Ok(report) => report,
-            Err(_) => {
-                self.issues.extend(crate::file_application::rejected(
-                    "output",
-                    "publication_report_limit",
-                ));
+            Err(error) => {
+                self.issues.extend(match error {
+                    ReportError::ResourceLimit(refusal) => {
+                        refusal.issues("output", "publication_report_limit")
+                    }
+                    _ => crate::file_application::rejected("output", "publication_report_limit"),
+                });
                 return if failed {
                     Err(crate::file_application::FailedBuild)
                 } else {

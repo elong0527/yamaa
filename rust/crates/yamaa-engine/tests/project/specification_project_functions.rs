@@ -507,8 +507,25 @@ fn classified_limit_observation_keeps_exact_facts_and_never_invents_generic_capa
                 )]
             );
         } else {
-            assert!(matches!(*error, ExecutionError::Capacity));
-            assert!(refusals.is_empty());
+            assert!(matches!(
+                *error,
+                ExecutionError::Limit {
+                    resource: Resource::SourceRows,
+                    limit: 0,
+                    required: Some(1)
+                }
+            ));
+            assert_eq!(
+                refusals,
+                [(
+                    Phase::Dataset(ExecutionPhase::Admission),
+                    Refusal {
+                        resource: Resource::SourceRows,
+                        limit: 0,
+                        required: Some(1)
+                    }
+                )]
+            );
         }
         assert_eq!(source.reads, 1);
         assert_eq!(cells.get(), 0);

@@ -326,7 +326,11 @@ fn accounting_and_resource_failures_preserve_snapshots_and_precede_later_effects
     );
     assert!(matches!(
         bytes.result,
-        Err(RunError::SourceBytes { limit: 0 })
+        Err(RunError::SourceBytes {
+            limit: 0,
+            actual: Some(13),
+            source: 0
+        })
     ));
     assert!(decoder.trace.borrow().is_empty());
     let cells = run::execute_bytes(
@@ -338,7 +342,7 @@ fn accounting_and_resource_failures_preserve_snapshots_and_precede_later_effects
             ..limits()
         },
     );
-    assert!(matches!(cells.result, Err(RunError::SourceCells)));
+    assert!(matches!(cells.result, Err(RunError::SourceCells { .. })));
     assert!(cells.table.is_some() && !decoder.trace.borrow().contains(&"cell"));
 }
 #[test]
@@ -1042,7 +1046,11 @@ mod source_collection {
         run::execute_with_port_into(&prepared, &mut port, &mut decoder, bounded, &mut attempt);
         assert!(matches!(
             attempt.result,
-            Err(PortError::Run(RunError::SourceBytes { limit: 20 }))
+            Err(PortError::Run(RunError::SourceBytes {
+                limit: 20,
+                actual: Some(26),
+                source: 1
+            }))
         ));
         assert_eq!(port.requests, ["SRC", "SECOND"]);
         assert_eq!(port.limits, [20, 7]);
@@ -1054,7 +1062,7 @@ mod source_collection {
         run::execute_with_port_into(&prepared, &mut port, &mut decoder, bounded, &mut attempt);
         assert!(matches!(
             attempt.result,
-            Err(PortError::Run(RunError::SourceCells))
+            Err(PortError::Run(RunError::SourceCells { .. }))
         ));
         assert_eq!(port.requests, ["SRC", "SECOND", "THIRD"]);
         assert!(attempt.sources.iter().all(|s| s.table.is_some()));

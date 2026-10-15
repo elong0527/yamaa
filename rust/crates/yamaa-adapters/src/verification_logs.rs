@@ -151,8 +151,13 @@ fn held(path: &str, table: core::LogTable, limits: PreparationLimits) -> Result<
     let projection = (0..table.schema().columns().len()).collect::<Vec<_>>();
     let bytes = if profile == "csv" {
         crate::csv_artifact::render(&table, &projection, limits.output_bytes).map_err(|e| {
-            if matches!(e, crate::csv_artifact::Error::Limit) {
-                Error::OutputLimit
+            if let crate::csv_artifact::Error::Limit { limit, actual, .. } = e {
+                Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                    "output_bytes",
+                    limit,
+                    actual,
+                    Vec::new(),
+                ))
             } else {
                 Error::InvalidObservation
             }
@@ -169,8 +174,18 @@ fn held(path: &str, table: core::LogTable, limits: PreparationLimits) -> Result<
             },
         )
         .map_err(|e| {
-            if matches!(e, crate::parquet_artifact::Error::Limit) {
-                Error::OutputLimit
+            if let crate::parquet_artifact::Error::Limit {
+                resource,
+                limit,
+                actual,
+            } = e
+            {
+                Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                    resource,
+                    limit,
+                    actual,
+                    Vec::new(),
+                ))
             } else {
                 Error::InvalidObservation
             }
@@ -207,8 +222,18 @@ fn held(path: &str, table: core::LogTable, limits: PreparationLimits) -> Result<
             "",
             crate::parquet_artifact::records(&table, &projection, limits.report_bytes).map_err(
                 |e| {
-                    if matches!(e, crate::parquet_artifact::Error::Limit) {
-                        Error::OutputLimit
+                    if let crate::parquet_artifact::Error::Limit {
+                        resource,
+                        limit,
+                        actual,
+                    } = e
+                    {
+                        Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                            resource,
+                            limit,
+                            actual,
+                            Vec::new(),
+                        ))
                     } else {
                         Error::InvalidObservation
                     }

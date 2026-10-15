@@ -22,10 +22,10 @@ Docker; this folder only writes Harbor task directories and a job file.
 Results are not kept in this repository: runs are uploaded to Harbor Hub and
 reviewed on its leaderboards.
 
-Standalone `result.sas` sources are also prepared for the 145 prompted
+Standalone `result.sas` sources are also prepared for the 148 prompted
 derivation benchmarks. Their execution prerequisites, local checks and known
 compatibility gaps are documented in [solutions/opensas.md](solutions/opensas.md).
-The opensas track runs the 142 confident cases with native CSV inputs. Three
+The opensas track runs the 145 confident cases with native CSV inputs. Three
 prepared cases remain excluded: investigator comments (spaces-only text),
 randomization (Parquet input), and age quality (warning-log output).
 `build.py` records their reasons and rejects explicit requests to run them.
@@ -323,7 +323,7 @@ uv run --project python --no-sync python evaluations/harbor/smoke.py \
     --out ~/.cache/yamaa-harbor-opensas
 ```
 
-This runs oracle and nop on the same 142 cases, with no model key. The saved
+This runs oracle and nop on the same 145 cases, with no model key. The saved
 `sample.json` lists every selected task and exclusion; `summary.json` records
 each case's rewards and exceptions. Jobs retain the usual task snapshots,
 verifier grades and logs. Weekly and manual CI runs retain this complete
@@ -350,7 +350,7 @@ uv run --project python --no-sync python evaluations/harbor/build.py \
     --out ~/.cache/yamaa-harbor-language-images
 ```
 
-This prepares 1,290 trials: 144 R, 144 Python and 142 opensas cases in each
+This prepares 1,317 trials: 147 R, 147 Python and 145 opensas cases in each
 prompt tier. Exclusions remain reported. Run at most six job processes in
 parallel, each with one active trial; start the remaining three as slots free
 up. Keep the default model variant, one attempt per task, and all failures.
@@ -475,23 +475,33 @@ rules, and whose rows are uploaded runs that point back to their trials.
 
 A leaderboard's tasks are its fixed question, as a Hub leaderboard is
 pinned to dataset versions: adding a task leaves earlier runs without it,
-and `export` then refuses them. Start a new leaderboard instead. There is
+and `export` then refuses them. Start a new leaderboard instead. New
+benchmarks may be built and evaluated before a successor board is assembled;
+their admission leaves historical task lists and scores unchanged. There is
 one leaderboard per dataset, so one per language and prompt tier
 (`yamaa/yamaa-sdtm-adam-r/sdtm-adam-v4-r`,
 `yamaa/yamaa-sdtm-adam-brief-r/sdtm-adam-v4-brief-r`, ...), and R, Python,
 opensas and each tier are ranked independently. All boards rank by complete task pass
 rate before cell accuracy. Shorter prompts can leave sponsor choices unstated,
 so their strict pass rates include the model's ability to infer those choices.
-The protocol-4 boards started as `v4` because protocol 4 separates the
-language images, records both runtime references, and applies the
-helper-runtime restriction to every track. The `v4` boards are frozen with
-their history; the `v5` boards, still graded under protocol 4, are the new
-task set that admits the PK/QT batch (#2297). Protocol 3's changed-input
-checks, regenerated partial credit and complete job evidence remain
-required. Older scores stay on their
+The v4 boards introduced protocol 4, which separates the language images,
+records both runtime references, and applies the helper-runtime restriction
+to every track. Protocol 3's changed-input checks, regenerated partial credit
+and complete job evidence remain required. Older scores stay on their
 existing boards. Export appends the full source commit to the Hub board name
 and pins that commit and both image references in its metadata schema, so separately
 published runs cannot mix releases. Compared jobs must share the same commit.
+
+The `v5` boards retain protocol 4 and add completed-history intercurrent
+event priority, event-specific time-at-risk incidence and ARS-style adverse
+event results. Their task populations are pinned independently in
+`leaderboards/task-populations.json`, alongside the frozen v4 population.
+The `v6` boards retain protocol 4 and admit the eight public PK/QT cases
+from #2297, covering replicate QTcF averages, time-matched baseline and
+concentration, placebo-corrected change, carry-over exclusions, comparison
+sets, accumulation ratios and dose normalization. Their pinned population
+contains 147 R/Python cases and 145 opensas cases in each prompt tier. The
+v4 and v5 definitions, task populations and historical scores stay frozen.
 
 A row is one job: one agent, model, and variant, so the variants of a model
 sit side by side. Its metadata comes from the job (agent, version, model,

@@ -504,3 +504,176 @@ fn publication_retains_the_selected_physical_root_after_name_substitution() {
     );
     assert_eq!(fs::read_dir(&outside.0).unwrap().count(), 0);
 }
+
+#[test]
+fn compiler_refusals_retain_the_same_capacity_on_plain_and_environment_routes() {
+    use serde_json::json;
+    for (resource, limit, actual, path) in [
+        ("columns", 1024, 1025, "columns"),
+        ("inputs", 16, 17, "input"),
+        ("source_fields", 1024, 1025, "input.SRC.types"),
+        ("projected_columns", 1024, 1025, "output.columns"),
+    ] {
+        let study = Study::new();
+        let mut body = String::from(VALID);
+        match resource {
+            "columns" => {
+                for i in 1..actual {
+                    body.push_str(&format!(
+                        "  - {{name: C{i}, type: int, derivation: {{literal: 1}}}}\n"
+                    ));
+                }
+            }
+            "inputs" => {
+                let inputs = (0..actual)
+                    .map(|i| format!("S{i}: input.csv"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                body = body.replace("input: {SRC: input.csv}", &format!("input: {{{inputs}}}"));
+            }
+            "source_fields" => {
+                let fields = (0..actual)
+                    .map(|i| format!("F{i}: str"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                body = body.replace(
+                    "input: {SRC: input.csv}",
+                    &format!("input: {{SRC: {{path: input.csv, types: {{{fields}}}}}}}"),
+                );
+            }
+            "projected_columns" => {
+                body = body.replace(
+                    "columns: [ID]",
+                    &format!("columns: [{}]", vec!["ID"; actual].join(", ")),
+                );
+            }
+            _ => unreachable!(),
+        }
+        fs::write(study.0.join("spec.yaml"), body).unwrap();
+        fs::write(
+            study.0.join("environment.yaml"),
+            "schema_version: '1.0'\nlanguage: python\n",
+        )
+        .unwrap();
+        let spec = study.text("spec.yaml");
+        let environment = study.text("environment.yaml");
+        for environment in [None, Some(environment.as_str())] {
+            let request = || Request {
+                specification: &spec,
+                environment,
+            };
+            for issues in [
+                file_application::check(request(), identity(&spec)),
+                file_application::domain(request(), identity(&spec))
+                    .err()
+                    .expect("refused before execution"),
+            ] {
+                assert_eq!(issues.len(), 1, "{resource}, {environment:?}");
+                let issue = &issues[0];
+                assert_eq!(issue.phase, "engine");
+                assert_eq!(issue.condition, "engine_rejected");
+                assert_eq!(issue.requirement, None);
+                assert_eq!(issue.spec_paths, [path]);
+                assert_eq!(
+                    serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
+                    json!({
+                        "stage":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual,
+                    })
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn inherited_and_decoder_refusals_keep_resource_phase_on_both_public_routes() {
+    use serde_json::json;
+    for (resource, limit, phase, stage) in [
+        ("depth", 64, "inheritance", "prepare"),
+        ("numeric_digits", 4096, "yaml_decode", "capture"),
+    ] {
+        let study = Study::new();
+        if resource == "depth" {
+            fs::write(study.0.join("base.yaml"), VALID).unwrap();
+            for index in 0..65 {
+                let parent = if index < 64 {
+                    format!("layer-{}.yaml", index + 1)
+                } else {
+                    "base.yaml".into()
+                };
+                fs::write(
+                    study.0.join(format!("layer-{index}.yaml")),
+                    format!("schema_version: '1.0'\nparents: [{parent}]\n"),
+                )
+                .unwrap();
+            }
+            fs::write(
+                study.0.join("spec.yaml"),
+                "schema_version: '1.0'\nparents: [layer-0.yaml]\n",
+            )
+            .unwrap();
+        } else {
+            fs::write(
+                study.0.join("spec.yaml"),
+                format!("value: {}\n", "9".repeat(4097)),
+            )
+            .unwrap();
+        }
+        fs::write(
+            study.0.join("environment.yaml"),
+            "schema_version: '1.0'\nlanguage: python\n",
+        )
+        .unwrap();
+        let spec = study.text("spec.yaml");
+        let environment = study.text("environment.yaml");
+        for environment in [None, Some(environment.as_str())] {
+            let request = || Request {
+                specification: &spec,
+                environment,
+            };
+            for issues in [
+                file_application::check(request(), identity(&spec)),
+                file_application::domain(request(), identity(&spec))
+                    .err()
+                    .unwrap(),
+            ] {
+                assert_eq!(issues.len(), 1, "{resource}, {environment:?}");
+                assert_eq!(issues[0].phase, "engine");
+                assert_eq!(issues[0].condition, "engine_rejected");
+                assert_eq!(issues[0].requirement, None);
+                let mut expected = json!({"code":"resource_limit","stage":stage,"phase":phase,"resource":resource,"limit":limit});
+                if resource == "numeric_digits" {
+                    expected["actual"] = json!(4097);
+                }
+                assert_eq!(
+                    serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
+                    expected
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn matching_budget_refusal_retains_pattern_path_and_applied_bound() {
+    let study = Study::new();
+    fs::write(study.0.join("spec.yaml"), "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n  - name: TERM\n    type: str\n    derivation: {source: SRC.TERM}\n    verifications: {matches: {pattern: '(a+)+b'}}\n").unwrap();
+    fs::write(
+        study.0.join("input.csv"),
+        format!("ID,TERM\n1,{}\n", "a".repeat(32)),
+    )
+    .unwrap();
+    let result = study.build();
+    assert!(result.output().is_none());
+    let findings = result.issues();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].condition, "engine_rejected");
+    assert_eq!(
+        findings[0].spec_paths,
+        ["columns.TERM.verifications[0].matches.pattern"]
+    );
+    let context: serde_json::Value = serde_json::from_str(&findings[0].context).unwrap();
+    assert_eq!(context["resource"], "predicate_regex_state_cells");
+    assert_eq!(context["limit"], 1_000_000);
+    assert!(!study.0.join("output.csv").exists());
+}

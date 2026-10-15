@@ -4,7 +4,7 @@
 # attempt counts and at least `attempts` attempts each, at the tasks' own
 # timeouts, so every row answers
 # the same question. Metrics are computed from the listed tasks only.
-# This board covers 142 confident derivation cases, including BIMO;
+# This board covers 134 confident derivation cases, including BIMO;
 # exclusions are in build.py OPENSAS_EXCLUSIONS. Each task requires `/app/output/result.sas`.
 grading_protocol: "4"
 image_reference: yamaa-harbor-agent-opensas:0.8
@@ -12,6 +12,7 @@ verifier_image_reference: yamaa-harbor-verifier-opensas:0.8
 package: yamaa/yamaa-sdtm-adam-opensas
 tasks:
   - adam-adae-death-opensas
+  - adam-adae-exposure-adjusted-incidence-opensas
   - adam-adae-occurrence-flags-opensas
   - adam-adae-onset-emergence-opensas
   - adam-adae-partial-dates-opensas
@@ -32,14 +33,11 @@ tasks:
   - adam-adcm-atc-classes-opensas
   - adam-adcm-on-treatment-opensas
   - adam-adeg-derived-intervals-opensas
-  - adam-adeg-placebo-corrected-change-opensas
-  - adam-adeg-replicate-qtc-average-opensas
-  - adam-adeg-time-matched-baseline-opensas
-  - adam-adeg-time-matched-concentration-opensas
   - adam-adex-cumulative-dose-opensas
   - adam-adex-dose-reduction-opensas
   - adam-adex-uncollected-opensas
   - adam-adfa-fever-opensas
+  - adam-adice-governing-event-opensas
   - adam-adlb-bds-opensas
   - adam-adlb-closest-visit-opensas
   - adam-adlb-end-of-treatment-opensas
@@ -52,10 +50,6 @@ tasks:
   - adam-adlbc-row-window-opensas
   - adam-adlbc-window-chain-opensas
   - adam-adoe-study-eye-opensas
-  - adam-adpp-accumulation-ratio-opensas
-  - adam-adpp-carryover-exclusion-opensas
-  - adam-adpp-comparison-sets-opensas
-  - adam-adpp-dose-normalized-opensas
   - adam-adqs-missed-visit-locf-opensas
   - adam-adqs-multi-scale-scoring-opensas
   - adam-adqs-subscale-score-opensas
@@ -99,6 +93,7 @@ tasks:
   - adam-advs-prior-result-opensas
   - adam-advs-window-table-opensas
   - adam-advs-windows-opensas
+  - ars-ae-incidence-results-opensas
   - bimo-clinsite-site-level-opensas
   - sdtm-ae-coding-opensas
   - sdtm-ae-meddra-hierarchy-opensas
@@ -163,7 +158,7 @@ harbor:
   name: sdtm-adam-v5-opensas
   title: yamaa derivation v5 (opensas)
   description: >-
-    The 142 confident yamaa derivation benchmarks, including BIMO, solved
+    The 134 confident yamaa derivation benchmarks, including BIMO, solved
     with opensas v0.6.6. An agent gets the opensas system prompt, the benchmark's
     prompt and input datasets, with no internet but the model's API. A task
     passes when its output matches every golden cell, the verifier's rerun
