@@ -328,6 +328,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(preflight::reached());
     reached.extend(preflight::self_reached());
     reached.extend(preflight::intermediate_reached());
+    reached.extend(preflight::namespace_reached());
     reached.extend(binding::intermediate_key_reached());
     reached.extend(intermediate_ranges::reached());
     reached.extend(producer::reached());
