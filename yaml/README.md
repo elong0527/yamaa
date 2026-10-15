@@ -139,8 +139,10 @@ within the partition; it never constructs additional rows.
 
 A named intermediate can compare a donor field with the
 current driver's field in its `filter`, for example
-`OBS.AVISITN < PLAN.AVISITN`. The driver is root `base` without row templates,
-or the explicit template's `dataset`. `order_by` and `keep` select one donor
+`OBS.AVISITN < PLAN.AVISITN`. The driver is the row template's `dataset` (an
+input dataset or an eligible named intermediate), or root `base` without row
+templates; either defaults to the single declared input when omitted (see the
+[contract index](../rules/README.md#terminology)). `order_by` and `keep` select one donor
 from the surviving candidates. Use an explicit planning input for visits
 that do not yet have observed records. See the [window contract](../rules/operations/windows.md)
 and [lookup contract](../rules/operations/lookup.md).

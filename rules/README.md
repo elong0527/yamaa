@@ -97,10 +97,12 @@ One term per concept across all rules, schema comments, and messages
   format profiles). **variable** -- an expression-level name (schema language).
 - **path notation** -- `row.dataset`, `root.input`, `expression.source`
   (binding notation). Never `row_class.` or `root_class.`.
-- **driver** -- the dataset whose records drive row construction: the root
-  `base` without row templates, or the explicit row template's `dataset`.
-  The term is allowed in normative text, schema descriptions, and
-  user-facing messages.
+- **driver** -- the source whose records drive row construction: a row
+  template's `dataset`, naming an input dataset or an eligible named
+  intermediate ([REQ-0034](execution/rows.md#req-0034)), or root `base`
+  without row templates ([REQ-0042](execution/rows.md#req-0042)). Either
+  defaults to the single declared input when omitted. The term is allowed
+  in normative text, schema descriptions, and user-facing messages.
 
 A field that holds a predicate is named for how it treats the three truth
 values, so one name never covers two treatments:
