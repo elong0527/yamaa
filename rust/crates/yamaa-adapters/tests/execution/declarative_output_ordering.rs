@@ -415,7 +415,7 @@ fn nested_column_and_row_odm_derivations_still_reject_ordinals_before_capture() 
 
 #[test]
 fn parquet_records_expose_identical_ordinal_policy_without_changing_stored_fields() {
-    use yamaa_adapters::{arrow_table::TableLimits, parquet_artifact, typed_csv};
+    use yamaa_adapters::{parquet_artifact, typed_csv};
     let fixture = authored(
         r#"schema_version: '1.0'
 domain: TEST
@@ -436,29 +436,8 @@ columns:
         (b"ID\n", b"ID,POSITION\n"),
     ] {
         // Known physical input; the expected generated positions above are authored independently.
-        let table = typed_csv::parse(
-            input,
-            &[],
-            Default::default(),
-            TableLimits {
-                max_rows: 2,
-                max_columns: 1,
-                max_batches: 1,
-                max_cells: 2,
-            },
-        )
-        .unwrap();
-        let bytes = parquet_artifact::render(
-            &table,
-            &[0],
-            parquet_artifact::Limits {
-                output_bytes: 4096,
-                staged_bytes: 4096,
-                cells: 2,
-                columns: 1,
-            },
-        )
-        .unwrap();
+        let table = typed_csv::parse(input, &[]).unwrap();
+        let bytes = parquet_artifact::render(&table, &[0]).unwrap();
         fs::write(fixture.0.join("source.parquet"), bytes).unwrap();
         let mut result = fixture.run().unwrap();
         assert!(result.issues().is_empty(), "{:?}", result.issues());

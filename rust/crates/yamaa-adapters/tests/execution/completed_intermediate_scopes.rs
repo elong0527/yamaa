@@ -40,7 +40,7 @@ fn issue(issue: &yamaa_adapters::issue_rows::Issue) -> serde_json::Value {
 }
 fn expected(path: &Path) -> serde_json::Value {
     let text = fs::read_to_string(path).unwrap();
-    let d = yamaa_adapters::yaml_decode::decode_yaml(text.as_bytes(), Default::default())
+    let d = yamaa_adapters::yaml_decode::decode_yaml(text.as_bytes())
         .unwrap()
         .document;
     fn value(d: &yamaa_core::schema::Document, id: usize) -> serde_json::Value {

@@ -33,7 +33,7 @@ impl InheritancePort for Parents {
             display_path: written.into(),
         })
     }
-    fn capture(&mut self, source: &Identity, maximum: usize) -> Result<Vec<u8>, SourceError<()>> {
+    fn capture(&mut self, source: &Identity) -> Result<Vec<u8>, SourceError<()>> {
         assert!(
             source.identity.ends_with(".yaml"),
             "compiler read study data"
@@ -46,16 +46,9 @@ impl InheritancePort for Parents {
                 .replace("input/lb.csv", "input/lb.xlsx")
                 .into_bytes();
         }
-        assert!(bytes.len() <= maximum);
         Ok(bytes)
     }
-    fn rebase(
-        &mut self,
-        _: &Identity,
-        _: &Identity,
-        written: &str,
-        _: usize,
-    ) -> Result<String, ()> {
+    fn rebase(&mut self, _: &Identity, _: &Identity, written: &str) -> Result<String, ()> {
         Ok(written.into())
     }
 }

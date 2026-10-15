@@ -1,5 +1,5 @@
 //! Unique prototype assertions retained over typed source, engine and issue APIs.
-use yamaa_adapters::{arrow_table::TableLimits, issue_rows::Issue, typed_csv};
+use yamaa_adapters::{issue_rows::Issue, typed_csv};
 use yamaa_core::dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate};
 use yamaa_core::{
     reduction::NumericReducer,
@@ -21,18 +21,8 @@ fn grouped_reduction_preserves_authored_identifier_missingness_and_fresh_attempt
     .unwrap();
     for identifier in [None, Some("SRC.x".to_owned())] {
         for content in [b"id,x\n1,\n1,2\n".as_slice(), b"id,x\n1,\n1,\n".as_slice()] {
-            let source = typed_csv::parse(
-                content,
-                &[("id".into(), T::Int), ("x".into(), T::Str)],
-                Default::default(),
-                TableLimits {
-                    max_rows: 10,
-                    max_columns: 2,
-                    max_batches: 1,
-                    max_cells: 20,
-                },
-            )
-            .unwrap();
+            let source =
+                typed_csv::parse(content, &[("id".into(), T::Int), ("x".into(), T::Str)]).unwrap();
             let plan = DatasetPlan::new(
                 source.schema().clone(),
                 output.clone(),
@@ -63,26 +53,20 @@ fn grouped_reduction_preserves_authored_identifier_missingness_and_fresh_attempt
             )
             .unwrap();
             for _ in 0..2 {
-                match plan.execute(
-                    &source,
-                    yamaa_core::dataset::Limits {
-                        source_rows: 10,
-                        output_rows: 10,
-                        output_cells: 20,
-                        key_cells: 10,
-                        work_cells: 1000,
-                        scalar_text_bytes: 1000,
-                        output_text_bytes: 1000,
-                        identity_cells: 10,
-                        identity_text_bytes: 1000,
-                    },
-                ) {
+                match plan
+                    .execute(
+                        &source,
+                        &[],
+                        &mut yamaa_core::function_invocation::NoFunctions::new(),
+                        None,
+                    )
+                    .result
+                {
                     Ok(result) => {
                         assert_eq!(result.dataset.rows(), [vec![Value::Int(1), Value::Missing]])
                     }
                     Err(error) => {
-                        let issue =
-                            Issue::from_core(error.diagnostic_with_limit(4096).unwrap()).unwrap();
+                        let issue = Issue::from_core(error.diagnostic().unwrap().unwrap()).unwrap();
                         assert_eq!(issue.condition, "incompatible_input_type");
                         assert_eq!(issue.requirement.as_deref(), Some("REQ-0510"));
                         assert_eq!(issue.spec_paths, ["rows[0].derivations.total.aggregate"]);

@@ -277,18 +277,17 @@ fn original_binding_fixture_keeps_output_names_literal_fields_and_complete_sourc
             name: "ODM",
             fields: &fields,
         }],
-        Default::default(),
     )
     .unwrap();
     assert_eq!(
-        catalog.bind("LBDTC").unwrap(),
+        catalog.bind("LBDTC"),
         Some(Binding::Output {
             column: 7,
             column_type: ColumnType::Date
         })
     );
     assert_eq!(
-        catalog.bind("ODM.StudyOID").unwrap(),
+        catalog.bind("ODM.StudyOID"),
         Some(Binding::Dataset {
             dataset: 0,
             field: 0,
@@ -296,7 +295,7 @@ fn original_binding_fixture_keeps_output_names_literal_fields_and_complete_sourc
         })
     );
     for name in ["UNKNOWN", "OTHER.Value", "ODM.IT.LB.LBDTC", "ODM.AGE"] {
-        assert_eq!(catalog.bind(name).unwrap(), None, "{name}");
+        assert_eq!(catalog.bind(name), None, "{name}");
     }
 }
 

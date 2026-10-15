@@ -1,7 +1,6 @@
 //! Original-document compiler and source-port integration contracts.
 use std::{path::Path, sync::Arc};
 use yamaa_adapters::{
-    arrow_table::TableLimits,
     csv_source,
     specification_source::{CapturedSchema, PreparedDocument, Source},
     yaml_decode::decode_yaml,
@@ -37,13 +36,9 @@ fn spec_findings(
     error: &yamaa_adapters::specification_run::Error,
     source: Option<&yamaa_core::specification::SourceDeclaration>,
 ) -> Option<Vec<serde_json::Value>> {
-    yamaa_adapters::specification_diagnostics::findings_with_limit(
-        error,
-        source,
-        yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
-    )
-    .ok()
-    .flatten()
+    yamaa_adapters::specification_diagnostics::findings(error, source)
+        .ok()
+        .flatten()
 }
 
 fn text(d: &Document, id: usize) -> &str {
@@ -63,7 +58,7 @@ fn schema(root: &Path) -> Arc<CapturedSchema> {
         if modules.iter().any(|m| m.identity == name) {
             return;
         }
-        let d = decode_yaml(&std::fs::read(root.join(name)).unwrap(), Default::default())
+        let d = decode_yaml(&std::fs::read(root.join(name)).unwrap())
             .unwrap()
             .document;
         let children = d
@@ -85,7 +80,7 @@ fn schema(root: &Path) -> Arc<CapturedSchema> {
     }
     let mut modules = Vec::new();
     visit(root, "schema.yaml", &mut modules);
-    CapturedSchema::admit(modules, 0, Default::default()).unwrap()
+    CapturedSchema::admit(modules, 0).unwrap()
 }
 fn prepare(schema: &Arc<CapturedSchema>, source: &[u8]) -> PreparedDocument {
     schema
@@ -101,19 +96,6 @@ fn lower(spec: &SpecificationDocument, source: &TableSchema) -> DatasetPlan {
         .bind(source)
         .unwrap()
 }
-fn limits() -> dataset::Limits {
-    dataset::Limits {
-        source_rows: 1_000_000,
-        output_rows: 1_000_000,
-        output_cells: 10_000_000,
-        key_cells: 10_000_000,
-        work_cells: 100_000_000,
-        scalar_text_bytes: 1_000_000,
-        output_text_bytes: 10_000_000,
-        identity_cells: 10_000_000,
-        identity_text_bytes: 10_000_000,
-    }
-}
 
 #[test]
 fn parquet_input_policy_and_owned_source_observations_use_the_shared_build_path() {
@@ -125,15 +107,6 @@ fn parquet_input_policy_and_owned_source_observations_use_the_shared_build_path(
         calls: usize,
     }
     impl SourcePort for Port {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -150,10 +123,10 @@ fn parquet_input_policy_and_owned_source_observations_use_the_shared_build_path(
         fn capture(
             &mut self,
             source: &SourceDeclaration,
-            maximum: usize,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             assert_eq!(source.path, "input.PARQUET");
-            assert!(self.content.len() <= maximum);
             self.calls += 1;
             Ok(self.content.clone())
         }
@@ -219,20 +192,17 @@ fn original_yaml_to_checked_numeric_failure_without_python_plan() {
     ] {
         let case = root.join("benchmarks").join(name);
         let spec = prepare(&schema, &std::fs::read(case.join("spec.yaml")).unwrap());
-        let source = csv_source::parse_text_table(
-            &std::fs::read(case.join("input/lb.csv")).unwrap(),
-            Default::default(),
-            TableLimits {
-                max_rows: 1_000_000,
-                max_columns: 4096,
-                max_batches: 1,
-                max_cells: 10_000_000,
-            },
-        )
-        .unwrap();
+        let source =
+            csv_source::parse_text_table(&std::fs::read(case.join("input/lb.csv")).unwrap())
+                .unwrap();
         let plan = lower(spec.model(), source.schema());
         drop(spec);
-        let attempt = plan.execute_observed(&source, limits());
+        let attempt = plan.execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert!(attempt.handler_counts.is_empty());
         let error = attempt.result.unwrap_err();
         let dataset::ExecutionError::Numeric { error, identity } = *error else {
@@ -262,16 +232,18 @@ fn repeated_keys_collect_raw_readings_before_conversion() {
         &schema,
         &std::fs::read(root.join("benchmarks/negative-zero-division/spec.yaml")).unwrap(),
     );
-    let table_limits = TableLimits {
-        max_rows: 100,
-        max_columns: 10,
-        max_batches: 1,
-        max_cells: 1000,
-    };
     let same = b"STUDYID,USUBJID,LBTESTCD,LBSTRESN,LBBLRESN\nS,P,ALT,12,10\nS,P,ALT,12,10\n";
-    let table = csv_source::parse_text_table(same, Default::default(), table_limits).unwrap();
+    let table = csv_source::parse_text_table(same).unwrap();
     let plan = lower(spec.model(), table.schema());
-    let result = plan.execute(&table, limits()).unwrap();
+    let result = plan
+        .execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         result.dataset.rows(),
         &[vec![
@@ -284,8 +256,13 @@ fn repeated_keys_collect_raw_readings_before_conversion() {
         ]]
     );
     let different = b"STUDYID,USUBJID,LBTESTCD,LBSTRESN,LBBLRESN\nS,P,ALT,12,10\nS,P,ALT,12.0,10\n";
-    let table = csv_source::parse_text_table(different, Default::default(), table_limits).unwrap();
-    let attempt = plan.execute_observed(&table, limits());
+    let table = csv_source::parse_text_table(different).unwrap();
+    let attempt = plan.execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(attempt.handler_counts.is_empty());
     let dataset::ExecutionError::MultipleValues {
         path,
@@ -346,8 +323,8 @@ fn captured_schema_and_occurrence_origins_survive_caller_buffers() {
 }
 
 #[test]
-fn inheritance_presence_and_capture_budgets_cannot_silently_fall_through() {
-    use yamaa_adapters::specification_source::{Error, Limits};
+fn inheritance_presence_cannot_silently_fall_through() {
+    use yamaa_adapters::specification_source::Error;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     for raw in [
@@ -363,32 +340,6 @@ fn inheritance_presence_and_capture_budgets_cannot_silently_fall_through() {
             Err(Error::InheritanceRequired)
         ));
     }
-    let error = CapturedSchema::admit(
-        vec![Source {
-            identity: "schema.yaml".into(),
-            bytes: b"bad yaml [".to_vec(),
-        }],
-        0,
-        Limits {
-            captured_bytes: 2,
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    assert!(matches!(error, Error::Limit("captured_bytes")));
-    let error = CapturedSchema::admit(
-        vec![Source {
-            identity: "schema.yaml".into(),
-            bytes: vec![],
-        }],
-        0,
-        Limits {
-            identity_bytes: 2,
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    assert!(matches!(error, Error::Limit("identity_bytes")));
 }
 
 #[test]
@@ -425,17 +376,8 @@ fn binding_uses_shared_reference_and_dependency_findings() {
     let schema = schema(&root.join("yaml"));
     let raw =
         std::fs::read_to_string(root.join("benchmarks/negative-zero-division/spec.yaml")).unwrap();
-    let table = csv_source::parse_text_table(
-        b"STUDYID,USUBJID,LBTESTCD,LBSTRESN,LBBLRESN\n",
-        Default::default(),
-        TableLimits {
-            max_rows: 0,
-            max_columns: 5,
-            max_batches: 1,
-            max_cells: 0,
-        },
-    )
-    .unwrap();
+    let table =
+        csv_source::parse_text_table(b"STUDYID,USUBJID,LBTESTCD,LBSTRESN,LBBLRESN\n").unwrap();
     for (expression, expected_suggestion) in [("MISSING + 1", false), ("LBSTRESN + 1", true)] {
         let written = raw.replace("100 * (AVAL - BASE) / BASE", expression);
         let captured = prepare(&schema, written.as_bytes());
@@ -773,15 +715,6 @@ fn independent_failed_reports(
     use yamaa_core::specification::SourceDeclaration;
     struct Port(usize, Arc<[u8]>);
     impl SourcePort for Port {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -795,9 +728,13 @@ fn independent_failed_reports(
         fn capture_reads(&self) -> usize {
             self.0
         }
-        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             assert_eq!((&*source.name, &*source.path), ("SRC", "source.csv"));
-            assert!(maximum >= self.1.len());
             self.0 += 1;
             Ok(Arc::clone(&self.1))
         }
@@ -814,35 +751,36 @@ fn independent_failed_reports(
     // Converted fixtures are JSON rows; the remaining readable TSV fixtures
     // keep their original three/four-column shape. Both normalize to
     // (case, source, expected, optional exact source bytes).
-    let rows: Vec<(String, String, Value, Option<Vec<u8>>)> = if fixture.starts_with('[') {
-        fixture_rows(fixture)
-            .iter()
-            .map(|row| {
-                (
-                    row["case"].as_str().unwrap().to_owned(),
-                    row["source"].as_str().unwrap().to_owned(),
-                    row["expected"].clone(),
-                    row.get("source_bytes").map(fixture_bytes),
-                )
-            })
-            .collect()
-    } else {
-        fixture
-            .lines()
-            .skip(1)
-            .map(|line| {
-                let fields = line.split('\t').collect::<Vec<_>>();
-                assert!(matches!(fields.len(), 3 | 4));
-                (
-                    fields[0].to_owned(),
-                    fields[1].to_owned(),
-                    serde_json::from_str(fields[2]).unwrap(),
-                    (fields.len() == 4)
-                        .then(|| fixture_bytes(&serde_json::json!({"hex": fields[3]}))),
-                )
-            })
-            .collect()
-    };
+    let rows: Vec<(String, String, Value, Option<Vec<u8>>)> =
+        if fixture.trim_start().starts_with('[') {
+            fixture_rows(fixture)
+                .iter()
+                .map(|row| {
+                    (
+                        row["case"].as_str().unwrap().to_owned(),
+                        row["source"].as_str().unwrap().to_owned(),
+                        row["expected"].clone(),
+                        row.get("source_bytes").map(fixture_bytes),
+                    )
+                })
+                .collect()
+        } else {
+            fixture
+                .lines()
+                .skip(1)
+                .map(|line| {
+                    let fields = line.split('\t').collect::<Vec<_>>();
+                    assert!(matches!(fields.len(), 3 | 4));
+                    (
+                        fields[0].to_owned(),
+                        fields[1].to_owned(),
+                        serde_json::from_str(fields[2]).unwrap(),
+                        (fields.len() == 4)
+                            .then(|| fixture_bytes(&serde_json::json!({"hex": fields[3]}))),
+                    )
+                })
+                .collect()
+        };
     for (case, source, expected, source_bytes) in &rows {
         let run = PreparedRun::prepare(prepare(&schema, source.as_bytes())).unwrap();
         let content = source_bytes.as_deref().unwrap_or(content);
@@ -920,99 +858,6 @@ fn binding_collects_ordered_findings_before_dependency_diagnostics() {
 }
 
 #[test]
-fn compiler_budgets_precede_owned_planning_and_preserve_policy_boundary() {
-    use yamaa_adapters::{specification_diagnostics, specification_run};
-    use yamaa_core::specification::{CompilationLimits, PrepareError, PreparedSpecification};
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let schema = schema(&root.join("yaml"));
-    let raw =
-        std::fs::read_to_string(root.join("benchmarks/negative-zero-division/spec.yaml")).unwrap();
-    // Two formulas each fit individually, but the sum exceeds the run's budget.
-    let written = raw
-        .replace(
-            "derivation: LB.LBSTRESN",
-            "derivation: {compute: {expr: '1 + 2'}}",
-        )
-        .replace("100 * (AVAL - BASE) / BASE", "3 + 4");
-    let doc = prepare(&schema, written.as_bytes());
-    for (resource, limits) in [
-        (
-            "columns",
-            CompilationLimits {
-                columns: 5,
-                ..Default::default()
-            },
-        ),
-        (
-            "keys",
-            CompilationLimits {
-                keys: 2,
-                ..Default::default()
-            },
-        ),
-        (
-            "inputs",
-            CompilationLimits {
-                inputs: 0,
-                ..Default::default()
-            },
-        ),
-        (
-            "projected_columns",
-            CompilationLimits {
-                projected_columns: 5,
-                ..Default::default()
-            },
-        ),
-        (
-            "model_text_bytes",
-            CompilationLimits {
-                model_text_bytes: 1,
-                ..Default::default()
-            },
-        ),
-        (
-            "numeric_bytes",
-            CompilationLimits {
-                numeric_bytes: 9,
-                ..Default::default()
-            },
-        ),
-    ] {
-        let error = PreparedSpecification::prepare_with_limits(doc.model(), limits).unwrap_err();
-        assert!(
-            matches!(&error, PrepareError::Limit(actual) if actual .resource == resource),
-            "{error:?}"
-        );
-        let error = specification_run::Error::Prepare(error);
-        assert!(spec_findings(&error, None).is_none());
-        let envelope = serde_json::from_str::<serde_json::Value>(
-            &specification_diagnostics::failure(&error, None),
-        )
-        .unwrap();
-        let outcome = &envelope["outcome"];
-        assert_eq!(outcome["status"], "rejected");
-        assert_eq!(outcome["stage"], "prepare");
-        assert_eq!(outcome["code"], "compiler_limit");
-        assert_eq!(outcome["resource"], resource);
-        let specification_run::Error::Prepare(PrepareError::Limit(facts)) = &error else {
-            unreachable!()
-        };
-        assert_eq!(outcome["limit"], facts.limit);
-        assert_eq!(outcome["actual"].as_u64(), facts.actual.map(|v| v as u64));
-        assert_eq!(outcome["spec_paths"], serde_json::json!(facts.spec_paths));
-    }
-    PreparedSpecification::prepare_with_limits(
-        doc.model(),
-        CompilationLimits {
-            numeric_bytes: 10,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-}
-
-#[test]
 fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
     use yamaa_adapters::specification_run::{Error, PortError, PreparedRun, SourcePort};
     use yamaa_core::specification::SourceDeclaration;
@@ -1023,15 +868,6 @@ fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
         fail: bool,
     }
     impl SourcePort for Port {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -1048,12 +884,10 @@ fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
         fn capture(
             &mut self,
             source: &SourceDeclaration,
-            limit: usize,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             assert_eq!((&*source.name, &*source.path), ("LB", "input/lb.csv"));
-            // This attempt starts with the central cumulative source allowance;
-            // capture retains the same physical bytes for later owned decoding.
-            assert_eq!(limit, yamaa_core::capacity::SOURCE_BYTES);
             self.requests += 1;
             if self.fail {
                 return Err("resource_path_missing");
@@ -1129,15 +963,6 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
         reads: usize,
     }
     impl SourcePort for Files {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -1154,14 +979,14 @@ fn whole_failure_reports_match_reference_observations_from_actual_capture() {
         fn capture(
             &mut self,
             source: &SourceDeclaration,
-            limit: usize,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             use std::io::Read;
             let mut bytes = Vec::new();
             std::fs::File::open(self.base.join(&source.path))?
-                .take((limit + 1) as u64)
+                .take((yamaa_core::limits::Limits::SOURCE_BYTES + 1) as u64)
                 .read_to_end(&mut bytes)?;
-            assert!(bytes.len() <= limit);
             self.reads += 1;
             Ok(bytes.into())
         }
@@ -1272,21 +1097,21 @@ fn original_ordered_sum_yaml_executes_all_seventeen_rows_with_exact_float_bits()
     let document = prepare(&schema, &std::fs::read(case.join("spec.yaml")).unwrap());
     let compiled =
         yamaa_core::specification::PreparedSpecification::prepare(document.model()).unwrap();
-    let table_limits = TableLimits {
-        max_rows: 100,
-        max_columns: 64,
-        max_batches: 1,
-        max_cells: 6400,
-    };
     let source = typed_csv::parse(
         &std::fs::read(case.join("input/lb.csv")).unwrap(),
         &compiled.source().types,
-        Default::default(),
-        table_limits,
     )
     .unwrap();
     let plan = compiled.bind(source.schema()).unwrap();
-    let result = plan.execute(&source, limits()).unwrap();
+    let result = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(result.dataset.rows().len(), 17);
     let projection = compiled
         .projection()
@@ -1301,7 +1126,7 @@ fn original_ordered_sum_yaml_executes_all_seventeen_rows_with_exact_float_bits()
                 .unwrap()
         })
         .collect::<Vec<_>>();
-    let bytes = yamaa_adapters::csv_artifact::render(&result.dataset, &projection, 4096).unwrap();
+    let bytes = yamaa_adapters::csv_artifact::render(&result.dataset, &projection, None).unwrap();
     assert_eq!(
         bytes,
         std::fs::read(case.join("expected/adlb.csv")).unwrap()
@@ -1309,8 +1134,6 @@ fn original_ordered_sum_yaml_executes_all_seventeen_rows_with_exact_float_bits()
     let expected = typed_csv::parse(
         &std::fs::read(case.join("expected/adlb.csv")).unwrap(),
         &[("AVAL".into(), yamaa_core::value::ColumnType::Float)],
-        Default::default(),
-        table_limits,
     )
     .unwrap();
     for (column, name) in compiled.projection().iter().enumerate() {
@@ -1433,45 +1256,6 @@ fn aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path() 
 }
 
 #[test]
-fn declared_field_and_total_row_expression_budgets_precede_compiler_ownership() {
-    use yamaa_core::specification::{CompilationLimits, PrepareError, PreparedSpecification};
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let schema = schema(&root.join("yaml"));
-    let raw = std::fs::read(root.join("benchmarks/adam-adlb-ordered-sum/spec.yaml")).unwrap();
-    let document = prepare(&schema, &raw);
-    assert!(matches!(
-        PreparedSpecification::prepare_with_limits(
-            document.model(),
-            CompilationLimits {
-                source_fields: 0,
-                ..Default::default()
-            }
-        ),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "source_fields",
-                ..
-            }
-        ))
-    ));
-    assert!(matches!(
-        PreparedSpecification::prepare_with_limits(
-            document.model(),
-            CompilationLimits {
-                numeric_bytes: 3,
-                ..Default::default()
-            }
-        ),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "numeric_bytes",
-                ..
-            }
-        ))
-    ));
-}
-
-#[test]
 fn original_success_report_follows_actual_atomic_publication_and_output_failures_do_not_publish() {
     use serde_json::{json, Value as Json};
     use yamaa_adapters::{
@@ -1484,15 +1268,6 @@ fn original_success_report_follows_actual_atomic_publication_and_output_failures
         reads: usize,
     }
     impl SourcePort for Captured {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -1509,10 +1284,10 @@ fn original_success_report_follows_actual_atomic_publication_and_output_failures
         fn capture(
             &mut self,
             source: &SourceDeclaration,
-            limit: usize,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Self::Error> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             assert_eq!(source.path, "input/lb.csv");
-            assert!(self.bytes.len() <= limit);
             self.reads = 1;
             Ok(self.bytes.clone())
         }
@@ -1677,15 +1452,6 @@ fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
         reads: usize,
     }
     impl SourcePort for Host {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -1699,7 +1465,12 @@ fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
         fn capture_reads(&self) -> usize {
             self.reads
         }
-        fn capture(&mut self, _: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            _: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             self.reads += 1;
             Ok(self.bytes.clone())
         }
@@ -1934,15 +1705,6 @@ fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
         published: Vec<Vec<u8>>,
     }
     impl SourcePort for Host {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -1956,7 +1718,12 @@ fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
         fn capture_reads(&self) -> usize {
             self.reads
         }
-        fn capture(&mut self, _: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            _: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             self.reads += 1;
             Ok(self.bytes.clone())
         }
@@ -2065,15 +1832,6 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
         published: Vec<Vec<u8>>,
     }
     impl SourcePort for Host {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -2087,7 +1845,12 @@ fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
         fn capture_reads(&self) -> usize {
             self.reads
         }
-        fn capture(&mut self, _: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            _: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             self.reads += 1;
             Ok(self.bytes.clone())
         }
@@ -2212,17 +1975,8 @@ fn original_lookup_compiles_multiple_schemas_and_executes_named_selections() {
             .sources()
             .iter()
             .map(|source| {
-                csv_source::parse_text_table(
-                    &std::fs::read(case.join(&source.path)).unwrap(),
-                    Default::default(),
-                    TableLimits {
-                        max_rows: 100,
-                        max_columns: 64,
-                        max_cells: 6400,
-                        max_batches: 1,
-                    },
-                )
-                .unwrap()
+                csv_source::parse_text_table(&std::fs::read(case.join(&source.path)).unwrap())
+                    .unwrap()
             })
             .collect::<Vec<_>>();
         assert!(matches!(
@@ -2238,14 +1992,15 @@ fn original_lookup_compiles_multiple_schemas_and_executes_named_selections() {
             .map(|(_, table)| table as &dyn TableAccess<Error = _>)
             .collect::<Vec<_>>();
         for _ in 0..2 {
-            let attempt = plan.execute_observed_sources(
+            let attempt = plan.execute(
                 &tables[prepared.driver_index()],
                 &secondary,
-                limits(),
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
             );
             let execution = attempt.result.unwrap();
             let bytes =
-                yamaa_adapters::csv_artifact::render(&execution.dataset, &[0, 1, 2, 3], 8192)
+                yamaa_adapters::csv_artifact::render(&execution.dataset, &[0, 1, 2, 3], None)
                     .unwrap();
             assert_eq!(
                 bytes,
@@ -2298,15 +2053,6 @@ fn original_lookup_complete_report_uses_all_captured_sources_and_actual_handlers
         published: Vec<Vec<u8>>,
     }
     impl SourcePort for Host {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -2320,14 +2066,19 @@ fn original_lookup_complete_report_uses_all_captured_sources_and_actual_handlers
         fn capture_reads(&self) -> usize {
             self.reads
         }
-        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             self.requests.push(source.name.clone());
             if !self.seen.contains(&source.name) {
                 self.seen.push(source.name.clone());
                 self.reads += 1;
             }
             let bytes = Arc::clone(&self.content[&source.path]);
-            assert!(bytes.len() <= maximum);
+
             Ok(bytes)
         }
     }
@@ -2405,15 +2156,6 @@ fn original_lookup_failures_match_independent_diagnostics_and_completed_observat
         requests: Vec<String>,
     }
     impl SourcePort for Host {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -2427,7 +2169,12 @@ fn original_lookup_failures_match_independent_diagnostics_and_completed_observat
         fn capture_reads(&self) -> usize {
             self.requests.len()
         }
-        fn capture(&mut self, source: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             self.requests.push(source.name.clone());
             Ok(Arc::from(
                 std::fs::read(self.case.join(&source.path)).unwrap(),
@@ -2492,10 +2239,7 @@ fn original_lookup_failures_match_independent_diagnostics_and_completed_observat
 
 #[test]
 fn directly_admitted_intermediate_order_terms_keep_omitted_schema_defaults() {
-    use yamaa_core::{
-        schema::{DocumentLimits, ValidationBudget},
-        specification::PreparedSpecification,
-    };
+    use yamaa_core::specification::PreparedSpecification;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let case = root.join("benchmarks/schema-lookup");
     let raw = std::fs::read_to_string(case.join("spec.yaml"))
@@ -2546,27 +2290,15 @@ fn directly_admitted_intermediate_order_terms_keep_omitted_schema_defaults() {
         }
         let mut reachable = Vec::new();
         let root = copy_node(&nodes, input.root(), &mut reachable);
-        let document = Document::new(reachable, root, DocumentLimits::default()).unwrap();
-        let model =
-            SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
-                .unwrap()
-                .unwrap();
+        let document = Document::new(reachable, root).unwrap();
+        let model = SpecificationDocument::admit(document).unwrap().unwrap();
         let prepared = PreparedSpecification::prepare(&model).unwrap();
         let tables = prepared
             .sources()
             .iter()
             .map(|source| {
-                csv_source::parse_text_table(
-                    &std::fs::read(case.join(&source.path)).unwrap(),
-                    Default::default(),
-                    TableLimits {
-                        max_rows: 100,
-                        max_columns: 64,
-                        max_cells: 6400,
-                        max_batches: 1,
-                    },
-                )
-                .unwrap()
+                csv_source::parse_text_table(&std::fs::read(case.join(&source.path)).unwrap())
+                    .unwrap()
             })
             .collect::<Vec<_>>();
         let schemas = tables.iter().map(TableAccess::schema).collect::<Vec<_>>();
@@ -2617,15 +2349,6 @@ fn original_window_yaml_compiles_and_publishes_complete_independent_report() {
         published: Vec<Vec<u8>>,
     }
     impl SourcePort for Host {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -2639,9 +2362,13 @@ fn original_window_yaml_compiles_and_publishes_complete_independent_report() {
         fn capture_reads(&self) -> usize {
             self.reads
         }
-        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             assert_eq!((&*source.name, &*source.path), ("VS", "input/vs.csv"));
-            assert!(self.bytes.len() <= maximum);
             self.requests += 1;
             self.reads = 1;
             Ok(self.bytes.clone())
@@ -2715,15 +2442,6 @@ fn original_window_failures_match_independent_diagnostics_and_completed_observat
         requests: Vec<String>,
     }
     impl SourcePort for Host {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -2737,7 +2455,12 @@ fn original_window_failures_match_independent_diagnostics_and_completed_observat
         fn capture_reads(&self) -> usize {
             self.requests.len()
         }
-        fn capture(&mut self, source: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             self.requests.push(source.name.clone());
             assert_eq!(source.path, "input/vs.csv");
             Ok(self.bytes.clone())
@@ -2813,7 +2536,7 @@ fn original_window_failures_match_independent_diagnostics_and_completed_observat
 
 #[test]
 fn inherited_original_preparation_prunes_before_source_binding() {
-    use yamaa_core::schema::{NormalizationBudget, SchemaSource};
+    use yamaa_core::schema::SchemaSource;
     use yamaa_core::{inheritance as graph, inheritance_preparation as lifecycle};
     struct Host {
         root: std::path::PathBuf,
@@ -2840,12 +2563,11 @@ fn inherited_original_preparation_prunes_before_source_binding() {
             source: &graph::Source,
         ) -> Result<Document, graph::SourceError<&'static str>> {
             self.reads.push(source.identity.clone());
-            Ok(decode_yaml(
-                &std::fs::read(self.root.join(&source.identity)).unwrap(),
-                Default::default(),
+            Ok(
+                decode_yaml(&std::fs::read(self.root.join(&source.identity)).unwrap())
+                    .unwrap()
+                    .document,
             )
-            .unwrap()
-            .document)
         }
     }
     impl lifecycle::PathPort for Host {
@@ -2854,7 +2576,6 @@ fn inherited_original_preparation_prunes_before_source_binding() {
             _: &graph::Source,
             _: &graph::Source,
             written: &str,
-            _: usize,
         ) -> Result<String, &'static str> {
             if self.fail_path {
                 return Err("original path failure");
@@ -2875,11 +2596,10 @@ fn inherited_original_preparation_prunes_before_source_binding() {
         fn capture(
             &mut self,
             source: &graph::Source,
-            maximum: usize,
         ) -> Result<Vec<u8>, graph::SourceError<Self::Error>> {
             self.reads.push(source.identity.clone());
             let bytes = std::fs::read(self.root.join(&source.identity)).unwrap();
-            assert!(bytes.len() <= maximum);
+
             Ok(bytes)
         }
         fn rebase(
@@ -2887,20 +2607,16 @@ fn inherited_original_preparation_prunes_before_source_binding() {
             layer: &graph::Source,
             entry: &graph::Source,
             written: &str,
-            maximum: usize,
         ) -> Result<String, Self::Error> {
-            lifecycle::PathPort::rebase(self, layer, entry, written, maximum)
+            lifecycle::PathPort::rebase(self, layer, entry, written)
         }
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let case = root.join("benchmarks/schema-inheritance");
     let schema = schema(&root.join("yaml"));
-    let raw = decode_yaml(
-        &std::fs::read(case.join("spec_study.yaml")).unwrap(),
-        Default::default(),
-    )
-    .unwrap()
-    .document;
+    let raw = decode_yaml(&std::fs::read(case.join("spec_study.yaml")).unwrap())
+        .unwrap()
+        .document;
     let mut host = Host {
         root: case.clone(),
         reads: vec![],
@@ -2916,8 +2632,6 @@ fn inherited_original_preparation_prunes_before_source_binding() {
         },
         raw.clone(),
         &mut host,
-        &mut NormalizationBudget::new(Default::default()),
-        Default::default(),
     )
     .unwrap();
     assert_eq!(host.reads, ["spec_organization.yaml", "spec_compound.yaml"]);
@@ -2979,17 +2693,18 @@ fn inherited_original_preparation_prunes_before_source_binding() {
     let table = yamaa_adapters::typed_csv::parse(
         &std::fs::read(case.join("input/lb.csv")).unwrap(),
         &compiled.source().types,
-        Default::default(),
-        TableLimits {
-            max_rows: 100,
-            max_columns: 64,
-            max_batches: 1,
-            max_cells: 6400,
-        },
     )
     .unwrap();
     let plan = compiled.bind(table.schema()).unwrap();
-    let execution = plan.execute_observed(&table, limits()).result.unwrap();
+    let execution = plan
+        .execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         execution.dataset.rows(),
         &[
@@ -3010,7 +2725,7 @@ fn inherited_original_preparation_prunes_before_source_binding() {
     assert_eq!(execution.verifications.len(), 1);
     assert_eq!(execution.verifications[0].failed_count, 0);
     assert_eq!(
-        yamaa_adapters::csv_artifact::render(&execution.dataset, &[0, 1, 2, 3], 1024).unwrap(),
+        yamaa_adapters::csv_artifact::render(&execution.dataset, &[0, 1, 2, 3], None).unwrap(),
         std::fs::read(case.join("expected/adlb.csv")).unwrap()
     );
     for (original, reserved, path) in [
@@ -3023,12 +2738,9 @@ fn inherited_original_preparation_prunes_before_source_binding() {
             .position(|n| matches!(n,N::Text(value) if value == original))
             .unwrap();
         nodes[key] = N::Text(reserved.into());
-        let changed = SpecificationDocument::admit(
-            Document::new(nodes, d.root(), Default::default()).unwrap(),
-            &mut yamaa_core::schema::ValidationBudget::new(Default::default()),
-        )
-        .unwrap()
-        .unwrap();
+        let changed = SpecificationDocument::admit(Document::new(nodes, d.root()).unwrap())
+            .unwrap()
+            .unwrap();
         let error =
             yamaa_core::specification::PreparedSpecification::prepare(&changed).unwrap_err();
         assert!(
@@ -3063,15 +2775,6 @@ fn inherited_original_preparation_prunes_before_source_binding() {
         published: Vec<Vec<u8>>,
     }
     impl yamaa_adapters::specification_run::SourcePort for Data {
-        fn capture_observed(
-            &mut self,
-            source: &yamaa_core::specification::SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(
             &mut self,
             _source: &yamaa_core::specification::SourceDeclaration,
@@ -3091,10 +2794,10 @@ fn inherited_original_preparation_prunes_before_source_binding() {
         fn capture(
             &mut self,
             source: &yamaa_core::specification::SourceDeclaration,
-            maximum: usize,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             assert_eq!((&*source.name, &*source.path), ("LB", "input/lb.csv"));
-            assert!(self.bytes.len() <= maximum);
             self.reads = 1;
             Ok(self.bytes.clone())
         }
@@ -3138,32 +2841,21 @@ fn inherited_original_preparation_prunes_before_source_binding() {
         data.published,
         vec![std::fs::read(case.join("expected/adlb.csv")).unwrap(); 2]
     );
-    for fail_path in [false, true] {
-        host.fail_path = fail_path;
-        let error = lifecycle::prepare(
-            schema.structure(),
-            graph::Source {
-                identity: "spec_study.yaml".into(),
-                display_path: "spec_study.yaml".into(),
-            },
-            raw.clone(),
-            &mut host,
-            &mut NormalizationBudget::new(Default::default()),
-            lifecycle::Limits {
-                rebased_bytes: 0,
-                ..Default::default()
-            },
-        )
-        .unwrap_err();
-        if fail_path {
-            assert!(matches!(
-                error,
-                lifecycle::Error::Path("original path failure")
-            ));
-        } else {
-            assert!(matches!(error, lifecycle::Error::PathBytes));
-        }
-    }
+    host.fail_path = true;
+    let error = lifecycle::prepare(
+        schema.structure(),
+        graph::Source {
+            identity: "spec_study.yaml".into(),
+            display_path: "spec_study.yaml".into(),
+        },
+        raw.clone(),
+        &mut host,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        lifecycle::Error::Path("original path failure")
+    ));
 }
 
 #[test]
@@ -3189,15 +2881,6 @@ fn classified_capture_failures_retain_complete_reports_without_publication() {
         identity: Arc<()>,
     }
     impl SourcePort for Port {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -3211,8 +2894,9 @@ fn classified_capture_failures_retain_complete_reports_without_publication() {
         fn capture(
             &mut self,
             source: &SourceDeclaration,
-            limit: usize,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Payload> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             let index = self.calls.len();
             self.calls.push(source.name.clone());
             if index == self.fail_at {
@@ -3222,7 +2906,6 @@ fn classified_capture_failures_retain_complete_reports_without_publication() {
                 });
             }
             assert_eq!(source.name, "DM");
-            assert!(self.bytes.len() <= limit);
             self.reads += usize::from(!self.cached);
             Ok(Arc::clone(&self.bytes))
         }
@@ -3301,7 +2984,8 @@ fn classified_capture_failures_retain_complete_reports_without_publication() {
                 let kind = match cause {
                     ResourceFailure::Missing => "missing",
                     ResourceFailure::NotRegularFile => "not_regular_file",
-                    ResourceFailure::UriScheme
+                    ResourceFailure::Boundary(_)
+                    | ResourceFailure::UriScheme
                     | ResourceFailure::Backslash
                     | ResourceFailure::EmptySegment
                     | ResourceFailure::ContentChanged
@@ -3388,7 +3072,7 @@ fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
                 display_path: written.into(),
             })
         }
-        fn capture(&mut self, _: &FileIdentity, _: usize) -> Result<Vec<u8>, SourceError<()>> {
+        fn capture(&mut self, _: &FileIdentity) -> Result<Vec<u8>, SourceError<()>> {
             Ok(self.parent.clone())
         }
         fn rebase(
@@ -3396,7 +3080,6 @@ fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
             layer: &FileIdentity,
             _: &FileIdentity,
             written: &str,
-            _: usize,
         ) -> Result<String, ()> {
             Ok(if layer.identity == "parent.yaml" {
                 format!("internal-location/{written}")
@@ -3407,15 +3090,6 @@ fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
     }
     struct Missing;
     impl SourcePort for Missing {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -3426,7 +3100,12 @@ fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
         fn capture_reads(&self) -> usize {
             0
         }
-        fn capture(&mut self, _: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            _: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             Err(())
         }
     }
@@ -3519,15 +3198,6 @@ fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize
         expected: Vec<u8>,
     }
     impl SourcePort for Port {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -3541,9 +3211,13 @@ fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize
         fn capture_reads(&self) -> usize {
             self.reads
         }
-        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             assert_eq!((&*source.name, &*source.path), ("SRC", "source.csv"));
-            assert!(maximum >= 5);
             self.reads += 1;
             Ok(Arc::from(&b"ID\n1\n"[..]))
         }
@@ -3634,15 +3308,6 @@ fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
         inspected: Vec<String>,
     }
     impl SourcePort for Port {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         type Error = ResourceFailure;
         fn resource_failure(&self, error: &ResourceFailure) -> Option<ResourceFailure> {
             Some(*error)
@@ -3662,8 +3327,9 @@ fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
         fn capture(
             &mut self,
             _: &SourceDeclaration,
-            _: usize,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, ResourceFailure> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             panic!("metadata failure reached study capture");
         }
     }
@@ -3801,15 +3467,6 @@ fn exact_wide_count_bounds_preserve_empty_counts_and_completed_check_prefix() {
         reads: usize,
     }
     impl SourcePort for Host {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -3823,7 +3480,12 @@ fn exact_wide_count_bounds_preserve_empty_counts_and_completed_check_prefix() {
         fn capture_reads(&self) -> usize {
             self.reads
         }
-        fn capture(&mut self, _: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            _: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             self.reads += 1;
             Ok(Arc::clone(&self.bytes))
         }
@@ -3962,7 +3624,7 @@ fn original_column_matches_match_complete_reports_and_exact_csv() {
     );
 }
 #[test]
-fn deferred_column_findings_stop_later_payload_compilation_but_keep_vocabulary_admission() {
+fn deferred_column_findings_keep_vocabulary_and_warning_log_admission() {
     use yamaa_adapters::specification_run::{Error, PreparedRun};
     use yamaa_core::specification::PrepareError;
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
@@ -3983,27 +3645,7 @@ fn deferred_column_findings_stop_later_payload_compilation_but_keep_vocabulary_a
             "columns: [ID, V], warning_log: warnings.csv}",
         );
         PreparedRun::prepare(prepare(&schema, with_log.as_bytes()))
-            .expect("later large pattern is still not compiled after the earlier deferred finding");
-    }
-    for (first, later_severity, index) in [
-        (
-            "matches: {pattern: 'a{1000001}', severity: warning}",
-            "error",
-            0,
-        ),
-        ("matches: {pattern: 'a{1000001}'}", "warning", 1),
-    ] {
-        let document = prepare(&schema, raw(first, later_severity).as_bytes());
-        let expected = format!("columns.V.verifications[{index}].matches");
-        // Without an earlier deferred finding, the first large payload reaches
-        // its own regex budget and still grants no study authority.
-        assert!(
-            matches!(
-                PreparedRun::prepare(document),
-                Err(Error::Prepare(PrepareError::Limit(_)))
-            ),
-            "{expected}"
-        );
+            .expect("the earlier finding remains deferred with a declared warning log");
     }
 }
 #[test]
@@ -4042,15 +3684,6 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
         saves: usize,
     }
     impl SourcePort for Port {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -4064,9 +3697,13 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
         fn capture_reads(&self) -> usize {
             self.reads
         }
-        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             assert_eq!((&*source.name, &*source.path), ("SRC", "source.csv"));
-            assert!(self.content.len() <= maximum);
             self.reads += 1;
             Ok(Arc::clone(&self.content))
         }
@@ -4187,15 +3824,6 @@ fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
         saves: usize,
     }
     impl SourcePort for Port {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -4209,11 +3837,16 @@ fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
         fn capture_reads(&self) -> usize {
             self.calls.len()
         }
-        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             assert_eq!(source.path, format!("{}.csv", source.name.to_lowercase()));
             self.calls.push(source.name.clone());
             let input = &self.inputs[&source.name];
-            assert!(input.len() <= maximum);
+
             Ok(Arc::clone(input))
         }
     }
@@ -4310,15 +3943,6 @@ fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
         saves: usize,
     }
     impl SourcePort for Port {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -4332,11 +3956,16 @@ fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
         fn capture_reads(&self) -> usize {
             self.calls.len()
         }
-        fn capture(&mut self, source: &SourceDeclaration, maximum: usize) -> Result<Arc<[u8]>, ()> {
+        fn capture(
+            &mut self,
+            source: &SourceDeclaration,
+            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, ()> {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
             assert_eq!(source.path, format!("{}.csv", source.name.to_lowercase()));
             self.calls.push(source.name.clone());
             let input = &self.inputs[&source.name];
-            assert!(input.len() <= maximum);
+
             Ok(Arc::clone(input))
         }
     }
@@ -4464,61 +4093,6 @@ fn original_mapping_cut_admission_has_complete_findings_before_study_ports() {
                 .clone(),
             "{}",
             row["case"].as_str().unwrap()
-        );
-    }
-}
-
-#[test]
-fn numeric_policy_reply_preserves_the_applicable_parser_and_resolution_bounds() {
-    use yamaa_adapters::{specification_diagnostics, specification_run::Error};
-    use yamaa_core::{
-        numeric_compiler::CompileError,
-        numeric_parser::{ParseError, ParseResource, SourcePosition},
-        specification::PrepareError,
-    };
-    for (error, resource, bound, actual) in [
-        (
-            CompileError::ResolutionLimit {
-                limit: 7,
-                required: 8,
-            },
-            "resolutions",
-            7,
-            Some(8),
-        ),
-        (
-            CompileError::Parse(ParseError::Limit {
-                position: SourcePosition {
-                    byte: 1,
-                    character: 1,
-                },
-                resource: ParseResource::Nodes,
-                limit: 3,
-            }),
-            "nodes",
-            3,
-            None,
-        ),
-    ] {
-        let error = Error::Prepare(PrepareError::Numeric {
-            path: "columns.VALUE.derivation.compute.expr".into(),
-            error,
-        });
-        let value: serde_json::Value =
-            serde_json::from_str(&specification_diagnostics::failure(&error, None)).unwrap();
-        let outcome = &value["outcome"];
-        assert_eq!(outcome["code"], "numeric_policy");
-        assert_eq!(outcome["stage"], "prepare");
-        assert_eq!(outcome["resource"], resource);
-        assert_eq!(outcome["limit"], bound);
-        assert_eq!(outcome["actual"].as_u64(), actual);
-        assert_eq!(
-            outcome["spec_paths"],
-            serde_json::json!(["columns.VALUE.derivation.compute.expr"])
-        );
-        assert_eq!(
-            outcome.as_object().unwrap().contains_key("actual"),
-            actual.is_some()
         );
     }
 }
