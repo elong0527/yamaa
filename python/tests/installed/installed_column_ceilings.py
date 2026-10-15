@@ -9,7 +9,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 import yamaa
-from yamaa import _native
 
 
 class ColumnCeilings(unittest.TestCase):
@@ -295,43 +294,6 @@ class ColumnCeilings(unittest.TestCase):
                     self.assert_build(consumer)
                 else:
                     self.assert_refusal(yamaa.domain(consumer))
-
-    def test_ipc_source_fields_refuse_before_batches_and_allow_retry(self):
-        spec = self.write_case("ipc")
-
-        def no_io(*_):
-            self.fail("in-memory execution entered file IO")
-
-        run = _native._prepare_document(
-            "memory.yaml", spec.read_bytes(), no_io, no_io, no_io
-        )
-        table = pa.table(
-            {"ID": ["S-001"], **{f"F{index:04d}": ["x"] for index in range(1, 1024)}}
-        )
-        stream = pa.BufferOutputStream()
-        with pa.ipc.new_stream(stream, table.schema) as writer:
-            writer.write_table(table)
-        ipc = stream.getvalue()
-
-        def assert_ipc_build():
-            output, outcome = run.execute_arrow(pa.ipc.open_stream(ipc))
-            self.assertEqual(json.loads(outcome)["outcome"]["status"], "success")
-            self.assertEqual(
-                pa.ipc.open_stream(output).read_all().to_pydict(), {"ID": ["S-001"]}
-            )
-
-        assert_ipc_build()
-
-        def forbid():
-            self.fail("over-wide schema entered batch producer")
-            yield
-
-        overwide = pa.RecordBatchReader.from_batches(
-            table.schema.append(pa.field("EXCESS", pa.string())), forbid()
-        )
-        with self.assertRaisesRegex(ValueError, "resource limit"):
-            run.execute_arrow(overwide)
-        assert_ipc_build()
 
 
 if __name__ == "__main__":

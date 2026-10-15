@@ -1,7 +1,6 @@
 # Installed 1,024/1,025 controls for every width route (#2299).
 library(yamaa)
-stopifnot(requireNamespace("arrow", quietly = TRUE),
-          requireNamespace("nanoarrow", quietly = TRUE))
+stopifnot(requireNamespace("arrow", quietly = TRUE))
 
 write_case <- function(root, columns = 1L, fields = 1L, typed = FALSE,
                        source_format = "csv", selected = NULL) {
@@ -269,36 +268,6 @@ run_column_ceilings <- function() {
     stopifnot(nrow(yamaa_check(consumer)$issues) == 0L)
     if (width == 1024L) assert_build(consumer) else assert_refusal(yamaa_domain(consumer))
   }
-
-  # Read an actual IPC source through the installed C Stream entry point.
-  no_io <- function(...) stop("in-memory execution entered file IO")
-  prepare <- get(".prepare_document", asNamespace("yamaa"))
-  execute <- get(".execute_specification_arrow", asNamespace("yamaa"))
-  spec <- write_case(path("ipc"))
-  source <- readBin(spec, "raw", n = file.info(spec)$size)
-  run <- prepare("memory.yaml", source, no_io, no_io, no_io)
-  header <- c("ID", sprintf("F%04d", seq_len(1023L)))
-  values <- as.data.frame(setNames(rep(list("x"), 1024L), header),
-                          stringsAsFactors = FALSE, check.names = FALSE)
-  values$ID <- "S-001"
-  ipc <- file.path(root, "input.arrow")
-  arrow::write_ipc_stream(values, ipc)
-  assert_ipc_build <- function() {
-    result <- execute(run, arrow::read_ipc_stream(ipc, as_data_frame = FALSE))
-    stopifnot(grepl('"status":"success"', result$outcome, fixed = TRUE))
-    output <- arrow::read_ipc_stream(arrow::BufferReader$create(result$table))
-    stopifnot(identical(names(output), "ID"), identical(output$ID, "S-001"))
-  }
-  assert_ipc_build()
-  values$EXCESS <- "x"
-  released <- 0L
-  overwide <- nanoarrow::array_stream_set_finalizer(
-    nanoarrow::basic_array_stream(list(values)), function() released <<- released + 1L)
-  failure <- tryCatch(execute(run, overwide), error = identity)
-  stopifnot(inherits(failure, "error"),
-            grepl("resource limit", conditionMessage(failure), fixed = TRUE),
-            released == 1L, !nanoarrow::nanoarrow_pointer_is_valid(overwide))
-  assert_ipc_build()
 }
 
 run_column_ceilings()

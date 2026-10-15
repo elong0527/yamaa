@@ -1,6 +1,5 @@
 //! Python composition roots and lossless public result conversion.
 use pyo3::prelude::*;
-mod arrow_input;
 mod define_entry;
 mod domain_entry;
 mod file_domain;
@@ -16,7 +15,6 @@ mod specification_inheritance;
 mod specification_result;
 mod specification_service;
 mod style;
-mod temporal_result;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("_CORE_VERSION", yamaa_core::VERSION)?;
@@ -67,7 +65,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
         specification_inheritance::_prepare_document,
         module
     )?)?;
-    module.add_function(wrap_pyfunction!(temporal_result::_temporal_result, module)?)?;
     module.add_class::<specification_service::Specification>()?;
     module.add_class::<specification_result::BuildResult>()?;
     module.add_function(wrap_pyfunction!(

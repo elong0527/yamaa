@@ -14,7 +14,7 @@ doctest = false
 
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
-yamaa-adapters = { path = "../yamaa-adapters", features = ["arrow-c-data"] }
+yamaa-adapters = { path = "../yamaa-adapters" }
 pyo3 = { version = "=0.27.2", features = ["extension-module", "abi3-py312"] }
 
 [build-dependencies]

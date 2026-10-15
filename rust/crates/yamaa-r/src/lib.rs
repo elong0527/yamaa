@@ -1,6 +1,5 @@
 //! R composition roots and lossless public result conversion.
 use extendr_api::prelude::*;
-mod arrow_input;
 mod define_entry;
 mod domain_entry;
 mod file_domain;
@@ -31,7 +30,6 @@ extendr_module! {
     use define_entry;
     use scalars;
     use specification_service;
-    use arrow_input;
     use specification_result;
     use project_result;
     use specification_inheritance;
