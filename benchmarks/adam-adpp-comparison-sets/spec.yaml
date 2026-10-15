@@ -1,0 +1,141 @@
+schema_version: "1.0"
+domain: ADPP
+keys: [STUDYID, USUBJID, PARAMCD, APERIOD]
+input:
+  ADPP_RAW: {path: input/adpp_raw.csv, types: {APERIOD: int, AVAL: float}}
+  ADSL: input/adsl.csv
+  COMPARE: {path: input/compare.csv, types: {COMPNO: int}}
+base: ADPP_RAW
+
+output:
+  path: adpp.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, APERIOD, TRTA, TRTSEQP, AVAL,
+            ANL01FL, ANL02FL]
+
+# Each planned comparison is read by its number; a missing or repeated
+# comparison stops the run.
+intermediates:
+  - id: COMP01
+    dataset: COMPARE
+    key: {COMPNO: {literal: 1}}
+    verifications:
+      - unique: [COMPNO]
+
+  - id: COMP02
+    dataset: COMPARE
+    key: {COMPNO: {literal: 2}}
+    verifications:
+      - unique: [COMPNO]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADPP_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADPP_RAW.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: ADPP_RAW.PARAMCD
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation: ADPP_RAW.PARAM
+
+  - name: APERIOD
+    type: int
+    label: Period
+    derivation: ADPP_RAW.APERIOD
+
+  - name: TRTA
+    type: str
+    label: Actual Treatment
+    derivation: ADPP_RAW.TRTA
+
+  - name: TRTSEQP
+    type: str
+    label: Planned Sequence of Treatments
+    derivation: ADSL.TRTSEQP
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: ADPP_RAW.AVAL
+
+  # The comparison's other treatment for a record of one of its two
+  # treatments; no value for a treatment the comparison does not involve.
+  - name: PARTNER1
+    type: str
+    label: Other Treatment of Comparison 1
+    derivation:
+      case:
+        - when: "TRTA = COMP01.TESTTRT"
+          then: COMP01.REFTRT
+        - when: "TRTA = COMP01.REFTRT"
+          then: COMP01.TESTTRT
+
+  - name: PARTNER2
+    type: str
+    label: Other Treatment of Comparison 2
+    derivation:
+      case:
+        - when: "TRTA = COMP02.TESTTRT"
+          then: COMP02.REFTRT
+        - when: "TRTA = COMP02.REFTRT"
+          then: COMP02.TESTTRT
+
+  # The same subject's value of the same parameter under that other
+  # treatment; ONLY() stops the run on a replicated treatment.
+  - name: PAVAL1
+    type: float
+    label: Partner Value in Comparison 1
+    derivation:
+      aggregate:
+        key: {STUDYID: STUDYID, USUBJID: USUBJID, PARAMCD: PARAMCD,
+              TRTA: PARTNER1}
+        expr: "ONLY(ADPP_RAW.AVAL)"
+
+  - name: PAVAL2
+    type: float
+    label: Partner Value in Comparison 2
+    derivation:
+      aggregate:
+        key: {STUDYID: STUDYID, USUBJID: USUBJID, PARAMCD: PARAMCD,
+              TRTA: PARTNER2}
+        expr: "ONLY(ADPP_RAW.AVAL)"
+
+  # A complete pair: both values present and greater than 0.
+  - name: ANL01FL
+    type: str
+    label: Analysis Flag 01
+    derivation:
+      flag: "AVAL > 0 AND PAVAL1 > 0"
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: ANL02FL
+    type: str
+    label: Analysis Flag 02
+    derivation:
+      flag: "AVAL > 0 AND PAVAL2 > 0"
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, APERIOD]
+  - row_count:
+      min: 20
+      max: 20
+  - assert:
+      id: flagged-records-are-evaluable
+      when: "ANL01FL = 'Y' OR ANL02FL = 'Y'"
+      require: "AVAL > 0"

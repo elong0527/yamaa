@@ -1,0 +1,18 @@
+STUDYID,USUBJID,PARAMCD,PARAM,APERIOD,APERDAY,ATPT,ATPTN,AVAL,AVALU,ABLFL,BASE,CHG,BASETYPE
+TQT-01,TQT-01-S01,QTCF,QTcF Interval,1,-1,0 h,0,398,msec,Y,398,,Period 1 Baseline Day 0 h
+TQT-01,TQT-01-S01,QTCF,QTcF Interval,1,-1,2 h,2,401.333,msec,Y,401.333,,Period 1 Baseline Day 2 h
+TQT-01,TQT-01-S01,QTCF,QTcF Interval,1,1,0 h,0,399.667,msec,,398,1.6669999999999732,Period 1 Baseline Day 0 h
+TQT-01,TQT-01-S01,QTCF,QTcF Interval,1,1,2 h,2,407,msec,,401.333,5.666999999999973,Period 1 Baseline Day 2 h
+TQT-01,TQT-01-S01,QTCF,QTcF Interval,1,2,0 h,0,400.333,msec,,398,2.333000000000027,Period 1 Baseline Day 0 h
+TQT-01,TQT-01-S01,QTCF,QTcF Interval,1,2,2 h,2,409.667,msec,,401.333,8.333999999999946,Period 1 Baseline Day 2 h
+TQT-01,TQT-01-S02,QTCF,QTcF Interval,1,-1,2 h,2,392.667,msec,Y,392.667,,Period 1 Baseline Day 2 h
+TQT-01,TQT-01-S02,QTCF,QTcF Interval,1,1,2 h,2,398.333,msec,,392.667,5.666000000000054,Period 1 Baseline Day 2 h
+TQT-01,TQT-01-S02,QTCF,QTcF Interval,2,-1,2 h,2,395,msec,Y,395,,Period 2 Baseline Day 2 h
+TQT-01,TQT-01-S02,QTCF,QTcF Interval,2,1,2 h,2,404.667,msec,,395,9.666999999999973,Period 2 Baseline Day 2 h
+TQT-01,TQT-01-S03,QTCF,QTcF Interval,1,-1,0 h,0,410.333,msec,Y,410.333,,Period 1 Baseline Day 0 h
+TQT-01,TQT-01-S03,QTCF,QTcF Interval,1,1,0 h,0,412,msec,,410.333,1.6669999999999732,Period 1 Baseline Day 0 h
+TQT-01,TQT-01-S03,QTCF,QTcF Interval,1,1,2 h,2,418.667,msec,,,,Period 1 Baseline Day 2 h
+TQT-01,TQT-01-S03,QTCF,QTcF Interval,1,2,2 h,2,421.333,msec,,,,Period 1 Baseline Day 2 h
+TQT-01,TQT-01-S04,QTCF,QTcF Interval,1,-1,2 h,2,385.667,msec,Y,385.667,,Period 1 Baseline Day 2 h
+TQT-01,TQT-01-S04,QTCF,QTcF Interval,1,1,2 h,2,390.333,msec,,385.667,4.666000000000054,Period 1 Baseline Day 2 h
+TQT-01,TQT-01-S04,QTCF,QTcF Interval,2,1,2 h,2,393,msec,,,,Period 2 Baseline Day 2 h

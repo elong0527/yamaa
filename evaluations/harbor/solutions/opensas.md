@@ -1,13 +1,13 @@
 # opensas reference solutions
 
-The `result.sas` programs prepare all 137 prompted derivation benchmarks for
+The `result.sas` programs prepare all 148 prompted derivation benchmarks for
 execution with the existing [opensas v0.6.6 release](https://github.com/kirha-ai/opensas/releases/tag/v0.6.6).
 Each program reads `/app/input` and writes the CSV files requested by its full
 prompt to `/app/output`. The race/ethnicity solution writes both DM and SUPPDM.
 Identifiers are read as character values to preserve leading zeros; numeric
 measurements and sequence variables use explicit numeric input.
 
-The Harbor opensas track executes the 134 confident native CSV cases with the
+The Harbor opensas track executes the 145 confident native CSV cases with the
 existing opensas v0.6.6 release. The image installs an unmodified release
 executable; these programs do not implement or modify an execution engine. Benchmarks
 without derivation prompts, including yamaa specification rejection cases,
@@ -46,12 +46,25 @@ column types, keys and tolerances.
 
 | Check | Result |
 |---|---|
-| Source coverage | 137 of 137 full derivation prompts have `result.sas` |
-| Original fixture data | 136 match; 1 whitespace mismatch |
-| Native CSV input | 135 matching cases |
+| Source coverage | 145 of 145 full derivation prompts have `result.sas` |
+| Original fixture data | 144 match; 1 whitespace mismatch |
+| Native CSV input | 143 matching cases |
 | Parquet input staged as CSV | 1 matching case, randomization |
-| Changed inputs against the existing Python references | 135 of 136 match; the same whitespace mismatch remains |
-| Reduced-subject inputs against the Python references | 134 of 134 checked match; 2 single-subject cases skipped |
+| Changed inputs against the existing Python references | 143 of 144 match; the same whitespace mismatch remains |
+| Reduced-subject inputs against the Python references | 142 of 142 checked match; 2 single-subject cases skipped |
+
+These retained preparation counts cover the original 137-case collection and
+the eight PK/QT additions; they do not claim measurements of the three cases
+admitted on main in between. The current collection contains 148 sources and
+145 executable native CSV cases. The Linux v0.6.6 reference check now matches
+all 145 executable cases against their original goldens.
+
+The eight PK/QT cases of #2297 were checked the same way on 2026-10-14
+with the same release asset, and the counts above include them: their
+fixture, changed-input and reduced-subject checks all match. For seven of
+them the reduced-subject check compared against the restricted golden; for
+`adam-adeg-placebo-corrected-change` it compared against the Python
+reference.
 
 The changed-input check uses the existing grader's deterministic subject
 renaming and supported age, measurement and complete-date perturbations.
@@ -71,7 +84,7 @@ too; see the whitespace entry below.
 `adam-adsl-age-quality` matches the prompt's requested ADSL data. Its
 specification also declares a warning log that is absent from the full prompt;
 the current Harbor builder excludes that benchmark because log outputs are
-not graded. Its data-only check is included in the 137-case fixture count,
+not graded. Its data-only check is included in the 145-case fixture count,
 and it has no existing Python reference for the changed-input check.
 
 ## Compatibility gaps and solution choices

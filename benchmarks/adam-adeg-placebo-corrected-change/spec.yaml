@@ -1,0 +1,182 @@
+schema_version: "1.0"
+domain: ADEG
+keys: [STUDYID, USUBJID, PARAMCD, APERIOD, APERDAY, ATPTN]
+input:
+  ADEG_RAW:
+    path: input/adeg_raw.csv
+    types: {APERIOD: int, APERDAY: int, ATPTN: float, AVAL: float,
+            BASE: float, CHG: float}
+
+output:
+  path: adeg.csv
+  columns: [STUDYID, USUBJID, COHORT, TRTA, PARAMCD, PARAM, APERIOD, APERDAY,
+            ATPT, ATPTN, AVAL, AVALU, ABLFL, BASE, CHG, BASETYPE, ACOMPFL,
+            COMP, COMPBASE, COMPCHG, CCOMPCHG, COMPTYPE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADEG_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADEG_RAW.USUBJID
+
+  - name: COHORT
+    type: str
+    label: Cohort
+    derivation: ADEG_RAW.COHORT
+
+  - name: TRTA
+    type: str
+    label: Actual Treatment
+    derivation: ADEG_RAW.TRTA
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: ADEG_RAW.PARAMCD
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation: ADEG_RAW.PARAM
+
+  - name: APERIOD
+    type: int
+    label: Period
+    derivation: ADEG_RAW.APERIOD
+
+  - name: APERDAY
+    type: int
+    label: Analysis Nominal Period Day
+    derivation: ADEG_RAW.APERDAY
+
+  - name: ATPT
+    type: str
+    label: Analysis Time Point
+    derivation: ADEG_RAW.ATPT
+
+  - name: ATPTN
+    type: float
+    label: Analysis Time Point (N)
+    derivation: ADEG_RAW.ATPTN
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: ADEG_RAW.AVAL
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+    derivation: ADEG_RAW.AVALU
+
+  - name: ABLFL
+    type: str
+    label: Baseline Record Flag
+    derivation: ADEG_RAW.ABLFL
+
+  - name: BASE
+    type: float
+    label: Baseline Value
+    derivation: ADEG_RAW.BASE
+
+  - name: CHG
+    type: float
+    label: Change from Baseline
+    derivation: ADEG_RAW.CHG
+
+  - name: BASETYPE
+    type: str
+    label: Baseline Type
+    derivation: ADEG_RAW.BASETYPE
+
+  # The comparator records: placebo records after baseline. Baseline records
+  # carry ABLFL instead.
+  - name: ACOMPFL
+    type: str
+    label: Comparator Record Flag
+    derivation:
+      case:
+        - when: "TRTA = 'Placebo' AND ABLFL IS NULL"
+          then: {literal: "Y"}
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  # The key of the time-matched placebo group, on every record after
+  # baseline, drug and placebo alike, also where the group has no record.
+  - name: COMPTYPE
+    type: str
+    label: Comparator Type
+    derivation:
+      case:
+        - when: "ABLFL IS NULL"
+          then:
+            str_template: "Placebo group at {ATPT}"
+
+  # The placebo group of a record: every comparator record of the same
+  # parameter, period, day and nominal time, all cohorts pooled. Each mean
+  # skips the records without a value in its own column, and placebo records
+  # carry the group's means too. Baseline days have no comparator records.
+  - name: COMP
+    type: float
+    label: Comparator Value
+    derivation:
+      aggregate:
+        filter: "ACOMPFL = 'Y'"
+        group_by: [STUDYID, PARAMCD, APERIOD, APERDAY, ATPTN]
+        expr: "MEAN(AVAL)"
+
+  - name: COMPBASE
+    type: float
+    label: Baseline Value of the Comparator
+    derivation:
+      aggregate:
+        filter: "ACOMPFL = 'Y'"
+        group_by: [STUDYID, PARAMCD, APERIOD, APERDAY, ATPTN]
+        expr: "MEAN(BASE)"
+
+  - name: COMPCHG
+    type: float
+    label: Change from Baseline in the Comparator
+    derivation:
+      aggregate:
+        filter: "ACOMPFL = 'Y'"
+        group_by: [STUDYID, PARAMCD, APERIOD, APERDAY, ATPTN]
+        expr: "MEAN(CHG)"
+
+  # The double delta, on drug records after baseline only.
+  - name: CCOMPCHG
+    type: float
+    label: Comparator corrected change from BL
+    derivation:
+      case:
+        - when: "COMPTYPE IS NOT NULL AND ACOMPFL IS NULL"
+          then:
+            compute:
+              expr: "CHG - COMPCHG"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, APERIOD, APERDAY, ATPTN]
+  - row_count:
+      min: 21
+      max: 21
+  - assert:
+      id: no-comparator-on-baseline-records
+      when: "ABLFL = 'Y'"
+      require: >-
+        ACOMPFL IS NULL AND COMPTYPE IS NULL AND COMP IS NULL
+        AND COMPBASE IS NULL AND COMPCHG IS NULL
+  - assert:
+      id: no-double-delta-on-comparator-records
+      when: "ACOMPFL = 'Y'"
+      require: "CCOMPCHG IS NULL"
+  - assert:
+      id: no-double-delta-without-a-change
+      when: "CHG IS NULL OR COMPCHG IS NULL"
+      require: "CCOMPCHG IS NULL"

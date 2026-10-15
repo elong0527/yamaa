@@ -1,0 +1,17 @@
+STUDYID,USUBJID,TRTA,PARAMCD,PARAM,APERIOD,APERDAY,ATPT,ATPTN,AVAL,AVALU,ABLFL,BASE,CHG,BASETYPE,ECGPCFL,PKCONC,CQTANLFL
+TQT-01,TQT-01-S01,Placebo,QTCF,QTcF Interval,1,-1,2 h,2,402.333,msec,Y,402.333,,Period 1 Baseline Day 2 h,,0,
+TQT-01,TQT-01-S01,Placebo,QTCF,QTcF Interval,1,1,2 h,2,404,msec,,402.333,1.6669999999999732,Period 1 Baseline Day 2 h,Y,0,Y
+TQT-01,TQT-01-S01,Drug X,QTCF,QTcF Interval,2,-1,2 h,2,399.667,msec,Y,399.667,,Period 2 Baseline Day 2 h,,,
+TQT-01,TQT-01-S01,Drug X,QTCF,QTcF Interval,2,1,2 h,2,411.333,msec,,399.667,11.666000000000054,Period 2 Baseline Day 2 h,Y,148,Y
+TQT-01,TQT-01-S02,Drug X,QTCF,QTcF Interval,1,-1,2 h,2,395,msec,Y,395,,Period 1 Baseline Day 2 h,,,
+TQT-01,TQT-01-S02,Drug X,QTCF,QTcF Interval,1,-1,12 h,12,391.667,msec,Y,391.667,,Period 1 Baseline Day 12 h,,,
+TQT-01,TQT-01-S02,Drug X,QTCF,QTcF Interval,1,1,2 h,2,408.667,msec,,395,13.666999999999973,Period 1 Baseline Day 2 h,Y,171,Y
+TQT-01,TQT-01-S02,Drug X,QTCF,QTcF Interval,1,1,12 h,12,397.333,msec,,391.667,5.666000000000054,Period 1 Baseline Day 12 h,,,
+TQT-01,TQT-01-S02,Placebo,QTCF,QTcF Interval,2,-1,2 h,2,396.333,msec,Y,396.333,,Period 2 Baseline Day 2 h,,0,
+TQT-01,TQT-01-S02,Placebo,QTCF,QTcF Interval,2,1,2 h,2,398,msec,,396.333,1.6669999999999732,Period 2 Baseline Day 2 h,,0,Y
+TQT-01,TQT-01-S03,Drug X,QTCF,QTcF Interval,1,-1,0 h,0,410.333,msec,Y,410.333,,Period 1 Baseline Day 0 h,,,
+TQT-01,TQT-01-S03,Drug X,QTCF,QTcF Interval,1,1,0 h,0,411.667,msec,,410.333,1.3339999999999463,Period 1 Baseline Day 0 h,Y,,
+TQT-01,TQT-01-S03,Placebo,QTCF,QTcF Interval,2,-1,2 h,2,407,msec,Y,407,,Period 2 Baseline Day 2 h,,0,
+TQT-01,TQT-01-S03,Placebo,QTCF,QTcF Interval,2,1,2 h,2,409.333,msec,,407,2.333000000000027,Period 2 Baseline Day 2 h,Y,1.2,Y
+TQT-01,TQT-01-S04,Drug X,QTCF,QTcF Interval,2,-1,0 h,0,412.333,msec,Y,412.333,,Period 2 Baseline Day 0 h,,,
+TQT-01,TQT-01-S04,Drug X,QTCF,QTcF Interval,2,1,2 h,2,415.667,msec,,,,Period 2 Baseline Day 2 h,Y,139,
