@@ -159,6 +159,15 @@ Conventions used below:
 
 ## pharmaverse
 
+- **admiral ADPP template v1.5.0** -
+  https://github.com/pharmaverse/admiral/blob/v1.5.0/inst/templates/ad_adpp.R -
+  Dose-normalized PK parameters CMAXD and AUCIFOD use controlled parameter
+  names without units; AVALU carries the unit. Grounding:
+  `adam-adpp-dose-normalized`, retaining collected PP records and adding
+  exposure parameters normalized by the matching administration's dose.
+  CDISC PKPARM terminology supplies AUCLSTD and the controlled names:
+  https://evs.nci.nih.gov/ftp1/CDISC/SDTM/SDTM%20Terminology.txt.
+
 - **admiral** - https://github.com/pharmaverse/admiral -
   Cross-TA core derivations: AVAL/CHG/PCHG (derive_var_base/chg/pchg),
   computed parameters, TTE (derive_param_tte), CTCAE grading, dose

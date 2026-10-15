@@ -350,7 +350,7 @@ uv run --project python --no-sync python evaluations/harbor/build.py \
     --out ~/.cache/yamaa-harbor-language-images
 ```
 
-This prepares 1,245 trials: 139 R, 139 Python and 137 opensas cases in each
+This prepares 1,254 trials: 140 R, 140 Python and 138 opensas cases in each
 prompt tier. Exclusions remain reported. Run at most six job processes in
 parallel, each with one active trial; start the remaining three as slots free
 up. Keep the default model variant, one attempt per task, and all failures.

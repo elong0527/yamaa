@@ -9,7 +9,8 @@ GOVTYPE, GOVDT, GOVSEQ
 ASEQ is ICESEQ, ADECOD1 is ICETYPE and ASTDT is ICEDTC. ICEPRIO is 1 for
 ICE04 and ICE05, 2 for ICE01, 3 for ICE02 and 4 for ICE03. These types are
 death, kidney replacement, prohibited medication, start of other
-protocol-prohibited therapy and treatment discontinuation, respectively. ICERANK numbers each subject's events from 1
+protocol-prohibited therapy and treatment discontinuation, respectively.
+ICERANK numbers each subject's events from 1
 by increasing ICEPRIO, then earliest ASTDT, then lowest ASEQ. GOVFL is "Y"
 on ICERANK 1 and has no value otherwise. SUPERFL is "Y" on every other
 event and has no value on ICERANK 1. GOVTYPE, GOVDT and GOVSEQ are the type,
