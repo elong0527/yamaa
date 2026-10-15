@@ -3,15 +3,11 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use yamaa_adapters::{
     specification_diagnostics::capture_failure,
-    specification_source::{
-        CapturedSchema, Error, InheritanceError, InheritancePort, Limits, Source,
-    },
-    yaml_decode::{decode_yaml, DecodeFailure, DecodeLimits},
+    specification_source::{CapturedSchema, Error, InheritanceError, InheritancePort, Source},
+    yaml_decode::{decode_yaml, DecodeFailure},
 };
 use yamaa_core::inheritance::{Source as Identity, SourceError};
-use yamaa_core::schema::{
-    DocumentLimits, DocumentNode as N, NormalizationError, NormalizationResource, SchemaSource,
-};
+use yamaa_core::schema::{DocumentNode as N, NormalizationError, SchemaSource};
 
 const SCHEMA: &str = "version: '1.0'\nroot_class:\n  - schema_version: {type: str}\n  - domain: {type: [str, int], default: DEFAULT}\n  - input: {type: dict}\n  - keys: {type: 'list[str]'}\n  - output: {type: dict}\n  - columns: {type: 'list[column_class]'}\n  - windows: {type: 'dict[str, window_spec]'}\ncolumn_class:\n  - name: {type: str}\n  - type: {type: str}\n  - derivation: {type: handled_expression_class}\nhandled_expression_class:\n  - value: {type: expression}\nexpression: {registry: expressions}\nexpressions:\n  row_number:\n    - window: {type: window_selection}\nwindow_selection: {type: [str, window_spec]}\nwindow_spec:\n  - group_by: {type: 'list[str]'}\n  - order_by: {type: 'list[order_term]'}\norder_term:\n  - variable: {type: str}\n";
 const VALID: &str = "schema_version: '1.0'\ndomain: X\ninput: {}\nkeys: []\noutput: {path: output.csv, columns: []}\ncolumns: []\n";
@@ -21,14 +17,13 @@ fn source(text: &str) -> Source {
         bytes: text.as_bytes().to_vec(),
     }
 }
-fn schema(limits: Limits) -> Arc<CapturedSchema> {
+fn schema() -> Arc<CapturedSchema> {
     CapturedSchema::admit(
         vec![Source {
             identity: "schema.yaml".into(),
             bytes: SCHEMA.as_bytes().to_vec(),
         }],
         0,
-        limits,
     )
     .unwrap()
 }
@@ -44,16 +39,10 @@ impl InheritancePort for NoParents {
     fn canonicalize(&mut self, _: &str, _: &str) -> Result<Identity, SourceError<Self::Error>> {
         panic!("standalone path must not canonicalize")
     }
-    fn capture(&mut self, _: &Identity, _: usize) -> Result<Vec<u8>, SourceError<Self::Error>> {
+    fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<Self::Error>> {
         panic!("standalone path must not capture")
     }
-    fn rebase(
-        &mut self,
-        _: &Identity,
-        _: &Identity,
-        _: &str,
-        _: usize,
-    ) -> Result<String, Self::Error> {
+    fn rebase(&mut self, _: &Identity, _: &Identity, _: &str) -> Result<String, Self::Error> {
         panic!("standalone path must not rebase")
     }
 }
@@ -64,12 +53,12 @@ fn adapter_moves_source_allocations_and_retains_original_physical_locations_and_
     let entry = source(&text);
     let bytes = entry.bytes.as_ptr();
     let identity = entry.identity.as_ptr();
-    let schema = schema(Limits::default());
+    let schema = schema();
     let prepared = schema.prepare_standalone(entry).unwrap();
     assert_eq!(prepared.source().bytes.as_ptr(), bytes);
     assert_eq!(prepared.source().identity.as_ptr(), identity);
     assert_eq!(prepared.source().bytes, text.as_bytes());
-    let decoded = decode_yaml(text.as_bytes(), DecodeLimits::default()).unwrap();
+    let decoded = decode_yaml(text.as_bytes()).unwrap();
     assert_eq!(prepared.raw().document, decoded.document);
     assert_eq!(prepared.raw().locations, decoded.locations);
     assert_eq!(
@@ -114,7 +103,7 @@ fn adapter_moves_source_allocations_and_retains_original_physical_locations_and_
 
 #[test]
 fn both_semantic_passes_keep_source_identity_and_independent_complete_reports() {
-    let schema = schema(Limits::default());
+    let schema = schema();
     let text = VALID.replace("'1.0'", "92233720368547758081234567890");
     let entry = source(&text);
     let bytes = entry.bytes.as_ptr();
@@ -125,7 +114,7 @@ fn both_semantic_passes_keep_source_identity_and_independent_complete_reports() 
     };
     assert_eq!(captured.source().bytes.as_ptr(), bytes);
     assert_eq!(captured.source().identity.as_ptr(), identity);
-    let decoded = decode_yaml(text.as_bytes(), DecodeLimits::default()).unwrap();
+    let decoded = decode_yaml(text.as_bytes()).unwrap();
     assert_eq!(captured.document(), Some(&decoded.document));
     let expected:Value=serde_json::from_str("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":\"REQ-0281\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
     assert_eq!(outcome(&error), invalid(json!([expected])));
@@ -144,12 +133,7 @@ fn both_semantic_passes_keep_source_identity_and_independent_complete_reports() 
         normalized.nodes()[normalized.field(normalized.root(), "domain").unwrap()],
         N::Text("DEFAULT".into())
     );
-    assert_ne!(
-        normalized,
-        &decode_yaml(text.as_bytes(), DecodeLimits::default())
-            .unwrap()
-            .document
-    );
+    assert_ne!(normalized, &decode_yaml(text.as_bytes()).unwrap().document);
     assert_eq!(
         outcome(&error),
         invalid(json!([
@@ -166,9 +150,7 @@ fn final_model_findings_retain_no_pass_document_and_move_original_source() {
         .replace("{path: output.csv, columns: []}", "{}");
     let entry = source(&text);
     let pointer = entry.bytes.as_ptr();
-    let error = schema(Limits::default())
-        .prepare_standalone(entry)
-        .unwrap_err();
+    let error = schema().prepare_standalone(entry).unwrap_err();
     let Error::Findings(captured) = &error else {
         panic!()
     };
@@ -185,10 +167,8 @@ fn final_model_findings_retain_no_pass_document_and_move_original_source() {
 }
 
 #[test]
-fn physical_decode_and_source_limits_keep_their_existing_precedence_before_lifecycle() {
-    let mut limits = Limits::default();
-    limits.normalization.storage.nodes = 0;
-    let schema = schema(limits);
+fn physical_decode_and_source_boundary_precede_lifecycle() {
+    let schema = schema();
     let text = VALID.to_owned() + "parents: null\n";
     assert!(matches!(
         schema.prepare_standalone(source(&text)),
@@ -202,47 +182,23 @@ fn physical_decode_and_source_limits_keep_their_existing_precedence_before_lifec
         })
     ));
     let mut entry = source("[unterminated");
-    entry.bytes.resize(limits.captured_bytes + 1, b'x');
-    entry.identity = "x".repeat(limits.identity_bytes + 1);
-    assert!(matches!(
-        schema.prepare_standalone(entry),
-        Err(Error::Limit("captured_bytes"))
-    ));
-    let mut entry = source("[unterminated");
-    entry.identity = "x".repeat(limits.identity_bytes + 1);
-    assert!(matches!(
-        schema.prepare_standalone(entry),
-        Err(Error::Limit("identity_bytes"))
-    ));
+    entry
+        .bytes
+        .resize(yamaa_core::limits::Limits::SPEC_BYTES + 1, b'x');
+    assert!(
+        matches!(schema.prepare_standalone(entry), Err(Error::Decode {
+        error: DecodeFailure::Limit(error), ..
+    }) if error.resource == "spec_bytes" && error.limit == yamaa_core::limits::Limits::SPEC_BYTES
+        && error.actual == Some(yamaa_core::limits::Limits::SPEC_BYTES + 1))
+    );
 }
 
 #[test]
-fn standalone_dispatch_has_no_parent_effect_and_shared_storage_boundary_is_unchanged() {
-    for nodes in [33, 34] {
-        let mut limits = Limits::default();
-        limits.normalization.storage = DocumentLimits {
-            nodes,
-            ..Default::default()
-        };
-        let schema = schema(limits);
-        let result =
-            schema.prepare_document(source(VALID), "retained/spec.yaml".into(), &mut NoParents);
-        if nodes == 34 {
-            assert!(result.is_ok());
-        } else {
-            let Err(InheritanceError::Entry(Error::Normalize(error))) = result else {
-                panic!()
-            };
-            assert_eq!(
-                error,
-                NormalizationError::Limit {
-                    resource: NormalizationResource::Nodes,
-                    limit: 33
-                }
-            );
-        }
-    }
-    let error = schema(Limits::default())
+fn standalone_dispatch_has_no_parent_effect_for_valid_or_invalid_entries() {
+    assert!(schema()
+        .prepare_document(source(VALID), "retained/spec.yaml".into(), &mut NoParents)
+        .is_ok());
+    let error = schema()
         .prepare_document(
             source(&VALID.replace("'1.0'", "'99.0'")),
             "retained/spec.yaml".into(),
@@ -264,7 +220,6 @@ fn schema_default_checkpoint_precedes_authored_version_and_window_errors() {
             bytes: invalid.into_bytes(),
         }],
         0,
-        Limits::default(),
     )
     .unwrap();
     let entry = source("schema_version: '99.0'\nwindows: {BAD: broken}\n");

@@ -3,10 +3,8 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use yamaa_adapters::{
     specification_diagnostics::capture_failure,
-    specification_source::{
-        CapturedSchema, Error, InheritanceError, InheritancePort, Limits, Source,
-    },
-    yaml_decode::{decode_yaml, DecodeFailure, DecodeLimits},
+    specification_source::{CapturedSchema, Error, InheritanceError, InheritancePort, Source},
+    yaml_decode::{decode_yaml, DecodeFailure},
 };
 use yamaa_core::inheritance::{Source as Identity, SourceError};
 use yamaa_core::schema::{DocumentNode as N, NormalizationError, SchemaSource};
@@ -19,14 +17,13 @@ fn source(text: &str) -> Source {
         bytes: text.as_bytes().to_vec(),
     }
 }
-fn schema(limits: Limits) -> Arc<CapturedSchema> {
+fn schema() -> Arc<CapturedSchema> {
     CapturedSchema::admit(
         vec![Source {
             identity: "schema.yaml".into(),
             bytes: SCHEMA.as_bytes().to_vec(),
         }],
         0,
-        limits,
     )
     .unwrap()
 }
@@ -42,16 +39,10 @@ impl InheritancePort for NoParents {
     fn canonicalize(&mut self, _: &str, _: &str) -> Result<Identity, SourceError<Self::Error>> {
         panic!("standalone path must not canonicalize")
     }
-    fn capture(&mut self, _: &Identity, _: usize) -> Result<Vec<u8>, SourceError<Self::Error>> {
+    fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<Self::Error>> {
         panic!("standalone path must not capture")
     }
-    fn rebase(
-        &mut self,
-        _: &Identity,
-        _: &Identity,
-        _: &str,
-        _: usize,
-    ) -> Result<String, Self::Error> {
+    fn rebase(&mut self, _: &Identity, _: &Identity, _: &str) -> Result<String, Self::Error> {
         panic!("standalone path must not rebase")
     }
 }
@@ -62,12 +53,12 @@ fn adapter_moves_source_allocations_and_retains_original_physical_locations_and_
     let entry = source(&text);
     let bytes = entry.bytes.as_ptr();
     let identity = entry.identity.as_ptr();
-    let schema = schema(Limits::default());
+    let schema = schema();
     let prepared = schema.dispatch(entry).unwrap();
     assert_eq!(prepared.source().bytes.as_ptr(), bytes);
     assert_eq!(prepared.source().identity.as_ptr(), identity);
     assert_eq!(prepared.source().bytes, text.as_bytes());
-    let decoded = decode_yaml(text.as_bytes(), DecodeLimits::default()).unwrap();
+    let decoded = decode_yaml(text.as_bytes()).unwrap();
     assert_eq!(prepared.raw().document, decoded.document);
     assert_eq!(prepared.raw().locations, decoded.locations);
     assert_eq!(
@@ -112,7 +103,7 @@ fn adapter_moves_source_allocations_and_retains_original_physical_locations_and_
 
 #[test]
 fn both_semantic_passes_keep_source_identity_and_independent_complete_reports() {
-    let schema = schema(Limits::default());
+    let schema = schema();
     let text = VALID.replace("'1.0'", "92233720368547758081234567890");
     let entry = source(&text);
     let bytes = entry.bytes.as_ptr();
@@ -123,7 +114,7 @@ fn both_semantic_passes_keep_source_identity_and_independent_complete_reports() 
     };
     assert_eq!(captured.source().bytes.as_ptr(), bytes);
     assert_eq!(captured.source().identity.as_ptr(), identity);
-    let decoded = decode_yaml(text.as_bytes(), DecodeLimits::default()).unwrap();
+    let decoded = decode_yaml(text.as_bytes()).unwrap();
     assert_eq!(captured.document(), Some(&decoded.document));
     let expected:Value=serde_json::from_str("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":\"REQ-0281\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
     assert_eq!(outcome(&error), invalid(json!([expected])));
@@ -142,12 +133,7 @@ fn both_semantic_passes_keep_source_identity_and_independent_complete_reports() 
         normalized.nodes()[normalized.field(normalized.root(), "domain").unwrap()],
         N::Text("DEFAULT".into())
     );
-    assert_ne!(
-        normalized,
-        &decode_yaml(text.as_bytes(), DecodeLimits::default())
-            .unwrap()
-            .document
-    );
+    assert_ne!(normalized, &decode_yaml(text.as_bytes()).unwrap().document);
     assert_eq!(
         outcome(&error),
         invalid(json!([
@@ -164,7 +150,7 @@ fn final_model_findings_retain_no_pass_document_and_move_original_source() {
         .replace("{path: output.csv, columns: []}", "{}");
     let entry = source(&text);
     let pointer = entry.bytes.as_ptr();
-    let error = schema(Limits::default()).dispatch(entry).unwrap_err();
+    let error = schema().dispatch(entry).unwrap_err();
     let Error::Findings(captured) = &error else {
         panic!()
     };
@@ -200,10 +186,8 @@ impl Dispatch for CapturedSchema {
     }
 }
 #[test]
-fn physical_decode_and_source_admission_precede_raw_dispatch_and_zero_semantic_capacity() {
-    let mut limits = Limits::default();
-    limits.normalization.storage.nodes = 0;
-    let schema = schema(limits);
+fn physical_decode_and_source_boundary_precede_lifecycle() {
+    let schema = schema();
     assert!(matches!(
         schema.dispatch(source("parents: null\n[unterminated")),
         Err(Error::Decode {
@@ -212,19 +196,15 @@ fn physical_decode_and_source_admission_precede_raw_dispatch_and_zero_semantic_c
         })
     ));
     let mut entry = source("[unterminated");
-    entry.bytes.resize(limits.captured_bytes + 1, b'x');
-    entry.identity = "x".repeat(limits.identity_bytes + 1);
-    assert!(matches!(
-        schema.dispatch(entry),
-        Err(Error::Limit("captured_bytes"))
-    ));
-    let mut entry = source("[unterminated");
-    entry.identity = "x".repeat(limits.identity_bytes + 1);
-    assert!(matches!(
-        schema.dispatch(entry),
-        Err(Error::Limit("identity_bytes"))
-    ));
+    entry
+        .bytes
+        .resize(yamaa_core::limits::Limits::SPEC_BYTES + 1, b'x');
+    assert!(matches!(schema.dispatch(entry), Err(Error::Decode {
+        error: DecodeFailure::Limit(error), ..
+    }) if error.resource == "spec_bytes" && error.limit == yamaa_core::limits::Limits::SPEC_BYTES
+        && error.actual == Some(yamaa_core::limits::Limits::SPEC_BYTES + 1)));
 }
+
 #[test]
 fn invalid_schema_default_precedes_authored_version_through_live_dispatch() {
     let schema = CapturedSchema::admit(
@@ -238,7 +218,6 @@ fn invalid_schema_default_precedes_authored_version_through_live_dispatch() {
                 .into_bytes(),
         }],
         0,
-        Limits::default(),
     )
     .unwrap();
     let Error::Normalize(NormalizationError::Defaults(defaults)) = schema

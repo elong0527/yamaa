@@ -3,7 +3,7 @@ use a::Reducer;
 use n::NumericFunction;
 use serde_json::{json, Value as Json};
 use std::collections::BTreeSet;
-use yamaa_adapters::yaml_decode::{decode_yaml, DecodeLimits};
+use yamaa_adapters::yaml_decode::decode_yaml;
 use yamaa_core::schema::{Document, DocumentNode};
 use yamaa_core::{
     aggregate_parser as a,
@@ -297,13 +297,13 @@ fn yaml(path: &str) -> Json {
         .join("../../..")
         .join(path);
     let bytes = std::fs::read(path).unwrap();
-    let decoded = decode_yaml(&bytes, DecodeLimits::default()).unwrap();
+    let decoded = decode_yaml(&bytes).unwrap();
     value(&decoded.document, decoded.document.root())
 }
 
 fn observation(contract: &str, text: &str) -> Result<(String, Vec<String>), String> {
     let (shape, mut identifiers) = match contract {
-        "numeric" => match n::parse_numeric(text, n::ParseLimits::default()) {
+        "numeric" => match n::parse_numeric(text) {
             Ok(parsed) => (
                 numeric(&parsed, parsed.root()),
                 parsed.identifiers().map(String::from).collect::<Vec<_>>(),
@@ -311,7 +311,7 @@ fn observation(contract: &str, text: &str) -> Result<(String, Vec<String>), Stri
             Err(n::ParseError::Grammar { failure, .. }) => return Err(failure.condition().into()),
             Err(error) => panic!("grammar vector exceeds resource policy: {error:?}"),
         },
-        "aggregate" => match a::parse_aggregate(text, a::ParseLimits::default()) {
+        "aggregate" => match a::parse_aggregate(text) {
             Ok(parsed) => (
                 aggregate(&parsed, parsed.root()),
                 parsed.identifiers().map(String::from).collect::<Vec<_>>(),
@@ -319,7 +319,7 @@ fn observation(contract: &str, text: &str) -> Result<(String, Vec<String>), Stri
             Err(a::ParseError::Grammar { failure, .. }) => return Err(failure.condition().into()),
             Err(error) => panic!("grammar vector exceeds resource policy: {error:?}"),
         },
-        "predicate" => match p::parse_predicate(text, p::ParseLimits::default()) {
+        "predicate" => match p::parse_predicate(text) {
             Ok(parsed) => (
                 predicate(&parsed, parsed.root()),
                 parsed.identifiers().map(String::from).collect::<Vec<_>>(),
@@ -495,13 +495,13 @@ fn unchanged_shared_grammars_have_exact_shapes_dependencies_decisions_and_vocabu
 }
 
 fn regex_observation(pattern: &str, subject: &str) -> Json {
-    use yamaa_core::regex::{CompileError, CompileLimits, MatchLimits, Pattern};
-    match Pattern::compile(pattern, CompileLimits::default()) {
+    use yamaa_core::regex::{CompileError, Pattern};
+    match Pattern::compile(pattern) {
         Err(CompileError::Invalid { .. }) => json!({"accepted":false}),
         Err(error) => panic!("regex truth exceeds compile policy: {error:?}"),
         Ok(pattern) => {
-            let found = pattern.search(subject, MatchLimits::default()).unwrap();
-            let full = pattern.full_match(subject, MatchLimits::default()).unwrap();
+            let found = pattern.search(subject).unwrap();
+            let full = pattern.full_match(subject).unwrap();
             json!({"accepted":true, "group_count":pattern.group_count(), "full_match":full.is_some(), "match":found.map(|found|found.groups)})
         }
     }
@@ -676,7 +676,7 @@ fn unchanged_independent_rational_rounding_corpus_matches_current_compiler() {
     use yamaa_core::{
         evaluation::NumericResolver,
         numeric::Number,
-        numeric_compiler::{compile_numeric, CompileLimits},
+        numeric_compiler::compile_numeric,
         value::{Selection, Value},
     };
     struct Inputs(f64, i64);
@@ -690,12 +690,7 @@ fn unchanged_independent_rational_rounding_corpus_matches_current_compiler() {
             }))
         }
     }
-    let plan = compile_numeric(
-        "ROUND_HALF_AWAY_FROM_ZERO(A, D)",
-        "rounding",
-        CompileLimits::default(),
-    )
-    .unwrap();
+    let plan = compile_numeric("ROUND_HALF_AWAY_FROM_ZERO(A, D)", "rounding").unwrap();
     // Original cb34f38a3:rust/tools/assess_rounding.py, using
     // Fraction(abs(value)) and the exact REQ-0418 half-minus-2^-26 threshold.
     // All 2,936 unchanged boundary/range/seed-1585 inputs and expected bits

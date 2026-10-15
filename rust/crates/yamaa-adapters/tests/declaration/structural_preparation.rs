@@ -5,16 +5,14 @@ use std::{rc::Rc, sync::Arc};
 use yamaa_adapters::{
     issue_rows::Issue,
     project_environment_diagnostics as diagnostics,
-    project_source::{
-        self, CaptureFailure, CapturePort, Failure, Kind, Limits as ProjectLimits, Reply, Request,
-    },
-    specification_source::{CapturedSchema, Error, Limits, Source},
-    yaml_decode::{decode_yaml, DecodeFailure, DecodeLimits},
+    project_source::{self, CaptureFailure, CapturePort, Failure, Kind, Reply, Request},
+    specification_source::{CapturedSchema, Error, Source},
+    yaml_decode::{decode_yaml, DecodeFailure},
 };
 use yamaa_core::{
     project_environment::LockKind,
     project_function::Language,
-    schema::{Document, DocumentNode as N, NormalizationError, SchemaSource, ValidationError},
+    schema::{Document, DocumentNode as N, SchemaSource},
 };
 
 const FUNCTION:&str="function: project.constant\ndescription: Constant.\nparams: []\nreturns: int\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 7}]\n";
@@ -25,7 +23,7 @@ fn source(name: &str, text: &str) -> Source {
         bytes: text.as_bytes().to_vec(),
     }
 }
-fn captured_schema(limits: Limits) -> Arc<CapturedSchema> {
+fn captured_schema() -> Arc<CapturedSchema> {
     CapturedSchema::admit_root(
         vec![
             source(
@@ -39,7 +37,6 @@ fn captured_schema(limits: Limits) -> Arc<CapturedSchema> {
         ],
         0,
         "environment_class",
-        limits,
     )
     .unwrap()
 }
@@ -70,7 +67,7 @@ fn issues(rows: Vec<Issue>) -> Value {
     Value::Array(rows.into_iter().map(|row|json!({"phase":row.phase,"condition":row.condition,"requirement":row.requirement,"spec_paths":row.spec_paths,"context":serde_json::from_str::<Value>(&row.context).unwrap()})).collect())
 }
 fn original_locations(actual: &yamaa_adapters::specification_source::CapturedDocument, text: &str) {
-    let decoded = decode_yaml(text.as_bytes(), DecodeLimits::default()).unwrap();
+    let decoded = decode_yaml(text.as_bytes()).unwrap();
     assert_eq!(actual.raw().document, decoded.document);
     assert_eq!(actual.raw().locations, decoded.locations);
 }
@@ -82,7 +79,7 @@ struct Opaque {
 }
 struct Metadata {
     pending: Vec<(Kind, String, Result<Reply, Opaque>)>,
-    trace: Vec<(Kind, String, usize, usize)>,
+    trace: Vec<(Kind, String)>,
 }
 impl Metadata {
     fn new(pending: Vec<(Kind, &str, Result<Reply, Opaque>)>) -> Self {
@@ -98,12 +95,7 @@ impl Metadata {
 impl CapturePort for Metadata {
     type Error = Opaque;
     fn capture(&mut self, request: Request<'_>) -> Result<Reply, Opaque> {
-        self.trace.push((
-            request.kind,
-            request.written.into(),
-            request.remaining_bytes,
-            request.remaining_identity_bytes,
-        ));
+        self.trace.push((request.kind, request.written.into()));
         let (kind, path, reply) = self.pending.remove(0);
         assert_eq!(kind, request.kind);
         assert_eq!(path, request.written);
@@ -123,7 +115,7 @@ fn document(name: &str, text: &str) -> Reply {
 
 #[test]
 fn live_root_full_reports_preserve_original_source_and_stop_before_every_dependency() {
-    let schema = captured_schema(Limits::default());
+    let schema = captured_schema();
     for (text,expected) in [
         ("schema_version: '99.0'\nparents: [parent.yaml]\nfunctions: {bad: bad.yaml}\n",json!([{ "phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0281","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}}])),
         ("schema_version: '1.0'\nparents: [base.yaml]\nruntime: {language: python}\nversion: old\n",json!([
@@ -133,16 +125,16 @@ fn live_root_full_reports_preserve_original_source_and_stop_before_every_depende
         ])),
     ] {
         let entry=source("study/environment.yaml",text);let bytes=entry.bytes.as_ptr();let identity=entry.identity.as_ptr();let mut port=Metadata::new(vec![]);
-        let Err(Failure::Root(Error::Findings(captured)))=project_source::prepare(Arc::clone(&schema),entry,Language::Python,&mut port,ProjectLimits::default()) else{panic!("root structural gate")};
+        let Err(Failure::Root(Error::Findings(captured)))=project_source::prepare(Arc::clone(&schema), entry, Language::Python, &mut port) else{panic!("root structural gate")};
         assert!(port.trace.is_empty());assert!(std::ptr::eq(captured.schema(),schema.as_ref()));assert_eq!(captured.source().bytes.as_ptr(),bytes);assert_eq!(captured.source().identity.as_ptr(),identity);
-        assert_eq!(captured.document(),Some(&decode_yaml(text.as_bytes(),Default::default()).unwrap().document));assert_eq!(issues(diagnostics::schema_root(&captured).unwrap()),expected);
+        assert_eq!(captured.document(),Some(&decode_yaml(text.as_bytes()).unwrap().document));assert_eq!(issues(diagnostics::schema_root(&captured).unwrap()),expected);
     }
 }
 
 #[test]
-fn live_success_preserves_order_allowances_allocations_and_independent_default_trees() {
+fn live_success_preserves_order_allocations_and_independent_default_trees() {
     let root="schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {external: functions/constant.yaml, inline: {function: project.constant, description: Constant., params: [], returns: int, tests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 7}]}}\ncodelists: [ct/sex.yaml]\n";
-    let schema = captured_schema(Limits::default());
+    let schema = captured_schema();
     let entry = source("study/environment.yaml", root);
     let root_bytes = entry.bytes.as_ptr();
     let root_identity = entry.identity.as_ptr();
@@ -161,14 +153,8 @@ fn live_success_preserves_order_allowances_allocations_and_independent_default_t
         ),
         (Kind::Codelist, "ct/sex.yaml", Ok(Reply::Document(codelist))),
     ]);
-    let prepared = project_source::prepare(
-        Arc::clone(&schema),
-        entry,
-        Language::Python,
-        &mut port,
-        ProjectLimits::default(),
-    )
-    .unwrap_or_else(|_| panic!("complete live metadata"));
+    let prepared = project_source::prepare(Arc::clone(&schema), entry, Language::Python, &mut port)
+        .unwrap_or_else(|_| panic!("complete live metadata"));
     assert_eq!(prepared.root.source().bytes.as_ptr(), root_bytes);
     assert_eq!(prepared.root.source().identity.as_ptr(), root_identity);
     original_locations(&prepared.root, root);
@@ -187,9 +173,7 @@ fn live_success_preserves_order_allowances_allocations_and_independent_default_t
     let expected_function="function: project.constant\ndescription: Constant.\nparams: []\nreturns: int\nmay_return_missing: false\ncomparison_decimals: 4\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 7}]\n";
     let expected_ct="codelists: [{id: SEX, name: Sex, data_type: text, extensible: false, items: [{value: F, extended: false}, {value: M, extended: false}]}]\n";
     for (actual, expected) in [(function, expected_function), (codelist, expected_ct)] {
-        let expected = decode_yaml(expected.as_bytes(), Default::default())
-            .unwrap()
-            .document;
+        let expected = decode_yaml(expected.as_bytes()).unwrap().document;
         let d = &actual.normalized().document;
         assert_eq!(tree(d, d.root()), tree(&expected, expected.root()));
         assert!(d.field(d.root(), "schema_version").is_none());
@@ -212,32 +196,12 @@ fn live_success_preserves_order_allowances_allocations_and_independent_default_t
             }
         }
     }
-    let limits = ProjectLimits::default();
-    let root_ids = "study/environment.yaml".len();
     assert_eq!(
         port.trace,
         vec![
-            (
-                Kind::Lock,
-                "uv.lock".into(),
-                limits.bytes - root.len(),
-                limits.identity_bytes - root_ids
-            ),
-            (
-                Kind::Function,
-                "functions/constant.yaml".into(),
-                limits.bytes - root.len() - "version = 1\n".len(),
-                limits.identity_bytes - root_ids - "held/uv.lock".len()
-            ),
-            (
-                Kind::Codelist,
-                "ct/sex.yaml".into(),
-                limits.bytes - root.len() - "version = 1\n".len() - FUNCTION.len(),
-                limits.identity_bytes
-                    - root_ids
-                    - "held/uv.lock".len()
-                    - "held/function.yaml".len()
-            ),
+            (Kind::Lock, "uv.lock".into()),
+            (Kind::Function, "functions/constant.yaml".into()),
+            (Kind::Codelist, "ct/sex.yaml".into()),
         ]
     );
     assert!(port.pending.is_empty());
@@ -272,7 +236,7 @@ fn live_success_preserves_order_allowances_allocations_and_independent_default_t
 fn external_findings_keep_full_original_provenance_and_collect_later_live_sources() {
     let root="schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {bad: bad.yaml, good: good.yaml}\ncodelists: [ct.yaml]\n";
     let bad = FUNCTION.to_owned() + "contract_version: '1'\nbinding: {call: project.constant}\n";
-    let schema = captured_schema(Limits::default());
+    let schema = captured_schema();
     let failed = source("held/bad.yaml", &bad);
     let bytes = failed.bytes.as_ptr();
     let identity = failed.identity.as_ptr();
@@ -295,14 +259,13 @@ fn external_findings_keep_full_original_provenance_and_collect_later_live_source
         source("study/environment.yaml", root),
         Language::Python,
         &mut port,
-        ProjectLimits::default(),
     ) else {
         panic!("external structural rejection")
     };
     assert_eq!(
         port.trace
             .iter()
-            .map(|(_, path, _, _)| path.as_str())
+            .map(|(_, path)| path.as_str())
             .collect::<Vec<_>>(),
         ["uv.lock", "bad.yaml", "good.yaml", "ct.yaml"]
     );
@@ -316,11 +279,7 @@ fn external_findings_keep_full_original_provenance_and_collect_later_live_source
     assert!(std::ptr::eq(captured.schema(), schema.as_ref()));
     assert_eq!(
         captured.document(),
-        Some(
-            &decode_yaml(bad.as_bytes(), Default::default())
-                .unwrap()
-                .document
-        )
+        Some(&decode_yaml(bad.as_bytes()).unwrap().document)
     );
     assert_eq!(
         issues(diagnostics::schema_sources(&rejected).unwrap()),
@@ -354,11 +313,10 @@ fn live_opaque_capture_identity_and_collection_stay_outside_structural_codec() {
         ),
     ]);
     let Err(Failure::Rejected(rejected)) = project_source::prepare(
-        captured_schema(Limits::default()),
+        captured_schema(),
         source("study/environment.yaml", root),
         Language::Python,
         &mut port,
-        ProjectLimits::default(),
     ) else {
         panic!()
     };
@@ -374,15 +332,8 @@ fn live_opaque_capture_identity_and_collection_stay_outside_structural_codec() {
 
 #[test]
 fn named_predecode_guards_and_physical_query_failure_categories_remain_exact() {
-    let schema = captured_schema(Limits {
-        identity_bytes: 64,
-        ..Default::default()
-    });
+    let schema = captured_schema();
     let malformed = || source("held/invalid.yaml", "[unclosed");
-    assert!(matches!(
-        schema.prepare_named_class(malformed(), &"x".repeat(65)),
-        Err(Error::Limit("class_name"))
-    ));
     for name in ["", "str", "function_definition", "unknown"] {
         assert!(
             matches!(schema.prepare_named_class(malformed(),name),Err(Error::UnknownClass(actual)) if actual==name)
@@ -399,32 +350,12 @@ fn named_predecode_guards_and_physical_query_failure_categories_remain_exact() {
             ..
         })
     ));
-    let mut limits = Limits::default();
-    limits.normalization.validation.work = 0;
-    let schema = captured_schema(limits);
-    assert!(matches!(
-        schema.prepare_named_class(
-            source("held/function.yaml", FUNCTION),
-            "function_definition_class"
-        ),
-        Err(Error::Validation(ValidationError::Constraint(_)))
-    ));
-    assert!(matches!(
-        schema.prepare_structural(source("study/environment.yaml", "schema_version: '1.0'\n")),
-        Err(Error::Normalize(NormalizationError::Validation(
-            ValidationError::Constraint(_)
-        )))
-    ));
-    assert!(matches!(
-        schema.prepare_named_class(malformed(), "function_definition_class"),
-        Err(Error::Decode { .. })
-    ));
 }
 
 #[test]
 fn root_and_named_complete_reports_keep_unbounded_integer_context_and_compatibility_shapes() {
     use yamaa_adapters::specification_diagnostics::capture_failure;
-    let schema = captured_schema(Limits::default());
+    let schema = captured_schema();
     let root = "schema_version: 92233720368547758081234567890\n";
     let entry = source("study/environment.yaml", root);
     let bytes = entry.bytes.as_ptr();
@@ -466,7 +397,7 @@ fn live_codelist_class_failure_keeps_full_raw_source_report_and_later_capture() 
     let failed = source("held/bad-ct.yaml", &bad);
     let bytes = failed.bytes.as_ptr();
     let identity = failed.identity.as_ptr();
-    let schema = captured_schema(Limits::default());
+    let schema = captured_schema();
     let mut port = Metadata::new(vec![
         (Kind::Lock, "uv.lock", Ok(lock())),
         (Kind::Codelist, "bad.yaml", Ok(Reply::Document(failed))),
@@ -481,14 +412,13 @@ fn live_codelist_class_failure_keeps_full_raw_source_report_and_later_capture() 
         source("study/environment.yaml", root),
         Language::Python,
         &mut port,
-        ProjectLimits::default(),
     ) else {
         panic!("external codelist structural rejection")
     };
     assert_eq!(
         port.trace
             .iter()
-            .map(|(kind, path, _, _)| (*kind, path.as_str()))
+            .map(|(kind, path)| (*kind, path.as_str()))
             .collect::<Vec<_>>(),
         [
             (Kind::Lock, "uv.lock"),
@@ -507,11 +437,7 @@ fn live_codelist_class_failure_keeps_full_raw_source_report_and_later_capture() 
     assert!(std::ptr::eq(captured.schema(), schema.as_ref()));
     assert_eq!(
         captured.document(),
-        Some(
-            &decode_yaml(bad.as_bytes(), Default::default())
-                .unwrap()
-                .document
-        )
+        Some(&decode_yaml(bad.as_bytes()).unwrap().document)
     );
     assert_eq!(
         issues(diagnostics::schema_sources(&rejected).unwrap()),

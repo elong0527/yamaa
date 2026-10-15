@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, rc::Rc};
 use yamaa_adapters::{
     shipped_schema, specification_diagnostics,
     specification_source::{
-        CapturedSchema, InheritanceError, InheritancePort, Limits, Source, SourceFailure,
+        CapturedSchema, InheritanceError, InheritancePort, Source, SourceFailure,
     },
 };
 use yamaa_core::{inheritance as graph, inheritance_preparation as lifecycle};
@@ -69,9 +69,10 @@ fn repeated_parent_occurrences_cannot_bypass_the_traversal_request_bound() {
     };
     assert!(matches!(
         *error,
-        lifecycle::Error::Traversal(graph::Error::Resource(graph::Exhausted {
-            resource: graph::Resource::ParentVisits,
+        lifecycle::Error::Traversal(graph::Error::Resource(yamaa_core::limits::LimitExceeded {
+            resource: "parent_occurrences",
             limit: 8192,
+            actual: Some(8193),
         }))
     ));
     assert_eq!(
@@ -115,13 +116,8 @@ impl InheritancePort for Host {
             display_path: format!("display/{written}"),
         })
     }
-    fn capture(
-        &mut self,
-        source: &graph::Source,
-        maximum: usize,
-    ) -> Result<Vec<u8>, graph::SourceError<Payload>> {
-        self.calls
-            .push(format!("capture:{}:{maximum}", source.identity));
+    fn capture(&mut self, source: &graph::Source) -> Result<Vec<u8>, graph::SourceError<Payload>> {
+        self.calls.push(format!("capture:{}", source.identity));
         if self.calls.len() == self.fail_at {
             return Err(graph::SourceError::Raised(self.failure.take().unwrap()));
         }
@@ -135,10 +131,9 @@ impl InheritancePort for Host {
         layer: &graph::Source,
         entry: &graph::Source,
         written: &str,
-        maximum: usize,
     ) -> Result<String, Payload> {
         self.calls.push(format!(
-            "rebase:{}:{}:{written}:{maximum}",
+            "rebase:{}:{}:{written}",
             layer.identity, entry.identity
         ));
         if self.calls.len() == self.fail_at {
@@ -169,13 +164,8 @@ fn outcome(error: InheritanceError<Payload>) -> Value {
         Err(_) => panic!("semantic report"),
     }
 }
-fn schema(limits: Limits) -> std::sync::Arc<CapturedSchema> {
-    CapturedSchema::admit(
-        shipped_schema::capture().unwrap().sources().to_vec(),
-        0,
-        limits,
-    )
-    .unwrap()
+fn schema() -> std::sync::Arc<CapturedSchema> {
+    CapturedSchema::admit(shipped_schema::capture().unwrap().sources().to_vec(), 0).unwrap()
 }
 #[test]
 fn unchanged_independent_complete_original_preparation_reports_and_effect_counts() {
@@ -201,10 +191,7 @@ fn unchanged_independent_complete_original_preparation_reports_and_effect_counts
             fields[0]
         );
         assert_eq!(host.calls[0], "resolve:entry.yaml:parent.yaml");
-        assert_eq!(
-            host.calls[1],
-            format!("capture:parent.yaml:{}", 16_777_216 - fields[1].len())
-        );
+        assert_eq!(host.calls[1], "capture:parent.yaml");
         assert_eq!(
             host.calls
                 .iter()
@@ -300,9 +287,7 @@ fn opaque_canonicalize_capture_and_rebase_errors_preserve_their_actual_allocatio
 fn raw_parent_overruns_refuse_before_codec_and_keep_existing_capture_category() {
     let root = format!("{VALID}parents: parent.yaml\n");
     let parent = b"schema_version: '1.0'\n";
-    // The captured schema closure has a larger byte policy; a small root total
-    // is represented by a single larger parent reply under the unchanged policy.
-    let mut host = new_host(&vec![b' '; 16_777_216 - root.len() + 1]);
+    let mut host = new_host(&vec![b' '; yamaa_core::limits::Limits::SPEC_BYTES + 1]);
     let error = match shipped_schema::prepare(
         source(root.as_bytes().to_vec()),
         "entry.yaml".into(),
@@ -313,18 +298,18 @@ fn raw_parent_overruns_refuse_before_codec_and_keep_existing_capture_category() 
     };
     assert_eq!(
         outcome(error),
-        json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":"capture_limit"}})
+        json!({"protocol":"specification/prototype","outcome":{"status":"resource_limit","stage":"capture","phase":"yaml_decode","resource":"spec_bytes","limit":yamaa_core::limits::Limits::SPEC_BYTES,"actual":yamaa_core::limits::Limits::SPEC_BYTES + 1}})
     );
     assert_eq!(host.calls.len(), 2);
     let mut host = new_host(parent);
-    assert!(schema(Limits::default())
+    assert!(schema()
         .prepare_document(source(root.into_bytes()), "entry.yaml".into(), &mut host)
         .is_ok());
 }
 
 // Retained-arena oracles replacing the retired Python JSON graph consumers.
 // Expected resolved YAML and CSV remain the original committed authored bytes.
-use yamaa_adapters::yaml_decode::{decode_yaml, DecodeLimits};
+use yamaa_adapters::yaml_decode::decode_yaml;
 use yamaa_core::schema::{Document, DocumentNode as N, SchemaSource};
 
 fn tree(document: &Document, node: usize) -> Value {
@@ -383,8 +368,8 @@ fn window() -> Value {
 #[derive(Debug, PartialEq)]
 enum Event {
     Resolve(String, String),
-    Capture(String, String, usize),
-    Rebase(String, String, String, usize),
+    Capture(String, String),
+    Rebase(String, String, String),
 }
 #[derive(Default)]
 struct Files {
@@ -414,15 +399,12 @@ impl InheritancePort for Files {
     fn capture(
         &mut self,
         source: &graph::Source,
-        maximum: usize,
     ) -> Result<Vec<u8>, graph::SourceError<Self::Error>> {
         self.events.push(Event::Capture(
             source.identity.clone(),
             source.display_path.clone(),
-            maximum,
         ));
         let bytes = std::fs::read(&source.identity).map_err(graph::SourceError::Raised)?;
-        assert!(bytes.len() <= maximum);
         Ok(bytes)
     }
     fn rebase(
@@ -430,13 +412,11 @@ impl InheritancePort for Files {
         layer: &graph::Source,
         entry: &graph::Source,
         written: &str,
-        maximum: usize,
     ) -> Result<String, Self::Error> {
         self.events.push(Event::Rebase(
             layer.identity.clone(),
             entry.identity.clone(),
             written.into(),
-            maximum,
         ));
         // All three independent benchmark cases have parents in the entry directory.
         assert_eq!(
@@ -494,11 +474,7 @@ fn three_complete_committed_resolved_documents_survive_native_preparation() {
         let prepared =
             shipped_schema::prepare(source, entry.to_str().unwrap().into(), &mut files).unwrap();
         assert_eq!(prepared.source().bytes.as_ptr(), entry_pointer);
-        let expected = decode_yaml(
-            case["resolved"].as_str().unwrap().as_bytes(),
-            DecodeLimits::default(),
-        )
-        .unwrap();
+        let expected = decode_yaml(case["resolved"].as_str().unwrap().as_bytes()).unwrap();
         let mut expected = value(&expected.document);
         // The committed resolved documents precede the separately specified
         // REQ-1158 default; exact descriptor/default authority is pinned below.
@@ -541,7 +517,6 @@ fn three_complete_committed_resolved_documents_survive_native_preparation() {
             expected_layers.iter().collect::<Vec<_>>()
         );
         let mut tape = Vec::new();
-        let mut remaining = 16_777_216 - prepared.source().bytes.len();
         for (index, parent) in prepared.parents().iter().enumerate() {
             let parent_name = parent_names[index];
             tape.push(Event::Resolve(
@@ -551,7 +526,6 @@ fn three_complete_committed_resolved_documents_survive_native_preparation() {
             tape.push(Event::Capture(
                 parent.source().identity.clone(),
                 parent.source().identity.clone(),
-                remaining,
             ));
             let original = case["sources"]
                 .as_array()
@@ -566,7 +540,6 @@ fn three_complete_committed_resolved_documents_survive_native_preparation() {
                 parent.raw().locations.len(),
                 parent.raw().document.nodes().len()
             );
-            remaining -= original.len();
         }
         if name != "schema-inherited-output" {
             tape.push(Event::Resolve(
@@ -590,15 +563,12 @@ fn three_complete_committed_resolved_documents_survive_native_preparation() {
             ],
             _ => panic!("closed independent case inventory"),
         };
-        remaining = 1_048_576;
         for &(layer, written) in rebases {
             tape.push(Event::Rebase(
                 root.join(layer).to_str().unwrap().into(),
                 entry.to_str().unwrap().into(),
                 written.into(),
-                remaining,
             ));
-            remaining -= written.len();
         }
         assert_eq!(files.events, tape, "{name}");
         let N::Mapping(inputs) =
@@ -758,10 +728,10 @@ fn count_dependency_pruning_keeps_complete_normalized_application_model() {
     assert_eq!(
         host.calls,
         [
-            "rebase:entry.yaml:entry.yaml:never-read.csv:1048576",
-            "rebase:entry.yaml:entry.yaml:dm.csv:1048562",
-            "rebase:entry.yaml:entry.yaml:ex.csv:1048556",
-            "rebase:entry.yaml:entry.yaml:out.csv:1048550"
+            "rebase:entry.yaml:entry.yaml:never-read.csv",
+            "rebase:entry.yaml:entry.yaml:dm.csv",
+            "rebase:entry.yaml:entry.yaml:ex.csv",
+            "rebase:entry.yaml:entry.yaml:out.csv"
         ]
     );
     assert_eq!(prepared.written_source_path("DM"), Some("dm.csv"));
@@ -953,24 +923,21 @@ fn distinct_written_aliases_keep_first_canonical_arena_and_complete_authored_mod
         fn capture(
             &mut self,
             source: &graph::Source,
-            maximum: usize,
         ) -> Result<Vec<u8>, graph::SourceError<Self::Error>> {
-            self.0.capture(source, maximum)
+            self.0.capture(source)
         }
         fn rebase(
             &mut self,
             layer: &graph::Source,
             entry: &graph::Source,
             written: &str,
-            maximum: usize,
         ) -> Result<String, Self::Error> {
-            self.0.rebase(layer, entry, written, maximum)
+            self.0.rebase(layer, entry, written)
         }
     }
     let original = json!({"schema_version":"1.0","domain":"OUT","keys":["ID"],"input":{"DM":"data.csv"},"base":"DM","output":{"path":"out.csv","columns":["ID"]},"columns":[{"name":"ID","type":"str","derivation":"DM.ID"}]}).to_string().into_bytes();
     let pointer = original.as_ptr();
     let entry = b"schema_version: '1.0'\nparents: [base.yaml, alias.yaml]\n".to_vec();
-    let allowance = 16_777_216 - entry.len();
     let mut host = Aliases(Host {
         bytes: [("canonical/base.yaml".into(), original)]
             .into_iter()
@@ -988,11 +955,11 @@ fn distinct_written_aliases_keep_first_canonical_arena_and_complete_authored_mod
     assert_eq!(
         host.0.calls,
         [
-            "resolve:entry.yaml:base.yaml".into(),
-            format!("capture:canonical/base.yaml:{allowance}"),
-            "resolve:entry.yaml:alias.yaml".into(),
-            "rebase:canonical/base.yaml:entry.yaml:data.csv:1048576".into(),
-            "rebase:canonical/base.yaml:entry.yaml:out.csv:1048568".into()
+            "resolve:entry.yaml:base.yaml".to_owned(),
+            "capture:canonical/base.yaml".to_owned(),
+            "resolve:entry.yaml:alias.yaml".to_owned(),
+            "rebase:canonical/base.yaml:entry.yaml:data.csv".to_owned(),
+            "rebase:canonical/base.yaml:entry.yaml:out.csv".to_owned()
         ]
     );
     assert_eq!(prepared.parents().len(), 1);
