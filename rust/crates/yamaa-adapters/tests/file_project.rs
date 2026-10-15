@@ -127,6 +127,7 @@ mod file {
         struct Activation {
             trace: Vec<&'static str>,
             reject: bool,
+            reject_binding: bool,
             mismatch: bool,
         }
         impl ActivationPort for Activation {
@@ -154,7 +155,11 @@ mod file {
                 _: &LogicalSignature,
             ) -> Result<(), Self::Error> {
                 self.trace.push("bind");
-                Ok(())
+                if self.reject_binding {
+                    Err("original binding rejection")
+                } else {
+                    Ok(())
+                }
             }
             fn invoke(
                 &mut self,
@@ -264,6 +269,45 @@ mod file {
                     .rows(),
                 &[vec![Value::Int(1), Value::Int(1)]]
             );
+        }
+
+        #[test]
+        fn functions_without_a_lock_still_reject_bindings_and_cases_before_study_reads() {
+            let study = Study::new();
+            study.write(
+                "env/environment.yaml",
+                "schema_version: '1.0'\nlanguage: python\nfunctions: {id: id.yaml}\ncodelists: [ct.yaml]\n",
+            );
+            fs::remove_file(study.0.join("uv.lock")).unwrap();
+            let mut project = study.prepare(&study.text(""), &[]).unwrap();
+            let reads = project.capture_reads();
+            assert!(!study.0.join("entry/input.csv").exists());
+            for reject_binding in [true, false] {
+                let mut activation = Activation {
+                    reject: true,
+                    reject_binding,
+                    mismatch: true,
+                    ..Default::default()
+                };
+                let attempt = project.build(&mut activation);
+                if reject_binding {
+                    assert!(matches!(
+                        attempt.boundary,
+                        Err(BoundaryFailure::Activation(Failure::Bindings(_)))
+                    ));
+                    assert_eq!(activation.trace, ["bind"]);
+                } else {
+                    assert!(matches!(
+                        attempt.boundary,
+                        Err(BoundaryFailure::Activation(Failure::Tests(_)))
+                    ));
+                    assert_eq!(activation.trace, ["bind", "call", "call"]);
+                }
+                assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
+                assert!(attempt.dataset.sources.is_empty());
+                assert!(matches!(attempt.dataset.result, Err(PortError::Incomplete)));
+                assert_eq!(project.capture_reads(), reads);
+            }
         }
 
         #[test]
