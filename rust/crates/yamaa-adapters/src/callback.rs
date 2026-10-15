@@ -16,7 +16,6 @@ impl fmt::Display for BoundaryError {
     }
 }
 impl std::error::Error for BoundaryError {}
-type Error = BoundaryError;
 
 /// Owned host facts. Borrowed diagnostic views retain their exact text.
 #[derive(Debug)]
@@ -29,7 +28,7 @@ pub enum CallbackError {
         reason: String,
         returned: Option<String>,
     },
-    Boundary(Error),
+    Boundary(BoundaryError),
 }
 
 /// Project the admitted host classification without copying or rendering it.

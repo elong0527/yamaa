@@ -658,10 +658,11 @@ output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
         self.assertIs(retained.exception, original)
         self.assertIsNone(held.output())
 
-    def test_opaque_oversized_exception_rendering_preserves_original_and_refuses_public_output(
+    def test_long_exception_message_preserves_exact_facts_and_original_failure(
         self,
     ):
-        original = RuntimeError("x" * 65537)
+        message = "\u00e9\x00" * 30_000 + "complete producer failure"
+        original = RuntimeError(message)
         real = program.project_value
 
         def value(x):
@@ -674,9 +675,11 @@ output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
         self.assertIsNone(result.output)
         self.assertIs(result._native.project_failures()[0][1], original)
         self.assertEqual(self.entered(result).entered_nodes(), [1])
-        self.assertEqual(
-            json.loads(result.issues["context"][0])["code"], "report_limit"
-        )
+        self.assertEqual(result.issues["condition"].to_list(), ["function_call_failed"])
+        context = json.loads(result.issues["context"][0])
+        self.assertEqual(context["host_error"], "RuntimeError")
+        self.assertEqual(context["host_message"], message)
+        self.assertNotIn("host_details_truncated", context)
 
     def test_failed_consumer_verification_has_no_output_from_accepted_producer(self):
         self.write("consumer/root.yaml", CONSUMER + TRUTH["fatal_row_count_yaml"])
@@ -706,9 +709,7 @@ output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
         self.assertGreater(result.issues.height, 0)
 
     def assert_large_projection_admitted(self, result, ids, columns, expected_csv):
-        # The original smaller copy-policy refusals remain explicit-budget
-        # native controls in producer_result.rs. Public defaults now admit this
-        # geometry under the approved longitudinal profile.
+        # The fixed table geometry admits these cells and their held bytes.
         self.assertTrue(self.entered(result).accepted())
         self.assertEqual(self.entered(result).entered_nodes(), [1, 0])
         self.assertEqual(result.issues.height, 0)

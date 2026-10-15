@@ -233,7 +233,7 @@ for(interrupted in c(FALSE,TRUE)) {
 cat("R public original condition/interrupt identity and entered prefixes survive other owners and files\n")
 
 work <- study()
-oversized <- structure(list(message=strrep("x",65537L),call=NULL),class=c("public_producer_error","error","condition"))
+oversized <- structure(list(message=paste0(strrep("\u00e9\n",30000L),"complete producer failure"),call=NULL),class=c("public_producer_error","error","condition"))
 resolve_oversized <- function(call,parameters) {
   resolved <- capabilities$resolve(call,parameters)
   if(resolved[[1L]] != 0L) return(resolved)
@@ -247,8 +247,11 @@ failed <- with_caps(capabilities$verify,resolve_oversized,build(work))
 unlink(work,recursive=TRUE); invisible(gc())
 stopifnot(is.null(failed$output),identical(unlist(evidence(failed)$entered),1),
   identical(evidence(failed)$failures[[1L]]$facts$condition,oversized),
-  grepl('"code":"report_limit"',failed$issues$context,fixed=TRUE))
-cat("R public oversized host projection refuses beside the original rooted condition\n")
+  identical(failed$issues$condition,"function_call_failed"))
+context <- jsonlite::fromJSON(failed$issues$context[[1L]],simplifyVector=FALSE)
+stopifnot(identical(context$host_error,"public_producer_error"),
+  identical(context$host_message,oversized$message),is.null(context$host_details_truncated))
+cat("R public long host messages preserve exact Unicode beside the original rooted condition\n")
 
 work <- study()
 write(work,"consumer/root.yaml",paste0(consumer,host_truth[["fatal_row_count_yaml"]]))

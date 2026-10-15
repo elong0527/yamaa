@@ -25,7 +25,6 @@ pub mod parquet_source;
 #[allow(unsafe_code)] // The reviewed static ReadStat callback and memory transport ABI.
 pub mod sas_source;
 
-pub mod schema_metadata;
 pub mod shipped_schema;
 pub mod specification_source;
 
@@ -99,8 +98,6 @@ pub mod project_check;
 mod project_diagnostic_projection;
 
 mod file_inventory;
-
-pub mod host_limits;
 
 pub mod callback;
 pub mod dataset_result;

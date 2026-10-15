@@ -143,17 +143,11 @@ impl RuntimePort for Runtime<'_, '_> {
             ],
         )?;
         let fields = std::sync::Arc::new(crate::report_fields::fields(&metadata)?);
-        let attempt = crate::file_producer::build_selected_with_observer(
-            py,
-            &mut build,
-            fields,
-            yamaa_core::capacity::REPORT_ENCODED_BYTES,
-            scope,
-        );
+        let attempt =
+            crate::file_producer::build_selected_with_observer(py, &mut build, fields, scope);
         scope.phase(Phase::Output);
         let converted = (|| {
-            let producer =
-                attempt.formatted(py, yamaa_core::capacity::REPORT_ENCODED_BYTES, true)?;
+            let producer = attempt.formatted(py)?;
             Ok(Domain {
                 producer: Some(producer),
                 measurements: None,
