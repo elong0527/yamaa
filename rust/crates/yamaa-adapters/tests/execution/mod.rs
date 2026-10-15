@@ -19,6 +19,7 @@ mod declarative_primary_intermediates;
 mod declarative_row_intermediates;
 mod declarative_self;
 mod declarative_source_selection;
+mod diagnostic_sites;
 mod empty_child_condition;
 mod inherited_aggregate_bindings;
 mod inherited_identifier_collision;

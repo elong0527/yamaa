@@ -2347,6 +2347,42 @@ local({
   cat("original namespace declarations preserve complete paired public refusals before source reads\n")
 })
 
+local({
+  assert_diagnostic_sites <- function(actual,expected) {
+    stopifnot(identical(names(actual),fixture_strings(host_truth[["issue_columns"]])),
+      nrow(actual)==length(expected))
+    for (i in seq_along(expected)) {
+      finding <- expected[[i]]
+      context <- jsonlite::fromJSON(actual$context[[i]],simplifyVector=FALSE)
+      stopifnot(identical(actual$phase[[i]],finding$phase),
+        identical(actual$condition[[i]],finding$condition),
+        identical(actual$requirement[[i]],finding$requirement),
+        identical(actual$spec_paths[[i]],fixture_strings(finding$spec_paths)),
+        identical(context[sort(names(context))],finding$context[sort(names(finding$context))]))
+    }
+  }
+  for (truth in host_truth[["diagnostic_sites"]]) {
+    directory <- tempfile("yamaa-diagnostic-sites-"); dir.create(directory)
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    assert_diagnostic_sites(yamaa_check(entry)$issues,truth$check_issues)
+    for (name in names(truth$inputs)) {
+      path <- file.path(directory,name); dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
+      writeBin(charToRaw(truth$inputs[[name]]),path)
+    }
+    for (attempt in 1:2) {
+      assert_diagnostic_sites(yamaa_check(entry)$issues,truth$check_issues)
+      result <- yamaa_domain(entry)
+      assert_diagnostic_sites(result$issues,truth$issues)
+      stopifnot(is.null(result$output),
+        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,truth$output)))
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("original unknown references retain authored identifiers, dataset context and complete findings without Python\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

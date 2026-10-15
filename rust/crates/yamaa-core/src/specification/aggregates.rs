@@ -30,6 +30,7 @@ pub(super) struct Declaration {
     )>,
     derive: Option<Vec<DeriveDeclaration>>,
     derive_relations: Vec<String>,
+    derive_references: Vec<String>,
     between: Option<RangeDeclaration>,
 }
 #[derive(Clone, Debug)]
@@ -171,6 +172,7 @@ pub(super) fn prepare(
     }
     let mut extra = Vec::new();
     let mut derive_relations = Vec::<String>::new();
+    let mut derive_references = Vec::<String>::new();
     let derive = if scalar {
         None
     } else {
@@ -230,6 +232,7 @@ pub(super) fn prepare(
                         if let Some((relation, _)) = reference.split_once('.') {
                             if !named.contains(relation) {
                                 derive_relations.push(relation.into());
+                                derive_references.push(reference);
                             } else {
                                 intermediate_names.push(relation.into());
                             }
@@ -402,6 +405,16 @@ pub(super) fn prepare(
     };
     if derive.is_some() {
         if let Some((_, Ok(filter))) = &filter {
+            derive_references.extend(
+                filter
+                    .identifiers()
+                    .into_iter()
+                    .filter(|name| {
+                        name.split_once('.')
+                            .is_some_and(|(relation, _)| !named.contains(relation))
+                    })
+                    .map(String::from),
+            );
             derive_relations.extend(
                 filter
                     .identifiers()
@@ -450,6 +463,7 @@ pub(super) fn prepare(
         filter,
         derive,
         derive_relations,
+        derive_references,
         between,
     })
 }
@@ -654,9 +668,18 @@ pub(super) fn bind(
         } else if let Some(index) = secondary.iter().position(|source| source.name == relation) {
             AggregateSource::Secondary(index)
         } else {
+            let reference = declaration
+                .derive_references
+                .iter()
+                .map(String::as_str)
+                .chain(compiled.identifiers())
+                .find(|name| {
+                    name.split_once('.')
+                        .is_some_and(|(owner, _)| owner == relation)
+                });
             findings.push(BindFinding::UnknownReference {
                 path: declaration.expression_path.clone(),
-                name: format!("{relation}.*"),
+                name: reference.map_or_else(|| format!("{relation}.*"), String::from),
             });
             return Ok(None);
         }

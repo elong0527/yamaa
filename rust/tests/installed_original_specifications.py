@@ -2860,5 +2860,39 @@ class NamespaceAdmission(unittest.TestCase):
                     self.assertEqual(entry.read_bytes(), original)
 
 
+class DiagnosticSites(unittest.TestCase):
+    def test_original_unknown_references_keep_authored_identifier_and_dataset(self):
+        import yamaa
+
+        def issues(frame):
+            rows = frame.to_dicts()
+            self.assertEqual(frame.columns, TRUTH["issue_columns"])
+            for row in rows:
+                self.assertIsInstance(row["context"], str)
+                row["context"] = json.loads(row["context"])
+            return rows
+
+        for case in TRUTH["diagnostic_sites"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="utf-8")
+                self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
+                for name, content in case["inputs"].items():
+                    path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(content, encoding="utf-8")
+                for _ in range(2):
+                    self.assertEqual(issues(yamaa.check(entry).issues), case["check_issues"])
+                    result = yamaa.domain(entry)
+                    self.assertEqual(issues(result.issues), case["issues"])
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.DomainError):
+                        result.save()
+                    self.assertFalse((root / case["output"]).exists())
+
+
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -83,6 +83,10 @@ fn intrinsic_vendor_filter_and_intermediate_derive_contexts_precede_metadata() {
     );
     assert_eq!(observed["issues"][0]["condition"], "unknown_field");
     assert_eq!(
+        observed["issues"][0]["context"],
+        json!({"identifier":"ODM.SITEID","dataset":"ODM"})
+    );
+    assert_eq!(
         observed["issues"][0]["spec_paths"],
         json!(["columns.AGE.derivation.odm.filter"])
     );
