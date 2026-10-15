@@ -466,6 +466,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "readstat")]
     #[test]
     fn both_sas_source_profiles_use_receipts_and_preserve_exact_caller_caps() {
         for (profile, bytes) in [

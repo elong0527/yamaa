@@ -150,6 +150,9 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             }
             Error::ParquetSource(_) => ("ingest", "parquet_boundary"),
             Error::SasSource(crate::sas_source::Error::Limit { .. }) => ("ingest", "sas_limit"),
+            Error::SasSource(crate::sas_source::Error::Unavailable) => {
+                ("ingest", "sas_reader_unavailable")
+            }
             Error::SasSource(_) => ("ingest", "sas_boundary"),
             Error::Ordinal(_) => ("ingest", "source_ordinal_boundary"),
             Error::Bind(BindError::Catalog(_)) => ("bind", "reference_catalog"),
