@@ -1917,6 +1917,40 @@ local({
   cat("all 19 unchanged scalar-key captures match complete ordered findings, CSV and handler ledgers twice without Python passed\n")
 })
 
+local({
+  source(file.path(root,"key-truth.R"),local=TRUE)
+  original <- file.path(root,"keys","dependency_before_bad_filter")
+  type_truth <- list(phase="validation",condition="incompatible_input_type",requirement="REQ-0190",
+    spec_paths=list("intermediates[0].filter"),context='{"left_type":"int","right_type":"str"}')
+  directory <- tempfile("retained-filter-types-");dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  for(variant in c("duplicate","resolved","empty_donor","empty_driver","missing_filter_operand","unused","unread_branch","boolean_missing")) {
+    stopifnot(file.copy(original,directory,recursive=TRUE))
+    case <- file.path(directory,"dependency_before_bad_filter")
+    entry <- file.path(case,"spec.yaml");output <- file.path(case,"out.csv")
+    written <- rawToChar(rawfile(entry))
+    if(variant!="duplicate") writeBin(charToRaw("ID,N\na,7\n"),file.path(case,"src.csv"))
+    if(variant=="empty_donor") writeBin(charToRaw("K,KINT,KNUM,VAL\n"),file.path(case,"tab.csv"))
+    if(variant=="empty_driver") writeBin(charToRaw("ID,N\n"),file.path(case,"src.csv"))
+    if(variant %in% c("missing_filter_operand","boolean_missing"))
+      writeBin(charToRaw('K,KINT,KNUM,VAL\n"       7",,7,A\n'),file.path(case,"tab.csv"))
+    if(variant=="unused") written <- gsub("derivation: LOOK.VAL","derivation: {literal: ok}",written,fixed=TRUE)
+    if(variant=="unread_branch") written <- gsub("derivation: LOOK.VAL",
+      "derivation: {case: [{when: 'FALSE', then: {source: LOOK.VAL}}, {otherwise: {literal: ok}}]}",written,fixed=TRUE)
+    if(variant=="boolean_missing") written <- sub("TAB.KINT > 'bad'","FALSE AND TAB.KINT > 'bad'",written,fixed=TRUE)
+    writeBin(charToRaw(written),entry)
+    result <- yamaa_domain(entry)
+    check_issue_frame(result$issues,if(variant=="duplicate") key_truth$dependency_before_bad_filter$issues else type_truth)
+    stopifnot(is.null(result$output))
+    for(i in seq_len(2L)) stopifnot(inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+    stopifnot(!file.exists(output))
+    unlink(file.path(case,c("src.csv","tab.csv")))
+    check_issue_frame(yamaa_check(entry)$issues,type_truth)
+    unlink(case,recursive=TRUE)
+  }
+  cat("retained filter types, original key ordering and check without source files passed\n")
+})
+
 # Compare complete independently authored ledgers while ignoring only JSON object
 # key order. Array order, every field, duplicate fields and integer text remain
 # part of the comparison; no semantic observation is selected or discarded.

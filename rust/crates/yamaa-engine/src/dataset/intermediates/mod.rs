@@ -518,6 +518,7 @@ fn eligibility<E>(
     item: &Intermediate,
     budget: &mut Budget,
 ) -> Result<Vec<usize>, Box<ExecutionError<E>>> {
+    check_deferred_filter_types(item)?;
     budget.work(table.row_count(), 1)?;
     let mut eligible = Vec::new();
     eligible
@@ -659,6 +660,7 @@ fn read_with_observations<T: TableAccess + ?Sized>(
         } else {
             None
         };
+        check_deferred_filter_types(item)?;
         state.budget.work(
             state
                 .intermediates
@@ -912,6 +914,34 @@ fn read_with_observations<T: TableAccess + ?Sized>(
             .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
     }
     Ok(value)
+}
+
+fn check_deferred_filter_types<E>(item: &Intermediate) -> Result<(), Box<ExecutionError<E>>> {
+    let findings = item
+        .filter
+        .as_ref()
+        .map(|filter| filter.deferred_type_findings())
+        .unwrap_or(&[]);
+    if findings.is_empty() {
+        Ok(())
+    } else {
+        Err(Box::new(ExecutionError::IntermediateFilterTypes(
+            findings.to_vec(),
+        )))
+    }
+}
+
+pub(super) fn check_unobserved_filter_types<E>(
+    plan: &DatasetPlan,
+    budget: &mut Budget,
+) -> Result<(), Box<ExecutionError<E>>> {
+    budget.work(plan.intermediates().len(), 1)?;
+    for item in plan.intermediates() {
+        // Keep the first failing selector's complete bounded projection rather
+        // than allocate an aggregate copy of every unused selector's findings.
+        check_deferred_filter_types(item)?;
+    }
+    Ok(())
 }
 
 /// Retain exact key values separately from output-row identity in join diagnostics.

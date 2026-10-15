@@ -96,35 +96,32 @@ pub(super) fn bind(
     // A type refusal still retains the donor's bound fields for later checks.
     // Only unresolved references prevent constructing this partial plan.
     let references_resolved = findings.len() == before;
-    if static_filter_types {
-        findings.extend(
-            static_types::predicate_kinds(plan, |name| {
-                let binding = bindings.iter().find(|binding| binding.name == name)?;
-                let (schema, column) = match binding.read {
-                    Read::Source(column) => (donor, column),
-                    Read::Column(slot) => {
-                        let CurrentRead::Record { source, column } = current.get(slot)?.read else {
-                            return None;
-                        };
-                        let index = if source == 0 {
-                            driver
-                        } else if source <= driver {
-                            source - 1
-                        } else {
-                            source
-                        };
-                        (*schemas.get(index)?, column)
-                    }
-                    _ => return None,
+    let type_findings = static_types::predicate_kinds(plan, |name| {
+        let binding = bindings.iter().find(|binding| binding.name == name)?;
+        let (schema, column) = match binding.read {
+            Read::Source(column) => (donor, column),
+            Read::Column(slot) => {
+                let CurrentRead::Record { source, column } = current.get(slot)?.read else {
+                    return None;
                 };
-                schema
-                    .columns()
-                    .get(column)
-                    .map(|column| column.kind.into())
-            })?
-            .into_iter()
-            .map(BindFinding::Predicate),
-        );
+                let index = if source == 0 {
+                    driver
+                } else if source <= driver {
+                    source - 1
+                } else {
+                    source
+                };
+                (*schemas.get(index)?, column)
+            }
+            _ => return None,
+        };
+        schema
+            .columns()
+            .get(column)
+            .map(|column| column.kind.into())
+    })?;
+    if static_filter_types {
+        findings.extend(type_findings.iter().cloned().map(BindFinding::Predicate));
     }
     if !references_resolved {
         return Ok(None);
@@ -135,7 +132,12 @@ pub(super) fn bind(
                 .map_err(BindError::InvalidPredicateBinding)?,
             current,
         )
-        .map_err(BindError::InvalidPredicateBinding)?,
+        .map_err(BindError::InvalidPredicateBinding)?
+        .with_deferred_type_findings(if static_filter_types {
+            Vec::new()
+        } else {
+            type_findings
+        }),
     ))
 }
 

@@ -304,6 +304,7 @@ pub enum ExecutionError<E> {
     /// A pure scalar operation's already classified cause and original field path.
     ScalarDiagnostic(yamaa_core::diagnostic::Diagnostic),
     IntermediateVerifications(Vec<yamaa_core::diagnostic::Diagnostic>),
+    IntermediateFilterTypes(Vec<yamaa_core::diagnostic::Diagnostic>),
     SemanticDiagnostic {
         diagnostic: yamaa_core::diagnostic::Diagnostic,
         identity: Option<RowIdentity>,
@@ -2057,6 +2058,9 @@ impl Executor<'_> {
             completed[assignment.column] = true;
             self.check_columns(&candidates, &completed, &mut next_column, records, budget)?;
         }
+        // A selector hidden by an empty input or a lazy branch must still report
+        // its known filter-type refusal before a successful result can publish.
+        intermediates::check_unobserved_filter_types(self, budget)?;
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Derivation,
             outcome: crate::application_observer::Outcome::Succeeded,
