@@ -1,0 +1,93 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXSTDTC: date, EXENDTC: date}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AP01SDT, AP01EDT, AP02SDT, AP02EDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # Each period starts on its first exposure start date. MIN skips a record
+  # with no start date, so such a record never decides a period's start.
+  - name: AP01SDT
+    type: date
+    label: Period 01 Start Date
+    derivation:
+      aggregate:
+        filter: "EX.EPOCH = 'TREATMENT 1'"
+        expr: "MIN(EX.EXSTDTC)"
+
+  - name: AP02SDT
+    type: date
+    label: Period 02 Start Date
+    derivation:
+      aggregate:
+        filter: "EX.EPOCH = 'TREATMENT 2'"
+        expr: "MIN(EX.EXSTDTC)"
+
+  # The subject's last exposure end date over all exposure records, also
+  # one with no start date. Not published; it anchors the follow-up.
+  - name: LASTEXDT
+    type: date
+    label: Date of Last Exposure
+    derivation:
+      aggregate: "MAX(EX.EXENDTC)"
+
+  # Period 1 ends the day before period 2 starts. A subject who never
+  # entered period 2 is followed for 30 days after last exposure instead.
+  - name: AP01EDT
+    type: date
+    label: Period 01 End Date
+    derivation:
+      case:
+        - when: "AP02SDT IS NOT NULL"
+          then:
+            date_shift: {source: AP02SDT, days: -1}
+        - otherwise:
+            date_shift: {source: LASTEXDT, days: 30}
+
+  # The last period ends 30 days after last exposure; empty when the
+  # subject never entered period 2.
+  - name: AP02EDT
+    type: date
+    label: Period 02 End Date
+    derivation:
+      case:
+        - when: "AP02SDT IS NOT NULL"
+          then:
+            date_shift: {source: LASTEXDT, days: 30}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 7
+      max: 7
+  - assert:
+      id: period-one-does-not-end-before-it-starts
+      when: "AP01SDT IS NOT NULL AND AP01EDT IS NOT NULL"
+      require: "AP01EDT >= AP01SDT"
+  - assert:
+      id: period-one-ends-before-period-two-starts
+      when: "AP02SDT IS NOT NULL"
+      require: "AP01EDT < AP02SDT"
+  - assert:
+      id: period-two-end-needs-period-two-start
+      when: "AP02EDT IS NOT NULL"
+      require: "AP02SDT IS NOT NULL"
