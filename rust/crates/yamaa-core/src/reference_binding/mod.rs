@@ -350,6 +350,29 @@ impl Catalog {
             .find(|(_, dataset)| dataset.index == index)
             .map(|(name, _)| name.as_str())
     }
+    /// Suggest a qualifier only when exactly one admitted dataset owns a bare field.
+    pub(crate) fn unique_field_owner(&self, field: &str) -> Result<Option<&str>, Error> {
+        limit("reference_bytes", field.len(), self.limits.reference_bytes)?;
+        let mut owners = self
+            .datasets
+            .iter()
+            .filter(|(_, dataset)| dataset.fields.contains_key(field))
+            .map(|(name, _)| name.as_str())
+            .chain(
+                self.joined
+                    .iter()
+                    .filter(|(_, relation)| {
+                        relation.fields.contains_key(field)
+                            && matches!(
+                                relation.inference,
+                                crate::key_relation::Inference::Keys { .. }
+                            )
+                    })
+                    .map(|(name, _)| name.as_str()),
+            );
+        let first = owners.next();
+        Ok(if owners.next().is_none() { first } else { None })
+    }
     /// Borrow a declared relation's fields in stored column order.
     pub(crate) fn fields(&self, name: &str) -> Option<alloc::vec::Vec<Field<'_>>> {
         let dataset = self.datasets.get(name)?;

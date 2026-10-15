@@ -81,6 +81,21 @@ pub(super) fn bind(
                 read,
             });
         } else {
+            if !name.contains('.') {
+                if let Some(owner) = catalog
+                    .unique_field_owner(name)
+                    .map_err(BindError::Catalog)?
+                {
+                    let mut finding = LookupFinding::new(
+                        plan.spec_path(),
+                        crate::diagnostic::ConditionCode::PredicateUnresolvableName,
+                    );
+                    finding.text("identifier", name);
+                    finding.text("suggestion", &format!("{owner}.{name}"));
+                    findings.push(BindFinding::Predicate(finding.diagnostic()));
+                    continue;
+                }
+            }
             findings.push(BindFinding::UnknownReference {
                 path: plan.spec_path().into(),
                 name: name.into(),

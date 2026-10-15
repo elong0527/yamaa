@@ -1016,6 +1016,216 @@
             }
           ]
         }
+      ],
+      "predicate_suggestions": [
+        {
+          "name": "original_column_case",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\",\"DTHFL2\":\"str\"}}},\"base\":\"SRC\",\"keys\":[\"K\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"K\",\"DTHFL\"]},\"columns\":[{\"name\":\"K\",\"type\":\"str\",\"derivation\":{\"source\":\"SRC.X\"}},{\"name\":\"DTHFL\",\"type\":\"str\",\"derivation\":{\"case\":[{\"when\":\"DTHFL2 = 'Y'\",\"then\":{\"literal\":\"Y\"}},{\"otherwise\":{\"literal\":\"N\"}}]}}]}",
+          "inputs": {
+            "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unresolvable_name",
+              "requirement": "REQ-0189",
+              "spec_paths": [
+                "columns.DTHFL.derivation.case[0].when"
+              ],
+              "context": {
+                "identifier": "DTHFL2",
+                "suggestion": "SRC.DTHFL2"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "original_row_case",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\",\"DTHFL2\":\"str\"}}},\"base\":\"SRC\",\"keys\":[\"K\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"K\",\"DTHFL\"]},\"columns\":[{\"name\":\"K\",\"type\":\"str\"},{\"name\":\"DTHFL\",\"type\":\"str\"}],\"rows\":[{\"id\":\"row\",\"derivations\":{\"K\":{\"source\":\"SRC.X\"},\"DTHFL\":{\"case\":[{\"when\":\"DTHFL2 = 'Y'\",\"then\":{\"literal\":\"Y\"}},{\"otherwise\":{\"literal\":\"N\"}}]}}}]}",
+          "inputs": {
+            "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unresolvable_name",
+              "requirement": "REQ-0106",
+              "spec_paths": [
+                "rows[0].derivations.DTHFL.case[0].when"
+              ],
+              "context": {
+                "identifier": "DTHFL2",
+                "suggestion": "SRC.DTHFL2"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "original_lookup_wrong_qualifier",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\"}},\"RIGHT\":{\"path\":\"input/right.csv\",\"types\":{\"X\":\"str\",\"V\":\"float\"}}},\"base\":\"SRC\",\"keys\":[\"X\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"X\",\"V\"]},\"columns\":[{\"name\":\"X\",\"type\":\"str\",\"derivation\":{\"source\":\"SRC.X\"}},{\"name\":\"V\",\"type\":\"float\",\"derivation\":{\"source\":\"LOOK.V\"}}],\"intermediates\":[{\"id\":\"LOOK\",\"dataset\":\"RIGHT\",\"key\":[\"X\"],\"filter\":\"SRC.V > 0\"}]}",
+          "inputs": {
+            "input/source.csv": "X\none\ntwo\n",
+            "input/right.csv": "X,V\none,1.0\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0120",
+              "spec_paths": [
+                "intermediates[0].filter"
+              ],
+              "context": {
+                "identifier": "SRC.V",
+                "intermediate": "LOOK",
+                "suggestion": "RIGHT.V"
+              }
+            },
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "columns.V.derivation.source"
+              ],
+              "context": {
+                "identifier": "LOOK.V"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "unknown_bare_case",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\",\"DTHFL2\":\"str\"}}},\"base\":\"SRC\",\"keys\":[\"K\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"K\",\"DTHFL\"]},\"columns\":[{\"name\":\"K\",\"type\":\"str\",\"derivation\":{\"source\":\"SRC.X\"}},{\"name\":\"DTHFL\",\"type\":\"str\",\"derivation\":{\"case\":[{\"when\":\"NOSUCH = 'Y'\",\"then\":{\"literal\":\"Y\"}},{\"otherwise\":{\"literal\":\"N\"}}]}}]}",
+          "inputs": {
+            "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "columns.DTHFL.derivation.case[0].when"
+              ],
+              "context": {
+                "identifier": "NOSUCH"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "ambiguous_bare_case",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\",\"DTHFL2\":\"str\"}},\"OTHER\":{\"path\":\"input/other.csv\",\"types\":{\"K\":\"str\",\"DTHFL2\":\"str\"}}},\"base\":\"SRC\",\"keys\":[\"K\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"K\",\"DTHFL\"]},\"columns\":[{\"name\":\"K\",\"type\":\"str\",\"derivation\":{\"source\":\"SRC.X\"}},{\"name\":\"DTHFL\",\"type\":\"str\",\"derivation\":{\"case\":[{\"when\":\"DTHFL2 = 'Y'\",\"then\":{\"literal\":\"Y\"}},{\"otherwise\":{\"literal\":\"N\"}}]}}]}",
+          "inputs": {
+            "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n",
+            "input/other.csv": "K,DTHFL2\none,Y\ntwo,N\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "columns.DTHFL.derivation.case[0].when"
+              ],
+              "context": {
+                "identifier": "DTHFL2"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "qualified_case",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\",\"DTHFL2\":\"str\"}}},\"base\":\"SRC\",\"keys\":[\"K\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"K\",\"DTHFL\"]},\"columns\":[{\"name\":\"K\",\"type\":\"str\",\"derivation\":{\"source\":\"SRC.X\"}},{\"name\":\"DTHFL\",\"type\":\"str\",\"derivation\":{\"case\":[{\"when\":\"SRC.DTHFL2 = 'Y'\",\"then\":{\"literal\":\"Y\"}},{\"otherwise\":{\"literal\":\"N\"}}]}}]}",
+          "inputs": {
+            "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "K,DTHFL\none,Y\ntwo,N\n"
+        },
+        {
+          "name": "lookup_no_donor_field",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\"}},\"RIGHT\":{\"path\":\"input/right.csv\",\"types\":{\"X\":\"str\",\"V\":\"float\"}}},\"base\":\"SRC\",\"keys\":[\"X\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"X\",\"V\"]},\"columns\":[{\"name\":\"X\",\"type\":\"str\",\"derivation\":{\"source\":\"SRC.X\"}},{\"name\":\"V\",\"type\":\"float\",\"derivation\":{\"source\":\"LOOK.V\"}}],\"intermediates\":[{\"id\":\"LOOK\",\"dataset\":\"RIGHT\",\"key\":[\"X\"],\"filter\":\"SRC.NOSUCH > 0\"}]}",
+          "inputs": {
+            "input/source.csv": "X\none\ntwo\n",
+            "input/right.csv": "X,V\none,1.0\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0120",
+              "spec_paths": [
+                "intermediates[0].filter"
+              ],
+              "context": {
+                "identifier": "SRC.NOSUCH",
+                "intermediate": "LOOK"
+              }
+            },
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "columns.V.derivation.source"
+              ],
+              "context": {
+                "identifier": "LOOK.V"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "lookup_bare_donor_field",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\"}},\"RIGHT\":{\"path\":\"input/right.csv\",\"types\":{\"X\":\"str\",\"V\":\"float\"}}},\"base\":\"SRC\",\"keys\":[\"X\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"X\",\"V\"]},\"columns\":[{\"name\":\"X\",\"type\":\"str\",\"derivation\":{\"source\":\"SRC.X\"}},{\"name\":\"V\",\"type\":\"float\",\"derivation\":{\"source\":\"LOOK.V\"}}],\"intermediates\":[{\"id\":\"LOOK\",\"dataset\":\"RIGHT\",\"key\":[\"X\"],\"filter\":\"V > 0\"}]}",
+          "inputs": {
+            "input/source.csv": "X\none\ntwo\n",
+            "input/right.csv": "X,V\none,1.0\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0120",
+              "spec_paths": [
+                "intermediates[0].filter"
+              ],
+              "context": {
+                "identifier": "V",
+                "intermediate": "LOOK",
+                "suggestion": "RIGHT.V"
+              }
+            },
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "columns.V.derivation.source"
+              ],
+              "context": {
+                "identifier": "LOOK.V"
+              }
+            }
+          ],
+          "csv": null
+        }
       ]
     },
     "file-resources": {
