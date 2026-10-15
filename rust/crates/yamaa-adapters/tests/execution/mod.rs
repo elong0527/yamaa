@@ -32,6 +32,7 @@ mod nested_windows;
 mod original_named_windows;
 mod predicate_suggestions;
 mod probe_successors;
+mod retired_odm_context;
 mod row_count_lookups;
 mod row_derivations;
 mod row_filter_paths;
