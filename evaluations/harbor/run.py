@@ -1,6 +1,6 @@
 """Run a local evaluation job with task evidence saved before execution.
 
-    python evaluations/harbor/run.py -c <generated-job.json>
+    python -m evaluations.harbor.run -c <generated-job.json>
 
 The job owns a copy of each task, including its metadata. Later builds cannot
 change its inputs or provenance, even when setup fails before verification.
@@ -47,7 +47,7 @@ async def confirm_uploaded_job(uploader, receipt: dict) -> None:
         raise RuntimeError(
             "Harbor Hub has not confirmed the complete job and trial archives"
         )
-    from hub import link_job_datasets
+    from evaluations.harbor.hub import link_job_datasets
 
     await link_job_datasets(
         str(job_id), receipt["datasets"], receipt["expected_trials"]
@@ -153,7 +153,7 @@ async def upload_completed_job(job_dir: Path) -> bool:
     try:
         uploader = Uploader()
         if not receipt.get("datasets"):
-            from hub import publish_job_datasets
+            from evaluations.harbor.hub import publish_job_datasets
 
             receipt["datasets"] = await publish_job_datasets(job_dir)
             save_upload_receipt(job_dir, receipt)
@@ -176,7 +176,10 @@ async def upload_completed_job(job_dir: Path) -> bool:
             ):
                 raise RuntimeError("Harbor Hub did not receive every trial")
         await confirm_uploaded_job(uploader, receipt)
-        from hub import prepare_job_leaderboards, publish_job_leaderboards
+        from evaluations.harbor.hub import (
+            prepare_job_leaderboards,
+            publish_job_leaderboards,
+        )
 
         if not receipt.get("leaderboard_submissions"):
             receipt["leaderboard_submissions"] = prepare_job_leaderboards(

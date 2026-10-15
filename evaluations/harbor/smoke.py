@@ -17,7 +17,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-import build
+from evaluations.harbor import build
 
 PREFLIGHT_TRIALS = 10
 
@@ -43,8 +43,6 @@ def main() -> None:
         action="store_true",
         help="record and skip a restricted selection with no buildable tasks",
     )
-    # Older launch scripts pass --full. It now uses the same ten-task sample.
-    parser.add_argument("--full", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--seed", type=int, help="repeat a saved preflight sample")
     parser.add_argument(
         "--all-cases", action="store_true", help="run every selected buildable case"

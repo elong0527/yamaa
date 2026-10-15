@@ -29,9 +29,9 @@ Each language is its own dataset (`yamaa/yamaa-sdtm-adam-r`,
 independently, and so is each tier (`yamaa/yamaa-sdtm-adam-brief-r`). Tasks never name a model or provider; the job files do, so
 one build runs against any provider. Run from the repository root:
 
-    uv run --project python --group harbor python evaluations/harbor/build.py \\
+    uv run --project python --group harbor python -m evaluations.harbor.build \\
         --model opencode-go/muse-spark-1.3-contributor --variant low high
-    uv run --project python --group harbor python evaluations/harbor/run.py \\
+    uv run --project python --group harbor python -m evaluations.harbor.run \\
         -c ~/.cache/yamaa-harbor/configs/muse-spark-1.3-contributor-r-low.json
 
 Pass `--language r`, `--language python` or `--language opensas` to build one track, and
@@ -51,6 +51,8 @@ import sys
 from pathlib import Path
 
 import yaml
+from evaluations.harbor.brief import brief
+from tools.benchmark import directories, load_metadata
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -120,13 +122,6 @@ LANGUAGES = {
 }
 INTERPRETER_COMMANDS = ("R", "Rscript", "r", "python", "python3", "opensas")
 DEFAULT_LANGUAGES = ("r", "python")
-# Prepared sources remain available for these cases, but they cannot yet
-# earn a correct Harbor score on native inputs with opensas v0.6.6.
-OPENSAS_EXCLUSIONS = {
-    "adam-adsl-investigator-comment": "opensas normalizes the spaces-only comment to missing",
-    "adam-adsl-randomization": "opensas has no native Parquet reader",
-    "adam-adsl-age-quality": "the specification's warning log is not graded by Harbor",
-}
 # Harbor installs OpenCode with nvm and npm during agent setup only.
 SETUP_HOSTS = (
     "raw.githubusercontent.com",
@@ -211,12 +206,12 @@ def git_commit() -> str:
     return commit + ("+dirty" if dirty else "")
 
 
-def readme_tags(readme: str) -> dict[str, str]:
-    lifecycle = re.search(r"Lifecycle-(\w+)", readme)
-    standard = re.search(r"Standard:\*?\*?\s*([A-Za-z]+)", readme)
+def opensas_exclusions():
+    """Each reviewed runtime exclusion is owned by its benchmark metadata."""
     return {
-        "lifecycle": lifecycle.group(1) if lifecycle else "unknown",
-        "standard": standard.group(1) if standard else "unknown",
+        case.name: metadata["harbor"]["opensas_exclusion"]
+        for case in directories(BENCHMARKS)
+        if (metadata := load_metadata(case)).get("harbor", {}).get("opensas_exclusion")
     }
 
 
@@ -295,8 +290,9 @@ def contract_for(benchmark: Path, language: str) -> dict:
     """
     if language not in LANGUAGES:
         raise BuildError(f"unknown language {language!r}; want {', '.join(LANGUAGES)}")
-    if language == "opensas" and benchmark.name in OPENSAS_EXCLUSIONS:
-        raise BuildError(f"{benchmark.name}: {OPENSAS_EXCLUSIONS[benchmark.name]}")
+    exclusion = load_metadata(benchmark).get("harbor", {}).get("opensas_exclusion")
+    if language == "opensas" and exclusion:
+        raise BuildError(f"{benchmark.name}: {exclusion}")
     outputs = [_output_contract(benchmark, s) for s in output_specs(benchmark)]
     return {
         "benchmark": benchmark.name,
@@ -479,20 +475,19 @@ def benchmark_title(benchmark: Path) -> str:
 
 
 def _benchmark_body(benchmark: Path) -> str:
-    """The benchmark README without its title and badge lines."""
+    """The benchmark data contract without its title."""
     lines = (benchmark / "README.md").read_text(encoding="utf-8").splitlines()
-    body = [
-        line
-        for line in lines
-        if not line.startswith("# ") and not line.startswith("[![")
-    ]
+    body = [line for line in lines if not line.startswith("# ")]
     return "\n".join(body).strip()
 
 
-def prompt_file(benchmark: Path, tier: str = "full") -> Path:
+def prompt_text(benchmark: Path, tier: str = "full") -> str:
     if tier not in TIERS:
         raise BuildError(f"unknown prompt tier {tier!r}; want {', '.join(TIERS)}")
-    return PROMPTS / benchmark.name / f"{tier}.md"
+    directory = PROMPTS / benchmark.name
+    if tier == "brief":
+        return brief((directory / "full.md").read_text(encoding="utf-8"))
+    return (directory / f"{tier}.md").read_text(encoding="utf-8")
 
 
 def reference_solution(benchmark: Path, language: str) -> Path | None:
@@ -511,7 +506,7 @@ def task_readme(
     other = " or ".join(v["label"] for k, v in LANGUAGES.items() if k != language)
     article = "an" if language == "r" else "a"
     runner = LANGUAGES[language]["runner"]
-    tags = readme_tags((benchmark / "README.md").read_text(encoding="utf-8"))
+    tags = load_metadata(benchmark)
     domain = " and ".join(s["domain"] for s in output_specs(benchmark))
     tiers = _source_link(commit, "evaluations/harbor/prompts/README.md")
     if tier == "full":
@@ -537,7 +532,8 @@ show that this prompt alone can be solved."""
         else f"\nThe agent gets the benchmark's {tier} prompt: {TIERS[tier]}.\n"
         f"{tiers} says what each prompt tier keeps.\n"
     )
-    prompt = f"evaluations/harbor/prompts/{benchmark.name}/{tier}.md"
+    source_tier = "full" if tier == "brief" else tier
+    prompt = f"evaluations/harbor/prompts/{benchmark.name}/{source_tier}.md"
     return f"""\
 # yamaa/{task_name(benchmark.name, language, tier)}
 
@@ -736,9 +732,8 @@ def build_task(
         raise BuildError(
             f"{benchmark.name}-{language}: a derivation reference is required"
         )
-    readme = (benchmark / "README.md").read_text(encoding="utf-8")
     domain = " and ".join(s["domain"] for s in output_specs(benchmark))
-    prompt = prompt_file(benchmark, tier).read_text(encoding="utf-8").strip()
+    prompt = prompt_text(benchmark, tier).strip()
     task = tasks / task_name(benchmark.name, language, tier)
     if task.exists():
         shutil.rmtree(task)
@@ -748,7 +743,7 @@ def build_task(
 
     task_text = task_toml(
         benchmark.name,
-        readme_tags(readme),
+        load_metadata(benchmark),
         domain,
         commit,
         language,

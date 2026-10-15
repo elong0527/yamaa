@@ -13,6 +13,7 @@ from urllib.parse import quote, urlsplit
 from markdown_it import MarkdownIt
 
 import yaml
+from evaluations.harbor.brief import brief
 from tools.benchmark import LIFECYCLES, load_metadata
 from tools.benchmark import entries as benchmark_entries
 from tools.benchmark_docs import mapping_doc
@@ -624,13 +625,13 @@ def render_code_text(text, slug, title, edit_url=None):
     return render_file_document(f"code-pane-{slug}", title, len(lines), body, edit_url)
 
 
-def render_prompt_document(path, tier, title, edit_url, source_url):
+def render_prompt_document(path, tier, title, edit_url, source_url, text=None):
     """A prompt reads as the request it is; the Edit link opens the raw file.
 
     It renders under the README's rules: no raw HTML, links resolved against
     the prompt's folder, and images shown as links.
     """
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8") if text is None else text
     markdown = MarkdownIt("commonmark", {"html": False}).enable("table")
     body = render_markdown_tokens(markdown, markdown.parse(text), source_url)
     return render_file_document(
@@ -696,7 +697,11 @@ def render_materials(benchmark, spec, define, code_snippets, edit_base):
         )
     name = quote(benchmark.name)
     prompts = HARBOR / "prompts" / benchmark.name
-    tiers = [tier for tier in PROMPT_TIERS if (prompts / f"{tier[0]}.md").is_file()]
+    tiers = [
+        tier
+        for tier in PROMPT_TIERS
+        if (prompts / ("full.md" if tier[0] == "brief" else f"{tier[0]}.md")).is_file()
+    ]
     if tiers:
         materials.append(
             (
@@ -713,11 +718,16 @@ def render_materials(benchmark, spec, define, code_snippets, edit_base):
                         f"{label} \u2014 {keeps}",
                         f"prompt-pane-{tier}",
                         render_prompt_document(
-                            prompts / f"{tier}.md",
+                            prompts / ("full.md" if tier == "brief" else f"{tier}.md"),
                             tier,
                             f"prompts/{benchmark.name}/{tier}.md",
-                            f"{REPOSITORY}/edit/main/evaluations/harbor/prompts/{name}/{tier}.md",
+                            f"{REPOSITORY}/edit/main/evaluations/harbor/prompts/{name}/{'full' if tier == 'brief' else tier}.md",
                             f"{REPOSITORY}/blob/main/evaluations/harbor/prompts/{name}",
+                            text=brief(
+                                (prompts / "full.md").read_text(encoding="utf-8")
+                            )
+                            if tier == "brief"
+                            else None,
                         ),
                     )
                     for tier, label, keeps in tiers

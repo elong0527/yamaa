@@ -1,0 +1,992 @@
+"""Independent prompt witnesses for #1889, using temporary input copies only."""
+
+from __future__ import annotations
+
+import csv
+import functools
+import os
+import re
+import shutil
+import subprocess
+import sys
+from decimal import Decimal
+from importlib import import_module
+from itertools import pairwise
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).parents[3]
+SOLUTIONS = ROOT / "evaluations/harbor/solutions"
+
+
+def _read(path):
+    with path.open(newline="", encoding="utf-8") as stream:
+        reader = csv.DictReader(stream)
+        return reader.fieldnames, list(reader)
+
+
+def _input(name, file):
+    return _read(ROOT / "benchmarks" / name / "input" / file)[1]
+
+
+@functools.cache
+def _r_has(packages):
+    if shutil.which("Rscript") is None:
+        return False
+    script = ";".join(f"library({p})" for p in packages)
+    return (
+        subprocess.run(
+            ["Rscript", "-e", script], capture_output=True, check=False
+        ).returncode
+        == 0
+    )
+
+
+@pytest.fixture(params=["python", "r", "opensas"])
+def language(request):
+    return request.param
+
+
+def _run(tmp_path, name, language, changes):
+    script_name = {"python": "result.py", "r": "result.R", "opensas": "result.sas"}[
+        language
+    ]
+    text = (SOLUTIONS / name / script_name).read_text()
+    if language == "r":
+        packages = tuple(sorted(set(re.findall(r"library\(([\w.]+)", text))))
+        if not _r_has(packages):
+            if os.environ.get("YAMAA_REQUIRE_R"):
+                pytest.fail(f"R reference dependencies unavailable: {packages}")
+            pytest.skip("R reference dependencies unavailable")
+    if language == "opensas" and not shutil.which("opensas"):
+        if os.environ.get("YAMAA_REQUIRE_OPENSAS"):
+            pytest.fail("opensas reference runtime unavailable")
+        pytest.skip("opensas reference runtime unavailable")
+    source = tmp_path / "input"
+    shutil.copytree(ROOT / "benchmarks" / name / "input", source)
+    for file, rows in changes.items():
+        header, _ = _read(source / file)
+        with (source / file).open("w", newline="", encoding="utf-8") as stream:
+            writer = csv.DictWriter(stream, fieldnames=header)
+            writer.writeheader()
+            writer.writerows(rows)
+    output = tmp_path / "output"
+    output.mkdir()
+    script = output / script_name
+    script.write_text(text.replace("/app/", f"{tmp_path.as_posix()}/"))
+    runner = {"python": sys.executable, "r": "Rscript", "opensas": "opensas"}[language]
+    completed = subprocess.run(
+        [runner, str(script)], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    return {p.name: _read(p)[1] for p in output.glob("*.csv")}
+
+
+@pytest.fixture(params=["yamaa", "python", "r", "opensas"])
+def worsening_track(request):
+    return request.param
+
+
+def _worsening_rows(tmp_path, track, ae=None, fa=None):
+    name = "adam-adae-worsening-emergence"
+    changes = {
+        "ae.csv": _input(name, "ae.csv") if ae is None else ae,
+        "fa.csv": _input(name, "fa.csv") if fa is None else fa,
+    }
+    if track != "yamaa":
+        return _run(tmp_path, name, track, changes)["adae.csv"]
+    # The native extension is optional for the test suite (see
+    # test_package.py), but the yamaa track runs the compiled domain entry
+    # point: skip it like the R and opensas tracks skip unavailable
+    # runtimes, instead of failing on the missing module.
+    try:
+        import_module("yamaa._native")
+    except ModuleNotFoundError as error:
+        if error.name != "yamaa._native":
+            raise
+        pytest.skip("the compiled native extension is not installed")
+    from yamaa import domain
+
+    study = tmp_path / "study"
+    shutil.copytree(ROOT / "benchmarks" / name, study)
+    for file, rows in changes.items():
+        header, _ = _read(study / "input" / file)
+        with (study / "input" / file).open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=header)
+            writer.writeheader()
+            writer.writerows(rows)
+    result = domain(study / "spec.yaml").output
+    result.write_csv(study / "actual.csv", datetime_format="%Y-%m-%dT%H:%M:%S")
+    return _read(study / "actual.csv")[1]
+
+
+def _event_rows(rows, subject="P7-101", sequence="1"):
+    return sorted(
+        [row for row in rows if row["USUBJID"] == subject and row["AESEQ"] == sequence],
+        key=lambda row: row["ASTDTM"],
+    )
+
+
+def test_worsening_rows_honours_an_explicit_empty_change_set(tmp_path, monkeypatch):
+    captured = {}
+
+    def fake_run(tmp_path_, name, language, changes):
+        captured.update(changes)
+        return {"adae.csv": []}
+
+    monkeypatch.setattr(sys.modules[__name__], "_run", fake_run)
+    _worsening_rows(tmp_path, "python", ae=[], fa=[])
+    assert captured == {"ae.csv": [], "fa.csv": []}
+    _worsening_rows(tmp_path, "python")
+    assert captured["ae.csv"]
+    assert captured["fa.csv"]
+
+
+def test_one_source_ae_expands_to_continuous_analysis_periods(
+    tmp_path, worsening_track
+):
+    rows = _worsening_rows(tmp_path, worsening_track)
+    assert len(rows) == 14 > len(_input("adam-adae-worsening-emergence", "ae.csv"))
+    headache = _event_rows(rows)
+    assert [row["TRTEMFL"] for row in headache] == ["", "Y", "Y", "Y"]
+    assert [row["ASEV"] for row in headache] == ["MILD", "MODERATE", "SEVERE", "MILD"]
+    assert all(row["AESEV"] == "SEVERE" for row in headache)
+    assert [int(row["ASEQ"]) for row in headache] == [1, 2, 3, 4]
+    for earlier, later in pairwise(headache):
+        assert earlier["AENDTM"] == later["ASTDTM"]
+    assert headache[0]["ASTDTM"] == headache[0]["AESTDTC"]
+    assert headache[-1]["AENDTM"] == headache[-1]["AEENDTC"]
+    # Improvement alone does not start TE; improvement after worsening keeps TE.
+    assert [row["TRTEMFL"] for row in _event_rows(rows, "P7-102")] == ["", "", "Y"]
+    cough = _event_rows(rows, "P7-105")
+    assert all(row["TRTEMFL"] == "" for row in cough)
+    assert cough[-1]["AENDTM"] == ""
+    assert all(row["TRTEMFL"] == "" for row in _event_rows(rows, "P7-104"))
+    assert [row["TRTEMFL"] for row in _event_rows(rows, "P7-103")] == ["", "Y"]
+
+
+def test_moving_a_collected_change_moves_both_period_boundaries(
+    tmp_path, worsening_track
+):
+    fa = _input("adam-adae-worsening-emergence", "fa.csv")
+    for row in fa:
+        if row["USUBJID"] == "P7-101" and row["FADTC"] == "2025-03-04T11:00:00":
+            row["FADTC"] = "2025-03-04T11:45"
+    rows = _event_rows(_worsening_rows(tmp_path, worsening_track, fa=fa))
+    assert rows[0]["AENDTM"] == "2025-03-04T11:45:00"
+    assert rows[1]["ASTDTM"] == rows[0]["AENDTM"]
+    assert rows[1]["TRTEMFL"] == "Y"
+
+
+def test_different_source_events_with_the_same_term_do_not_share_worsening(
+    tmp_path, worsening_track
+):
+    name = "adam-adae-worsening-emergence"
+    ae, fa = _input(name, "ae.csv"), _input(name, "fa.csv")
+    for row in ae:
+        if row["USUBJID"] == "P7-101" and row["AESEQ"] == "2":
+            row.update(AESTDTC="2025-03-03T06:00:00", AEENDTC="2025-03-04T06:00:00")
+    for row in fa:
+        if row["USUBJID"] == "P7-101" and row["FALNKID"] == "AE-2":
+            row["FADTC"] = "2025-03-03T06:00:00"
+    rows = _worsening_rows(tmp_path, worsening_track, ae, fa)
+    assert all(row["TRTEMFL"] == "" for row in _event_rows(rows, sequence="2"))
+    assert [row["TRTEMFL"] for row in _event_rows(rows)] == ["", "Y", "Y", "Y"]
+
+
+@pytest.mark.parametrize(
+    ("subject", "dimension"), [("P7-101", "SEV"), ("P7-103", "TOXGR")]
+)
+def test_missing_pretreatment_dimension_cannot_establish_worsening(
+    tmp_path, worsening_track, subject, dimension
+):
+    fa = _input("adam-adae-worsening-emergence", "fa.csv")
+    for row in fa:
+        if (
+            row["USUBJID"] == subject
+            and row["FALNKID"] == "AE-1"
+            and row["FATESTCD"] == dimension
+            and row["FADTC"] < "2025-03-04T09:00:00"
+        ):
+            row["FASTRESC"] = ""
+    rows = _worsening_rows(tmp_path, worsening_track, fa=fa)
+    event_rows = _event_rows(rows, subject)
+    # Without this the assertion below passes vacuously when the track
+    # emits no rows for the subject's first event.
+    assert event_rows
+    assert all(row["TRTEMFL"] == "" for row in event_rows)
+
+
+def test_worsening_uses_the_last_pretreatment_state(tmp_path, worsening_track):
+    fa = _input("adam-adae-worsening-emergence", "fa.csv")
+    for row in fa:
+        if row["USUBJID"] != "P7-101" or row["FALNKID"] != "AE-1":
+            continue
+        if row["FADTC"] == "2025-03-04T11:00:00":
+            row.update(FADTC="2025-03-04T08:00:00", FASTRESC="SEVERE")
+        elif row["FADTC"] == "2025-03-04T13:00:00":
+            row["FASTRESC"] = "MODERATE"
+    rows = _event_rows(_worsening_rows(tmp_path, worsening_track, fa=fa))
+    # Without this the assertion below passes vacuously on an empty output.
+    assert rows
+    assert all(row["TRTEMFL"] == "" for row in rows)
+
+
+def test_worsening_at_first_exposure_starts_treatment_emergence(
+    tmp_path, worsening_track
+):
+    fa = _input("adam-adae-worsening-emergence", "fa.csv")
+    for row in fa:
+        if row["USUBJID"] == "P7-101" and row["FADTC"] == "2025-03-04T11:00:00":
+            row["FADTC"] = "2025-03-04T09:00:00"
+    rows = _event_rows(_worsening_rows(tmp_path, worsening_track, fa=fa))
+    assert [row["TRTEMFL"] for row in rows] == ["", "Y", "Y", "Y"]
+    assert rows[1]["ASTDTM"] == rows[1]["TRTSDTM"]
+
+
+def test_simultaneous_severity_and_grade_changes_create_one_period(
+    tmp_path, worsening_track
+):
+    name = "adam-adae-worsening-emergence"
+    ae, fa = _input(name, "ae.csv"), _input(name, "fa.csv")
+    update = next(
+        row
+        for row in fa
+        if row["USUBJID"] == "P7-101" and row["FADTC"] == "2025-03-04T11:00:00"
+    )
+    fa.append({**update, "FASEQ": "8", "FATESTCD": "TOXGR", "FASTRESC": "2"})
+    ae[0]["AETOXGR"] = "2"
+    rows = _worsening_rows(tmp_path, worsening_track, ae, fa)
+    assert len(rows) == 14
+    headache = _event_rows(rows)
+    assert len(headache) == 4
+    assert headache[1]["ASEV"] == "MODERATE"
+    assert headache[1]["ATOXGRN"] == "2"
+    assert all(row["ATOXGRN"] == "2" for row in headache[1:])
+
+
+def test_missing_age_has_no_group_and_ranks_last(tmp_path, language):
+    name = "adam-adsl-flag-chain"
+    dm = _input(name, "dm.csv")
+    dm.append({**dm[0], "USUBJID": "AGE-MISSING", "AGE": ""})
+    rows = _run(tmp_path, name, language, {"dm.csv": dm})["adsl.csv"]
+    missing = next(r for r in rows if r["USUBJID"] == "AGE-MISSING")
+    assert missing["AGEGR1"] == ""
+    assert int(missing["AGERNK"]) == len(rows)
+
+
+@pytest.mark.parametrize("only_temperature", [False, True])
+def test_temperature_never_becomes_fa(tmp_path, language, only_temperature):
+    name = "sdtm-fa-reactogenicity-diary"
+    diary = _input(name, "diary.csv")
+    temperature = {**diary[0], "REACTION": "TEMPERATURE", "TPT": "TEMP-EDGE"}
+    changes = [temperature] if only_temperature else [*diary, temperature]
+    rows = _run(tmp_path, name, language, {"diary.csv": changes})["fa.csv"]
+    assert all(r["FAOBJ"] != "TEMPERATURE" for r in rows)
+    if only_temperature:
+        assert rows == []
+    else:
+        # The full diary yields FA rows for its other reactions; without
+        # this the assertion above passes vacuously on an empty output.
+        assert rows
+
+
+def test_blank_completion_is_a_missed_day(tmp_path, language):
+    name = "sdtm-fa-reactogenicity-diary"
+    diary = _input(name, "diary.csv")
+    diary.append({**diary[0], "COMPLETED": "", "TPT": "COMPLETION-EDGE"})
+    rows = _run(tmp_path, name, language, {"diary.csv": diary})["fa.csv"]
+    missed = [r for r in rows if r["FATPT"] == "COMPLETION-EDGE"]
+    assert len(missed) == 1
+    assert missed[0]["FATESTCD"] == "OCCUR"
+    assert missed[0]["FASTAT"] == "NOT DONE"
+    assert missed[0]["FAORRES"] == ""
+
+
+def test_unoccurred_reaction_severity_is_none(tmp_path, language):
+    name = "sdtm-fa-reactogenicity-diary"
+    diary = _input(name, "diary.csv")
+    diary.append({**diary[0], "OCCUR": "N", "SEV": "SEVERE", "TPT": "NONE-EDGE"})
+    rows = _run(tmp_path, name, language, {"diary.csv": diary})["fa.csv"]
+    severity = next(
+        r for r in rows if r["FATPT"] == "NONE-EDGE" and r["FATESTCD"] == "SEV"
+    )
+    assert severity["FAORRES"] == severity["FASTRESC"] == "NONE"
+
+
+def test_multiform_repeats_use_numeric_occurrence_and_result(tmp_path, language):
+    name = "sdtm-lb-multiform"
+    odm = _input(name, "odm.csv")
+    result = next(r for r in odm if r["ItemOID"].endswith(".VITD"))
+    date = next(r for r in odm if r["ItemOID"].endswith(".LBDTC"))
+    records = []
+    for repeat, value in [("1", "001.20"), ("10", "0"), ("11", "text")]:
+        base = {
+            "SubjectKey": "REPEAT-EDGE",
+            "StudyEventOID": "SE.UNSCH",
+            "ItemGroupRepeatKey": repeat,
+        }
+        records.extend([{**date, **base}, {**result, **base, "Value": value}])
+    rows = _run(tmp_path, name, language, {"odm.csv": records})["lb.csv"]
+    by_visit = {Decimal(r["VISITNUM"]): r for r in rows}
+    assert len(rows) == 3
+    assert set(by_visit) == {Decimal("2.01"), Decimal("2.1"), Decimal("2.11")}
+    assert by_visit[Decimal("2.01")]["LBORRES"] == "001.20"
+    assert Decimal(by_visit[Decimal("2.01")]["LBSTRESN"]) == Decimal("1.2")
+    assert Decimal(by_visit[Decimal("2.10")]["LBSTRESN"]) == 0
+    assert by_visit[Decimal("2.11")]["LBSTRESN"] == ""
+
+
+def test_unknown_event_keeps_reported_lab_without_visit(tmp_path, language):
+    name = "sdtm-lb-multiform"
+    odm = _input(name, "odm.csv")
+    records = [
+        {**r, "StudyEventOID": "SE.OTHER"}
+        for r in odm
+        if r["ItemOID"].endswith((".VITD", ".LBDTC"))
+    ]
+    rows = _run(tmp_path, name, language, {"odm.csv": records})["lb.csv"]
+    assert rows
+    assert all(r["VISIT"] == r["VISITNUM"] == "" for r in rows)
+
+
+def test_missing_seriousness_does_not_mean_nonserious(tmp_path, language):
+    name = "adam-adae-prior-serious-event"
+    ae = _input(name, "ae.csv")
+    ae.append({**ae[1], "AESEQ": "99", "AESER": ""})
+    rows = _run(tmp_path, name, language, {"ae.csv": ae})["adae.csv"]
+    row = next(r for r in rows if r["AESEQ"] == "99")
+    assert all(
+        row[c] == ""
+        for c in [
+            "PRIOR_SAEFL",
+            "PRIOR_SAEDECOD",
+            "PRIOR_SAESEQ",
+            "FIRST_SAEDECOD",
+            "FIRST_SAESEQ",
+        ]
+    )
+    assert row["PREV_AEDECOD"]
+
+
+@pytest.mark.parametrize("answer", ["N", "", "UNKNOWN"])
+def test_repeated_checklist_uses_last_collected_answer(tmp_path, language, answer):
+    name = "sdtm-mh-prespecified-conditions"
+    odm = _input(name, "odm.csv")
+    items = _input(name, "mh_items.csv")
+    first = next(r for r in odm if r["ItemOID"] == items[0]["ItemOID"])
+    odm.append({**first, "Value": answer})
+    rows = _run(tmp_path, name, language, {"odm.csv": odm})["mh.csv"]
+    selected = [
+        r
+        for r in rows
+        if r["USUBJID"] == first["SubjectKey"] and r["MHTERM"] == items[0]["MHTERM"]
+    ]
+    assert len(selected) == 1
+    assert selected[0]["MHOCCUR"] == (answer if answer == "N" else "")
+    assert selected[0]["MHSTAT"] == ("" if answer == "N" else "NOT DONE")
+
+
+@pytest.mark.parametrize(
+    "name,file,seq,severity,flag",
+    [
+        ("adam-adae-worst-severity", "adae_raw.csv", "AESEQ", "AESEV", "AOCCPIFL"),
+        ("adam-adce-worst-toxicity", "ce.csv", "CESEQ", "CESEV", "AOCCFL"),
+    ],
+)
+def test_missing_date_does_not_win_a_severity_tie(
+    tmp_path, language, name, file, seq, severity, flag
+):
+    template = _input(name, file)[0]
+    records = [
+        {**template, seq: "1", severity: "SEVERE", "ASTDT": ""},
+        {**template, seq: "2", severity: "SEVERE", "ASTDT": "2025-01-01"},
+    ]
+    output = "adae.csv" if seq == "AESEQ" else "adce.csv"
+    rows = _run(tmp_path, name, language, {file: records})[output]
+    assert next(r for r in rows if r[seq] == "1")[flag] == ""
+    assert next(r for r in rows if r[seq] == "2")[flag] == "Y"
+
+
+def test_missing_censor_date_follows_dated_reason(tmp_path, language):
+    name = "adam-adtte-pro-deterioration"
+    ds = _input(name, "ds.csv")
+    ds.append({**ds[0], "DSDTC": "", "DSSEQ": "0", "DSDECOD": "WITHDRAWAL OF CONSENT"})
+    rows = _run(tmp_path, name, language, {"ds.csv": ds})["adtte.csv"]
+    row = next(r for r in rows if r["USUBJID"] == ds[0]["USUBJID"])
+    assert row["CNSDTDSC"] == "DISEASE PROGRESSION"
+    assert row["ADT"] == "2026-03-12"
+
+
+@pytest.fixture(params=["yamaa", "python", "r", "opensas"])
+def pro_deterioration_track(request):
+    return request.param
+
+
+def _pro_deterioration_rows(tmp_path, track, qs):
+    name = "adam-adtte-pro-deterioration"
+    if track != "yamaa":
+        return _run(tmp_path, name, track, {"qs.csv": qs})["adtte.csv"]
+    try:
+        import_module("yamaa._native")
+    except ModuleNotFoundError as error:
+        if error.name != "yamaa._native":
+            raise
+        pytest.skip("the compiled native extension is not installed")
+    from yamaa import domain
+
+    study = tmp_path / "study"
+    shutil.copytree(ROOT / "benchmarks" / name, study)
+    header, _ = _read(study / "input" / "qs.csv")
+    with (study / "input" / "qs.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=header)
+        writer.writeheader()
+        writer.writerows(qs)
+    result = domain(study / "spec.yaml").output
+    result.write_csv(study / "actual.csv")
+    return _read(study / "actual.csv")[1]
+
+
+def test_scoreless_rows_are_neither_baseline_nor_last_assessment(
+    tmp_path, pro_deterioration_track
+):
+    # #2426: baseline and last-assessment selections exclude scoreless QS
+    # rows (AVAL IS NOT NULL), but the frozen fixture scores every row, so
+    # it cannot tell the selections apart. This changed input blanks the
+    # score on three rows of the frozen qs.csv: subject 101's earliest
+    # row, subject 104's latest row, and subject 105's only row. The
+    # expected values below were derived from the corrected reference
+    # solutions (the Python reference was run on this input and returned
+    # exactly these values), not from the native spec, and hand-checked:
+    # 101's baseline becomes the WEEK 8 score 74 (cutoff 64), so the
+    # WEEK 16 score 60 is a deterioration; with the scoreless row as
+    # baseline no deterioration could ever flag and 101 would end as a
+    # death on 2026-08-20. 104 is censored at its last scored assessment
+    # (WEEK 8, sequence 2), not at the scoreless WEEK 16 row. 105 has no
+    # scored assessment at all, so it is censored at randomization.
+    # Subject 102, whose rows are untouched, keeps its frozen death row.
+    name = "adam-adtte-pro-deterioration"
+    qs = _input(name, "qs.csv")
+    for row in qs:
+        if (row["USUBJID"], row["QSSEQ"]) in {
+            ("YAMAA-01-101", "1"),
+            ("YAMAA-01-104", "3"),
+            ("YAMAA-01-105", "1"),
+        }:
+            row["AVAL"] = ""
+    rows = _pro_deterioration_rows(tmp_path, pro_deterioration_track, qs)
+    assert len(rows) == 6
+    by_subject = {r["USUBJID"]: r for r in rows}
+
+    baseline = by_subject["YAMAA-01-101"]
+    assert baseline["EVNTDESC"] == "PRO DETERIORATION"
+    assert baseline["ADT"] == "2026-05-07"
+    assert baseline["AVAL"] == "3"
+    assert baseline["CNSR"] == "0"
+    assert baseline["SRCDOM"] == "QS"
+    assert baseline["SRCVAR"] == "ADT"
+    assert baseline["SRCSEQ"] == "3"
+
+    latest = by_subject["YAMAA-01-104"]
+    assert latest["EVNTDESC"] == "CENSORED"
+    assert latest["CNSDTDSC"] == "WITHDRAWAL OF CONSENT"
+    assert latest["ADT"] == "2026-03-12"
+    assert latest["AVAL"] == "1"
+    assert latest["CNSR"] == "1"
+    assert latest["SRCDOM"] == "QS"
+    assert latest["SRCVAR"] == "ADT"
+    assert latest["SRCSEQ"] == "2"
+
+    only = by_subject["YAMAA-01-105"]
+    assert only["EVNTDESC"] == "CENSORED"
+    assert only["CNSDTDSC"] == "STUDY DISCONTINUATION"
+    assert only["ADT"] == "2026-01-15"
+    assert only["AVAL"] == "0"
+    assert only["SRCDOM"] == "ADSL"
+    assert only["SRCVAR"] == "RANDDT"
+    assert only["SRCSEQ"] == ""
+
+    control = by_subject["YAMAA-01-102"]
+    assert control["EVNTDESC"] == "DEATH"
+    assert control["ADT"] == "2026-06-10"
+    assert control["AVAL"] == "4"
+    assert control["SRCDOM"] == "ADSL"
+    assert control["SRCVAR"] == "DTHDT"
+    assert control["SRCSEQ"] == ""
+
+
+def test_missing_exposure_date_sorts_last(tmp_path, language):
+    name = "sdtm-ex-from-ec"
+    odm = _input(name, "odm.csv")
+    date = next(r for r in odm if r["ItemOID"] == "IT.EC.ECSTDTC")
+    date["Value"] = ""
+    rows = _run(tmp_path, name, language, {"odm.csv": odm})["ex.csv"]
+    subject = [r for r in rows if r["USUBJID"] == date["SubjectKey"]]
+    missing = next(r for r in subject if r["EXSTDTC"] == "")
+    assert int(missing["EXSEQ"]) == len(subject)
+
+
+def test_missing_window_target_sorts_after_known_distance(tmp_path, language):
+    name = "adam-advs-window-table"
+    raw = _input(name, "advs_raw.csv")[0]
+    window = _input(name, "awindow.csv")[2]
+    records = [{**raw, "VSSEQ": "1", "ADY": "2"}, {**raw, "VSSEQ": "2", "ADY": "15"}]
+    windows = [
+        {**window, "AWLO": "2", "AWHI": "2", "AWTARGET": ""},
+        {**window, "AWLO": "15", "AWHI": "15", "AWTARGET": "15"},
+    ]
+    rows = _run(
+        tmp_path, name, language, {"advs_raw.csv": records, "awindow.csv": windows}
+    )["advs.csv"]
+    assert next(r for r in rows if r["VSSEQ"] == "1")["ANL01FL"] == ""
+    assert next(r for r in rows if r["VSSEQ"] == "2")["ANL01FL"] == "Y"
+
+
+@pytest.mark.parametrize("boundary", ["age", "effective_date"])
+@pytest.mark.parametrize("reversed_ranges", [False, True])
+def test_range_boundary_selects_the_starting_band_and_new_limits(
+    tmp_path, language, boundary, reversed_ranges
+):
+    name = "sdtm-lb-lab-specific-ranges"
+    odm = _input(name, "odm.csv")
+    first = odm[0]["SubjectKey"]
+    odm = [r for r in odm if r["SubjectKey"] == first]
+    for r in odm:
+        if r["ItemOID"] == "IT.LB.LBDTC":
+            r["Value"] = "2025-05-01" if boundary == "age" else "2025-07-01"
+    old = _input(name, "lbrange.csv")[0]
+    if boundary == "age":
+        ranges = [{**old, "AGEHI": "45"}, {**old, "AGELO": "45", "NRHI": "55"}]
+    else:
+        ranges = [
+            {**old, "EFFENDT": "2025-07-01"},
+            {**old, "EFFSTDT": "2025-07-01", "EFFENDT": "", "NRHI": "55"},
+        ]
+    if reversed_ranges:
+        ranges.reverse()
+    rows = _run(tmp_path, name, language, {"odm.csv": odm, "lbrange.csv": ranges})[
+        "lb.csv"
+    ]
+    assert len(rows) == 1
+    assert Decimal(rows[0]["LBSTNRHI"]) == 55
+
+
+def test_before_exposure_compares_dates_then_sequences(tmp_path, language):
+    name = "sdtm-lb-last-observation-before-exposure"
+    odm = _input(name, "odm.csv")
+    result = next(r for r in odm if r["ItemOID"] == "IT.LB.ALT_SERUM")
+    date = next(r for r in odm if r["ItemOID"] == "IT.LB.LBDTC")
+    records = []
+    for repeat, time in [("1", "23:00"), ("2", "01:00")]:
+        base = {"ItemGroupRepeatKey": repeat}
+        records.extend(
+            [{**result, **base}, {**date, **base, "Value": f"2026-01-10T{time}"}]
+        )
+    dm = _input(name, "dm.csv")
+    for r in dm:
+        if r["USUBJID"] == result["SubjectKey"]:
+            r["RFSTDTC"] = "2026-01-10T00:00"
+    rows = _run(tmp_path, name, language, {"odm.csv": records, "dm.csv": dm})["lb.csv"]
+    assert next(r for r in rows if r["LBSEQ"] == "1")["LBLOBXFL"] == ""
+    assert next(r for r in rows if r["LBSEQ"] == "2")["LBLOBXFL"] == "Y"
+
+
+def test_identical_range_starts_keep_the_first_collected_range(tmp_path, language):
+    name = "sdtm-lb-lab-specific-ranges"
+    odm = _input(name, "odm.csv")
+    odm = [r for r in odm if r["SubjectKey"] == odm[0]["SubjectKey"]]
+    first = _input(name, "lbrange.csv")[0]
+    ranges = [first, {**first, "NRHI": "55"}]
+    rows = _run(tmp_path, name, language, {"odm.csv": odm, "lbrange.csv": ranges})[
+        "lb.csv"
+    ]
+    assert len(rows) == 1
+    assert Decimal(rows[0]["LBSTNRHI"]) == 40
+
+
+@pytest.mark.parametrize("consent", ["2025-01", "2025-01-02T09:30"])
+def test_informed_consent_text_is_preserved(tmp_path, language, consent):
+    name = "sdtm-dm-dates"
+    dm = _input(name, "dm_raw.csv")
+    dm[0]["RFICDTC"] = consent
+    rows = _run(tmp_path, name, language, {"dm_raw.csv": dm})["dm.csv"]
+    assert (
+        next(r for r in rows if r["USUBJID"] == dm[0]["USUBJID"])["RFICDTC"] == consent
+    )
+
+
+def test_race_keeps_the_subject_key_in_dm_and_suppdm(tmp_path, language):
+    name = "sdtm-dm-race-ethnicity"
+    odm = _input(name, "odm.csv")
+    # SUPPDM holds the additional races of multi-race subjects only, so
+    # rename the first subject with more than one collected race. Renaming
+    # a single-race subject (such as the first row's) would leave the
+    # suppdm assertion below with no row it could ever match.
+    races = {}
+    for r in odm:
+        if r["ItemOID"] == "IT.DM.RACE":
+            races[r["SubjectKey"]] = races.get(r["SubjectKey"], 0) + 1
+    subject = next(key for key, count in races.items() if count > 1)
+    for r in odm:
+        if r["SubjectKey"] == subject:
+            r["SubjectKey"] = "COLLECTED-SUBJECT"
+    output = _run(tmp_path, name, language, {"odm.csv": odm})
+    assert any(r["USUBJID"] == "COLLECTED-SUBJECT" for r in output["dm.csv"])
+    suppdm = [r for r in output["suppdm.csv"] if r["USUBJID"] == "COLLECTED-SUBJECT"]
+    assert suppdm
+    for r in suppdm:
+        assert r["USUBJID"] == r["IDVARVAL"] == "COLLECTED-SUBJECT"
+
+
+@pytest.mark.parametrize("coded_term", ["", "OTHER"])
+def test_treatment_disposition_uses_date_and_numeric_sequence(
+    tmp_path, language, coded_term
+):
+    name = "adam-adsl-disposition"
+    dm = _input(name, "dm.csv")
+    template = next(r for r in _input(name, "ds.csv") if r["EPOCH"] == "TREATMENT")
+    base = {**template, **dm[0], "DSSTDTC": "2025-02-01"}
+    records = [
+        {**base, "DSSEQ": "2", "DSDECOD": "COMPLETED", "DSTERM": "Completed"},
+        {**base, "DSSEQ": "10", "DSDECOD": coded_term, "DSTERM": "Stopped dosing"},
+        {**base, "DSSEQ": "99", "DSSTDTC": "", "DSDECOD": "COMPLETED"},
+    ]
+    rows = _run(tmp_path, name, language, {"ds.csv": records})["adsl.csv"]
+    row = next(r for r in rows if r["USUBJID"] == dm[0]["USUBJID"])
+    assert row["EOTDT"] == "2025-02-01"
+    assert row["EOTSTT"] == "DISCONTINUED"
+    assert row["DCTREAS"] == "Stopped dosing"
+    assert row["DCSREASP"] == ("Stopped dosing" if coded_term == "OTHER" else "")
+    assert row["EOSSTT"] == "ONGOING"
+    assert row["EOSDT"] == row["DCSREAS"] == ""
+
+
+def test_disposition_always_joins_study_and_subject(tmp_path, language):
+    name = "sdtm-ds-multi-form-disposition"
+    odm = _input(name, "odm.csv")
+    first = odm[0]["SubjectKey"]
+    study = odm[0]["StudyOID"]
+    for r in odm:
+        if r["SubjectKey"] == first:
+            r["SubjectKey"] = f"{study}-ALREADY-PREFIXED"
+    rows = _run(tmp_path, name, language, {"odm.csv": odm})["ds.csv"]
+    assert any(r["USUBJID"] == f"{study}-{study}-ALREADY-PREFIXED" for r in rows)
+
+
+@pytest.mark.parametrize("only_nondemographic", [False, True])
+def test_subject_without_dm_items_still_gets_dm(
+    tmp_path, language, only_nondemographic
+):
+    name = "sdtm-dm-basic"
+    odm = _input(name, "odm.csv")
+    extra = {
+        **odm[0],
+        "SubjectKey": "NO-DEMOGRAPHICS",
+        "ItemGroupOID": "IG.VS",
+        "ItemOID": "IT.VS.WEIGHT",
+        "Value": "70",
+    }
+    records = [extra] if only_nondemographic else [*odm, extra]
+    rows = _run(tmp_path, name, language, {"odm.csv": records})["dm.csv"]
+    subject = next(r for r in rows if r["USUBJID"] == "NO-DEMOGRAPHICS")
+    assert subject["SEX"] == "U"
+    assert subject["AGE"] == subject["ARM"] == subject["ACTARM"] == ""
+    assert subject["ARMNRS"] == "Not assigned to treatment arm"
+
+
+def test_expected_visit_sequences_follow_all_subject_parameters(tmp_path, language):
+    name = "adam-advs-windows"
+    vs = _input(name, "vs.csv")
+    subject = vs[0]["USUBJID"]
+    vs = [
+        r
+        for r in vs
+        if not (
+            r["USUBJID"] == subject
+            and r["VSTESTCD"] == "SYSBP"
+            and r["VSDY"] in {str(day) for day in range(22, 43)}
+        )
+    ]
+    vs.append({**vs[0], "VSTESTCD": "DIABP", "VSSEQ": "99"})
+    rows = _run(tmp_path, name, language, {"vs.csv": vs})["advs.csv"]
+    expected = [
+        r
+        for r in rows
+        if r["USUBJID"] == subject and r["AVISIT"] == "WEEK 4" and r["ADY"] == ""
+    ]
+    assert expected
+    assert min(int(r["VSSEQ"]) for r in expected) == 100
+    assert all(r["ANL01FL"] == "" for r in expected)
+
+
+def test_prior_result_visit_ties_keep_input_order(tmp_path, language):
+    name = "adam-advs-prior-result"
+    row = _input(name, "vs.csv")[0]
+    records = [
+        {**row, "VSSEQ": "9", "AVISITN": "1", "AVALC": "FIRST-COLLECTED"},
+        {**row, "VSSEQ": "1", "AVISITN": "1", "AVALC": "SECOND-COLLECTED"},
+    ]
+    rows = _run(tmp_path, name, language, {"vs.csv": records})["advs.csv"]
+    assert next(r for r in rows if r["VSSEQ"] == "9")["PREVAVALC"] == ""
+    assert next(r for r in rows if r["VSSEQ"] == "1")["PREVAVALC"] == "FIRST-COLLECTED"
+
+
+def test_fever_numbers_by_assessment_date_then_sequence(tmp_path, language):
+    name = "adam-adfa-fever"
+    row = _input(name, "vs.csv")[0]
+    records = [
+        {**row, "VSSEQ": "1", "VSDTC": "2025-03-02T23:00"},
+        {**row, "VSSEQ": "2", "VSDTC": "2025-03-02T01:00"},
+    ]
+    rows = _run(tmp_path, name, language, {"vs.csv": records})["adfa.csv"]
+    assert next(r for r in rows if r["SRCSEQ"] == "1")["ASEQ"] == "1"
+    assert next(r for r in rows if r["SRCSEQ"] == "2")["ASEQ"] == "2"
+
+
+def test_site_parse_accepts_any_prefix_and_exactly_two_dashes(tmp_path, language):
+    name = "adam-adsl-site-parse"
+    row = _input(name, "dm.csv")[0]
+    records = [
+        {**row, "USUBJID": "OTHER-SITE-1234", "SITEID": "FALLBACK"},
+        {**row, "USUBJID": "OTHER-EXTRA-SITE-1234", "SITEID": "FALLBACK"},
+    ]
+    rows = _run(tmp_path, name, language, {"dm.csv": records})["adsl.csv"]
+    valid = next(r for r in rows if r["USUBJID"] == "OTHER-SITE-1234")
+    assert valid["SITEIDP"] == valid["SITEID"] == "SITE"
+    invalid = next(r for r in rows if r["USUBJID"] == "OTHER-EXTRA-SITE-1234")
+    assert invalid["SITEIDP"] == ""
+    assert invalid["SITEID"] == "FALLBACK"
+
+
+@pytest.fixture(params=["yamaa", "python", "r", "opensas"])
+def qtc_track(request):
+    return request.param
+
+
+def test_replicate_qtc_average_pairs_by_replicate_and_skips_absent_rr(
+    tmp_path, qtc_track
+):
+    # Edges the prompt states but the fixture does not hold: an RR record
+    # absent rather than not done, a time point without any RR, RR records
+    # before QT, replicate numbers other than 1-3, and decimal results.
+    name = "adam-adeg-replicate-qtc-average"
+    row = _input(name, "eg.csv")[0]
+
+    def ecg(seq, test, rep, value, tpt, tptnum):
+        label = {"QTAG": "QT Interval, Aggregate", "RRAG": "RR Interval, Aggregate"}
+        return {
+            **row,
+            "USUBJID": "EDGE-01",
+            "EGSEQ": str(seq),
+            "EGTESTCD": test,
+            "EGTEST": label[test],
+            "EGREPNUM": str(rep),
+            "EGSTAT": "",
+            "EGSTRESN": value,
+            "EGSTRESU": "msec",
+            "EGTPT": tpt,
+            "EGTPTNUM": tptnum,
+            "EGDTC": "2026-03-04T08:00",
+        }
+
+    records = [
+        ecg(1, "RRAG", 1, "950.5", "0.5 HR", "0.5"),
+        ecg(2, "RRAG", 3, "1010", "0.5 HR", "0.5"),
+        ecg(3, "QTAG", 1, "401.5", "0.5 HR", "0.5"),
+        ecg(4, "QTAG", 2, "399", "0.5 HR", "0.5"),
+        ecg(5, "QTAG", 3, "403", "0.5 HR", "0.5"),
+        ecg(6, "QTAG", 1, "400", "1 HR", "1"),
+        ecg(7, "QTAG", 2, "404", "1 HR", "1"),
+        ecg(8, "QTAG", 4, "396", "2 HR", "2"),
+        ecg(9, "RRAG", 4, "980", "2 HR", "2"),
+        ecg(10, "QTAG", 7, "398", "2 HR", "2"),
+        ecg(11, "RRAG", 7, "1000", "2 HR", "2"),
+    ]
+    changes = {"eg.csv": records}
+    if qtc_track == "yamaa":
+        try:
+            import_module("yamaa._native")
+        except ModuleNotFoundError as error:
+            if error.name != "yamaa._native":
+                raise
+            pytest.skip("the compiled native extension is not installed")
+        from yamaa import domain
+
+        study = tmp_path / "study"
+        shutil.copytree(ROOT / "benchmarks" / name, study)
+        with (study / "input" / "eg.csv").open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(row))
+            writer.writeheader()
+            writer.writerows(records)
+        domain(study / "spec.yaml").output.write_csv(study / "actual.csv")
+        rows = _read(study / "actual.csv")[1]
+    else:
+        rows = _run(tmp_path, name, qtc_track, changes)["adeg.csv"]
+
+    def qtcf(qt, rr):
+        return qt / (rr / 1000) ** (1 / 3)
+
+    expected = {
+        ("QTAG", 0.5): (401.5 + 399 + 403) / 3,
+        ("RRAG", 0.5): (950.5 + 1010) / 2,
+        ("QTCF", 0.5): (qtcf(401.5, 950.5) + qtcf(403, 1010)) / 2,
+        ("QTAG", 1.0): (400 + 404) / 2,
+        ("QTAG", 2.0): (396 + 398) / 2,
+        ("RRAG", 2.0): (980 + 1000) / 2,
+        ("QTCF", 2.0): (qtcf(396, 980) + qtcf(398, 1000)) / 2,
+    }
+    actual = {
+        (r["PARAMCD"], float(r["ATPTN"])): float(r["AVAL"])
+        for r in rows
+        if r["USUBJID"] == "EDGE-01"
+    }
+    assert set(actual) == set(expected)
+    for key, value in expected.items():
+        assert actual[key] == pytest.approx(value, rel=1e-9), key
+    assert {r["DTYPE"] for r in rows} == {"AVERAGE"}
+
+
+@pytest.fixture(params=["yamaa", "python", "r", "opensas"])
+def placebo_track(request):
+    return request.param
+
+
+def test_placebo_comparator_pools_by_parameter_and_time_point(tmp_path, placebo_track):
+    # The contract pools the comparator by PARAMCD + ATPTN only, across
+    # periods and days (#2422), but the frozen fixture never repeats a time
+    # point on two post-baseline days, so it cannot tell the groupings
+    # apart. This changed input repeats 1 h and 4 h in period 1 day 1,
+    # period 2 day 1 and period 2 day 8. The expected pooled means below
+    # were derived from the reference solutions (the Python reference was
+    # run on this input and returned exactly these values), not from the
+    # native spec: at 1 h the six comparator AVALs are 400, 410, 420, 430,
+    # 440, 450 (mean 425), their BASEs skip one missing value (mean 394)
+    # and their CHGs are 10, 10, 30, 50, 50 (mean 30); at 4 h the four
+    # comparator records give 407.5, 387.5 and 20. Grouping by period and
+    # day instead would give, for example, COMP 405 on the drug record in
+    # period 1 day 1 at 1 h.
+    name = "adam-adeg-placebo-corrected-change"
+    row = _input(name, "adeg_raw.csv")[0]
+
+    def record(subject, cohort, trta, period, day, atpt, aval, base, chg, ablfl=""):
+        return {
+            **row,
+            "USUBJID": subject,
+            "COHORT": cohort,
+            "TRTA": trta,
+            "APERIOD": str(period),
+            "APERDAY": str(day),
+            "ATPT": atpt,
+            "ATPTN": atpt.split()[0],
+            "AVAL": aval,
+            "ABLFL": ablfl,
+            "BASE": base,
+            "CHG": chg,
+            "BASETYPE": f"Period 1 Baseline Day {atpt}",
+        }
+
+    records = []
+    for subject, cohort, trta, base_1h, base_4h in [
+        ("SAD-01-P01", "Cohort 1", "Placebo", "390", "380"),
+        ("SAD-01-P02", "Cohort 2", "Placebo", "400", "395"),
+        ("SAD-01-D01", "Cohort 1", "Drug 10 mg", "385", "375"),
+    ]:
+        records.append(
+            record(subject, cohort, trta, 1, -1, "1 h", base_1h, base_1h, "", "Y")
+        )
+        records.append(
+            record(subject, cohort, trta, 1, -1, "4 h", base_4h, base_4h, "", "Y")
+        )
+    for period, day, atpt, p01, p02 in [
+        (1, 1, "1 h", ("400", "390", "10"), ("410", "400", "10")),
+        (1, 1, "4 h", ("390", "380", "10"), ("405", "395", "10")),
+        (2, 1, "1 h", ("420", "390", "30"), ("430", "", "")),
+        (2, 1, "4 h", ("410", "380", "30"), ("425", "395", "30")),
+        (2, 8, "1 h", ("440", "390", "50"), ("450", "400", "50")),
+    ]:
+        records.append(
+            record("SAD-01-P01", "Cohort 1", "Placebo", period, day, atpt, *p01)
+        )
+        records.append(
+            record("SAD-01-P02", "Cohort 2", "Placebo", period, day, atpt, *p02)
+        )
+    for period, day, atpt, aval, base, chg in [
+        (1, 1, "1 h", "415", "385", "30"),
+        (1, 1, "4 h", "400", "375", "25"),
+        (2, 1, "1 h", "425", "385", "40"),
+        (2, 1, "4 h", "410", "375", "35"),
+        (2, 8, "1 h", "435", "385", "50"),
+    ]:
+        records.append(
+            record(
+                "SAD-01-D01",
+                "Cohort 1",
+                "Drug 10 mg",
+                period,
+                day,
+                atpt,
+                aval,
+                base,
+                chg,
+            )
+        )
+    assert len(records) == 21
+
+    if placebo_track == "yamaa":
+        try:
+            import_module("yamaa._native")
+        except ModuleNotFoundError as error:
+            if error.name != "yamaa._native":
+                raise
+            pytest.skip("the compiled native extension is not installed")
+        from yamaa import domain
+
+        study = tmp_path / "study"
+        shutil.copytree(ROOT / "benchmarks" / name, study)
+        with (study / "input" / "adeg_raw.csv").open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(row))
+            writer.writeheader()
+            writer.writerows(records)
+        domain(study / "spec.yaml").output.write_csv(study / "actual.csv")
+        rows = _read(study / "actual.csv")[1]
+    else:
+        rows = _run(tmp_path, name, placebo_track, {"adeg_raw.csv": records})[
+            "adeg.csv"
+        ]
+
+    pooled = {1.0: (425.0, 394.0, 30.0), 4.0: (407.5, 387.5, 20.0)}
+    double_delta = {
+        (1, 1, 1.0): 0.0,
+        (1, 1, 4.0): 5.0,
+        (2, 1, 1.0): 10.0,
+        (2, 1, 4.0): 15.0,
+        (2, 8, 1.0): 20.0,
+    }
+
+    def value(record_, column):
+        return float(record_[column]) if record_[column] else None
+
+    assert len(rows) == 21
+    for record_ in rows:
+        if record_["ABLFL"] == "Y":
+            assert record_["ACOMPFL"] == record_["COMPTYPE"] == ""
+            for column in ("COMP", "COMPBASE", "COMPCHG", "CCOMPCHG"):
+                assert value(record_, column) is None
+            continue
+        comp, compbase, compchg = pooled[float(record_["ATPTN"])]
+        assert value(record_, "COMP") == pytest.approx(comp)
+        assert value(record_, "COMPBASE") == pytest.approx(compbase)
+        assert value(record_, "COMPCHG") == pytest.approx(compchg)
+        assert record_["COMPTYPE"] == f"Placebo group at {record_['ATPT']}"
+        if record_["TRTA"] == "Placebo":
+            assert record_["ACOMPFL"] == "Y"
+            assert value(record_, "CCOMPCHG") is None
+        else:
+            assert record_["ACOMPFL"] == ""
+            key = (
+                int(record_["APERIOD"]),
+                int(record_["APERDAY"]),
+                float(record_["ATPTN"]),
+            )
+            assert value(record_, "CCOMPCHG") == pytest.approx(double_delta[key])

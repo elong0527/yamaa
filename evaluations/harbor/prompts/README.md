@@ -1,7 +1,7 @@
 # Prompts
 
 The requests an agent gets in a Harbor task, one folder per benchmark,
-`<benchmark>/<tier>.md`. A benchmark's tiers ask for the same datasets and
+`<benchmark>/full.md` and `conventions.md`. The brief tier is derived when used. A benchmark's tiers ask for the same datasets and
 are graded against the same expected data; they differ only in how much of
 the rules the prompt states, so comparing one model's runs across tiers
 measures what the stated rules are worth.
@@ -10,7 +10,7 @@ measures what the stated rules are worth.
 |---|---|---|---|
 | `full.md` | full | the opening, the column list, every rule an expected cell depends on, and the paths | Can the agent follow a complete specification? |
 | `conventions.md` | conventions | the opening, the column list, the sponsor's conventions, and the paths | Given the sponsor's vocabulary, can the agent reason out the derivation? |
-| `brief.md` | brief | the opening, the column list, and the paths | How much of the specification can the agent rebuild from CDISC practice, the column names, and the data? |
+| derived from `full.md` | brief | the opening, the column list, and the paths | How much of the specification can the agent rebuild from CDISC practice, the column names, and the data? |
 
 Each tier states no more than the one above it: brief within
 conventions, conventions within full.
@@ -19,7 +19,7 @@ conventions, conventions within full.
 
 The complete request a statistician would send a statistical programmer,
 written by hand to the
-[benchmark prompt recipe](../../../automation/benchmark_prompt.md). It has
+[benchmark prompt recipe](recipe.md). It has
 four parts, in order:
 
 1. **Opening.** The standard, the input datasets, and the record level
@@ -96,8 +96,8 @@ step. Rewrite it in the same change as its full prompt.
 ## brief
 
 The full prompt without its rules: parts 1, 2, and 4, verbatim. It is
-written by [`../brief.py`](../brief.py), never by hand; rerun it after
-changing a full prompt.
+rendered by [`../brief.py`](../brief.py) when a task or dashboard is built.
+No generated `brief.md` is committed.
 
 The brief prompt is not meant to be solvable everywhere. The expected data
 still holds the sponsor's choices that only the rules state: category
@@ -123,13 +123,13 @@ own.
 
 ## Checks
 
-`python/tests/test_harbor_evaluation.py` checks that:
+`evaluations/harbor/tests/test_harbor_evaluation.py` checks that:
 
 - every `sdtm-*` and `adam-*` benchmark has a folder here, holding
-  `full.md`, `conventions.md`, and `brief.md`, and no prompt is left under
+  `full.md` and `conventions.md`, and no prompt is left under
   `benchmarks/`;
 - every full prompt has the four parts, and every brief prompt is exactly
-  what `brief.py` writes from it;
+  what `brief.py` renders from it;
 - every conventions prompt keeps the full prompt's parts 1, 2, and 4
   verbatim, is no longer than the full prompt or 20 lines, and names no
   quoted value, upper-case code, or number the full prompt does not;
@@ -138,6 +138,6 @@ own.
 - every tier keeps to the recipe's 79-column width and never names the
   harness (yamaa, specifications, rule identifiers).
 
-The Harbor Evaluation workflow (`.github/workflows/harbor-evaluation.yml`)
-runs these checks, and every reference solution in both languages, on each
-pull request that changes a benchmark or the evaluation.
+The Harbor workflow runs these checks and the R and Python reference
+solutions on main pushes, schedules and manual dispatch. Its oracle job
+exercises the image verifier.

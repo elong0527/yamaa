@@ -1,3 +1,5 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+harbor:
+  opensas_exclusion: opensas normalizes the spaces-only comment to missing

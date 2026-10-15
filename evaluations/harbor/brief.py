@@ -1,26 +1,20 @@
-"""Write each benchmark's brief prompt from its full prompt.
+"""Render the brief tier from an authored full prompt.
 
-A full prompt, `prompts/<benchmark>/full.md`, has four parts, in order:
+The brief keeps the opening, column list and paths verbatim, dropping the
+rules. Builders and documentation call ``brief`` directly; the CLI prints
+one derived prompt without creating source files::
 
-    Following CDISC ... standards, ...          the opening paragraph
-    The output dataset should contain ...       the column list
-    <one or more paragraphs>                    the rules
-    Read the source datasets from /app/input    the input and output paths
+    python -m evaluations.harbor.brief evaluations/harbor/prompts/<case>/full.md
 
-The brief prompt, `prompts/<benchmark>/brief.md`, is the full prompt without
-its rules: the opening, the column list, and the paths, verbatim. What each
-tier means is in `prompts/README.md`. Run from the repository root after
-changing a full prompt:
-
-    uv run --project python --no-sync python evaluations/harbor/brief.py
+The tier contract is in ``prompts/README.md``.
 """
 
 from __future__ import annotations
 
+import argparse
 import re
 from pathlib import Path
 
-PROMPTS = Path(__file__).resolve().parent / "prompts"
 OPENING = "Following CDISC "
 COLUMNS = "should contain the following columns in this order:"
 PATHS = "Read the source datasets from /app/input"
@@ -50,9 +44,12 @@ def brief(full: str) -> str:
 
 
 def main() -> None:
-    for full in sorted(PROMPTS.glob("*/full.md")):
-        text = brief(full.read_text(encoding="utf-8"))
-        (full.parent / "brief.md").write_text(text, encoding="utf-8")
+    parser = argparse.ArgumentParser(
+        description="Render a brief prompt without writing generated source files."
+    )
+    parser.add_argument("full", type=Path)
+    args = parser.parse_args()
+    print(brief(args.full.read_text(encoding="utf-8")), end="")
 
 
 if __name__ == "__main__":

@@ -1,3 +1,5 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
+harbor:
+  opensas_exclusion: opensas has no native Parquet reader

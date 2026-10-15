@@ -56,6 +56,7 @@ def load_metadata(case):
                 "validation",
                 "covers",
                 "conformance",
+                "harbor",
             }
         ),
         f"{label}: unknown metadata field",
@@ -132,6 +133,15 @@ def load_metadata(case):
                 and (not declaration.get("permanent") or "reason" in declaration),
                 f"{label}: malformed metamorphic declaration: {check}",
             )
+    if "harbor" in metadata:
+        harbor = metadata["harbor"]
+        require(
+            isinstance(harbor, dict)
+            and set(harbor) == {"opensas_exclusion"}
+            and isinstance(harbor["opensas_exclusion"], str)
+            and harbor["opensas_exclusion"].strip(),
+            f"{label}: Harbor exclusions must state their reason",
+        )
     return metadata
 
 

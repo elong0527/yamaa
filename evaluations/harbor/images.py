@@ -1,7 +1,7 @@
 """Build language images and check isolation before and after Harbor setup.
 
-    python evaluations/harbor/images.py build
-    python evaluations/harbor/images.py verify --out /tmp/yamaa-image-checks
+    python -m evaluations.harbor.images build
+    python -m evaluations.harbor.images verify --out /tmp/yamaa-image-checks
 
 Verification uses Harbor's pinned OpenCode installer and runner, without a
 remote model or credential. A local deterministic provider checks permissions.
@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
-import build
+from evaluations.harbor import build
 
 
 class DockerCheck:
@@ -83,9 +83,7 @@ def inventory_command(language: str, role: str) -> str:
     elif language == "python":
         checks += ["python3 -c 'import numpy, pandas, polars, pyarrow, lxml'"]
     else:
-        checks += [
-            'Rscript -e \'stopifnot(all(vapply(c("dplyr", "tidyr", "readr", "stringr", "lubridate", "purrr", "haven", "xml2", "nanoparquet"), requireNamespace, logical(1), quietly=TRUE)))\''
-        ]
+        checks += ["Rscript --vanilla /opt/yamaa-eval/install-r-packages.R --check"]
         if role == "verifier":
             checks += ["python3 -c 'import pyarrow'"]
     return "; ".join(checks)
@@ -168,7 +166,7 @@ async def verify_permissions(
         raise RuntimeError("a denied helper command executed")
     # Denied attempts must survive Harbor's conversion and remain ineligible.
     agent.populate_context_post_run(AgentContext())
-    import grade
+    from evaluations.harbor import grade
 
     audit = grade.scan_trajectory(out / "trajectory.json", language)
     if not audit["checked"] or len(audit["language_violations"]) != 1:

@@ -1,0 +1,97 @@
+name: Harbor
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: harbor-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  solutions:
+    name: Reference solutions and prompts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      YAMAA_REQUIRE_R: '1'
+      YAMAA_REQUIRE_OPENSAS: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.6.1'
+      - name: Install the evaluation runtime's R packages
+        run: Rscript --vanilla evaluations/harbor/install-r-packages.R
+      - name: Install the evaluation runtime's opensas release
+        run: bash evaluations/harbor/install-opensas.sh amd64
+      - name: Grade every reference solution and check every prompt
+        run: >-
+          uv run --project python --no-sync pytest -ra
+          evaluations/harbor/tests/test_harbor_evaluation.py
+          evaluations/harbor/tests/test_harbor_opensas.py
+          evaluations/harbor/tests/test_harbor_reference_edges.py
+      - name: Reject literal R golden writers
+        if: always()
+        run: >-
+          uv run --project python --no-sync python -m evaluations.harbor.check_pkqt_r_golden_copy
+          --out "${RUNNER_TEMP}/pkqt-r-golden-copy"
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: always()
+        with:
+          name: harbor-r-rejection-controls
+          path: ${{ runner.temp }}/pkqt-r-golden-copy
+          if-no-files-found: warn
+  oracle:
+    name: Oracle and nop through the Docker verifier
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install the locked Harbor runner
+        run: uv sync --project python --extra test --group benchmark --group tooling --group harbor --locked --no-editable --config-setting build-args=--profile=dev
+      - name: Check the harness and regression tests
+        run: uv run --project python --no-sync pytest evaluations/harbor/tests
+      - name: Build agent and verifier images
+        run: uv run --project python --no-sync python -m evaluations.harbor.images build
+      - name: Verify language isolation after Harbor setup
+        run: uv run --project python --no-sync python -m evaluations.harbor.images verify --out "${RUNNER_TEMP}/harbor-images"
+      - name: Check every opensas case through Harbor
+        run: >-
+          uv run --project python --no-sync python -m evaluations.harbor.smoke
+          --language opensas --all-cases --prompt full --n-concurrent 6
+          --out "${RUNNER_TEMP}/harbor-opensas"
+      - name: Check a reproducible R and Python sample across all prompt tiers
+        run: >-
+          uv run --project python --no-sync python -m evaluations.harbor.smoke
+          --language r python --prompt full conventions brief --n-concurrent 6
+          --out "${RUNNER_TEMP}/harbor"
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: always()
+        with:
+          name: harbor-verification
+          path: |
+            ${{ runner.temp }}/harbor-images
+            ${{ runner.temp }}/harbor/jobs
+            ${{ runner.temp }}/harbor/sample.json
+            ${{ runner.temp }}/harbor/summary.json
+            ${{ runner.temp }}/harbor-opensas/jobs
+            ${{ runner.temp }}/harbor-opensas/sample.json
+            ${{ runner.temp }}/harbor-opensas/summary.json
+          if-no-files-found: warn
