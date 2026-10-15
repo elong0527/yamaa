@@ -1052,7 +1052,7 @@
             {
               "phase": "validation",
               "condition": "unresolvable_name",
-              "requirement": "REQ-0106",
+              "requirement": "REQ-0189",
               "spec_paths": [
                 "rows[0].derivations.DTHFL.case[0].when"
               ],
@@ -1111,7 +1111,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "requirement": "REQ-0189",
               "spec_paths": [
                 "columns.DTHFL.derivation.case[0].when"
               ],
@@ -1134,7 +1134,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "requirement": "REQ-0189",
               "spec_paths": [
                 "columns.DTHFL.derivation.case[0].when"
               ],
