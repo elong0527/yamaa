@@ -3,7 +3,7 @@
 //! No filesystem authority, Arrow metadata, compression or numeric rounding.
 use crate::arrow_temporal::{date_days, datetime_seconds};
 use parquet::{
-    basic::{Compression, LogicalType, Repetition, TimeUnit, Type as Physical},
+    basic::{Compression, LogicalType, Repetition, Type as Physical},
     data_type::{ByteArray, ByteArrayType, DataType, DoubleType, Int32Type, Int64Type},
     errors::ParquetError,
     file::{
@@ -67,7 +67,7 @@ fn field<E>(name: &str, kind: ColumnType) -> Result<Arc<Type>, Error<E>> {
         ColumnType::Date => (Physical::INT32, Some(LogicalType::Date)),
         ColumnType::DateTime => (
             Physical::INT64,
-            Some(LogicalType::timestamp(false, TimeUnit::MICROS)),
+            Some(crate::storage_api::timestamp_micros(false)),
         ),
     };
     Type::primitive_type_builder(name, physical)

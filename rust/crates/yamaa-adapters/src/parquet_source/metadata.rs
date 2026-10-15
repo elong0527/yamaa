@@ -35,7 +35,7 @@ pub(super) fn admit(
     let message =
         arrow_ipc::root_as_message_with_opts(&options, message).map_err(|_| Error::Malformed)?;
     let schema = message.header_as_schema().ok_or(Error::Malformed)?;
-    arrow_ipc::convert::try_fb_to_schema(schema)
+    crate::storage_api::ipc_schema(schema)
         .map(Some)
         .map_err(|_| Error::Malformed)
 }
