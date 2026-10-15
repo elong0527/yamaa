@@ -3,7 +3,7 @@ use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
-    schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{BindError, PreflightFinding, PrepareError, PreparedSpecification},
     table::{Column, TableSchema},
     value::ColumnType,
@@ -105,12 +105,9 @@ fn document(operation: T<'_>, grouped: Option<bool>, intermediate: bool) -> Spec
     fields.push(("columns", List(columns)));
     let mut nodes = vec![];
     let root = Map(fields).append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 fn findings(model: SpecificationDocument) -> Vec<Diagnostic> {
     let prepared = match PreparedSpecification::prepare(&model) {
@@ -187,12 +184,9 @@ fn driver_document(dataset: &str, extra: Vec<(&str, T<'_>)>) -> SpecificationDoc
     ]);
     let mut nodes = vec![];
     let root = fields.append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();

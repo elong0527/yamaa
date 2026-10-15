@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use support::{candidate, consumer, document, producer, Tree};
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
-    producer_admission::{prepare, Error, Limits},
+    producer_admission::{prepare, Error},
     producer_contract,
 };
 pub fn reached() -> BTreeSet<ConditionCode> {
@@ -30,7 +30,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         &consumer(Some(Map(vec![]))),
         &[candidate(&source)],
         None,
-        Limits::default(),
     ) else {
         panic!("redundant authority")
     };
@@ -51,7 +50,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         &consumer(None),
         &[candidate(&invalid)],
         None,
-        Limits::default(),
     ) else {
         panic!("invalid producer")
     };
@@ -63,13 +61,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     ));
     let mut mismatch = candidate(&source);
     mismatch.output_identity = "/other.csv";
-    let Err(Error::Invalid(findings)) = prepare(
-        "/consumer.yaml",
-        &consumer(None),
-        &[mismatch],
-        None,
-        Limits::default(),
-    ) else {
+    let Err(Error::Invalid(findings)) =
+        prepare("/consumer.yaml", &consumer(None), &[mismatch], None)
+    else {
         panic!("path mismatch")
     };
     reached.insert(check(
@@ -78,10 +72,10 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "REQ-0534",
         &["input.SRC.path", "input.SRC.schema"],
     ));
-    let contract = producer_contract::prepare(&source, Default::default()).unwrap();
+    let contract = producer_contract::prepare(&source).unwrap();
     reached.insert(check(
         contract
-            .validate_header("SRC", &["VALUE", "ID"], Default::default())
+            .validate_header("SRC", &["VALUE", "ID"])
             .unwrap()
             .unwrap(),
         "producer_contract_mismatch",
@@ -95,7 +89,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "/self",
             &[graph::node("/self", &own, &links)],
             graph::environment(&[]),
-            Default::default(),
         )
     else {
         panic!("actual graph cycle cause")

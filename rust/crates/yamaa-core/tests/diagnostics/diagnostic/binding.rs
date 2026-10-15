@@ -6,7 +6,7 @@ use yamaa_core::{
     diagnostic::{ConditionCode, Context, Diagnostic},
     reference_binding::{Catalog, Dataset, Field},
     reference_scope::{self, Phase, Reach, Scope},
-    schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{
         BindError, BindFinding, PreparedSpecification, SourceDeclaration, SourceProfile,
     },
@@ -124,12 +124,9 @@ fn compile(value: T<'_>, rows: Option<T<'_>>) -> PreparedSpecification {
     }
     let mut nodes = vec![];
     let root = Map(fields).append(&mut nodes);
-    let model = SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap();
+    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
     PreparedSpecification::prepare(&model).unwrap()
 }
 fn failures(prepared: &PreparedSpecification) -> Vec<BindFinding> {
@@ -200,7 +197,6 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             name: "SRC",
             fields: &stored,
         }],
-        Default::default(),
     )
     .unwrap();
     let group = ["SRC.ID"];
@@ -232,7 +228,6 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
                 joined: false,
                 phase,
             },
-            Default::default(),
         )
         .unwrap();
         assert_eq!(found.len(), 1);
@@ -414,8 +409,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         (vec![Some(vec![1]), Some(vec![])], vec![0]),
         (vec![None, Some(vec![])], vec![0]),
     ] {
-        let analysis =
-            column_dependencies::analyze(&dependencies, &keys, false, Default::default()).unwrap();
+        let analysis = column_dependencies::analyze(&dependencies, &keys, false).unwrap();
         for f in analysis.diagnostics {
             let (condition, requirement, site, fields) = match &f {
                 column_dependencies::Diagnostic::Cycle { .. } => (
@@ -462,13 +456,8 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
 
 #[test]
 fn malformed_dependency_metadata_has_no_projection_or_panic() {
-    let analysis = column_dependencies::analyze(
-        &[Some(vec![1]), Some(vec![0])],
-        &[],
-        false,
-        Default::default(),
-    )
-    .unwrap();
+    let analysis =
+        column_dependencies::analyze(&[Some(vec![1]), Some(vec![0])], &[], false).unwrap();
     for finding in analysis.diagnostics {
         assert!(finding.specification_diagnostic(&[], &[]).is_none());
     }
@@ -601,12 +590,9 @@ fn lookup_compile(
     ]);
     let mut nodes = vec![];
     let root = tree.append(&mut nodes);
-    let model = SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap();
+    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
     PreparedSpecification::prepare(&model).unwrap()
 }
 
@@ -790,12 +776,9 @@ pub fn verification_reached() -> BTreeSet<ConditionCode> {
         ("verifications", verifications),
     ])
     .append(&mut nodes);
-    let model = SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap();
+    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
     let prepared = PreparedSpecification::prepare(&model).unwrap();
     assert_eq!(prepared.verifications().len(), 2);
     assert!(matches!(
@@ -982,12 +965,9 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
             ("verifications", dataset_checks),
         ])
         .append(&mut nodes);
-        let model = SpecificationDocument::admit(
-            Document::new(nodes, root, Default::default()).unwrap(),
-            &mut ValidationBudget::new(Default::default()),
-        )
-        .unwrap()
-        .unwrap();
+        let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+            .unwrap()
+            .unwrap();
         let prepared = PreparedSpecification::prepare(&model).unwrap();
         let findings = prepared.verification_declaration_diagnostics();
         assert_eq!(prepared.verification_declaration_diagnostics(), findings);
@@ -1035,12 +1015,9 @@ pub(super) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
     ]);
     let mut nodes = vec![];
     let root = tree.append(&mut nodes);
-    let model = SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap();
+    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
     let prepared = PreparedSpecification::prepare(&model).unwrap();
     let driver = TableSchema::new(vec![Column {
         name: "ID".into(),
@@ -1139,12 +1116,9 @@ pub(super) fn intermediate_key_reached() -> BTreeSet<ConditionCode> {
     ]);
     let mut nodes = vec![];
     let root = tree.append(&mut nodes);
-    let model = SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap();
+    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
     let prepared = PreparedSpecification::prepare(&model).unwrap();
     let driver = TableSchema::new(vec![Column {
         name: "ID".into(),

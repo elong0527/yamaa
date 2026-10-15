@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::ConditionCode,
-    project_codelist_binding::{bind, AllowedValues, Binding, Error},
+    project_codelist_binding::{bind, AllowedValues, Binding},
     project_terminology::{Catalogue, Codelist, DataType, Item, Source},
     value::{ColumnType, Value},
 };
@@ -39,7 +39,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         codelist: "UNKNOWN",
         allowed_values: &[],
     };
-    let Err(Error::Findings(findings)) = bind(
+    let Err(findings) = bind(
         &cat,
         &[
             base,
@@ -50,7 +50,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 ..base
             },
         ],
-        Default::default(),
     ) else {
         panic!("real catalogue faults")
     };

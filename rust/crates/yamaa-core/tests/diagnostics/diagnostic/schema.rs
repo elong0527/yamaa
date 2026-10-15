@@ -3,9 +3,8 @@ use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::ConditionCode,
     schema::{
-        BundleLimits, Document, DocumentLimits, DocumentNode as N, NormalizationBudget,
-        NormalizationError, NormalizationLimits, SchemaContext as C, SchemaDiagnostic,
-        SchemaModule, SchemaStructure, SpecificationDocument, ValidationBudget, ValidationLimits,
+        Document, DocumentNode as N, NormalizationError, SchemaContext as C, SchemaDiagnostic,
+        SchemaModule, SchemaStructure, SpecificationDocument,
     },
 };
 
@@ -38,7 +37,7 @@ fn raw_document(tree: T) -> Document {
     }
     let mut nodes = vec![];
     let root = push(tree, &mut nodes);
-    Document::new(nodes, root, DocumentLimits::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 fn integer(value: &str) -> T {
     T::Scalar(N::Integer(value.into()))
@@ -70,15 +69,8 @@ fn schema(fields: Vec<T>, declarations: Vec<(&str, T)>) -> SchemaStructure {
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap()
-}
-fn budget() -> ValidationBudget {
-    ValidationBudget::new(ValidationLimits::default())
-}
-fn normal_budget() -> NormalizationBudget {
-    NormalizationBudget::new(NormalizationLimits::default())
 }
 fn check(
     reached: &mut BTreeSet<ConditionCode>,
@@ -111,7 +103,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ("needed", T::Scalar(N::Boolean(true))),
         ("extra", T::text("x")),
     ]));
-    let findings = basic.validate_document(&input, &mut budget()).unwrap();
+    let findings = basic.validate_document(&input).unwrap();
     check(
         &mut reached,
         &findings,
@@ -128,9 +120,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "unknown_field",
         "REQ-0285",
     );
-    let findings = basic
-        .validate_document(&document(T::map(vec![])), &mut budget())
-        .unwrap();
+    let findings = basic.validate_document(&document(T::map(vec![]))).unwrap();
     check(
         &mut reached,
         &findings,
@@ -140,10 +130,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "REQ-0285",
     );
     let findings = basic
-        .validate_document(
-            &document(T::map(vec![("schema_version", T::text("old"))])),
-            &mut budget(),
-        )
+        .validate_document(&document(T::map(vec![("schema_version", T::text("old"))])))
         .unwrap();
     check(
         &mut reached,
@@ -156,7 +143,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(findings.len(), 1); // Version rejection precedes missing-field detection.
     let resolved = schema(vec![field("output", "str", true)], vec![]);
     let findings = resolved
-        .validate_resolved_document(&document(T::map(vec![])), &mut budget())
+        .validate_resolved_document(&document(T::map(vec![])))
         .unwrap();
     check(
         &mut reached,
@@ -167,7 +154,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "REQ-0657",
     );
     let ordinary = resolved
-        .validate_document(&document(T::map(vec![])), &mut budget())
+        .validate_document(&document(T::map(vec![])))
         .unwrap();
     assert_eq!(ordinary[0].code, SchemaMissingRequiredField);
     assert_eq!(ordinary[0].definition().requirement, Some("REQ-0285"));
@@ -213,7 +200,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ),
     ] {
         let findings = operations
-            .validate_document(&document(T::map(vec![("derive", value)])), &mut budget())
+            .validate_document(&document(T::map(vec![("derive", value)])))
             .unwrap();
         check(&mut reached, &findings, code, path, condition, req);
     }
@@ -272,7 +259,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             )],
         );
         let findings = constrained
-            .validate_document(&document(T::map(vec![("v", T::text("x"))])), &mut budget())
+            .validate_document(&document(T::map(vec![("v", T::text("x"))])))
             .unwrap();
         assert_eq!(findings.len(), 3);
         for (code, condition) in codes[..3].iter().copied().zip([
@@ -294,10 +281,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             )],
         );
         let findings = sized
-            .validate_document(
-                &document(T::map(vec![("v", T::List(vec![]))])),
-                &mut budget(),
-            )
+            .validate_document(&document(T::map(vec![("v", T::List(vec![]))])))
             .unwrap();
         check(&mut reached, &findings, codes[3], "v", "invalid_size", req);
     }
@@ -381,9 +365,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         } else {
             document(T::map(fields))
         };
-        let NormalizationError::Invalid(findings) = layer_schema
-            .normalize_layer(&input, &mut normal_budget())
-            .unwrap_err()
+        let NormalizationError::Invalid(findings) =
+            layer_schema.normalize_layer(&input).unwrap_err()
         else {
             panic!("authored layer finding")
         };
@@ -406,11 +389,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ],
     );
     let NormalizationError::Invalid(findings) = window_schema
-        .expand_named_windows(
-            &document(T::map(vec![("w", T::text("ABSENT"))])),
-            true,
-            &mut normal_budget(),
-        )
+        .expand_named_windows(&document(T::map(vec![("w", T::text("ABSENT"))])), true)
         .unwrap_err()
     else {
         panic!("window finding")
@@ -467,7 +446,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             fields.retain(|(k, _)| *k != name);
             fields.push((name, value));
         }
-        let findings = SpecificationDocument::admit(document(T::map(fields)), &mut budget())
+        let findings = SpecificationDocument::admit(document(T::map(fields)))
             .unwrap()
             .unwrap_err();
         check(

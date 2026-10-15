@@ -3,7 +3,7 @@ use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
-    schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{BindError, PreflightFinding, PrepareError, PreparedSpecification},
     table::{Column, TableSchema},
     value::ColumnType,
@@ -81,12 +81,9 @@ fn model(mut extra: Vec<(&str, Tree<'_>)>, driver: bool) -> SpecificationDocumen
     }
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 fn read_model(self_target: bool) -> SpecificationDocument {
     let mut fields = vec![
@@ -150,12 +147,9 @@ fn read_model(self_target: bool) -> SpecificationDocument {
     }
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 fn text(text: &str) -> V {
     V::String(text.into())

@@ -4,7 +4,7 @@ use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
-    schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{BindError, PrepareError, PreparedSpecification},
     value::ColumnType as T,
 };
@@ -80,12 +80,9 @@ fn model(between: Option<Tree<'_>>, columns: Option<Tree<'_>>) -> SpecificationD
         ),
     ])
     .append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 fn text(value: &str) -> JsonValue {
     JsonValue::String(value.into())

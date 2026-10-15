@@ -123,16 +123,14 @@ fn arithmetic_after_an_operand_adds_the_compute_column_suggestion() {
             position: actual,
             failure,
             ..
-        }) = parse_predicate(text, Default::default())
+        }) = parse_predicate(text)
         else {
             panic!("predicate must fail: {text}")
         };
         assert_eq!(actual.character, position, "{text}");
         for d in [
             failure.diagnostic("columns.OHYPO.derivation.case[0].when", text, position),
-            failure
-                .original_diagnostic("columns.OHYPO.derivation.case[0].when", text, position)
-                .unwrap(),
+            failure.original_diagnostic("columns.OHYPO.derivation.case[0].when", text, position),
         ] {
             assert_eq!(d.definition().condition, "invalid_predicate");
             assert_eq!(d.definition().requirement, Some("REQ-0188"));
@@ -147,27 +145,24 @@ fn arithmetic_after_an_operand_adds_the_compute_column_suggestion() {
     for text in ["AGE >> 65", "A >"] {
         let Err(ParseError::Grammar {
             position, failure, ..
-        }) = parse_predicate(text, Default::default())
+        }) = parse_predicate(text)
         else {
             panic!("predicate must fail: {text}")
         };
-        let d = failure
-            .original_diagnostic("filter", text, position.character)
-            .unwrap();
+        let d = failure.original_diagnostic("filter", text, position.character);
         assert!(!d.context.contains_key("suggestion"), "{text}");
     }
 }
 
 #[test]
 fn caller_supplied_function_span_cannot_slice_a_different_expression() {
-    let Err(N::Grammar { failure, .. }) = parse_numeric("  foo(1)", Default::default()) else {
+    let Err(N::Grammar { failure, .. }) = parse_numeric("  foo(1)") else {
         panic!("prohibited function");
     };
     assert!(failure
         .diagnostic("columns.VALUE", "\u{03b2}\u{03b2}\u{03b2}")
         .is_none());
-    let Err(A::Grammar { failure, .. }) = parse_aggregate("  sumx(SRC.ID)", Default::default())
-    else {
+    let Err(A::Grammar { failure, .. }) = parse_aggregate("  sumx(SRC.ID)") else {
         panic!("prohibited function");
     };
     assert!(failure.diagnostic("columns.VALUE", "").is_none());
@@ -197,7 +192,7 @@ pub(super) fn predicate_reached(
     ] {
         let Err(ParseError::Grammar {
             position, failure, ..
-        }) = parse_predicate(text, Default::default())
+        }) = parse_predicate(text)
         else {
             panic!("predicate must fail")
         };
@@ -218,13 +213,11 @@ pub(super) fn predicate_reached(
     let expression = "A = 9223372036854775808";
     let Err(ParseError::Grammar {
         position, failure, ..
-    }) = parse_predicate(expression, Default::default())
+    }) = parse_predicate(expression)
     else {
         panic!("overflowing integer literal must fail parsing")
     };
-    let d = failure
-        .original_diagnostic("filter", expression, position.character)
-        .unwrap();
+    let d = failure.original_diagnostic("filter", expression, position.character);
     assert_eq!(d.code, C::PredicateIntegerOverflow);
     assert_eq!(d.definition().phase, "parse");
     assert_eq!(d.definition().condition, "integer_overflow");
