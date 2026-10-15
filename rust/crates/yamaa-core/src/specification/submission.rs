@@ -1,12 +1,12 @@
 //! Family-independent submission admission and completed-column length binding.
 //! Standard, document and terminology composition remains the Define use case.
 use super::*;
-use crate::json::Value as V;
 use crate::{
     dataset::{Check, Verification},
     diagnostic::{ConditionCode as C, Diagnostic},
     value::Value,
 };
+use serde_json::Value as V;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn present_field(d: &Document, node: usize, name: &str) -> Option<usize> {
@@ -298,6 +298,14 @@ pub(super) fn admit(
     groups: &mut [verifications::Verifications],
     result: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
+    let mut metadata_budget = crate::project_limits::Budget::new(Default::default());
+    for node in d.nodes() {
+        if let N::Text(text) | N::Integer(text) = node {
+            metadata_budget
+                .text(text)
+                .map_err(|error| PrepareError::project_limit(error, Default::default(), None))?;
+        }
+    }
     let root = d.root();
     let output = sequence(d, field(d, field(d, root, "output")?, "columns")?)?
         .iter()
@@ -423,8 +431,14 @@ pub(super) fn admit(
                     let check = match value.parse::<usize>() {
                         Ok(maximum) => Check::MaxLength(maximum),
                         Err(_) => Check::WideMaxLength(
-                            crate::dataset::RowCountBound::new(value)
-                                .map_err(|_| PrepareError::Internal)?,
+                            crate::dataset::RowCountBound::new(value).map_err(|_| {
+                                PrepareError::limit(
+                                    "submission_length",
+                                    crate::dataset::MAX_COUNT_BOUND_BYTES,
+                                    None,
+                                    None,
+                                )
+                            })?,
                         ),
                     };
                     groups[index].append_metadata(Verification {
@@ -552,6 +566,14 @@ pub(super) fn admit(
         let path = format!("rows.{row_name}.submission");
         for &(name, entry) in entries {
             let name = text(d, name)?;
+            for _ in 0..4 {
+                metadata_budget
+                    .text(row_name)
+                    .and_then(|_| metadata_budget.text(name))
+                    .map_err(|error| {
+                        PrepareError::project_limit(error, Default::default(), None)
+                    })?;
+            }
             if let Some(&column) = by_name.get(name) {
                 let inherits_origin = present_field(d, entry, "origin").is_none()
                     && present_field(d, column, "submission")
@@ -705,8 +727,14 @@ pub(super) fn admit(
         };
         if let (Some(index), Some(max)) = (default_index, default) {
             group.checks[index].check = Check::ValueMaxLength {
-                max: crate::dataset::RowCountBound::new(&max)
-                    .map_err(|_| PrepareError::Internal)?,
+                max: crate::dataset::RowCountBound::new(&max).map_err(|_| {
+                    PrepareError::limit(
+                        "submission_length",
+                        crate::dataset::MAX_COUNT_BOUND_BYTES,
+                        None,
+                        None,
+                    )
+                })?,
                 discriminator,
                 codes: overrides.iter().map(|entry| entry.1.clone()).collect(),
                 include: false,
@@ -716,8 +744,14 @@ pub(super) fn admit(
             group.append_metadata(Verification {
                 path: entry.3.clone(),
                 check: Check::ValueMaxLength {
-                    max: crate::dataset::RowCountBound::new(&entry.2)
-                        .map_err(|_| PrepareError::Internal)?,
+                    max: crate::dataset::RowCountBound::new(&entry.2).map_err(|_| {
+                        PrepareError::limit(
+                            "submission_length",
+                            crate::dataset::MAX_COUNT_BOUND_BYTES,
+                            None,
+                            None,
+                        )
+                    })?,
                     discriminator,
                     codes: vec![entry.1.clone()],
                     include: true,
@@ -725,6 +759,7 @@ pub(super) fn admit(
             });
         }
     }
+    let mut inventory_budget = crate::project_limits::Budget::new(Default::default());
     for (column, &node) in columns.iter().enumerate() {
         let name = text(d, field(d, node, "name")?)?;
         let base = present_field(d, node, "submission");
@@ -778,6 +813,11 @@ pub(super) fn admit(
                     overrides: overrides.into_iter().collect(),
                 })
         };
+        for name in inventory {
+            inventory_budget
+                .text(name)
+                .map_err(|error| PrepareError::project_limit(error, Default::default(), None))?;
+        }
         groups[column].append_codelist(Verification {
             path: format!("columns.{name}.submission.inventory_vocabulary"),
             check: Check::Inventory {

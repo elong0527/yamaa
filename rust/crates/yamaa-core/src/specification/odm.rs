@@ -53,8 +53,11 @@ pub(super) fn prepare(
         .filter(|&node| !matches!(d.nodes()[node], N::Null))
         .map(|node| {
             let expression = text(d, node)?;
-            let compiled =
-                crate::predicate_compiler::compile(expression, &format!("{path}.filter"));
+            let compiled = crate::predicate_compiler::compile(
+                expression,
+                &format!("{path}.filter"),
+                Default::default(),
+            );
             match &compiled {
                 Ok(_)
                 | Err(crate::predicate_compiler::Error::Parse(
@@ -120,7 +123,8 @@ pub(super) fn bind(
                     crate::diagnostic::OdmLocation::Column
                 },
             }
-            .diagnostic(),
+            .diagnostic()
+            .map_err(|_| BindError::Internal)?,
         ));
         return Ok(None);
     }
@@ -133,11 +137,15 @@ pub(super) fn bind(
                     position, failure, ..
                 },
             )) => {
-                findings.push(BindFinding::Predicate(failure.original_diagnostic(
-                    &format!("{}.filter", declaration.path),
-                    expression,
-                    position.character,
-                )));
+                findings.push(BindFinding::Predicate(
+                    failure
+                        .original_diagnostic(
+                            &format!("{}.filter", declaration.path),
+                            expression,
+                            position.character,
+                        )
+                        .map_err(|_| BindError::PredicateDiagnosticLimit)?,
+                ));
                 return Ok(None);
             }
             Err(error) => return Err(BindError::PredicatePolicy(error.clone())),
@@ -162,7 +170,7 @@ pub(super) fn bind(
                 )));
                 continue;
             }
-            match catalog.bind(identifier) {
+            match catalog.bind(identifier).map_err(BindError::Catalog)? {
                 Some(reference_binding::Binding::Dataset { field, .. }) => bindings.push(Binding {
                     name: identifier.into(),
                     read: Read::Source(field),
@@ -223,7 +231,7 @@ pub(super) fn bind(
         source: if matches!(phase, Phase::Column { .. }) {
             let reference = format!("{}.ItemOID", declaration.dataset);
             let Some(reference_binding::Binding::Dataset { dataset, .. }) =
-                catalog.bind(&reference)
+                catalog.bind(&reference).map_err(BindError::Catalog)?
             else {
                 return Err(BindError::Internal);
             };
@@ -244,10 +252,10 @@ pub(super) fn bind(
 }
 
 pub(super) fn contains(d: &Document, node: usize, depth: usize) -> Result<bool, PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+    if depth > 64 {
         return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
+            "odm_expression_depth",
+            64,
             Some(depth),
             None,
         ));
@@ -302,18 +310,29 @@ pub(super) fn context_findings(
         column: Option<&'a str>,
         row: Option<usize>,
         depth: usize,
-
+        bytes: &mut usize,
         sites: &mut Vec<Site<'a>>,
     ) -> Result<(), PrepareError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+        if depth > 64 {
             return Err(PrepareError::limit(
-                "semantic_depth",
-                crate::limits::Limits::SEMANTIC_DEPTH,
+                "odm_expression_depth",
+                64,
                 Some(depth),
                 Some(path),
             ));
         }
-
+        if path.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(path.len()),
+                Some(path),
+            ));
+        }
+        *bytes = bytes
+            .checked_add(path.len())
+            .filter(|&n| n <= 16_777_216)
+            .ok_or_else(|| PrepareError::limit("odm_site_metadata", 16_777_216, None, None))?;
         match &d.nodes()[node] {
             N::Mapping(fields) => {
                 if let Some(value) = d.field(node, "value").filter(|_| {
@@ -334,6 +353,7 @@ pub(super) fn context_findings(
                         column,
                         row,
                         depth + 1,
+                        bytes,
                         sites,
                     );
                 }
@@ -344,6 +364,22 @@ pub(super) fn context_findings(
                         text(d, field(d, payload, "item")?)?
                     };
                     let (dataset, _) = item.split_once('.').ok_or(PrepareError::Internal)?;
+                    *bytes = bytes
+                        .checked_add(item.len().checked_mul(4).ok_or_else(|| {
+                            PrepareError::limit("odm_site_metadata", 16_777_216, None, None)
+                        })?)
+                        .filter(|&n| n <= 16_777_216)
+                        .ok_or_else(|| {
+                            PrepareError::limit("odm_site_metadata", 16_777_216, None, None)
+                        })?;
+                    if sites.len() >= 128 {
+                        return Err(PrepareError::limit(
+                            "odm_sites",
+                            128,
+                            Some(sites.len()),
+                            None,
+                        ));
+                    }
                     sites.push(Site {
                         payload,
                         item,
@@ -372,6 +408,7 @@ pub(super) fn context_findings(
                             column,
                             row,
                             depth + 1,
+                            bytes,
                             sites,
                         )?;
                     }
@@ -387,6 +424,7 @@ pub(super) fn context_findings(
                         column,
                         row,
                         depth + 1,
+                        bytes,
                         sites,
                     )?;
                 }
@@ -415,7 +453,7 @@ pub(super) fn context_findings(
             .map(|driver| driver.or_else(|| (inputs.len() == 1).then(|| inputs[0])))
     };
     let mut sites = Vec::new();
-
+    let mut bytes = 0;
     for &node in sequence(d, field(d, root, "columns")?)? {
         if let Some(derivation) = d
             .field(node, "derivation")
@@ -430,6 +468,7 @@ pub(super) fn context_findings(
                 Some(column),
                 None,
                 0,
+                &mut bytes,
                 &mut sites,
             )?;
         }
@@ -456,6 +495,7 @@ pub(super) fn context_findings(
                             None,
                             Some(index),
                             0,
+                            &mut bytes,
                             &mut sites,
                         )?;
                     }
@@ -505,7 +545,8 @@ pub(super) fn context_findings(
                     dataset: site.dataset,
                     location: site.location,
                 }
-                .diagnostic(),
+                .diagnostic()
+                .map_err(|_| PrepareError::limit("odm_diagnostic", 16_777_216, None, None))?,
             ));
         }
         if let Some(filter) = d
@@ -514,7 +555,7 @@ pub(super) fn context_findings(
         {
             let path = format!("{}.filter", site.path);
             let expression = text(d, filter)?;
-            match crate::predicate_compiler::compile(expression, &path) {
+            match crate::predicate_compiler::compile(expression, &path, Default::default()) {
                 Ok(plan) => {
                     let mut seen = BTreeSet::new();
                     for identifier in plan.identifiers() {
@@ -545,11 +586,13 @@ pub(super) fn context_findings(
                         position, failure, ..
                     },
                 )) => {
-                    findings.push(PreflightFinding::Odm(failure.original_diagnostic(
-                        &path,
-                        expression,
-                        position.character,
-                    )));
+                    findings.push(PreflightFinding::Odm(
+                        failure
+                            .original_diagnostic(&path, expression, position.character)
+                            .map_err(|_| {
+                                PrepareError::limit("odm_diagnostic", 16_777_216, None, None)
+                            })?,
+                    ));
                 }
                 Err(_) => (), // Existing expression preparation retains unsupported/policy failures.
             }
@@ -565,13 +608,8 @@ pub(super) fn inputs(d: &Document) -> Result<BTreeSet<&str>, PrepareError> {
         depth: usize,
         found: &mut BTreeSet<&'a str>,
     ) -> Result<(), PrepareError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-            return Err(PrepareError::limit(
-                "semantic_depth",
-                crate::limits::Limits::SEMANTIC_DEPTH,
-                None,
-                None,
-            ));
+        if depth > 64 {
+            return Err(PrepareError::limit("odm_expression_depth", 64, None, None));
         }
         match &d.nodes()[node] {
             N::Mapping(fields) => {
@@ -649,54 +687,80 @@ impl Declaration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_document::Tree;
-
+    enum Tree<'a> {
+        Text(&'a str),
+        Map(Vec<(&'a str, Tree<'a>)>),
+        List(Vec<Tree<'a>>),
+    }
+    impl Tree<'_> {
+        fn append(self, nodes: &mut Vec<N>) -> usize {
+            let node = match self {
+                Self::Text(text) => N::Text(text.into()),
+                Self::Map(fields) => N::Mapping(
+                    fields
+                        .into_iter()
+                        .map(|(key, value)| (Self::Text(key).append(nodes), value.append(nodes)))
+                        .collect(),
+                ),
+                Self::List(children) => N::Sequence(
+                    children
+                        .into_iter()
+                        .map(|child| child.append(nodes))
+                        .collect(),
+                ),
+            };
+            let index = nodes.len();
+            nodes.push(node);
+            index
+        }
+    }
     #[test]
     fn dictionary_data_and_literal_values_cannot_select_odm_source_admission() {
+        use Tree::*;
         for expression in [
-            Tree::map(vec![(
+            Map(vec![(
                 "mapping",
-                Tree::map(vec![
-                    ("source", Tree::text("SRC.X")),
-                    (
-                        "dict",
-                        Tree::map(vec![("odm", Tree::text("SRC.IT.TEST.OID"))]),
-                    ),
+                Map(vec![
+                    ("source", Text("SRC.X")),
+                    ("dict", Map(vec![("odm", Text("SRC.IT.TEST.OID"))])),
                 ]),
             )]),
-            Tree::map(vec![("literal", Tree::text("SRC.IT.TEST.OID"))]),
+            Map(vec![("literal", Text("SRC.IT.TEST.OID"))]),
         ] {
-            let tree = Tree::map(vec![
-                ("schema_version", Tree::text("1.0")),
-                ("domain", Tree::text("TEST")),
+            let tree = Map(vec![
+                ("schema_version", Text("1.0")),
+                ("domain", Text("TEST")),
                 (
                     "input",
-                    Tree::map(vec![(
-                        "SRC",
-                        Tree::map(vec![("path", Tree::text("source.csv"))]),
-                    )]),
+                    Map(vec![("SRC", Map(vec![("path", Text("source.csv"))]))]),
                 ),
-                ("keys", Tree::List(vec![Tree::text("ID")])),
+                ("keys", List(vec![Text("ID")])),
                 (
                     "columns",
-                    Tree::List(vec![Tree::map(vec![
-                        ("name", Tree::text("ID")),
-                        ("type", Tree::text("str")),
-                        ("derivation", Tree::map(vec![("value", expression)])),
+                    List(vec![Map(vec![
+                        ("name", Text("ID")),
+                        ("type", Text("str")),
+                        ("derivation", Map(vec![("value", expression)])),
                     ])]),
                 ),
                 (
                     "output",
-                    Tree::map(vec![
-                        ("path", Tree::text("result.csv")),
-                        ("columns", Tree::List(vec![Tree::text("ID")])),
+                    Map(vec![
+                        ("path", Text("result.csv")),
+                        ("columns", List(vec![Text("ID")])),
                     ]),
                 ),
             ]);
             let mut nodes = Vec::new();
             let root = tree.append(&mut nodes);
-            let document = Document::new(nodes, root).unwrap();
-            let admitted = SpecificationDocument::admit(document).unwrap().unwrap();
+            let document =
+                Document::new(nodes, root, crate::schema::DocumentLimits::default()).unwrap();
+            let admitted = SpecificationDocument::admit(
+                document,
+                &mut crate::schema::ValidationBudget::new(Default::default()),
+            )
+            .unwrap()
+            .unwrap();
             let document = admitted.document();
             let column = sequence(
                 document,

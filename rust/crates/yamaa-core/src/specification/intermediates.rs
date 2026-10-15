@@ -5,6 +5,7 @@ use crate::{
     predicate_compiler,
     value::Value,
 };
+use std::collections::BTreeSet;
 
 type UniqueDeclarations = Vec<(String, Vec<(String, String)>, Option<String>)>;
 
@@ -49,6 +50,25 @@ impl Declarations {
         self.0.iter().any(|declaration| declaration.path == path)
     }
 
+    pub(super) fn failed_metadata_names<'a>(
+        &'a self,
+        findings: &[crate::diagnostic::Diagnostic],
+    ) -> BTreeSet<&'a str> {
+        self.0
+            .iter()
+            .filter(|item| {
+                findings.iter().any(|finding| {
+                    finding.spec_paths.iter().any(|path| {
+                        path == &item.path
+                            || path.strip_prefix(&item.path).is_some_and(|suffix| {
+                                suffix.starts_with('.') || suffix.starts_with('[')
+                            })
+                    })
+                })
+            })
+            .map(|item| item.name.as_str())
+            .collect()
+    }
     pub(super) fn add_call_uses(&self, uses: &mut [usize]) -> Result<(), PrepareError> {
         let mut calls = Vec::new();
         for item in self.0.iter() {
@@ -58,7 +78,9 @@ impl Declarations {
         }
         for call in calls {
             let count = uses.get_mut(call).ok_or(PrepareError::Internal)?;
-            *count = count.checked_add(1).ok_or(PrepareError::Internal)?;
+            *count = count
+                .checked_add(1)
+                .ok_or_else(|| PrepareError::limit("function_calls", 1024, None, None))?;
         }
         Ok(())
     }
@@ -233,6 +255,7 @@ impl Declarations {
         driver: usize,
         output: &TableSchema,
         keys: &[usize],
+        limits: CompilationLimits,
         project: Option<&functions::Prepared>,
         extraction: &str_extract::Prepared,
         templates: &str_template::Prepared,
@@ -246,10 +269,10 @@ impl Declarations {
             return Ok(result);
         };
         let items = sequence(d, id)?;
-        if items.len() > crate::limits::Limits::COLUMNS {
+        if items.len() > limits.columns {
             return Err(PrepareError::limit(
                 "intermediates",
-                crate::limits::Limits::COLUMNS,
+                limits.columns,
                 Some(items.len()),
                 None,
             ));
@@ -270,7 +293,7 @@ impl Declarations {
             )
             .map_err(|_| PrepareError::Internal)?,
         );
-        let order = derivation_order(d, items, project, templates)?;
+        let order = derivation_order(d, items, project, templates, limits)?;
         for index in order {
             let id = items[index];
             let path = format!("intermediates[{index}]");
@@ -288,7 +311,7 @@ impl Declarations {
                 });
             let driver_keys = row_driver.then(|| std::sync::Arc::clone(&driver_key_schema));
             let range = intermediate_range::prepare(d, id, &path, name)?;
-            let columns = intermediate_range::prepare_columns(d, id)?;
+            let columns = intermediate_range::prepare_columns(d, id, limits)?;
             let dataset = text(d, field(d, id, "dataset")?)?;
             let source = if dataset == "SELF" && present(d, d.root(), "rows") {
                 self_relations::Relation::SelfRows
@@ -307,18 +330,26 @@ impl Declarations {
                     continue;
                 }
                 if let N::Text(name) = &d.nodes()[key] {
+                    if limits.keys == 0 {
+                        return Err(PrepareError::limit(
+                            "intermediate_keys",
+                            limits.keys,
+                            None,
+                            None,
+                        ));
+                    }
                     Some(vec![(
                         name.clone(),
                         match_values::Declaration::Variable(name.clone()),
                     )])
                 } else if matches!(d.nodes()[key], N::Sequence(_)) {
                     let fields = sequence(d, key)?;
-                    if fields.len() > crate::limits::Limits::KEYS {
+                    if fields.len() > limits.keys {
                         return Err(PrepareError::limit(
                             "intermediate_keys",
-                            crate::limits::Limits::KEYS,
+                            limits.keys,
                             Some(fields.len()),
-                            Some(&format!("{path}.key")),
+                            None,
                         ));
                     }
                     Some(
@@ -336,12 +367,12 @@ impl Declarations {
                     )
                 } else {
                     let fields = mapping(d, key)?;
-                    if fields.len() > crate::limits::Limits::KEYS {
+                    if fields.len() > limits.keys {
                         return Err(PrepareError::limit(
                             "intermediate_keys",
-                            crate::limits::Limits::KEYS,
+                            limits.keys,
                             Some(fields.len()),
-                            Some(&format!("{path}.key")),
+                            None,
                         ));
                     }
                     if fields.is_empty() {
@@ -380,7 +411,11 @@ impl Declarations {
             {
                 let expression = text(d, filter)?;
                 filter_text = Some(expression.into());
-                let compiled = predicate_compiler::compile(expression, &format!("{path}.filter"));
+                let compiled = predicate_compiler::compile(
+                    expression,
+                    &format!("{path}.filter"),
+                    Default::default(),
+                );
                 match &compiled {
                     Err(predicate_compiler::Error::Parse(
                         crate::predicate_parser::ParseError::Grammar { .. },
@@ -420,10 +455,10 @@ impl Declarations {
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
                 let terms = sequence(d, order_id)?;
-                if terms.len() > crate::limits::Limits::COLUMNS {
+                if terms.len() > limits.source_fields {
                     return Err(PrepareError::limit(
                         "intermediate_order",
-                        crate::limits::Limits::COLUMNS,
+                        limits.source_fields,
                         Some(terms.len()),
                         None,
                     ));
@@ -514,7 +549,7 @@ impl Declarations {
                 .map(String::from)
                 .collect();
             let derivations = intermediate_derivations::prepare(
-                d, id, &path, dataset, project, extraction, templates, &result,
+                d, id, &path, dataset, limits, project, extraction, templates, &result,
             )?;
             std::sync::Arc::get_mut(&mut result.0)
                 .ok_or(PrepareError::Internal)?
@@ -550,6 +585,13 @@ impl Declarations {
         project: Option<&crate::project_calls::ProjectCalls>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(Vec<SecondarySource>, Vec<Option<Intermediate>>), BindError> {
+        intermediate_sources::admit(self.0.iter().filter_map(|item| match item.source {
+            self_relations::Relation::Input(index) if index == driver => {
+                Some((schemas[index], sources[index].name.as_str()))
+            }
+            self_relations::Relation::SelfRows => Some((output, "SELF")),
+            _ => None,
+        }))?;
         let secondary = sources
             .iter()
             .zip(schemas)
@@ -592,21 +634,6 @@ impl Declarations {
                     .as_ref()
                     .map_or(schema, |derived| derived.plan.output())
             });
-            let donor_kind = |column| {
-                if let Some(derived) = &derivations {
-                    derived.column_kind(column)
-                } else {
-                    match item.source {
-                        self_relations::Relation::Input(index) => schemas[index]
-                            .columns()
-                            .get(column)
-                            .map(|column| column.kind),
-                        self_relations::Relation::SelfRows => {
-                            output.columns().get(column).map(|column| column.kind)
-                        }
-                    }
-                }
-            };
             let admits = |column: usize| {
                 !matches!(item.source, self_relations::Relation::SelfRows)
                     || column >= output.columns().len()
@@ -669,8 +696,8 @@ impl Declarations {
                     fields,
                 })
                 .collect::<Vec<_>>();
-            let catalog =
-                Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)?;
+            let catalog = Catalog::compile(&output_fields, &datasets, Default::default())
+                .map_err(BindError::Catalog)?;
             let default_keys = if item.keys.is_none() {
                 let before_keys = findings.len();
                 match intermediate_admission::inferred_keys(
@@ -678,7 +705,6 @@ impl Declarations {
                     output,
                     keys,
                     schema,
-                    &donor_kind,
                     &admits,
                     &item.path,
                     source_name,
@@ -702,20 +728,16 @@ impl Declarations {
             // Result types and donor fields precede expression declarations and reads.
             for (field, declaration) in pairs_declared {
                 if let (Some(donor), Some(expected)) = (
-                    schema
-                        .columns()
-                        .iter()
-                        .position(|column| column.name == *field)
-                        .and_then(&donor_kind),
-                    declaration.result_type(&catalog),
+                    schema.columns().iter().find(|column| column.name == *field),
+                    declaration.result_type(&catalog)?,
                 ) {
-                    if !crate::key_relation::comparable(expected, donor.into()) {
+                    if !crate::key_relation::comparable(expected, donor.kind.into()) {
                         findings.push(BindFinding::Lookup(LookupFinding::key_type(
                             &format!("{}.key", item.path),
                             &item.name,
                             &declaration.display_name(field),
                             expected,
-                            donor,
+                            donor.kind,
                         )));
                         failed = true;
                     }
@@ -792,7 +814,6 @@ impl Declarations {
                         plan,
                         source_name,
                         schema,
-                        &donor_kind,
                         matches!(item.source, self_relations::Relation::SelfRows),
                         &admits,
                         &item.name,
@@ -827,7 +848,7 @@ impl Declarations {
                         item.filter_text.as_deref().expect("written predicate"),
                         position.character,
                         failure,
-                    )));
+                    )?));
                     // A syntax rejection does not remove the declaration's schema.
                     None
                 }
@@ -869,7 +890,6 @@ impl Declarations {
                         declaration,
                         &item.name,
                         schema,
-                        &donor_kind,
                         &admits,
                         &catalog,
                         sources,
@@ -982,8 +1002,10 @@ fn derivation_order(
     items: &[usize],
     project: Option<&functions::Prepared>,
     templates: &str_template::Prepared,
+    limits: CompilationLimits,
 ) -> Result<Vec<usize>, PrepareError> {
-    use crate::dependency_analysis;
+    use crate::dependency_analysis::{self, Error};
+    const EDGE_LIMIT: usize = 65_536;
     let names = items
         .iter()
         .map(|&item| text(d, field(d, item, "id")?))
@@ -995,6 +1017,10 @@ fn derivation_order(
         .collect::<BTreeMap<_, _>>();
     let mut graph = vec![Vec::new(); items.len()];
     let mut sites = vec![Vec::new(); items.len()];
+    let mut edges = 0usize;
+    let mut projection =
+        crate::diagnostic::ProjectionBudget::new(crate::diagnostic::MAX_PROJECTION_BYTES)
+            .map_err(|_| PrepareError::Internal)?;
     for (index, &item) in items.iter().enumerate() {
         let Some(derivations) = d
             .field(item, "derivations")
@@ -1020,12 +1046,49 @@ fn derivation_order(
                 else {
                     continue;
                 };
+                edges = edges
+                    .checked_add(1)
+                    .filter(|&edges| edges <= EDGE_LIMIT)
+                    .ok_or_else(|| {
+                        PrepareError::limit("intermediate_dependency_edges", EDGE_LIMIT, None, None)
+                    })?;
+                projection
+                    .text(&path)
+                    .and_then(|()| projection.text(names[index]))
+                    .and_then(|()| projection.text(names[dependency]))
+                    .and_then(|()| projection.charge(64))
+                    .map_err(|_| {
+                        PrepareError::limit(
+                            "intermediate_dependency_metadata",
+                            crate::diagnostic::MAX_PROJECTION_BYTES,
+                            None,
+                            None,
+                        )
+                    })?;
                 graph[index].push(dependency);
                 sites[index].push((dependency, path.clone()));
             }
         }
     }
-    let analysis = dependency_analysis::analyze(&graph).map_err(|_| PrepareError::Internal)?;
+    let analysis = dependency_analysis::analyze(
+        &graph,
+        dependency_analysis::Limits {
+            nodes: limits.columns,
+            edges: EDGE_LIMIT,
+        },
+    )
+    .map_err(|error| match error {
+        Error::NodeLimit { limit, required } => {
+            PrepareError::limit("intermediate_dependency_nodes", limit, Some(required), None)
+        }
+        Error::EdgeLimit { limit, required } => {
+            PrepareError::limit("intermediate_dependency_edges", limit, Some(required), None)
+        }
+        Error::SizeOverflow => {
+            PrepareError::limit("intermediate_dependency_edges", EDGE_LIMIT, None, None)
+        }
+        Error::InvalidDependency { .. } => PrepareError::Internal,
+    })?;
     if let Some(cycle) = analysis.cycle {
         let mut paths = Vec::new();
         for pair in cycle.windows(2) {
@@ -1086,8 +1149,9 @@ impl Declarations {
                 fields,
             })
             .collect::<Vec<_>>();
-        let catalog = Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)?;
-        let mut known = BTreeMap::<String, Option<ColumnType>>::new();
+        let catalog = Catalog::compile(&output_fields, &datasets, Default::default())
+            .map_err(BindError::Catalog)?;
+        let mut known = BTreeMap::<String, ColumnType>::new();
         for declaration in self.0.iter() {
             let dataset = match declaration.source {
                 self_relations::Relation::Input(index) => sources[index].name.as_str(),
@@ -1097,12 +1161,12 @@ impl Declarations {
                 self_relations::Relation::Input(index) => sources[index]
                     .types
                     .iter()
-                    .map(|(name, kind)| (name.clone(), Some(*kind)))
+                    .cloned()
                     .collect::<BTreeMap<_, _>>(),
                 self_relations::Relation::SelfRows => output
                     .columns()
                     .iter()
-                    .map(|column| (column.name.clone(), Some(column.kind)))
+                    .map(|column| (column.name.clone(), column.kind))
                     .collect(),
             };
             if let (Some(expression), Some(compiled)) =
@@ -1117,12 +1181,12 @@ impl Declarations {
             }
             for derived in &declaration.derivations {
                 static_checks::branch(&derived.branch, findings)?;
-                let kind = derived.result_kind(&|name| {
+                if let Some(kind) = derived.result_kind(&|name| {
                     let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
                     if owner == dataset {
-                        donor.get(field).copied().flatten()
+                        donor.get(field).copied()
                     } else if let Some(kind) = known.get(name) {
-                        *kind
+                        Some(*kind)
                     } else {
                         sources
                             .iter()
@@ -1135,8 +1199,9 @@ impl Declarations {
                                     .map(|(_, kind)| *kind)
                             })
                     }
-                });
-                donor.insert(derived.name.clone(), kind);
+                }) {
+                    donor.insert(derived.name.clone(), kind);
+                }
             }
             if let Some(Ok(filter)) = &declaration.filter {
                 findings.extend(
@@ -1145,7 +1210,7 @@ impl Declarations {
                             .split_once('.')
                             .or_else(|| (dataset == "SELF").then_some((dataset, name)))?;
                         if owner == dataset {
-                            donor.get(field).copied().flatten().map(Into::into)
+                            donor.get(field).copied().map(Into::into)
                         } else {
                             sources
                                 .iter()
@@ -1155,23 +1220,22 @@ impl Declarations {
                                 })
                                 .map(|(_, kind)| (*kind).into())
                         }
-                    })
+                    })?
                     .into_iter()
                     .map(BindFinding::Predicate),
                 );
             }
             for (field, value) in declaration.keys.iter().flatten() {
-                if let (Some(actual), Some(expected)) = (
-                    donor.get(field).copied().flatten(),
-                    value.result_type(&catalog),
-                ) {
-                    if !crate::key_relation::comparable(expected, actual.into()) {
+                if let (Some(actual), Some(expected)) =
+                    (donor.get(field), value.result_type(&catalog)?)
+                {
+                    if !crate::key_relation::comparable(expected, (*actual).into()) {
                         findings.push(BindFinding::Lookup(LookupFinding::key_type(
                             &format!("{}.key", declaration.path),
                             &declaration.name,
                             &value.display_name(field),
                             expected,
-                            actual,
+                            *actual,
                         )));
                     }
                 }

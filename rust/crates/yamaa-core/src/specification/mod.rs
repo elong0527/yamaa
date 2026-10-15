@@ -7,7 +7,7 @@ use crate::{
 };
 use crate::{
     column_dependencies,
-    numeric_compiler::{compile_numeric, CompiledNumeric},
+    numeric_compiler::{compile_numeric, CompileError, CompiledNumeric},
     numeric_parser::ParseError,
     reference_binding::{self, Catalog},
     schema::{Document, DocumentNode as N, SpecificationDocument},
@@ -23,6 +23,7 @@ mod intermediate_admission;
 pub(crate) use intermediate_admission::is_rename_only;
 mod intermediate_derivations;
 mod intermediate_range;
+mod intermediate_sources;
 mod intermediates;
 mod lookup_diagnostics;
 mod match_values;
@@ -78,7 +79,7 @@ pub enum PrepareError {
     #[error("specification unsupported: {0:?}")]
     Unsupported(Vec<UnsupportedFeature>),
     #[error("specification numeric: path={path:?}, error={error:?}")]
-    Numeric { path: String, error: ParseError },
+    Numeric { path: String, error: CompileError },
     #[error("specification invalid: {0:?}")]
     Invalid(Vec<PreflightFinding>),
     #[error("specification output schema: {0:?}")]
@@ -86,9 +87,40 @@ pub enum PrepareError {
     #[error("specification internal")]
     Internal,
 }
+/// Default width policy shared by compilation, producer contracts and host decoders.
+/// Aggregate cell, text and work budgets are enforced independently.
+pub const DEFAULT_MAX_COLUMNS: usize = 1_024;
+
 /// Maximum declared CSV display precision under REQ-0744.
 pub const MAX_OUTPUT_DECIMALS: u8 = 18;
 
+/// Trusted compiler policy, not language limits. Aggregate admission precedes
+/// owned names, findings, compiled expressions and reference catalog construction.
+#[derive(Clone, Copy, Debug)]
+pub struct CompilationLimits {
+    pub columns: usize,
+    pub keys: usize,
+    pub inputs: usize,
+    pub projected_columns: usize,
+    pub source_fields: usize,
+    pub model_text_bytes: usize,
+    pub numeric_bytes: usize,
+    pub source_operands: usize,
+}
+impl Default for CompilationLimits {
+    fn default() -> Self {
+        Self {
+            columns: DEFAULT_MAX_COLUMNS,
+            keys: 64,
+            inputs: 16,
+            projected_columns: DEFAULT_MAX_COLUMNS,
+            source_fields: DEFAULT_MAX_COLUMNS,
+            model_text_bytes: 262_144,
+            numeric_bytes: 65_536,
+            source_operands: 64,
+        }
+    }
+}
 #[derive(Clone, Debug, PartialEq)]
 pub enum PreflightFinding {
     IntegerLiteralOverflow {
@@ -189,8 +221,8 @@ pub enum PreflightFinding {
 pub enum BindError {
     #[error("specification internal")]
     Internal,
-    #[error("specification invalid diagnostic")]
-    InvalidDiagnostic,
+    #[error("specification predicate diagnostic limit")]
+    PredicateDiagnosticLimit,
     #[error("specification source count")]
     SourceCount,
     #[error("specification predicate policy: {0:?}")]
@@ -259,7 +291,7 @@ pub enum BindFinding {
     Numeric {
         path: String,
         expression: String,
-        error: ParseError,
+        error: CompileError,
     },
     UnknownReference {
         path: String,
@@ -351,7 +383,7 @@ enum Operation {
     /// Reference planning emits formula diagnostics after source ingestion.
     InvalidNumeric {
         expression: String,
-        error: ParseError,
+        error: CompileError,
     },
 }
 #[derive(Clone, Debug)]
@@ -673,7 +705,7 @@ fn preflight(spec: &SpecificationDocument) -> Result<Vec<PreflightFinding>, Prep
             finding.spec_paths.push(format!("rows[{previous}].id"));
             finding.context.insert(
                 "identifier".into(),
-                crate::json::Value::String(identity.into()),
+                serde_json::Value::String(identity.into()),
             );
             findings.push(PreflightFinding::Scalar(finding));
         }
@@ -732,7 +764,13 @@ impl PreparedSpecification {
     /// Reject unsupported declarations before requesting any source bytes. Effective
     /// source empty-string behavior is missing unless explicitly declared otherwise.
     pub fn prepare(spec: &SpecificationDocument) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, None, None, None, None)
+        Self::prepare_with_limits(spec, CompilationLimits::default())
+    }
+    pub fn prepare_with_limits(
+        spec: &SpecificationDocument,
+        limits: CompilationLimits,
+    ) -> Result<Self, PrepareError> {
+        Self::prepare_implementation(spec, limits, None, None, Default::default(), None, None)
     }
     /// Prepare calls against statically admitted environment definitions. No
     /// project imports, lock verification, test invocation or study reads occur.
@@ -740,48 +778,74 @@ impl PreparedSpecification {
         spec: &SpecificationDocument,
         functions: &[crate::project_function::Function],
     ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, Some(functions), None, None, None)
+        Self::prepare_implementation(
+            spec,
+            CompilationLimits::default(),
+            Some(functions),
+            None,
+            Default::default(),
+            None,
+            None,
+        )
     }
     /// Compile project calls and fixed terminology against the same admitted metadata.
     pub fn prepare_with_environment(
         spec: &SpecificationDocument,
         environment: &crate::project_environment::ExecutionEnvironment,
     ) -> Result<Self, PrepareError> {
+        Self::prepare_with_environment_limits(
+            spec,
+            environment,
+            CompilationLimits::default(),
+            Default::default(),
+        )
+    }
+    pub fn prepare_with_environment_limits(
+        spec: &SpecificationDocument,
+        environment: &crate::project_environment::ExecutionEnvironment,
+        limits: CompilationLimits,
+        terminology_limits: crate::project_limits::Limits,
+    ) -> Result<Self, PrepareError> {
         Self::prepare_implementation(
             spec,
+            limits,
             Some(environment.functions()),
             Some(environment.catalogue()),
+            terminology_limits,
             None,
             Some(environment.inventory()),
         )
     }
     /// This representation stays inside the sealed producer metadata result.
+    /// No public constructor exposes a producer-backed executable plan.
     pub(crate) fn prepare_producer_metadata(
         spec: &SpecificationDocument,
+        limits: CompilationLimits,
         environment: Option<&crate::project_environment::ExecutionEnvironment>,
         producers: &[crate::producer_admission::Declaration],
     ) -> Result<Self, PrepareError> {
         Self::prepare_implementation(
             spec,
+            limits,
             environment.map(|e| e.functions()),
             environment.map(|e| e.catalogue()),
+            Default::default(),
             Some(producers),
             environment.map(|e| e.inventory()),
         )
     }
     fn prepare_implementation(
         spec: &SpecificationDocument,
+        limits: CompilationLimits,
         functions: Option<&[crate::project_function::Function]>,
         catalogue: Option<&crate::project_terminology::Catalogue>,
+        terminology_limits: crate::project_limits::Limits,
         producers: Option<&[crate::producer_admission::Declaration]>,
         inventory: Option<&crate::submission_inventory::Inventory>,
     ) -> Result<Self, PrepareError> {
         let d = spec.document();
         let root = d.root();
-        for (field_name, limit) in [
-            ("columns", crate::limits::Limits::COLUMNS),
-            ("keys", crate::limits::Limits::KEYS),
-        ] {
+        for (field_name, limit) in [("columns", limits.columns), ("keys", limits.keys)] {
             let actual = sequence(d, field(d, root, field_name)?)?.len();
             if actual > limit {
                 return Err(PrepareError::limit(
@@ -793,82 +857,219 @@ impl PreparedSpecification {
             }
         }
         let actual = mapping(d, field(d, root, "input")?)?.len();
-        if actual > crate::limits::Limits::INPUTS {
+        if actual > limits.inputs {
             return Err(PrepareError::limit(
                 "inputs",
-                crate::limits::Limits::INPUTS,
+                limits.inputs,
                 Some(actual),
                 Some("input"),
             ));
         }
         let output = field(d, root, "output")?;
         let actual = sequence(d, field(d, output, "columns")?)?.len();
-        if actual > crate::limits::Limits::COLUMNS {
+        if actual > limits.projected_columns {
             return Err(PrepareError::limit(
                 "projected_columns",
-                crate::limits::Limits::COLUMNS,
+                limits.projected_columns,
                 Some(actual),
                 Some("output.columns"),
             ));
         }
+        let mut model_text_bytes = 0usize;
+        for node in d.nodes() {
+            if let N::Text(value) | N::Integer(value) = node {
+                compiler_limits::charge(
+                    "model_text_bytes",
+                    &mut model_text_bytes,
+                    value.len(),
+                    limits.model_text_bytes,
+                    None,
+                )?;
+            }
+        }
+        // Per-expression parser limits remain in force. Charge the entire sum
+        // before compiling any formula, including malformed/unsupported formulas.
+        let mut numeric_bytes = 0usize;
+        if let Some(filter) = d
+            .field(root, "filter")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            numeric_bytes = text(d, filter)?.len();
+            if numeric_bytes > limits.numeric_bytes {
+                return Err(PrepareError::limit(
+                    "numeric_bytes",
+                    limits.numeric_bytes,
+                    Some(numeric_bytes),
+                    Some("filter"),
+                ));
+            }
+        }
         for &column in sequence(d, field(d, root, "columns")?)? {
+            let column_path = format!("columns.{}.derivation", text(d, field(d, column, "name")?)?);
+            let expr = d
+                .field(column, "derivation")
+                .and_then(|id| d.field(id, "value"))
+                .and_then(|id| d.field(id, "compute"))
+                .and_then(|id| d.field(id, "expr"));
             let value = d
                 .field(column, "derivation")
                 .and_then(|id| d.field(id, "value"));
+            if let Some(value) = value {
+                cases::charge(
+                    d,
+                    value,
+                    &column_path,
+                    &mut numeric_bytes,
+                    limits.numeric_bytes,
+                    0,
+                )?;
+            }
             let operands = value
                 .and_then(|id| d.field(id, "first_available"))
                 .and_then(|id| d.field(id, "sources"))
                 .map(|id| sequence(d, id))
                 .transpose()?
                 .unwrap_or(&[]);
-            if operands.len() > crate::limits::Limits::SOURCE_OPERANDS {
-                let name = text(d, field(d, column, "name")?)?;
+            if operands.len() > limits.source_operands {
                 return Err(PrepareError::limit(
                     "source_operands",
-                    crate::limits::Limits::SOURCE_OPERANDS,
+                    limits.source_operands,
                     Some(operands.len()),
-                    Some(&format!(
-                        "columns.{name}.derivation.first_available.sources"
-                    )),
+                    Some(&format!("{column_path}.first_available.sources")),
                 ));
             }
+            let filter = d
+                .field(column, "derivation")
+                .and_then(|id| d.field(id, "value"))
+                .and_then(|id| d.field(id, "source"))
+                .and_then(|id| d.field(id, "filter"))
+                .filter(|&id| !matches!(d.nodes()[id], N::Null));
+            let expression_paths = expr
+                .into_iter()
+                .map(|id| (id, format!("{column_path}.compute.expr")))
+                .chain(filter.map(|id| (id, format!("{column_path}.source.filter"))))
+                .chain(operands.iter().enumerate().filter_map(|(index, &id)| {
+                    d.field(id, "filter")
+                        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                        .map(|id| {
+                            (
+                                id,
+                                format!("{column_path}.first_available.sources[{index}].filter"),
+                            )
+                        })
+                }));
+            for (id, path) in expression_paths {
+                compiler_limits::charge(
+                    "numeric_bytes",
+                    &mut numeric_bytes,
+                    text(d, id)?.len(),
+                    limits.numeric_bytes,
+                    Some(&path),
+                )?;
+            }
         }
-        // Own row-shape admission before filters or default expansion allocate a plan.
+        // Row expressions are charged across the entire document before any
+        // aggregate parsing, owned row declarations, or literal conversion.
         if let Some(rows) = d
             .field(root, "rows")
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
         {
-            for (index, &row) in sequence(d, rows)?.iter().enumerate() {
-                for (resource, name, actual, maximum) in [
-                    (
-                        "group_keys",
-                        "group_by",
-                        d.field(row, "group_by")
-                            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                            .map(|id| sequence(d, id).map(<[_]>::len))
-                            .transpose()?
-                            .unwrap_or(0),
-                        crate::limits::Limits::KEYS,
-                    ),
-                    (
-                        "row_columns",
-                        "derivations",
-                        mapping(d, field(d, row, "derivations")?)?.len(),
-                        crate::limits::Limits::COLUMNS,
-                    ),
-                ] {
-                    if actual > maximum {
+            let rows = sequence(d, rows)?;
+            if rows.len() > 16 {
+                return Err(PrepareError::limit(
+                    "row_templates",
+                    16,
+                    Some(rows.len()),
+                    Some("rows"),
+                ));
+            }
+            for (row_index, &row) in rows.iter().enumerate() {
+                let row_path = format!("rows[{row_index}]");
+                if let Some(filter) = d
+                    .field(row, "filter")
+                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                {
+                    compiler_limits::charge(
+                        "numeric_bytes",
+                        &mut numeric_bytes,
+                        text(d, filter)?.len(),
+                        limits.numeric_bytes,
+                        Some(&format!("{row_path}.filter")),
+                    )?;
+                }
+                if let Some(group) = d
+                    .field(row, "group_by")
+                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                {
+                    let actual = sequence(d, group)?.len();
+                    if actual > limits.keys {
                         return Err(PrepareError::limit(
-                            resource,
-                            maximum,
+                            "group_keys",
+                            limits.keys,
                             Some(actual),
-                            Some(&format!("rows[{index}].{name}")),
+                            Some(&format!("{row_path}.group_by")),
                         ));
+                    }
+                }
+                let declarations = mapping(d, field(d, row, "derivations")?)?;
+                if declarations.len() > limits.columns {
+                    return Err(PrepareError::limit(
+                        "row_columns",
+                        limits.columns,
+                        Some(declarations.len()),
+                        Some(&format!("{row_path}.derivations")),
+                    ));
+                }
+                for &(name, declaration) in declarations {
+                    let declaration_path = format!("{row_path}.derivations.{}", text(d, name)?);
+                    let value = field(d, declaration, "value")?;
+                    cases::charge(
+                        d,
+                        value,
+                        &declaration_path,
+                        &mut numeric_bytes,
+                        limits.numeric_bytes,
+                        0,
+                    )?;
+                    for operation in ["compute", "aggregate"] {
+                        if let Some(expr) =
+                            d.field(value, operation).and_then(|id| d.field(id, "expr"))
+                        {
+                            compiler_limits::charge(
+                                "numeric_bytes",
+                                &mut numeric_bytes,
+                                text(d, expr)?.len(),
+                                limits.numeric_bytes,
+                                Some(&format!("{declaration_path}.{operation}.expr")),
+                            )?;
+                        }
                     }
                 }
             }
         }
-        match_values::declaration_admission(d)?;
+        if let Some(verifications) = d
+            .field(root, "verifications")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            for (index, &verification) in sequence(d, verifications)?.iter().enumerate() {
+                if let Some(assertion) = d.field(verification, "assert") {
+                    for name in ["when", "require"] {
+                        if let Some(N::Text(expression)) =
+                            d.field(assertion, name).map(|id| &d.nodes()[id])
+                        {
+                            compiler_limits::charge(
+                                "numeric_bytes",
+                                &mut numeric_bytes,
+                                expression.len(),
+                                limits.numeric_bytes,
+                                Some(&format!("verifications[{index}].assert.{name}")),
+                            )?;
+                        }
+                    }
+                }
+            }
+        }
+        match_values::declaration_admission(d, limits)?;
         let mut findings = preflight(spec)?;
         findings.extend(odm::context_findings(spec)?);
         let columns = sequence(d, field(d, root, "columns")?)?;
@@ -918,7 +1119,14 @@ impl PreparedSpecification {
             })
             .collect::<Result<Vec<_>, _>>()?;
         if let Some(catalogue) = catalogue {
-            match terminology::apply(d, columns, &output, catalogue, &mut column_verifications) {
+            match terminology::apply(
+                d,
+                columns,
+                &output,
+                catalogue,
+                terminology_limits,
+                &mut column_verifications,
+            ) {
                 Ok(()) => (),
                 Err(PrepareError::Invalid(errors)) => findings.extend(errors),
                 Err(error) => return Err(error),
@@ -934,6 +1142,8 @@ impl PreparedSpecification {
         rounding::declaration_findings(d, columns, &output, &mut findings)?;
         temporal::declaration_findings(d, columns, &output, &mut findings)?;
         imputation::declaration_findings(d, columns, &output, &mut findings)?;
+        str_pad::declaration_admission(d, columns, &output)?;
+        flags::declaration_admission(d, columns, &output)?;
         str_case::declaration_findings(d, columns, &output, &mut findings)?;
         scalar::declaration_findings(d, &output, &mut findings)?;
         let extraction = str_extract::Prepared::new(d, &output, &mut findings)?;
@@ -989,7 +1199,7 @@ impl PreparedSpecification {
                     spec_paths: vec![format!("{prefix}.encoding")],
                     context: crate::diagnostic::Context::from([(
                         "dataset".into(),
-                        crate::json::Value::String(text(d, name)?.into()),
+                        serde_json::Value::String(text(d, name)?.into()),
                     )]),
                     source_span: None,
                     operand_route: None,
@@ -1023,7 +1233,10 @@ impl PreparedSpecification {
                             dataset: text(d, name)?,
                             declared,
                         }
-                        .diagnostic(),
+                        .diagnostic()
+                        .map_err(|_| {
+                            PrepareError::limit("odm_diagnostic", 16_777_216, None, None)
+                        })?,
                     ));
                 }
                 continue;
@@ -1037,10 +1250,10 @@ impl PreparedSpecification {
                     .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 {
                     let fields = mapping(d, types)?;
-                    if fields.len() > crate::limits::Limits::COLUMNS {
+                    if fields.len() > limits.source_fields {
                         return Err(PrepareError::limit(
                             "source_fields",
-                            crate::limits::Limits::COLUMNS,
+                            limits.source_fields,
                             Some(fields.len()),
                             Some(&format!("input.{}.types", text(d, name)?)),
                         ));
@@ -1085,10 +1298,10 @@ impl PreparedSpecification {
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
                 let fields = mapping(d, id)?;
-                if fields.len() > crate::limits::Limits::COLUMNS {
+                if fields.len() > limits.source_fields {
                     return Err(PrepareError::limit(
                         "source_fields",
-                        crate::limits::Limits::COLUMNS,
+                        limits.source_fields,
                         Some(fields.len()),
                         Some(&format!("input.{}.types", text(d, name)?)),
                     ));
@@ -1167,7 +1380,7 @@ impl PreparedSpecification {
         let output_path = String::from(text(d, field(d, output_id, "path")?)?);
         // Retain the complete integer for output-declaration diagnostics, even
         // when it exceeds REQ-0744's range. Build validation retains its existing
-        // post-verification phase; saved-file size is admitted at publication.
+        // post-verification phase; the artifact byte budget stays independent.
         let output_decimals = d
             .field(output_id, "decimals")
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -1218,6 +1431,7 @@ impl PreparedSpecification {
             driver_index,
             &output,
             &keys,
+            limits,
             project.as_ref(),
             &extraction,
             &templates,
@@ -1231,6 +1445,7 @@ impl PreparedSpecification {
                 d,
                 &output,
                 driver,
+                limits,
                 project.as_ref(),
                 catalogue.is_some(),
                 &extraction,
@@ -1312,7 +1527,7 @@ impl PreparedSpecification {
                 | "previous_non_missing"
                 | "locf"
                 | "baseline_flag" => Some(Operation::Window(std::boxed::Box::new(
-                    windows::Declaration::prepare(d, payload, op, &path, &mut extra)?,
+                    windows::Declaration::prepare(d, payload, op, &path, limits, &mut extra)?,
                 ))),
                 _ => match derivations::prepare_value_with_driver(
                     d,
@@ -1325,6 +1540,7 @@ impl PreparedSpecification {
                     &extraction,
                     &templates,
                     Some(driver),
+                    limits,
                 ) {
                     Ok(branch) => Some(*branch.operation),
                     Err(PrepareError::Unsupported(features)) => {
@@ -1618,6 +1834,7 @@ impl PreparedSpecification {
         }
         let source = schemas[self.driver];
         if let Some(rows) = &self.rows {
+            rows.admit_sources(schemas, &self.output)?;
             let mut findings = Vec::new();
             let (secondary, intermediates) = self.intermediates.bind(
                 &self.sources,
@@ -1676,6 +1893,7 @@ impl PreparedSpecification {
                 name: &self.source().name,
                 fields: &source_fields,
             }],
+            Default::default(),
         )
         .map_err(BindError::Catalog)?;
         let mut findings = Vec::new();
@@ -1729,7 +1947,7 @@ impl PreparedSpecification {
                         return Ok(None);
                     }
                 }
-                let binding = catalog.bind(name);
+                let binding = catalog.bind(name).map_err(BindError::Catalog)?;
                 if binding.is_none() {
                     findings.push(BindFinding::UnknownReference {
                         path: reference_path.clone(),
@@ -2094,8 +2312,9 @@ impl PreparedSpecification {
                 );
             }
         }
-        let analysis = column_dependencies::analyze(&dependencies, &self.keys, false)
-            .map_err(BindError::DependencyPolicy)?;
+        let analysis =
+            column_dependencies::analyze(&dependencies, &self.keys, false, Default::default())
+                .map_err(BindError::DependencyPolicy)?;
         if !analysis.diagnostics.is_empty() {
             findings.push(BindFinding::Dependencies {
                 columns: self
@@ -2215,3 +2434,5 @@ fn output_profile(path: &str) -> Option<&'static str> {
         None
     }
 }
+
+mod metadata;

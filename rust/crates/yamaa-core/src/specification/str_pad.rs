@@ -1,6 +1,6 @@
 //! Original scalar padding shares named-reference and phase binding authority.
 use super::*;
-use crate::text_pad::{DeclarationError, StringPad};
+use crate::text_pad::{DeclarationError, StringPad, MAX_DECLARATION_BYTES};
 #[derive(Clone, Debug)]
 pub(super) enum Declaration {
     Valid(StringPad),
@@ -54,8 +54,145 @@ pub(super) fn prepare(
             source: source.into(),
             path: path.into(),
         }),
+        Err(DeclarationError::MetadataLimit) => Err(PrepareError::limit(
+            "str_pad_metadata",
+            MAX_DECLARATION_BYTES,
+            None,
+            Some(path),
+        )),
         Err(DeclarationError::Shape) => Err(PrepareError::Internal),
     }
+}
+
+/// Charge every occurrence in columns, rows and all nested cases before owning
+/// any padding declaration. Validated source width/text is borrowed from its arena.
+pub(super) fn declaration_admission(
+    d: &Document,
+    columns: &[usize],
+    output: &TableSchema,
+) -> Result<(), PrepareError> {
+    fn visit(
+        d: &Document,
+        value: usize,
+        path: &str,
+        depth: usize,
+        bytes: &mut usize,
+    ) -> Result<(), PrepareError> {
+        if depth > 64 {
+            return Err(PrepareError::limit(
+                "case_depth",
+                64,
+                Some(depth),
+                Some(path),
+            ));
+        }
+        if path.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(path.len()),
+                Some(path),
+            ));
+        }
+        if let Some(payload) = d.field(value, "str_pad") {
+            let source = text(d, field(d, payload, "source")?)?;
+            let N::Integer(width) = &d.nodes()[field(d, payload, "width")?] else {
+                return Err(PrepareError::Internal);
+            };
+            let operation_path_bytes =
+                path.len().checked_add(".str_pad".len()).ok_or_else(|| {
+                    PrepareError::limit("str_pad_metadata", MAX_DECLARATION_BYTES, None, Some(path))
+                })?;
+            let required = source
+                .len()
+                .checked_add(operation_path_bytes)
+                .and_then(|n| n.checked_add(width.len()))
+                .and_then(|n| n.checked_mul(8))
+                .and_then(|n| n.checked_add(512))
+                .ok_or_else(|| {
+                    PrepareError::limit("str_pad_metadata", MAX_DECLARATION_BYTES, None, Some(path))
+                })?;
+            *bytes = bytes
+                .checked_add(required)
+                .filter(|&n| n <= MAX_DECLARATION_BYTES)
+                .ok_or_else(|| {
+                    PrepareError::limit("str_pad_metadata", MAX_DECLARATION_BYTES, None, Some(path))
+                })?;
+        }
+        if let Some(case) = d.field(value, "case") {
+            for (index, &branch) in sequence(d, case)?.iter().enumerate() {
+                let (name, child) = d
+                    .field(branch, "then")
+                    .map(|id| ("then", id))
+                    .or_else(|| d.field(branch, "otherwise").map(|id| ("otherwise", id)))
+                    .ok_or(PrepareError::Internal)?;
+                visit(
+                    d,
+                    child,
+                    &format!("{path}.case[{index}].{name}"),
+                    depth + 1,
+                    bytes,
+                )?;
+            }
+        }
+        Ok(())
+    }
+    let mut bytes = 0;
+    for (index, &column) in columns.iter().enumerate() {
+        if let Some(value) = d
+            .field(column, "derivation")
+            .and_then(|id| d.field(id, "value"))
+        {
+            visit(
+                d,
+                value,
+                &format!("columns.{}.derivation", output.columns()[index].name),
+                0,
+                &mut bytes,
+            )?;
+        }
+    }
+    if let Some(rows) = d
+        .field(d.root(), "rows")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    {
+        for (index, &row) in sequence(d, rows)?.iter().enumerate() {
+            if let Some(derivations) = d.field(row, "derivations") {
+                for &(name, derivation) in mapping(d, derivations)? {
+                    if let Some(value) = d.field(derivation, "value") {
+                        visit(
+                            d,
+                            value,
+                            &format!("rows[{index}].derivations.{}", text(d, name)?),
+                            0,
+                            &mut bytes,
+                        )?;
+                    }
+                }
+            }
+        }
+    }
+    if let Some(items) = d
+        .field(d.root(), "intermediates")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    {
+        for (index, &item) in sequence(d, items)?.iter().enumerate() {
+            if let Some(key) = d.field(item, "key") {
+                if let N::Mapping(fields) = &d.nodes()[key] {
+                    for &(name, value) in fields {
+                        visit(
+                            d,
+                            value,
+                            &format!("intermediates[{index}].key.{}", text(d, name)?),
+                            0,
+                            &mut bytes,
+                        )?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Report the operation's width defect at its enclosing derivation checkpoint,

@@ -48,6 +48,7 @@ pub(super) fn catalog_visible(
             name,
             fields: &fields,
         }],
+        Default::default(),
     )
     .map_err(BindError::Catalog)
 }
@@ -167,13 +168,8 @@ pub(super) fn admit_reads(
         names: &mut Vec<String>,
         depth: usize,
     ) -> Result<(), PrepareError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-            return Err(PrepareError::limit(
-                "semantic_depth",
-                crate::limits::Limits::SEMANTIC_DEPTH,
-                None,
-                None,
-            ));
+        if depth > 64 {
+            return Err(PrepareError::limit("expression_depth", 64, None, None));
         }
         if let Some(payload) = d.field(value, "str_template") {
             names.extend(templates.get(payload)?.identifiers().iter().cloned());

@@ -65,7 +65,7 @@ impl WindowFinding {
     /// Retain the authored failure without consulting a host or source table.
     pub fn diagnostic(&self) -> crate::diagnostic::Diagnostic {
         use crate::diagnostic::Diagnostic;
-        use crate::json::Value as JsonValue;
+        use serde_json::Value as JsonValue;
         let (path, name, value) = match self {
             Self::ZeroOffset { path } => (path, "offset", crate::value::Value::Int(0)),
             Self::Order {
@@ -91,6 +91,7 @@ impl Declaration {
         payload: usize,
         op: &str,
         path: &str,
+        limits: CompilationLimits,
         extra: &mut Vec<UnsupportedFeature>,
     ) -> Result<Self, PrepareError> {
         let name = |field_name| text(d, field(d, payload, field_name)?).map(String::from);
@@ -148,10 +149,10 @@ impl Declaration {
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
                 let items = sequence(d, group)?;
-                if items.len() > crate::limits::Limits::KEYS {
+                if items.len() > limits.keys {
                     return Err(PrepareError::limit(
                         "window_groups",
-                        crate::limits::Limits::KEYS,
+                        limits.keys,
                         Some(items.len()),
                         Some(&format!("{path}.window.group_by")),
                     ));
@@ -166,10 +167,10 @@ impl Declaration {
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
                 let items = sequence(d, terms)?;
-                if items.len() > crate::limits::Limits::COLUMNS {
+                if items.len() > limits.source_fields {
                     return Err(PrepareError::limit(
                         "window_order",
-                        crate::limits::Limits::COLUMNS,
+                        limits.source_fields,
                         Some(items.len()),
                         Some(&format!("{path}.window.order_by")),
                     ));
@@ -202,7 +203,8 @@ impl Declaration {
             {
                 let expression = text(d, id)?;
                 let filter_path = format!("{path}.window.filter");
-                let compiled = predicate_compiler::compile(expression, &filter_path);
+                let compiled =
+                    predicate_compiler::compile(expression, &filter_path, Default::default());
                 match &compiled {
                     Ok(_)
                     | Err(predicate_compiler::Error::Parse(
@@ -275,7 +277,7 @@ impl Declaration {
                     text,
                     position.character,
                     failure,
-                )));
+                )?));
                 None
             }
             Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
@@ -285,7 +287,7 @@ impl Declaration {
         let mut sources = Vec::new();
         let mut resolve = |name: &str, path: String| -> Result<usize, BindError> {
             if name.contains('.') {
-                match catalog.bind(name) {
+                match catalog.bind(name).map_err(BindError::Catalog)? {
                     Some(reference_binding::Binding::Dataset {
                         dataset: 0, field, ..
                     }) => {
@@ -319,7 +321,9 @@ impl Declaration {
                 });
                 return Ok(0);
             }
-            let Some(reference_binding::Binding::Output { column, .. }) = catalog.bind(name) else {
+            let Some(reference_binding::Binding::Output { column, .. }) =
+                catalog.bind(name).map_err(BindError::Catalog)?
+            else {
                 return Err(BindError::Internal);
             };
             edges.push(column);
@@ -380,7 +384,7 @@ impl Declaration {
             reference_date,
         } = &self.kind
         {
-            let kind = |name: &str| match catalog.bind(name) {
+            let kind = |name: &str| match catalog.bind(name).map_err(BindError::Catalog)? {
                 Some(reference_binding::Binding::Output { column_type, .. })
                 | Some(reference_binding::Binding::Dataset { column_type, .. }) => Ok(column_type),
                 None => Err(BindError::Internal),

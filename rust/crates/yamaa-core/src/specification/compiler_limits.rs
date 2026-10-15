@@ -28,14 +28,26 @@ impl PrepareError {
 pub(super) fn parse_resource(resource: crate::numeric_parser::ParseResource) -> &'static str {
     use crate::numeric_parser::ParseResource;
     match resource {
-        ParseResource::Depth => "semantic_depth",
+        ParseResource::Bytes => "bytes",
+        ParseResource::Tokens => "tokens",
+        ParseResource::Nodes => "nodes",
+        ParseResource::Depth => "depth",
     }
 }
 pub(super) fn regex_resource(resource: crate::regex::Resource) -> &'static str {
     use crate::regex::Resource;
     match resource {
-        Resource::Depth => "semantic_depth",
-        Resource::Work => "regex_steps",
+        Resource::PatternBytes => "pattern_bytes",
+        Resource::Nodes => "nodes",
+        Resource::Groups => "groups",
+        Resource::Depth => "depth",
+        Resource::Repetition => "repetition",
+        Resource::Width => "width",
+        Resource::WidthWork => "width_work",
+        Resource::WidthCells => "width_cells",
+        Resource::SubjectBytes => "subject_bytes",
+        Resource::Work => "work",
+        Resource::StateCells => "state_cells",
     }
 }
 impl PrepareError {
@@ -81,11 +93,25 @@ impl PrepareError {
         }
     }
     pub(super) fn predicate(error: crate::predicate_compiler::Error, path: Option<&str>) -> Self {
-        use crate::{predicate::PlanError, predicate_compiler::Error};
+        use crate::{
+            predicate::{PlanError, Resource},
+            predicate_compiler::Error,
+        };
         match error {
             Error::Parse(error) => Self::predicate_parse(error, path),
             Error::Plan(PlanError::Limit(error)) => {
-                Self::limit(error.resource, error.limit, error.actual, path)
+                let resource = match error.resource {
+                    Resource::Nodes => "nodes",
+                    Resource::Depth => "depth",
+                    Resource::Work => "work",
+                    Resource::Resolutions => "resolutions",
+                    Resource::TextBytes => "text_bytes",
+                    Resource::LikeWork => "like_work",
+                    Resource::RegexSubjectBytes => "regex_subject_bytes",
+                    Resource::RegexWork => "regex_work",
+                    Resource::RegexStateCells => "regex_state_cells",
+                };
+                Self::limit(resource, error.limit, None, path)
             }
             Error::Plan(PlanError::Regex {
                 error:
@@ -97,4 +123,65 @@ impl PrepareError {
             _ => Self::Internal,
         }
     }
+}
+
+impl PrepareError {
+    pub(super) fn project_limit(
+        error: crate::project_limits::Limit,
+        limits: crate::project_limits::Limits,
+        path: Option<&str>,
+    ) -> Self {
+        use crate::project_limits::Resource;
+        let (resource, limit) = match error.resource {
+            Resource::Nodes => ("nodes", limits.nodes),
+            Resource::TextBytes => ("text_bytes", limits.text_bytes),
+            Resource::Work => ("work", limits.work),
+            Resource::Findings => ("findings", limits.findings),
+        };
+        Self::limit(resource, limit, None, path)
+    }
+    pub(super) fn call_limit(resource: &'static str, path: Option<&str>) -> Self {
+        let limits = crate::project_calls::Limits::default();
+        let (resource, limit) = match resource {
+            "definitions" => ("function_definitions", limits.definitions),
+            "calls" | "bound_calls" => ("function_calls", limits.calls),
+            "arguments" | "bound_arguments" => ("function_arguments", limits.arguments),
+            "parameters" => ("function_parameters", limits.parameters),
+            "text" => ("text_bytes", limits.text_bytes),
+            "work" => ("work", limits.work),
+            _ => return Self::Internal,
+        };
+        Self::limit(resource, limit, None, path)
+    }
+    pub(super) fn call_document_limit(
+        error: crate::project_call_document::Error,
+        path: Option<&str>,
+    ) -> Self {
+        match error {
+            crate::project_call_document::Error::Limit(resource) => {
+                let limits = crate::project_call_document::Limits::default();
+                let (resource, limit) = match resource {
+                    "arguments" => ("function_arguments", limits.arguments),
+                    "text" => ("text_bytes", limits.text_bytes),
+                    _ => return Self::Internal,
+                };
+                Self::limit(resource, limit, None, path)
+            }
+            _ => Self::Internal,
+        }
+    }
+}
+
+pub(super) fn charge(
+    resource: &'static str,
+    used: &mut usize,
+    amount: usize,
+    limit: usize,
+    path: Option<&str>,
+) -> Result<(), PrepareError> {
+    let actual = used.checked_add(amount);
+    *used = actual
+        .filter(|&n| n <= limit)
+        .ok_or_else(|| PrepareError::limit(resource, limit, actual, path))?;
+    Ok(())
 }

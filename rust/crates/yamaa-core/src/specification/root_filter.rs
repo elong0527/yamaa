@@ -1,11 +1,11 @@
 //! A root predicate reads only the base driver, before key construction (REQ-1170).
 use super::*;
-use crate::json::Value as JsonValue;
 use crate::{
     bound_expression::BoundPredicate,
     diagnostic::{ConditionCode, Diagnostic},
     predicate_compiler,
 };
+use serde_json::Value as JsonValue;
 
 #[derive(Debug)]
 pub(super) struct RootFilter {
@@ -24,7 +24,7 @@ impl RootFilter {
             return Ok(None);
         };
         let expression = text(d, id)?;
-        let compiled = predicate_compiler::compile(expression, "filter");
+        let compiled = predicate_compiler::compile(expression, "filter", Default::default());
         match &compiled {
             Ok(_)
             | Err(predicate_compiler::Error::Parse(
@@ -59,7 +59,7 @@ impl RootFilter {
                     &self.expression,
                     position.character,
                     failure,
-                )));
+                )?));
                 return Ok(None);
             }
             Err(error) => return Err(BindError::PredicatePolicy(error.clone())),
