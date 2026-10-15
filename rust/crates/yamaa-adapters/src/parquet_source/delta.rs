@@ -156,6 +156,7 @@ pub(super) fn admit(
             })?;
             let mut index = 0;
             let mut previous = 0;
+            let mut reconstructed = 0usize;
             let mut stored = 0usize;
             let (suffix_offset, suffix_count) =
                 scan(&bytes[offset..], 32, expected_values, |value| {
@@ -165,6 +166,10 @@ pub(super) fn admit(
                         return Err(Error::Malformed);
                     }
                     previous = prefix.checked_add(suffix).ok_or(Error::Malformed)?;
+                    reconstructed = reconstructed
+                        .checked_add(previous)
+                        .filter(|total| *total <= i32::MAX as usize)
+                        .ok_or(Error::Malformed)?;
                     stored = stored.checked_add(suffix).ok_or(Error::Malformed)?;
                     index += 1;
                     Ok(())
@@ -298,5 +303,16 @@ mod tests {
         let mut bad = progression(0, 0, 2);
         bad.extend(progression(0, 0, 1));
         assert_eq!(admit(&bad, 7, 32, 3), Err(Error::Malformed));
+    }
+    #[test]
+    fn repeated_prefixes_cannot_expand_past_arrow_string_offsets() {
+        // Only 64 KiB of stored suffixes, but prefix reconstruction produces
+        // lengths 1, 2, ... count before the physical decoder copies them.
+        for (count, expected) in [(65_535, Ok(())), (65_536, Err(Error::Malformed))] {
+            let mut data = progression(0, 1, count);
+            data.extend(progression(1, 0, count));
+            data.resize(data.len() + count, b'x');
+            assert_eq!(admit(&data, 7, 32, count), expected);
+        }
     }
 }
