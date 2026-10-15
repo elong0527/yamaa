@@ -20,7 +20,11 @@ data qs;
   input STUDYID : $char1024. USUBJID : $char1024. QSSEQ AVISIT : $char1024. ADT : $char1024. AVAL;
 run;
 
-proc sort data=qs(where=(ADT ne '')) out=ordered; by STUDYID USUBJID ADT QSSEQ; run;
+/* The baseline and the last assessment both require a score, so ordered
+   carries dated, scored rows only: a scoreless row cannot be the baseline
+   (its missing score would leave no later row able to meet the
+   deterioration cutoff) and is not an evaluable last assessment. */
+proc sort data=qs(where=(ADT ne '' and AVAL ne .)) out=ordered; by STUDYID USUBJID ADT QSSEQ; run;
 data deteriorations;
   length BASEDT $10;
   retain BASEDT BASEVAL;
