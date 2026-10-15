@@ -11,6 +11,7 @@ pub mod file_define;
 pub mod public_table;
 mod report_publication;
 pub mod report_storage;
+mod storage_api;
 
 pub mod scalar_bytes;
 
