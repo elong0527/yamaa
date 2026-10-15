@@ -162,6 +162,82 @@ def test_value_child_in_foreign_namespace_is_rejected_not_dropped(
         list(iter_odm_records(source))
 
 
+@pytest.mark.parametrize(
+    ("document", "original", "replacement"),
+    [
+        # ODM 1.3: the value written as element text, not the attribute.
+        (
+            ODM_13,
+            '<ItemData ItemOID="I.DATE" Value="2026-01-02"/>',
+            '<ItemData ItemOID="I.DATE">2026-01-02</ItemData>',
+        ),
+        # ODM 2.0: the value written as element text, not a `Value` child.
+        (
+            ODM_20,
+            '<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>',
+            '<ItemData ItemOID="I.TEST">PD-L1</ItemData>',
+        ),
+        # Character data after a `Value` child is likewise not its value.
+        (
+            ODM_20,
+            '<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>',
+            '<ItemData ItemOID="I.TEST"><Value>PD-L1</Value>stray</ItemData>',
+        ),
+    ],
+)
+def test_item_data_text_content_is_rejected_not_dropped(
+    tmp_path: Path, document: str, original: str, replacement: str
+) -> None:
+    # Character data written directly in ItemData is not a value form in
+    # either ODM version; ignoring it silently presented a supplied value
+    # as absent (value null, ValuePresent false), the failure the foreign
+    # `Value` child rejection above already names.
+    source = tmp_path / "text-value.xml"
+    source.write_text(document.replace(original, replacement), encoding="utf-8")
+
+    with pytest.raises(ODMError, match="contains text outside its value"):
+        list(iter_odm_records(source))
+
+
+def test_whitespace_around_value_child_is_not_text_content(
+    tmp_path: Path,
+) -> None:
+    # Pretty-printing whitespace inside ItemData is layout, not data.
+    source = tmp_path / "indented-value.xml"
+    source.write_text(
+        ODM_20.replace(
+            '<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>',
+            '<ItemData ItemOID="I.TEST">\n  <Value>PD-L1</Value>\n</ItemData>',
+        ),
+        encoding="utf-8",
+    )
+
+    rows = list(iter_odm_records(source))
+
+    assert [row.value for row in rows] == ["PD-L1", ""]
+
+
+def test_namespaced_value_attribute_is_rejected_not_dropped(
+    tmp_path: Path,
+) -> None:
+    # A namespaced `Value` attribute names the item's value the same way a
+    # foreign `Value` child does; the plain attribute lookup cannot see
+    # it, so ignoring it presented a supplied value as absent.
+    source = tmp_path / "namespaced-value-attribute.xml"
+    source.write_text(
+        ODM_13.replace(
+            '<ItemData ItemOID="I.DATE" Value="2026-01-02"/>',
+            '<ItemData ItemOID="I.DATE" oc:Value="2026-01-02"/>',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ODMError, match="Value attribute is in an unsupported namespace"
+    ):
+        list(iter_odm_records(source))
+
+
 @pytest.mark.parametrize("annotation", ["<!-- c -->", "<?pi data?>"])
 def test_comment_or_pi_inside_item_data_is_ignored(
     tmp_path: Path, annotation: str
