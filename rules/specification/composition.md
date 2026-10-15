@@ -201,8 +201,9 @@ replaces the whole derivation.
 
 **REQ-0631.** Dataset shorthand is expanded before datasets are matched. A bare
 path becomes the long `dataset_class` form, after which matching dataset
-declarations merge the immediate `path`, `types`, and `schema` fields by the
-same rule.
+declarations merge their immediate member fields by the same rule. A later
+`relative_to` setting therefore governs an inherited `path` and `schema`
+without requiring either path to be written again.
 
 ### Named-window composition
 
