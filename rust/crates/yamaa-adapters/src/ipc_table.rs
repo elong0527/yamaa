@@ -483,8 +483,7 @@ fn schema_from_message(
     for field in fields {
         check_field(field, true)?;
     }
-    let converted =
-        arrow_ipc::convert::try_fb_to_schema(schema).map_err(|_| Error::InvalidTable)?;
+    let converted = crate::storage_api::ipc_schema(schema).map_err(|_| Error::InvalidTable)?;
     let mut columns = Vec::new();
     for field in converted.fields() {
         let kind = match field.data_type() {

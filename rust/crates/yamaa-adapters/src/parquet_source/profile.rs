@@ -2,7 +2,7 @@
 use arrow_schema::{DataType, Schema, TimeUnit as ArrowUnit};
 pub(super) use core_profile::{temporal, Error};
 use parquet::{
-    basic::{ConvertedType, LogicalType, TimeUnit, Type as Physical},
+    basic::{ConvertedType, Type as Physical},
     schema::types::{ColumnDescriptor, SchemaDescriptor},
 };
 use yamaa_core::{parquet_source as core_profile, table::TableSchema, value::ColumnType};
@@ -18,23 +18,7 @@ fn physical(stored: &ColumnDescriptor) -> core_profile::Physical {
     }
 }
 fn logical(stored: &ColumnDescriptor) -> core_profile::Logical {
-    use core_profile::{Logical as L, Unit};
-    match stored.logical_type_ref() {
-        None => L::None,
-        Some(LogicalType::String) => L::String,
-        Some(LogicalType::Date) => L::Date,
-        Some(LogicalType::Timestamp(t)) => L::Timestamp {
-            unit: if t.unit == TimeUnit::MICROS {
-                Unit::Microsecond
-            } else if t.unit == TimeUnit::MILLIS {
-                Unit::Millisecond
-            } else {
-                Unit::Nanosecond
-            },
-            utc: t.is_adjusted_to_u_t_c,
-        },
-        _ => L::Other,
-    }
+    crate::storage_api::logical_type(stored.logical_type_ref())
 }
 fn converted(stored: &ColumnDescriptor) -> core_profile::Converted {
     use core_profile::Converted as C;
@@ -108,6 +92,7 @@ pub(super) fn columns(arrow: &Schema, stored: &SchemaDescriptor) -> Result<Table
 #[cfg(test)]
 mod tests {
     use super::*;
+    use parquet::basic::LogicalType;
     use parquet::{basic::Repetition, schema::types::Type};
     use std::sync::Arc;
     fn descriptor(
@@ -177,7 +162,7 @@ mod tests {
             ),
             (
                 Physical::INT64,
-                Some(LogicalType::timestamp(false, TimeUnit::MICROS)),
+                Some(crate::storage_api::timestamp_micros(false)),
                 ConvertedType::NONE,
                 DataType::Timestamp(ArrowUnit::Microsecond, None),
                 ColumnType::DateTime,
@@ -189,19 +174,19 @@ mod tests {
         for (physical, logical, converted, arrow) in [
             (
                 Physical::INT64,
-                Some(LogicalType::integer(64, true)),
+                Some(crate::storage_api::integer(64, true)),
                 ConvertedType::INT_64,
                 DataType::Int64,
             ),
             (
                 Physical::INT64,
-                Some(LogicalType::timestamp(true, TimeUnit::MICROS)),
+                Some(crate::storage_api::timestamp_micros(true)),
                 ConvertedType::TIMESTAMP_MICROS,
                 DataType::Timestamp(ArrowUnit::Microsecond, None),
             ),
             (
                 Physical::INT64,
-                Some(LogicalType::timestamp(false, TimeUnit::MILLIS)),
+                Some(crate::storage_api::timestamp_millis(false)),
                 ConvertedType::NONE,
                 DataType::Timestamp(ArrowUnit::Millisecond, None),
             ),
