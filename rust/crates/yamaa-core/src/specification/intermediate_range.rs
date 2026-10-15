@@ -113,7 +113,7 @@ pub(super) fn bind(
         return Ok(None);
     }
     let name = &declaration.value;
-    let current = match catalog.bind(name).map_err(BindError::Catalog)? {
+    let current = match catalog.bind(name) {
         Some(reference_binding::Binding::Output {
             column,
             column_type,
@@ -185,17 +185,6 @@ pub(super) fn bind(
         );
         return Ok(None);
     };
-    let initial = declaration
-        .path
-        .len()
-        .checked_add(name.len())
-        .and_then(|n| n.checked_add(std::mem::size_of::<RelationRange>()))
-        .ok_or(BindError::Catalog(reference_binding::Error::SizeOverflow))?;
-    let required = [lower.as_ref(), upper.as_ref()]
-        .into_iter()
-        .flatten()
-        .try_fold(initial, |n, bound| n.checked_add(bound.identifier.len()));
-    let required = required.ok_or(BindError::Catalog(reference_binding::Error::SizeOverflow))?;
     match RelationRange::new(
         declaration.path.clone(),
         CurrentField {
@@ -205,7 +194,6 @@ pub(super) fn bind(
         kind,
         lower,
         upper,
-        16_777_216,
     ) {
         Ok(range) => Ok(Some(range)),
         Err(RelationRangeError::Incomparable(types)) => {
@@ -213,13 +201,6 @@ pub(super) fn bind(
                 types.diagnostic(&declaration.path, intermediate),
             )));
             Ok(None)
-        }
-        Err(RelationRangeError::Limit) => {
-            Err(BindError::Catalog(reference_binding::Error::Limit {
-                resource: "intermediate_range_metadata",
-                limit: 16_777_216,
-                required,
-            }))
         }
         Err(_) => Err(BindError::Internal),
     }

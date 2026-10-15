@@ -279,10 +279,7 @@ fn finish(
         return Ok(None);
     }
     // Scope/availability succeeds before type and retained pattern/group facts.
-    if let Some(kind) = catalog
-        .type_of(operation.source())
-        .map_err(BindError::Catalog)?
-    {
+    if let Some(kind) = catalog.type_of(operation.source()) {
         if kind != ColumnType::Str {
             findings.push(BindFinding::TextExtract(
                 operation.input_diagnostic(kind_name(kind)),

@@ -40,9 +40,7 @@ impl InvalidPredicate {
         else {
             return Err(BindError::Internal);
         };
-        failure
-            .original_diagnostic(&self.path, &self.expression, position.character)
-            .map_err(|_| BindError::PredicateDiagnosticLimit)
+        Ok(failure.original_diagnostic(&self.path, &self.expression, position.character))
     }
 }
 fn unsupported(path: &str, operation: &str) -> PrepareError {
@@ -93,8 +91,7 @@ pub(super) fn prepare(
             (None, value, format!("{prefix}.otherwise"))
         } else {
             let when = text(d, field(d, item, "when")?)?;
-            let compiled =
-                predicate_compiler::compile(when, &format!("{prefix}.when"), Default::default());
+            let compiled = predicate_compiler::compile(when, &format!("{prefix}.when"));
             let compiled = match compiled {
                 Ok(plan) => Ok(plan),
                 Err(predicate_compiler::Error::Parse(
@@ -478,7 +475,7 @@ pub(super) fn bind(
                         });
                         continue;
                     }
-                    match catalog.bind(name).map_err(BindError::Catalog)? {
+                    match catalog.bind(name) {
                         Some(reference_binding::Binding::Output { column, .. }) => {
                             edges.push(column);
                             bindings.push(Binding {

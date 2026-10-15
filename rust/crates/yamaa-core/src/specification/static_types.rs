@@ -2,50 +2,21 @@
 use super::*;
 use crate::{
     dataset::{Intermediate, SecondarySource},
-    diagnostic::{Diagnostic, ProjectionBudget},
+    diagnostic::Diagnostic,
     evaluation::NumericCondition,
     predicate::Plan,
     value::ValueType,
 };
 
-fn budget(path: &str, expression: &str) -> Result<ProjectionBudget, BindError> {
-    let mut budget = ProjectionBudget::new(crate::diagnostic::MAX_PROJECTION_BYTES)
-        .map_err(|_| BindError::PredicateDiagnosticLimit)?;
-    budget
-        .text(path)
-        .map_err(|_| BindError::PredicateDiagnosticLimit)?;
-    budget
-        .text(expression)
-        .map_err(|_| BindError::PredicateDiagnosticLimit)?;
-    Ok(budget)
-}
-
 pub(super) fn numeric_kinds(
     plan: &CompiledNumeric,
     kind: impl Fn(&str) -> Option<ValueType>,
-) -> Result<Vec<Diagnostic>, BindError> {
-    let mut budget = budget(plan.spec_path(), plan.expression())?;
-    numeric_kinds_with_budget(plan, kind, &mut budget)
-}
-
-fn numeric_kinds_with_budget(
-    plan: &CompiledNumeric,
-    kind: impl Fn(&str) -> Option<ValueType>,
-    budget: &mut ProjectionBudget,
-) -> Result<Vec<Diagnostic>, BindError> {
+) -> Vec<Diagnostic> {
     let mut findings = Vec::new();
     for name in plan.identifiers() {
         if let Some(actual) =
             kind(name).filter(|actual| !matches!(actual, ValueType::Int | ValueType::Float))
         {
-            for text in [plan.spec_path(), plan.expression(), name] {
-                budget
-                    .text(text)
-                    .map_err(|_| BindError::PredicateDiagnosticLimit)?;
-            }
-            budget
-                .charge(1024)
-                .map_err(|_| BindError::PredicateDiagnosticLimit)?;
             findings.push(
                 NumericCondition::IncompatibleInput {
                     identifier: name.into(),
@@ -55,7 +26,7 @@ fn numeric_kinds_with_budget(
             );
         }
     }
-    Ok(findings)
+    findings
 }
 
 pub(super) fn aggregate_kinds(
@@ -68,11 +39,10 @@ pub(super) fn aggregate_kinds(
         aggregate_parser::Reducer,
         reduction::NumericReducer,
     };
-    let mut budget = budget(plan.spec_path(), plan.expression())?;
     let mut findings = Vec::new();
     for reduction in plan.reductions() {
         if let AggregateOperand::Numeric(numeric) = &reduction.operand {
-            findings.extend(numeric_kinds_with_budget(numeric, &kind, &mut budget)?);
+            findings.extend(numeric_kinds(numeric, &kind));
         }
         let reducer = match reduction.reducer {
             Reducer::Sum => NumericReducer::Sum,
@@ -88,14 +58,6 @@ pub(super) fn aggregate_kinds(
             if let Some(actual) =
                 kind(name).filter(|actual| !matches!(actual, ValueType::Int | ValueType::Float))
             {
-                for text in [plan.spec_path(), plan.expression(), name] {
-                    budget
-                        .text(text)
-                        .map_err(|_| BindError::PredicateDiagnosticLimit)?;
-                }
-                budget
-                    .charge(1024)
-                    .map_err(|_| BindError::PredicateDiagnosticLimit)?;
                 findings.push(
                     crate::diagnostic::DatasetFinding::ReductionInputType {
                         path: plan.spec_path(),
@@ -105,13 +67,13 @@ pub(super) fn aggregate_kinds(
                         actual,
                     }
                     .diagnostic()
-                    .ok_or(BindError::Internal)?,
+                    .map_err(|_| BindError::InvalidDiagnostic)?,
                 );
             }
         }
     }
     if let AggregateResult::Numeric(numeric) = plan.result() {
-        findings.extend(numeric_kinds_with_budget(numeric, kind, &mut budget)?);
+        findings.extend(numeric_kinds(numeric, kind));
     }
     Ok(findings)
 }
@@ -119,27 +81,11 @@ pub(super) fn aggregate_kinds(
 pub(super) fn predicate_kinds(
     plan: &Plan,
     kind: impl Fn(&str) -> Option<ValueType>,
-) -> Result<Vec<Diagnostic>, BindError> {
-    let mut budget = budget(plan.spec_path(), plan.expression())?;
-    let mut findings = Vec::new();
-    for (condition, route) in plan.type_conditions(kind) {
-        budget
-            .text(plan.spec_path())
-            .map_err(|_| BindError::PredicateDiagnosticLimit)?;
-        budget
-            .charge(1024 + route.len().saturating_mul(512))
-            .map_err(|_| BindError::PredicateDiagnosticLimit)?;
-        findings.push(
-            condition
-                .static_diagnostic_with_limit(
-                    plan.spec_path(),
-                    &route,
-                    crate::diagnostic::MAX_PREDICATE_DIAGNOSTIC_BYTES,
-                )
-                .map_err(|_| BindError::PredicateDiagnosticLimit)?,
-        );
-    }
-    Ok(findings)
+) -> Vec<Diagnostic> {
+    plan.type_conditions(kind)
+        .into_iter()
+        .map(|(condition, route)| condition.static_diagnostic(plan.spec_path(), &route))
+        .collect()
 }
 
 pub(super) fn kind(
@@ -162,13 +108,10 @@ pub(super) fn kind(
             return Ok(joined.fields.get(field).map(|(_, kind)| (*kind).into()));
         }
     }
-    Ok(catalog
-        .bind(name)
-        .map_err(BindError::Catalog)?
-        .map(|binding| match binding {
-            reference_binding::Binding::Output { column_type, .. }
-            | reference_binding::Binding::Dataset { column_type, .. } => column_type.into(),
-        }))
+    Ok(catalog.bind(name).map(|binding| match binding {
+        reference_binding::Binding::Output { column_type, .. }
+        | reference_binding::Binding::Dataset { column_type, .. } => column_type.into(),
+    }))
 }
 
 pub(super) fn numeric(
@@ -186,7 +129,7 @@ pub(super) fn numeric(
         .map(|name| kind(name, named, catalog, secondary, intermediates).map(|kind| (name, kind)))
         .collect::<Result<BTreeMap<_, _>, _>>()?;
     findings.extend(
-        numeric_kinds(plan, |name| kinds.get(name).copied().flatten())?
+        numeric_kinds(plan, |name| kinds.get(name).copied().flatten())
             .into_iter()
             .map(BindFinding::Scalar),
     );

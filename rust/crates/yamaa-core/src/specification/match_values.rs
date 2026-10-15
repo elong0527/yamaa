@@ -232,7 +232,7 @@ impl Declaration {
         {
             if defer_unknown {
                 for name in references {
-                    if catalog.bind(name).map_err(BindError::Catalog)?.is_none() {
+                    if catalog.bind(name).is_none() {
                         return Ok(Some(MatchValue::Contextual(
                             crate::dataset::ContextualMatch::Expression {
                                 identifier: name.clone(),
@@ -245,7 +245,7 @@ impl Declaration {
             let mut reads = Vec::new();
             let mut fields = Vec::new();
             for name in references {
-                let Some(bound) = catalog.bind(name).map_err(BindError::Catalog)? else {
+                let Some(bound) = catalog.bind(name) else {
                     findings.push(BindFinding::Lookup(LookupFinding::reference(
                         path,
                         name,
@@ -349,7 +349,7 @@ impl Declaration {
             };
             return Ok(Some(MatchValue::Literal(value.clone())));
         };
-        let read = match catalog.bind(name).map_err(BindError::Catalog)? {
+        let read = match catalog.bind(name) {
             Some(reference_binding::Binding::Output { column, .. }) => MatchRead::Output {
                 column,
                 identifier: name.into(),
@@ -387,8 +387,8 @@ impl Declaration {
                 let suggestion = name
                     .strip_prefix("SELF.")
                     .filter(|bare| {
-                        catalog.bind(bare).is_ok_and(|item| {
-                            matches!(item, Some(reference_binding::Binding::Output { .. }))
+                        catalog.bind(bare).is_some_and(|item| {
+                            matches!(item, reference_binding::Binding::Output { .. })
                         })
                     })
                     .map(String::from);

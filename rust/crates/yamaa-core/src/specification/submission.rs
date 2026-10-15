@@ -423,14 +423,8 @@ pub(super) fn admit(
                     let check = match value.parse::<usize>() {
                         Ok(maximum) => Check::MaxLength(maximum),
                         Err(_) => Check::WideMaxLength(
-                            crate::dataset::RowCountBound::new(value).map_err(|_| {
-                                PrepareError::limit(
-                                    "submission_length",
-                                    crate::dataset::MAX_COUNT_BOUND_BYTES,
-                                    None,
-                                    None,
-                                )
-                            })?,
+                            crate::dataset::RowCountBound::new(value)
+                                .map_err(|_| PrepareError::Internal)?,
                         ),
                     };
                     groups[index].append_metadata(Verification {
@@ -711,14 +705,8 @@ pub(super) fn admit(
         };
         if let (Some(index), Some(max)) = (default_index, default) {
             group.checks[index].check = Check::ValueMaxLength {
-                max: crate::dataset::RowCountBound::new(&max).map_err(|_| {
-                    PrepareError::limit(
-                        "submission_length",
-                        crate::dataset::MAX_COUNT_BOUND_BYTES,
-                        None,
-                        None,
-                    )
-                })?,
+                max: crate::dataset::RowCountBound::new(&max)
+                    .map_err(|_| PrepareError::Internal)?,
                 discriminator,
                 codes: overrides.iter().map(|entry| entry.1.clone()).collect(),
                 include: false,
@@ -728,14 +716,8 @@ pub(super) fn admit(
             group.append_metadata(Verification {
                 path: entry.3.clone(),
                 check: Check::ValueMaxLength {
-                    max: crate::dataset::RowCountBound::new(&entry.2).map_err(|_| {
-                        PrepareError::limit(
-                            "submission_length",
-                            crate::dataset::MAX_COUNT_BOUND_BYTES,
-                            None,
-                            None,
-                        )
-                    })?,
+                    max: crate::dataset::RowCountBound::new(&entry.2)
+                        .map_err(|_| PrepareError::Internal)?,
                     discriminator,
                     codes: vec![entry.1.clone()],
                     include: true,

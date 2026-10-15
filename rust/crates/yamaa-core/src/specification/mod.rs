@@ -23,7 +23,6 @@ mod intermediate_admission;
 pub(crate) use intermediate_admission::is_rename_only;
 mod intermediate_derivations;
 mod intermediate_range;
-mod intermediate_sources;
 mod intermediates;
 mod lookup_diagnostics;
 mod match_values;
@@ -190,8 +189,8 @@ pub enum PreflightFinding {
 pub enum BindError {
     #[error("specification internal")]
     Internal,
-    #[error("specification predicate diagnostic limit")]
-    PredicateDiagnosticLimit,
+    #[error("specification invalid diagnostic")]
+    InvalidDiagnostic,
     #[error("specification source count")]
     SourceCount,
     #[error("specification predicate policy: {0:?}")]
@@ -929,7 +928,6 @@ impl PreparedSpecification {
         rounding::declaration_findings(d, columns, &output, &mut findings)?;
         temporal::declaration_findings(d, columns, &output, &mut findings)?;
         imputation::declaration_findings(d, columns, &output, &mut findings)?;
-        flags::declaration_admission(d, columns, &output)?;
         str_case::declaration_findings(d, columns, &output, &mut findings)?;
         scalar::declaration_findings(d, &output, &mut findings)?;
         let extraction = str_extract::Prepared::new(d, &output, &mut findings)?;
@@ -1019,10 +1017,7 @@ impl PreparedSpecification {
                             dataset: text(d, name)?,
                             declared,
                         }
-                        .diagnostic()
-                        .map_err(|_| {
-                            PrepareError::limit("odm_diagnostic", 16_777_216, None, None)
-                        })?,
+                        .diagnostic(),
                     ));
                 }
                 continue;
@@ -1617,7 +1612,6 @@ impl PreparedSpecification {
         }
         let source = schemas[self.driver];
         if let Some(rows) = &self.rows {
-            rows.admit_sources(schemas, &self.output)?;
             let mut findings = Vec::new();
             let (secondary, intermediates) = self.intermediates.bind(
                 &self.sources,
@@ -1676,7 +1670,6 @@ impl PreparedSpecification {
                 name: &self.source().name,
                 fields: &source_fields,
             }],
-            Default::default(),
         )
         .map_err(BindError::Catalog)?;
         let mut findings = Vec::new();
@@ -1730,7 +1723,7 @@ impl PreparedSpecification {
                         return Ok(None);
                     }
                 }
-                let binding = catalog.bind(name).map_err(BindError::Catalog)?;
+                let binding = catalog.bind(name);
                 if binding.is_none() {
                     findings.push(BindFinding::UnknownReference {
                         path: reference_path.clone(),
@@ -2095,9 +2088,8 @@ impl PreparedSpecification {
                 );
             }
         }
-        let analysis =
-            column_dependencies::analyze(&dependencies, &self.keys, false, Default::default())
-                .map_err(BindError::DependencyPolicy)?;
+        let analysis = column_dependencies::analyze(&dependencies, &self.keys, false)
+            .map_err(BindError::DependencyPolicy)?;
         if !analysis.diagnostics.is_empty() {
             findings.push(BindFinding::Dependencies {
                 columns: self

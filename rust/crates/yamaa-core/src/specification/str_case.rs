@@ -228,7 +228,6 @@ pub(super) fn bind_row(
     if source.is_some() {
         if let Some(kind) = catalog
             .type_of(operation.source())
-            .map_err(BindError::Catalog)?
             .filter(|kind| *kind != ColumnType::Str)
         {
             let actual = match kind {

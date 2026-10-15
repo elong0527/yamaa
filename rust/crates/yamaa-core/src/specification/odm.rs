@@ -53,11 +53,8 @@ pub(super) fn prepare(
         .filter(|&node| !matches!(d.nodes()[node], N::Null))
         .map(|node| {
             let expression = text(d, node)?;
-            let compiled = crate::predicate_compiler::compile(
-                expression,
-                &format!("{path}.filter"),
-                Default::default(),
-            );
+            let compiled =
+                crate::predicate_compiler::compile(expression, &format!("{path}.filter"));
             match &compiled {
                 Ok(_)
                 | Err(crate::predicate_compiler::Error::Parse(
@@ -123,8 +120,7 @@ pub(super) fn bind(
                     crate::diagnostic::OdmLocation::Column
                 },
             }
-            .diagnostic()
-            .map_err(|_| BindError::Internal)?,
+            .diagnostic(),
         ));
         return Ok(None);
     }
@@ -137,15 +133,11 @@ pub(super) fn bind(
                     position, failure, ..
                 },
             )) => {
-                findings.push(BindFinding::Predicate(
-                    failure
-                        .original_diagnostic(
-                            &format!("{}.filter", declaration.path),
-                            expression,
-                            position.character,
-                        )
-                        .map_err(|_| BindError::PredicateDiagnosticLimit)?,
-                ));
+                findings.push(BindFinding::Predicate(failure.original_diagnostic(
+                    &format!("{}.filter", declaration.path),
+                    expression,
+                    position.character,
+                )));
                 return Ok(None);
             }
             Err(error) => return Err(BindError::PredicatePolicy(error.clone())),
@@ -170,7 +162,7 @@ pub(super) fn bind(
                 )));
                 continue;
             }
-            match catalog.bind(identifier).map_err(BindError::Catalog)? {
+            match catalog.bind(identifier) {
                 Some(reference_binding::Binding::Dataset { field, .. }) => bindings.push(Binding {
                     name: identifier.into(),
                     read: Read::Source(field),
@@ -231,7 +223,7 @@ pub(super) fn bind(
         source: if matches!(phase, Phase::Column { .. }) {
             let reference = format!("{}.ItemOID", declaration.dataset);
             let Some(reference_binding::Binding::Dataset { dataset, .. }) =
-                catalog.bind(&reference).map_err(BindError::Catalog)?
+                catalog.bind(&reference)
             else {
                 return Err(BindError::Internal);
             };
@@ -538,8 +530,7 @@ pub(super) fn context_findings(
                     dataset: site.dataset,
                     location: site.location,
                 }
-                .diagnostic()
-                .map_err(|_| PrepareError::limit("odm_diagnostic", 16_777_216, None, None))?,
+                .diagnostic(),
             ));
         }
         if let Some(filter) = d
@@ -548,7 +539,7 @@ pub(super) fn context_findings(
         {
             let path = format!("{}.filter", site.path);
             let expression = text(d, filter)?;
-            match crate::predicate_compiler::compile(expression, &path, Default::default()) {
+            match crate::predicate_compiler::compile(expression, &path) {
                 Ok(plan) => {
                     let mut seen = BTreeSet::new();
                     for identifier in plan.identifiers() {
@@ -579,13 +570,11 @@ pub(super) fn context_findings(
                         position, failure, ..
                     },
                 )) => {
-                    findings.push(PreflightFinding::Odm(
-                        failure
-                            .original_diagnostic(&path, expression, position.character)
-                            .map_err(|_| {
-                                PrepareError::limit("odm_diagnostic", 16_777_216, None, None)
-                            })?,
-                    ));
+                    findings.push(PreflightFinding::Odm(failure.original_diagnostic(
+                        &path,
+                        expression,
+                        position.character,
+                    )));
                 }
                 Err(_) => (), // Existing expression preparation retains unsupported/policy failures.
             }

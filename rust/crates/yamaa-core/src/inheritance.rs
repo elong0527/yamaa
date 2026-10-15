@@ -113,7 +113,7 @@ impl<E> Error<E> {
             },
             _ => return Ok(None),
         }
-        .diagnostic_with_limit(crate::diagnostic::MAX_PROJECTION_BYTES)
+        .diagnostic()
         .map(Some)
     }
 }

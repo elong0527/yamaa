@@ -1072,7 +1072,7 @@ pub fn compose(
                 &id,
             ));
         }
-        let declarations = match spec::decode(doc, doc.root(), Default::default()) {
+        let declarations = match spec::decode(doc, doc.root()) {
             Ok(value) => value,
             Err(_) => {
                 findings.push(Finding::cause(

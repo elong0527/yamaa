@@ -196,8 +196,7 @@ impl Descriptor {
                 issues.push(DescriptorIssue::PatternRequiresString);
             }
             match &nodes[id] {
-                DocumentNode::Text(text) => match regex::Pattern::compile(text, Default::default())
-                {
+                DocumentNode::Text(text) => match regex::Pattern::compile(text) {
                     Ok(compiled) => pattern = Some((text.clone(), compiled)),
                     Err(regex::CompileError::Invalid { byte, reason }) => {
                         issues.push(DescriptorIssue::InvalidPattern {

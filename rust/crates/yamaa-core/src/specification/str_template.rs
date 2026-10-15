@@ -259,7 +259,7 @@ fn finish(
         }
         return Ok(None);
     }
-    if let Some(kind) = catalog.type_of(source).map_err(BindError::Catalog)? {
+    if let Some(kind) = catalog.type_of(source) {
         if kind != ColumnType::Str {
             findings.push(BindFinding::TextTemplate(
                 operation

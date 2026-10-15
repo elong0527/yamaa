@@ -50,7 +50,7 @@ fn predicate(
             operand_route: None,
         }));
     };
-    let plan = match predicate_compiler::compile(expression, &path, Default::default()) {
+    let plan = match predicate_compiler::compile(expression, &path) {
         Ok(plan) => plan,
         // Every grammar failure, including an invalid expression, reports the
         // shared structured {position, predicate} context that `when` and
@@ -60,11 +60,11 @@ fn predicate(
             failure,
             ..
         })) => {
-            return Ok(Err(failure
-                .original_diagnostic(&path, expression, position.character)
-                .map_err(|_| {
-                    PrepareError::limit("predicate_diagnostic_bytes", 16_777_216, None, None)
-                })?));
+            return Ok(Err(failure.original_diagnostic(
+                &path,
+                expression,
+                position.character,
+            )));
         }
         Err(predicate_compiler::Error::Parse(
             crate::predicate_parser::ParseError::UnsupportedRegex { .. },
@@ -423,12 +423,6 @@ impl Verifications {
                             };
                             RowCountBound::new(value).map_err(|error| match error {
                                 CountBoundError::Invalid => PrepareError::Internal,
-                                CountBoundError::Limit => PrepareError::limit(
-                                    "verification_bound_bytes",
-                                    crate::dataset::MAX_COUNT_BOUND_BYTES,
-                                    None,
-                                    None,
-                                ),
                             })
                         })
                         .transpose()

@@ -222,7 +222,7 @@ pub(super) fn bind_operand(
             return Ok(None);
         }
     } else {
-        match catalog.bind(name).map_err(BindError::Catalog)? {
+        match catalog.bind(name) {
             Some(reference_binding::Binding::Output { column, .. }) => {
                 edges.push(column);
                 Expression::Column(column)
@@ -332,7 +332,6 @@ pub(super) fn bind_row_operand(
                 joined: false,
                 phase,
             },
-            Default::default(),
         )
         .map_err(BindError::Catalog)?;
         if !scoped.is_empty() {
@@ -359,7 +358,7 @@ pub(super) fn bind_row_operand(
         });
         return Ok(None);
     }
-    let source = match catalog.bind(name).map_err(BindError::Catalog)? {
+    let source = match catalog.bind(name) {
         Some(reference_binding::Binding::Output { column, .. }) => {
             edges.push(column);
             Expression::Column(column)

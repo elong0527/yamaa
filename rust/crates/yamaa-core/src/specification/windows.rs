@@ -202,8 +202,7 @@ impl Declaration {
             {
                 let expression = text(d, id)?;
                 let filter_path = format!("{path}.window.filter");
-                let compiled =
-                    predicate_compiler::compile(expression, &filter_path, Default::default());
+                let compiled = predicate_compiler::compile(expression, &filter_path);
                 match &compiled {
                     Ok(_)
                     | Err(predicate_compiler::Error::Parse(
@@ -286,7 +285,7 @@ impl Declaration {
         let mut sources = Vec::new();
         let mut resolve = |name: &str, path: String| -> Result<usize, BindError> {
             if name.contains('.') {
-                match catalog.bind(name).map_err(BindError::Catalog)? {
+                match catalog.bind(name) {
                     Some(reference_binding::Binding::Dataset {
                         dataset: 0, field, ..
                     }) => {
@@ -320,9 +319,7 @@ impl Declaration {
                 });
                 return Ok(0);
             }
-            let Some(reference_binding::Binding::Output { column, .. }) =
-                catalog.bind(name).map_err(BindError::Catalog)?
-            else {
+            let Some(reference_binding::Binding::Output { column, .. }) = catalog.bind(name) else {
                 return Err(BindError::Internal);
             };
             edges.push(column);
@@ -383,7 +380,7 @@ impl Declaration {
             reference_date,
         } = &self.kind
         {
-            let kind = |name: &str| match catalog.bind(name).map_err(BindError::Catalog)? {
+            let kind = |name: &str| match catalog.bind(name) {
                 Some(reference_binding::Binding::Output { column_type, .. })
                 | Some(reference_binding::Binding::Dataset { column_type, .. }) => Ok(column_type),
                 None => Err(BindError::Internal),

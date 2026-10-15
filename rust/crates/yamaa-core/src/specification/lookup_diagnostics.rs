@@ -112,9 +112,6 @@ impl LookupFinding {
         position: usize,
         error: &GrammarFailure,
     ) -> Result<Self, BindError> {
-        error
-            .original_diagnostic(path, text, position)
-            .map(Self)
-            .map_err(|_| BindError::PredicateDiagnosticLimit)
+        Ok(Self(error.original_diagnostic(path, text, position)))
     }
 }

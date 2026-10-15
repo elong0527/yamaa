@@ -432,21 +432,12 @@ impl<'a> Run<'a> {
         if !issues.is_empty() {
             return Err(Error::Invalid(issues));
         }
+        let analysis = dependency_analysis::analyze_admitted(dependencies);
         let mut emitted = vec![false; selected.len()];
-        // The shared scheduler needs its own bounded state. Keep this request's
-        // normalization policy rather than imposing dependency-analysis caps.
-        dependency_analysis::visit_stable_order(&dependencies, |next| -> Result<(), Error> {
-            // Retain the legacy scan's charge sequence, including emitted
-            // prefixes and the final exhausted pass. Scheduling itself has one
-            // shared implementation; this is only request-policy accounting.
-            let scanned = next.map_or(dependencies.len(), |node| node + 1);
-            for edges in dependencies.iter().take(scanned) {}
-            if let Some(i) = next {
-                emitted[i] = true;
-                self.ordered_columns.push(selected[i].node);
-            }
-            Ok(())
-        })?;
+        for &index in &analysis.order {
+            emitted[index] = true;
+            self.ordered_columns.push(selected[index].node);
+        }
         if self.ordered_columns.len() != selected.len() {
             let mut columns = Vec::new();
             for (i, column) in selected.iter().enumerate() {
@@ -457,7 +448,6 @@ impl<'a> Run<'a> {
             // Name the cycle itself, not only the residuals it blocks: the shared
             // analysis spells the first cycle the same way the flat compiler does.
             // Charge its bounded scheduler state like the first scheduling pass.
-            let analysis = dependency_analysis::analyze_admitted(dependencies);
             let (cycle_indices, closed) = match analysis.cycle {
                 Some(cycle) => (cycle, true),
                 None => (

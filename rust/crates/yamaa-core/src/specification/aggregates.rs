@@ -377,11 +377,7 @@ pub(super) fn prepare(
                 let expr = text(d, id)?;
                 Ok((
                     expr.into(),
-                    crate::predicate_compiler::compile(
-                        expr,
-                        &format!("{path}.filter"),
-                        Default::default(),
-                    ),
+                    crate::predicate_compiler::compile(expr, &format!("{path}.filter")),
                 ))
             })
             .transpose()?
@@ -676,7 +672,7 @@ pub(super) fn bind(
                    findings: &mut Vec<BindFinding>|
      -> Result<Option<(usize, ColumnType)>, BindError> {
         let bound = match (relation, donor) {
-            (None, _) => match catalog.bind(name).map_err(BindError::Catalog)? {
+            (None, _) => match catalog.bind(name) {
                 Some(reference_binding::Binding::Output {
                     column,
                     column_type,
@@ -695,14 +691,12 @@ pub(super) fn bind(
                         .find(|(_, column)| column.name == field)
                         .map(|(index, column)| (index, column.kind))
                 }),
-            (Some(_), AggregateSource::Primary) => {
-                match catalog.bind(name).map_err(BindError::Catalog)? {
-                    Some(reference_binding::Binding::Dataset {
-                        field, column_type, ..
-                    }) => Some((field, column_type)),
-                    _ => None,
-                }
-            }
+            (Some(_), AggregateSource::Primary) => match catalog.bind(name) {
+                Some(reference_binding::Binding::Dataset {
+                    field, column_type, ..
+                }) => Some((field, column_type)),
+                _ => None,
+            },
         };
         if bound.is_none() {
             findings.push(BindFinding::UnknownReference {
@@ -723,8 +717,8 @@ pub(super) fn bind(
     // must not be reported again under an invented aggregate.group_by path.
     if matches!(phase, Phase::Row { .. })
         && grain.iter().any(|name| {
-            !catalog.bind(name).is_ok_and(|binding| {
-                matches!(binding, Some(reference_binding::Binding::Dataset { .. }))
+            !catalog.bind(name).is_some_and(|binding| {
+                matches!(binding, reference_binding::Binding::Dataset { .. })
             })
         })
     {
@@ -776,9 +770,7 @@ pub(super) fn bind(
                     .filter(|name| {
                         let written = format!("{relation_name}.{name}");
                         match donor {
-                            AggregateSource::Primary => {
-                                catalog.bind(&written).is_ok_and(|value| value.is_some())
-                            }
+                            AggregateSource::Primary => catalog.bind(&written).is_some(),
                             AggregateSource::Secondary(index) => secondary[index]
                                 .schema
                                 .columns()
@@ -943,9 +935,7 @@ pub(super) fn bind(
                 .filter(|name| {
                     let written = format!("{relation}.{name}");
                     match donor {
-                        AggregateSource::Primary => {
-                            catalog.bind(&written).is_ok_and(|value| value.is_some())
-                        }
+                        AggregateSource::Primary => catalog.bind(&written).is_some(),
                         AggregateSource::Secondary(index) => secondary[index]
                             .schema
                             .columns()
@@ -987,10 +977,7 @@ pub(super) fn bind(
             for (field, value) in pairs {
                 let written = format!("{relation}.{field}");
                 let donor_field = match donor {
-                    AggregateSource::Primary => match catalog
-                        .bind(&written)
-                        .map_err(BindError::Catalog)?
-                    {
+                    AggregateSource::Primary => match catalog.bind(&written) {
                         Some(reference_binding::Binding::Dataset {
                             field, column_type, ..
                         }) => Some((field, column_type)),
@@ -1030,11 +1017,7 @@ pub(super) fn bind(
                 }
                 let before_references = findings.len();
                 for reference in value.references() {
-                    if catalog
-                        .bind(reference)
-                        .map_err(BindError::Catalog)?
-                        .is_none()
-                    {
+                    if catalog.bind(reference).is_none() {
                         finding(
                             Finding::KeyReference {
                                 path: key_path,
@@ -1213,7 +1196,7 @@ fn bind_range(
     if findings.len() != before {
         return Ok(None);
     }
-    let current = match catalog.bind(&range.value).map_err(BindError::Catalog)? {
+    let current = match catalog.bind(&range.value) {
         Some(reference_binding::Binding::Output {
             column,
             column_type,
@@ -1285,7 +1268,6 @@ fn bind_range(
         Some(kind.into()),
         lower,
         upper,
-        16_777_216,
     ) {
         Ok(range) => Ok(Some(range)),
         Err(RelationRangeError::Incomparable(types)) => {
@@ -1293,13 +1275,6 @@ fn bind_range(
                 types.diagnostic_for(&path, None),
             ));
             Ok(None)
-        }
-        Err(RelationRangeError::Limit) => {
-            Err(BindError::Catalog(reference_binding::Error::Limit {
-                resource: "aggregate_range_metadata",
-                limit: 16_777_216,
-                required: usize::MAX,
-            }))
         }
         Err(_) => Err(BindError::Internal),
     }
@@ -1389,7 +1364,6 @@ fn bind_derivations(
             name: relation,
             fields: &source_fields,
         }],
-        Default::default(),
     )
     .map_err(BindError::Catalog)?;
     let references = derive

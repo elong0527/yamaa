@@ -2,60 +2,6 @@
 //! The matching language remains owned by the shared match-value compiler.
 use super::*;
 
-const METADATA_BYTES: usize = 16_777_216;
-const BINDING_WORK: usize = 100_000_000;
-
-/// Refuse aggregate binding metadata/work before cloning secondary schemas.
-pub(super) fn admit_sources(
-    schemas: &[&TableSchema],
-    output: &TableSchema,
-    templates: usize,
-    paths: impl Iterator<Item = usize>,
-) -> Result<(), BindError> {
-    let limit = |resource, limit, required| {
-        BindError::Catalog(reference_binding::Error::Limit {
-            resource,
-            limit,
-            required,
-        })
-    };
-    let overflow = || BindError::Catalog(reference_binding::Error::SizeOverflow);
-    let mut bytes = 0usize;
-    let mut fields = 0usize;
-    for column in schemas
-        .iter()
-        .flat_map(|schema| schema.columns())
-        .chain(output.columns())
-    {
-        fields = fields.checked_add(1).ok_or_else(overflow)?;
-        bytes = bytes
-            .checked_add(column.name.len())
-            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<crate::table::Column>()))
-            .ok_or_else(overflow)?;
-    }
-    let mut reads = 0usize;
-    for path in paths {
-        reads = reads.checked_add(1).ok_or_else(overflow)?;
-        bytes = bytes.checked_add(path).ok_or_else(overflow)?;
-    }
-    // Schemas/catalogs and actual dependency/finding copies are bounded together.
-    let required = bytes
-        .checked_mul(reads.checked_add(templates).ok_or_else(overflow)?.max(1))
-        .and_then(|bytes| bytes.checked_mul(8))
-        .ok_or_else(overflow)?;
-    if required > METADATA_BYTES {
-        return Err(limit("row_intermediate_metadata", METADATA_BYTES, required));
-    }
-    let required = fields
-        .checked_mul(reads)
-        .and_then(|work| work.checked_mul(fields))
-        .ok_or_else(overflow)?;
-    if required > BINDING_WORK {
-        return Err(limit("row_intermediate_work", BINDING_WORK, required));
-    }
-    Ok(())
-}
-
 /// Select a common authored input without introducing a root base/default.
 pub(super) fn common_driver<'a>(
     d: &'a Document,
@@ -123,45 +69,6 @@ pub(super) fn common_driver<'a>(
 }
 
 /// Whole-occurrence admission precedes expanded defaults and owned read paths.
-pub(super) fn admit(d: &Document, templates: usize) -> Result<(), PrepareError> {
-    if !present(d, d.root(), "intermediates") {
-        return Ok(());
-    }
-    let bytes = d.nodes().iter().try_fold(0usize, |bytes, node| {
-        let text = match node {
-            N::Text(text) | N::Integer(text) => text.len(),
-            _ => 0,
-        };
-        bytes
-            .checked_add(text)?
-            .checked_add(std::mem::size_of::<N>())
-    });
-    let expanded = bytes
-        .and_then(|bytes| bytes.checked_mul(templates.checked_add(1)?))
-        .and_then(|bytes| bytes.checked_mul(8));
-    if expanded.is_none_or(|bytes| bytes > METADATA_BYTES) {
-        return Err(PrepareError::limit(
-            "row_intermediate_metadata",
-            METADATA_BYTES,
-            None,
-            None,
-        ));
-    }
-    let work = d
-        .nodes()
-        .len()
-        .checked_mul(d.nodes().len())
-        .and_then(|work| work.checked_mul(templates.checked_add(1)?));
-    if work.is_none_or(|work| work > BINDING_WORK) {
-        return Err(PrepareError::limit(
-            "row_intermediate_work",
-            BINDING_WORK,
-            None,
-            None,
-        ));
-    }
-    Ok(())
-}
 
 /// Borrow references from admitted key occurrences, without lowering them again.
 /// Named reads in every expression promote their matching output defaults.
@@ -333,13 +240,9 @@ pub(super) fn bind(
                 }
             }
             if let crate::dataset::MatchRead::SecondaryRecord { identifier, .. } = read {
-                if catalog
-                    .bind(identifier)
-                    .map_err(BindError::Catalog)?
-                    .is_some_and(|read| {
-                        matches!(read, reference_binding::Binding::Dataset { dataset: 0, .. })
-                    })
-                {
+                if catalog.bind(identifier).is_some_and(|read| {
+                    matches!(read, reference_binding::Binding::Dataset { dataset: 0, .. })
+                }) {
                     continue;
                 }
                 findings.push(missing_dependency(identifier, &key.path));
@@ -361,8 +264,7 @@ pub(super) fn bind(
                     column_type: column.kind,
                 })
                 .collect::<Vec<_>>();
-            let root_catalog =
-                Catalog::compile(&fields, &[], Default::default()).map_err(BindError::Catalog)?;
+            let root_catalog = Catalog::compile(&fields, &[]).map_err(BindError::Catalog)?;
             // A scalar read still needs lookup keys even when this relation also drives rows.
             let dataset = match &item.source {
                 crate::dataset::IntermediateSource::Input(index) => secondary
@@ -390,8 +292,6 @@ pub(super) fn bind(
             .value
             .read()
             .map(|read| catalog.bind(read.identifier()))
-            .transpose()
-            .map_err(BindError::Catalog)?
             .flatten()
             .map(|read| match read {
                 reference_binding::Binding::Output { column_type, .. }

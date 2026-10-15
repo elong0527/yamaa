@@ -213,11 +213,7 @@ fn bound_types(
     sources: &[String],
     catalog: &Catalog,
 ) -> Result<Vec<Option<ColumnType>>, BindError> {
-    sources
-        .iter()
-        .map(|name| catalog.type_of(name))
-        .collect::<Result<_, _>>()
-        .map_err(BindError::Catalog)
+    Ok(sources.iter().map(|name| catalog.type_of(name)).collect())
 }
 fn finish_extreme(
     sources: &[String],

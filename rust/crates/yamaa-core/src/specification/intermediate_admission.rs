@@ -29,25 +29,12 @@ pub(super) fn declaration_findings(
     sources: &[SourceDeclaration],
 ) -> Result<Vec<PreflightFinding>, PrepareError> {
     let mut findings = Vec::new();
-    let mut bytes = 0usize;
     let mut identifiers = BTreeMap::<&str, String>::new();
     let domain = text(d, field(d, d.root(), "domain")?)?;
     for (index, &item) in items.iter().enumerate() {
         let path = format!("intermediates[{index}]");
         let name = text(d, field(d, item, "id")?)?;
         let dataset = text(d, field(d, item, "dataset")?)?;
-        let mut admit_finding = || -> Result<(), PrepareError> {
-            bytes = bytes
-                .checked_add(path.len())
-                .and_then(|n| n.checked_add(name.len()))
-                .and_then(|n| n.checked_add(dataset.len()))
-                .and_then(|n| n.checked_add(256))
-                .filter(|&n| n <= 16_777_216)
-                .ok_or_else(|| {
-                    PrepareError::limit("intermediate_findings", 16_777_216, None, None)
-                })?;
-            Ok(())
-        };
         if let Some(previous) = identifiers.get(name).cloned().or_else(|| {
             sources
                 .iter()
@@ -55,7 +42,6 @@ pub(super) fn declaration_findings(
                 .map(|_| format!("input.{name}"))
                 .or_else(|| (name == domain).then(|| "domain".into()))
         }) {
-            admit_finding()?;
             findings.push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
                 code: C::IntermediateIdentifierCollision,
                 spec_paths: vec![format!("{path}.id"), previous],
@@ -69,7 +55,6 @@ pub(super) fn declaration_findings(
         if !(sources.iter().any(|source| source.name == dataset)
             || dataset == "SELF" && present(d, d.root(), "rows"))
         {
-            admit_finding()?;
             let mut finding =
                 LookupFinding::new(&format!("{path}.dataset"), C::IntermediateDatasetReference);
             finding.text("identifier", dataset);
@@ -80,7 +65,6 @@ pub(super) fn declaration_findings(
             matches!(&d.nodes()[key], N::Mapping(pairs) if pairs.is_empty())
                 || matches!(&d.nodes()[key], N::Sequence(pairs) if pairs.is_empty())
         }) {
-            admit_finding()?;
             let mut finding = LookupFinding::new(&format!("{path}.key"), C::IntermediateEmptyKey);
             finding.text("intermediate", name);
             finding.text("dataset", dataset);
@@ -88,7 +72,6 @@ pub(super) fn declaration_findings(
             findings.push(PreflightFinding::Scalar(finding.diagnostic()));
         }
         if is_rename_only(d, item) {
-            admit_finding()?;
             let mut finding = LookupFinding::new(&path, C::IntermediateRenameOnly);
             finding.text("intermediate", name);
             finding.text("dataset", dataset);
@@ -96,7 +79,6 @@ pub(super) fn declaration_findings(
         }
         for (declared, missing) in [("order_by", "keep"), ("keep", "order_by")] {
             if present(d, item, declared) && !present(d, item, missing) {
-                admit_finding()?;
                 let mut finding = LookupFinding::new(&path, C::IntermediateSelectionUnpaired);
                 finding.text("intermediate", name);
                 finding.texts("declared", &[declared]);
@@ -134,8 +116,8 @@ pub(super) fn inferred_keys(
             column_type: column.kind,
         })
         .collect::<Vec<_>>();
-    let inferred = crate::key_relation::infer(catalog, &names, &fields, Default::default())
-        .map_err(BindError::Catalog)?;
+    let inferred =
+        crate::key_relation::infer(catalog, &names, &fields).map_err(BindError::Catalog)?;
     match inferred {
         Inference::Keys { keys } => Ok(Some(
             keys.into_iter()

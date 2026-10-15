@@ -45,7 +45,7 @@ impl Descriptor {
         }
         if let (Some((_, pattern)), DocumentNode::Text(text)) = (self.pattern(), value) {
             if pattern
-                .full_match(text, Default::default())
+                .full_match(text)
                 .map_err(ConstraintError::Regex)?
                 .is_none()
             {

@@ -329,14 +329,6 @@ impl Declarations {
                     continue;
                 }
                 if let N::Text(name) = &d.nodes()[key] {
-                    if crate::limits::Limits::KEYS == 0 {
-                        return Err(PrepareError::limit(
-                            "intermediate_keys",
-                            crate::limits::Limits::KEYS,
-                            None,
-                            None,
-                        ));
-                    }
                     Some(vec![(
                         name.clone(),
                         match_values::Declaration::Variable(name.clone()),
@@ -410,11 +402,7 @@ impl Declarations {
             {
                 let expression = text(d, filter)?;
                 filter_text = Some(expression.into());
-                let compiled = predicate_compiler::compile(
-                    expression,
-                    &format!("{path}.filter"),
-                    Default::default(),
-                );
+                let compiled = predicate_compiler::compile(expression, &format!("{path}.filter"));
                 match &compiled {
                     Err(predicate_compiler::Error::Parse(
                         crate::predicate_parser::ParseError::Grammar { .. },
@@ -584,13 +572,6 @@ impl Declarations {
         project: Option<&crate::project_calls::ProjectCalls>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(Vec<SecondarySource>, Vec<Option<Intermediate>>), BindError> {
-        intermediate_sources::admit(self.0.iter().filter_map(|item| match item.source {
-            self_relations::Relation::Input(index) if index == driver => {
-                Some((schemas[index], sources[index].name.as_str()))
-            }
-            self_relations::Relation::SelfRows => Some((output, "SELF")),
-            _ => None,
-        }))?;
         let secondary = sources
             .iter()
             .zip(schemas)
@@ -695,8 +676,8 @@ impl Declarations {
                     fields,
                 })
                 .collect::<Vec<_>>();
-            let catalog = Catalog::compile(&output_fields, &datasets, Default::default())
-                .map_err(BindError::Catalog)?;
+            let catalog =
+                Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)?;
             let default_keys = if item.keys.is_none() {
                 let before_keys = findings.len();
                 match intermediate_admission::inferred_keys(
@@ -1002,8 +983,7 @@ fn derivation_order(
     project: Option<&functions::Prepared>,
     templates: &str_template::Prepared,
 ) -> Result<Vec<usize>, PrepareError> {
-    use crate::dependency_analysis::{self, Error};
-    const EDGE_LIMIT: usize = 65_536;
+    use crate::dependency_analysis;
     let names = items
         .iter()
         .map(|&item| text(d, field(d, item, "id")?))
@@ -1015,10 +995,6 @@ fn derivation_order(
         .collect::<BTreeMap<_, _>>();
     let mut graph = vec![Vec::new(); items.len()];
     let mut sites = vec![Vec::new(); items.len()];
-    let mut edges = 0usize;
-    let mut projection =
-        crate::diagnostic::ProjectionBudget::new(crate::diagnostic::MAX_PROJECTION_BYTES)
-            .map_err(|_| PrepareError::Internal)?;
     for (index, &item) in items.iter().enumerate() {
         let Some(derivations) = d
             .field(item, "derivations")
@@ -1044,49 +1020,12 @@ fn derivation_order(
                 else {
                     continue;
                 };
-                edges = edges
-                    .checked_add(1)
-                    .filter(|&edges| edges <= EDGE_LIMIT)
-                    .ok_or_else(|| {
-                        PrepareError::limit("intermediate_dependency_edges", EDGE_LIMIT, None, None)
-                    })?;
-                projection
-                    .text(&path)
-                    .and_then(|()| projection.text(names[index]))
-                    .and_then(|()| projection.text(names[dependency]))
-                    .and_then(|()| projection.charge(64))
-                    .map_err(|_| {
-                        PrepareError::limit(
-                            "intermediate_dependency_metadata",
-                            crate::diagnostic::MAX_PROJECTION_BYTES,
-                            None,
-                            None,
-                        )
-                    })?;
                 graph[index].push(dependency);
                 sites[index].push((dependency, path.clone()));
             }
         }
     }
-    let analysis = dependency_analysis::analyze(
-        &graph,
-        dependency_analysis::Limits {
-            nodes: crate::limits::Limits::COLUMNS,
-            edges: EDGE_LIMIT,
-        },
-    )
-    .map_err(|error| match error {
-        Error::NodeLimit { limit, required } => {
-            PrepareError::limit("intermediate_dependency_nodes", limit, Some(required), None)
-        }
-        Error::EdgeLimit { limit, required } => {
-            PrepareError::limit("intermediate_dependency_edges", limit, Some(required), None)
-        }
-        Error::SizeOverflow => {
-            PrepareError::limit("intermediate_dependency_edges", EDGE_LIMIT, None, None)
-        }
-        Error::InvalidDependency { .. } => PrepareError::Internal,
-    })?;
+    let analysis = dependency_analysis::analyze(&graph).map_err(|_| PrepareError::Internal)?;
     if let Some(cycle) = analysis.cycle {
         let mut paths = Vec::new();
         for pair in cycle.windows(2) {
@@ -1147,8 +1086,7 @@ impl Declarations {
                 fields,
             })
             .collect::<Vec<_>>();
-        let catalog = Catalog::compile(&output_fields, &datasets, Default::default())
-            .map_err(BindError::Catalog)?;
+        let catalog = Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)?;
         let mut known = BTreeMap::<String, ColumnType>::new();
         for declaration in self.0.iter() {
             let dataset = match declaration.source {
@@ -1218,7 +1156,7 @@ impl Declarations {
                                 })
                                 .map(|(_, kind)| (*kind).into())
                         }
-                    })?
+                    })
                     .into_iter()
                     .map(BindFinding::Predicate),
                 );

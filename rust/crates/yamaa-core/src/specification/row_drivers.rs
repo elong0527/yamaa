@@ -48,7 +48,6 @@ pub(super) fn catalog_visible(
             name,
             fields: &fields,
         }],
-        Default::default(),
     )
     .map_err(BindError::Catalog)
 }

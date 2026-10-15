@@ -367,25 +367,6 @@ pub(super) fn bind(
     let before = findings.len();
     // Shared earlier donor plans do not recursively copy their expression trees.
     // Admit aggregate retained schema/catalog copies before making the first copy.
-    intermediate_sources::admit(
-        sources
-            .iter()
-            .zip(schemas)
-            .flat_map(|(source, schema)| std::iter::repeat_n((*schema, source.name.as_str()), 4))
-            .chain(std::iter::repeat_n((outer_output, "output"), 2))
-            .chain(
-                previous
-                    .iter()
-                    .flatten()
-                    .filter_map(|item| match &item.source {
-                        IntermediateSource::Primary { schema, name } => {
-                            Some((schema, name.as_str()))
-                        }
-                        IntermediateSource::SelfRows { schema, .. } => Some((schema, "SELF")),
-                        _ => None,
-                    }),
-            ),
-    )?;
     let original_secondary = outer_secondary(sources, schemas, driver);
     let mut fields = stored.columns().to_vec();
     let mut driver_kinds = Vec::new();
@@ -613,7 +594,7 @@ pub(super) fn bind(
         .zip(&fields)
         .map(|(name, fields)| reference_binding::Dataset { name, fields })
         .collect::<Vec<_>>();
-    let catalog = Catalog::compile(&outputs, &datasets, Default::default())
+    let catalog = Catalog::compile(&outputs, &datasets)
         .map_err(BindError::Catalog)?
         .with_record_derivation();
     let references = declarations
@@ -1037,7 +1018,6 @@ fn rebase(
                     range.value_kind(),
                     range.lower().cloned(),
                     range.upper().cloned(),
-                    16_777_216,
                 )
                 .map_err(|_| {
                     BindError::InvalidPlan(crate::dataset::PlanError::InvalidIntermediate)

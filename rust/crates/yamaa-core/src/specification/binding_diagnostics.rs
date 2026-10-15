@@ -165,7 +165,7 @@ impl BindFinding {
             Self::Numeric {
                 path,
                 expression,
-                error: ParseError::Parse(ParseError::Grammar { failure, .. }),
+                error: ParseError::Grammar { failure, .. },
             } => return Some(vec![failure.diagnostic(path, expression)?]),
             Self::AggregateScope {
                 path,

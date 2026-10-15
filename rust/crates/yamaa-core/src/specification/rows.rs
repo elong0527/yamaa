@@ -692,7 +692,6 @@ impl Rows {
                 Some("rows"),
             ));
         }
-        row_intermediates::admit(d, raw_rows.len())?;
         let columns = sequence(d, field(d, root, "columns")?)?;
         let filters = raw_rows
             .iter()
@@ -703,8 +702,7 @@ impl Rows {
                     .map(|id| {
                         let expression = text(d, id)?;
                         let path = format!("rows[{index}].filter");
-                        let compiled =
-                            predicate_compiler::compile(expression, &path, Default::default());
+                        let compiled = predicate_compiler::compile(expression, &path);
                         match &compiled {
                             Ok(_)
                             | Err(predicate_compiler::Error::Parse(
@@ -1077,22 +1075,7 @@ impl Rows {
         }
         Ok(uses)
     }
-    pub(super) fn admit_sources(
-        &self,
-        schemas: &[&TableSchema],
-        output: &TableSchema,
-    ) -> Result<(), BindError> {
-        row_intermediates::admit_sources(
-            schemas,
-            output,
-            self.templates.len(),
-            self.templates
-                .iter()
-                .flat_map(|t| &t.declarations)
-                .chain(&self.columns)
-                .map(|d| d.path.len()),
-        )
-    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind(
         &self,
@@ -1201,7 +1184,7 @@ impl Rows {
                         None
                     } else {
                         let Some(reference_binding::Binding::Output { column, .. }) =
-                            catalog.bind(reference).map_err(BindError::Catalog)?
+                            catalog.bind(reference)
                         else {
                             return Err(BindError::Internal);
                         };
@@ -1272,7 +1255,6 @@ impl Rows {
                                 joined: false,
                                 phase,
                             },
-                            Default::default(),
                         )
                         .map_err(BindError::Catalog)?;
                         let valid = scoped.is_empty();
@@ -1339,9 +1321,8 @@ impl Rows {
                 &secondary,
                 &template.driver,
             )?;
-            let row_catalog = row_catalog
-                .with_row_joins(&template.driver, template.groups.as_deref())
-                .map_err(BindError::Catalog)?;
+            let row_catalog =
+                row_catalog.with_row_joins(&template.driver, template.groups.as_deref());
             let mode = match &template.groups {
                 None => RowMode::Records,
                 Some(groups) => RowMode::Groups(
@@ -1468,8 +1449,8 @@ impl Rows {
                     assignments.insert(declaration.column, value);
                 }
             }
-            let analyzed = crate::dependency_analysis::analyze(&graph, Default::default())
-                .map_err(|_| BindError::Internal)?;
+            let analyzed =
+                crate::dependency_analysis::analyze(&graph).map_err(|_| BindError::Internal)?;
             if let Some(cycle) = analyzed.cycle {
                 let mut paths = std::vec![""; output.columns().len()];
                 for declaration in &template.declarations {
@@ -1716,7 +1697,7 @@ impl Rows {
             }
             dependencies[declaration.column] = Some(edges);
         }
-        let analyzed = column_dependencies::analyze(&dependencies, keys, true, Default::default())
+        let analyzed = column_dependencies::analyze(&dependencies, keys, true)
             .map_err(|_| BindError::Internal)?;
         if !analyzed.diagnostics.is_empty() {
             let mut paths = std::vec![String::new(); output.columns().len()];

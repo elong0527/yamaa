@@ -16,7 +16,7 @@ impl PreparedSpecification {
             Ok(plan) => {
                 let findings = plan
                     .metadata_type_findings()
-                    .map_err(|_| BindError::PredicateDiagnosticLimit)?;
+                    .map_err(|_| BindError::InvalidDiagnostic)?;
                 if !findings.is_empty() {
                     return Ok(findings);
                 }

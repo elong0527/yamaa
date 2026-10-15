@@ -123,7 +123,7 @@ pub(super) fn bind(
             .columns()
             .get(column)
             .map(|column| column.kind.into())
-    })?;
+    });
     if static_filter_types {
         findings.extend(type_findings.iter().cloned().map(BindFinding::Predicate));
     }

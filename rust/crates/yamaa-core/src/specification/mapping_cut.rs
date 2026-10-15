@@ -266,7 +266,7 @@ pub(super) fn bind_row(
             .and_then(|schema| schema.columns().iter().find(|c| c.name == field))
             .map(|c| c.kind)
     } else {
-        catalog.type_of(name).map_err(BindError::Catalog)?
+        catalog.type_of(name)
     };
     Ok(expression
         .and_then(|expression| checked_wrap(declaration, column, expression, kind, findings)))

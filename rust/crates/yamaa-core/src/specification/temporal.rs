@@ -473,10 +473,7 @@ pub(super) fn bind_row(
                     .map(|column| column.kind)
                     .ok_or(BindError::Internal)?
             } else {
-                catalog
-                    .type_of(source)
-                    .map_err(BindError::Catalog)?
-                    .ok_or(BindError::Internal)?
+                catalog.type_of(source).ok_or(BindError::Internal)?
             };
             if !operation.accepts(index, column_type) {
                 let actual = match column_type {
