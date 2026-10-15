@@ -44,18 +44,18 @@ fn every_root_and_terminology_cause_has_independent_normative_paths_and_mapping(
         &project_environment::validate(Language::Python, &draft),
     )
     .unwrap();
-    assert_eq!(projected[3].context["value"], JsonValue::Bool(true));
-    assert_eq!(projected[1].context.len(), 2);
+    assert_eq!(projected[2].context["value"], JsonValue::Bool(true));
+    assert_eq!(projected[0].context.len(), 2);
     assert_eq!(
-        projected[1].context["runner"],
+        projected[0].context["runner"],
         JsonValue::String("python".into())
     );
     assert_eq!(
-        projected[7].context["field"],
+        projected[6].context["field"],
         JsonValue::String("decode".into())
     );
     assert_eq!(
-        projected[8].context["field"],
+        projected[7].context["field"],
         JsonValue::String("rank".into())
     );
 }

@@ -246,18 +246,14 @@ fn read_issue(
         E::Symlink => "symbolic_link",
         E::Changed => "content_changed",
         E::InvalidLock => "invalid_packaging_lock",
-        E::Limit => "resource_limit",
+        E::Limit => return Err(Error::Limit),
     };
-    let mut diagnostic = if matches!(error, E::Limit) {
-        yamaa_core::application_issue::rejected("environment", cause)
-    } else {
-        Diagnostic {
-            code: yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentInvalid,
-            spec_paths: vec![declaration.into()],
-            context: Default::default(),
-            source_span: None,
-            operand_route: None,
-        }
+    let mut diagnostic = Diagnostic {
+        code: yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentInvalid,
+        spec_paths: vec![declaration.into()],
+        context: Default::default(),
+        source_span: None,
+        operand_route: None,
     };
     for (key, value) in [
         ("entry", entry),
@@ -290,6 +286,9 @@ fn decode_issues(
     declaration: &str,
     budget: &mut Budget,
 ) -> Result<Vec<Issue>, Error> {
+    if matches!(error, SourceError::Limit(_)) {
+        return Err(Error::Limit);
+    }
     if let SourceError::Decode { error, .. } = error {
         use crate::yaml_decode::DecodeFailure as D;
         match error {
@@ -430,4 +429,57 @@ pub fn admission_with_limit<E>(
     )
     .map_err(projection_error)?;
     issues(report.diagnostics().map_err(projection_error)?, maximum)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        file_resources::Error as ResourceError, project_source, specification_source::Source,
+    };
+    use yamaa_core::project_function::Language;
+
+    struct Missing;
+    impl project_source::CapturePort for Missing {
+        type Error = ResourceError;
+        fn capture(
+            &mut self,
+            _: project_source::Request<'_>,
+        ) -> Result<project_source::Reply, Self::Error> {
+            Err(ResourceError::Missing)
+        }
+    }
+
+    #[test]
+    fn per_source_limits_refuse_the_entire_projection_and_retain_original_failures() {
+        let source = Source {
+            identity: "study/environment.yaml".into(),
+            bytes: b"schema_version: '1.0'\nlanguage: python\nfunctions: {first: missing.yaml, second: limited.yaml}\n".to_vec(),
+        };
+        let project_source::Failure::Rejected(mut rejected) = project_source::prepare(
+            crate::shipped_schema::capture_environment().unwrap(),
+            source,
+            Language::Python,
+            &mut Missing,
+            project_source::Limits::default(),
+        )
+        .unwrap_err() else {
+            panic!("retained resource failures")
+        };
+        assert_eq!(capture_sources(&rejected).unwrap().len(), 2);
+        for failure in [
+            CaptureFailure::Port(ResourceError::Limit),
+            CaptureFailure::Interrupted(ResourceError::Limit),
+            CaptureFailure::Structural(SourceError::Limit("document_nodes")),
+            CaptureFailure::Limit("sources"),
+        ] {
+            rejected.sources[1].error = failure;
+            assert_eq!(capture_sources(&rejected), Err(Error::Limit));
+            assert_eq!(rejected.sources[1].written, "limited.yaml");
+            assert!(matches!(
+                rejected.sources[0].error,
+                CaptureFailure::Port(ResourceError::Missing)
+            ));
+        }
+    }
 }
