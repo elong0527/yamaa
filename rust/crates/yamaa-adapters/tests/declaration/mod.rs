@@ -1,5 +1,6 @@
 //! Declaration contracts in the yamaa-adapters integration suite.
 
+mod contract_vectors;
 mod inheritance_capture;
 mod odm_declaration_fixture;
 mod original_intermediate_verifications;

@@ -1,0 +1,537 @@
+[
+  {
+    "family": "numeric",
+    "text": "\u2003-(0001 + abs(B.x)) + B.x",
+    "expected": {
+      "status": "parsed",
+      "identifiers": [
+        "B.x"
+      ],
+      "ast": {
+        "kind": "binary",
+        "operator": "+",
+        "left": {
+          "kind": "unary",
+          "operator": "-",
+          "value": {
+            "kind": "binary",
+            "operator": "+",
+            "left": {
+              "kind": "number",
+              "type": "int",
+              "value": "0001"
+            },
+            "right": {
+              "kind": "call",
+              "name": "ABS",
+              "arguments": [
+                {
+                  "kind": "identifier",
+                  "name": "B.x"
+                }
+              ]
+            }
+          }
+        },
+        "right": {
+          "kind": "identifier",
+          "name": "B.x"
+        }
+      }
+    }
+  },
+  {
+    "family": "numeric",
+    "text": "Z + A + Z",
+    "expected": {
+      "status": "parsed",
+      "identifiers": [
+        "Z",
+        "A"
+      ],
+      "ast": {
+        "kind": "binary",
+        "operator": "+",
+        "left": {
+          "kind": "binary",
+          "operator": "+",
+          "left": {
+            "kind": "identifier",
+            "name": "Z"
+          },
+          "right": {
+            "kind": "identifier",
+            "name": "A"
+          }
+        },
+        "right": {
+          "kind": "identifier",
+          "name": "Z"
+        }
+      }
+    }
+  },
+  {
+    "family": "numeric",
+    "text": "01.00E+2",
+    "expected": {
+      "status": "parsed",
+      "identifiers": [],
+      "ast": {
+        "kind": "number",
+        "type": "float",
+        "value": "01.00E+2"
+      }
+    }
+  },
+  {
+    "family": "numeric",
+    "text": "\u2003\u00a0A + #",
+    "expected": {
+      "status": "invalid",
+      "condition": "invalid_numeric_expression",
+      "requirement": "REQ-0439",
+      "position": {
+        "byte": 9,
+        "character": 6
+      },
+      "context": {}
+    }
+  },
+  {
+    "family": "numeric",
+    "text": "\u2003aNd",
+    "expected": {
+      "status": "invalid",
+      "condition": "prohibited_construct",
+      "requirement": "REQ-0441",
+      "position": {
+        "byte": 3,
+        "character": 1
+      },
+      "context": {
+        "construct": "boolean"
+      }
+    }
+  },
+  {
+    "family": "numeric",
+    "text": "abS(1, 2)",
+    "expected": {
+      "status": "invalid",
+      "condition": "prohibited_function",
+      "requirement": "REQ-0440",
+      "position": {
+        "byte": 0,
+        "character": 0
+      },
+      "context": {
+        "function": "abS",
+        "argument_count": 2
+      }
+    }
+  },
+  {
+    "family": "numeric",
+    "text": "foo(1",
+    "expected": {
+      "status": "invalid",
+      "condition": "invalid_numeric_expression",
+      "requirement": "REQ-0439",
+      "position": {
+        "byte": 5,
+        "character": 5
+      },
+      "context": {}
+    }
+  },
+  {
+    "family": "numeric",
+    "text": "foo(ABS())",
+    "expected": {
+      "status": "invalid",
+      "condition": "prohibited_function",
+      "requirement": "REQ-0440",
+      "position": {
+        "byte": 4,
+        "character": 4
+      },
+      "context": {
+        "function": "ABS",
+        "argument_count": 0
+      }
+    }
+  },
+  {
+    "family": "aggregate",
+    "text": "sUm( D.Z + 01.00E+2 ) + COUNT(E.*) + A + D.Z",
+    "expected": {
+      "status": "parsed",
+      "identifiers": [
+        "D.Z",
+        "A"
+      ],
+      "star_datasets": [
+        "E"
+      ],
+      "ungrouped_identifiers": [
+        "A",
+        "D.Z"
+      ],
+      "ast": {
+        "kind": "binary",
+        "operator": "+",
+        "left": {
+          "kind": "binary",
+          "operator": "+",
+          "left": {
+            "kind": "binary",
+            "operator": "+",
+            "left": {
+              "kind": "reduction",
+              "name": "SUM",
+              "text": "sUm( D.Z + 01.00E+2 )",
+              "argument": {
+                "kind": "binary",
+                "operator": "+",
+                "left": {
+                  "kind": "identifier",
+                  "name": "D.Z"
+                },
+                "right": {
+                  "kind": "number",
+                  "type": "float",
+                  "value": "01.00E+2"
+                }
+              }
+            },
+            "right": {
+              "kind": "reduction",
+              "name": "COUNT",
+              "text": "COUNT(E.*)",
+              "argument": {
+                "kind": "star",
+                "dataset": "E"
+              }
+            }
+          },
+          "right": {
+            "kind": "identifier",
+            "name": "A"
+          }
+        },
+        "right": {
+          "kind": "identifier",
+          "name": "D.Z"
+        }
+      }
+    }
+  },
+  {
+    "family": "aggregate",
+    "text": "COUNT(Z.*) + COUNT(A.*) + COUNT(Z.*)",
+    "expected": {
+      "status": "parsed",
+      "identifiers": [],
+      "star_datasets": [
+        "Z",
+        "A"
+      ],
+      "ungrouped_identifiers": [],
+      "ast": {
+        "kind": "binary",
+        "operator": "+",
+        "left": {
+          "kind": "binary",
+          "operator": "+",
+          "left": {
+            "kind": "reduction",
+            "name": "COUNT",
+            "text": "COUNT(Z.*)",
+            "argument": {
+              "kind": "star",
+              "dataset": "Z"
+            }
+          },
+          "right": {
+            "kind": "reduction",
+            "name": "COUNT",
+            "text": "COUNT(A.*)",
+            "argument": {
+              "kind": "star",
+              "dataset": "A"
+            }
+          }
+        },
+        "right": {
+          "kind": "reduction",
+          "name": "COUNT",
+          "text": "COUNT(Z.*)",
+          "argument": {
+            "kind": "star",
+            "dataset": "Z"
+          }
+        }
+      }
+    }
+  },
+  {
+    "family": "aggregate",
+    "text": "\u2003SUM(COALESCE(MIN(A), MAX(B)))",
+    "expected": {
+      "status": "invalid",
+      "condition": "nested_reduction",
+      "requirement": "REQ-0502",
+      "position": {
+        "byte": 3,
+        "character": 1
+      },
+      "context": {
+        "outer": "SUM",
+        "inner": "MIN"
+      }
+    }
+  },
+  {
+    "family": "aggregate",
+    "text": "SUM(MIN(A)",
+    "expected": {
+      "status": "invalid",
+      "condition": "invalid_aggregate_expression",
+      "requirement": "REQ-0499",
+      "position": {
+        "byte": 10,
+        "character": 10
+      },
+      "context": {}
+    }
+  },
+  {
+    "family": "aggregate",
+    "text": "SUM(MIN(A)) > X",
+    "expected": {
+      "status": "invalid",
+      "condition": "prohibited_construct",
+      "requirement": "REQ-0512",
+      "position": {
+        "byte": 12,
+        "character": 12
+      },
+      "context": {
+        "construct": "comparison"
+      }
+    }
+  },
+  {
+    "family": "aggregate",
+    "text": "abS(1,2)",
+    "expected": {
+      "status": "invalid",
+      "condition": "prohibited_function",
+      "requirement": "REQ-0500",
+      "position": {
+        "byte": 0,
+        "character": 0
+      },
+      "context": {
+        "function": "abS",
+        "argument_count": 2
+      }
+    }
+  },
+  {
+    "family": "predicate",
+    "text": "Z = A AND Z IS NULL",
+    "expected": {
+      "status": "parsed",
+      "identifiers": [
+        "Z",
+        "A"
+      ],
+      "ast": {
+        "kind": "and",
+        "left": {
+          "kind": "comparison",
+          "operator": "=",
+          "left": {
+            "kind": "identifier",
+            "name": "Z",
+            "position": 0
+          },
+          "right": {
+            "kind": "identifier",
+            "name": "A",
+            "position": 4
+          }
+        },
+        "right": {
+          "kind": "null_test",
+          "value": {
+            "kind": "identifier",
+            "name": "Z",
+            "position": 10
+          },
+          "negated": false
+        }
+      }
+    }
+  },
+  {
+    "family": "predicate",
+    "text": "NOT STR_CONTAINS(NULL, '^$')",
+    "expected": {
+      "status": "parsed",
+      "identifiers": [],
+      "ast": {
+        "kind": "not",
+        "value": {
+          "kind": "call",
+          "function": "str_contains",
+          "source": {
+            "kind": "literal",
+            "type": null,
+            "value": null,
+            "position": 17
+          },
+          "pattern": "^$",
+          "position": 4
+        }
+      }
+    }
+  },
+  {
+    "family": "predicate",
+    "text": "AEDECOD LIKE 'a' ESCAPE ''",
+    "expected": {
+      "status": "invalid",
+      "condition": "invalid_predicate",
+      "requirement": "REQ-0191",
+      "position": {
+        "byte": 24,
+        "character": 24
+      },
+      "context": {},
+      "message": "ESCAPE requires exactly one code point"
+    }
+  },
+  {
+    "family": "predicate",
+    "text": "AEDECOD LIKE 'a' ESCAPE '!!'",
+    "expected": {
+      "status": "invalid",
+      "condition": "invalid_predicate",
+      "requirement": "REQ-0191",
+      "position": {
+        "byte": 24,
+        "character": 24
+      },
+      "context": {},
+      "message": "ESCAPE requires exactly one code point"
+    }
+  },
+  {
+    "family": "predicate",
+    "text": "AEDECOD LIKE 'HEAD!' ESCAPE '!'",
+    "expected": {
+      "status": "invalid",
+      "condition": "invalid_predicate",
+      "requirement": "REQ-0191",
+      "position": {
+        "byte": 13,
+        "character": 13
+      },
+      "context": {},
+      "message": "LIKE pattern has a dangling escape"
+    }
+  },
+  {
+    "family": "predicate",
+    "text": "A = 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+    "expected": {
+      "status": "invalid",
+      "condition": "integer_overflow",
+      "requirement": "REQ-0014",
+      "position": {
+        "byte": 4,
+        "character": 4
+      },
+      "context": {},
+      "message": "integer literal is outside the signed 64-bit range"
+    }
+  },
+  {
+    "family": "predicate",
+    "text": "A = -9223372036854775809",
+    "expected": {
+      "status": "invalid",
+      "condition": "integer_overflow",
+      "requirement": "REQ-0014",
+      "position": {
+        "byte": 4,
+        "character": 4
+      },
+      "context": {},
+      "message": "integer literal is outside the signed 64-bit range"
+    }
+  },
+  {
+    "family": "predicate",
+    "text": "A = +0009223372036854775808",
+    "expected": {
+      "status": "invalid",
+      "condition": "integer_overflow",
+      "requirement": "REQ-0014",
+      "position": {
+        "byte": 4,
+        "character": 4
+      },
+      "context": {},
+      "message": "integer literal is outside the signed 64-bit range"
+    }
+  },
+  {
+    "family": "predicate",
+    "text": "FALSE AND A IN (1, +9223372036854775808)",
+    "expected": {
+      "status": "invalid",
+      "condition": "integer_overflow",
+      "requirement": "REQ-0014",
+      "position": {
+        "byte": 19,
+        "character": 19
+      },
+      "context": {},
+      "message": "integer literal is outside the signed 64-bit range"
+    }
+  },
+  {
+    "family": "predicate",
+    "text": "'\ud83d\ude00' = -9223372036854775809",
+    "expected": {
+      "status": "invalid",
+      "condition": "integer_overflow",
+      "requirement": "REQ-0014",
+      "position": {
+        "byte": 9,
+        "character": 6
+      },
+      "context": {},
+      "message": "integer literal is outside the signed 64-bit range"
+    }
+  },
+  {
+    "family": "predicate",
+    "text": "A BETWEEN 0 AND 9999999999999999999999999999999",
+    "expected": {
+      "status": "invalid",
+      "condition": "integer_overflow",
+      "requirement": "REQ-0014",
+      "position": {
+        "byte": 16,
+        "character": 16
+      },
+      "context": {},
+      "message": "integer literal is outside the signed 64-bit range"
+    }
+  }
+]
