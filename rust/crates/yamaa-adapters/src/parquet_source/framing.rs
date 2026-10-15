@@ -87,8 +87,8 @@ fn sequence<'a, 'b>(value: Option<&'b Value<'a>>) -> Result<&'b [Value<'a>], Err
 // A compact list's length bounds its own allocation, but not allocations made
 // later from integer fields within each SchemaElement. The general reader
 // reserves num_children slots before discovering a truncated schema tree.
-fn admit_schema(schema: &[Value<'_>]) -> Result<(), Error> {
-    yamaa_core::limits::Limits::columns(schema.len().saturating_sub(1))?;
+fn admit_schema(schema: &[Value<'_>]) -> Result<usize, Error> {
+    let mut leaves = 0;
     let mut remaining_children = Vec::new();
     for (index, element) in schema.iter().enumerate() {
         while remaining_children.last() == Some(&0) {
@@ -102,17 +102,25 @@ fn admit_schema(schema: &[Value<'_>]) -> Result<(), Error> {
         if remaining_children.len() + 1 > yamaa_core::limits::Limits::SEMANTIC_DEPTH {
             return Err(Error::Malformed);
         }
-        if let Some(value) = element.field(5) {
-            let children = count(Some(value))?;
-            if children > schema.len() - index - 1 {
-                return Err(Error::Malformed);
-            }
-            if children != 0 {
-                remaining_children.push(children);
-            }
+        let children = element
+            .field(5)
+            .map(|value| count(Some(value)))
+            .transpose()?
+            .unwrap_or(0);
+        if children > schema.len() - index - 1 {
+            return Err(Error::Malformed);
+        }
+        if children != 0 {
+            remaining_children.push(children);
+        } else if index != 0 && matches!(element.field(1), Some(Value::Integer(_))) {
+            // Match the downstream descriptor: only primitive fields supply
+            // columns. Groups, including empty groups, have no physical leaf.
+            // Parquet writers may omit num_children or explicitly store zero.
+            leaves += 1;
         }
     }
-    Ok(())
+    yamaa_core::limits::Limits::columns(leaves)?;
+    Ok(leaves)
 }
 
 /// Collect borrowed page bodies from every stored column chunk in source order.
@@ -129,12 +137,12 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
         .filter(|n| *n >= 4)
         .ok_or(Error::Malformed)?;
     let metadata = &bytes[start..footer];
-    let (root, _) = compact::parse(metadata)?;
+    let (root, _) = compact::metadata(metadata)?;
     let declared_rows = count(root.field(3))?;
     let groups = sequence(root.field(4))?;
     let schema = sequence(root.field(2))?;
-    admit_schema(schema)?;
-    yamaa_core::limits::Limits::table(declared_rows, schema.len().saturating_sub(1))?;
+    let leaves = admit_schema(schema)?;
+    yamaa_core::limits::Limits::table(declared_rows, leaves)?;
     let mut result = Framing {
         metadata,
         pages: Vec::new(),
@@ -164,7 +172,7 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
                 return Err(Error::Malformed);
             }
             while offset < end {
-                let (header, used) = compact::parse(&bytes[offset..end])?;
+                let (header, used) = compact::page(&bytes[offset..end])?;
                 let uncompressed = count(header.field(2))?;
                 let compressed = count(header.field(3))?;
                 let payload = match integer(header.field(1))? {
@@ -289,6 +297,143 @@ mod tests {
             0x15, 0, 0x15, 8, 0x15, 8, 0x2c, 0x15, 2, 0x15, 0, 0x15, 6, 0x15, 6, 0, 0, 0, 0, 0, 0,
         ]
     }
+
+    // Independently encoded, zero-row-group footer. Each INT64 leaf is either
+    // at the root or inside its own required group; no page values are needed
+    // to exercise geometry declared by the schema and file metadata.
+    fn geometry_container(rows: usize, leaves: usize, wrapped: bool) -> Vec<u8> {
+        fn unsigned(mut value: usize, output: &mut Vec<u8>) {
+            while value >= 128 {
+                output.push(value as u8 | 128);
+                value >>= 7;
+            }
+            output.push(value as u8);
+        }
+        fn name(value: &str, output: &mut Vec<u8>) {
+            unsigned(value.len(), output);
+            output.extend(value.as_bytes());
+        }
+        let mut footer = vec![0x15, 2, 0x19, 0xfc]; // version=1; schema list
+        unsigned(1 + leaves * if wrapped { 2 } else { 1 }, &mut footer);
+        footer.push(0x48); // root name, then num_children
+        name("schema", &mut footer);
+        footer.push(0x15);
+        unsigned(leaves * 2, &mut footer);
+        footer.push(0);
+        for index in 0..leaves {
+            if wrapped {
+                footer.extend([0x35, 0, 0x18]); // REQUIRED group with one child
+                name(&format!("G{index}"), &mut footer);
+                footer.extend([0x15, 2, 0]);
+            }
+            footer.extend([0x15, 4, 0x25, 0, 0x18]); // INT64; REQUIRED; name
+            name(&format!("V{index}"), &mut footer);
+            if index % 2 == 0 {
+                footer.extend([0x15, 0]); // explicit zero children is also valid
+            }
+            footer.push(0);
+        }
+        footer.push(0x16); // file num_rows
+        unsigned(rows * 2, &mut footer);
+        footer.extend([0x19, 0x0c, 0]); // empty row_groups; STOP
+        let mut bytes = b"PAR1".to_vec();
+        bytes.extend(&footer);
+        bytes.extend((footer.len() as u32).to_le_bytes());
+        bytes.extend(b"PAR1");
+        bytes
+    }
+
+    #[test]
+    fn column_boundary_counts_leaves_instead_of_group_nodes() {
+        for wrapped in [false, true] {
+            for leaves in [1023, 1024, 1025] {
+                let bytes = geometry_container(0, leaves, wrapped);
+                if leaves <= 1024 {
+                    admit(&bytes).unwrap();
+                } else {
+                    assert!(matches!(
+                        admit(&bytes),
+                        Err(Error::ResourceLimit {
+                            resource: "columns",
+                            limit: 1024,
+                            actual: Some(1025),
+                        })
+                    ));
+                }
+            }
+        }
+        // Neither the message root nor an empty group supplies a physical leaf.
+        let schema = [
+            Value::Struct(vec![(5, Value::Integer(2))]),
+            Value::Struct(vec![(5, Value::Integer(0))]),
+            Value::Struct(vec![(1, Value::Integer(2))]),
+        ];
+        assert_eq!(admit_schema(&schema).unwrap(), 1);
+    }
+
+    #[test]
+    fn declared_cell_boundary_uses_physical_leaf_columns() {
+        let at = geometry_container(10_000_000, 64, true);
+        admit(&at).unwrap(); // 640,000,000 cells despite the 64 extra group nodes
+        let above = geometry_container(10_000_000, 65, true);
+        assert!(matches!(
+            admit(&above),
+            Err(Error::ResourceLimit {
+                resource: "table_cells",
+                limit: 640_000_000,
+                actual: Some(650_000_000),
+            })
+        ));
+    }
+
+    #[test]
+    fn nested_schema_at_leaf_boundary_reaches_unsupported_profile_finding() {
+        let bytes = geometry_container(0, 1024, true);
+        assert!(matches!(
+            crate::parquet_source::reader::read(&bytes),
+            Err(crate::parquet_source::reader::Error::Profile(
+                crate::parquet_source::profile::Error::Unsupported { field, .. }
+            )) if field == "G0"
+        ));
+    }
+
+    #[test]
+    fn unknown_footer_fanout_keeps_a_valid_empty_table_decodable() {
+        let mut bytes = geometry_container(0, 1, false);
+        // Remove root STOP and trailer. Unknown field 15 follows field 4: a
+        // 65,536-element byte list, valid for both Compact decoders.
+        bytes.truncate(bytes.len() - 9);
+        bytes.extend([0xb9, 0xf3, 0x80, 0x80, 4]);
+        for _ in 0..32_768 {
+            bytes.extend([1, 2]);
+        }
+        bytes.push(0);
+        let footer_length = (bytes.len() - 4) as u32;
+        bytes.extend(footer_length.to_le_bytes());
+        bytes.extend(b"PAR1");
+        let decoded = crate::parquet_source::reader::read(&bytes).unwrap();
+        assert_eq!(decoded.schema.columns()[0].name, "V0");
+        assert_eq!(decoded.batches[0].num_rows(), 0);
+    }
+
+    #[test]
+    fn wrong_schema_and_row_group_container_shapes_are_malformed() {
+        for footer in [
+            // schema is a bool list, rows=0, row_groups=[]
+            &[0x15, 2, 0x19, 0x31, 1, 2, 1, 0x16, 0, 0x19, 0x0c, 0][..],
+            // schema=[{num_children:0}], rows=0, row_groups is a bool list
+            &[
+                0x15, 2, 0x19, 0x1c, 0x55, 0, 0, 0x16, 0, 0x19, 0x31, 1, 2, 1, 0,
+            ][..],
+        ] {
+            let mut bytes = b"PAR1".to_vec();
+            bytes.extend(footer);
+            bytes.extend((footer.len() as u32).to_le_bytes());
+            bytes.extend(b"PAR1");
+            assert!(matches!(admit(&bytes), Err(Error::Malformed)));
+        }
+    }
+
     #[test]
     fn schema_integer_claims_and_flattened_tree_recursion_are_checked() {
         let element = |children| Value::Struct(vec![(5, Value::Integer(children))]);
