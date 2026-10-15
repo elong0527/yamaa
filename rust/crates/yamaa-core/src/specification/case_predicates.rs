@@ -6,6 +6,58 @@ use crate::{
     predicate::Plan,
 };
 
+fn unknown(path: &str, name: &str) -> BindFinding {
+    let mut finding = LookupFinding::new(
+        path,
+        crate::diagnostic::ConditionCode::PredicateUnknownField,
+    );
+    finding.text("identifier", name);
+    BindFinding::Predicate(finding.diagnostic())
+}
+
+/// Operand binding is shared with expressions; only predicate-name failures
+/// cite REQ-0189 here. Phase, type and relation failures keep their own owner.
+pub(super) fn retain_reference_owner(
+    findings: &mut [BindFinding],
+    catalog: &Catalog,
+) -> Result<(), BindError> {
+    for finding in findings {
+        let replacement = match finding {
+            BindFinding::UnknownReference { path, name }
+            | BindFinding::OutputReference {
+                path,
+                name,
+                finding: reference_binding::Diagnostic::UnknownField,
+            }
+            | BindFinding::QualifiedReference {
+                path,
+                name,
+                finding: crate::reference_scope::Finding::UnknownField,
+                ..
+            } => Some(unknown(path, name)),
+            BindFinding::OutputReference {
+                path,
+                name,
+                finding: reference_binding::Diagnostic::UnresolvableName { dataset },
+            } => {
+                let owner = catalog.dataset_name(*dataset).ok_or(BindError::Internal)?;
+                let mut diagnostic = LookupFinding::new(
+                    path,
+                    crate::diagnostic::ConditionCode::PredicateUnresolvableName,
+                );
+                diagnostic.text("identifier", name);
+                diagnostic.text("suggestion", &format!("{owner}.{name}"));
+                Some(BindFinding::Predicate(diagnostic.diagnostic()))
+            }
+            _ => None,
+        };
+        if let Some(replacement) = replacement {
+            *finding = replacement;
+        }
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
     spec: &PreparedSpecification,
@@ -25,6 +77,7 @@ pub(super) fn bind(
         if !seen.insert(name) {
             continue;
         }
+        let reference_start = findings.len();
         let read = if let Some((index, field)) = spec.intermediates.reference(name) {
             if let Some(item) = &intermediates[index] {
                 edges.extend(item.output_dependencies());
@@ -75,6 +128,7 @@ pub(super) fn bind(
                 None => None,
             }
         };
+        retain_reference_owner(&mut findings[reference_start..], catalog)?;
         if let Some(read) = read {
             bindings.push(Binding {
                 name: name.into(),
@@ -96,10 +150,7 @@ pub(super) fn bind(
                     continue;
                 }
             }
-            findings.push(BindFinding::UnknownReference {
-                path: plan.spec_path().into(),
-                name: name.into(),
-            });
+            findings.push(unknown(plan.spec_path(), name));
         }
     }
     let kinds = plan

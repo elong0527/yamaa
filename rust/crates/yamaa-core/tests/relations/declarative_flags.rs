@@ -125,7 +125,7 @@ fn nested_flag_declarations_precede_enclosing_case_reference_checkpoint() {
         [
             C::PredicateInvalidExpression,
             C::FlagMissingValueRequired,
-            C::SourceUnknownReference
+            C::PredicateUnknownField
         ]
     );
 }
