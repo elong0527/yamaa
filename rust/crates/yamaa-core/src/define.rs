@@ -280,7 +280,7 @@ impl<P: Ports> Application<P> {
             let artifact = ports
                 .location(
                     &format!("{path}.output.path"),
-                    origin.declaring_source,
+                    origin.base_source,
                     origin.written,
                 )
                 .map_err(Failure::Port)?;
@@ -289,7 +289,7 @@ impl<P: Ports> Application<P> {
                 ports
                     .location(
                         &format!("{path}.dataset_json"),
-                        origin.declaring_source,
+                        origin.base_source,
                         &written_json,
                     )
                     .map_err(Failure::Port)?
@@ -348,7 +348,7 @@ impl<P: Ports> Application<P> {
             locations.push(artifact);
             hrefs.push(href);
             outputs.push((
-                origin.declaring_source.to_string(),
+                origin.base_source.to_string(),
                 origin.written.to_string(),
                 written_json,
             ));

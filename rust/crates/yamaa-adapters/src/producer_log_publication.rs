@@ -56,7 +56,7 @@ pub(crate) fn admit_locations(
     for document in documents {
         for (field, _) in fields {
             if let Some(origin) = document.written_output_field_origin(field) {
-                let bound = selected_bound(origin.declaring_source, origin.written)
+                let bound = selected_bound(origin.base_source, origin.written)
                     .map_err(|_| Error::Limit("producer_graph_text_bytes"))?;
                 resources
                     .charge_metadata_text(bound.saturating_mul(2))
@@ -73,7 +73,7 @@ pub(crate) fn admit_locations(
             if let Some(origin) = document.written_output_field_origin(field) {
                 // Match ordinary metadata admission: an operational path
                 // refusal does not require output parents to exist at Build.
-                let Ok(location) = resources.location_from(origin.declaring_source, origin.written)
+                let Ok(location) = resources.location_from(origin.base_source, origin.written)
                 else {
                     continue;
                 };
@@ -400,16 +400,12 @@ impl Publication {
                 .document()
                 .written_output_field_origin(request.field)
                 .ok_or_else(|| failure(AdmissionFailure::Incomplete))?;
-            for path in [
-                origin.declaring_source,
-                origin.written,
-                request.path.as_str(),
-            ] {
+            for path in [origin.base_source, origin.written, request.path.as_str()] {
                 text = text.checked_sub(path.len()).ok_or_else(|| {
                     failure(AdmissionFailure::Limit("producer_publication_paths"))
                 })?;
             }
-            let bound = selected_bound(origin.declaring_source, origin.written).map_err(failure)?;
+            let bound = selected_bound(origin.base_source, origin.written).map_err(failure)?;
             text = text
                 .checked_sub(bound.saturating_mul(2))
                 .ok_or_else(|| failure(AdmissionFailure::Limit("producer_publication_paths")))?;
@@ -439,10 +435,10 @@ impl Publication {
                 )
             };
             let selected = resources
-                .location_from(origin.declaring_source, origin.written)
+                .location_from(origin.base_source, origin.written)
                 .map_err(failure)?;
             if selected.len()
-                > selected_bound(origin.declaring_source, origin.written)
+                > selected_bound(origin.base_source, origin.written)
                     .map_err(|reason| Admission::at(index, reason))?
             {
                 return Err(Admission::at(
@@ -451,7 +447,7 @@ impl Publication {
                 ));
             }
             let target = resources
-                .publication_target_from(origin.declaring_source, origin.written)
+                .publication_target_from(origin.base_source, origin.written)
                 .map_err(failure)?;
             if targets
                 .iter()

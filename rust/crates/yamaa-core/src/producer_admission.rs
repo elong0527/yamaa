@@ -10,11 +10,12 @@ use crate::{
 };
 use std::vec;
 
-/// A spelling and the retained specification layer that authored it. These are
-/// provenance facts, not a filesystem lookup or a resource capability.
+/// Original authoring and the selected resolution base remain separate facts.
+/// These grant no filesystem lookup or resource capability.
 #[derive(Clone, Copy, Debug)]
 pub struct WrittenPath<'a> {
     pub declaring_source: &'a str,
+    pub base_source: &'a str,
     pub written: &'a str,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

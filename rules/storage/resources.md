@@ -14,8 +14,10 @@ status: normative
 
 **REQ-0772.** The caller explicitly supplies the entry file and any implementation
 environment file. These caller arguments follow ordinary host path resolution.
-Every document-declared relative path resolves from the file that writes it,
-including an inherited layer or a producing specification. Composition retains
+By default, every document-declared relative path resolves from the file that
+writes it, including an inherited layer or a producing specification.
+A dataset or output declaration may explicitly select its entry file with
+`relative_to: entry` under [REQ-0780](resources.md#req-0780). Composition retains
 the original declaring file and written spelling. No project configuration is
 discovered or read to select resource locations.
 
@@ -55,7 +57,7 @@ separator. An empty path has one empty segment and is invalid.
 **REQ-0778.** A `..` segment climbs to the parent directory and a `.` segment
 stays put. Relative and absolute paths may contain both. They resolve textually
 before the filesystem is consulted. A relative path starts at the canonical
-directory of its declaring file. Traversal may leave that directory without a
+directory selected by [REQ-0780](resources.md#req-0780). Traversal may leave that directory without a
 yamaa containment failure. A parent step at a filesystem root stays at that root.
 
 <a id="req-0779"></a>
@@ -67,14 +69,27 @@ repository-authored value.
 
 <a id="req-0780"></a>
 
-**REQ-0780.** A relative `project_path` resolves only from the directory of
-the file that writes it, as [Name binding](../specification/binding.md) and
-[Source ingestion](ingestion.md) require. An inherited declaration keeps that
-location. Rebasing in a resolved specification names the same location from the
-entry file; it does not change the original declaring file or written spelling.
-A rooted path names its absolute local location. A missing entry fails there.
-There is no retry from the entry directory, a project root, a data root or the
-process working directory.
+**REQ-0780.** A relative path uses its declaration's `relative_to` base.
+`declaring` selects the directory of the file that writes the path; `entry`
+selects the directory of the specification's entry file. The schema fixes the
+closed values and default. On an input dataset this setting applies to both
+`path` and `schema`; on `output` it applies to `path`, `warning_log` and
+`verification_log`. Other document resources use their declaring file.
+An inherited input uses its composed setting, even when another layer supplied
+the path. An inherited output uses its complete inherited declaration.
+
+The entry file of a producing specification is the file its consumer's `schema`
+link selects. It does not inherit the outer workflow's entry directory. A shared
+consumer can select a study's producer wrapper with `relative_to: entry`; that
+wrapper may inherit a shared producer program. The producer's own setting then
+selects its wrapper directory. Input and output must still name the same artifact
+under [REQ-1247](resources.md#req-1247).
+
+Composition retains the original declaring file and written spelling. Materialized
+paths name the selected location from the entry file. A rooted path names its
+absolute local location regardless of `relative_to`. A missing entry fails at
+that one selected location. There is no retry from another directory, a project
+root, a data root or the process working directory.
 
 <a id="req-0781"></a>
 
@@ -88,11 +103,12 @@ native traversal rules on every supported platform.
 
 <a id="req-1246"></a>
 
-**REQ-1246.** A shared layer's `input/dm.csv` names the file beside that shared
-layer. If that file is absent, a study's own `input/dm.csv` is not substituted.
-The study must explicitly supply a declaration that names its own file.
-`yamaa-project.yaml` and old project/data-root settings do not affect this
-resolution. Missing-file diagnostics retain the original declaring field and
+**REQ-1246.** With the default `relative_to: declaring`, a shared layer's
+`input/dm.csv` names the file beside that shared layer. If that file is absent,
+a study's own `input/dm.csv` is not substituted. A shared input with
+`relative_to: entry` explicitly names each study entry's own `input/dm.csv`.
+`yamaa-project.yaml` and old project/data-root settings do not affect either
+selection. Missing-file diagnostics retain the original declaring field and
 written path.
 
 <a id="req-1247"></a>
@@ -174,7 +190,9 @@ when content does.
 
 | Field | Meaning |
 | --- | --- |
-| `project_path` | Local resource a run reads or publishes; a relative spelling starts at its original declaring file and an absolute spelling names its local location under [Resource resolution](resources.md). |
+| `project_path` | Local resource a run reads or publishes; a relative spelling uses the base selected by REQ-0780 and an absolute spelling names its local location. |
+| `dataset_class.relative_to` | Base for the input dataset's `path` and `schema`. |
+| `output_class.relative_to` | Base for the primary artifact and its warning and verification logs. |
 
 ## Error conditions
 

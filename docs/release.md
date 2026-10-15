@@ -70,8 +70,9 @@ owns decoding behavior.
 - Preserve full signed-i64 values and separate missingness, lossless R
   `yamaa_int64_vector`/`yamaa_utf8_vector`, preserve-or-error conversions and
   JSON-text diagnostic context.
-- Resolve resources from their original declaring file, with absolute and
-  parent-relative local paths and no project-root fallback. Preserve snapshots,
+- Resolve resources from their original declaring file by default; explicit
+  input/output `relative_to: entry` selects each specification entry. Admit
+  absolute and parent-relative local paths without project-root fallback. Preserve snapshots,
   original failures, callback counts and producer-first publication order.
 - Keep normative diagnostics registry-owned, including the reviewed
   `unsupported_operation` and `engine_rejected` null-requirement exceptions.

@@ -398,7 +398,7 @@ pub(crate) fn location_findings(
             .written_output_field_origin(field)
             .and_then(|origin| {
                 resources
-                    .location_from(origin.declaring_source, origin.written)
+                    .location_from(origin.base_source, origin.written)
                     .ok()
             })
             .map(|location| (field, location))

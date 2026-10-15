@@ -13,12 +13,14 @@ pub use crate::value::ColumnType as Kind;
 pub struct Origin<'a> {
     pub dataset: &'a str,
     pub declaring_source: &'a str,
+    pub base_source: &'a str,
     pub written: &'a str,
 }
 pub struct InputMetadata {
     pub owner: String,
     pub dataset: String,
     pub declaring_source: String,
+    pub base_source: String,
     pub written: String,
     pub profile: Profile,
 }
@@ -38,6 +40,7 @@ pub fn inputs(
     for (origin, source) in origins.iter().zip(prepared.sources()) {
         if origin.dataset != source.name
             || origin.declaring_source.is_empty()
+            || origin.base_source.is_empty()
             || origin.written.is_empty()
         {
             return Err(Error::SourceIdentity);
@@ -46,6 +49,7 @@ pub fn inputs(
             owner,
             origin.dataset,
             origin.declaring_source,
+            origin.base_source,
             origin.written,
         ] {
             budget.text(text.len())?;
@@ -58,6 +62,7 @@ pub fn inputs(
             owner: owner.into(),
             dataset: origin.dataset.into(),
             declaring_source: origin.declaring_source.into(),
+            base_source: origin.base_source.into(),
             written: origin.written.into(),
             profile: source.profile,
         })
@@ -505,6 +510,7 @@ pub fn graph_inputs(
             if supplied.owner != node.identity()
                 || supplied.origin.dataset != source.name
                 || supplied.origin.declaring_source.is_empty()
+                || supplied.origin.base_source.is_empty()
                 || supplied.origin.written.is_empty()
             {
                 return Err(Error::SourceIdentity);
@@ -513,6 +519,7 @@ pub fn graph_inputs(
                 supplied.owner,
                 supplied.origin.dataset,
                 supplied.origin.declaring_source,
+                supplied.origin.base_source,
                 supplied.origin.written,
             ] {
                 budget.text(text.len())?;
@@ -539,6 +546,7 @@ pub fn graph_inputs(
                 owner: supplied.owner.into(),
                 dataset: supplied.origin.dataset.into(),
                 declaring_source: supplied.origin.declaring_source.into(),
+                base_source: supplied.origin.base_source.into(),
                 written: supplied.origin.written.into(),
                 profile: source.profile,
             });

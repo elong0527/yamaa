@@ -428,6 +428,46 @@ fn explicit_section_selector_datetime_and_missing_published_artifact_are_refused
     assert!(run.issues().iter().any(|i| i.spec_paths == ["standard"]));
 }
 #[test]
+fn entry_relative_inherited_output_supplies_json_capture_and_publication_targets() {
+    let temp = Temp::fixture("sdtm-dm-metadata", false);
+    fs::create_dir(temp.0.join("parents")).unwrap();
+    fs::create_dir_all(temp.0.join("children/artifacts")).unwrap();
+    let parent = fs::read_to_string(temp.0.join("spec.yaml"))
+        .unwrap()
+        .replace(
+            "path: dm.csv",
+            "path: artifacts/dm.csv\n  relative_to: entry",
+        );
+    fs::write(temp.0.join("parents/base.yaml"), parent).unwrap();
+    fs::write(
+        temp.0.join("children/spec.yaml"),
+        "schema_version: '1.0'\nparents: ../parents/base.yaml\n",
+    )
+    .unwrap();
+    let environment = fs::read_to_string(temp.0.join("environment.yaml"))
+        .unwrap()
+        .replace("  - spec.yaml", "  - children/spec.yaml")
+        .replace(
+            "define: define.xml",
+            "define: children/artifacts/define.xml",
+        );
+    fs::write(temp.0.join("environment.yaml"), environment).unwrap();
+    fs::copy(
+        root().join("benchmarks/sdtm-dm-metadata/expected/dm.csv"),
+        temp.0.join("children/artifacts/dm.csv"),
+    )
+    .unwrap();
+    let mut result = temp.run("2026-09-11T00:00:00");
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(std::str::from_utf8(result.artifacts().nth(1).unwrap().1)
+        .unwrap()
+        .contains("xlink:href=\"dm.json\""));
+    assert!(result.save().unwrap());
+    assert!(temp.0.join("children/artifacts/dm.json").is_file());
+    assert!(!temp.0.join("parents/artifacts").exists());
+}
+
+#[test]
 fn inherited_original_output_supplies_both_json_capture_and_publication_target() {
     let temp = Temp::fixture("sdtm-dm-metadata", false);
     for directory in ["parents", "children", "artifacts"] {

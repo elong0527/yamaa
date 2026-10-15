@@ -17,6 +17,7 @@ pub fn inputs(run: &dyn RunView) -> Result<Vec<InputMetadata>, Error> {
             Ok(application::Origin {
                 dataset: &source.name,
                 declaring_source: original.declaring_source,
+                base_source: original.base_source,
                 written: original.written,
             })
         })
@@ -143,6 +144,7 @@ pub fn graph_inputs(graph: &crate::file_graph::FileGraph) -> Result<Vec<InputMet
                 origin: application::Origin {
                     dataset: &source.name,
                     declaring_source: original.declaring_source,
+                    base_source: original.base_source,
                     written: original.written,
                 },
             });
@@ -223,7 +225,7 @@ pub(crate) fn capture(
         .map_err(|_| crate::file_application::rejected("source_metadata", "capture_admission"))?;
     let descriptor = &descriptors[index];
     resources
-        .capture_from(&descriptor.declaring_source, &descriptor.written, maximum)
+        .capture_from(&descriptor.base_source, &descriptor.written, maximum)
         .map(|(bytes, _)| bytes)
         .map_err(|error| {
             use yamaa_core::specification_run::SourcePort;

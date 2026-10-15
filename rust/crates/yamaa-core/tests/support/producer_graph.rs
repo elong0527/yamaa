@@ -200,14 +200,17 @@ pub fn candidate<'a>(
         schema_path: identity,
         schema_origin: WrittenPath {
             declaring_source: consumer,
+            base_source: consumer,
             written: identity,
         },
         input_origin: WrittenPath {
             declaring_source: consumer,
+            base_source: consumer,
             written: "produced.csv",
         },
         output_origin: WrittenPath {
             declaring_source: identity,
+            base_source: identity,
             written: "produced.csv",
         },
         schema_identity: identity,

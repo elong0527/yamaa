@@ -96,7 +96,8 @@ rule, grammar, or fixture:
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.
 - Keep ordinary examples portable: declare source paths relative to the YAML
-  file that writes them and store their fixtures beside that file. Dedicated
+  file that writes them and store their fixtures beside that file. Explicit
+  `relative_to: entry` examples keep study inputs beside each study entry. Dedicated
   path-policy tests may exercise parent-directory segments and temporary
   absolute local paths as positive cases. URI schemes, symbolic links,
   non-regular resources and missing files remain negative cases. A

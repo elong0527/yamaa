@@ -773,6 +773,14 @@ impl PreparedDocument {
         }
         use yamaa_core::schema::DocumentNode;
         let (identity, raw) = self.authored_document(&format!("input.{dataset}.{field}"))?;
+        let resolved = self.model().document();
+        let inputs = resolved.field(resolved.root(), "input")?;
+        let declaration = resolved.field(inputs, dataset)?;
+        let base_source = if entry_relative(resolved, declaration) {
+            self.source.identity.as_str()
+        } else {
+            identity
+        };
         let input = raw.field(raw.root(), "input")?;
         let source = raw.field(input, dataset)?;
         let node = match raw.nodes().get(source)? {
@@ -782,6 +790,7 @@ impl PreparedDocument {
         match raw.nodes().get(node)? {
             DocumentNode::Text(path) => Some(yamaa_core::producer_admission::WrittenPath {
                 declaring_source: identity,
+                base_source,
                 written: path,
             }),
             _ => None,
@@ -801,12 +810,20 @@ impl PreparedDocument {
         }
         // Output is an atomic top-level field in shared layer composition.
         let (identity, raw) = self.authored_document("output")?;
+        let resolved = self.model().document();
+        let output = resolved.field(resolved.root(), "output")?;
+        let base_source = if entry_relative(resolved, output) {
+            self.source.identity.as_str()
+        } else {
+            identity
+        };
         let output = raw.field(raw.root(), "output")?;
         let node = raw.field(output, field)?;
         match &raw.nodes()[node] {
             yamaa_core::schema::DocumentNode::Text(path) => {
                 Some(yamaa_core::producer_admission::WrittenPath {
                     declaring_source: identity,
+                    base_source,
                     written: path,
                 })
             }
@@ -834,4 +851,10 @@ impl PreparedDocument {
             Some((self.source.identity.as_str(), &self.raw.document))
         }
     }
+}
+
+fn entry_relative(document: &yamaa_core::schema::Document, node: usize) -> bool {
+    document.field(node, "relative_to").is_some_and(|field| {
+        matches!(&document.nodes()[field], yamaa_core::schema::DocumentNode::Text(base) if base == "entry")
+    })
 }

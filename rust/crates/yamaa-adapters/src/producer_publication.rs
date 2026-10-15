@@ -75,12 +75,12 @@ impl Publication {
                 .document()
                 .written_output_origin()
                 .ok_or(AdmissionFailure::Incomplete)?;
-            for path in [origin.declaring_source, origin.written, artifact.path()] {
+            for path in [origin.base_source, origin.written, artifact.path()] {
                 text = text
                     .checked_sub(path.len())
                     .ok_or(AdmissionFailure::Limit("producer_publication_paths"))?;
             }
-            let selected = selected_bound(origin.declaring_source, origin.written)?;
+            let selected = selected_bound(origin.base_source, origin.written)?;
             // Location and AnchoredTarget each retain a canonical copy. Lexical
             // normalization removes components and cannot exceed this bound.
             text = text
@@ -117,13 +117,13 @@ impl Publication {
                 error,
             };
             let selected = resources
-                .location_from(origin.declaring_source, origin.written)
+                .location_from(origin.base_source, origin.written)
                 .map_err(failure)?;
-            if selected.len() > selected_bound(origin.declaring_source, origin.written)? {
+            if selected.len() > selected_bound(origin.base_source, origin.written)? {
                 return Err(AdmissionFailure::Limit("producer_publication_paths"));
             }
             let target = resources
-                .publication_target_from(origin.declaring_source, origin.written)
+                .publication_target_from(origin.base_source, origin.written)
                 .map_err(failure)?;
             // Bound the full duplicate-target scan before retaining this target.
             work = work
