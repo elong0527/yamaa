@@ -2586,6 +2586,53 @@ local({
   cat("implicit row joins preserve raw driver keys while column and named lookups preserve constructed keys without Python\n")
 })
 
+local({
+  assert_key_issues <- function(frame, expected) {
+    stopifnot(nrow(frame)==length(expected))
+    for (index in seq_along(expected)) {
+      row <- expected[[index]]
+      stopifnot(identical(frame$phase[[index]],row$phase),
+        identical(frame$condition[[index]],row$condition),
+        identical(frame$requirement[[index]],row$requirement),
+        identical(frame$spec_paths[[index]],fixture_strings(row$spec_paths)),
+        identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),row$context))
+    }
+  }
+  for (truth in host_truth[["key_expressions"]]) {
+    directory <- tempfile("key-expressions-"); dir.create(directory)
+    entry <- file.path(directory,"spec.yaml")
+    writeBin(charToRaw(truth$specification),entry)
+    if (length(truth$check_issues)) {
+      assert_key_issues(yamaa_check(entry)$issues,truth$check_issues)
+      assert_key_issues(yamaa_domain(entry)$issues,truth$check_issues)
+    }
+    for (name in names(truth$inputs)) writeBin(charToRaw(truth$inputs[[name]]),file.path(directory,name))
+    for (attempt in 1:2) {
+      assert_key_issues(yamaa_check(entry)$issues,truth$check_issues)
+      result <- yamaa_domain(entry)
+      assert_key_issues(result$issues,truth$issues)
+      stopifnot(!file.exists(file.path(directory,"out.csv")))
+      if (length(truth$issues)) stopifnot(is.null(result$output),
+        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        !file.exists(file.path(directory,"out.csv")))
+      else {
+        observations <- get(".domain_observations",asNamespace("yamaa"))(result)
+        counts <- jsonlite::fromJSON(rawToChar(observations),simplifyVector=FALSE)$handler_counts
+        stopifnot(identical(counts,truth$handlers),identical(result$save(),TRUE),
+          identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
+        writeBin(charToRaw("changed after build"),file.path(directory,"source.csv"))
+        stopifnot(identical(result$save(),TRUE),
+          identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
+        unlink(file.path(directory,"out.csv"))
+        writeBin(charToRaw(truth$inputs[["source.csv"]]),file.path(directory,"source.csv"))
+      }
+    }
+    stopifnot(identical(rawfile(entry),charToRaw(truth$specification)))
+    unlink(directory,recursive=TRUE)
+  }
+  cat("scalar and window key expressions preserve current scope, raw comparisons, handler counts and saved truth without Python\n")
+})
+
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 Sys.setenv(PATH=original_path)
 unlink(runtime_path,recursive=TRUE)

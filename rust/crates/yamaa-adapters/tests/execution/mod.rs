@@ -43,3 +43,4 @@ mod typed_intermediate_derivations;
 
 mod baseline_window_types;
 mod intermediate_row_drivers;
+mod key_expressions;

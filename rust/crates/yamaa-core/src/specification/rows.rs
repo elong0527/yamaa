@@ -228,7 +228,12 @@ fn default_reads(
     let mut self_default = false;
     for name in names {
         self_default |= self_relations::is_self_reference(d, &name)?;
-        reads.extend(row_intermediates::default_dependencies(d, &name, output)?);
+        reads.extend(row_intermediates::default_dependencies(
+            d,
+            &name,
+            output,
+            string_templates,
+        )?);
     }
     let mut reference = |name: &str| {
         if !name.contains('.') {
@@ -727,8 +732,12 @@ impl Rows {
                     if !present(d, row, "group_by") {
                         // A named lookup in an ungrouped filter also reads its
                         // match defaults from this candidate's derived values.
-                        filter_defaults
-                            .extend(row_intermediates::default_dependencies(d, name, output)?);
+                        filter_defaults.extend(row_intermediates::default_dependencies(
+                            d,
+                            name,
+                            output,
+                            string_templates,
+                        )?);
                     }
                     if name.contains('.') {
                         continue;
@@ -1618,8 +1627,7 @@ impl Rows {
                         _ => None,
                     };
                     if lookup_match.is_some()
-                        || matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
-                        || matches!(&binding.read, Read::Joined(read) if read.record_keys.is_none() && read.keys.iter().any(|key| deferred.get(key.output_column).copied().unwrap_or(true)))
+                        || crate::dataset::read_requires_window(&binding.read, &deferred, &bound)
                     {
                         let mut context: crate::diagnostic::Context = [
                             (

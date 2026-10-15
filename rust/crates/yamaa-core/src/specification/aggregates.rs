@@ -363,6 +363,9 @@ pub(super) fn prepare(
                                 &format!("{path}.key.{name}"),
                                 &[],
                                 0,
+                                project,
+                                extraction,
+                                templates,
                                 &mut extra,
                             )?,
                         ))
@@ -986,7 +989,7 @@ pub(super) fn bind(
                         )?;
                     }
                 }
-                if let Some(reference) = value.reference() {
+                for reference in value.references() {
                     if catalog
                         .bind(reference)
                         .map_err(BindError::Catalog)?
@@ -1007,11 +1010,21 @@ pub(super) fn bind(
                     relation,
                     catalog,
                     findings,
+                    match_values::Context {
+                        output,
+                        driver,
+                        row,
+                        phase,
+                        project,
+                        named,
+                        secondary,
+                        intermediates,
+                    },
                 )?;
                 if let Some(value) = bound {
-                    if let Some(column) = value
-                        .read()
-                        .and_then(crate::dataset::MatchRead::output_column)
+                    for column in value
+                        .reads()
+                        .filter_map(crate::dataset::MatchRead::output_column)
                     {
                         edges.push(column);
                     }

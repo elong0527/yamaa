@@ -390,6 +390,7 @@ conditions! {
     IntermediateDatasetReference => ("validation", "unknown_field", Some("REQ-0079")),
     IntermediateRenameOnly => ("validation", "rename_only_intermediate", Some("REQ-1248")),
     IntermediateSelectionUnpaired => ("validation", "unpaired_fields", Some("REQ-0119")),
+    IntermediateEmptyKey => ("validation", "invalid_field_type", Some("REQ-0115")),
     IntermediateNoApplicableKeys => ("validation", "no_applicable_keys", Some("REQ-0153")),
     IntermediateRangeDeclaration => ("validation", "invalid_field_type", Some("REQ-1049")),
     IntermediateRangeReference => ("validation", "unknown_field", Some("REQ-0121")),

@@ -1459,6 +1459,19 @@ impl Executor<'_> {
             .iter()
             .flat_map(|template| &template.assignments)
             .chain(self.plan.columns())
+            .chain(
+                self.plan
+                    .intermediates()
+                    .iter()
+                    .flat_map(|item| &item.keys)
+                    .filter_map(|key| {
+                        if let MatchValue::Expression(expression) = &key.value {
+                            Some(&expression.assignment)
+                        } else {
+                            None
+                        }
+                    }),
+            )
         {
             scalar::register(assignment, &mut observations.handlers);
             imputation::register(&assignment.expression, &mut observations.handlers);
@@ -1755,9 +1768,15 @@ impl Executor<'_> {
                 // Grouped predicates may read the completed window pass. Predicates
                 // independent of windows keep their single prewindow eligibility pass.
                 let postwindow_filter = matches!(template.mode.local_mode(), RowMode::Groups(_))
-                    && template.filter.as_ref().is_some_and(|filter| filter.bindings().iter().any(|binding| {
-                        matches!(binding.read, yamaa_core::bound_expression::Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
-                    }));
+                    && template.filter.as_ref().is_some_and(|filter| {
+                        filter.bindings().iter().any(|binding| {
+                            yamaa_core::dataset::read_requires_window(
+                                &binding.read,
+                                &deferred,
+                                self.plan.intermediates(),
+                            )
+                        })
+                    });
                 let groups = match template.mode.local_mode() {
                     RowMode::Driver { .. } | RowMode::IntermediateDriver { .. } => {
                         unreachable!("plan admission rejects nested drivers")
@@ -2002,6 +2021,7 @@ impl Executor<'_> {
                 )?;
             }
         }
+        intermediate_run.begin_columns(self, budget)?;
         let mut completed = vec![false; self.plan.output().columns().len()];
         for assignment in &self.plan.templates()[0].assignments {
             completed[assignment.column] = true;

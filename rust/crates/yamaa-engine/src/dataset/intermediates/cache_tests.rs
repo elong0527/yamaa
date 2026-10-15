@@ -49,6 +49,9 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
+        Self::with_value(None)
+    }
+    fn with_value(value: Option<MatchValue>) -> Self {
         let trace = Trace::default();
         let primary = Table {
             schema: schema(&[("K", ColumnType::Str)]),
@@ -77,9 +80,11 @@ impl Fixture {
                 keys: vec![IntermediateKey {
                     source_column: 0,
                     path: "intermediates[0].key".into(),
-                    value: MatchValue::Variable(MatchRead::Record {
-                        column: 0,
-                        identifier: "BASE.K".into(),
+                    value: value.unwrap_or_else(|| {
+                        MatchValue::Variable(MatchRead::Record {
+                            column: 0,
+                            identifier: "BASE.K".into(),
+                        })
                     }),
                 }],
                 filter: None,
@@ -290,4 +295,115 @@ fn retained_index_strings_and_coordinate_capacity_obey_the_admitted_source_bound
     assert_eq!(coordinate_cells, 256);
     assert!(text_bytes <= 256 * 4);
     assert!(coordinate_cells <= 2 * eligible.len());
+}
+
+#[test]
+fn scalar_key_snapshots_read_current_once_and_quota_refusal_runs_no_handler_or_donor() {
+    use yamaa_core::{
+        dataset::MatchExpression,
+        text_case::{Case, StringCase},
+    };
+    let path = "intermediates[0].key.K.str_case";
+    let mut fixture = Fixture::with_value(Some(MatchValue::Expression(Box::new(
+        MatchExpression::new(
+            Assignment {
+                column: 2,
+                path: path.into(),
+                expression: Expression::StrCase {
+                    source: Box::new(Assignment {
+                        column: 2,
+                        path: alloc::format!("{path}.source"),
+                        expression: Expression::Source(0),
+                    }),
+                    operation: StringCase::new(
+                        "BASE.K".into(),
+                        path.into(),
+                        Case::Lower,
+                        Some(Value::Str("x".into())),
+                    )
+                    .unwrap(),
+                },
+            },
+            vec![MatchRead::Record {
+                column: 0,
+                identifier: "BASE.K".into(),
+            }],
+            schema(&[("BASE.K", ColumnType::Str)]),
+            Some(ColumnType::Str.into()),
+        )
+        .unwrap(),
+    ))));
+    let candidate = Candidate {
+        template: Some(0),
+        selection_identity: SelectionIdentity::Candidate(0),
+        members: vec![0],
+        values: vec![Value::Int(1), Value::Missing],
+        completed: vec![true, false],
+    };
+    for refuse in [false, true] {
+        fixture.primary.values[0] = if refuse {
+            Value::Missing
+        } else {
+            Value::Str("x".into())
+        };
+        fixture.trace.borrow_mut().clear();
+        let mut budget = budget(1000);
+        let mut handlers = HandlerCounter::default();
+        handlers.register(&alloc::format!("{path}.missing"), HandlerKind::Missing);
+        let mut state = EvaluationState {
+            functions: &mut crate::function_invocation::NoFunctions::new(),
+            budget: &mut budget,
+            handlers: &mut handlers,
+            secondary: &[&fixture.donor],
+            primary: &fixture.primary,
+            self_rows: &[],
+            intermediates: &mut Run::default(),
+            output_rows: &[],
+            aggregate_row: None,
+            output_offset: 0,
+            windows: &mut windows::Cache::default(),
+        };
+        let item = &fixture.plan.intermediates()[0];
+        let current = match_values::resolve(
+            item,
+            &candidate,
+            &fixture.plan,
+            0,
+            &fixture.primary,
+            &mut state,
+        )
+        .unwrap();
+        assert_eq!(*fixture.trace.borrow(), ["BASE.K"]);
+        if refuse {
+            let used = state.budget.predicate().used().work;
+            *state.budget = Budget::with_work(state.budget.limits(), used, used);
+        }
+        let result = match_values::evaluate(
+            item,
+            &current,
+            &candidate,
+            &fixture.plan,
+            0,
+            &fixture.primary,
+            state.budget.limits(),
+            &mut state,
+        );
+        if refuse {
+            assert!(matches!(
+                *result.unwrap_err(),
+                ExecutionError::Limit {
+                    resource: Resource::WorkCells,
+                    ..
+                }
+            ));
+        } else {
+            assert_eq!(result.unwrap(), [(0, Value::Str("x".into()))]);
+        }
+        assert_eq!(
+            *fixture.trace.borrow(),
+            ["BASE.K"],
+            "scalar evaluation uses the resolved snapshot only"
+        );
+        assert_eq!(handlers.snapshot()[0].count, 0);
+    }
 }
