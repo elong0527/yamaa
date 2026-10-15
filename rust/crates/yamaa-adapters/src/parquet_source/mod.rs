@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn unsupported_text_representation_has_no_invalid_parquet_finding() {
-        let error = Error::from(reader::Error::Representation);
+        let error = Error::from(reader::Error::from(compact::Error::Representation));
         assert!(matches!(
             error,
             Error::Representation {

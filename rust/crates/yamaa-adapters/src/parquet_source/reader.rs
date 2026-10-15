@@ -43,8 +43,11 @@ impl From<framing::Error> for Error {
     }
 }
 impl From<compact::Error> for Error {
-    fn from(_: compact::Error) -> Self {
-        Self::Malformed
+    fn from(error: compact::Error) -> Self {
+        match error {
+            compact::Error::Malformed => Self::Malformed,
+            compact::Error::Representation => Self::Representation,
+        }
     }
 }
 impl From<compression::Error> for Error {
