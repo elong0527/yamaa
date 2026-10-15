@@ -1890,9 +1890,16 @@ impl DatasetPlan {
             })
         })?;
         Limits::table(rows, self.output().columns().len()).map_err(|error| {
+            if error.resource == "columns" {
+                return Box::new(ExecutionError::ScopedLimit {
+                    resource: Resource::OutputColumns,
+                    limit: error.limit,
+                    required: error.actual,
+                    spec_paths: vec!["output.columns".into()],
+                });
+            }
             Box::new(ExecutionError::Limit {
                 resource: match error.resource {
-                    "columns" => Resource::OutputColumns,
                     "table_rows" => Resource::OutputRows,
                     "table_cells" => Resource::OutputCells,
                     _ => unreachable!("table boundary resource"),
