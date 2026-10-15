@@ -193,3 +193,205 @@ fn named_derive_read_requires_keep_and_uses_original_current_record() {
         "{issues:?}"
     );
 }
+
+fn original_fieldless_count(expression: &str, key: &str, filter: &str) -> String {
+    format!(
+        "schema_version: '1.0'\ndomain: OUT\ninput:\n  SRC: {{path: src.csv, types: {{N: int}}}}\n  OTHER: {{path: other.csv, types: {{N: int}}}}\nbase: SRC\nkeys: [K]\noutput: {{path: out.csv, columns: [K, V]}}\ncolumns:\n  - name: V\n    type: int\n    derivation:\n      aggregate:\n        expr: '{expression}'\n        key: {key}\n{filter}  - {{name: K, type: int, derivation: SRC.N}}\n"
+    )
+}
+
+fn fieldless_count_fixture(source: &str) -> Fixture {
+    let fixture = Fixture::new();
+    fs::write(fixture.0.join("src.csv"), "N\n1\n").unwrap();
+    fs::write(fixture.0.join("other.csv"), "N\n1\n1\n2\n").unwrap();
+    fs::write(fixture.0.join("spec.yaml"), source).unwrap();
+    fixture
+}
+
+fn saved_count(fixture: &Fixture, mut result: file_application::Domain) -> Vec<u8> {
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(!fixture.0.join("out.csv").exists());
+    assert!(result.save().unwrap());
+    fs::read(fixture.0.join("out.csv")).unwrap()
+}
+
+// Original planning/test_aggregate_relation_reads.py inputs: COUNT still owns
+// a relation even though it reads no payload field. Its key producer is written
+// after the consuming column, and only the two matching donors are eligible.
+#[test]
+fn original_fieldless_reductions_schedule_real_key_dependencies_once() {
+    for (expression, count) in [
+        ("COUNT(OTHER.*)", 2),
+        ("SUM(OTHER.N)", 2),
+        ("COUNT(OTHER.*) + COUNT(OTHER.*)", 4),
+        ("COUNT(OTHER.*) + SUM(OTHER.N)", 4),
+    ] {
+        for key in [
+            "{N: K}",
+            "{N: {source: K}}",
+            "{N: {literal: 1}}",
+            "{N: {greatest: {sources: [K, K]}}}",
+        ] {
+            let source = original_fieldless_count(expression, key, "");
+            let fixture = fieldless_count_fixture(&source);
+            let result = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
+            assert!(
+                result.issues().is_empty(),
+                "{expression}, {key}: {:?}",
+                result.issues()
+            );
+            assert_eq!(
+                saved_count(&fixture, result),
+                format!("K,V\n1,{count}\n").as_bytes()
+            );
+        }
+    }
+    let source = original_fieldless_count("COUNT(OTHER.*)", "{N: K}", "")
+        .replace("keys: [K]", "keys: [N]")
+        .replace("columns: [K, V]", "columns: [N, V]")
+        .replace("        key: {N: K}\n", "")
+        .replace("name: K", "name: N");
+    let fixture = fieldless_count_fixture(&source);
+    let result = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert_eq!(saved_count(&fixture, result), b"N,V\n1,2\n");
+}
+
+fn complete_aggregate_issues(fixture: &Fixture) -> Vec<serde_json::Value> {
+    let issues = match fixture.run() {
+        Ok(mut result) => {
+            assert!(result.output().is_none());
+            assert!(result.save().is_err());
+            result.issues()
+        }
+        Err(issues) => issues,
+    };
+    assert!(!fixture.0.join("out.csv").exists());
+    issues
+        .iter()
+        .map(|issue| {
+            serde_json::json!({
+                "phase": issue.phase, "condition": issue.condition,
+                "requirement": issue.requirement, "spec_paths": issue.spec_paths,
+                "context": serde_json::from_str::<serde_json::Value>(&issue.context).unwrap()
+            })
+        })
+        .collect()
+}
+
+#[test]
+fn original_fieldless_reduction_type_findings_keep_one_authored_owner() {
+    for expression in [
+        "COUNT(OTHER.*)",
+        "SUM(OTHER.N)",
+        "COUNT(OTHER.*) + COUNT(OTHER.*)",
+        "COUNT(OTHER.*) + SUM(OTHER.N)",
+    ] {
+        for (literal, kind) in [("true", "bool"), ("x", "str")] {
+            let fixture = fieldless_count_fixture(&original_fieldless_count(
+                expression,
+                &format!("{{N: {{literal: {literal}}}}}"),
+                "",
+            ));
+            assert_eq!(
+                complete_aggregate_issues(&fixture),
+                vec![serde_json::json!({
+                    "phase": "validation", "condition": "incompatible_input_type",
+                    "requirement": "REQ-0004", "spec_paths": ["columns.V.derivation.aggregate.expr"],
+                    "context": {"source": "key[N]", "expected": kind, "actual": "int"}
+                })],
+                "{expression}, {literal}"
+            );
+        }
+    }
+    for (expression, path) in [
+        ("COUNT(OTHER.*)", "columns.V.derivation.aggregate.filter"),
+        ("SUM(OTHER.N)", "columns.V.derivation.aggregate.expr"),
+        (
+            "COUNT(OTHER.*) + SUM(OTHER.N)",
+            "columns.V.derivation.aggregate.expr",
+        ),
+    ] {
+        let fixture = fieldless_count_fixture(&original_fieldless_count(
+            expression,
+            "{N: {literal: true}}",
+            "        filter: OTHER.N > 0\n",
+        ));
+        assert_eq!(
+            complete_aggregate_issues(&fixture),
+            vec![serde_json::json!({
+                "phase": "validation", "condition": "incompatible_input_type",
+                "requirement": "REQ-0004", "spec_paths": [path],
+                "context": {"source": "key[N]", "expected": "bool", "actual": "int"}
+            })],
+            "{expression}"
+        );
+    }
+}
+
+#[test]
+fn original_fieldless_reduction_unknown_names_do_not_invent_join_findings() {
+    for (expression, key, identifier, requirement) in [
+        ("COUNT(OTHER.*)", "{ABSENT: K}", "OTHER.ABSENT", "REQ-0141"),
+        ("COUNT(OTHER.*)", "{N: ABSENT}", "ABSENT", "REQ-0141"),
+        ("COUNT(ABSENT.*)", "{N: K}", "ABSENT.*", "REQ-0103"),
+    ] {
+        let fixture = fieldless_count_fixture(&original_fieldless_count(expression, key, ""));
+        assert_eq!(
+            complete_aggregate_issues(&fixture),
+            vec![serde_json::json!({
+                "phase": "validation", "condition": "unknown_field",
+                "requirement": requirement, "spec_paths": ["columns.V.derivation.aggregate.expr"],
+                "context": {"identifier": identifier}
+            })],
+            "{expression}, {key}"
+        );
+    }
+    for (expression, identifier) in [
+        ("SUM(ABSENT.N)", "ABSENT.N"),
+        ("COUNT(ABSENT.*)", "ABSENT.*"),
+    ] {
+        let fixture = fieldless_count_fixture(&original_fieldless_count(
+            expression,
+            "{N: K}",
+            "        filter: ABSENT.OTHER > 0\n",
+        ));
+        assert_eq!(
+            complete_aggregate_issues(&fixture),
+            vec![serde_json::json!({
+                "phase": "validation", "condition": "unknown_field",
+                "requirement": "REQ-0103", "spec_paths": ["columns.V.derivation.aggregate.expr"],
+                "context": {"identifier": identifier}
+            })],
+            "{expression}"
+        );
+    }
+}
+
+#[test]
+fn fieldless_literal_bindings_keep_the_filter_as_the_only_donor_reference() {
+    for expression in ["COUNT(OTHER.*)", "SUM(H)"] {
+        for key in ["{N: {literal: true}}", "{N: K}"] {
+            let source = original_fieldless_count(expression, key, "        filter: OTHER.N > 0\n")
+                .replace(
+                    "        filter: OTHER.N > 0\n",
+                    "        derive:\n          - {name: H, type: int, derivation: {literal: 1}}\n        filter: OTHER.N > 0\n",
+                );
+            let fixture = fieldless_count_fixture(&source);
+            if key == "{N: K}" {
+                let result = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
+                assert_eq!(saved_count(&fixture, result), b"K,V\n1,2\n");
+            } else {
+                assert_eq!(
+                    complete_aggregate_issues(&fixture),
+                    vec![serde_json::json!({
+                        "phase": "validation", "condition": "incompatible_input_type",
+                        "requirement": "REQ-0004", "spec_paths": ["columns.V.derivation.aggregate.filter"],
+                        "context": {"source": "key[N]", "expected": "bool", "actual": "int"}
+                    })],
+                    "{expression}"
+                );
+            }
+        }
+    }
+}

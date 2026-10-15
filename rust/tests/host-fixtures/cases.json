@@ -1751,6 +1751,31 @@
             }
           ],
           "output": "adqs.csv"
+        },
+        {
+          "name": "original_fieldless_count_filter_key_type",
+          "specification": "schema_version: '1.0'\ndomain: OUT\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  OTHER: {path: other.csv, types: {N: int}}\nbase: SRC\nkeys: [K]\noutput: {path: out.csv, columns: [K, V]}\ncolumns:\n  - name: V\n    type: int\n    derivation:\n      aggregate:\n        expr: COUNT(OTHER.*)\n        key: {N: {literal: true}}\n        filter: OTHER.N > 0\n  - {name: K, type: int, derivation: SRC.N}\n",
+          "inputs": {
+            "src.csv": "N\n1\n",
+            "other.csv": "N\n1\n1\n2\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0004",
+              "spec_paths": [
+                "columns.V.derivation.aggregate.filter"
+              ],
+              "context": {
+                "source": "key[N]",
+                "expected": "bool",
+                "actual": "int"
+              }
+            }
+          ],
+          "output": "out.csv"
         }
       ],
       "row_count_lookups": [
