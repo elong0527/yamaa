@@ -1,6 +1,6 @@
 use yamaa_core::{
-    reference_binding::{Catalog, Dataset, Error, Field, Limits as CatalogLimits},
-    reference_scope::{validate, Finding as F, Limits, Phase, Reach, Scope},
+    reference_binding::{Catalog, Dataset, Error, Field},
+    reference_scope::{validate, Finding as F, Phase, Reach, Scope},
     value::ColumnType::{Float, Int, Str},
 };
 
@@ -32,7 +32,6 @@ fn catalog() -> Catalog {
                 fields: &other,
             },
         ],
-        CatalogLimits::default(),
     )
     .unwrap()
 }
@@ -280,85 +279,21 @@ fn independent_scope_and_priority_truth() {
         ),
     ] {
         assert_eq!(
-            validate(&catalog, name, expected, scope, Limits::default()),
+            validate(&catalog, name, expected, scope),
             Ok(findings),
             "{name}: {scope:?}"
         );
     }
 }
 
-/// Count written scope entries and UTF-8 bytes before language diagnostics, without state leakage.
+/// A malformed query remains separate from later valid scope checks.
 #[test]
-fn scope_admission_and_reuse() {
+fn qualified_query_shape_and_reuse() {
     let catalog = catalog();
     let row = scope(Phase::Row { group_by: None });
     assert_eq!(
-        validate(&catalog, "N", None, row, Limits::default()),
+        validate(&catalog, "N", None, row),
         Err(Error::BareQualifiedQuery)
     );
-    for (scope, limits, resource, limit, required) in [
-        (
-            Scope {
-                drivers: &["SRC", "SRC"],
-                ..row
-            },
-            Limits {
-                drivers: 1,
-                ..Limits::default()
-            },
-            "scope_drivers",
-            1,
-            2,
-        ),
-        (
-            scope(Phase::Column {
-                groups: &[&[], &[]],
-            }),
-            Limits {
-                groups: 1,
-                ..Limits::default()
-            },
-            "scope_groups",
-            1,
-            2,
-        ),
-        (
-            scope(Phase::Row {
-                group_by: Some(&["SRC.K", "SRC.K"]),
-            }),
-            Limits {
-                group_fields: 1,
-                ..Limits::default()
-            },
-            "scope_group_fields",
-            1,
-            2,
-        ),
-        (
-            Scope {
-                drivers: &["é"],
-                ..row
-            },
-            Limits {
-                context_bytes: 1,
-                ..Limits::default()
-            },
-            "scope_context_bytes",
-            1,
-            2,
-        ),
-    ] {
-        assert_eq!(
-            validate(&catalog, "UNKNOWN.N", None, scope, limits),
-            Err(Error::Limit {
-                resource,
-                limit,
-                required
-            })
-        );
-    }
-    assert_eq!(
-        validate(&catalog, "SRC.N", Some(Int), row, Limits::default()),
-        Ok(vec![])
-    );
+    assert_eq!(validate(&catalog, "SRC.N", Some(Int), row), Ok(vec![]));
 }

@@ -1,8 +1,8 @@
 use yamaa_core::{
     intermediate_reference::{
-        validate_field, validate_read, Finding as F, Intermediate, Limits, Read, Source,
+        validate_field, validate_read, Finding as F, Intermediate, Read, Source,
     },
-    reference_binding::{Catalog, Dataset, Error, Field, Limits as CatalogLimits},
+    reference_binding::{Catalog, Dataset, Field},
     value::ColumnType,
 };
 
@@ -31,7 +31,6 @@ fn catalog() -> Catalog {
                 },
             ],
         }],
-        CatalogLimits::default(),
     )
     .unwrap()
 }
@@ -97,7 +96,7 @@ fn stored_derived_and_self_visibility() {
         ),
     ] {
         assert_eq!(
-            validate_field(&catalog, field, target, Limits::default()).unwrap(),
+            validate_field(&catalog, field, target),
             finding,
             "{field}, {target:?}"
         );
@@ -245,17 +244,13 @@ fn donor_scope_phase_and_priority() {
             vec![],
         ),
     ] {
-        assert_eq!(
-            validate_read(&catalog, read, Limits::default()).unwrap(),
-            expected,
-            "{read:?}"
-        );
+        assert_eq!(validate_read(&catalog, read), expected, "{read:?}");
     }
 }
 
-/// Written duplicates and UTF-8 bytes count before language short-circuits; rejection is reusable.
+/// Self-reads stay deferred to cycle analysis, and Unicode visibility has no shared state.
 #[test]
-fn resource_admission_before_skipped_reads() {
+fn self_reads_and_unicode_visibility_are_reusable() {
     let catalog = catalog();
     let target = Intermediate {
         source: Source::Dataset("SRC"),
@@ -263,35 +258,7 @@ fn resource_admission_before_skipped_reads() {
         readable: &[],
         dependencies: &[],
     };
-    let limits = Limits {
-        entries: 2,
-        context_bytes: 5,
-    };
-    assert_eq!(validate_field(&catalog, "é", target, limits).unwrap(), None);
-    assert_eq!(
-        validate_field(&catalog, "éé", target, limits),
-        Err(Error::Limit {
-            resource: "intermediate_context_bytes",
-            limit: 5,
-            required: 7
-        })
-    );
-    assert_eq!(
-        validate_field(
-            &catalog,
-            "K",
-            Intermediate {
-                derived: &["K", "K"],
-                ..target
-            },
-            limits
-        ),
-        Err(Error::Limit {
-            resource: "intermediate_entries",
-            limit: 2,
-            required: 4
-        })
-    );
+    assert_eq!(validate_field(&catalog, "é", target), None);
     let read = Read {
         reader: "same",
         target_name: "same",
@@ -300,39 +267,6 @@ fn resource_admission_before_skipped_reads() {
         donor_dataset: "D",
         visible: &["é"],
     };
-    assert_eq!(
-        validate_read(
-            &catalog,
-            read,
-            Limits {
-                entries: 4,
-                ..Limits::default()
-            }
-        ),
-        Err(Error::Limit {
-            resource: "intermediate_entries",
-            limit: 4,
-            required: 5
-        })
-    );
-    assert_eq!(
-        validate_read(
-            &catalog,
-            read,
-            Limits {
-                context_bytes: 11,
-                ..Limits::default()
-            }
-        ),
-        Err(Error::Limit {
-            resource: "intermediate_context_bytes",
-            limit: 11,
-            required: 12
-        })
-    );
-    assert_eq!(
-        validate_read(&catalog, read, Limits::default()).unwrap(),
-        vec![]
-    );
-    assert_eq!(validate_field(&catalog, "é", target, limits).unwrap(), None);
+    assert_eq!(validate_read(&catalog, read), vec![]);
+    assert_eq!(validate_field(&catalog, "é", target), None);
 }

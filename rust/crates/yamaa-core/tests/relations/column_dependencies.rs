@@ -1,5 +1,5 @@
 use yamaa_core::column_dependencies::{analyze, Analysis, Diagnostic, Error};
-use yamaa_core::dependency_analysis::{Error as GraphError, Limits};
+use yamaa_core::dependency_analysis::Error as GraphError;
 
 /// Decode hand-authored fixture indices, independently of the transport parser.
 fn indices(text: &str) -> Vec<usize> {
@@ -51,12 +51,7 @@ fn shared_column_dependency_truth() {
                 .collect()
         };
         assert_eq!(
-            analyze(
-                &graph,
-                &indices(fields[2]),
-                fields[3].parse().unwrap(),
-                Limits::default()
-            ),
+            analyze(&graph, &indices(fields[2]), fields[3].parse().unwrap(),),
             Ok(Analysis {
                 order: indices(fields[4]),
                 diagnostics
@@ -67,42 +62,28 @@ fn shared_column_dependency_truth() {
     }
 }
 
-/// Limits precede index admission; malformed metadata never poisons the next call.
+/// Malformed metadata never poisons the next call.
 #[test]
 fn metadata_admission_and_reuse() {
     let graph = [Some(vec![1, 1, 99]), None];
     for _ in 0..2 {
         assert_eq!(
-            analyze(&graph, &[99], false, Limits { nodes: 1, edges: 0 }),
-            Err(Error::Graph(GraphError::NodeLimit {
-                limit: 1,
-                required: 2
-            }))
-        );
-        assert_eq!(
-            analyze(&graph, &[99], false, Limits { nodes: 2, edges: 2 }),
-            Err(Error::Graph(GraphError::EdgeLimit {
-                limit: 2,
-                required: 3
-            }))
-        );
-        assert_eq!(
-            analyze(&graph, &[99], false, Limits { nodes: 2, edges: 3 }),
+            analyze(&graph, &[99], false),
             Err(Error::Graph(GraphError::InvalidDependency {
                 node: 0,
                 dependency: 99
             }))
         );
         assert_eq!(
-            analyze(&[None], &[1], true, Limits::default()),
+            analyze(&[None], &[1], true),
             Err(Error::InvalidKey { key: 1 })
         );
         assert_eq!(
-            analyze(&[None], &[0, 0], true, Limits::default()),
+            analyze(&[None], &[0, 0], true),
             Err(Error::DuplicateKey { key: 0 })
         );
         assert_eq!(
-            analyze(&[Some(vec![])], &[0], false, Limits::default()),
+            analyze(&[Some(vec![])], &[0], false),
             Ok(Analysis {
                 order: vec![0],
                 diagnostics: vec![]
