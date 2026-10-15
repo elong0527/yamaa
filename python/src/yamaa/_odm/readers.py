@@ -651,7 +651,7 @@ def iter_odm_records(
                     # form written inside one item silently supplied the
                     # projected context of every following row. Roll the
                     # context back and reject the container here, at its
-                    # own end — an ItemData nested inside it ends first,
+                    # own end -- an ItemData nested inside it ends first,
                     # so that nesting is still reported as nested ItemData.
                     if name == "ItemGroupData":
                         if groups:
