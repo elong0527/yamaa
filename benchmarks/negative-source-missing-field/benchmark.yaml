@@ -1,0 +1,6 @@
+lifecycle: draft
+standard: SDTM
+domain: DM
+validation:
+  rule: R003
+  validator: predicate

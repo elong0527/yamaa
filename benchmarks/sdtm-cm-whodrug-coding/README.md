@@ -1,8 +1,5 @@
 # Code medications against WHODrug
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-cm-whodrug-coding.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** code reported medication names with the World Health
 Organization drug dictionary (WHODrug), carrying the coder's chosen
 drug record and Anatomical Therapeutic Chemical (ATC) class into CM.
@@ -27,5 +24,3 @@ collected record); and a WHODrug dictionary extract.
 **Note:** one drug can carry several ATC codes, and the coder assigns
 the class for the use at hand: the same drug record can code to a
 different `CMCLAS` on different records.
-
-Standard: SDTM | Domain: CM

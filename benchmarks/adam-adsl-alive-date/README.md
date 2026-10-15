@@ -1,8 +1,5 @@
 # Derive the Last Known Alive Date from Multiple Sources
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-alive-date.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive `LSTCNTDT` and `LSTALVDT` for each subject from the
 contact, treatment, adverse event, and vital signs dates.
 
@@ -25,5 +22,3 @@ never claims contact beyond what was collected: `2025-02` counts as
 `2025-02-01` and `2025` as `2025-01-01`, so a fully collected date within
 that period wins. Text that cannot be read as a date (for example
 `unknown`) leaves the completed date missing instead.
-
-**Standard:** ADaM | **Domain:** ADSL

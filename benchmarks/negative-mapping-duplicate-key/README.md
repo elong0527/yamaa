@@ -1,8 +1,5 @@
 # Reject Duplicate Key
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-mapping-duplicate-key.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry sex and the numeric result into the output and
 choose the upper limit of normal (`ANRHI`) from a reference table
 by test and sex.
@@ -24,8 +21,6 @@ Taking either line, or the first the file happens to list, would
 make the result depend on file order rather than on the study's
 reference ranges, so the run is rejected with no artifact accepted,
 even when the lines agree.
-
-**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

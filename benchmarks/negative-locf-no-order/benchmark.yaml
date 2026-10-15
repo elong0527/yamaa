@@ -1,0 +1,8 @@
+lifecycle: draft
+standard: ADaM
+domain: ADVS
+validation:
+  rule: R007
+  validator: static_semantics
+covers:
+- locf

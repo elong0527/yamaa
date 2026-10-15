@@ -1,8 +1,5 @@
 # Reject Mixed Types
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-least-mixed.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** record each subject's date of death (`DTHDT`) and
 last-visit study day (`LSTVSDY`) from collected demographics, and
 keep the earlier of the two in `FSTALVDT` as the first known alive
@@ -22,8 +19,6 @@ date.
   the other is missing. A calendar date and a day count have no
   common order, so there is no earlier of the two: the run is
   rejected before any data is read and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

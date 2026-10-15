@@ -1,8 +1,5 @@
 # Reference Range Flags
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-lb-ranges.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** attach the reference unit and limits to each collected
 test result and flag the result against them: `LBSTRESU`,
 `LBSTNRLO`, `LBSTNRHI`, and `LBNRIND`.
@@ -30,5 +27,3 @@ giving the unit and the lower and upper limits.
 stops the run. One with no entry leaves the unit and both limits
 blank, and its range indicator stays blank. A record whose result is
 missing still carries its unit and limits.
-
-**Standard:** SDTM | **Domain:** LB

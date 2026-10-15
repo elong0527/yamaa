@@ -1,8 +1,5 @@
 # Dataset-Level Related Records
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-relrec-dataset-level.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** emit related-records rows for whole-dataset
 relationships alongside record-level rows, carrying `IDVAR`,
 `IDVARVAL`, and `RELID`.
@@ -38,5 +35,3 @@ without a link identifier gets no row.
 **Note:** rows sharing a `RELID` are related to one another
 whether they point at whole datasets or single records; a
 dataset-level row never names a subject or a record value.
-
-**Standard:** SDTM | **Domain:** RELREC

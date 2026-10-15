@@ -1,8 +1,5 @@
 # Exposure Adjusted Adverse Event Incidence
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-exposure-adjusted-incidence.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** report event-specific time at risk and exposure adjusted incidence
 per actual treatment, with subject-level risk attribution alongside it.
 
@@ -26,5 +23,3 @@ analysis records with term and complete onset date.
 **Note:** repeated events contribute only their first eligible onset. An
 onset before first dose or after the collection window contributes no event
 and does not shorten time at risk. Different terms have separate denominators.
-
-**Standard:** ADaM | **Domain:** ADAE

@@ -1,8 +1,5 @@
 # Post-Index Event Flags
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-post-index.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** mark each Analysis Data Model (ADaM) adverse event record
 with `AFTIDXFL` when it starts after the subject's index event -- the
 subject's first occurrence of a designated term (in the sample data,
@@ -22,5 +19,3 @@ COVID-19).
 
 **Note:** ordering is within each subject by start date, with the
 sequence number (`AESEQ`) breaking ties on the same date.
-
-**Standard:** ADaM | **Domain:** ADAE

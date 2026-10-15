@@ -1,8 +1,5 @@
 # Reject Remote Parent
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-remote-parent.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** attempt to prepare subject records reusing shared
 definitions named by `https://example.test/organization.yaml`.
 
@@ -17,8 +14,6 @@ records prepared from the shared definitions.
 **Note:** the run is rejected before any data is read and no
 artifact is accepted: a remote resource can change independently
 and cannot provide a reproducible local build.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

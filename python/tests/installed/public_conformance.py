@@ -184,7 +184,7 @@ def main(argv=None):
                     case,
                     symlinks=True,
                     ignore=shutil.ignore_patterns(
-                        "expected", "run.py", "run.R", "README.md"
+                        "expected", "README.md", "benchmark.yaml"
                     ),
                 )
                 staged = args.plan / "variants" / name

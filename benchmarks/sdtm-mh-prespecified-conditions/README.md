@@ -1,8 +1,5 @@
 # Pre-specified Medical History Checklist
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-mh-prespecified-conditions.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** map a pre-specified medical history checklist into MH and carry
 any number of volunteered free-text conditions alongside it.
 
@@ -31,5 +28,3 @@ Repeat numbers can be reused at another visit.
 entirely absent from the extract is not assumed to have been asked. Each
 volunteered condition is its own MH record, even when its repeat number is
 reused at another visit.
-
-**Standard:** SDTM | **Domain:** MH

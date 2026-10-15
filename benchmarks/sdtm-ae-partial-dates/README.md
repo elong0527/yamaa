@@ -1,8 +1,5 @@
 # Partial Adverse Event Dates
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-ae-partial-dates.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** one row per adverse event (AE) with the collected start
 and end kept at the precision they were collected (`AESTDTC`,
 `AEENDTC`), and the study day (`AESTDY`, `AEENDY`) filled only when
@@ -33,5 +30,3 @@ subject has no usable reference date.
   is no day zero. Only a complete date gets a study day: a partial
   date has none even when the reference date is known, and no date
   has one when the reference date is unknown.
-
-**Standard:** SDTM | **Domain:** AE

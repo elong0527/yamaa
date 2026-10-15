@@ -1,8 +1,5 @@
 # Death Date Flag
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-death.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive date/time of death (`DTHDTC`) and death flag (`DTHFL`) for
 each demographics subject.
 
@@ -18,5 +15,3 @@ date, and adverse events with outcome and end date.
 
 **Note:** when the sources record different death dates, the disposition date
 wins. An undated death or fatal event cannot displace a dated one.
-
-**Standard:** SDTM | **Domain:** DM

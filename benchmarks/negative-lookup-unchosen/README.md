@@ -1,8 +1,5 @@
 # Reject Unchosen Record
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-lookup-unchosen.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry the treatment a subject received and the dose they
 received of it onto `TRT01A` and `TRT01DOSE`.
 
@@ -20,8 +17,6 @@ number (`EXSEQ`), and start date (`EXSTDTC`).
 says which one, so a subject matching more than one exposure
 record has no single answer, and the run is rejected with no
 artifact accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

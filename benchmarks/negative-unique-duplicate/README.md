@@ -1,8 +1,5 @@
 # Reject Duplicate SITEID
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-unique-duplicate.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build the analysis dataset with one record per subject
 carrying `SITEID`.
 
@@ -18,8 +15,6 @@ enrolling site.
 site, but a site that enrolled more than one subject repeats its
 `SITEID`, which then cannot identify a subject record. The run is
 rejected and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

@@ -1,8 +1,5 @@
 # Assign Each Vital Sign's Trial Period
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-vs-epoch-from-subject-elements.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry each collected vital-signs result with its test, result,
 and collection date-time, and add the trial period from the subject's
 own elements: `VSTESTCD`, `VSORRES`, `VSDTC`, and `EPOCH`.
@@ -26,5 +23,3 @@ reading on that day belongs to screening and a post-dose reading to
 treatment. A date-only collection reads as the start of that day, so it
 falls in the element in progress at day-start; a reading exactly at a
 shared element boundary belongs to the later element.
-
-**Standard:** SDTM | **Domain:** VS

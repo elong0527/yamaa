@@ -1,0 +1,6 @@
+lifecycle: draft
+standard: ADaM
+domain: ADSL
+validation:
+  rule: R020
+  validator: artifact_profile

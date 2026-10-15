@@ -1,8 +1,5 @@
 # Standardize Collected Sex, Race, and Age
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-demographics.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** produce standard sex, race code, age, and age group
 values from collected demographics, carrying `SEX` and `RACE`
 through and producing `SEXN`, `RACEN`, `AGE`, and `AGEGR1`.
@@ -29,5 +26,3 @@ and `AGE` as reported.
 
 **Note:** the numeric mappings match exactly: a race value with
 different case or extra wording gives `99`.
-
-**Standard:** ADaM | **Domain:** ADSL

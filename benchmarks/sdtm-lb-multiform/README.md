@@ -1,8 +1,5 @@
 # Multiform Labs
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-lb-multiform.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** one record per reported result from serum, skin-biopsy,
 saliva, and tape-strip forms, carrying `LBTESTCD`, `LBTEST`,
 `LBCAT`, `LBSPEC`, `LBLOC`, `LBORRES`, `LBORRESU`, `LBSTRESC`,
@@ -51,5 +48,3 @@ still produces a record, with the result and unit fields left blank
 and the status recorded. Each record keeps the date of the form it
 came from, so a form collected twice at one visit keeps each
 occurrence's own date.
-
-**Standard:** SDTM | **Domain:** LB

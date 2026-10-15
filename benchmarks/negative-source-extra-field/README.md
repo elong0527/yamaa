@@ -1,8 +1,5 @@
 # Reject Extra Field
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-source-extra-field.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build a subject-level result carrying the enrollment
 site (`SITEID`) and the recorded sex (`SEX`) for each subject.
 
@@ -22,8 +19,6 @@ Reading the longer record would mean either dropping a collected
 value or shifting every value after it into the wrong field, so the
 run is rejected while reading the listing and no artifact is
 accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

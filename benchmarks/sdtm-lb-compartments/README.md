@@ -1,8 +1,5 @@
 # Conditional Compartments
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-lb-compartments.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one record per skin compartment a subject has for
 the test code (`IL13`), carrying `LBTESTCD`, `LBTEST`, `LBSPEC`,
 `LBLOC`, `LBORRES`, `LBORRESU`, `LBSTRESN`, and `LBSTAT`.
@@ -34,5 +31,3 @@ non-lesional result, and unit.
 **Note:** a blank result with `NOT DONE` means the compartment
 exists but its sample was not analysed, while a missing lesional
 record means the subject has no lesional compartment.
-
-**Standard:** SDTM | **Domain:** LB

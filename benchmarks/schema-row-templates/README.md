@@ -1,8 +1,5 @@
 # Row Templates
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-row-templates.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build output rows from input records and groups with the three
 row-template shapes: record-driven templates with input filters, a case
 split across several templates, and a grouped template whose own filter
@@ -33,5 +30,3 @@ tests interleaved in the file. A result may be missing.
 the same for every template, so they are stated once at column level.
 The subject and visit read the input record on the record-driven
 templates and the group keys on the grouped template.
-
-**Standard:** ADaM | **Domain:** ADLB

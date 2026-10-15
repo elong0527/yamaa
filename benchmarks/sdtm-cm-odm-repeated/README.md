@@ -1,8 +1,5 @@
 # Repeated Concomitant Medications from ODM
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-cm-odm-repeated.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** create one CM record per reported medication course from long-form
 Operational Data Model (ODM) item data.
 
@@ -22,5 +19,3 @@ identifiers. Items from other forms contribute no CM record.
 **Note:** A form repeat number reused at a later visit starts a separate
 course, and a medication reported in two courses gives two records. A course
 without a reported treatment name contributes no CM record.
-
-**Standard:** SDTM | **Domain:** CM

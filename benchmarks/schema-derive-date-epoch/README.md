@@ -1,8 +1,5 @@
 # Derive Date Epoch
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-derive-date-epoch.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** demonstrate the per-record `derive` step of an aggregation:
 convert each record's date to an integer day count with `to_epoch_day`,
 then summarize the integers.
@@ -23,5 +20,3 @@ count first, so the summary works on plain integers and never on dates.
 The summary then keeps the value of the one record with the row's
 subject and sequence number (`ONLY`); a second matching record would
 stop the run.
-
-**Standard:** ADaM | **Domain:** ADEX

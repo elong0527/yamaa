@@ -1,8 +1,5 @@
 # Derive mean arterial pressure records
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-map.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** add one mean arterial pressure (`MAP`) record, holding the result
 in `AVAL` and `CALCULATION` in `DTYPE`, for each subject and visit that has
 both a systolic (`SYSBP`) and a diastolic (`DIABP`) blood pressure result;
@@ -22,5 +19,3 @@ subject, visit, and parameter.
 **Note:** a subject and visit with more than one `SYSBP` or `DIABP` record
 stops the run rather than choosing one, and so does an input that already
 carries a `MAP` record.
-
-**Standard:** ADaM | **Domain:** ADVS

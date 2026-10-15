@@ -1,8 +1,5 @@
 # Severity Ranking
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-severity-rank.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** rank each subject's adverse events (AEs) from worst to
 mildest: the numeric severity `ASEVN` orders events into a rank
 `SEVRANK` and a dense rank `SEVLVL` in an Analysis Data Model (ADaM)
@@ -32,5 +29,3 @@ with a reported severity, and events with no reported severity share
 one rank with each other because nothing tells them apart. A subject
 with a single event carries rank 1, and when none of a subject's
 events has a reported severity every event shares rank 1.
-
-**Standard:** ADaM | **Domain:** ADAE

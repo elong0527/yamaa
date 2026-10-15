@@ -1,8 +1,5 @@
 # Reject Unknown Column
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-order-unknown-column.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive the measurement code (`VSTESTCD`) and the numeric
 result in standard units (`VSSTRESN`) for each collected
 vital-signs measurement, presented by subject and then by visit
@@ -23,8 +20,6 @@ numeric result (`VSSTRESN`), and the visit number (`VISITNUM`).
 variable of the requested dataset carries it, so a completed record
 has no value to be ordered by. The run is rejected before any data
 is read and no artifact is accepted.
-
-**Standard:** SDTM | **Domain:** VS
 
 ## How to fix
 

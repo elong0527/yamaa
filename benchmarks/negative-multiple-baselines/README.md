@@ -1,8 +1,5 @@
 # Reject Multiple Baselines
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-multiple-baselines.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry the numeric result (`LBSTRESN`) and the baseline
 flag (`LBBLFL`) as collected, and repeat the baseline value (`BAVL`)
 on every row for the subject.
@@ -20,8 +17,6 @@ baseline record.
 **Note:** the run is rejected when a subject has more than one
 record flagged `Y`: no single baseline value exists, so no artifact
 is accepted.
-
-**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

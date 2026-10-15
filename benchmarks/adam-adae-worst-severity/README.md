@@ -1,8 +1,5 @@
 # Worst Severity Flags
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-worst-severity.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** rank severity and flag the worst-severity
 treatment-emergent event for each subject and preferred term
 (`AEDECOD`), adding `ASEVN` and `AOCCPIFL`.
@@ -24,5 +21,3 @@ flag (`TRTEMFL`).
 **Note:** only a treatment-emergent event with a graded severity is
 eligible, so a preferred term (`AEDECOD`) whose events are all
 ineligible has no flagged event.
-
-**Standard:** ADaM | **Domain:** ADAE

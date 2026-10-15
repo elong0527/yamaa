@@ -11,14 +11,18 @@ From the repository root, install the Python package and its project programs:
 uv sync --project python --locked --group benchmark --extra test --no-editable
 python/.venv/bin/python -m tools.staging.stage_project_inputs /tmp/yamaa-project-studies
 cd /tmp/yamaa-project-studies/schema-functions
-/path/to/yamaa/python/.venv/bin/python run.py
+/path/to/yamaa/python/.venv/bin/python - <<'PYTHON'
+import yamaa
+result = yamaa.domain("spec.yaml", environment="python/environment.yaml")
+result.save()
+PYTHON
 ```
 
 The stager copies the exact existing `python/uv.lock` into each isolated study.
 It refuses an existing destination. No second Python lock is committed.
 
 For R, install `rust/tests/project-programs/r` into the same library as the standalone
-`yamaa` package and run the staged study's `run.R`. Each R environment refers to
+`yamaa` package and call its declared entry. Each R environment refers to
 its hash-free `renv.lock`, which pins `yamaa` and the called project package.
 
 ```r

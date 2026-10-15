@@ -1,0 +1,8 @@
+lifecycle: reviewed
+standard: ADaM
+domain: ADSL
+validation:
+  rule: R002
+  validator: name_contract
+covers:
+- source

@@ -1,8 +1,5 @@
 # Reject Repeated End-of-Study Records
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-lookup-duplicate-intermediate.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive each subject's end-of-study date (`EOSDT`) from the
 subject's one end-of-study disposition record.
 
@@ -18,8 +15,6 @@ category (`DSCAT`), decoded term (`DSDECOD`), and start date
   such record per subject; a subject with two has no single
   end-of-study date, so the run is rejected before any output row is
   built and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

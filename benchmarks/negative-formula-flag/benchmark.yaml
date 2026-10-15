@@ -1,0 +1,8 @@
+lifecycle: reviewed
+standard: ADaM
+domain: ADLB
+validation:
+  rule: R010
+  validator: numeric_expression
+covers:
+- compute

@@ -1,8 +1,5 @@
 # Prepare Response Assessments for Best Overall Response
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adrs-response-prep.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** prepare each collected overall response assessment for best
 overall response (BOR) selection, adding `BORCAT`, `BORPRI`, and
 `BORSEQ`.
@@ -39,5 +36,3 @@ date of new anti-cancer therapy, when one was started.
 number, so numbering passes over it to the next usable record: it can
 never be numbered `1`, and it never consumes a number a usable record
 would otherwise take.
-
-**Standard:** ADaM | **Domain:** ADRS

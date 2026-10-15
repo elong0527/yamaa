@@ -1,8 +1,5 @@
 # Derive a Chain of Population Flags
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-flag-chain.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive the combined population flag `POPFL` from the
 safety flag `SAFFL` and the intent-to-treat flag `ITTFL`, plus
 the dates and age they read: first exposure date `TRTSDT`,
@@ -35,5 +32,3 @@ exposure start date.
 **Note:** the dates and age are settled before the flags that
 read them: the safety and intent-to-treat flags come from their
 dates, and the combined flag comes from both flags.
-
-**Standard:** ADaM | **Domain:** ADSL

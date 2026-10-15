@@ -1,7 +1,5 @@
 # Collected Daily Dosing
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-ec-collected-exposure.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one EC (Exposure as Collected) record per dosing-log
 day, carrying `ECSEQ`, `ECTRT`, `ECMOOD`, `ECOCCUR`, `ECREASND`, `ECDOSE`,
 `ECDOSU`, `ECDOSFRM`, `ECDOSFRQ`, `ECROUTE`, `ECSTDTC`, `ECENDTC`, and
@@ -32,5 +30,3 @@ was missed, and any dose adjustment.
 reason (`DOSE REDUCED`), not the event. A missed day keeps the
 treatment's unit, form, frequency, and route with no dose and the
 missed reason.
-
-**Standard:** SDTM | **Domain:** EC

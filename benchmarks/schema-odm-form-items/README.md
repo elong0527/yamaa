@@ -1,8 +1,5 @@
 # Form-Scoped Items
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-odm-form-items.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive `LBTESTCD`, `LBTEST`, `LBCAT`, `LBORRES`, and
 `LBDTC` for one record per reported laboratory result, reading each
 item only within the form that collected it.
@@ -29,5 +26,3 @@ row from one form never supplies the date for a result on another
 form at the same subject and visit. Within each study and subject,
 records are numbered in a fixed form order: chemistry, hematology,
 thyroid, urinalysis, then coagulation.
-
-**Standard:** SDTM | **Domain:** LB

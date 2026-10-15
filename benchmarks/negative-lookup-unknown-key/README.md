@@ -1,8 +1,5 @@
 # Reject Uninferable Key
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-lookup-unknown-key.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** attach the reference-range upper limit (`LBSTNRHI`) to
 each collected result, carrying its test code and sex.
 
@@ -20,8 +17,6 @@ the match falls back to the output identifiers (`STUDYID`,
 `USUBJID`, `LBSEQ`), and the limit table carries none of them. With
 nothing to match on, the run is rejected before any data is read and
 no artifact is accepted.
-
-**Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 

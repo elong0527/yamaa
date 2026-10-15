@@ -1,7 +1,5 @@
 # Standardize Non-Numeric Lab Results
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-lb-character-results.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry `LBORRES` into a standardized `LBSTRESC`, populate
 `LBSTRESN` for true numerics only, and state `LBNRIND` for results
 at the quantification limits.
@@ -43,5 +41,3 @@ separate.
 collected rather than dropped, so a new spelling shows up in the
 output instead of silently disappearing. No demographics input is
 needed: the subject identifier comes from the ODM subject key.
-
-**Standard:** SDTM | **Domain:** LB

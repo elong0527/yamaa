@@ -1,0 +1,8 @@
+lifecycle: draft
+standard: ADaM
+domain: ADVS
+validation:
+  rule: R007
+  validator: window_contract
+covers:
+- row_value

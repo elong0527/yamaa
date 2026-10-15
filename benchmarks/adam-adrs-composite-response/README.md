@@ -1,8 +1,5 @@
 # Assign a Composite Responder Status
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adrs-composite-response.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** assign each subject a composite responder status (`AVALC`),
 its numeric companion (`AVAL`), and the reason behind the assignment
 (`ARSN`), for every analysis visit.
@@ -29,5 +26,3 @@ whatever the efficacy value, even a missing one; otherwise a subject
 with no efficacy value is not evaluable, one with a percent change of
 -75 or less (a reduction of at least 75%) is a responder, and everyone
 else is a non-responder.
-
-**Standard:** ADaM | **Domain:** ADRS

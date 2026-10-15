@@ -1,0 +1,6 @@
+lifecycle: draft
+standard: SDTM
+domain: LB
+validation:
+  rule: R003
+  validator: spec_contract

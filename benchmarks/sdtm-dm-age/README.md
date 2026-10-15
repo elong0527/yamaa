@@ -1,8 +1,5 @@
 # Age From Birthdate
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-age.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive `AGE` in completed years at the sponsor's reference date
 (informed consent, `RFICDTC`) from the collected birth date, keeping
 `BRTHDTC` at its collected precision.
@@ -25,5 +22,3 @@ as collected) and an informed consent date item (`IT.DM.RFICDTC`).
 
 **Note:** a missing birth date leaves `BRTHDTC`, `AGE`, and `AGEU`
 missing.
-
-**Standard:** SDTM | **Domain:** DM

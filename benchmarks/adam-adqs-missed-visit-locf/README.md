@@ -1,8 +1,5 @@
 # Carry the last score to each missed scheduled visit
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adqs-missed-visit-locf.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** give every subject in the efficacy population a total score
 record at each scheduled visit, adding a last observation carried forward
 record for each visit missed, with the analysis value (`AVAL`), the
@@ -30,5 +27,3 @@ left out, so at a scheduled visit it counts as missed. Subjects outside
 the efficacy population keep their collected records and gain none, and
 baseline is not a scheduled visit, so a missing baseline adds nothing.
 The input carries at most one score per subject per visit.
-
-**Standard:** ADaM | **Domain:** ADQS

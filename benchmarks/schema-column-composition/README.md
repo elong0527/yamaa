@@ -1,8 +1,5 @@
 # Column Composition
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-column-composition.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** demonstrate a study level changing details inside inherited
 columns - `AVAL`, `ANRIND`, and `PARCAT1`.
 
@@ -31,5 +28,3 @@ reading survives a level that never mentions it. A level naming a
 different way to produce a value replaces it whole instead, which is
 why `PARCAT1` stops reading the test code. Lists never accumulate: the
 study's own check on `AVAL` replaces the organization's.
-
-**Standard:** ADaM | **Domain:** ADLB
