@@ -10,12 +10,33 @@ plain fixtures are discovered by glob.
 
 ## Public reports
 
-`tools.conformance.qualify_public_cohort` compares complete domain reports with authored
-truth. `tools.conformance.qualify_producer_cohort` compares retained producer results before
-and after repeated Save calls with `producer-cohort/` fixtures. Comparisons cover
-values, types, exact float bits, ordering, diagnostics, verification, callbacks,
-resource observations and saved artifacts. CSV bytes compare exactly; Parquet
-compares logical fields, types, nulls, rows and values.
+`python -m tools.conformance.public_conformance complete-reports` compares every
+complete authored report under `crates/yamaa-adapters/tests/fixtures/specs/`
+with retained actual installed Python and R file runs. It also compares the
+original producer's complete reports before and after two Save calls with
+`producer-cohort/` truth. Complete-report objects are discovered from their
+files; malformed report objects fail, while array-shaped partial diagnostic
+fixtures belong to their direct native tests.
+
+One inventory retains both installed owners, unchanged authored truth and all
+complete observations. Comparisons cover values, types, exact float bits,
+ordering, diagnostics, verification, callbacks, resource observations and saved
+artifacts. CSV bytes compare exactly; Parquet compares logical fields, types,
+nulls, rows and values. An exhaustive complete-report comparison rejects extra
+findings; a benchmark's partial `expected/error.yaml` assertion permits other
+independent findings while requiring its own fields and every declared path.
+
+```sh
+python -m tools.conformance.public_conformance complete-reports \
+  --fixtures benchmarks --python-evidence /tmp/native-python/wheel \
+  --r-evidence /tmp/native-r/r-source --output /tmp/complete-reports \
+  --source-revision REVISION
+```
+
+The output directory must be fresh and outside both authored fixture trees.
+The revision must equal the reviewed checkout and both installed owners' actual
+source revision. Comparator unit fixtures are deliberately marked unqualified;
+their successful mutation controls never establish installed release evidence.
 
 ## Benchmark conformance
 

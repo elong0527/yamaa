@@ -1,4 +1,4 @@
-"""Independent original-input identity and M1 corruption controls.
+"""Independent original-input identity and complete report corruption controls.
 
 Synthetic native metadata below exercises the comparator only. It is never
 installed-owner or qualification evidence.
@@ -11,13 +11,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.conformance import qualify_producer_cohort as module
+from tools.conformance import complete_reports as module
 from tools.paths import ROOT
 
 FIXTURES = ROOT / "rust/qualification/producer-cohort"
 
-ExampleReport = module.ExampleReport
-compare_reports = module.compare_reports
+ExampleReport = module.reports.ExampleReport
+compare_reports = module.reports.compare_reports
 
 
 class OriginalProducerCohort(unittest.TestCase):
@@ -45,14 +45,14 @@ class OriginalProducerCohort(unittest.TestCase):
                 found[node.func.value.right.value] = node.args[0].value.encode("ascii")
         self.assertEqual(set(found), {"seed.csv", "producer.yaml", "spec.yaml"})
         for name, payload in found.items():
-            self.assertEqual((FIXTURES / module.NAME / name).read_bytes(), payload)
+            self.assertEqual((FIXTURES / module.PRODUCER / name).read_bytes(), payload)
         self.assertEqual(
-            (FIXTURES / module.NAME / "expected/out.csv").read_bytes(), b"ID\n01\n"
+            (FIXTURES / module.PRODUCER / "expected/out.csv").read_bytes(), b"ID\n01\n"
         )
 
     def setUp(self):
         self.reference = ExampleReport.model_validate_json(
-            (FIXTURES / module.NAME / "reference.json").read_text()
+            (FIXTURES / module.PRODUCER / "reference.json").read_text()
         )
         self.case = "/unit-unqualified/original"
         self.raw = self.reference.model_dump(mode="json")
@@ -113,14 +113,15 @@ class OriginalProducerCohort(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "project-original"
             staging.stage(destination)
-            producer = destination / module.NAME
+            producer = destination / module.PRODUCER
             self.assertEqual(
                 {item.name for item in producer.iterdir()},
                 {"seed.csv", "producer.yaml", "spec.yaml"},
             )
             for item in producer.iterdir():
                 self.assertEqual(
-                    item.read_bytes(), (FIXTURES / module.NAME / item.name).read_bytes()
+                    item.read_bytes(),
+                    (FIXTURES / module.PRODUCER / item.name).read_bytes(),
                 )
 
     def test_generated_aliases_cannot_be_hidden_from_a_corrupted_read_ledger(self):
@@ -182,7 +183,9 @@ class OriginalProducerCohort(unittest.TestCase):
     def test_saved_byte_corruption_is_rejected_beside_complete_report(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
-            owner = directory / "public-reports/producer-cohort/python" / module.NAME
+            owner = (
+                directory / "public-reports/producer-cohort/python" / module.PRODUCER
+            )
             owner.mkdir(parents=True)
             record = {
                 "evidence": {
@@ -213,11 +216,11 @@ class OriginalProducerCohort(unittest.TestCase):
             }
             (saved / "report.json").write_text(json.dumps(after))
             (saved / "produced.parquet").write_bytes(
-                (FIXTURES / module.NAME / "expected/produced.parquet").read_bytes()
+                (FIXTURES / module.PRODUCER / "expected/produced.parquet").read_bytes()
             )
             (saved / "out.csv").write_bytes(b"ID\n02\n")
             with self.assertRaisesRegex(ValueError, "CSV bytes"):
-                module.retain_owner(
+                module.retain_producer(
                     directory, "python", record, self.reference, directory / "output"
                 )
 
