@@ -1,6 +1,6 @@
 //! Case substitution has one named read and one admitted byte-preserving copy.
 use super::*;
-use {crate::text_case::Error, crate::text_case::Step};
+use crate::text_case::{Error, Step};
 
 pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
     match expression {

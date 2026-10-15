@@ -1,9 +1,8 @@
 //! Demand-driven inheritance traversal; filesystem identity and bytes remain host ports.
-use alloc::{string::String, vec, vec::Vec};
-use {
-    crate::schema::Document, crate::schema::DocumentNode as N, crate::schema::NormalizationBudget,
-    crate::schema::NormalizationError, crate::schema::SchemaStructure,
+use crate::schema::{
+    Document, DocumentNode as N, NormalizationBudget, NormalizationError, SchemaStructure,
 };
+use alloc::{string::String, vec, vec::Vec};
 
 /// The canonical identity is compared directly. Display spelling retains read-error context.
 #[derive(Clone, Debug, PartialEq, Eq)]

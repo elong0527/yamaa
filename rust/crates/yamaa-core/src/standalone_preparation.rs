@@ -2,14 +2,12 @@
 //!
 //! Physical decoding and occurrence locations remain codec authority. This service
 //! neither captures sources nor grants data, function, path or publication authority.
-use alloc::{boxed::Box, vec::Vec};
-use {
-    crate::schema::Document, crate::schema::ExpandedWindows, crate::schema::NormalizationBudget,
-    crate::schema::NormalizationError, crate::schema::NormalizedDocument,
-    crate::schema::SchemaDiagnostic, crate::schema::SchemaOrigin, crate::schema::SchemaStructure,
-    crate::schema::SpecificationDocument, crate::schema::ValidationError,
-    crate::schema::WindowReference,
+use crate::schema::{
+    Document, ExpandedWindows, NormalizationBudget, NormalizationError, NormalizedDocument,
+    SchemaDiagnostic, SchemaOrigin, SchemaStructure, SpecificationDocument, ValidationError,
+    WindowReference,
 };
+use alloc::{boxed::Box, vec::Vec};
 
 #[derive(Debug)]
 pub enum Error {
@@ -115,12 +113,11 @@ pub fn prepare(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::{string::String, vec};
-    use {
-        crate::schema::BundleLimits, crate::schema::DocumentLimits,
-        crate::schema::DocumentNode as N, crate::schema::NormalizationLimits,
-        crate::schema::SchemaContext, crate::schema::SchemaModule,
+    use crate::schema::{
+        BundleLimits, DocumentLimits, DocumentNode as N, NormalizationLimits, SchemaContext,
+        SchemaModule,
     };
+    use alloc::{string::String, vec};
 
     #[test]
     fn strict_failure_moves_the_actual_normalized_checkpoint_allocation() {

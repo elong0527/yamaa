@@ -1,11 +1,11 @@
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
+use yamaa_core::dataset::{ExecutionError, Limits};
 use yamaa_core::{
     dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate, Temporal, TemporalKind},
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
-use {yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Limits};
 
 // Opaque caller-thread errors need neither cloning nor formatting.
 struct Opaque(Rc<()>);

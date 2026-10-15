@@ -1,11 +1,11 @@
 //! Bounded selected-relation access for counts and ordered numeric folds.
 
-use alloc::vec::Vec;
-use {
-    crate::numeric::Number, crate::reduction::count_records, crate::reduction::count_values,
-    crate::reduction::reduce_numeric, crate::reduction::NumericReducer,
-    crate::reduction::ReductionError, crate::table::CellError, crate::table::TableAccess,
+use crate::{
+    numeric::Number,
+    reduction::{count_records, count_values, reduce_numeric, NumericReducer, ReductionError},
+    table::{CellError, TableAccess},
 };
+use alloc::vec::Vec;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TableReductionError<E> {

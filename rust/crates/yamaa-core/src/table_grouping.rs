@@ -1,10 +1,10 @@
 //! Stable, exact partitioning of an immutable normalized table snapshot.
 
-use alloc::{collections::BTreeMap, vec::Vec};
-use {
-    crate::table::CellError, crate::table::TableAccess, crate::table::ValueRef,
-    crate::temporal::Date, crate::temporal::DateTime,
+use crate::{
+    table::{CellError, TableAccess, ValueRef},
+    temporal::{Date, DateTime},
 };
+use alloc::{collections::BTreeMap, vec::Vec};
 
 /// Map ordering is internal: returned groups always follow first source occurrence.
 /// Finite float bits suffice for equality after canonicalizing signed zero. Types

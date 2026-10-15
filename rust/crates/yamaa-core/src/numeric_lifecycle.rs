@@ -3,15 +3,15 @@
 //! This application slice covers evaluate -> convert -> unconvertible replacement
 //! (REQ-0211-0214), not table execution, verification or specification decoding.
 
+use crate::conversion::{convert, ConversionError};
 use crate::evaluation::NumericResolver;
+use crate::numeric_compiler::{CompiledEvaluationError, CompiledNumeric};
+use crate::value::{ColumnType, Value};
 use alloc::{
     boxed::Box,
     string::{String, ToString},
     vec::Vec,
 };
-use {crate::conversion::convert, crate::conversion::ConversionError};
-use {crate::numeric_compiler::CompiledEvaluationError, crate::numeric_compiler::CompiledNumeric};
-use {crate::value::ColumnType, crate::value::Value};
 
 /// Handler sites supported by this application slice, not the full language registry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -1,9 +1,10 @@
 //! Typed effect/order witnesses use independent retained parents and native policy.
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
-use {
-    yamaa_core::file_preparation as app, yamaa_core::inheritance::Source as Identity,
-    yamaa_core::inheritance::SourceError, yamaa_core::inheritance_capture::CapturePort,
-    yamaa_core::project_preparation::Source,
+use yamaa_core::{
+    file_preparation as app,
+    inheritance::{Source as Identity, SourceError},
+    inheritance_capture::CapturePort,
+    project_preparation::Source,
 };
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Event {

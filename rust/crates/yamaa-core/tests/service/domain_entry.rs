@@ -1,10 +1,9 @@
 //! One request composition selects held metadata before any execution authority.
 use std::{cell::RefCell, rc::Rc};
 use yamaa_core::schema::{Document, DocumentNode as N};
-use {
-    yamaa_core::build, yamaa_core::build::EntrySelection, yamaa_core::build::MetadataAdmissionPort,
-    yamaa_core::build::PreparationPort, yamaa_core::build::Prepared, yamaa_core::domain_entry,
-    yamaa_core::domain_entry::Ports, yamaa_core::domain_entry::Request,
+use yamaa_core::{
+    build::{self, EntrySelection, MetadataAdmissionPort, PreparationPort, Prepared},
+    domain_entry::{self, Ports, Request},
 };
 
 struct Original(Rc<()>);
@@ -161,11 +160,7 @@ fn request(environment: bool) -> Request<'static> {
 
 #[test]
 fn observed_request_brackets_actual_metadata_before_every_route_and_keeps_original_failure() {
-    use {
-        yamaa_core::application_observer::Event, yamaa_core::application_observer::Observer,
-        yamaa_core::application_observer::Outcome, yamaa_core::application_observer::Phase,
-        yamaa_core::application_observer::Scope,
-    };
+    use yamaa_core::application_observer::{Event, Observer, Outcome, Phase, Scope};
     #[derive(Debug, PartialEq)]
     enum Observed {
         Entry(Phase),

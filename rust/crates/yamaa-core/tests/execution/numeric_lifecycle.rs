@@ -3,13 +3,10 @@ use yamaa_core::conversion::{ConversionError, ConversionValue};
 use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver};
 use yamaa_core::numeric::ArithmeticErrorKind;
 use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
-use yamaa_core::value::{ColumnType, Selection, Value, ValueType};
-use {
-    yamaa_core::numeric_lifecycle::HandlerCounter, yamaa_core::numeric_lifecycle::HandlerKind,
-    yamaa_core::numeric_lifecycle::LiteralHandler,
-    yamaa_core::numeric_lifecycle::NumericDerivation,
-    yamaa_core::numeric_lifecycle::NumericLifecycleError,
+use yamaa_core::numeric_lifecycle::{
+    HandlerCounter, HandlerKind, LiteralHandler, NumericDerivation, NumericLifecycleError,
 };
+use yamaa_core::value::{ColumnType, Selection, Value, ValueType};
 
 const COLUMN: &str = "columns.A";
 const EXPRESSION: &str = "columns.A.derivation.value.compute";

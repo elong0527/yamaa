@@ -3,15 +3,15 @@ use crate::support::project_call_compiler as support;
 use std::cell::RefCell;
 use support::{call, function, specification_with_rows, Tree};
 use yamaa_core::{
+    dataset::Limits,
+    function_invocation::{Argument, FunctionPort, HostError},
+};
+use yamaa_core::{
     function_signature::{InvocationPlan, ProjectInvocationPlan},
     schema::DocumentNode as N,
     specification::PreparedSpecification,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
-};
-use {
-    yamaa_core::dataset::Limits, yamaa_core::function_invocation::Argument,
-    yamaa_core::function_invocation::FunctionPort, yamaa_core::function_invocation::HostError,
 };
 fn literal(value: i64) -> Tree {
     Tree::map(vec![(

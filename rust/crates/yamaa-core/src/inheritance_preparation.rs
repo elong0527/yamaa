@@ -1,15 +1,12 @@
 //! Inheritance application lifecycle over captured documents and explicit path authority.
 use crate::inheritance::{self, Layer, Source, SourcePort};
-use alloc::{boxed::Box, string::String, vec::Vec};
-use {
-    crate::schema::Document, crate::schema::DocumentError, crate::schema::DocumentLimits,
-    crate::schema::DocumentNode as N, crate::schema::InheritanceDependencyError,
-    crate::schema::LayerCompositionError, crate::schema::LayerProvenance,
-    crate::schema::NormalizationBudget, crate::schema::NormalizationError,
-    crate::schema::SchemaDiagnostic, crate::schema::SchemaOrigin, crate::schema::SchemaStructure,
-    crate::schema::SpecificationDocument, crate::schema::ValidationError,
-    crate::schema::WindowReference,
+use crate::schema::{
+    Document, DocumentError, DocumentLimits, DocumentNode as N, InheritanceDependencyError,
+    LayerCompositionError, LayerProvenance, NormalizationBudget, NormalizationError,
+    SchemaDiagnostic, SchemaOrigin, SchemaStructure, SpecificationDocument, ValidationError,
+    WindowReference,
 };
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 /// The host respells paths using captured canonical file identities, without reopening them.
 pub trait PathPort: SourcePort {

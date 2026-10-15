@@ -1,13 +1,11 @@
 use std::{cell::Cell, convert::Infallible};
+use yamaa_core::dataset::{
+    Assignment, DatasetPlan, ExecutionBudget, ExecutionError, Expression, Resource, RowMode,
+    RowTemplate, SecondarySource,
+};
 use yamaa_core::{
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
-};
-use {
-    yamaa_core::dataset::Assignment, yamaa_core::dataset::DatasetPlan,
-    yamaa_core::dataset::ExecutionBudget, yamaa_core::dataset::ExecutionError,
-    yamaa_core::dataset::Expression, yamaa_core::dataset::Resource, yamaa_core::dataset::RowMode,
-    yamaa_core::dataset::RowTemplate, yamaa_core::dataset::SecondarySource,
 };
 
 struct Source {

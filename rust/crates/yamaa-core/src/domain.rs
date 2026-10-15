@@ -6,9 +6,9 @@
 //! is invoked. A successful check is not evidence that ingestion or execution
 //! will succeed: actual source schemas and values are available only at build.
 use crate::specification_run::{self, CapturedAttempt, Limits, SourceDecoder, SourcePort};
-use {
-    crate::schema::SpecificationDocument, crate::specification::PrepareError,
-    crate::specification::PreparedSpecification,
+use crate::{
+    schema::SpecificationDocument,
+    specification::{PrepareError, PreparedSpecification},
 };
 
 /// An immutable capability obtained only by the engine's preflight operation.

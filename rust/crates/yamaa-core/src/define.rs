@@ -1,19 +1,22 @@
 //! Define preparation and one-shot publication over retained native snapshots.
 //! This service owns admission, composition, rendering and effect order. Ports
 //! observe file geometry and codecs without interpreting submission declarations.
+use crate::{
+    diagnostic::{ConditionCode, ContextValue, Diagnostic},
+    producer_admission::WrittenPath,
+    project_terminology::Catalogue,
+    schema::Document,
+    submission_composition::{self as composition, Finding},
+    submission_document,
+    table::TableAccess,
+    value::Value,
+};
 use alloc::{
     borrow::ToOwned,
     format,
     string::{String, ToString},
     vec,
     vec::Vec,
-};
-use {
-    crate::diagnostic::ConditionCode, crate::diagnostic::ContextValue,
-    crate::diagnostic::Diagnostic, crate::producer_admission::WrittenPath,
-    crate::project_terminology::Catalogue, crate::schema::Document,
-    crate::submission_composition as composition, crate::submission_composition::Finding,
-    crate::submission_document, crate::table::TableAccess, crate::value::Value,
 };
 
 pub(crate) const MAX_ARTIFACT_BYTES: usize = 67_108_864;
@@ -124,7 +127,7 @@ fn published_source_failure<E, PE>(
     finding: Option<crate::diagnostic::SourceFinding<'_>>,
     fallback: Finding,
 ) -> Failure<E, PE> {
-    use {crate::diagnostic::ProjectionError, crate::diagnostic::MAX_PROJECTION_BYTES};
+    use crate::diagnostic::{ProjectionError, MAX_PROJECTION_BYTES};
     let Some(finding) = finding else {
         return Failure::Metadata(vec![fallback]);
     };
@@ -766,7 +769,7 @@ mod projection_tests {
 
     #[test]
     fn published_csv_context_limit_remains_an_explicit_refusal() {
-        use {crate::diagnostic::SourceFinding, crate::diagnostic::MAX_PROJECTION_BYTES};
+        use crate::diagnostic::{SourceFinding, MAX_PROJECTION_BYTES};
         let value = "x".repeat(MAX_PROJECTION_BYTES / 6);
         let failure: Failure<(), ()> = published_source_failure(
             Some(SourceFinding::FieldParse {

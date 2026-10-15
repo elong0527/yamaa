@@ -1,9 +1,9 @@
 //! Read one retained typed attempt without host calls, retries or publication.
 use crate::project_run::{Attempt, BoundaryFailure};
-use {
-    yamaa_core::dataset::Execution, yamaa_core::dataset::ExecutionError,
-    yamaa_core::function_invocation::FailureKind, yamaa_core::project_activation::Failure,
-    yamaa_core::project_activation::TestFailure,
+use yamaa_core::{
+    dataset::{Execution, ExecutionError},
+    function_invocation::FailureKind,
+    project_activation::{Failure, TestFailure},
 };
 
 /// Dataset execution success is a separate gate from output admission and save.

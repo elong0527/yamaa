@@ -9,10 +9,10 @@ use crate::{
 use serde::Serialize;
 use std::fmt;
 use yamaa_core::reduction::ReductionError;
-use {
-    yamaa_core::dataset, yamaa_core::dataset::CheckRecord, yamaa_core::dataset::ExecutionError,
-    yamaa_core::dataset::RowIdentity, yamaa_core::table_grouping::GroupingError,
-    yamaa_core::table_reduction::TableReductionError,
+use yamaa_core::{
+    dataset::{self, CheckRecord, ExecutionError, RowIdentity},
+    table_grouping::GroupingError,
+    table_reduction::TableReductionError,
 };
 pub(crate) const MAX_SOURCE_CELLS: usize =
     dataset::ExecutionBudget::longitudinal().max_decoded_cells;

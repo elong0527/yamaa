@@ -15,14 +15,13 @@ use std::{
     sync::Arc,
 };
 use yamaa_core::{
+    dataset::Dataset,
+    producer_build::{self as engine, CodecPort, PreparedBuild, ReportPort, StudyPort},
+    project_activation::ActivationPort,
+};
+use yamaa_core::{
     producer_graph::{Node, PreparedGraph},
     specification::{PreparedSpecification, SourceDeclaration},
-};
-use {
-    yamaa_core::dataset::Dataset, yamaa_core::producer_build as engine,
-    yamaa_core::producer_build::CodecPort, yamaa_core::producer_build::PreparedBuild,
-    yamaa_core::producer_build::ReportPort, yamaa_core::producer_build::StudyPort,
-    yamaa_core::project_activation::ActivationPort,
 };
 
 #[derive(Clone, Copy, Debug)]

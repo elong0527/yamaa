@@ -2,16 +2,15 @@
 //!
 //! This trusted typed service does not discover code, decode requests, activate
 //! environments, or validate host-language identifiers. Those are outer gates.
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
-use {
-    crate::table::ValueRef, crate::value::ColumnType, crate::value::Value, crate::value::ValueType,
+use crate::{
+    table::ValueRef,
+    value::{ColumnType, Value, ValueType},
 };
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
-use {
-    crate::function_signature::FunctionIdentity, crate::function_signature::InvocationPlan,
-    crate::function_signature::LogicalSignature, crate::function_signature::Presence,
-    crate::function_signature::ProjectFunctionIdentity,
-    crate::function_signature::ProjectInvocationPlan,
+use crate::function_signature::{
+    FunctionIdentity, InvocationPlan, LogicalSignature, Presence, ProjectFunctionIdentity,
+    ProjectInvocationPlan,
 };
 
 /// A borrowed mapped argument; callbacks receive nothing beyond this ordered list.

@@ -1,12 +1,12 @@
 //! Native entry preparation and success-only alias acceptance through typed ports.
 //! Physical identities, snapshots, path policy and resource limits belong to the port.
+use crate::{diagnostic::Diagnostic, resource::ResourceFailure};
 use crate::{
     inheritance::{Source as Identity, SourceError},
     inheritance_capture::CapturePort,
     project_preparation::Source,
 };
 use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
-use {crate::diagnostic::Diagnostic, crate::resource::ResourceFailure};
 
 pub trait NativePort {
     type Error;

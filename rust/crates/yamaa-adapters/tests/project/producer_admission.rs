@@ -4,8 +4,8 @@ use yamaa_adapters::{
     shipped_schema,
     specification_source::{InheritancePort, PreparedDocument, Source},
 };
+use yamaa_core::inheritance::{Source as FileIdentity, SourceError};
 use yamaa_core::{producer_admission::Error as CoreError, specification::PrepareError};
-use {yamaa_core::inheritance::Source as FileIdentity, yamaa_core::inheritance::SourceError};
 const PRODUCER:&str="schema_version: '1.0'\ndomain: PROD\nkeys: [ID]\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: float, label: Reported value, derivation: RAW.VALUE}\noutput: {path: './produced.csv', columns: [ID, VALUE]}\n";
 const CONSUMER:&str="schema_version: '1.0'\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './produced.csv', schema: nested/producer.yaml}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
 fn standalone(identity: &str, text: &str) -> Arc<PreparedDocument> {

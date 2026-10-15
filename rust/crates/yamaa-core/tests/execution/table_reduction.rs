@@ -1,13 +1,10 @@
 use std::cell::RefCell;
+use yamaa_core::table_reduction::{count_selected, reduce_column, TableReductionError};
 use yamaa_core::{
     numeric::{ArithmeticErrorKind, Number},
     reduction::{NumericReducer, ReductionError},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
-};
-use {
-    yamaa_core::table_reduction::count_selected, yamaa_core::table_reduction::reduce_column,
-    yamaa_core::table_reduction::TableReductionError,
 };
 
 /// Record counts never read cells; field counts visit every selected value in order.

@@ -1,17 +1,14 @@
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, convert::Infallible};
+use yamaa_core::dataset::{
+    Assignment, DatasetPlan, ExecutionError, Expression, Limits, RowIdentity, RowMode, RowTemplate,
+};
 use yamaa_core::{
     diagnostic::{ContextValue as V, ProjectionError},
     reduction::NumericReducer,
     table::{CellError, TableAccess, TableSchema, ValueRef},
     temporal::{Date, DatePrecision},
     value::{ColumnType, Value, ValueType},
-};
-use {
-    yamaa_core::dataset::Assignment, yamaa_core::dataset::DatasetPlan,
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Expression,
-    yamaa_core::dataset::Limits, yamaa_core::dataset::RowIdentity, yamaa_core::dataset::RowMode,
-    yamaa_core::dataset::RowTemplate,
 };
 
 #[test]

@@ -212,11 +212,8 @@ impl<E> yamaa_core::producer_build::DecodePort for Decoder<E> {
 mod tests {
     use super::*;
     use crate::{csv_source::TextTableError, specification_source::Source};
+    use yamaa_core::producer_build::{DecodeError, DecodeLimits, DecodePort};
     use yamaa_core::{specification::SourceProfile, value::ColumnType};
-    use {
-        yamaa_core::producer_build::DecodeError, yamaa_core::producer_build::DecodeLimits,
-        yamaa_core::producer_build::DecodePort,
-    };
 
     fn csv_source() -> SourceDeclaration {
         SourceDeclaration {

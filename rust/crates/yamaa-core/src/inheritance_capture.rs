@@ -1,13 +1,10 @@
 //! Raw inheritance capture admission and retained catalogs over explicit native ports.
 //! YAML/schema representation and native path spelling remain decoder/host authority.
+use crate::schema::{Document, NormalizationBudget, NormalizationLimits, SchemaStructure};
 use crate::{
     inheritance as graph, inheritance_preparation as lifecycle, project_preparation::Source,
 };
 use alloc::{boxed::Box, string::String, vec::Vec};
-use {
-    crate::schema::Document, crate::schema::NormalizationBudget,
-    crate::schema::NormalizationLimits, crate::schema::SchemaStructure,
-};
 
 /// Fail-fast inheritance authority. Unlike project metadata capture, an ordinary
 /// failure stops the attempt; no independent-error collection or retry occurs.

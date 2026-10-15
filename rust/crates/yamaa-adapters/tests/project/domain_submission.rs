@@ -315,10 +315,10 @@ fn project_domain(path: &str, environment: &str) -> file_application::Domain {
 
 #[test]
 fn wide_length_projection_borrows_the_exact_bound_from_compiled_metadata() {
+    use yamaa_core::dataset::{CheckRecord, RowIdentity};
     use yamaa_core::{
         dataset::Check, diagnostic::ConditionCode, project_diagnostics::Fact, value::Value,
     };
-    use {yamaa_core::dataset::CheckRecord, yamaa_core::dataset::RowIdentity};
     let study = Study::new();
     let bound = "340282366920938463463374607431768211456";
     fs::write(

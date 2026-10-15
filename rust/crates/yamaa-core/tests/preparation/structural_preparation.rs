@@ -6,11 +6,9 @@ use yamaa_core::schema::{
     SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaOrigin, SchemaSource,
     SchemaStructure, ValidationError, ValidationLimits,
 };
-use {
-    yamaa_core::project_preparation::Source, yamaa_core::structural_preparation as application,
-    yamaa_core::structural_preparation::DecodePort, yamaa_core::structural_preparation::Decoded,
-    yamaa_core::structural_preparation::Error, yamaa_core::structural_preparation::Limits,
-    yamaa_core::structural_preparation::Selection,
+use yamaa_core::{
+    project_preparation::Source,
+    structural_preparation::{self as application, DecodePort, Decoded, Error, Limits, Selection},
 };
 
 #[derive(Clone)]

@@ -1,7 +1,7 @@
 //! Run-local cumulative accounting for installed dataset boundary policies.
 use crate::dataset::{ExecutionError, Limits, Resource};
+use crate::{predicate, table::ValueRef, value::Value};
 use alloc::boxed::Box;
-use {crate::predicate, crate::table::ValueRef, crate::value::Value};
 
 /// These counters bound retained data and logical work, not allocator overhead or CPU time.
 pub(crate) struct Budget {

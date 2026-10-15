@@ -8,16 +8,13 @@ use yamaa_core::{
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value, ValueType},
 };
-use {
-    yamaa_core::dataset::Assignment, yamaa_core::dataset::BoundProjectFunction,
-    yamaa_core::dataset::DatasetPlan, yamaa_core::dataset::ExecutionError,
-    yamaa_core::dataset::Expression, yamaa_core::dataset::FunctionArgument,
-    yamaa_core::dataset::FunctionInput, yamaa_core::dataset::Limits,
-    yamaa_core::dataset::PlanError, yamaa_core::dataset::RowMode, yamaa_core::dataset::RowTemplate,
-    yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::FailureKind,
-    yamaa_core::function_invocation::FunctionPort, yamaa_core::function_invocation::HostError,
-    yamaa_core::project_activation::ActivatedFunction,
-    yamaa_core::project_activation::ActivationPort, yamaa_core::project_activation::Bindings,
+use yamaa_core::{
+    dataset::{
+        Assignment, BoundProjectFunction, DatasetPlan, ExecutionError, Expression,
+        FunctionArgument, FunctionInput, Limits, PlanError, RowMode, RowTemplate,
+    },
+    function_invocation::{Argument, FailureKind, FunctionPort, HostError},
+    project_activation::{ActivatedFunction, ActivationPort, Bindings},
 };
 fn schema() -> TableSchema {
     TableSchema::new(vec![

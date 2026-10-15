@@ -6,7 +6,7 @@ use yamaa_adapters::{
         CapturedSchema, InheritanceError, InheritancePort, Limits, Source, SourceFailure,
     },
 };
-use {yamaa_core::inheritance as graph, yamaa_core::inheritance_preparation as lifecycle};
+use yamaa_core::{inheritance as graph, inheritance_preparation as lifecycle};
 const VALID:&str="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";
 
 fn case_parent(width: usize) -> Vec<u8> {

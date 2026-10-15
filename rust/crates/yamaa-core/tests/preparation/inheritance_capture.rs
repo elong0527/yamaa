@@ -2,9 +2,9 @@ use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 use yamaa_core::schema::{
     BundleLimits, Document, DocumentNode as N, NormalizationError, SchemaModule, SchemaStructure,
 };
-use {
-    yamaa_core::inheritance as graph, yamaa_core::inheritance_capture as app,
-    yamaa_core::inheritance_preparation as lifecycle, yamaa_core::project_preparation::Source,
+use yamaa_core::{
+    inheritance as graph, inheritance_capture as app, inheritance_preparation as lifecycle,
+    project_preparation::Source,
 };
 #[derive(Clone)]
 enum Tree {

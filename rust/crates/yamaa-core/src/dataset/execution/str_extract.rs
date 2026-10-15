@@ -1,9 +1,6 @@
 //! Extraction shares regex counters and admits captured/context copies before retention.
 use super::*;
-use {
-    crate::text_extract::Error, crate::text_extract::Step,
-    crate::text_extract::MAX_DECLARATION_BYTES,
-};
+use crate::text_extract::{Error, Step, MAX_DECLARATION_BYTES};
 
 pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
     match expression {

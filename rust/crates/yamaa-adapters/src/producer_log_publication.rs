@@ -17,9 +17,7 @@ use std::{
     panic::{catch_unwind, AssertUnwindSafe},
     sync::Arc,
 };
-use {
-    yamaa_core::producer_publication::Limits, yamaa_core::producer_publication::PreparedPublication,
-};
+use yamaa_core::producer_publication::{Limits, PreparedPublication};
 
 /// Lexical collisions across the complete authored graph are metadata facts.
 /// Existing-parent/physical alias checks remain at Save's whole-set preflight.

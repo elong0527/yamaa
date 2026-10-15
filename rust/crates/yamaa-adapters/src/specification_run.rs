@@ -7,12 +7,11 @@ use crate::{
     specification_source::PreparedDocument,
 };
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use yamaa_core::specification_run as application;
-use {yamaa_core::domain, yamaa_core::domain::CheckedSpecification};
-use {
-    yamaa_core::specification::BindError, yamaa_core::specification::PrepareError,
-    yamaa_core::specification::PreparedSpecification, yamaa_core::specification::SourceDeclaration,
+use yamaa_core::domain::{self, CheckedSpecification};
+use yamaa_core::specification::{
+    BindError, PrepareError, PreparedSpecification, SourceDeclaration,
 };
+use yamaa_core::specification_run as application;
 #[derive(Debug)]
 pub enum Error {
     ResourceLimit(crate::resource_diagnostics::Refusal),
@@ -28,10 +27,7 @@ pub enum Error {
     Bind(BindError),
     Execution(DatasetError),
 }
-pub use {
-    yamaa_core::specification_run::InspectionFailure, yamaa_core::specification_run::SourcePort,
-    yamaa_core::specification_run::SourceRead,
-};
+pub use yamaa_core::specification_run::{InspectionFailure, SourcePort, SourceRead};
 #[derive(Debug)]
 pub enum PortError<E> {
     Capture(E),

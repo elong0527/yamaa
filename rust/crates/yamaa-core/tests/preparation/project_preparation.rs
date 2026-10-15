@@ -7,7 +7,7 @@ use yamaa_core::{
     schema::{Document, DocumentLimits, DocumentNode as N},
     value::Value,
 };
-use {yamaa_core::project_preparation::*, yamaa_core::test_support::*};
+use yamaa_core::{project_preparation::*, test_support::*};
 
 enum Tree {
     Scalar(N),

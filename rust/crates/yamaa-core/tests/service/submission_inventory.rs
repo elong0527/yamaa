@@ -1,9 +1,9 @@
 use std::rc::Rc;
+use yamaa_core::submission_inventory::{self as service, Ports};
 use yamaa_core::{
     schema::{Document, DocumentNode as N},
     submission_inventory::Inventory,
 };
-use {yamaa_core::submission_inventory as service, yamaa_core::submission_inventory::Ports};
 fn domain(name: &str) -> Document {
     Document::new(
         vec![

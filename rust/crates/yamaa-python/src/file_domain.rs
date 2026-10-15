@@ -6,10 +6,7 @@ use yamaa_adapters::{
     file_application::{self, RuntimePort},
     specification_report::Identity,
 };
-use {
-    yamaa_core::application_observer::Noop, yamaa_core::application_observer::Outcome,
-    yamaa_core::application_observer::Phase, yamaa_core::application_observer::Scope,
-};
+use yamaa_core::application_observer::{Noop, Outcome, Phase, Scope};
 pub struct Runtime<'py, 'request> {
     pub py: Python<'py>,
     pub specification: &'request str,

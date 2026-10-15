@@ -1,8 +1,8 @@
 //! ODM scope selection, source-only eligibility, and strict record uniqueness.
 use super::*;
-use {
-    crate::dataset::BoundOdm, crate::dataset::OdmScope, crate::odm_source::FIELDS,
-    crate::odm_source::HIERARCHY, crate::odm_source::IDENTIFYING,
+use crate::{
+    dataset::{BoundOdm, OdmScope},
+    odm_source::{FIELDS, HIERARCHY, IDENTIFYING},
 };
 
 fn cell<'a, T: TableAccess + ?Sized>(

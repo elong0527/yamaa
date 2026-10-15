@@ -1,6 +1,9 @@
 //! Scalar evaluation retains authored reads, missing-handler counts and raw values.
 use super::*;
-use {crate::scalar_language, crate::text_extract::Error, crate::text_extract::Step};
+use crate::{
+    scalar_language,
+    text_extract::{Error, Step},
+};
 pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
     match &assignment.expression {
         Expression::Aggregate(aggregate) => {

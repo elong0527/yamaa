@@ -2,12 +2,12 @@
 //! location facts are compared as identities; they are not resource capabilities.
 use crate::specification_source::PreparedDocument;
 use std::sync::Arc;
+use yamaa_core::producer_admission::{self, Prepared};
 use yamaa_core::{
     producer_admission::{Candidate, Error as CoreError, Limits as CoreLimits},
     project_environment::ExecutionEnvironment,
     schema::DocumentNode as N,
 };
-use {yamaa_core::producer_admission, yamaa_core::producer_admission::Prepared};
 
 pub struct SuppliedProducer {
     pub dataset: String,

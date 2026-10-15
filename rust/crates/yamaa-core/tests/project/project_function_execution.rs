@@ -7,17 +7,16 @@ use std::{
 };
 use support::{call, function, specification, Tree};
 use yamaa_core::{
+    dataset::{self, ExecutionError},
+    domain,
+    function_invocation::{Argument, FailureKind, FunctionPort, HostError},
+    specification_run::{CapturedAttempt, Limits, SourceDecoder, SourcePort},
+};
+use yamaa_core::{
     function_signature::{InvocationPlan, ProjectInvocationPlan},
     specification::{PrepareError, SourceDeclaration},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
-};
-use {
-    yamaa_core::dataset, yamaa_core::dataset::ExecutionError, yamaa_core::domain,
-    yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::FailureKind,
-    yamaa_core::function_invocation::FunctionPort, yamaa_core::function_invocation::HostError,
-    yamaa_core::specification_run::CapturedAttempt, yamaa_core::specification_run::Limits,
-    yamaa_core::specification_run::SourceDecoder, yamaa_core::specification_run::SourcePort,
 };
 #[derive(Debug, PartialEq)]
 struct Payload(Rc<()>);
@@ -297,11 +296,8 @@ fn checked_calls_execute_through_shared_capture_and_repeat_on_held_snapshots() {
 }
 #[test]
 fn observer_counts_actual_calls_and_preserves_signature_short_circuit_and_original_failure() {
+    use yamaa_core::application_observer::{CallStage, Outcome, Phase, Scope};
     use yamaa_core::dataset::ExecutionPhase;
-    use {
-        yamaa_core::application_observer::CallStage, yamaa_core::application_observer::Outcome,
-        yamaa_core::application_observer::Phase, yamaa_core::application_observer::Scope,
-    };
     for mode in ["normal", "missing", "signature", "raised"] {
         let spec = specification(vec![(
             "VALUE",
@@ -475,11 +471,8 @@ fn observer_counts_actual_calls_and_preserves_signature_short_circuit_and_origin
 
 #[test]
 fn classified_limit_observation_keeps_exact_facts_and_never_invents_generic_capacity_details() {
-    use {
-        yamaa_core::application_observer::Phase, yamaa_core::application_observer::Refusal,
-        yamaa_core::application_observer::Scope,
-    };
-    use {yamaa_core::dataset::ExecutionPhase, yamaa_core::dataset::Resource};
+    use yamaa_core::application_observer::{Phase, Refusal, Scope};
+    use yamaa_core::dataset::{ExecutionPhase, Resource};
     for classified in [true, false] {
         let checked = domain::check_with_project(&model("id"), &[function("id")]).unwrap();
         let trace = Rc::new(RefCell::new(vec![]));
@@ -790,9 +783,9 @@ mod project_usecase {
         project_function::{Definition, Language},
         schema::DocumentNode as N,
     };
-    use {
-        yamaa_core::project_activation::ActivationPort, yamaa_core::project_activation::Failure,
-        yamaa_core::project_activation::TestFailure, yamaa_core::project_domain,
+    use yamaa_core::{
+        project_activation::{ActivationPort, Failure, TestFailure},
+        project_domain,
     };
     struct Activation {
         trace: Trace,
@@ -1078,11 +1071,7 @@ mod project_usecase {
     }
     #[test]
     fn owned_observed_build_retains_activation_after_execution_failure_and_resets_on_retry() {
-        use {
-            yamaa_core::project_activation::LockObservation,
-            yamaa_core::project_activation::Observations,
-            yamaa_core::project_activation::TestOutcome,
-        };
+        use yamaa_core::project_activation::{LockObservation, Observations, TestOutcome};
         let checked =
             project_domain::check_owned(&model("id"), environment(Some(definitions()))).unwrap();
         let trace = Rc::new(RefCell::new(vec![]));
@@ -1176,10 +1165,7 @@ mod project_usecase {
     }
     #[test]
     fn borrowed_observed_build_keeps_earlier_passes_after_late_case_or_original_host_failure() {
-        use {
-            yamaa_core::project_activation::Observations,
-            yamaa_core::project_activation::TestOutcome,
-        };
+        use yamaa_core::project_activation::{Observations, TestOutcome};
         let environment = environment(Some(definitions()));
         let checked = project_domain::check(&model("id"), &environment).unwrap();
         for mode in [5, 6] {
@@ -1239,11 +1225,8 @@ mod project_usecase {
     }
     #[test]
     fn owning_application_observer_attributes_actual_activation_and_preserves_empty_selection() {
+        use yamaa_core::application_observer::{CallStage, Phase, Scope};
         use yamaa_core::dataset::ExecutionPhase;
-        use {
-            yamaa_core::application_observer::CallStage, yamaa_core::application_observer::Phase,
-            yamaa_core::application_observer::Scope,
-        };
         for called in [false, true] {
             let spec = if called {
                 model("id")

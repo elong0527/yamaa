@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use yamaa_core::dataset::{ExecutionError, Limits};
 use yamaa_core::{
     conversion::LiteralHandler,
     dataset::{
@@ -7,7 +8,6 @@ use yamaa_core::{
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
-use {yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Limits};
 struct Table {
     schema: TableSchema,
     value: Value,

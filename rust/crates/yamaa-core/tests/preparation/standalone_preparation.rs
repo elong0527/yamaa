@@ -5,7 +5,7 @@ use yamaa_core::schema::{
     SchemaDiagnostic, SchemaModule, SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
     ValidationLimits, WindowReference,
 };
-use {yamaa_core::standalone_preparation::prepare, yamaa_core::standalone_preparation::Error};
+use yamaa_core::standalone_preparation::{prepare, Error};
 
 #[derive(Clone, Debug, PartialEq)]
 enum V {

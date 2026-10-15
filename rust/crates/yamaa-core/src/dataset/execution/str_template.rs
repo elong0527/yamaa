@@ -1,6 +1,6 @@
 //! Ordered occurrence reads and complete output admission before materialization.
 use super::*;
-use {crate::text_template::Part, crate::text_template::StringTemplate};
+use crate::text_template::{Part, StringTemplate};
 pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
     match expression {
         Expression::StrTemplate {

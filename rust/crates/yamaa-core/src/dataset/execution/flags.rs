@@ -1,9 +1,10 @@
 //! Lazy flag operands share the attempt's counters and named-selection cache.
 use super::*;
-use {
-    crate::bound_expression::Read, crate::dataset::Flag, crate::dataset::FlagRead,
-    crate::predicate, crate::predicate::ContextError, crate::predicate::EvaluationContext,
-    crate::value::Selection,
+use crate::{
+    bound_expression::Read,
+    dataset::{Flag, FlagRead},
+    predicate::{self, ContextError, EvaluationContext},
+    value::Selection,
 };
 
 pub(super) fn evaluate<T: TableAccess + ?Sized>(

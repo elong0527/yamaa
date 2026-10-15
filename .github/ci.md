@@ -149,7 +149,7 @@ numerical checks supply exact-head premerge evidence; renew main evidence after
 merge.
 
 The shared-crates step and `make test-rust` both call
-`scripts/commands/rust_tests.py` for locked debug, engine `test-support` and
+`scripts/commands/rust_tests.py` for locked debug, core `test-support` and
 optimized `release-test` tests. The engine feature enables the feature-gated
 project-preparation and test-support coverage omitted by a default-feature test
 invocation, including the explicit `test_support` integration suite.

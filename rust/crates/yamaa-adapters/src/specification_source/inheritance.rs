@@ -1,9 +1,6 @@
 //! Physical inheritance decoding and compatibility representation of engine preparation.
 use super::*;
-use {
-    yamaa_core::inheritance_capture as application,
-    yamaa_core::inheritance_preparation as lifecycle,
-};
+use yamaa_core::{inheritance_capture as application, inheritance_preparation as lifecycle};
 
 pub use application::CapturePort as InheritancePort;
 pub type CapturedParent = application::CapturedParent<DecodedYaml>;

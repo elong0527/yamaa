@@ -13,7 +13,7 @@ use yamaa_core::{
     value::Value,
 };
 
-use {yamaa_core::dataset, yamaa_core::dataset::DatasetPlan};
+use yamaa_core::dataset::{self, DatasetPlan};
 
 /// Rows of a converted readable JSON fixture (formerly hex-encoded TSV).
 fn fixture_rows(truth: &str) -> Vec<serde_json::Value> {
@@ -393,9 +393,7 @@ fn inheritance_presence_and_capture_budgets_cannot_silently_fall_through() {
 
 #[test]
 fn unsupported_operations_handlers_and_metadata_are_refused_before_binding() {
-    use {
-        yamaa_core::specification::PrepareError, yamaa_core::specification::PreparedSpecification,
-    };
+    use yamaa_core::specification::{PrepareError, PreparedSpecification};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let raw =
@@ -422,10 +420,7 @@ fn unsupported_operations_handlers_and_metadata_are_refused_before_binding() {
 #[test]
 fn binding_uses_shared_reference_and_dependency_findings() {
     use yamaa_core::reference_binding::Diagnostic;
-    use {
-        yamaa_core::specification::BindError, yamaa_core::specification::BindFinding,
-        yamaa_core::specification::PreparedSpecification,
-    };
+    use yamaa_core::specification::{BindError, BindFinding, PreparedSpecification};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let raw =
@@ -527,7 +522,7 @@ fn original_yaml_run_returns_complete_independent_portable_failures() {
 #[test]
 fn source_ingestion_failure_precedes_deferred_formula_diagnostics() {
     use yamaa_adapters::specification_run::{Error, PreparedRun};
-    use {yamaa_core::specification::BindError, yamaa_core::specification::BindFinding};
+    use yamaa_core::specification::{BindError, BindFinding};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let case = root.join("benchmarks/negative-zero-division");
@@ -927,10 +922,7 @@ fn binding_collects_ordered_findings_before_dependency_diagnostics() {
 #[test]
 fn compiler_budgets_precede_owned_planning_and_preserve_policy_boundary() {
     use yamaa_adapters::{specification_diagnostics, specification_run};
-    use {
-        yamaa_core::specification::CompilationLimits, yamaa_core::specification::PrepareError,
-        yamaa_core::specification::PreparedSpecification,
-    };
+    use yamaa_core::specification::{CompilationLimits, PrepareError, PreparedSpecification};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let raw =
@@ -1442,10 +1434,7 @@ fn aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path() 
 
 #[test]
 fn declared_field_and_total_row_expression_budgets_precede_compiler_ownership() {
-    use {
-        yamaa_core::specification::CompilationLimits, yamaa_core::specification::PrepareError,
-        yamaa_core::specification::PreparedSpecification,
-    };
+    use yamaa_core::specification::{CompilationLimits, PrepareError, PreparedSpecification};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let schema = schema(&root.join("yaml"));
     let raw = std::fs::read(root.join("benchmarks/adam-adlb-ordered-sum/spec.yaml")).unwrap();
@@ -2825,7 +2814,7 @@ fn original_window_failures_match_independent_diagnostics_and_completed_observat
 #[test]
 fn inherited_original_preparation_prunes_before_source_binding() {
     use yamaa_core::schema::{NormalizationBudget, SchemaSource};
-    use {yamaa_core::inheritance as graph, yamaa_core::inheritance_preparation as lifecycle};
+    use yamaa_core::{inheritance as graph, inheritance_preparation as lifecycle};
     struct Host {
         root: std::path::PathBuf,
         reads: Vec<String>,
@@ -3379,9 +3368,9 @@ fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
         specification_source::{InheritancePort, Source},
     };
     use yamaa_core::resource::ResourceFailure;
-    use {
-        yamaa_core::inheritance::Source as FileIdentity, yamaa_core::inheritance::SourceError,
-        yamaa_core::specification::SourceDeclaration,
+    use yamaa_core::{
+        inheritance::{Source as FileIdentity, SourceError},
+        specification::SourceDeclaration,
     };
     struct Files {
         parent: Vec<u8>,

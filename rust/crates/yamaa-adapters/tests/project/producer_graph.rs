@@ -5,13 +5,13 @@ use yamaa_adapters::{
     shipped_schema,
     specification_source::{InheritancePort, PreparedDocument, Source},
 };
+use yamaa_core::inheritance::{Source as Identity, SourceError};
 use yamaa_core::{
     producer_graph::Error as CoreError,
     project_environment::{Draft, Environment, ExecutionEnvironment},
     project_function::Language,
     specification::PrepareError,
 };
-use {yamaa_core::inheritance::Source as Identity, yamaa_core::inheritance::SourceError};
 
 fn environment() -> ExecutionEnvironment {
     Environment::admit(

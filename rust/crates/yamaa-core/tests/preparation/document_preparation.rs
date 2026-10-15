@@ -5,10 +5,9 @@ use yamaa_core::schema::{
     NormalizationLimits, SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaOrigin,
     SchemaSource, SchemaStructure,
 };
-use {
-    yamaa_core::document_preparation as app, yamaa_core::inheritance as graph,
-    yamaa_core::inheritance_capture as capture, yamaa_core::inheritance_preparation as lifecycle,
-    yamaa_core::project_preparation::Source,
+use yamaa_core::{
+    document_preparation as app, inheritance as graph, inheritance_capture as capture,
+    inheritance_preparation as lifecycle, project_preparation::Source,
 };
 #[derive(Clone)]
 enum Tree {

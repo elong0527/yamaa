@@ -1,8 +1,8 @@
 //! Explicit producer-first publication of bytes accepted by the actual build.
 //! Construction is private to the build boundary; public attempts are evidence.
 use crate::{producer_build::Attempt, specification_output::PreparedOutput};
+use crate::{producer_graph::PreparedGraph, table::TableAccess};
 use alloc::{string::String, sync::Arc, vec::Vec};
-use {crate::producer_graph::PreparedGraph, crate::table::TableAccess};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {

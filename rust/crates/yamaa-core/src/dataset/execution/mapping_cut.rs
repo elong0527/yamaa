@@ -1,6 +1,6 @@
 //! Native mapping/cut selection with reached handlers and retained failure identity.
 use super::*;
-use {crate::mapping_cut::MappingCut, crate::mapping_cut::SelectedValue};
+use crate::mapping_cut::{MappingCut, SelectedValue};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn evaluate<T: TableAccess + ?Sized>(

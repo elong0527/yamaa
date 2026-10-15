@@ -32,6 +32,13 @@ mod str_template;
 mod windows;
 
 use crate::{
+    bound_expression::BoundPredicate,
+    conversion::{convert, ConversionError},
+    reduction::NumericReducer,
+    table::{CellError, TableAccess, TableSchema, ValueRef},
+    value::{Value, ValueType},
+};
+use crate::{
     dataset_budget::Budget,
     numeric_lifecycle::{HandlerCount, HandlerCountOverflow, HandlerCounter, HandlerKind},
     table_grouping::{partition, GroupingError},
@@ -39,12 +46,6 @@ use crate::{
 };
 use alloc::{boxed::Box, collections::BTreeMap, format, string::String, vec, vec::Vec};
 use core::convert::Infallible;
-use {
-    crate::bound_expression::BoundPredicate, crate::conversion::convert,
-    crate::conversion::ConversionError, crate::reduction::NumericReducer, crate::table::CellError,
-    crate::table::TableAccess, crate::table::TableSchema, crate::table::ValueRef,
-    crate::value::Value, crate::value::ValueType,
-};
 
 /// Contiguous stages of one attempt; clocks and measurement storage belong to adapters.
 /// Derivation includes source reads, callbacks and per-value result conversion.

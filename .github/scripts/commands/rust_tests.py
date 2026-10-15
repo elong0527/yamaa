@@ -13,7 +13,7 @@ def main():
         toolchain = tomllib.load(source)["toolchain"]["channel"]
     for arguments in (
         [],
-        ["-p", "yamaa-engine", "--features", "test-support"],
+        ["-p", "yamaa-core", "--features", "test-support"],
         [
             "-p",
             "yamaa-adapters",
@@ -25,8 +25,6 @@ def main():
         [
             "-p",
             "yamaa-core",
-            "-p",
-            "yamaa-engine",
             "-p",
             "yamaa-adapters",
             "--profile",

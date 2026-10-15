@@ -1,12 +1,12 @@
 //! Capture, decode, bind and execute a prepared specification through native ports.
 //! Filesystem access, codecs and host exception containment belong to adapters.
-use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
-use {crate::dataset, crate::dataset::ExecutionAttempt};
-use {
-    crate::resource::ResourceFailure, crate::specification::BindError,
-    crate::specification::PreparedSpecification, crate::specification::SourceDeclaration,
-    crate::specification::SourceInterpretation, crate::table::TableAccess,
+use crate::dataset::{self, ExecutionAttempt};
+use crate::{
+    resource::ResourceFailure,
+    specification::{BindError, PreparedSpecification, SourceDeclaration, SourceInterpretation},
+    table::TableAccess,
 };
+use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
 
 /// Capture authority for a declared source. Bound allocation before returning,
 /// hold immutable bytes and compare cached snapshots on bytes, never a digest.

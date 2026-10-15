@@ -2,10 +2,9 @@
 //! later never runs a source, function, serializer or publisher again.
 use serde::Serialize;
 use std::{sync::Mutex, time::Instant};
-use {
-    yamaa_core::application_observer::CallStage, yamaa_core::application_observer::Event,
-    yamaa_core::application_observer::Observer, yamaa_core::application_observer::Outcome,
-    yamaa_core::application_observer::Phase, yamaa_core::dataset::ExecutionPhase,
+use yamaa_core::{
+    application_observer::{CallStage, Event, Observer, Outcome, Phase},
+    dataset::ExecutionPhase,
 };
 
 const NODES: usize = 64;
@@ -349,7 +348,7 @@ impl Observer for Measurements {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use {yamaa_core::application_observer::Noop, yamaa_core::application_observer::Scope};
+    use yamaa_core::application_observer::{Noop, Scope};
     #[test]
     fn actual_entries_returns_and_failed_stage_have_bounded_retention_and_typed_offsets() {
         let measurements = Measurements::new();

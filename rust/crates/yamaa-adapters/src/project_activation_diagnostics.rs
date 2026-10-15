@@ -1,7 +1,7 @@
 //! Serialize bounded core-owned binding and conformance diagnostic facts.
 use crate::{issue_rows::Issue, project_diagnostic_projection::finish};
+use yamaa_core::project_activation::{BindingFailure, TestFailure};
 pub use yamaa_core::project_diagnostics::{DefinitionSource, Error, HostDetails};
-use {yamaa_core::project_activation::BindingFailure, yamaa_core::project_activation::TestFailure};
 
 pub fn binding_issues<'a, E>(
     definitions: &[DefinitionSource<'_>],

@@ -10,10 +10,10 @@ use yamaa_core::{
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
-use {
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Limits,
-    yamaa_core::dataset::Resource, yamaa_core::execution_work::WorkBudget,
-    yamaa_core::function_invocation::NoFunctions,
+use yamaa_core::{
+    dataset::{ExecutionError, Limits, Resource},
+    execution_work::WorkBudget,
+    function_invocation::NoFunctions,
 };
 
 #[derive(Debug)]
@@ -377,10 +377,7 @@ fn pooled_identity_failures_keep_actual_cell_and_text_prefixes_across_nodes() {
 }
 #[test]
 fn pooled_scalar_and_matching_counters_do_not_restart_at_a_node_boundary() {
-    use {
-        yamaa_core::dataset::Check, yamaa_core::dataset::ColumnVerifications,
-        yamaa_core::dataset::Verification,
-    };
+    use yamaa_core::dataset::{Check, ColumnVerifications, Verification};
     let (table, _) = fixture(Expression::Literal(Value::Int(1)));
     let text = literal_rows(&table, 1, ColumnType::Str, true);
     let scalar_limits = Limits {
@@ -442,11 +439,8 @@ fn pooled_scalar_and_matching_counters_do_not_restart_at_a_node_boundary() {
 }
 #[test]
 fn pooled_predicate_resolutions_follow_actual_entered_rows() {
+    use yamaa_core::bound_expression::{Binding, BoundPredicate, Read};
     use yamaa_core::predicate::{self, Comparison, Node, Scalar};
-    use {
-        yamaa_core::bound_expression::Binding, yamaa_core::bound_expression::BoundPredicate,
-        yamaa_core::bound_expression::Read,
-    };
     let (table, _) = fixture(Expression::Literal(Value::Int(1)));
     let filter = BoundPredicate::new(
         predicate::Plan::new(

@@ -527,7 +527,7 @@ fn inheritance_issues<'a>(
         InheritanceDependencyError as D, InheritanceDependencyIssue as F,
         InheritanceReferenceError as R, NormalizationError as N,
     };
-    use {yamaa_core::inheritance::Error as G, yamaa_core::inheritance_preparation::Error as E};
+    use yamaa_core::{inheritance::Error as G, inheritance_preparation::Error as E};
     let mut budget = Budget::new(maximum);
     let mut supported = true;
     match cause {

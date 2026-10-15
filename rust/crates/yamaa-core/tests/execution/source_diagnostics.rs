@@ -1,6 +1,12 @@
 //! Actual capture/decoder ordering with payloads that are neither Clone nor Debug nor Send.
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use yamaa_core::{
+    dataset,
+    specification_run::{
+        self as run, CapturedAttempt, PortError, RunError, SourceDecoder, SourcePort,
+    },
+};
+use yamaa_core::{
     diagnostic::{
         admit_source_diagnostics, ConditionCode as C, ContextValue as V, Diagnostic,
         ProjectionError, MAX_PROJECTION_BYTES,
@@ -12,12 +18,6 @@ use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
     typed_csv::Error as TypingError,
     value::{ColumnType, Value},
-};
-use {
-    yamaa_core::dataset, yamaa_core::specification_run as run,
-    yamaa_core::specification_run::CapturedAttempt, yamaa_core::specification_run::PortError,
-    yamaa_core::specification_run::RunError, yamaa_core::specification_run::SourceDecoder,
-    yamaa_core::specification_run::SourcePort,
 };
 
 enum Tree<'a> {

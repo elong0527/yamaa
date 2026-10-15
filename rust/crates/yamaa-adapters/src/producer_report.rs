@@ -8,12 +8,13 @@ use crate::{
     specification_report::{self as report, Error, Identity},
 };
 use serde_json::{json, Value};
-use yamaa_core::{producer_graph::Node, table::TableAccess};
-use {
-    yamaa_core::dataset::CheckRecord, yamaa_core::dataset::Execution,
-    yamaa_core::producer_build::ReportPort, yamaa_core::specification_output::OutputReport,
-    yamaa_core::specification_run::CapturedAttempt,
+use yamaa_core::{
+    dataset::{CheckRecord, Execution},
+    producer_build::ReportPort,
+    specification_output::OutputReport,
+    specification_run::CapturedAttempt,
 };
+use yamaa_core::{producer_graph::Node, table::TableAccess};
 
 fn records(
     budget: &mut Budget,
@@ -785,7 +786,7 @@ fn failed_observations<'a, E>(
     entry: &str,
 ) -> Result<(StoredReport, bool), Error> {
     use yamaa_core::dataset::ExecutionError;
-    use {yamaa_core::specification_run::PortError, yamaa_core::specification_run::RunError};
+    use yamaa_core::specification_run::{PortError, RunError};
     let node = &entered.nodes[position];
     let attempt = &node.dataset;
     if attempt.sources.len() > view.compiled().sources().len()
@@ -1322,11 +1323,11 @@ mod tests {
     #[test]
     fn native_header_mismatch_reporting_keeps_the_actual_authored_cause_and_refuses_before_copy() {
         use crate::{project_source_decoder::Decoder, specification_source::Source};
+        use yamaa_core::producer_build::{DecodeLimits, DecodePort};
         use yamaa_core::{
             specification::{SourceDeclaration, SourceProfile},
             value::ColumnType,
         };
-        use {yamaa_core::producer_build::DecodeLimits, yamaa_core::producer_build::DecodePort};
         let document = crate::shipped_schema::capture().unwrap().prepare_standalone(Source {
             identity: "original-producer.yaml".into(),
             bytes: b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: int, label: Value, derivation: RAW.VALUE}\noutput: {path: produced.csv, columns: [ID, VALUE]}\n".to_vec(),

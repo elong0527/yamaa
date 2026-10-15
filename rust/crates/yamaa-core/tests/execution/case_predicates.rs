@@ -1,18 +1,15 @@
 //! Independent grain, ordering and original opaque-error controls for case predicates.
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
+use yamaa_core::dataset::{
+    Assignment, CaseBranch, Check, ColumnVerifications, ConversionHandler, DatasetPlan,
+    ExecutionError, Expression, Limits, RowMode, RowTemplate, Verification,
+};
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
     predicate_compiler,
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
-};
-use {
-    yamaa_core::dataset::Assignment, yamaa_core::dataset::CaseBranch, yamaa_core::dataset::Check,
-    yamaa_core::dataset::ColumnVerifications, yamaa_core::dataset::ConversionHandler,
-    yamaa_core::dataset::DatasetPlan, yamaa_core::dataset::ExecutionError,
-    yamaa_core::dataset::Expression, yamaa_core::dataset::Limits, yamaa_core::dataset::RowMode,
-    yamaa_core::dataset::RowTemplate, yamaa_core::dataset::Verification,
 };
 
 struct Source {

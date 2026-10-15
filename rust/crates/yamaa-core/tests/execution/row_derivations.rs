@@ -1,5 +1,6 @@
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
+use yamaa_core::dataset::{ExecutionError, Limits};
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
@@ -9,7 +10,6 @@ use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
-use {yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Limits};
 struct Table {
     schema: TableSchema,
     rows: Vec<Vec<Value>>,

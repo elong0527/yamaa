@@ -9,7 +9,7 @@ use yamaa_core::schema::{
     Document, InheritanceDependencyError, InheritanceReferenceError, NormalizationError,
     SchemaStructure,
 };
-use {yamaa_core::inheritance as graph, yamaa_core::inheritance_preparation::Error as E};
+use yamaa_core::{inheritance as graph, inheritance_preparation::Error as E};
 
 fn source<E>(error: SourceFailure<E>) -> Result<String, E> {
     match error {
@@ -64,7 +64,7 @@ fn traversal_finding<E>(error: &graph::Error<E>) -> Result<Option<Value>, captur
 // The engine classifies the typed error. This boundary only serializes its
 // already-owned fields; no source request or JSON reply crosses a host callback.
 fn traversal_outcome<E>(schema: &SchemaStructure, error: graph::Error<E>) -> Result<Value, E> {
-    use {yamaa_core::inheritance_outcome, yamaa_core::inheritance_outcome::Outcome};
+    use yamaa_core::inheritance_outcome::{self, Outcome};
     let error = match inheritance_outcome::traversal_outcome(error, 16_777_216) {
         Ok(Outcome::Diagnostic(finding)) => {
             return Ok(match super::portable_diagnostic(finding) {

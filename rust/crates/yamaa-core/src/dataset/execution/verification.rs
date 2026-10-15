@@ -2,13 +2,14 @@
 use super::{Check, CheckRecord, ExecutionError, Verification};
 use crate::bound_expression::BoundPredicate;
 use crate::dataset::execution as dataset;
-use alloc::{boxed::Box, vec::Vec};
-use {
-    crate::bound_expression::Binding, crate::bound_expression::Read, crate::predicate::ErrorKind,
-    crate::predicate::Truth, crate::table::TableAccess, crate::temporal::Date,
-    crate::temporal::DatePrecision, crate::temporal::DateTime, crate::temporal::DateTimePrecision,
-    crate::value::ColumnType, crate::value::Value,
+use crate::{
+    bound_expression::{Binding, Read},
+    predicate::{ErrorKind, Truth},
+    table::TableAccess,
+    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+    value::{ColumnType, Value},
 };
+use alloc::{boxed::Box, vec::Vec};
 
 /// Nonmissing representatives expose invalid declarations even for empty output.
 fn sample(kind: ColumnType) -> Value {
@@ -316,8 +317,8 @@ pub(crate) fn row_count_check<T: TableAccess + ?Sized>(
     })
 }
 
+use crate::table::{CellError, TableSchema, ValueRef};
 use core::convert::Infallible;
-use {crate::table::CellError, crate::table::TableSchema, crate::table::ValueRef};
 
 /// Borrow completed cells while retaining the attempt's candidate selection identities.
 pub(crate) struct CompletedRows<'a> {

@@ -1,10 +1,10 @@
 //! Gate artifact encoding and publication on accepted execution and observations.
 use crate::dataset::{Dataset, Execution};
-use alloc::{string::String, sync::Arc, vec::Vec};
-use {
-    crate::specification::OutputFinding, crate::specification::PreparedSpecification,
-    crate::table::TableAccess,
+use crate::{
+    specification::{OutputFinding, PreparedSpecification},
+    table::TableAccess,
 };
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 /// Explicit host authority for atomic output replacement. Success means every
 /// supplied byte has been published at the authorized path; no retry is implied.

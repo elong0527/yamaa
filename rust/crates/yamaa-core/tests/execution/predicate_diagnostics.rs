@@ -1,16 +1,14 @@
 //! Predicate projection inspects one completed native failure without port effects.
 use std::cell::RefCell;
+use yamaa_core::dataset::{
+    Assignment, DatasetPlan, ExecutionError, Expression, Limits, RowMode, RowTemplate,
+};
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
     diagnostic::{ContextValue, PredicateDiagnosticError},
     predicate::{Comparison, ErrorKind, Limits as PredicateLimits, Node, Plan, Scalar},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
-};
-use {
-    yamaa_core::dataset::Assignment, yamaa_core::dataset::DatasetPlan,
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Expression,
-    yamaa_core::dataset::Limits, yamaa_core::dataset::RowMode, yamaa_core::dataset::RowTemplate,
 };
 
 // Neither Clone nor Debug is available to diagnostic code.

@@ -1,11 +1,8 @@
 //! Admission of a complete captured schema closure over an explicit physical codec.
 //! Include resolution, descriptors and default authority remain in the shared core.
 use crate::project_preparation::Source;
+use crate::schema::{BundleError, BundleLimits, Document, SchemaModule, SchemaStructure};
 use alloc::{string::String, vec::Vec};
-use {
-    crate::schema::BundleError, crate::schema::BundleLimits, crate::schema::Document,
-    crate::schema::SchemaModule, crate::schema::SchemaStructure,
-};
 
 /// Discovery grants read authority only to names accepted by the existing core
 /// include grammar. Unsafe authored names remain for final bundle diagnostics.

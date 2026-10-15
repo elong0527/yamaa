@@ -6,20 +6,20 @@ use crate::function_signature::Parameter;
 use crate::function_signature::Presence;
 use crate::function_signature::ProjectFunctionIdentity;
 use crate::function_signature::ProjectInvocationPlan;
+use crate::{
+    schema::{
+        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
+    },
+    specification::{OutputFinding, PreparedSpecification, SourceDeclaration},
+    table::{CellError, Column, TableAccess, TableSchema},
+    value::{ColumnType, Value, ValueType},
+};
 use alloc::{boxed::Box, collections::BTreeMap, rc::Rc, sync::Arc, vec, vec::Vec};
 use function_invocation::FailureKind;
 use function_invocation::FunctionPort;
 use function_invocation::HostError;
 use output::{OutputReport, SaveError};
 use run::{CapturedAttempt, PortError, RunError};
-use {
-    crate::schema::Document, crate::schema::DocumentLimits, crate::schema::DocumentNode as N,
-    crate::schema::SpecificationDocument, crate::schema::ValidationBudget,
-    crate::specification::OutputFinding, crate::specification::PreparedSpecification,
-    crate::specification::SourceDeclaration, crate::table::CellError, crate::table::Column,
-    crate::table::TableAccess, crate::table::TableSchema, crate::value::ColumnType,
-    crate::value::Value, crate::value::ValueType,
-};
 
 /// Deliberately neither Clone nor Send/Sync. Its allocated token pins identity.
 #[derive(Debug)]

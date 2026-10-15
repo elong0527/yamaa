@@ -5,7 +5,7 @@ use crate::{
     project_source::{CapturePort, Kind, Reply, Request},
     specification_source::{Limits, Source},
 };
-use {yamaa_core::inheritance::Source as Identity, yamaa_core::inheritance::SourceError};
+use yamaa_core::inheritance::{Source as Identity, SourceError};
 
 pub(crate) struct Reader<'a> {
     pub(crate) resources: &'a mut Resources,

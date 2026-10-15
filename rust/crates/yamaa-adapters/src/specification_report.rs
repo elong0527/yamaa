@@ -659,10 +659,7 @@ fn prepare_result_with_output_limit(
     observations: StoredReport,
     maximum: usize,
 ) -> Result<BuildResult, Error> {
-    use {
-        yamaa_core::specification_output as output,
-        yamaa_core::specification_output::CompleteError as E,
-    };
+    use yamaa_core::specification_output::{self as output, CompleteError as E};
     let success = execution.is_some() && run.compiled().output_findings().is_empty();
     let logs = crate::verification_logs::prepare(run, &observations, success)?;
     let verification = logs.verification;

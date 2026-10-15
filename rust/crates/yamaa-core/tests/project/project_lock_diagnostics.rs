@@ -10,10 +10,9 @@ use yamaa_core::{
     project_function::{Case, Definition, Function, Language, Parameter},
     value::{ColumnType, Value, ValueType},
 };
-use {
-    yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::HostError,
-    yamaa_core::project_activation::activate, yamaa_core::project_activation::ActivationPort,
-    yamaa_core::project_activation::Failure,
+use yamaa_core::{
+    function_invocation::{Argument, HostError},
+    project_activation::{activate, ActivationPort, Failure},
 };
 
 // No Clone, Debug or Send implementation exists for this original host payload.

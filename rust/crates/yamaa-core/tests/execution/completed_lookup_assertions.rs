@@ -12,11 +12,10 @@ use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType as T, Value},
 };
-use {
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Limits,
-    yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::FunctionPort,
-    yamaa_core::function_invocation::HostError, yamaa_core::function_signature::FunctionIdentity,
-    yamaa_core::function_signature::InvocationPlan,
+use yamaa_core::{
+    dataset::{ExecutionError, Limits},
+    function_invocation::{Argument, FunctionPort, HostError},
+    function_signature::{FunctionIdentity, InvocationPlan},
 };
 
 #[derive(Debug)]

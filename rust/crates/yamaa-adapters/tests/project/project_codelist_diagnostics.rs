@@ -4,12 +4,9 @@ use support::{environment, schema, spec};
 use yamaa_adapters::project_codelist_diagnostics::{
     codelist_issues, codelist_issues_with_limit, Error,
 };
+use yamaa_core::dataset::{CheckRecord, CodelistObservation, ExecutionError, RowIdentity};
 use yamaa_core::table::{CellError, TableAccess, TableSchema, ValueRef};
 use yamaa_core::{specification::PreparedSpecification, value::Value};
-use {
-    yamaa_core::dataset::CheckRecord, yamaa_core::dataset::CodelistObservation,
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::RowIdentity,
-};
 struct Source {
     schema: TableSchema,
     reads: Cell<usize>,

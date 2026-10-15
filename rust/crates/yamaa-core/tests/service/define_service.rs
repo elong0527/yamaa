@@ -1,15 +1,11 @@
 //! Independently authored engine use-case controls; no native filesystem or host.
 use std::{cell::Cell, rc::Rc};
+use yamaa_core::define::{self, Application, Failure, Ports, PublicationState, SaveFailure};
 use yamaa_core::{
     diagnostic::ConditionCode,
     project_terminology::Catalogue,
     schema::{Document, DocumentNode as N},
     table::{CellError, TableAccess, TableSchema, ValueRef},
-};
-use {
-    yamaa_core::define, yamaa_core::define::Application, yamaa_core::define::Failure,
-    yamaa_core::define::Ports, yamaa_core::define::PublicationState,
-    yamaa_core::define::SaveFailure,
 };
 
 #[derive(Debug)]

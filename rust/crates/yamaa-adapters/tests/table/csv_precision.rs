@@ -9,7 +9,7 @@ use yamaa_core::{
     schema::DocumentNode,
     specification::{CompilationLimits, PrepareError, PreparedSpecification, SourceDeclaration},
 };
-use {yamaa_core::specification_output::SaveError, yamaa_core::specification_run::SourcePort};
+use yamaa_core::{specification_output::SaveError, specification_run::SourcePort};
 
 const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: output.csv, columns: [ID, VALUE, DOUBLE], decimals: PRECISION}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DOUBLE, type: float, derivation: {compute: {expr: 'VALUE + VALUE'}}}\n";
 fn prepared(precision: &str, path: &str, expression: &str) -> PreparedRun {

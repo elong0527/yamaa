@@ -1,11 +1,11 @@
 //! Refine invalid source profiles with metadata-only physical resource findings.
 //! Unknown regular or missing paths retain their static profile diagnostic. No
 //! byte capture or decoder is available at this boundary.
-use alloc::string::String;
-use {
-    crate::resource::ResourceFailure, crate::specification::PreflightFinding,
-    crate::specification::PrepareError,
+use crate::{
+    resource::ResourceFailure,
+    specification::{PreflightFinding, PrepareError},
 };
+use alloc::string::String;
 
 pub fn refine(
     error: PrepareError,

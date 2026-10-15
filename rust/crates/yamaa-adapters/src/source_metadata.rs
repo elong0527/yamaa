@@ -1,11 +1,8 @@
 //! Closed name/type carriers for retained repository fixture binding checks.
 use crate::{issue_rows::Issue, specification_run_view::RunView};
-use {
-    yamaa_core::source_metadata as application, yamaa_core::source_metadata::Kind,
-    yamaa_core::source_metadata::SourceSchema,
-};
-pub use {yamaa_core::source_metadata::Budget, yamaa_core::source_metadata::Limits};
-pub use {yamaa_core::source_metadata::InputMetadata, yamaa_core::source_metadata::Profile};
+use yamaa_core::source_metadata::{self as application, Kind, SourceSchema};
+pub use yamaa_core::source_metadata::{Budget, Limits};
+pub use yamaa_core::source_metadata::{InputMetadata, Profile};
 
 pub fn inputs(run: &dyn RunView) -> Result<Vec<InputMetadata>, Error> {
     let origins = run

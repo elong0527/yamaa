@@ -1,7 +1,7 @@
 //! Typed failure projection shared by native inheritance consumers. Opaque host
 //! failures and unclassified resource findings retain their original ownership.
+use crate::diagnostic::{Diagnostic, ProjectionError};
 use crate::inheritance::Error;
-use {crate::diagnostic::Diagnostic, crate::diagnostic::ProjectionError};
 
 pub enum Outcome<E> {
     Diagnostic(Diagnostic),

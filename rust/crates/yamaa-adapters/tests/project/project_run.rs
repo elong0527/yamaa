@@ -6,19 +6,18 @@ use yamaa_adapters::{
     specification_source::{PreparedDocument, Source},
 };
 use yamaa_core::{
+    dataset::ExecutionError,
+    function_invocation::{Argument, FailureKind, HostError},
+    project_activation::{ActivationPort, Failure, LockObservation, TestOutcome},
+    specification_run::{PortError, SourcePort},
+};
+use yamaa_core::{
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     project_environment::{LockKind, LockReference},
     project_function::Language,
     specification::SourceDeclaration,
     table::{TableAccess, ValueRef},
     value::Value,
-};
-use {
-    yamaa_core::dataset::ExecutionError, yamaa_core::function_invocation::Argument,
-    yamaa_core::function_invocation::FailureKind, yamaa_core::function_invocation::HostError,
-    yamaa_core::project_activation::ActivationPort, yamaa_core::project_activation::Failure,
-    yamaa_core::project_activation::LockObservation, yamaa_core::project_activation::TestOutcome,
-    yamaa_core::specification_run::PortError, yamaa_core::specification_run::SourcePort,
 };
 
 fn source(identity: &str, bytes: &[u8]) -> Source {

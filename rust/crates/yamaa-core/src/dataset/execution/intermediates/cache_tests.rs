@@ -1,11 +1,11 @@
 //! Exact cumulative cache boundaries through the real named-selection service.
 use super::*;
+use crate::{table::Column, value::ColumnType};
 use alloc::rc::Rc;
 use core::{
     cell::RefCell,
     mem::{align_of, size_of},
 };
-use {crate::table::Column, crate::value::ColumnType};
 
 type Trace = Rc<RefCell<Vec<&'static str>>>;
 type Original = core::convert::Infallible;
@@ -299,7 +299,10 @@ fn retained_index_strings_and_coordinate_capacity_obey_the_admitted_source_bound
 
 #[test]
 fn scalar_key_snapshots_read_current_once_and_quota_refusal_runs_no_handler_or_donor() {
-    use {crate::dataset::MatchExpression, crate::text_case::Case, crate::text_case::StringCase};
+    use crate::{
+        dataset::MatchExpression,
+        text_case::{Case, StringCase},
+    };
     let path = "intermediates[0].key.K.str_case";
     let mut fixture = Fixture::with_value(Some(MatchValue::Expression(Box::new(
         MatchExpression::new(

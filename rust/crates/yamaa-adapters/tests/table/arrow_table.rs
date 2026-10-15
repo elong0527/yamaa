@@ -10,15 +10,13 @@ use yamaa_adapters::arrow_table::{
     date_array, datetime_array, physical_schema, ArrowTable, TableError, TableLimits,
     TemporalCellError,
 };
+use yamaa_core::table_reduction::{reduce_column, TableReductionError};
 use yamaa_core::{
     numeric::{ArithmeticErrorKind, Number},
     reduction::{NumericReducer, ReductionError},
     table::{CellError, TableAccess, TableSchema, ValueRef},
     temporal::{Date, DatePrecision as DP, DateTime, DateTimePrecision as TP},
     value::ColumnType as CT,
-};
-use {
-    yamaa_core::table_reduction::reduce_column, yamaa_core::table_reduction::TableReductionError,
 };
 
 /// Build a closed schema without changing supplied declaration order.

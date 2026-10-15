@@ -1,16 +1,16 @@
 //! Capture, structurally decode and admit project dependencies through native ports.
 //! Code activation, study data and publication authority are absent from this service.
-use alloc::{boxed::Box, string::String, vec::Vec};
-use {
-    crate::project_environment::Draft, crate::project_environment::Environment,
-    crate::project_environment::Finding, crate::project_environment::LockKind,
-    crate::project_environment::LockReference, crate::project_environment_document,
-    crate::project_environment_document::Declaration, crate::project_function::Language,
-    crate::project_function_document, crate::project_limits::AdmissionError,
-    crate::project_limits::Limits as SemanticLimits,
-    crate::project_terminology::Source as TerminologySource, crate::project_terminology_document,
-    crate::schema::Document,
+use crate::{
+    project_environment::{Draft, Environment, Finding, LockKind, LockReference},
+    project_environment_document::{self, Declaration},
+    project_function::Language,
+    project_function_document,
+    project_limits::{AdmissionError, Limits as SemanticLimits},
+    project_terminology::Source as TerminologySource,
+    project_terminology_document,
+    schema::Document,
 };
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 /// Retained host identity and exact byte snapshot; identity is never a digest.
 #[derive(Clone, Debug)]

@@ -1,12 +1,9 @@
 //! Predicate binding to already available source/candidate columns, without joins.
-use {
-    crate::bound_expression::Binding,
-    crate::bound_expression::BoundPredicate, crate::bound_expression::Read,
-};
-use {
-    crate::predicate, crate::predicate::Resolved, crate::predicate::Resolver,
-    crate::table::CellError, crate::table::TableAccess, crate::table::ValueRef,
-    crate::value::Selection, crate::value::Value,
+use crate::bound_expression::{Binding, BoundPredicate, Read};
+use crate::{
+    predicate::{self, Resolved, Resolver},
+    table::{CellError, TableAccess, ValueRef},
+    value::{Selection, Value},
 };
 
 /// Resolve lazily in core's written order, sharing the engine's run-local counters.

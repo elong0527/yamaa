@@ -8,15 +8,16 @@ use yamaa_adapters::{
     specification_source::Source,
 };
 use yamaa_core::{
+    function_invocation::{Argument, HostError},
+    project_activation::ActivationPort,
+    specification_run::SourcePort,
+};
+use yamaa_core::{
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     project_environment::LockReference,
     project_function::Language,
     specification::SourceDeclaration,
     value::Value,
-};
-use {
-    yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::HostError,
-    yamaa_core::project_activation::ActivationPort, yamaa_core::specification_run::SourcePort,
 };
 fn source(identity: &str, bytes: &[u8]) -> Source {
     Source {

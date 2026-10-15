@@ -10,14 +10,12 @@ use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
-use yamaa_core::{project_environment::ExecutionEnvironment, specification::PreparedSpecification};
-use {
-    yamaa_core::project_activation::ActivationPort, yamaa_core::project_activation::Failure,
-    yamaa_core::project_activation::Observations, yamaa_core::project_domain,
-    yamaa_core::project_domain::CheckedOwnedProject,
-    yamaa_core::project_domain::RejectedOwnedProject,
-    yamaa_core::specification_run::CapturedAttempt, yamaa_core::specification_run::SourcePort,
+use yamaa_core::{
+    project_activation::{ActivationPort, Failure, Observations},
+    project_domain::{self, CheckedOwnedProject, RejectedOwnedProject},
+    specification_run::{CapturedAttempt, SourcePort},
 };
+use yamaa_core::{project_environment::ExecutionEnvironment, specification::PreparedSpecification};
 
 #[derive(Debug)]
 pub struct PreparedRun {

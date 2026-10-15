@@ -1,8 +1,8 @@
 //! One decoded entry selects the standalone or inherited preparation lifecycle.
 //! Codecs retain physical source/location authority; this application owns no IO.
+use crate::schema::{Document, NormalizationBudget, SchemaStructure};
 use crate::{inheritance_capture, project_preparation::Source, standalone_preparation};
 use alloc::string::String;
-use {crate::schema::Document, crate::schema::NormalizationBudget, crate::schema::SchemaStructure};
 
 /// Entry source admission is distinct from parent capture admission. The borrowed
 /// document must be the exact arena held by `Raw`; equal text is not authority.

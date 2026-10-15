@@ -4,14 +4,15 @@
 //! These ports consume scripted outcomes once, log before each effect, and panic
 //! on an unexpected request. They perform no I/O, codec work, activation or retry.
 //! Owned errors are moved intact and need neither Clone nor Send nor Sync.
+use crate::{
+    specification::SourceDeclaration,
+    table::{CellError, TableAccess, TableSchema, ValueRef},
+    value::Value,
+};
 use alloc::{rc::Rc, string::String, vec::Vec};
 use core::{
     cell::{Ref, RefCell},
     marker::PhantomData,
-};
-use {
-    crate::specification::SourceDeclaration, crate::table::CellError, crate::table::TableAccess,
-    crate::table::TableSchema, crate::table::ValueRef, crate::value::Value,
 };
 
 use crate::{

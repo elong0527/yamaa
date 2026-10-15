@@ -1,18 +1,18 @@
 //! Fake native ports pin application order without a host runtime or codec.
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use yamaa_core::{
+    dataset::{self, ExecutionError},
+    specification_run::{
+        self as run, CapturedAttempt, PortError, RunError, SourceDecoder, SourcePort,
+    },
+};
+use yamaa_core::{
     schema::{
         Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
     },
     specification::{PreparedSpecification, SourceDeclaration},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
-};
-use {
-    yamaa_core::dataset, yamaa_core::dataset::ExecutionError, yamaa_core::specification_run as run,
-    yamaa_core::specification_run::CapturedAttempt, yamaa_core::specification_run::PortError,
-    yamaa_core::specification_run::RunError, yamaa_core::specification_run::SourceDecoder,
-    yamaa_core::specification_run::SourcePort,
 };
 
 enum Tree<'a> {
@@ -411,13 +411,11 @@ fn runtime_errors_and_panic_boundaries_keep_the_observed_source() {
 mod publication {
     use super::*;
     use yamaa_core::specification::OutputFinding;
-    use {
-        yamaa_core::dataset::Dataset, yamaa_core::dataset::Execution,
-        yamaa_core::specification_output as output,
-        yamaa_core::specification_output::ArtifactEncoder,
-        yamaa_core::specification_output::ArtifactPort,
-        yamaa_core::specification_output::CompleteError,
-        yamaa_core::specification_output::OutputReport,
+    use yamaa_core::{
+        dataset::{Dataset, Execution},
+        specification_output::{
+            self as output, ArtifactEncoder, ArtifactPort, CompleteError, OutputReport,
+        },
     };
 
     struct Host {

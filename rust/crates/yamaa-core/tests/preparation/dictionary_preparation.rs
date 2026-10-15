@@ -5,11 +5,11 @@ use yamaa_core::schema::{
     BundleLimits, Document, DocumentLimits, DocumentNode as N, SchemaModule, SchemaStructure,
     SpecificationDocument, ValidationBudget, ValidationLimits,
 };
-use {
-    yamaa_core::dictionary_preparation as app, yamaa_core::inheritance::Source as Identity,
-    yamaa_core::inheritance::SourceError, yamaa_core::inheritance_capture::CapturePort,
-    yamaa_core::inheritance_capture::CaptureResource, yamaa_core::inheritance_capture::DecodePort,
-    yamaa_core::project_preparation::Source,
+use yamaa_core::{
+    dictionary_preparation as app,
+    inheritance::{Source as Identity, SourceError},
+    inheritance_capture::{CapturePort, CaptureResource, DecodePort},
+    project_preparation::Source,
 };
 #[derive(Clone)]
 enum V {

@@ -7,12 +7,11 @@ use yamaa_core::schema::{
     BundleError, BundleIssue, BundleIssueKind, BundleLimits, Document, DocumentLimits,
     DocumentNode as N, NormalizationBudget, NormalizationError, SchemaOrigin, SchemaSource,
 };
-use {
-    yamaa_core::project_preparation::Source, yamaa_core::schema_capture,
-    yamaa_core::schema_capture::CapturedClosure, yamaa_core::schema_capture::DecodePort,
-    yamaa_core::schema_capture::DecodedModule, yamaa_core::schema_capture::Error,
-    yamaa_core::schema_capture::Limits, yamaa_core::schema_capture::Resource,
-    yamaa_core::schema_capture::RootSelection,
+use yamaa_core::{
+    project_preparation::Source,
+    schema_capture::{
+        self, CapturedClosure, DecodePort, DecodedModule, Error, Limits, Resource, RootSelection,
+    },
 };
 
 enum Tree {

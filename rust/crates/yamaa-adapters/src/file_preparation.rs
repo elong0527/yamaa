@@ -218,9 +218,7 @@ pub(crate) fn prepare_document_from(
     written: &str,
     schema: Option<Arc<crate::specification_source::CapturedSchema>>,
 ) -> Result<crate::specification_source::PreparedDocument, Error> {
-    use {
-        yamaa_core::file_preparation as application, yamaa_core::file_preparation::Error as Failure,
-    };
+    use yamaa_core::file_preparation::{self as application, Error as Failure};
     application::prepare(
         &mut Native { resources },
         &mut Documents { schema },

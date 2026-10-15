@@ -8,12 +8,12 @@ use yamaa_core::{
     value::{ColumnType, Value},
 };
 
-use {
-    yamaa_core::dataset::Assignment, yamaa_core::dataset::Check, yamaa_core::dataset::DatasetPlan,
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Expression,
-    yamaa_core::dataset::Limits, yamaa_core::dataset::PlanError, yamaa_core::dataset::RowMode,
-    yamaa_core::dataset::RowTemplate, yamaa_core::dataset::Verification,
-    yamaa_core::table_grouping::partition, yamaa_core::table_grouping::GroupingError,
+use yamaa_core::{
+    dataset::{
+        Assignment, Check, DatasetPlan, ExecutionError, Expression, Limits, PlanError, RowMode,
+        RowTemplate, Verification,
+    },
+    table_grouping::{partition, GroupingError},
 };
 
 struct Table {
@@ -155,7 +155,7 @@ fn column_checks_wait_for_the_declared_prefix_and_retain_prior_records() {
 
 #[test]
 fn repeated_column_patterns_share_subject_budget_and_retain_completed_checks() {
-    use {yamaa_core::dataset::ColumnVerifications, yamaa_core::dataset::Resource};
+    use yamaa_core::dataset::{ColumnVerifications, Resource};
     let source = table(
         &[("ID", ColumnType::Str), ("V", ColumnType::Str)],
         vec![
@@ -239,7 +239,7 @@ fn repeated_column_patterns_share_subject_budget_and_retain_completed_checks() {
 
 #[test]
 fn permitted_value_work_is_admitted_before_comparison_and_retains_the_prior_check() {
-    use {yamaa_core::dataset::ColumnVerifications, yamaa_core::dataset::Resource};
+    use yamaa_core::dataset::{ColumnVerifications, Resource};
     let source = table(
         &[("ID", ColumnType::Int), ("V", ColumnType::Int)],
         vec![vec![Value::Int(1), Value::Int(10)]],
@@ -314,7 +314,7 @@ fn permitted_value_work_is_admitted_before_comparison_and_retains_the_prior_chec
 /// COUNT uses its owning group and preserves failures and cumulative work admission.
 #[test]
 fn grouped_count_avoids_unused_fields_and_withholds_output_on_read_failure() {
-    use {yamaa_core::dataset::Resource, yamaa_core::table_reduction::TableReductionError};
+    use yamaa_core::{dataset::Resource, table_reduction::TableReductionError};
     let mut source = table(
         &[("K", ColumnType::Int), ("V", ColumnType::Str)],
         vec![
@@ -429,7 +429,7 @@ fn record_plan(
 /// Compile authored arithmetic with a closed static name-to-read map.
 fn computed(text: &str, bindings: &[(&str, Read)]) -> Expression {
     use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
-    use {yamaa_core::bound_expression::Binding, yamaa_core::dataset::BoundNumeric};
+    use yamaa_core::{bound_expression::Binding, dataset::BoundNumeric};
     Expression::Compute(
         BoundNumeric::new(
             compile_numeric(
@@ -454,9 +454,9 @@ fn computed(text: &str, bindings: &[(&str, Read)]) -> Expression {
 #[test]
 fn dataset_numeric_bindings_and_occurrence_budgets_are_explicit() {
     use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
-    use {
-        yamaa_core::bound_expression::Binding, yamaa_core::bound_expression::BindingError,
-        yamaa_core::dataset::BoundNumeric,
+    use yamaa_core::{
+        bound_expression::{Binding, BindingError},
+        dataset::BoundNumeric,
     };
     let compiled = compile_numeric("X + X * 2", "compute", CompileLimits::default()).unwrap();
     assert_eq!(compiled.identifiers().collect::<Vec<_>>(), vec!["X"]);
@@ -1894,9 +1894,9 @@ fn verification_identity_budgets_accumulate_across_checks() {
 /// Work admission precedes grouped reads and the aggregate's eager argument collection.
 #[test]
 fn work_limits_fail_before_the_next_source_operation() {
+    use yamaa_core::application_observer::{Outcome, Refusal};
     use yamaa_core::dataset::Resource;
-    use {yamaa_core::application_observer::Outcome, yamaa_core::application_observer::Refusal};
-    use {yamaa_core::dataset::ExecutionEvent, yamaa_core::dataset::ExecutionPhase};
+    use yamaa_core::dataset::{ExecutionEvent, ExecutionPhase};
     let source = table(
         &[("id", ColumnType::Int), ("x", ColumnType::Int)],
         vec![
@@ -1996,7 +1996,7 @@ fn work_limits_fail_before_the_next_source_operation() {
 /// Completed missing keys are reportable; unconstructed key slots are not.
 #[test]
 fn conversion_failure_retains_completed_missing_identity_with_a_budget() {
-    use {yamaa_core::dataset::Resource, yamaa_core::dataset::RowIdentity};
+    use yamaa_core::dataset::{Resource, RowIdentity};
     let source = table(&[("id", ColumnType::Str)], vec![vec![Value::Missing]]);
     let plan = record_plan(
         &source,
@@ -2036,11 +2036,8 @@ fn conversion_failure_retains_completed_missing_identity_with_a_budget() {
     );
 }
 
+use yamaa_core::bound_expression::{Binding, BindingError, BoundPredicate as Filter, Read};
 use yamaa_core::predicate::{self, Comparison, Node, Scalar};
-use {
-    yamaa_core::bound_expression::Binding, yamaa_core::bound_expression::BindingError,
-    yamaa_core::bound_expression::BoundPredicate as Filter, yamaa_core::bound_expression::Read,
-};
 
 /// Admit a single authored predicate and its explicit scope bindings.
 fn filter(node: Node, bindings: Vec<Binding>) -> Filter {
@@ -3221,10 +3218,7 @@ fn numbering_with_filter(
     predicate: Option<Filter>,
     output_kind: ColumnType,
 ) -> DatasetPlan {
-    use {
-        yamaa_core::dataset::OrderTerm, yamaa_core::dataset::Window,
-        yamaa_core::dataset::WindowKind,
-    };
+    use yamaa_core::dataset::{OrderTerm, Window, WindowKind};
     let mut fields = source.schema.columns().to_vec();
     for name in ["SEQ", "RANK", "DENSE"] {
         fields.push(Column {
@@ -3400,10 +3394,7 @@ fn numbering_ignores_temporal_precision_for_ties_and_handles_empty_scope() {
 
 #[test]
 fn numbering_admits_complete_dependencies_in_completed_column_phase() {
-    use {
-        yamaa_core::dataset::OrderTerm, yamaa_core::dataset::Window,
-        yamaa_core::dataset::WindowKind,
-    };
+    use yamaa_core::dataset::{OrderTerm, Window, WindowKind};
     let source = table(&[("ID", ColumnType::Int)], vec![]);
     let window = Window {
         filter: None,
@@ -3715,7 +3706,7 @@ fn value_window_plan(
     kind: yamaa_core::dataset::WindowKind,
     filter: Option<Filter>,
 ) -> Result<DatasetPlan, PlanError> {
-    use {yamaa_core::dataset::OrderTerm, yamaa_core::dataset::Window};
+    use yamaa_core::dataset::{OrderTerm, Window};
     let mut fields = source.schema.columns().to_vec();
     fields.push(Column {
         name: "RESULT".into(),
@@ -4012,7 +4003,7 @@ fn previous_non_missing_crosses_long_gaps_without_rescanning_each_prefix() {
 
 /// Admit temporal baseline selection over completed dates and partition keys.
 fn baseline_plan(source: &Table, groups: Vec<usize>, filter: Option<Filter>) -> DatasetPlan {
-    use {yamaa_core::dataset::Window, yamaa_core::dataset::WindowKind};
+    use yamaa_core::dataset::{Window, WindowKind};
     let mut fields = source.schema.columns().to_vec();
     fields.push(Column {
         name: "BLFL".into(),
@@ -4621,7 +4612,7 @@ fn ordered_source_plan(
     nulls_first: bool,
     later_failure: bool,
 ) -> DatasetPlan {
-    use {yamaa_core::dataset::OrderTerm, yamaa_core::dataset::SourceSelection};
+    use yamaa_core::dataset::{OrderTerm, SourceSelection};
     let mut columns = vec![assign(
         1,
         Expression::Collect {
@@ -4655,7 +4646,7 @@ fn ordered_source_plan(
 /// Missing order placement is independent of direction; ties use original source order.
 #[test]
 fn source_order_selects_present_donors_stably_and_counts_actual_choices() {
-    use {yamaa_core::dataset::Keep, yamaa_core::numeric_lifecycle::HandlerKind};
+    use yamaa_core::{dataset::Keep, numeric_lifecycle::HandlerKind};
     let source = table(
         &[
             ("ID", ColumnType::Int),
@@ -4849,10 +4840,7 @@ fn source_order_counts_survive_conversion_and_resource_failures() {
 /// Ordering ignores representational precision and preserves equal donor representations.
 #[test]
 fn source_order_uses_exact_typed_comparison_and_lazy_representation() {
-    use {
-        yamaa_core::dataset::Keep, yamaa_core::dataset::OrderTerm,
-        yamaa_core::dataset::SourceSelection,
-    };
+    use yamaa_core::dataset::{Keep, OrderTerm, SourceSelection};
     for (kind, values) in [
         (
             ColumnType::Float,
@@ -4966,10 +4954,7 @@ fn source_order_uses_exact_typed_comparison_and_lazy_representation() {
 
 /// Bind an implicit many-to-one read against a separately owned immutable relation.
 fn secondary_lookup_plan(source: &Table, secondary: &Table) -> Result<DatasetPlan, PlanError> {
-    use {
-        yamaa_core::dataset::Lookup, yamaa_core::dataset::MatchKey,
-        yamaa_core::dataset::SecondarySource,
-    };
+    use yamaa_core::dataset::{Lookup, MatchKey, SecondarySource};
     DatasetPlan::new_with_sources(
         source.schema.clone(),
         vec![SecondarySource {
@@ -5004,7 +4989,7 @@ fn named_plan(
     secondary: &Table,
     item: yamaa_core::dataset::Intermediate,
 ) -> Result<DatasetPlan, PlanError> {
-    use {yamaa_core::dataset::SecondarySource, yamaa_core::dataset::SourceSchemas};
+    use yamaa_core::dataset::{SecondarySource, SourceSchemas};
     DatasetPlan::new_with_intermediates(
         SourceSchemas {
             primary: source.schema.clone(),
@@ -5047,10 +5032,8 @@ fn named_plan(
 
 /// A declaration independent of source payloads, including explicit missing absence handling.
 fn named_item() -> yamaa_core::dataset::Intermediate {
-    use {
-        yamaa_core::dataset::Intermediate, yamaa_core::dataset::IntermediateKey,
-        yamaa_core::dataset::Keep, yamaa_core::dataset::MatchRead, yamaa_core::dataset::MatchValue,
-        yamaa_core::dataset::OrderTerm, yamaa_core::dataset::SourceSelection,
+    use yamaa_core::dataset::{
+        Intermediate, IntermediateKey, Keep, MatchRead, MatchValue, OrderTerm, SourceSelection,
     };
     Intermediate {
         identifier: "SELECTED".into(),
@@ -5610,10 +5593,7 @@ fn conversion_handler_admission_and_reached_resource_accounting() {
 /// Raw record/group match values remain independent of already converted output keys.
 #[test]
 fn row_lookups_match_driver_fields_and_count_records_before_donor_reads() {
-    use {
-        yamaa_core::dataset::RowLookup, yamaa_core::dataset::RowMatchKey,
-        yamaa_core::dataset::SecondarySource, yamaa_core::dataset::SourceSchemas,
-    };
+    use yamaa_core::dataset::{RowLookup, RowMatchKey, SecondarySource, SourceSchemas};
     let driver = table(
         &[("ID", ColumnType::Str)],
         vec![vec![Value::Str("02".into())]],
@@ -5738,10 +5718,7 @@ fn row_lookups_match_driver_fields_and_count_records_before_donor_reads() {
 /// Placement preserves filtering order without changing raw-key matching or duplicate priority.
 #[test]
 fn row_lookup_assignment_phase_controls_reads_for_discarded_candidates() {
-    use {
-        yamaa_core::dataset::RowLookup, yamaa_core::dataset::RowMatchKey,
-        yamaa_core::dataset::SecondarySource,
-    };
+    use yamaa_core::dataset::{RowLookup, RowMatchKey, SecondarySource};
     for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
         let driver = table(
             &[("ID", ColumnType::Int)],
@@ -5837,14 +5814,10 @@ fn row_lookup_assignment_phase_controls_reads_for_discarded_candidates() {
 mod dataset_functions {
     use super::*;
     use yamaa_core::value::ValueType;
-    use {
-        yamaa_core::dataset::BoundFunction, yamaa_core::dataset::FunctionArgument,
-        yamaa_core::dataset::FunctionInput, yamaa_core::function_invocation::Argument,
-        yamaa_core::function_invocation::FailureKind,
-        yamaa_core::function_invocation::FunctionPort, yamaa_core::function_invocation::HostError,
-        yamaa_core::function_signature::FunctionIdentity,
-        yamaa_core::function_signature::InvocationPlan, yamaa_core::function_signature::Parameter,
-        yamaa_core::function_signature::Presence,
+    use yamaa_core::{
+        dataset::{BoundFunction, FunctionArgument, FunctionInput},
+        function_invocation::{Argument, FailureKind, FunctionPort, HostError},
+        function_signature::{FunctionIdentity, InvocationPlan, Parameter, Presence},
     };
 
     /// Fixed activated identity and independently declared host-argument ordering.
@@ -6032,7 +6005,7 @@ mod dataset_functions {
     #[test]
     fn typed_execution_exits_close_actual_success_and_each_failed_stage_before_finished() {
         use yamaa_core::application_observer::Outcome;
-        use {yamaa_core::dataset::ExecutionEvent, yamaa_core::dataset::ExecutionPhase::*};
+        use yamaa_core::dataset::{ExecutionEvent, ExecutionPhase::*};
         for failure in [
             None,
             Some(Admission),
@@ -7390,10 +7363,7 @@ fn ordered_cases_are_lazy_and_convert_the_selected_raw_value() {
 /// value. Conflicting raw readings are a collection failure, never first-row wins.
 #[test]
 fn named_record_matching_keeps_raw_driver_keys_independent_of_output_columns() {
-    use {
-        yamaa_core::dataset::IntermediateKey, yamaa_core::dataset::MatchRead,
-        yamaa_core::dataset::MatchValue,
-    };
+    use yamaa_core::dataset::{IntermediateKey, MatchRead, MatchValue};
     let driver = table(
         &[("ID", ColumnType::Int), ("RAW", ColumnType::Str)],
         vec![
@@ -7421,7 +7391,7 @@ fn named_record_matching_keeps_raw_driver_keys_independent_of_output_columns() {
             identifier: "DRIVER.RAW".into(),
         }),
     }];
-    use {yamaa_core::dataset::SecondarySource, yamaa_core::dataset::SourceSchemas};
+    use yamaa_core::dataset::{SecondarySource, SourceSchemas};
     let plan = DatasetPlan::new_with_intermediates(
         SourceSchemas {
             primary: driver.schema.clone(),
@@ -7619,7 +7589,7 @@ fn presentation_order_preserves_all_types_ties_and_direction_independent_nulls()
 /// Ordering follows window evaluation and admits only distinct bound columns.
 #[test]
 fn presentation_keeps_window_neighbors_and_rejects_invalid_terms() {
-    use {yamaa_core::dataset::OrderTerm, yamaa_core::dataset::WindowKind};
+    use yamaa_core::dataset::{OrderTerm, WindowKind};
     let source = table(
         &[
             ("ID", ColumnType::Int),
@@ -7682,7 +7652,7 @@ fn presentation_keeps_window_neighbors_and_rejects_invalid_terms() {
 /// Exhaustion during presentation returns no partial artifact and retains completed checks.
 #[test]
 fn presentation_budget_failure_retains_checks_and_recovers_on_a_fresh_run() {
-    use {yamaa_core::dataset::OrderTerm, yamaa_core::dataset::Resource};
+    use yamaa_core::dataset::{OrderTerm, Resource};
     let source = table(
         &[("ID", ColumnType::Int)],
         vec![

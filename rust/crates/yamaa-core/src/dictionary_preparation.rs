@@ -5,13 +5,14 @@ use crate::{
     inheritance_preparation::PreparedInheritance,
     project_preparation::Source,
 };
-use alloc::{boxed::Box, vec::Vec};
-use {
-    crate::resource::ResourceFailure, crate::schema::AdmittedMappingDictionary,
-    crate::schema::MappingDictionaryReference, crate::schema::NormalizationBudget,
-    crate::schema::NormalizationError, crate::schema::NormalizationLimits,
-    crate::schema::SchemaStructure, crate::schema::SpecificationDocument,
+use crate::{
+    resource::ResourceFailure,
+    schema::{
+        AdmittedMappingDictionary, MappingDictionaryReference, NormalizationBudget,
+        NormalizationError, NormalizationLimits, SchemaStructure, SpecificationDocument,
+    },
 };
+use alloc::{boxed::Box, vec::Vec};
 
 /// Only the retained declaring contribution can authorize a relative resource path.
 pub enum Origins<'a> {

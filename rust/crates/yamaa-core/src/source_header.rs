@@ -1,7 +1,7 @@
 //! Producer header admission before physical source typing.
-use {
-    crate::diagnostic::Diagnostic, crate::producer_contract::Contract,
-    crate::producer_contract::Error, crate::producer_contract::Limits,
+use crate::{
+    diagnostic::Diagnostic,
+    producer_contract::{Contract, Error, Limits},
 };
 pub fn validate_header(
     contract: &Contract,

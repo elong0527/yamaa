@@ -1,9 +1,6 @@
 //! Borrow retained dataset failures without cloning or inspecting host payloads.
 use super::ExecutionError;
-use {
-    crate::diagnostic::DatasetFinding as F, crate::diagnostic::Diagnostic,
-    crate::diagnostic::ProjectionError, crate::diagnostic::MAX_PROJECTION_BYTES,
-};
+use crate::diagnostic::{DatasetFinding as F, Diagnostic, ProjectionError, MAX_PROJECTION_BYTES};
 
 impl<E> ExecutionError<E> {
     fn classified_finding(&self) -> Option<F<'_>> {

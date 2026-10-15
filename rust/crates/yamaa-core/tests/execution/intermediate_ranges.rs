@@ -10,9 +10,9 @@ use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType as T, Value, ValueType},
 };
-use {
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Limits,
-    yamaa_core::numeric_lifecycle::HandlerKind,
+use yamaa_core::{
+    dataset::{ExecutionError, Limits},
+    numeric_lifecycle::HandlerKind,
 };
 #[derive(Debug)]
 struct Opaque(&'static str);

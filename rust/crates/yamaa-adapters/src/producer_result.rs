@@ -674,14 +674,14 @@ mod log_tests {
         sync::atomic::{AtomicUsize, Ordering},
     };
     use yamaa_core::{
+        function_invocation::{Argument, HostError},
+        project_activation::ActivationPort,
+    };
+    use yamaa_core::{
         function_signature::{LogicalSignature, ProjectFunctionIdentity},
         project_environment::LockReference,
         project_function::Language,
         value::Value as Scalar,
-    };
-    use {
-        yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::HostError,
-        yamaa_core::project_activation::ActivationPort,
     };
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     struct Study(PathBuf);

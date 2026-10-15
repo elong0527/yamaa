@@ -3,18 +3,19 @@
 use crate::function_invocation::{
     invoke_project, Argument, FailureKind, FunctionPort, HostError, InvocationFailure,
 };
+use crate::{
+    function_signature::{
+        LogicalSignature, PlanError, ProjectFunctionIdentity, ProjectInvocationPlan,
+    },
+    project_environment::{LockKind, LockReference},
+    project_function::{Function, Language},
+    project_function_result::results_match,
+    value::Value,
+};
 use alloc::{
     collections::{BTreeMap, BTreeSet},
     string::String,
     vec::Vec,
-};
-use {
-    crate::function_signature::LogicalSignature, crate::function_signature::PlanError,
-    crate::function_signature::ProjectFunctionIdentity,
-    crate::function_signature::ProjectInvocationPlan, crate::project_environment::LockKind,
-    crate::project_environment::LockReference, crate::project_function::Function,
-    crate::project_function::Language, crate::project_function_result::results_match,
-    crate::value::Value,
 };
 
 /// Installed metadata, callable resolution and scalar host invocation are ports.

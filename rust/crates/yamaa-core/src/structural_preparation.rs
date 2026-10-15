@@ -1,13 +1,11 @@
 //! Live structural root and versionless class preparation over captured metadata.
 //! The codec owns physical source limits and exact occurrence-location authority.
 use crate::project_preparation::Source;
-use alloc::{boxed::Box, string::String, vec::Vec};
-use {
-    crate::schema::Document, crate::schema::NormalizationBudget, crate::schema::NormalizationError,
-    crate::schema::NormalizationLimits, crate::schema::NormalizedDocument,
-    crate::schema::SchemaDiagnostic, crate::schema::SchemaStructure,
-    crate::schema::ValidationError,
+use crate::schema::{
+    Document, NormalizationBudget, NormalizationError, NormalizationLimits, NormalizedDocument,
+    SchemaDiagnostic, SchemaStructure, ValidationError,
 };
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 /// A physical codec decodes this exact held source once. Its locations must
 /// address the returned arena; equal strings cannot establish replacement authority.

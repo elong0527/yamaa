@@ -1,8 +1,9 @@
 //! Lazy donor/current predicate execution shared by correlated relation operations.
 use super::*;
-use {
-    crate::bound_expression::Read, crate::predicate, crate::predicate::ContextError,
-    crate::predicate::EvaluationContext, crate::value::Selection,
+use crate::{
+    bound_expression::Read,
+    predicate::{self, ContextError, EvaluationContext},
+    value::Selection,
 };
 
 /// Retain the native owner of opaque donor access failures.

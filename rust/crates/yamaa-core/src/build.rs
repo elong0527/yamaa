@@ -1,7 +1,7 @@
 //! Shared build request and original metadata admission. Study and publication
 //! authority enter only after the selected checked capability is complete.
+use crate::schema::{Document, DocumentNode};
 use alloc::string::String;
-use {crate::schema::Document, crate::schema::DocumentNode};
 
 pub struct Request<'a> {
     pub specification: &'a str,
@@ -13,7 +13,7 @@ pub struct Request<'a> {
 pub fn without_environment(
     host: crate::project_function::Language,
 ) -> crate::project_environment::ExecutionEnvironment {
-    use {crate::project_environment::Draft, crate::project_environment::Environment};
+    use crate::project_environment::{Draft, Environment};
     Environment::admit(
         host,
         Draft {

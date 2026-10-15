@@ -4,7 +4,7 @@ use yamaa_adapters::{
     shipped_schema,
     specification_source::{Error, InheritanceError, InheritancePort, Source},
 };
-use {yamaa_core::inheritance::Source as Identity, yamaa_core::inheritance::SourceError};
+use yamaa_core::inheritance::{Source as Identity, SourceError};
 
 struct NoParents;
 impl InheritancePort for NoParents {

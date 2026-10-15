@@ -1,10 +1,10 @@
 use std::{cell::RefCell, convert::Infallible};
+use yamaa_core::{dataset::Limits, numeric_lifecycle::HandlerKind};
 use yamaa_core::{
     dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
-use {yamaa_core::dataset::Limits, yamaa_core::numeric_lifecycle::HandlerKind};
 struct Table {
     schema: TableSchema,
     values: Vec<Value>,

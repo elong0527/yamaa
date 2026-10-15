@@ -12,11 +12,11 @@ use std::{
     panic::{catch_unwind, AssertUnwindSafe},
     sync::Arc,
 };
+use yamaa_core::dataset::{Dataset, ExecutionBudget};
 use yamaa_core::{
     table::{Column, TableAccess, TableSchema, ValueRef},
     value::ColumnType,
 };
-use {yamaa_core::dataset::Dataset, yamaa_core::dataset::ExecutionBudget};
 
 pub const MAX_INPUT_BYTES: usize = ExecutionBudget::longitudinal().max_ipc_bytes;
 pub const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;

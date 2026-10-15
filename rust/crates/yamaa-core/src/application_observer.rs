@@ -1,17 +1,18 @@
 //! Trusted stage observations, separate from semantic reports and source authority.
 //! Clocks, retained measurement storage and panic containment belong to adapters.
+use crate::{
+    dataset::ExecutionPhase,
+    function_invocation::{Argument, FunctionPort, HostError},
+    function_signature::{InvocationPlan, ProjectInvocationPlan},
+    project_activation::ActivationPort,
+};
+use crate::{
+    function_signature::{LogicalSignature, ProjectFunctionIdentity},
+    project_environment::LockReference,
+    project_function::Language,
+    value::Value,
+};
 use core::cell::Cell;
-use {
-    crate::dataset::ExecutionPhase, crate::function_invocation::Argument,
-    crate::function_invocation::FunctionPort, crate::function_invocation::HostError,
-    crate::function_signature::InvocationPlan, crate::function_signature::ProjectInvocationPlan,
-    crate::project_activation::ActivationPort,
-};
-use {
-    crate::function_signature::LogicalSignature,
-    crate::function_signature::ProjectFunctionIdentity, crate::project_environment::LockReference,
-    crate::project_function::Language, crate::value::Value,
-};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Phase {

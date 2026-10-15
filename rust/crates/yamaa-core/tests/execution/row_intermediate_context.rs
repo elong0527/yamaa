@@ -1,6 +1,7 @@
 //! Complete record attempts have stable choices and separate diagnostic positions.
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
+use yamaa_core::dataset::{ExecutionError, Limits, Resource};
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
@@ -14,9 +15,6 @@ use yamaa_core::{
     specification::{PreparedSpecification, SourceDeclaration},
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType as T, Value},
-};
-use {
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Limits, yamaa_core::dataset::Resource,
 };
 #[derive(Debug)]
 struct Failure(Box<u8>, Rc<()>);
@@ -514,10 +512,8 @@ fn port_document(
 #[test]
 fn all_inputs_inspect_then_capture_decode_in_authored_order_and_move_opaque_failure_once() {
     use std::sync::Arc;
-    use {
-        yamaa_core::specification_run as run, yamaa_core::specification_run::PortError,
-        yamaa_core::specification_run::RunError, yamaa_core::specification_run::SourceDecoder,
-        yamaa_core::specification_run::SourcePort,
+    use yamaa_core::specification_run::{
+        self as run, PortError, RunError, SourceDecoder, SourcePort,
     };
     type IoTrace = Rc<RefCell<Vec<String>>>;
     struct Port {

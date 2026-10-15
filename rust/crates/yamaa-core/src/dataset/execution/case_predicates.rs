@@ -1,8 +1,9 @@
 //! Case operands use the shared predicate evaluator and the attempt's own grain.
 use super::*;
-use {
-    crate::bound_expression::BoundPredicate, crate::bound_expression::Read, crate::predicate,
-    crate::predicate::ContextError, crate::predicate::EvaluationContext, crate::value::Selection,
+use crate::{
+    bound_expression::{BoundPredicate, Read},
+    predicate::{self, ContextError, EvaluationContext},
+    value::Selection,
 };
 
 #[allow(clippy::too_many_arguments)]

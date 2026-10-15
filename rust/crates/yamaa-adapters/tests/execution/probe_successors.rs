@@ -1,14 +1,10 @@
 //! Unique prototype assertions retained over typed source, engine and issue APIs.
 use yamaa_adapters::{arrow_table::TableLimits, issue_rows::Issue, typed_csv};
+use yamaa_core::dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate};
 use yamaa_core::{
     reduction::NumericReducer,
     table::{Column, TableAccess, TableSchema},
     value::{ColumnType as T, Value},
-};
-use {
-    yamaa_core::dataset::Assignment, yamaa_core::dataset::DatasetPlan,
-    yamaa_core::dataset::Expression, yamaa_core::dataset::RowMode,
-    yamaa_core::dataset::RowTemplate,
 };
 #[test]
 fn grouped_reduction_preserves_authored_identifier_missingness_and_fresh_attempts() {

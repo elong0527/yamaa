@@ -2,10 +2,10 @@
 use super::*;
 pub use crate::bound_expression::BoundNumeric;
 use crate::bound_expression::Read;
-use {
-    crate::evaluation::EvaluationError, crate::evaluation::EvaluationErrorKind,
-    crate::evaluation::NumericResolver, crate::numeric_compiler::CompiledEvaluationError,
-    crate::value::Selection,
+use crate::{
+    evaluation::{EvaluationError, EvaluationErrorKind, NumericResolver},
+    numeric_compiler::CompiledEvaluationError,
+    value::Selection,
 };
 
 /// Resolve in written order, preserving numeric validation versus derivation identity rules.

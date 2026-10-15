@@ -1,11 +1,12 @@
 //! Relation selection and eager reducer collection share the scalar numeric route.
 use super::*;
 use crate::table_grouping::Key;
-use {
-    crate::aggregate_compiler::AggregateOperand, crate::aggregate_compiler::AggregateResult,
-    crate::aggregate_compiler::CompiledReduction, crate::aggregate_parser::Reducer,
-    crate::aggregate_reduction::reduce_values, crate::aggregate_reduction::AggregateReductionError,
-    crate::evaluation::NumericResolver, crate::value::Selection,
+use crate::{
+    aggregate_compiler::{AggregateOperand, AggregateResult, CompiledReduction},
+    aggregate_parser::Reducer,
+    aggregate_reduction::{reduce_values, AggregateReductionError},
+    evaluation::NumericResolver,
+    value::Selection,
 };
 
 struct Output<'a, E> {

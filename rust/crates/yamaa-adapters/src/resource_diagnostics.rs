@@ -1,9 +1,9 @@
 //! Typed resource policies retain their applied bounds and authored owners.
 use crate::{csv_source::TextTableError, specification_run::Error};
 use serde_json::Value;
-use {
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Resource,
-    yamaa_core::specification::SourceDeclaration,
+use yamaa_core::{
+    dataset::{ExecutionError, Resource},
+    specification::SourceDeclaration,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]

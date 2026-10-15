@@ -5,12 +5,13 @@ use crate::{
     project_activation::{self, ActivationPort, Bindings, Failure},
     specification_run::{CapturedAttempt, Limits, PortError, SourceDecoder, SourcePort},
 };
-use alloc::{boxed::Box, vec::Vec};
-use {
-    crate::project_environment::ExecutionEnvironment, crate::schema::SpecificationDocument,
-    crate::specification::PrepareError, crate::specification::PreparedSpecification,
-    crate::table::TableAccess,
+use crate::{
+    project_environment::ExecutionEnvironment,
+    schema::SpecificationDocument,
+    specification::{PrepareError, PreparedSpecification},
+    table::TableAccess,
 };
+use alloc::{boxed::Box, vec::Vec};
 
 pub(crate) type BuildEvidence<'a, P, D> = (
     &'a mut CapturedAttempt<

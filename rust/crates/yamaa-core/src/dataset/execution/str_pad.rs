@@ -1,6 +1,6 @@
 //! One named read, shared canonical conversion and an admitted padding copy.
 use super::*;
-use {crate::text_pad::StringPad, crate::text_pad::MAX_PRIMITIVE_TEXT_BYTES};
+use crate::text_pad::{StringPad, MAX_PRIMITIVE_TEXT_BYTES};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn evaluate<T: TableAccess + ?Sized>(

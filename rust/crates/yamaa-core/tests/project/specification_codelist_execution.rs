@@ -2,11 +2,12 @@ use crate::support::project_codelist_compiler as support;
 use std::{cell::RefCell, convert::Infallible};
 use support::{environment, schema, spec};
 use yamaa_core::{
+    dataset::{ExecutionError, Limits},
+    project_domain,
+};
+use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::Value,
-};
-use {
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Limits, yamaa_core::project_domain,
 };
 struct Table {
     schema: TableSchema,

@@ -1,6 +1,7 @@
 //! Destination-free authored key execution, effect boundaries and exact equality.
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
+use yamaa_core::dataset::{ExecutionError, Limits, Resource};
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
@@ -11,9 +12,6 @@ use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
     text_pad::StringPad,
     value::{ColumnType as T, Value},
-};
-use {
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Limits, yamaa_core::dataset::Resource,
 };
 #[derive(Debug)]
 struct Failure(Box<u8>, Rc<()>);

@@ -1,11 +1,11 @@
 //! Repository fixture binding facts from immutable schemas, without data ports.
-use alloc::{collections::BTreeSet, string::String, vec::Vec};
-use {
-    crate::diagnostic::Diagnostic, crate::specification::BindError,
-    crate::specification::PreparedSpecification, crate::specification::SourceInterpretation,
-    crate::specification::SourceProfile, crate::table::Column, crate::table::SchemaError,
-    crate::table::TableAccess, crate::table::TableSchema, crate::value::ColumnType,
+use crate::{
+    diagnostic::Diagnostic,
+    specification::{BindError, PreparedSpecification, SourceInterpretation, SourceProfile},
+    table::{Column, SchemaError, TableAccess, TableSchema},
+    value::ColumnType,
 };
+use alloc::{collections::BTreeSet, string::String, vec::Vec};
 
 pub use crate::specification::SourceProfile as Profile;
 pub use crate::value::ColumnType as Kind;

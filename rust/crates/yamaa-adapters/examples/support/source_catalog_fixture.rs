@@ -10,9 +10,9 @@ use yamaa_core::{
     table::TableSchema,
     value::ColumnType,
 };
-use {
-    yamaa_core::source_metadata, yamaa_core::source_metadata::SourceSchema,
-    yamaa_core::source_ordinal,
+use yamaa_core::{
+    source_metadata::{self, SourceSchema},
+    source_ordinal,
 };
 
 fn document(value: &Value) -> SpecificationDocument {

@@ -9,9 +9,9 @@ use yamaa_core::{
     temporal::DatePrecision as P,
     value::{ColumnType as T, Value},
 };
-use {
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Limits,
-    yamaa_core::dataset::Resource, yamaa_core::numeric_lifecycle::HandlerKind,
+use yamaa_core::{
+    dataset::{ExecutionError, Limits, Resource},
+    numeric_lifecycle::HandlerKind,
 };
 #[derive(Debug, PartialEq)]
 struct Failure(Box<u8>, Rc<()>);

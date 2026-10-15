@@ -1,6 +1,7 @@
 //! Lazy reads, exact raw truth, handler ownership and attempt-local refusals.
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
+use yamaa_core::dataset::{ExecutionError, Limits, Resource};
 use yamaa_core::{
     bound_expression::Read,
     dataset::{
@@ -11,9 +12,6 @@ use yamaa_core::{
     predicate_compiler,
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType as T, Value},
-};
-use {
-    yamaa_core::dataset::ExecutionError, yamaa_core::dataset::Limits, yamaa_core::dataset::Resource,
 };
 #[derive(Debug)]
 struct Failure(Box<u8>, Rc<()>);

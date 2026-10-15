@@ -6,6 +6,7 @@ use yamaa_adapters::{
     shipped_schema,
     specification_source::{InheritancePort, PreparedDocument, Source},
 };
+use yamaa_core::inheritance::{Source as Identity, SourceError};
 use yamaa_core::{
     bound_expression::{Binding, Read},
     dataset::{DatasetPlan, Expression, RowMode, WindowKind},
@@ -14,7 +15,6 @@ use yamaa_core::{
     table::TableSchema,
     value::ColumnType as T,
 };
-use {yamaa_core::inheritance::Source as Identity, yamaa_core::inheritance::SourceError};
 
 struct Parents {
     root: PathBuf,

@@ -1,10 +1,7 @@
 //! Independent original-entry and admission-order controls for the shared Build boundary.
 use std::rc::Rc;
+use yamaa_core::build::{self, EntryView, MetadataAdmissionPort, SelectionFailure};
 use yamaa_core::schema::{Document, DocumentNode as N};
-use {
-    yamaa_core::build, yamaa_core::build::EntryView, yamaa_core::build::MetadataAdmissionPort,
-    yamaa_core::build::SelectionFailure,
-};
 
 struct Original(Rc<usize>);
 #[derive(Default)]

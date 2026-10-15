@@ -17,6 +17,14 @@ use yamaa_adapters::{
     specification_source::Source,
 };
 use yamaa_core::{
+    dataset::{Execution, ExecutionError},
+    function_invocation::{Argument, FailureKind, HostError},
+    producer_build::{CaptureError, Failure, ReportPort},
+    project_activation::{ActivationPort, Failure as ActivationFailure},
+    specification_output::{CompleteError, OutputReport},
+    specification_run::PortError,
+};
+use yamaa_core::{
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     producer_graph::Node,
     project_environment::{LockKind, LockReference},
@@ -24,16 +32,6 @@ use yamaa_core::{
     specification::OutputFinding,
     table::{TableAccess, ValueRef},
     value::Value,
-};
-use {
-    yamaa_core::dataset::Execution, yamaa_core::dataset::ExecutionError,
-    yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::FailureKind,
-    yamaa_core::function_invocation::HostError, yamaa_core::producer_build::CaptureError,
-    yamaa_core::producer_build::Failure, yamaa_core::producer_build::ReportPort,
-    yamaa_core::project_activation::ActivationPort,
-    yamaa_core::project_activation::Failure as ActivationFailure,
-    yamaa_core::specification_output::CompleteError,
-    yamaa_core::specification_output::OutputReport, yamaa_core::specification_run::PortError,
 };
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -401,10 +399,7 @@ fn whole_set_invalid_target_and_duplicate_normalized_alias_refuse_every_write() 
 #[test]
 fn native_save_admits_cumulative_limits_and_whole_report_before_first_write() {
     use yamaa_adapters::producer_result::prepare_owned_classified;
-    use {
-        yamaa_core::producer_publication::Failure as SaveFailure,
-        yamaa_core::producer_publication::Limits as SaveLimits,
-    };
+    use yamaa_core::producer_publication::{Failure as SaveFailure, Limits as SaveLimits};
     let study = Study::new();
     study.rounded();
     fs::create_dir(study.0.join("generated")).unwrap();
@@ -2235,10 +2230,7 @@ fn native_report_admission_stops_dependents_and_whole_report_limits_keep_earlier
 fn report_context_pointer_and_table_count_admission_precede_table_authority_and_clear_old_selection(
 ) {
     use yamaa_adapters::{producer_report::NativeReport, specification_report::Error};
-    use {
-        yamaa_core::specification_run::CapturedAttempt,
-        yamaa_core::specification_run::CapturedSource,
-    };
+    use yamaa_core::specification_run::{CapturedAttempt, CapturedSource};
     struct Bomb {
         schema: yamaa_core::table::TableSchema,
         reads: Rc<std::cell::Cell<usize>>,

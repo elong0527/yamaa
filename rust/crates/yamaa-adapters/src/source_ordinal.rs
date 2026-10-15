@@ -7,7 +7,7 @@ use crate::{
 use arrow_array::{ArrayRef, Int64Array, RecordBatch};
 use std::sync::Arc;
 use yamaa_core::table::TableAccess;
-use {yamaa_core::source_ordinal, yamaa_core::specification::SourceDeclaration};
+use yamaa_core::{source_ordinal, specification::SourceDeclaration};
 
 pub(crate) fn append(
     source: &SourceDeclaration,

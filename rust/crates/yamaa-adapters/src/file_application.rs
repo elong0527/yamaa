@@ -10,7 +10,7 @@ use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
-use {yamaa_core::domain_entry, yamaa_core::domain_entry::Request};
+use yamaa_core::domain_entry::{self, Request};
 
 pub type Failure = Vec<Issue>;
 

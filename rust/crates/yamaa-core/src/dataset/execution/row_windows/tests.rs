@@ -1,15 +1,14 @@
 use crate::dataset::Limits;
+use crate::{
+    bound_expression::{Binding, BoundPredicate, Read},
+    dataset::{
+        Assignment, DatasetPlan, Expression, OrderTerm, RowMode, RowTemplate, Window, WindowKind,
+    },
+    table::{CellError, Column, TableAccess, TableSchema, ValueRef},
+    value::{ColumnType, Value},
+};
 use alloc::{format, vec, vec::Vec};
 use core::cell::RefCell;
-use {
-    crate::bound_expression::Binding, crate::bound_expression::BoundPredicate,
-    crate::bound_expression::Read, crate::dataset::Assignment, crate::dataset::DatasetPlan,
-    crate::dataset::Expression, crate::dataset::OrderTerm, crate::dataset::RowMode,
-    crate::dataset::RowTemplate, crate::dataset::Window, crate::dataset::WindowKind,
-    crate::table::CellError, crate::table::Column, crate::table::TableAccess,
-    crate::table::TableSchema, crate::table::ValueRef, crate::value::ColumnType,
-    crate::value::Value,
-};
 
 struct Table {
     schema: TableSchema,
@@ -174,13 +173,11 @@ fn grouped_window_filter_runs_once_after_complete_windows_without_renumbering() 
 
 #[test]
 fn grouped_postwindow_filters_use_contextual_join_and_named_lookup_reads_lazily() {
-    use alloc::{boxed::Box, sync::Arc};
-    use {
-        crate::dataset::AggregateSource, crate::dataset::Intermediate,
-        crate::dataset::IntermediateKey, crate::dataset::IntermediateSource,
-        crate::dataset::JoinedRead, crate::dataset::MatchKey, crate::dataset::MatchRead,
-        crate::dataset::MatchValue, crate::dataset::SourceSchemas,
+    use crate::dataset::{
+        AggregateSource, Intermediate, IntermediateKey, IntermediateSource, JoinedRead, MatchKey,
+        MatchRead, MatchValue, SourceSchemas,
     };
+    use alloc::{boxed::Box, sync::Arc};
     for (named, keep) in [(false, true), (true, true), (false, false), (true, false)] {
         let input = schema(&["ID", "MATCH"]);
         let table = Table {

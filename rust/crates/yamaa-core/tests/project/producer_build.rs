@@ -6,6 +6,14 @@ use std::{
 };
 use support::{candidate, document, environment, node};
 use yamaa_core::{
+    dataset::{Dataset, Execution, ExecutionError},
+    function_invocation::{Argument, FailureKind, HostError},
+    producer_build::{self as build, CaptureError, CodecPort, Failure, ReportPort, StudyPort},
+    project_activation::{self, ActivationPort},
+    specification_output::{CompleteError, OutputReport},
+    specification_run::{PortError, SourceDecoder},
+};
+use yamaa_core::{
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     producer_graph::Node,
     project_environment::LockReference,
@@ -13,18 +21,6 @@ use yamaa_core::{
     specification::{PreparedSpecification, SourceDeclaration},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
-};
-use {
-    yamaa_core::dataset::Dataset, yamaa_core::dataset::Execution,
-    yamaa_core::dataset::ExecutionError, yamaa_core::function_invocation::Argument,
-    yamaa_core::function_invocation::FailureKind, yamaa_core::function_invocation::HostError,
-    yamaa_core::producer_build as build, yamaa_core::producer_build::CaptureError,
-    yamaa_core::producer_build::CodecPort, yamaa_core::producer_build::Failure,
-    yamaa_core::producer_build::ReportPort, yamaa_core::producer_build::StudyPort,
-    yamaa_core::project_activation, yamaa_core::project_activation::ActivationPort,
-    yamaa_core::specification_output::CompleteError,
-    yamaa_core::specification_output::OutputReport, yamaa_core::specification_run::PortError,
-    yamaa_core::specification_run::SourceDecoder,
 };
 type Trace = Rc<RefCell<Vec<String>>>;
 #[derive(Debug)]
@@ -414,11 +410,9 @@ type Attempt = build::BuildAttempt<Activation, Study, Decoder, Report, Codec>;
 
 mod application_observations {
     use super::*;
-    use {
-        yamaa_core::application_observer::CallStage, yamaa_core::application_observer::Event,
-        yamaa_core::application_observer::Observer, yamaa_core::application_observer::Outcome,
-        yamaa_core::application_observer::Phase, yamaa_core::application_observer::Scope,
-        yamaa_core::dataset::ExecutionPhase,
+    use yamaa_core::{
+        application_observer::{CallStage, Event, Observer, Outcome, Phase, Scope},
+        dataset::ExecutionPhase,
     };
     type NodeCoordinate = Option<(usize, String)>;
     #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1346,10 +1340,7 @@ fn save_unwind_and_whole_set_preflight_refusal_preserve_the_actual_evidence_with
 }
 #[test]
 fn cumulative_save_quotas_and_failed_actual_build_never_cross_publication_ports() {
-    use {
-        yamaa_core::producer_publication::Failure as SaveFailure,
-        yamaa_core::producer_publication::Limits as SaveLimits,
-    };
+    use yamaa_core::producer_publication::{Failure as SaveFailure, Limits as SaveLimits};
     let build = publication_diamond();
     let mut ports = Ports::new();
     let mut evidence = Attempt::default();

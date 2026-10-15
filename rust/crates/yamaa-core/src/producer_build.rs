@@ -7,13 +7,14 @@ use crate::{
     specification_output::{self as output, ArtifactEncoder, OutputReport, PreparedOutput},
     specification_run::{self as run, CapturedAttempt, SourceDecoder, SourcePort},
 };
+use crate::{
+    producer_graph::{Node, PreparedGraph},
+    resource::ResourceFailure,
+    specification::{PreparedSpecification, SourceDeclaration},
+    table::TableAccess,
+};
 use alloc::{sync::Arc, vec::Vec};
 use core::{cell::Cell, convert::Infallible};
-use {
-    crate::producer_graph::Node, crate::producer_graph::PreparedGraph,
-    crate::resource::ResourceFailure, crate::specification::PreparedSpecification,
-    crate::specification::SourceDeclaration, crate::table::TableAccess,
-};
 
 /// External study requests retain their canonical document context. Generated
 /// producer sources never reach this port, even for location inspection.

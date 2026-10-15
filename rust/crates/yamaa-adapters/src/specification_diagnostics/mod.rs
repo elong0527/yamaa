@@ -5,10 +5,8 @@ use crate::{
     specification_run::Error,
 };
 use serde_json::{json, Value};
-use {
-    yamaa_core::specification::BindError, yamaa_core::specification::BindFinding,
-    yamaa_core::specification::PreflightFinding, yamaa_core::specification::PrepareError,
-    yamaa_core::specification::SourceDeclaration,
+use yamaa_core::specification::{
+    BindError, BindFinding, PreflightFinding, PrepareError, SourceDeclaration,
 };
 
 fn diagnostic(

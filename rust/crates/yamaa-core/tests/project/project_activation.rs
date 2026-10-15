@@ -1,15 +1,13 @@
 use yamaa_core::{
+    function_invocation::{Argument, HostError},
+    project_activation::{activate, ActivatedFunction, ActivationPort, Failure, TestFailure},
+};
+use yamaa_core::{
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     project_environment::{LockKind, LockReference},
     project_function::{Case, Definition, Function, Language, Parameter},
     table::ValueRef,
     value::{ColumnType, Value, ValueType},
-};
-use {
-    yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::HostError,
-    yamaa_core::project_activation::activate, yamaa_core::project_activation::ActivatedFunction,
-    yamaa_core::project_activation::ActivationPort, yamaa_core::project_activation::Failure,
-    yamaa_core::project_activation::TestFailure,
 };
 #[derive(Debug, PartialEq)]
 struct Payload(&'static str);
@@ -153,14 +151,11 @@ fn lock() -> LockReference {
 fn successful_activation_handles_feed_versionless_dataset_without_rebinding_or_retesting() {
     use std::cell::RefCell;
     use yamaa_core::bound_expression::Read;
-    use yamaa_core::table::{CellError, Column, TableAccess, TableSchema};
-    use {
-        yamaa_core::dataset::Assignment, yamaa_core::dataset::BoundProjectFunction,
-        yamaa_core::dataset::DatasetPlan, yamaa_core::dataset::Expression,
-        yamaa_core::dataset::FunctionArgument, yamaa_core::dataset::FunctionInput,
-        yamaa_core::dataset::Limits, yamaa_core::dataset::RowMode,
-        yamaa_core::dataset::RowTemplate,
+    use yamaa_core::dataset::{
+        Assignment, BoundProjectFunction, DatasetPlan, Expression, FunctionArgument, FunctionInput,
+        Limits, RowMode, RowTemplate,
     };
+    use yamaa_core::table::{CellError, Column, TableAccess, TableSchema};
     struct Table {
         schema: TableSchema,
         values: Vec<Value>,
@@ -517,10 +512,7 @@ fn language_and_lock_kind_cannot_escape_static_admission_before_any_port() {
 
 #[test]
 fn selected_function_and_case_limits_precede_every_host_port() {
-    use {
-        yamaa_core::project_activation::activate_with_limits,
-        yamaa_core::project_activation::Limits, yamaa_core::project_activation::Resource,
-    };
+    use yamaa_core::project_activation::{activate_with_limits, Limits, Resource};
     let functions = [function("identity")];
     for (limits, resource) in [
         (
@@ -562,10 +554,7 @@ fn selected_function_and_case_limits_precede_every_host_port() {
 
 #[test]
 fn aggregate_signature_copies_are_bounded_before_lock_and_include_utf8_defaults() {
-    use {
-        yamaa_core::project_activation::activate_with_limits,
-        yamaa_core::project_activation::Limits, yamaa_core::project_activation::Resource,
-    };
+    use yamaa_core::project_activation::{activate_with_limits, Limits, Resource};
     let mut definition = function("identity").definition().clone();
     definition.params.push(Parameter {
         name: "label".into(),
@@ -638,10 +627,7 @@ fn aggregate_signature_copies_are_bounded_before_lock_and_include_utf8_defaults(
 }
 #[test]
 fn retained_case_text_has_an_exact_cumulative_limit_and_never_grants_partial_activation() {
-    use {
-        yamaa_core::project_activation::activate_with_limits,
-        yamaa_core::project_activation::Limits, yamaa_core::project_activation::Resource,
-    };
+    use yamaa_core::project_activation::{activate_with_limits, Limits, Resource};
     let mut definition = function("identity").definition().clone();
     definition.returns = ColumnType::Str;
     for case in &mut definition.tests[..2] {
@@ -675,10 +661,7 @@ fn retained_case_text_has_an_exact_cumulative_limit_and_never_grants_partial_act
 }
 #[test]
 fn repeated_owned_failure_identities_are_charged_and_whole_exhaustion_has_no_partial_findings() {
-    use {
-        yamaa_core::project_activation::activate_with_limits,
-        yamaa_core::project_activation::Limits, yamaa_core::project_activation::Resource,
-    };
+    use yamaa_core::project_activation::{activate_with_limits, Limits, Resource};
     let functions = [function("identity")];
     // identity/program.identity = 8+16 bytes for each of two failed invocations;
     // the successful short-circuit retains its nine-byte case ID: total 57.
@@ -768,10 +751,8 @@ fn borrowed_compiler_selection_activates_only_held_definitions_and_repeats_cases
 
 #[test]
 fn borrowed_selection_keeps_empty_duplicate_and_quota_gates_before_ports() {
-    use {
-        yamaa_core::project_activation::activate_references,
-        yamaa_core::project_activation::activate_references_with_limits,
-        yamaa_core::project_activation::Limits, yamaa_core::project_activation::Resource,
+    use yamaa_core::project_activation::{
+        activate_references, activate_references_with_limits, Limits, Resource,
     };
     let environment = [function("first"), function("second")];
     let mut port = Port::new();
@@ -842,14 +823,9 @@ fn borrowed_selection_keeps_empty_duplicate_and_quota_gates_before_ports() {
 
 mod observed {
     use super::*;
-    use {
-        yamaa_core::project_activation::activate_references_observed,
-        yamaa_core::project_activation::BindingObservation,
-        yamaa_core::project_activation::BindingOutcome, yamaa_core::project_activation::Limits,
-        yamaa_core::project_activation::LockObservation,
-        yamaa_core::project_activation::Observations, yamaa_core::project_activation::Resource,
-        yamaa_core::project_activation::TestObservation,
-        yamaa_core::project_activation::TestOutcome,
+    use yamaa_core::project_activation::{
+        activate_references_observed, BindingObservation, BindingOutcome, Limits, LockObservation,
+        Observations, Resource, TestObservation, TestOutcome,
     };
     struct ObservedPort {
         inner: Port,

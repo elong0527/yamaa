@@ -4,6 +4,17 @@ use crate::support::project_call_compiler as support;
 use std::{convert::Infallible, rc::Rc, sync::Arc};
 use support::{call, specification, Tree};
 use yamaa_core::{
+    build::{self, EntrySelection, MetadataAdmissionPort, PreparationPort, Prepared},
+    domain_entry::{self, Ports, Request},
+    function_invocation::{Argument, HostError},
+    project_activation::{self, ActivationPort},
+    project_domain::{self, CheckedOwnedProject},
+    project_preparation as metadata,
+    specification_output::{self as output, CompleteError, OutputReport, PreparedOutput},
+    specification_run::{CapturedAttempt, Limits},
+    test_support::*,
+};
+use yamaa_core::{
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     project_environment::{ExecutionEnvironment, LockKind, LockReference},
     project_function::Language,
@@ -11,20 +22,6 @@ use yamaa_core::{
     specification::PrepareError,
     table::{Column, TableSchema},
     value::{ColumnType, Value},
-};
-use {
-    yamaa_core::build, yamaa_core::build::EntrySelection, yamaa_core::build::MetadataAdmissionPort,
-    yamaa_core::build::PreparationPort, yamaa_core::build::Prepared, yamaa_core::domain_entry,
-    yamaa_core::domain_entry::Ports, yamaa_core::domain_entry::Request,
-    yamaa_core::function_invocation::Argument, yamaa_core::function_invocation::HostError,
-    yamaa_core::project_activation, yamaa_core::project_activation::ActivationPort,
-    yamaa_core::project_domain, yamaa_core::project_domain::CheckedOwnedProject,
-    yamaa_core::project_preparation as metadata, yamaa_core::specification_output as output,
-    yamaa_core::specification_output::CompleteError,
-    yamaa_core::specification_output::OutputReport,
-    yamaa_core::specification_output::PreparedOutput,
-    yamaa_core::specification_run::CapturedAttempt, yamaa_core::specification_run::Limits,
-    yamaa_core::test_support::*,
 };
 #[derive(Debug)]
 struct Opaque(Rc<()>);

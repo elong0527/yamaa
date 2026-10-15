@@ -7,7 +7,7 @@ use yamaa_core::schema::{
     NormalizedDocument, SchemaDiagnostic, SchemaOrigin, SchemaStructure, SpecificationDocument,
     ValidationError, WindowReference,
 };
-use {yamaa_core::schema_capture as capture, yamaa_core::schema_capture::RootSelection};
+use yamaa_core::schema_capture::{self as capture, RootSelection};
 mod inheritance;
 pub use inheritance::{CapturedParent, InheritanceError, InheritancePort, SourceFailure};
 
@@ -243,10 +243,7 @@ impl CapturedSchema {
         source: Source,
         selection: yamaa_core::structural_preparation::Selection<'_>,
     ) -> Result<CapturedDocument, Error> {
-        use {
-            yamaa_core::structural_preparation,
-            yamaa_core::structural_preparation::Error as StructuralError,
-        };
+        use yamaa_core::structural_preparation::{self, Error as StructuralError};
         let prepared = structural_preparation::prepare(
             &self.structure,
             source,
@@ -310,10 +307,7 @@ impl CapturedSchema {
         source: Source,
         raw: DecodedYaml,
     ) -> Result<PreparedDocument, Error> {
-        use {
-            yamaa_core::standalone_preparation,
-            yamaa_core::standalone_preparation::Error as StandaloneError,
-        };
+        use yamaa_core::standalone_preparation::{self, Error as StandaloneError};
         let DecodedYaml {
             document,
             locations,
@@ -374,11 +368,7 @@ impl CapturedSchema {
         display_path: String,
         port: &mut P,
     ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
-        use {
-            yamaa_core::document_preparation as application,
-            yamaa_core::document_preparation::Content,
-            yamaa_core::document_preparation::Error as Failure,
-        };
+        use yamaa_core::document_preparation::{self as application, Content, Error as Failure};
         let prepared = application::prepare(
             &self.structure,
             source,
@@ -638,10 +628,7 @@ impl PreparedDocument {
         mut self,
         port: &mut P,
     ) -> Result<Self, InheritanceError<P::Error>> {
-        use {
-            yamaa_core::dictionary_preparation as application,
-            yamaa_core::dictionary_preparation::Origins, yamaa_core::dictionary_preparation::Seed,
-        };
+        use yamaa_core::dictionary_preparation::{self as application, Origins, Seed};
         let origins = self.inheritance().map_or(
             Origins::Standalone(&self.source.identity),
             Origins::Inherited,
