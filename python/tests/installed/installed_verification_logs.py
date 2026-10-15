@@ -1,11 +1,8 @@
 """Installed public logs, complete independent run truth and held publication."""
 
-from tools.paths import ROOT, WORKSPACE
-
 import builtins
 import csv
 import gc
-from host_fixtures import load as load_truth
 import json
 import os
 import shutil
@@ -16,12 +13,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import polars as pl
+from host_fixtures import load as load_truth
+
 import yamaa
 from yamaa import _native
 
-TRUTH = load_truth(
-    __file__, "verification-logs"
-)
+TRUTH = load_truth(__file__, "verification-logs")
 
 ROOT = Path(__file__).with_name("specification-original")
 CASE = TRUTH["case_name"]
@@ -132,7 +129,10 @@ class VerificationLogs(unittest.TestCase):
             del result
             gc.collect()
             self.assertEqual(held.height, 4)
-            self.assertEqual(held["EVALUATED_COUNT"].to_list(), [int(value) for value in TRUTH["evaluated_counts"]])
+            self.assertEqual(
+                held["EVALUATED_COUNT"].to_list(),
+                [int(value) for value in TRUTH["evaluated_counts"]],
+            )
 
     def test_fatal_checks_publish_only_verification_and_keep_original_issues(self):
         with tempfile.TemporaryDirectory() as directory:

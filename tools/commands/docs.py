@@ -16,17 +16,9 @@ def main():
     if args.output_dir and args.command != "dashboards":
         parser.error("--output-dir is supported only for dashboards")
     if args.command == "test":
-        command = [
-            "-m",
-            "unittest",
-            "discover",
-            "-s",
-            ".github/scripts/docs",
-            "-p",
-            "test_*.py",
-        ]
+        command = ["-m", "unittest", "tools.tests.test_canonical_pages"]
     elif args.command == "dashboards":
-        command = ["tools/benchmark_docs/generate.py", "--all", "--quiet"]
+        command = ["-m", "tools.benchmark_docs.generate", "--all", "--quiet"]
         if args.output_dir:
             command += ["--output-dir", str(args.output_dir.resolve())]
     else:

@@ -1,9 +1,6 @@
 """Private installed whole-graph builds against separately authored study truth."""
 
-from tools.paths import ROOT, WORKSPACE
-
 import gc
-from host_fixtures import load as load_truth
 import json
 import shutil
 import tempfile
@@ -12,12 +9,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import yamaa_benchmarks as program
+from host_fixtures import load as load_truth
+
 from yamaa import _locked_functions as host
 from yamaa import _native as native
 
-TRUTH = load_truth(
-    __file__, "producer-graph"
-)
+TRUTH = load_truth(__file__, "producer-graph")
 
 ROOT = Path(__file__).parent / "project-original"
 RAW = TRUTH["raw_csv"].encode("utf-8")
@@ -25,7 +22,9 @@ PRODUCED = TRUTH["produced_csv"].encode("utf-8")
 CONSUMED = TRUTH["consumed_csv"].encode("utf-8")
 PRODUCER = TRUTH["producer_yaml"]
 CONSUMER = TRUTH["consumer_yaml"]
-FUNCTION = TRUTH["function_yaml"].replace("HOST_CALLABLE", "yamaa_benchmarks.project_value")
+FUNCTION = TRUTH["function_yaml"].replace(
+    "HOST_CALLABLE", "yamaa_benchmarks.project_value"
+)
 METADATA = (
     "installed-python",
     "0.1.0",

@@ -1,38 +1,14 @@
-"""Replay locked debug, engine/Arrow feature and optimized Rust test suites."""
+"""Run all shared workspace tests with debug and release code generation."""
 
 import subprocess
-import tomllib
 
 from tools.paths import WORKSPACE
 
 
 def main():
-    with (WORKSPACE / "rust-toolchain.toml").open("rb") as source:
-        toolchain = tomllib.load(source)["toolchain"]["channel"]
-    for arguments in (
-        [],
-        ["-p", "yamaa-engine", "--features", "test-support"],
-        [
-            "-p",
-            "yamaa-adapters",
-            "--features",
-            "arrow-c-data",
-            "--test",
-            "c_data_table",
-        ],
-        [
-            "-p",
-            "yamaa-core",
-            "-p",
-            "yamaa-engine",
-            "-p",
-            "yamaa-adapters",
-            "--profile",
-            "release-test",
-        ],
-    ):
+    for profile in ([], ["--profile", "release-test"]):
         subprocess.run(
-            ["cargo", f"+{toolchain}", "test", "--locked", *arguments],
+            ["cargo", "test", "--locked", "--all-targets", "--all-features", *profile],
             cwd=WORKSPACE,
             check=True,
         )

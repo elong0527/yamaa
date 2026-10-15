@@ -16,7 +16,6 @@ from tools.conformance import supplemental_inventory as inventory
 from tools.paths import ROOT
 
 CATALOG = ROOT / "rust/qualification/supplemental.json"
-RUNNER = ROOT / "tools/conformance/supplemental_inventory.py"
 
 
 def outside_checkout(path):
@@ -127,7 +126,8 @@ def main():
     command = [
         sys.executable,
         "-I",
-        str(RUNNER),
+        "-m",
+        "tools.conformance.supplemental_inventory",
         "--root",
         str(ROOT),
         "--catalog",

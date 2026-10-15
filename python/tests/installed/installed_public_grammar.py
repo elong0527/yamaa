@@ -1,14 +1,13 @@
 """Authored shared grammar decisions through the installed Python domain facade."""
 
 import csv
-from host_fixtures import load as load_truth
 from pathlib import Path
+
+from host_fixtures import load as load_truth
 
 import yamaa
 
-TRUTH = load_truth(
-    __file__, "public-grammar"
-)
+TRUTH = load_truth(__file__, "public-grammar")
 
 GRAMMAR = {name: set(values) for name, values in TRUTH["grammar_conditions"].items()}
 

@@ -1,11 +1,11 @@
 """Retained public XML/Parquet IO, independently qualified outside the checkout."""
 
 import importlib.abc
-import importlib.util
 import tempfile
 from pathlib import Path
 
 import polars as pl
+
 import yamaa
 
 
@@ -36,11 +36,8 @@ def main():
     import sys
 
     sys.meta_path.insert(0, RefuseReference())
-    spec = importlib.util.spec_from_file_location(
-        "authored_odm", Path("odm_documents.py")
-    )
-    documents = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(documents)
+    import odm_documents as documents
+
     with tempfile.TemporaryDirectory(prefix="yamaa-retained-odm-") as directory:
         root = Path(directory)
         for label, xml, values, present, nulls in (

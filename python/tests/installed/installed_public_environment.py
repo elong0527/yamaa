@@ -2,33 +2,31 @@
 
 from __future__ import annotations
 
-from tools.paths import ROOT, WORKSPACE
-
 import copy
 import json
 import os
-from host_fixtures import load as load_truth
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import yaml
+from host_fixtures import load as load_truth
+
 import yamaa
 from yamaa import _locked_functions as host
 
-import yaml
-
-TRUTH = load_truth(
-    __file__, "public-environment"
-)
+TRUTH = load_truth(__file__, "public-environment")
 
 ROOT = Path(__file__).parent / "project-original"
 CASES = tuple(TRUTH["original_case_names"])
 
 
 class PublicEnvironment(unittest.TestCase):
-    def test_supplied_missing_environment_precedes_bad_or_absent_entry_without_activation(self):
+    def test_supplied_missing_environment_precedes_bad_or_absent_entry_without_activation(
+        self,
+    ):
         directory = self.directory.resolve()
         os.chdir(directory)
         # The diagnostic echoes the path in the operating system's working-
@@ -36,42 +34,74 @@ class PublicEnvironment(unittest.TestCase):
         # 8.3 short components of the temp path (RUNNER~1), which
         # Path.resolve() would expand. Build the expectation from Path.cwd().
         expected = {
-            "phase": "validation", "condition": "project_environment_missing",
-            "requirement": "REQ-0694", "spec_paths": ["environment"],
-            "context": json.dumps({"cause": "missing", "path": (Path.cwd() / "missing-environment.yaml").as_posix()},
-                ensure_ascii=False, separators=(",", ":")),
+            "phase": "validation",
+            "condition": "project_environment_missing",
+            "requirement": "REQ-0694",
+            "spec_paths": ["environment"],
+            "context": json.dumps(
+                {
+                    "cause": "missing",
+                    "path": (Path.cwd() / "missing-environment.yaml").as_posix(),
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
         }
         with (
-            patch.object(host, "verify_versions", side_effect=AssertionError("unexpected activation")),
-            patch.object(host, "resolve_callable", side_effect=AssertionError("unexpected binding")),
+            patch.object(
+                host,
+                "verify_versions",
+                side_effect=AssertionError("unexpected activation"),
+            ),
+            patch.object(
+                host,
+                "resolve_callable",
+                side_effect=AssertionError("unexpected binding"),
+            ),
         ):
             for content in (None, "[entry must not be read"):
                 if content is not None:
                     Path("spec.yaml").write_text(content)
-                checked = yamaa.check("spec.yaml", environment="missing-environment.yaml")
-                failed = yamaa.domain("spec.yaml", environment="missing-environment.yaml")
+                checked = yamaa.check(
+                    "spec.yaml", environment="missing-environment.yaml"
+                )
+                failed = yamaa.domain(
+                    "spec.yaml", environment="missing-environment.yaml"
+                )
                 self.assertEqual(checked.issues.to_dicts(), [expected])
                 self.assertEqual(failed.issues.to_dicts(), [expected])
                 self.assertIsNone(failed.output)
                 with self.assertRaises(yamaa.DomainError):
                     failed.save()
-        self.assertEqual(sorted(p.name for p in self.directory.iterdir()), ["spec.yaml"])
+        self.assertEqual(
+            sorted(p.name for p in self.directory.iterdir()), ["spec.yaml"]
+        )
         Path("spec.yaml").unlink()
         Path("environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
         checked = yamaa.check("spec.yaml", environment="environment.yaml")
         self.assertEqual(checked.issues["condition"].to_list(), ["engine_rejected"])
-        self.assertEqual(json.loads(checked.issues["context"][0]),
-            {"code": "resource_missing", "stage": "prepare"})
-        self.assertEqual(sorted(p.name for p in self.directory.iterdir()), ["environment.yaml"])
+        self.assertEqual(
+            json.loads(checked.issues["context"][0]),
+            {"code": "resource_missing", "stage": "prepare"},
+        )
+        self.assertEqual(
+            sorted(p.name for p in self.directory.iterdir()), ["environment.yaml"]
+        )
 
-    def test_submission_version_schema_admission_precedes_any_artifact_or_study_read(self):
+    def test_submission_version_schema_admission_precedes_any_artifact_or_study_read(
+        self,
+    ):
         os.chdir(self.directory)
         Path("spec.yaml").write_text(
             "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
             "input: {SRC: absent.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n"
             "output: {path: result.csv, columns: [ID]}\n"
         )
-        for family, guide in (("sdtm", "SDTMIG"), ("adam", "ADaMIG"), ("send", "SENDIG")):
+        for family, guide in (
+            ("sdtm", "SDTMIG"),
+            ("adam", "ADaMIG"),
+            ("send", "SENDIG"),
+        ):
             prefix = (
                 "schema_version: '1.0'\nlanguage: python\n"
                 "study: {id: STUDY, name: Study, description: Study, protocol_name: Protocol}\n"
@@ -79,24 +109,46 @@ class PublicEnvironment(unittest.TestCase):
                 "  specs: [absent-spec.yaml]\n  define: absent/define.xml\n"
             )
             with (
-                patch.object(host, "verify_versions", side_effect=AssertionError("unexpected activation")),
-                patch.object(host, "resolve_callable", side_effect=AssertionError("unexpected binding")),
+                patch.object(
+                    host,
+                    "verify_versions",
+                    side_effect=AssertionError("unexpected activation"),
+                ),
+                patch.object(
+                    host,
+                    "resolve_callable",
+                    side_effect=AssertionError("unexpected binding"),
+                ),
             ):
                 for declared in (None, "'1.0'", "'future package build'"):
-                    field = "" if declared is None else f"  source_system_version: {declared}\n"
+                    field = (
+                        ""
+                        if declared is None
+                        else f"  source_system_version: {declared}\n"
+                    )
                     Path("environment.yaml").write_text(prefix + field)
                     checked = yamaa.check("spec.yaml", environment="environment.yaml")
                     self.assertTrue(checked.issues.is_empty(), checked.issues)
                 for declared in tuple(TRUTH["invalid_source_system_versions"]):
-                    Path("environment.yaml").write_text(prefix + f"  source_system_version: {declared}\n")
+                    Path("environment.yaml").write_text(
+                        prefix + f"  source_system_version: {declared}\n"
+                    )
                     checked = yamaa.check("spec.yaml", environment="environment.yaml")
                     self.assertEqual(checked.issues.height, 1, checked.issues)
-                    self.assertIn(f"{family}.source_system_version", checked.issues["spec_paths"][0])
-            self.assertEqual(sorted(p.name for p in self.directory.iterdir()), ["environment.yaml", "spec.yaml"])
+                    self.assertIn(
+                        f"{family}.source_system_version",
+                        checked.issues["spec_paths"][0],
+                    )
+            self.assertEqual(
+                sorted(p.name for p in self.directory.iterdir()),
+                ["environment.yaml", "spec.yaml"],
+            )
 
     def test_selected_functionless_producer_failure_retains_actual_source_prefix(self):
         os.chdir(self.directory)
-        (self.directory / "environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
+        (self.directory / "environment.yaml").write_text(
+            "schema_version: '1.0'\nlanguage: python\n"
+        )
         (self.directory / "producer.yaml").write_text(
             "schema_version: '1.0'\ndomain: PROD\nkeys: [ID]\n"
             "input: {RAW: never-read.csv}\n"
@@ -110,13 +162,23 @@ class PublicEnvironment(unittest.TestCase):
             "output: {path: consumer.csv, columns: [ID]}\n"
         )
         with (
-            patch.object(host, "verify_versions", side_effect=AssertionError("unexpected activation")),
-            patch.object(host, "resolve_callable", side_effect=AssertionError("unexpected binding")),
+            patch.object(
+                host,
+                "verify_versions",
+                side_effect=AssertionError("unexpected activation"),
+            ),
+            patch.object(
+                host,
+                "resolve_callable",
+                side_effect=AssertionError("unexpected binding"),
+            ),
         ):
             checked = yamaa.check("spec.yaml", environment="environment.yaml")
             failed = yamaa.domain("spec.yaml", environment="environment.yaml")
         self.assertTrue(checked.issues.is_empty(), checked.issues)
-        self.assertEqual(failed.issues["condition"].to_list(), ["resource_path_missing"])
+        self.assertEqual(
+            failed.issues["condition"].to_list(), ["resource_path_missing"]
+        )
         self.assertEqual(failed.issues["spec_paths"].to_list(), [["input.RAW.path"]])
         self.assertEqual(failed._native.producer_attempt().entered_nodes(), [1])
         self.assertEqual(self.report(failed)["source_reads"], [])
@@ -126,49 +188,111 @@ class PublicEnvironment(unittest.TestCase):
         self.assertFalse((self.directory / "produced.csv").exists())
         self.assertFalse((self.directory / "consumer.csv").exists())
 
-    def test_original_recursive_graph_checks_diagnostics_without_activation_or_data(self):
+    def test_original_recursive_graph_checks_diagnostics_without_activation_or_data(
+        self,
+    ):
         os.chdir(self.directory)
         Path("environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
+
         def document(input, base, output, invalid=False):
-            checks = '\n    verifications: [{matches: {pattern: "\\u00e9("}}]' if invalid else ""
+            checks = (
+                '\n    verifications: [{matches: {pattern: "\\u00e9("}}]'
+                if invalid
+                else ""
+            )
             return (
                 f"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {input}\n"
                 f"columns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n"
                 f"  - name: VALUE\n    type: str\n    label: Value\n    derivation: {base}.VALUE{checks}\n"
                 f"output: {{path: {output}, columns: [ID, VALUE]}}\n"
             )
+
         Path("parents").mkdir()
-        Path("parents/base.yaml").write_text(document("{RAW: ../never-read.csv}", "RAW", "../leaf.csv", True))
-        Path("leaf.yaml").write_text("schema_version: '1.0'\nparents: [parents/base.yaml]\ndomain: LEAF\n")
-        Path("left.yaml").write_text(document(TRUTH["aliased_leaf_reference"], "P", "left.csv"))
-        Path("right.yaml").write_text(document(TRUTH["leaf_reference"], "P", "right.csv"))
-        Path("spec.yaml").write_text(document(TRUTH["diamond_reference"], "L", "consumer.csv", True))
+        Path("parents/base.yaml").write_text(
+            document("{RAW: ../never-read.csv}", "RAW", "../leaf.csv", True)
+        )
+        Path("leaf.yaml").write_text(
+            "schema_version: '1.0'\nparents: [parents/base.yaml]\ndomain: LEAF\n"
+        )
+        Path("left.yaml").write_text(
+            document(TRUTH["aliased_leaf_reference"], "P", "left.csv")
+        )
+        Path("right.yaml").write_text(
+            document(TRUTH["leaf_reference"], "P", "right.csv")
+        )
+        Path("spec.yaml").write_text(
+            document(TRUTH["diamond_reference"], "L", "consumer.csv", True)
+        )
         with (
-            patch.object(host, "verify_versions", side_effect=AssertionError("unexpected activation")),
-            patch.object(host, "resolve_callable", side_effect=AssertionError("unexpected binding")),
+            patch.object(
+                host,
+                "verify_versions",
+                side_effect=AssertionError("unexpected activation"),
+            ),
+            patch.object(
+                host,
+                "resolve_callable",
+                side_effect=AssertionError("unexpected binding"),
+            ),
         ):
             for _ in range(2):
-                rows = yamaa.check("spec.yaml", environment="environment.yaml").issues.to_dicts()
+                rows = yamaa.check(
+                    "spec.yaml", environment="environment.yaml"
+                ).issues.to_dicts()
                 self.assertEqual(len(rows), 2)
                 for row, source in zip(rows, ("spec.yaml", "leaf.yaml"), strict=True):
-                    context = {"entry": Path("spec.yaml").resolve().as_posix(), "pattern": "\u00e9(", "source": Path(source).resolve().as_posix()}
+                    context = {
+                        "entry": Path("spec.yaml").resolve().as_posix(),
+                        "pattern": "\u00e9(",
+                        "source": Path(source).resolve().as_posix(),
+                    }
                     if source == "leaf.yaml":
-                        context["declaring_sources"] = [Path("parents/base.yaml").resolve().as_posix()]
-                    self.assertEqual(row, {
-                        "phase": "validation", "condition": "invalid_regex", "requirement": "REQ-0827",
-                        "spec_paths": [TRUTH["verification_pattern_path"]],
-                        "context": json.dumps(context, sort_keys=True, ensure_ascii=False, separators=(",", ":")),
-                    })
+                        context["declaring_sources"] = [
+                            Path("parents/base.yaml").resolve().as_posix()
+                        ]
+                    self.assertEqual(
+                        row,
+                        {
+                            "phase": "validation",
+                            "condition": "invalid_regex",
+                            "requirement": "REQ-0827",
+                            "spec_paths": [TRUTH["verification_pattern_path"]],
+                            "context": json.dumps(
+                                context,
+                                sort_keys=True,
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                            ),
+                        },
+                    )
             # The original authored mismatch is admitted independently of any
             # absent serialized artifact. Checking never opens the CSV paths.
-            Path("spec.yaml").write_text(document(TRUTH["wrong_leaf_reference"], "P", "consumer.csv"))
-            rows = yamaa.check("spec.yaml", environment="environment.yaml").issues.to_dicts()
-            self.assertEqual([(r["condition"], r["requirement"], r["spec_paths"]) for r in rows],
-                [("producer_output_path_mismatch", "REQ-0534", ["input.P.path", "input.P.schema"])])
-            Path("spec.yaml").write_text(document(TRUTH["incompatible_leaf_reference"], "P", "consumer.csv"))
-            rows = yamaa.check("spec.yaml", environment="environment.yaml").issues.to_dicts()
-            self.assertEqual([(r["condition"], r["requirement"], r["spec_paths"]) for r in rows],
-                [("redundant_field_type", "REQ-0523", ["input.P.types.ID"])])
+            Path("spec.yaml").write_text(
+                document(TRUTH["wrong_leaf_reference"], "P", "consumer.csv")
+            )
+            rows = yamaa.check(
+                "spec.yaml", environment="environment.yaml"
+            ).issues.to_dicts()
+            self.assertEqual(
+                [(r["condition"], r["requirement"], r["spec_paths"]) for r in rows],
+                [
+                    (
+                        "producer_output_path_mismatch",
+                        "REQ-0534",
+                        ["input.P.path", "input.P.schema"],
+                    )
+                ],
+            )
+            Path("spec.yaml").write_text(
+                document(TRUTH["incompatible_leaf_reference"], "P", "consumer.csv")
+            )
+            rows = yamaa.check(
+                "spec.yaml", environment="environment.yaml"
+            ).issues.to_dicts()
+            self.assertEqual(
+                [(r["condition"], r["requirement"], r["spec_paths"]) for r in rows],
+                [("redundant_field_type", "REQ-0523", ["input.P.types.ID"])],
+            )
         for name in tuple(TRUTH["unread_graph_files"]):
             self.assertFalse(Path(name).exists())
 
@@ -266,7 +390,9 @@ class PublicEnvironment(unittest.TestCase):
                 failed.save()
             self.assertFalse(Path(output).exists())
 
-    def test_external_codelists_keep_environment_locations_and_missing_files_fail_there(self):
+    def test_external_codelists_keep_environment_locations_and_missing_files_fail_there(
+        self,
+    ):
         os.chdir(self.directory)
         for name in tuple(TRUTH["terminology_directories"]):
             Path(name).mkdir()
@@ -283,13 +409,22 @@ class PublicEnvironment(unittest.TestCase):
         Path("terminology/ids.yaml").write_text(terminology)
         # An unrelated same-name document cannot change which codelist is used.
         Path("entry/ids.yaml").write_text("[unrelated document")
-        for written in ("../terminology/ids.yaml", (self.directory.resolve() / "terminology/ids.yaml").as_posix()):
+        for written in (
+            "../terminology/ids.yaml",
+            (self.directory.resolve() / "terminology/ids.yaml").as_posix(),
+        ):
             with self.subTest(written=written):
                 Path("environment/env.yaml").write_text(
-                    "schema_version: '1.0'\nlanguage: python\ncodelists: [" + json.dumps(written) + "]\n"
+                    "schema_version: '1.0'\nlanguage: python\ncodelists: ["
+                    + json.dumps(written)
+                    + "]\n"
                 )
-                checked = yamaa.check("entry/spec.yaml", environment="environment/env.yaml")
-                result = yamaa.domain("entry/spec.yaml", environment="environment/env.yaml")
+                checked = yamaa.check(
+                    "entry/spec.yaml", environment="environment/env.yaml"
+                )
+                result = yamaa.domain(
+                    "entry/spec.yaml", environment="environment/env.yaml"
+                )
                 self.assertTrue(checked.issues.is_empty(), checked.issues)
                 self.assertTrue(result.issues.is_empty(), result.issues)
                 self.assertEqual(result.output["ID"].to_list(), ["01"])
@@ -304,14 +439,18 @@ class PublicEnvironment(unittest.TestCase):
         # Even a valid codelist at the process/entry location must not rescue it.
         Path("ids.yaml").write_text(terminology)
         Path("entry/ids.yaml").write_text(terminology)
-        with patch.object(host, "verify_versions", side_effect=AssertionError("unexpected activation")):
+        with patch.object(
+            host, "verify_versions", side_effect=AssertionError("unexpected activation")
+        ):
             failed = yamaa.domain("entry/spec.yaml", environment="environment/env.yaml")
         self.assertIsNone(failed.output)
         self.assertFalse(failed.issues.is_empty())
         self.assertIsNone(failed._native.observations())
         self.assertFalse(Path("outputs/ids.csv").exists())
 
-    def test_matching_budget_has_the_same_owner_and_bound_with_and_without_environment(self):
+    def test_matching_budget_has_the_same_owner_and_bound_with_and_without_environment(
+        self,
+    ):
         os.chdir(self.directory)
         truth = TRUTH["regex_budget"]
         Path("spec.yaml").write_text(truth["specification"])
@@ -389,20 +528,36 @@ class PublicEnvironment(unittest.TestCase):
         )
         self.precision_study()
         with (
-            patch.object(host, "verify_versions", side_effect=AssertionError("unused lock")),
-            patch.object(host, "resolve_callable", side_effect=AssertionError("unused code")),
+            patch.object(
+                host, "verify_versions", side_effect=AssertionError("unused lock")
+            ),
+            patch.object(
+                host, "resolve_callable", side_effect=AssertionError("unused code")
+            ),
         ):
-            self.assertTrue(yamaa.check("spec.yaml", environment="environment.yaml").issues.is_empty())
+            self.assertTrue(
+                yamaa.check(
+                    "spec.yaml", environment="environment.yaml"
+                ).issues.is_empty()
+            )
             result = yamaa.domain("spec.yaml", environment="environment.yaml")
         self.assertTrue(result.issues.is_empty(), result.issues)
-        self.assertEqual(result.output["VALUE"].to_list(), [0.125, -0.125, 2.675, -0.004, 1.234, 2.345, None, 25.0])
-        self.assertEqual(result.output["DOUBLE"].to_list(), [0.25, -0.25, 5.35, -0.008, 2.468, 4.69, None, 50.0])
+        self.assertEqual(
+            result.output["VALUE"].to_list(),
+            [0.125, -0.125, 2.675, -0.004, 1.234, 2.345, None, 25.0],
+        )
+        self.assertEqual(
+            result.output["DOUBLE"].to_list(),
+            [0.25, -0.25, 5.35, -0.008, 2.468, 4.69, None, 50.0],
+        )
         before = self.report(result)
         self.assertEqual(before["artifacts"], [])
         self.assertFalse((self.directory / "rounded.csv").exists())
         self.assertTrue(result.save())
         self.assertEqual((self.directory / "rounded.csv").read_bytes(), expected)
-        self.assertEqual(self.report(result)["artifacts"][0]["content"].encode(), expected)
+        self.assertEqual(
+            self.report(result)["artifacts"][0]["content"].encode(), expected
+        )
         (self.directory / "rounded.csv").unlink()
         self.precision_study(None)
         ordinary = yamaa.domain("spec.yaml", environment="environment.yaml")
@@ -476,7 +631,9 @@ class PublicEnvironment(unittest.TestCase):
         for invalid in tuple(TRUTH["invalid_significant_digits"]):
             self.precision_study(invalid)
             result = yamaa.check("spec.yaml", environment="environment.yaml")
-            self.assertEqual(result.issues["spec_paths"].to_list(), [["output.decimals"]])
+            self.assertEqual(
+                result.issues["spec_paths"].to_list(), [["output.decimals"]]
+            )
             self.assertFalse(result.issues.is_empty())
         self.precision_study("-1")
         path = self.directory / "spec.yaml"
@@ -637,7 +794,10 @@ class PublicEnvironment(unittest.TestCase):
         env.write_text(yaml.safe_dump(source, sort_keys=False))
         spec_path = case / "spec.yaml"
         spec = yaml.safe_load(spec_path.read_text())
-        spec["columns"][0]["submission"] = {"codelist": "IDENTIFIERS", "origin": {"type": "Assigned"}}
+        spec["columns"][0]["submission"] = {
+            "codelist": "IDENTIFIERS",
+            "origin": {"type": "Assigned"},
+        }
         spec_path.write_text(yaml.safe_dump(spec, sort_keys=False))
         checked = yamaa.check("spec.yaml", environment=env.resolve())
         self.assertTrue(checked.issues.is_empty(), checked.issues)
@@ -851,28 +1011,51 @@ output: {path: output.csv, columns: [ID, N, VALUE]}
         (case / "input.csv").write_text("ID,N\n1,10\n1,30\n2,40\n")
         result = yamaa.domain("spec.yaml", environment="python/environment.yaml")
         self.assertTrue(result.issues.is_empty(), result.issues)
-        self.assertEqual(result.output.rows(), [(1, 10.0, 20.0), (1, 30.0, 60.0), (2, 40.0, 40.0)])
+        self.assertEqual(
+            result.output.rows(), [(1, 10.0, 20.0), (1, 30.0, 60.0), (2, 40.0, 40.0)]
+        )
         observed = self.report(result)
-        self.assertEqual([row["function"] for row in observed["activation"]["bindings"]], ["project_value"])
+        self.assertEqual(
+            [row["function"] for row in observed["activation"]["bindings"]],
+            ["project_value"],
+        )
         self.assertTrue(result.save())
-        self.assertEqual((case / "output.csv").read_bytes(), b"ID,N,VALUE\n1,10,20\n1,30,60\n2,40,40\n")
+        self.assertEqual(
+            (case / "output.csv").read_bytes(),
+            b"ID,N,VALUE\n1,10,20\n1,30,60\n2,40,40\n",
+        )
         self.assertTrue(result.save())
         self.assertEqual(self.report(result)["activation"], observed["activation"])
-        (case / "spec.yaml").write_text(spec.replace(", order_by: [SRC.ID], keep: first", ""))
+        (case / "spec.yaml").write_text(
+            spec.replace(", order_by: [SRC.ID], keep: first", "")
+        )
         with (
             patch.object(host, "verify_versions", side_effect=AssertionError("lock")),
             patch.object(host, "resolve_callable", side_effect=AssertionError("code")),
         ):
-            issues = yamaa.check("spec.yaml", environment="python/environment.yaml").issues.to_dicts()
-        self.assertTrue(any(row["condition"] == "invalid_derive_step" and row["requirement"] == "REQ-1242" for row in issues), issues)
-
+            issues = yamaa.check(
+                "spec.yaml", environment="python/environment.yaml"
+            ).issues.to_dicts()
+        self.assertTrue(
+            any(
+                row["condition"] == "invalid_derive_step"
+                and row["requirement"] == "REQ-1242"
+                for row in issues
+            ),
+            issues,
+        )
 
     def test_row_callbacks_join_each_driver_by_completed_keys(self):
         case = self.study("negative-function-contract")
         (case / "a.csv").write_text("ID,N\n1,10\n2,20\n3,30\n")
         (case / "b.csv").write_text("ID,N\n2,40\n1,50\n")
         for driver, other, rows, csv in (
-            ("SRC", "B", [(1, 50.0), (2, 40.0), (3, None)], b"ID,VALUE\n1,50\n2,40\n3,\n"),
+            (
+                "SRC",
+                "B",
+                [(1, 50.0), (2, 40.0), (3, None)],
+                b"ID,VALUE\n1,50\n2,40\n3,\n",
+            ),
             ("B", "SRC", [(2, 20.0), (1, 10.0)], b"ID,VALUE\n2,20\n1,10\n"),
         ):
             spec = f"""schema_version: '1.0'
@@ -898,12 +1081,13 @@ output: {{path: output.csv, columns: [ID, VALUE]}}
             self.assertTrue(result.issues.is_empty(), result.issues)
             self.assertEqual(result.output.rows(), rows)
             activation = self.report(result)["activation"]
-            self.assertEqual([row["function"] for row in activation["bindings"]], ["project_value"])
+            self.assertEqual(
+                [row["function"] for row in activation["bindings"]], ["project_value"]
+            )
             self.assertTrue(result.save())
             self.assertEqual((case / "output.csv").read_bytes(), csv)
             self.assertTrue(result.save())
             self.assertEqual(self.report(result)["activation"], activation)
-
 
     def test_intermediate_callbacks_read_prior_values_and_selected_donor_types(self):
         case = self.study("negative-function-contract")
@@ -934,11 +1118,18 @@ output: {path: output.csv, columns: [ID, N, VALUE]}
 """)
         result = yamaa.domain("spec.yaml", environment="python/environment.yaml")
         self.assertTrue(result.issues.is_empty(), result.issues)
-        self.assertEqual(result.output.rows(), [(1, 10.0, 10.0), (1, 30.0, 10.0), (2, 40.0, 40.0)])
+        self.assertEqual(
+            result.output.rows(), [(1, 10.0, 10.0), (1, 30.0, 10.0), (2, 40.0, 40.0)]
+        )
         activation = self.report(result)["activation"]
-        self.assertEqual([row["function"] for row in activation["bindings"]], ["project_value"])
+        self.assertEqual(
+            [row["function"] for row in activation["bindings"]], ["project_value"]
+        )
         self.assertTrue(result.save())
-        self.assertEqual((case / "output.csv").read_bytes(), b"ID,N,VALUE\n1,10,10\n1,30,10\n2,40,40\n")
+        self.assertEqual(
+            (case / "output.csv").read_bytes(),
+            b"ID,N,VALUE\n1,10,10\n1,30,10\n2,40,40\n",
+        )
         self.assertTrue(result.save())
         self.assertEqual(self.report(result)["activation"], activation)
 

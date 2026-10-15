@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import gc
-from host_fixtures import load as load_truth
 import inspect
 import json
 import shutil
@@ -13,16 +12,18 @@ from pathlib import Path
 from unittest.mock import patch
 
 import polars as pl
+from host_fixtures import load as load_truth
+
 import yamaa
 from yamaa import _locked_functions as host
 
-TRUTH = load_truth(
-    __file__, "public-contract"
-)
+TRUTH = load_truth(__file__, "public-contract")
 
 SPEC = TRUTH["specification_yaml"]
 INPUT = TRUTH["python_input_csv"].encode("utf-8")
-VALUES = [None if value is None else int(value) for value in TRUTH["python_values_decimal"]]
+VALUES = [
+    None if value is None else int(value) for value in TRUTH["python_values_decimal"]
+]
 
 
 class PublicContract(unittest.TestCase):
@@ -51,7 +52,34 @@ class PublicContract(unittest.TestCase):
 
     def test_component_endpoints_are_absent_from_the_installed_binding(self):
         from yamaa import _native
-        for name in ('engine_info', 'analyze_aggregate', 'analyze_numeric', 'analyze_predicate', 'analyze_dependencies', 'analyze_column_dependencies', 'analyze_references', 'reference_capabilities', 'dataset_capabilities', 'scalar_round_trip', 'evaluate_numeric', 'evaluate_regex', 'table_round_trip', 'table_snapshot', 'execute_dataset', 'execute_dataset_sources', 'execute_dataset_functions', 'invoke_function', 'interpret_schema', 'decode_yaml', '_compile_schema', '_Schema', '_compile_reference_catalog', '_ReferenceCatalog', '_profile_dataset_functions'):
+
+        for name in (
+            "engine_info",
+            "analyze_aggregate",
+            "analyze_numeric",
+            "analyze_predicate",
+            "analyze_dependencies",
+            "analyze_column_dependencies",
+            "analyze_references",
+            "reference_capabilities",
+            "dataset_capabilities",
+            "scalar_round_trip",
+            "evaluate_numeric",
+            "evaluate_regex",
+            "table_round_trip",
+            "table_snapshot",
+            "execute_dataset",
+            "execute_dataset_sources",
+            "execute_dataset_functions",
+            "invoke_function",
+            "interpret_schema",
+            "decode_yaml",
+            "_compile_schema",
+            "_Schema",
+            "_compile_reference_catalog",
+            "_ReferenceCatalog",
+            "_profile_dataset_functions",
+        ):
             with self.subTest(name=name):
                 self.assertFalse(hasattr(_native, name))
         self.assertIsInstance(_native._CORE_VERSION, str)

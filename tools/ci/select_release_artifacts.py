@@ -14,7 +14,7 @@ import tomllib
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from tools.ci import native_matrix
+from tools.ci import native
 from tools.packaging.check_shared_release_versions import violations
 from tools.paths import ROOT
 
@@ -110,17 +110,11 @@ def run_coverage(run, repository, revision):
         ),
         "release requires nightly main, main dispatch or a same-repository qualification push",
     )
-    coverage = native_matrix.plan(event, f"refs/heads/{branch}")
-    require(
-        coverage["full"] and coverage["run-rust"],
-        "installed-only evidence cannot release",
-    )
-    return coverage
+    return native.coverage()
 
 
 def required_jobs(coverage):
     jobs = {
-        "native-coverage": ("Select the full installed matrix",),
         "portable-math-exact": (
             "Compare every candidate bit across the native matrix",
         ),
@@ -130,9 +124,7 @@ def required_jobs(coverage):
     }
     for lane in coverage["build"]["include"]:
         suffix = f"({lane['os']}, {lane['python']})"
-        jobs[f"native-rust {suffix}"] = (
-            "Check shared crates and dependency direction",
-        )
+        jobs[f"native-rust {suffix}"] = ("Test shared workspace",)
         jobs[f"native-dist {suffix}"] = (
             "Build wheel and source archive",
             "Check Python distribution contents",
@@ -150,7 +142,6 @@ def required_jobs(coverage):
             "Build and install R outside checkout",
             "Report installed R public benchmark conformance",
             "Run installed R supplemental suites outside checkout",
-            "Require repository validator real-R public Check transport",
             "Check R source package outside checkout",
         )
     return jobs
@@ -170,19 +161,13 @@ def validate_jobs(jobs, coverage, run):
             job.get("run_attempt") == run["run_attempt"], f"{name}: job attempt differs"
         )
         by_name[name] = job
-    # GitHub evaluates the whole-job condition before expanding this matrix.
-    # Full shared Rust already runs these tools; the literal-name skip is intended.
-    skipped = (
-        {"native-numeric-tools (${{ matrix.os }})"} if coverage["run-rust"] else set()
-    )
     require(
-        set(by_name) == set(expected) | skipped,
+        set(by_name) == set(expected),
         "native job set is incomplete or unexpected",
     )
     for name, job in by_name.items():
         require(
-            job.get("status") == "completed"
-            and job.get("conclusion") == ("skipped" if name in skipped else "success"),
+            job.get("status") == "completed" and job.get("conclusion") == "success",
             f"{name}: required native job did not succeed",
         )
         for required in expected.get(name, ()):
@@ -284,7 +269,7 @@ def downloaded_assets(destination, selected, linux, version, root):
                 "expected one release wheel and source archive",
             )
             wheel = wheels[0]
-            python_tag = "cp" + min(native_matrix.PYTHONS).replace(".", "")
+            python_tag = "cp" + min(native.PYTHONS).replace(".", "")
             require(
                 re.fullmatch(
                     rf"yamaa-{re.escape(version)}-{python_tag}-abi3-[A-Za-z0-9_.]+\.whl",
@@ -308,10 +293,7 @@ def downloaded_assets(destination, selected, linux, version, root):
                 "wheel platform differs from the qualified host",
             )
             assets.append(wheel)
-            if (
-                artifact["name"]
-                == f"native-python-{linux}-{native_matrix.BUILD_PYTHON}"
-            ):
+            if artifact["name"] == f"native-python-{linux}-{native.BUILD_PYTHON}":
                 assets.append(sources[0])
         else:
             require(
@@ -354,7 +336,7 @@ def downloaded_assets(destination, selected, linux, version, root):
                     f"{path.name}: required license differs or is missing: {license_name}",
                 )
     require(
-        len(assets) == len(native_matrix.PLATFORMS) + 2
+        len(assets) == len(native.PLATFORMS) + 2
         and len({path.name for path in assets}) == len(assets),
         "release assets are incomplete or ambiguous",
     )

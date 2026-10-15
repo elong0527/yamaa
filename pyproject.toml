@@ -1,3 +1,16 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yamaa-tools"
+version = "0.0.0"
+description = "Repository development tools; not a released yamaa runtime package"
+requires-python = ">=3.12"
+
+[tool.setuptools.packages.find]
+include = ["tools*", "python"]
+
 [tool.ruff]
 target-version = "py312"
 

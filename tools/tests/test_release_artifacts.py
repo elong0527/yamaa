@@ -8,16 +8,16 @@ import stat
 import subprocess
 import tarfile
 import tempfile
-import textwrap
 import unittest
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
+from tools.ci import publish_release as publisher
 from tools.ci import select_release_artifacts as release
 from tools.paths import ROOT
 
-MATRIX = release.native_matrix
+MATRIX = release.native
 VERSION, TAG = "0.4.0", "yamaa-v0.4.0"
 REVISION = "a" * 40
 REPOSITORY = {
@@ -47,7 +47,6 @@ def native_jobs():
     # Independent expected routes and critical step names, using the one owned
     # platform/interpreter/form inventory rather than a second release matrix.
     jobs = {
-        "native-coverage": ["Select the full installed matrix"],
         "portable-math-exact": ["Compare every candidate bit across the native matrix"],
         "public-cohort-complete-runs": [
             "Require complete public runs through the M1 comparator"
@@ -55,7 +54,7 @@ def native_jobs():
     }
     for platform in MATRIX.PLATFORMS:
         jobs[f"native-rust ({platform}, {MATRIX.BUILD_PYTHON})"] = [
-            "Check shared crates and dependency direction"
+            "Test shared workspace"
         ]
         jobs[f"native-dist ({platform}, {MATRIX.BUILD_PYTHON})"] = [
             "Build wheel and source archive",
@@ -65,7 +64,6 @@ def native_jobs():
             "Build and install R outside checkout",
             "Report installed R public benchmark conformance",
             "Run installed R supplemental suites outside checkout",
-            "Require repository validator real-R public Check transport",
             "Check R source package outside checkout",
         ]
     for platform, python, form in itertools.product(
@@ -92,16 +90,6 @@ def native_jobs():
         }
         for name, steps in jobs.items()
     ]
-    rows.append(
-        {
-            "name": "native-numeric-tools (${{ matrix.os }})",
-            "status": "completed",
-            "conclusion": "skipped",
-            "head_sha": REVISION,
-            "run_attempt": 2,
-            "steps": [],
-        }
-    )
     return rows
 
 
@@ -180,24 +168,7 @@ def downloads(root):
 class QualificationSelection(unittest.TestCase):
     def setUp(self):
         self.run = native_run()
-        self.coverage = MATRIX.plan("schedule", "refs/heads/main")
-
-    def test_all_owned_matrix_routes_and_critical_steps_match_current_workflow(self):
-        jobs = native_jobs()
-        release.validate_jobs(jobs, self.coverage, self.run)
-        expected = release.required_jobs(self.coverage)
-        self.assertEqual(len(expected), 30)
-        self.assertEqual(
-            sum(name.startswith("native-qualify ") for name in expected), 18
-        )
-        workflow = (ROOT / ".github/workflows/native.yml").read_text()
-        for steps in expected.values():
-            for step in steps:
-                self.assertIn(f"- name: {step}\n", workflow)
-        self.assertIn(
-            "if: needs.plan.outputs.full == 'true' && needs.plan.outputs.run-rust != 'true'",
-            workflow,
-        )
+        self.coverage = MATRIX.coverage()
 
     def test_main_schedule_dispatch_and_same_repository_qualification_push_are_complete(
         self,
@@ -217,7 +188,7 @@ class QualificationSelection(unittest.TestCase):
             ("head_sha", "b" * 40),
             ("status", "in_progress"),
             ("conclusion", "failure"),
-            ("path", ".github/workflows/pr.yml"),
+            ("path", ".github/workflows/ci.yml"),
             ("path", None),
             ("run_attempt", 0),
             ("id", True),
@@ -481,14 +452,9 @@ class PublicationBoundary(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "main ancestry"):
                 release.tagged_revision(root, "yamaa-v0.5.0")
 
-    def test_publication_shell_rechecks_the_remote_annotated_tag_before_creating_a_release(
+    def test_publication_rechecks_the_remote_annotated_tag_before_creating_a_release(
         self,
     ):
-        workflow = (ROOT / ".github/workflows/release.yml").read_text()
-        step = workflow.split(
-            "      - name: Publish qualified assets without rebuilding\n", 1
-        )[1]
-        script = textwrap.dedent(step.split("        run: |\n", 1)[1])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             checkout = root / "checkout"
@@ -515,7 +481,12 @@ class PublicationBoundary(unittest.TestCase):
             artifacts = root / "qualified-release"
             artifacts.mkdir()
             (artifacts / "source-revision.txt").write_text(revision + "\n")
-            (artifacts / "asset-paths.txt").write_text("qualified.whl\n")
+            assets = [artifacts / f"asset-{index}.whl" for index in range(5)]
+            for asset in assets:
+                asset.write_bytes(b"qualified package bytes")
+            (artifacts / "asset-paths.txt").write_text(
+                "".join(str(asset) + "\n" for asset in assets)
+            )
             (artifacts / "release-notes.md").write_text("notes\n")
             commands = root / "bin"
             commands.mkdir()
@@ -535,16 +506,16 @@ class PublicationBoundary(unittest.TestCase):
             )
 
             def publish():
-                return subprocess.run(
-                    ["bash", "-e", "-o", "pipefail", "-c", script],
-                    cwd=checkout,
-                    env=environment,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
+                try:
+                    with patch.dict(os.environ, environment, clear=True):
+                        publisher.publish(
+                            checkout, artifacts, TAG, REPOSITORY["full_name"]
+                        )
+                except (subprocess.CalledProcessError, ValueError):
+                    return False
+                return True
 
-            self.assertEqual(publish().returncode, 0)
+            self.assertTrue(publish())
             self.assertIn("release create yamaa-v0.4.0", marker.read_text())
             marker.unlink()
             git("update-ref", "-d", "refs/release-publication/checked-tag")
@@ -552,7 +523,7 @@ class PublicationBoundary(unittest.TestCase):
             git("commit", "-am", "different source")
             git("tag", "-f", "-a", TAG, "-m", "moved")
             git("push", "--force", "origin", f"refs/tags/{TAG}")
-            self.assertNotEqual(publish().returncode, 0)
+            self.assertFalse(publish())
             self.assertFalse(
                 marker.exists(), "moved tags must not obtain release publication"
             )
@@ -670,34 +641,6 @@ class PublicationBoundary(unittest.TestCase):
                 release.select_release(ROOT, REPOSITORY["full_name"], TAG, destination)
             download.assert_not_called()
             self.assertFalse(destination.exists())
-
-    def test_workflow_is_tag_only_pinned_and_uploads_selected_assets_without_rebuilding(
-        self,
-    ):
-        workflow = (ROOT / ".github/workflows/release.yml").read_text()
-        self.assertIn("tags: ['yamaa-v*']", workflow)
-        self.assertNotIn("workflow_dispatch", workflow)
-        self.assertIn("contents: write\n  actions: read", workflow)
-        self.assertIn(
-            "git fetch --no-tags origin main:refs/remotes/origin/main", workflow
-        )
-        self.assertIn("gh release create", workflow)
-        self.assertIn(
-            "refs/tags/${RELEASE_TAG}:refs/release-publication/checked-tag", workflow
-        )
-        self.assertIn("refs/release-publication/checked-tag^{commit}", workflow)
-        self.assertIn("qualified-release/source-revision.txt", workflow)
-        self.assertIn('--verify-tag --title "yamaa ${RELEASE_TAG#yamaa-v}"', workflow)
-        self.assertIn('"${assets[@]}"', workflow)
-        self.assertNotIn("maturin", workflow)
-        self.assertNotIn("cargo build", workflow)
-        self.assertNotIn("pip install", workflow)
-        for action in [
-            line.strip().removeprefix("- uses: ").split(" #")[0]
-            for line in workflow.splitlines()
-            if "- uses: " in line
-        ]:
-            self.assertRegex(action, r"^[A-Za-z0-9_./-]+@[0-9a-f]{40}$")
 
 
 class ImmutableArtifactDownload(unittest.TestCase):

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+
 import yamaa
 from yamaa import _native
 

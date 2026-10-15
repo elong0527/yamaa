@@ -1,74 +1,44 @@
-# Supported local entry points. CI calls the same Python scripts directly so it
-# does not need GNU make on Windows. Run from the repository root.
+# Local checks and PR jobs use these same targets from the repository root.
 .DEFAULT_GOAL := help
-.PHONY: help sync-python check-fast check-repository check-blockers test-rust \
-        stage-python test-python stage-r stage-r-tests test-r check-r \
+.PHONY: help setup check check-lint check-repository test-rust test-python test-r \
         docs-test docs-generate docs-build docs
 
-PYTHON ?= python
-DOCS_PYTHON ?= $(PYTHON)
-HOST_PYTHON ?= $(PYTHON)
-HOST_WORK ?=
-OUTPUT ?=
-SOURCE_REVISION ?= $(shell git rev-parse HEAD)
-PACKAGE_FORM ?= source
-ARTIFACT_REFERENCE ?=
-HOST_ARTIFACT_REFERENCE ?=
-EVIDENCE ?=
-R_STAGE ?=
-R_ARCHIVE ?=
-COMMANDS := .github/scripts/commands
+UV ?= uv
+PROJECT := $(UV) run --project python --no-sync
+TOOLS := $(PROJECT) python -m
 
 help:
-	@$(PYTHON) $(COMMANDS)/help.py
+	@python -m tools.commands.help
 
-sync-python:
-	uv sync --project python --extra test --locked
+setup:
+	python -m tools.commands.setup --uv "$(UV)"
 
-check-fast:
-	$(PYTHON) $(COMMANDS)/repository.py fast
+check: check-lint check-repository test-rust test-python test-r
+
+check-lint:
+	$(TOOLS) tools.commands.repository lint
 
 check-repository:
-	$(PYTHON) $(COMMANDS)/repository.py repository
-
-check-blockers:
-	$(PYTHON) $(COMMANDS)/repository.py blockers
+	$(TOOLS) tools.commands.repository check
 
 test-rust:
-	$(PYTHON) $(COMMANDS)/rust_tests.py
-
-stage-python:
-	$(PYTHON) $(COMMANDS)/installed.py stage --runtime python --staged-root "$(HOST_WORK)"
+	$(TOOLS) tools.commands.rust_tests
 
 test-python:
-	$(HOST_PYTHON) -I $(COMMANDS)/installed.py run --runtime python \
-	  --staged-root "$(HOST_WORK)" --output "$(OUTPUT)" --source-revision "$(SOURCE_REVISION)" \
-	  --package-form "$(PACKAGE_FORM)" --artifact-reference "$(ARTIFACT_REFERENCE)" \
-	  --host-artifact-reference "$(HOST_ARTIFACT_REFERENCE)" --evidence "$(EVIDENCE)"
-
-stage-r:
-	@test -n "$(R_STAGE)" || (echo 'Set R_STAGE to a fresh package directory outside the checkout' >&2; exit 2)
-	$(PYTHON) tools/staging/stage_r_package.py "$(R_STAGE)"
-
-stage-r-tests:
-	$(PYTHON) $(COMMANDS)/installed.py stage --runtime r --staged-root "$(HOST_WORK)"
+	$(TOOLS) tools.commands.python_tests
 
 test-r:
-	$(PYTHON) $(COMMANDS)/installed.py run --runtime r \
-	  --staged-root "$(HOST_WORK)" --output "$(OUTPUT)" --source-revision "$(SOURCE_REVISION)" \
-	  --package-form source --artifact-reference "$(ARTIFACT_REFERENCE)" --evidence "$(EVIDENCE)"
-
-check-r:
-	$(PYTHON) $(COMMANDS)/check_r.py --archive "$(R_ARCHIVE)" --work-dir "$(HOST_WORK)"
+	$(TOOLS) tools.commands.r_tests
 
 docs-test:
-	$(DOCS_PYTHON) $(COMMANDS)/docs.py test
+	$(PROJECT) python -m unittest tools.tests.test_canonical_pages tools.tests.test_build_index tools.tests.test_generate tools.tests.test_mapping_doc
 
 docs-generate:
-	$(DOCS_PYTHON) $(COMMANDS)/docs.py dashboards
+	$(TOOLS) tools.commands.docs dashboards
 
 docs-build:
-	$(DOCS_PYTHON) $(COMMANDS)/docs.py build
+	$(TOOLS) tools.commands.docs build
 
-docs: docs-generate
-	$(DOCS_PYTHON) $(COMMANDS)/docs.py build
+docs:
+	$(TOOLS) tools.commands.docs dashboards
+	$(TOOLS) tools.commands.docs build

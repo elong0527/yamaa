@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 import polars as pl
+
 import yamaa
 
 FIXTURES = Path(__file__).with_name("host-fixtures")

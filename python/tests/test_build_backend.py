@@ -3,18 +3,19 @@
 import io
 import json
 import subprocess
+import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
-from tools.packaging import check_cargo_lock as guard
-backend = _BACKEND_MODULE
-import tarfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
-
 from python import yamaa_build_backend as _BACKEND_MODULE
+from tools.packaging import check_cargo_lock as guard
+
+backend = _BACKEND_MODULE
 preserve_workspace = _BACKEND_MODULE.preserve_workspace
+
 
 def _make_workspace(root: Path) -> Path:
     workspace = root / "rust"
@@ -1000,4 +1001,3 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
                 backend.preserve_workspace(archive, root)
             self.assertEqual(archive.read_bytes(), original)
             self.assertEqual(list(root.glob("*.tar.gz")), [archive])
-

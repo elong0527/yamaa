@@ -4,9 +4,6 @@ import copy
 import unittest
 
 from tools.numeric import check_math_portability as portability
-from tools.paths import WORKSPACE
-
-TOOLS = WORKSPACE / "tools"
 
 
 class PortabilityTests(unittest.TestCase):

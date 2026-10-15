@@ -12,7 +12,6 @@ from tools.validation.check_rule_rewrite import check, requirement_owners
 from tools.validation.generate_rule_reference import generated
 
 REPO = ROOT
-CHECKER = Path(__file__).resolve().with_name("check_rule_rewrite.py")
 
 
 class RuleRewriteTests(unittest.TestCase):
@@ -37,7 +36,13 @@ class RuleRewriteTests(unittest.TestCase):
         errors, _ = check(self.root)
         self.assertIn(error, errors)
         result = subprocess.run(
-            [sys.executable, str(CHECKER), "--root", str(self.root)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.check_rule_rewrite",
+                "--root",
+                str(self.root),
+            ],
             capture_output=True,
             text=True,
             check=False,
@@ -158,7 +163,8 @@ class RuleRewriteTests(unittest.TestCase):
                 result = subprocess.run(
                     [
                         sys.executable,
-                        str(CHECKER.with_name("generate_rule_reference.py")),
+                        "-m",
+                        "tools.validation.generate_rule_reference",
                         "--root",
                         str(self.root),
                         "--check",
@@ -230,7 +236,13 @@ class RuleRewriteTests(unittest.TestCase):
             errors,
         )
         result = subprocess.run(
-            [sys.executable, str(CHECKER), "--root", str(self.root)],
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.check_rule_rewrite",
+                "--root",
+                str(self.root),
+            ],
             capture_output=True,
             text=True,
             check=False,

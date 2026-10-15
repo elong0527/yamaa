@@ -1,11 +1,8 @@
 """Installed graph log capabilities and complete retained publication witnesses."""
 
-from tools.paths import ROOT, WORKSPACE
-
 import builtins
 import copy
 import gc
-from host_fixtures import load as load_truth
 import json
 import os
 import shutil
@@ -16,11 +13,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import polars as pl
+from host_fixtures import load as load_truth
+
 import yamaa
 
-TRUTH = load_truth(
-    __file__, "producer-logs"
-)
+TRUTH = load_truth(__file__, "producer-logs")
 
 ROOT = Path(__file__).with_name("project-original")
 SPECIFICATION = Path(__file__).with_name("specification-original")
@@ -32,7 +29,9 @@ KEYS = TRUTH["offending_keys_json"]
 def golden(name, warning=False, severity="warning"):
     """Read complete independent CSV truth without a second rendering algorithm."""
     records = TRUTH["golden_csv"][name]
-    return (records["warning"] if warning else records["verification"][severity]).encode("utf-8")
+    return (
+        records["warning"] if warning else records["verification"][severity]
+    ).encode("utf-8")
 
 
 class ProducerLogs(unittest.TestCase):
@@ -85,9 +84,7 @@ class ProducerLogs(unittest.TestCase):
 
     def fixture(self, fatal=None, diamond=False, blocked=False):
         self.write("input.csv", CSV)
-        self.names = (
-            TRUTH["diamond_names"] if diamond else ["producer", "root"]
-        )
+        self.names = TRUTH["diamond_names"] if diamond else ["producer", "root"]
         for name in self.names:
             if name == "producer":
                 source, base = TRUTH["raw_source_reference"], "SRC"
@@ -106,11 +103,7 @@ class ProducerLogs(unittest.TestCase):
                     TRUTH["aliased_producer_reference"],
                     "A",
                 )
-            intermediate = (
-                TRUTH["root_intermediate_yaml"]
-                if name == "root"
-                else ""
-            )
+            intermediate = TRUTH["root_intermediate_yaml"] if name == "root" else ""
             severity = "error" if name == fatal else "warning"
             warning = (
                 "blocked/root-warnings.csv"
@@ -212,11 +205,7 @@ class ProducerLogs(unittest.TestCase):
                     report = self.retain(result, f"save-{diamond}-{attempt}")
                     self.assertEqual(self.execution(report), self.execution(before))
                     entries = report["publication"]["entered"]
-                    order = (
-                        TRUTH["diamond_names"]
-                        if diamond
-                        else ["producer", "root"]
-                    )
+                    order = TRUTH["diamond_names"] if diamond else ["producer", "root"]
                     expected = [
                         f"generated/{name}{suffix}.csv"
                         for name in order

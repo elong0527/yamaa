@@ -8,6 +8,31 @@ from pathlib import Path
 from tools.paths import ROOT
 
 
+def check(archive, work, environment=None):
+    archive, work = archive.resolve(), work.resolve()
+    if work.is_relative_to(ROOT):
+        raise ValueError("R package checks must run outside the checkout")
+    if not archive.is_file():
+        raise ValueError("archive must identify the built source archive")
+    work.mkdir(parents=True)
+    revision = subprocess.check_output(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
+    )
+    (work / "source-revision.txt").write_text(revision, encoding="utf-8")
+    subprocess.run(
+        ["R", "CMD", "check", "--no-manual", str(archive)],
+        cwd=work,
+        env=environment,
+        check=True,
+    )
+    logs = list(work.glob("*.Rcheck/00check.log"))
+    if (
+        len(logs) != 1
+        or "Status: OK" not in logs[0].read_text(encoding="utf-8").splitlines()
+    ):
+        raise RuntimeError("R package check has unresolved findings")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", required=True, type=Path)
@@ -22,21 +47,7 @@ def main():
         parser.error(
             "R_LIBS must identify the installed package and dependency library"
         )
-    # Never overwrite previous evidence; an unsuccessful check keeps its logs.
-    work.mkdir(parents=True)
-    revision = subprocess.check_output(
-        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
-    )
-    (work / "source-revision.txt").write_text(revision, encoding="utf-8")
-    subprocess.run(
-        ["R", "CMD", "check", "--no-manual", str(archive)], cwd=work, check=True
-    )
-    logs = list(work.glob("*.Rcheck/00check.log"))
-    if (
-        len(logs) != 1
-        or "Status: OK" not in logs[0].read_text(encoding="utf-8").splitlines()
-    ):
-        raise RuntimeError("R package check has unresolved findings")
+    check(archive, work)
 
 
 if __name__ == "__main__":

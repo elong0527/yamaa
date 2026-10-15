@@ -6,12 +6,9 @@ builds inspect all sources first, so physical missing/directory cases use the
 unchanged inspection truth and retain zero study reads.
 """
 
-from tools.paths import ROOT, WORKSPACE
-
 import builtins
 import csv
 import gc
-from host_fixtures import load as load_truth
 import json
 import shutil
 import sys
@@ -20,12 +17,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from host_fixtures import load as load_truth
+
 import yamaa
 from yamaa import _native
 
-TRUTH = load_truth(
-    __file__, "file-resources"
-)
+TRUTH = load_truth(__file__, "file-resources")
 
 ROOT = Path(__file__).with_name("specification-original")
 PATHS = TRUTH["lookup_paths"]

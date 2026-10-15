@@ -1,10 +1,7 @@
 """Retain complete actual public producer owners for independent M1 comparison."""
 
-from tools.paths import ROOT, WORKSPACE
-
 import builtins
 import json
-from host_fixtures import load as load_truth
 import os
 import shutil
 import tempfile
@@ -12,34 +9,44 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from host_fixtures import load as load_truth
+
 from yamaa import domain
 
-TRUTH = load_truth(
-    __file__, "producer-cohort"
-)
+TRUTH = load_truth(__file__, "producer-cohort")
 
 ROOT = Path(__file__).with_name("project-original")
 NAME = TRUTH["case_name"]
 
 
 class ProducerCohort(unittest.TestCase):
-    def test_original_shared_parquet_build_and_repeated_save_without_reference_semantics(self):
+    def test_original_shared_parquet_build_and_repeated_save_without_reference_semantics(
+        self,
+    ):
         with tempfile.TemporaryDirectory() as temporary:
             work = Path(temporary).resolve()
             case = work / NAME
             case.mkdir()
             for name in tuple(TRUTH["source_files"]):
                 shutil.copyfile(ROOT / NAME / name, case / name)
-            (work / "yamaa-project.yaml").write_text(TRUTH["project_yaml"], encoding="ascii")
+            (work / "yamaa-project.yaml").write_text(
+                TRUTH["project_yaml"], encoding="ascii"
+            )
             (work / "environment.yaml").write_text(
                 "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {}\n",
                 encoding="ascii",
             )
             shutil.copyfile(ROOT / "schema-functions/python/uv.lock", work / "uv.lock")
             output = os.environ.get("YAMAA_PUBLIC_REPORT_DIR")
-            evidence = Path(output) / "producer-cohort/python" / NAME if output else work / "evidence"
+            evidence = (
+                Path(output) / "producer-cohort/python" / NAME
+                if output
+                else work / "evidence"
+            )
             evidence.mkdir(parents=True)
-            (evidence / "case-directory.txt").write_text(case.as_posix(), encoding="utf-8")
+            (evidence / "case-directory.txt").write_text(
+                case.as_posix(), encoding="utf-8"
+            )
             provenance = os.environ.get("YAMAA_SUPPLEMENTAL_EVIDENCE")
             if provenance:
                 (evidence / "provenance.json").write_text(provenance, encoding="utf-8")
@@ -48,13 +55,21 @@ class ProducerCohort(unittest.TestCase):
 
             def reject(name, *args, **kwargs):
                 if name in {"yaml", "yaml12", "pydantic", "pyarrow"} or name.startswith(
-                    ("yamaa.planning", "yamaa.runtime", "yamaa.specification", "yamaa.io", "yamaa.adapters")
+                    (
+                        "yamaa.planning",
+                        "yamaa.runtime",
+                        "yamaa.specification",
+                        "yamaa.io",
+                        "yamaa.adapters",
+                    )
                 ):
                     raise AssertionError("reference semantic import: " + name)
                 return original(name, *args, **kwargs)
 
             with patch("builtins.__import__", side_effect=reject):
-                result = domain(case / "spec.yaml", environment=work / "environment.yaml")
+                result = domain(
+                    case / "spec.yaml", environment=work / "environment.yaml"
+                )
                 self.assertTrue(result.issues.is_empty(), result.issues)
                 self.assertEqual(result.output.to_dicts(), [{"ID": "01"}])
                 before = result._native.observations()
@@ -74,7 +89,9 @@ class ProducerCohort(unittest.TestCase):
                     for name in ("produced.parquet", "out.csv"):
                         actual[name] = (case / name).read_bytes()
                         (directory / name).write_bytes(actual[name])
-                    self.assertEqual(actual["out.csv"], TRUTH["output_csv"].encode("utf-8"))
+                    self.assertEqual(
+                        actual["out.csv"], TRUTH["output_csv"].encode("utf-8")
+                    )
                     self.assertEqual(actual["produced.parquet"][:4], b"PAR1")
                     self.assertEqual(actual["produced.parquet"][-4:], b"PAR1")
                     if saved is not None:

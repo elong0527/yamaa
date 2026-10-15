@@ -67,8 +67,8 @@ def cell(value, kind):
         return str(
             int(
                 (
-                    value.replace(tzinfo=dt.timezone.utc)
-                    - dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+                    value.replace(tzinfo=dt.UTC)
+                    - dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
                 ).total_seconds()
             )
         )
