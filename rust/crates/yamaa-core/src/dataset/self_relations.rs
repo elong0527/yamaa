@@ -75,7 +75,9 @@ fn aggregate_reads(aggregate: &BoundAggregate) -> bool {
             };
             donor
                 || keys.iter().any(|key| match &key.value {
-                    MatchValue::Literal(_) | MatchValue::Contextual(_) => false,
+                    MatchValue::Literal(_)
+                    | MatchValue::Contextual(_)
+                    | MatchValue::Expression(_) => false,
                     MatchValue::Variable(read)
                     | MatchValue::Source(read)
                     | MatchValue::StrPad { read, .. } => match read {

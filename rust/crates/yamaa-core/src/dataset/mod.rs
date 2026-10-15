@@ -48,7 +48,9 @@ pub use relation_range::{
 };
 mod self_relations;
 pub use self_relations::IntermediateSource;
+mod match_expression;
 mod match_values;
+pub use match_expression::MatchExpression;
 pub use match_values::{ContextualMatch, IntermediateKey, MatchRead, MatchValue};
 mod joined;
 mod lookup;
@@ -75,7 +77,7 @@ pub use temporal_arithmetic::TemporalStep;
 mod selection;
 pub use selection::{FirstAvailable, SelectionRead, SelectionSource};
 mod row_stages;
-pub use row_stages::window_stages;
+pub use row_stages::{read_requires_window, window_stages};
 mod row_drivers;
 mod windows;
 pub use windows::{ContextWindow, OrderTerm, Window, WindowKind};
@@ -572,6 +574,7 @@ fn validate_assignment(
         0,
         &mut remaining,
         record_derivation,
+        false,
     )
 }
 /// Donor reads and named current-row reads use separate admitted schemas.
@@ -598,6 +601,7 @@ fn validate_record_assignment(
         0,
         &mut remaining,
         false,
+        false,
     )
 }
 /// The augmented primary stores completed fields in output coordinates and
@@ -622,8 +626,10 @@ fn validate_donor_reads(
                 .get(*index)
                 .ok_or(PlanError::InvalidIntermediate)?;
             for key in &item.keys {
-                if let Some(MatchRead::Record { column: index, .. }) = key.value.read() {
-                    column(*index)?;
+                for read in key.value.reads() {
+                    if let MatchRead::Record { column: index, .. } = read {
+                        column(*index)?;
+                    }
                 }
             }
             for field in item.current_fields() {
@@ -732,6 +738,7 @@ fn validate_assignment_at(
     depth: usize,
     remaining: &mut usize,
     record_derivation: bool,
+    destination_free: bool,
 ) -> Result<(), PlanError> {
     if depth > EXPRESSION_DEPTH_LIMIT || *remaining == 0 {
         return Err(PlanError::InvalidColumns);
@@ -740,11 +747,13 @@ fn validate_assignment_at(
     if assignment.path.is_empty() {
         return Err(PlanError::EmptyPath);
     }
-    if assignment.column >= available.len() {
-        return Err(PlanError::InvalidColumns);
-    }
-    if available[assignment.column] {
-        return Err(PlanError::DuplicateAssignment);
+    if !destination_free {
+        if assignment.column >= available.len() {
+            return Err(PlanError::InvalidColumns);
+        }
+        if available[assignment.column] {
+            return Err(PlanError::DuplicateAssignment);
+        }
     }
     if record_derivation {
         validate_donor_reads(&assignment.expression, available, intermediates)?;
@@ -815,8 +824,11 @@ fn validate_assignment_at(
                     depth + 1,
                     remaining,
                     record_derivation,
+                    destination_free,
                 )?;
-                available[assignment.column] = false;
+                if !destination_free {
+                    available[assignment.column] = false;
+                }
             }
         }
         // REQ-0211/0213 convert one derived value at execution, including
@@ -875,8 +887,11 @@ fn validate_assignment_at(
                 depth + 1,
                 remaining,
                 record_derivation,
+                destination_free,
             )?;
-            available[assignment.column] = false;
+            if !destination_free {
+                available[assignment.column] = false;
+            }
         }
         Expression::Imputation {
             operands,
@@ -901,8 +916,11 @@ fn validate_assignment_at(
                     depth + 1,
                     remaining,
                     record_derivation,
+                    destination_free,
                 )?;
-                available[assignment.column] = false;
+                if !destination_free {
+                    available[assignment.column] = false;
+                }
             }
         }
         Expression::MappingCut {
@@ -935,8 +953,11 @@ fn validate_assignment_at(
                 depth + 1,
                 remaining,
                 record_derivation,
+                destination_free,
             )?;
-            available[assignment.column] = false;
+            if !destination_free {
+                available[assignment.column] = false;
+            }
         }
         Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => {
             for operand in operands {
@@ -955,8 +976,11 @@ fn validate_assignment_at(
                     depth + 1,
                     remaining,
                     record_derivation,
+                    destination_free,
                 )?;
-                available[assignment.column] = false;
+                if !destination_free {
+                    available[assignment.column] = false;
+                }
             }
         }
         Expression::StrTemplate {
@@ -982,8 +1006,11 @@ fn validate_assignment_at(
                     depth + 1,
                     remaining,
                     record_derivation,
+                    destination_free,
                 )?;
-                available[assignment.column] = false;
+                if !destination_free {
+                    available[assignment.column] = false;
+                }
             }
         }
         Expression::Temporal {
@@ -1009,8 +1036,11 @@ fn validate_assignment_at(
                     depth + 1,
                     remaining,
                     record_derivation,
+                    destination_free,
                 )?;
-                available[assignment.column] = false;
+                if !destination_free {
+                    available[assignment.column] = false;
+                }
             }
         }
         Expression::Function(function) => {
@@ -1056,8 +1086,11 @@ fn validate_assignment_at(
                         depth + 1,
                         remaining,
                         record_derivation,
+                        destination_free,
                     )?;
-                    available[assignment.column] = false;
+                    if !destination_free {
+                        available[assignment.column] = false;
+                    }
                 }
             }
         }
@@ -1088,8 +1121,11 @@ fn validate_assignment_at(
                 depth + 1,
                 remaining,
                 record_derivation,
+                destination_free,
             )?;
-            available[assignment.column] = false;
+            if !destination_free {
+                available[assignment.column] = false;
+            }
         }
         Expression::SourceLookup {
             lookup: bound,
@@ -1238,7 +1274,9 @@ fn validate_assignment_at(
         }
         _ => (),
     }
-    available[assignment.column] = true;
+    if !destination_free {
+        available[assignment.column] = true;
+    }
     Ok(())
 }
 
@@ -1328,7 +1366,7 @@ fn current_record_read(
                 scope != RecordReadScope::Driver
                     && (keys
                         .iter()
-                        .filter_map(|key| key.value.read())
+                        .flat_map(|key| key.value.reads())
                         .any(|read| matches!(read, MatchRead::Record { .. }))
                         || aggregate.range().is_some_and(|range| {
                             matches!(range.current().read, CurrentRead::Record { .. })
@@ -1353,7 +1391,7 @@ fn current_record_read(
                 && intermediates.get(*index).is_some_and(|item| {
                     item.keys
                         .iter()
-                        .filter_map(|key| key.value.read())
+                        .flat_map(|key| key.value.reads())
                         .any(|read| matches!(read, MatchRead::Record { .. }))
                         || item
                             .current_fields()
@@ -1603,9 +1641,10 @@ impl DatasetPlan {
             }
             if let Some(filter) = &template.filter {
                 let deferred = window_stages(&template.assignments, width, &intermediates);
-                if !matches!(mode, RowMode::Groups(_)) && filter.bindings().iter().any(|binding| {
-                    matches!(binding.read, Read::Column(column) if deferred.get(column).copied().unwrap_or(false))
-                })
+                if !matches!(mode, RowMode::Groups(_))
+                    && filter.bindings().iter().any(|binding| {
+                        read_requires_window(&binding.read, &deferred, &intermediates)
+                    })
                 {
                     return Err(PlanError::Filter(BindingError::UnavailableColumn));
                 }

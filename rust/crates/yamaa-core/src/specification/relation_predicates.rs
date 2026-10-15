@@ -168,20 +168,22 @@ pub(super) fn admit_reads<'a>(
                         None,
                     )));
                 }
-                if let Some(crate::dataset::MatchRead::SecondaryRecord {
-                    source: owner,
-                    identifier,
-                    ..
-                }) = key.value.read()
-                {
-                    if owner + 1 != source {
-                        findings.push(BindFinding::Lookup(LookupFinding::reference(
-                            &key.path,
-                            identifier,
-                            Some(&item.identifier),
-                            ReferenceCause::OutputKey,
-                            None,
-                        )));
+                for read in key.value.reads() {
+                    if let crate::dataset::MatchRead::SecondaryRecord {
+                        source: owner,
+                        identifier,
+                        ..
+                    } = read
+                    {
+                        if owner + 1 != source {
+                            findings.push(BindFinding::Lookup(LookupFinding::reference(
+                                &key.path,
+                                identifier,
+                                Some(&item.identifier),
+                                ReferenceCause::OutputKey,
+                                None,
+                            )));
+                        }
                     }
                 }
             }

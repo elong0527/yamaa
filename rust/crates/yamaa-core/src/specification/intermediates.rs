@@ -200,13 +200,27 @@ impl Declarations {
             .position(|item| item.name == relation)
             .map(|index| (index, field))
     }
+    pub(super) fn match_declaration(
+        &self,
+        name: &str,
+        field: &str,
+    ) -> Option<&match_values::Declaration> {
+        self.0
+            .iter()
+            .find(|item| item.name == name)?
+            .keys
+            .as_ref()?
+            .iter()
+            .find(|(name, _)| name == field)
+            .map(|(_, declaration)| declaration)
+    }
     pub(super) fn match_references(&self, index: usize) -> impl Iterator<Item = &str> {
         self.0.get(index).into_iter().flat_map(|item| {
             item.keys
                 .as_ref()
                 .into_iter()
                 .flatten()
-                .filter_map(|(_, value)| value.reference())
+                .flat_map(|(_, value)| value.references())
                 .chain(item.range.iter().map(|range| range.value.as_str()))
         })
     }
@@ -331,6 +345,9 @@ impl Declarations {
                                         &format!("{path}.key.{name}"),
                                         sources,
                                         driver,
+                                        project,
+                                        extraction,
+                                        templates,
                                         extra,
                                     )?,
                                 ))
@@ -706,10 +723,20 @@ impl Declarations {
                 } else {
                     format!("{}.key.{field}", item.path)
                 };
+                let context = match_values::Context {
+                    output,
+                    driver: &sources[driver].name,
+                    row: None,
+                    phase: crate::reference_scope::Phase::Row { group_by: None },
+                    project,
+                    named: self,
+                    secondary: &secondary,
+                    intermediates: &result,
+                };
                 let value = if contextual_reader {
-                    declaration.bind_deferred(&path, &item.name, &catalog, findings)?
+                    declaration.bind_deferred(&path, &item.name, &catalog, findings, context)?
                 } else {
-                    declaration.bind(&path, &item.name, &catalog, findings)?
+                    declaration.bind(&path, &item.name, &catalog, findings, context)?
                 };
                 match value {
                     Some(value) => {

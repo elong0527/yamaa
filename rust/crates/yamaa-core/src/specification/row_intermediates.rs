@@ -169,6 +169,7 @@ pub(super) fn default_dependencies(
     d: &Document,
     reference: &str,
     output: &TableSchema,
+    templates: &str_template::Prepared,
 ) -> Result<Vec<usize>, PrepareError> {
     let Some((name, _)) = reference.split_once('.') else {
         return Ok(Vec::new());
@@ -214,16 +215,11 @@ pub(super) fn default_dependencies(
                     register(name);
                     continue;
                 }
-                let &[(op, payload)] = mapping(d, value)? else {
-                    return Err(PrepareError::Internal);
-                };
-                match text(d, op)? {
-                    "source" => register(match &d.nodes()[payload] {
-                        N::Text(name) => name,
-                        _ => text(d, field(d, payload, "variable")?)?,
-                    }),
-                    "str_pad" => register(text(d, field(d, payload, "source")?)?),
-                    _ => (),
+                let mut names = Vec::new();
+                derivations::current_references(d, value, None, &mut names, 0)?;
+                self_relations::template_references(d, value, templates, &mut names, 0)?;
+                for name in &names {
+                    register(name);
                 }
             }
         }
@@ -329,25 +325,25 @@ pub(super) fn bind(
             findings.push(missing_dependency(declaration.identifier(), &key.path));
             continue;
         }
-        if let Some(crate::dataset::MatchRead::Output { column, identifier }) = key.value.read() {
-            if available.is_some_and(|available| !available.contains(column)) {
+        for read in key.value.reads() {
+            if let crate::dataset::MatchRead::Output { column, identifier } = read {
+                if available.is_some_and(|available| !available.contains(column)) {
+                    findings.push(missing_dependency(identifier, &key.path));
+                    continue;
+                }
+            }
+            if let crate::dataset::MatchRead::SecondaryRecord { identifier, .. } = read {
+                if catalog
+                    .bind(identifier)
+                    .map_err(BindError::Catalog)?
+                    .is_some_and(|read| {
+                        matches!(read, reference_binding::Binding::Dataset { dataset: 0, .. })
+                    })
+                {
+                    continue;
+                }
                 findings.push(missing_dependency(identifier, &key.path));
-                continue;
             }
-        }
-        if let Some(crate::dataset::MatchRead::SecondaryRecord { identifier, .. }) =
-            key.value.read()
-        {
-            if catalog
-                .bind(identifier)
-                .map_err(BindError::Catalog)?
-                .is_some_and(|read| {
-                    matches!(read, reference_binding::Binding::Dataset { dataset: 0, .. })
-                })
-            {
-                continue;
-            }
-            findings.push(missing_dependency(identifier, &key.path));
         }
     }
     if findings.len() != before {

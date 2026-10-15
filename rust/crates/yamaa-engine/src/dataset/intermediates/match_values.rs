@@ -64,9 +64,18 @@ fn resolve_one<T: TableAccess + ?Sized>(
                     return Err(Box::new(ExecutionError::SchemaMismatch));
                 }
             }
+            let current = match read {
+                MatchRead::SecondaryRecord { source, .. } => row_drivers::Driver::Secondary(
+                    *state
+                        .secondary
+                        .get(*source)
+                        .ok_or_else(|| Box::new(ExecutionError::SchemaMismatch))?,
+                ),
+                _ => row_drivers::Driver::Primary(primary),
+            };
             state.budget.work(candidate.members.len(), 1)?;
             key_grain::collect_bound(
-                primary,
+                &current,
                 key_grain::Collection {
                     column: *column,
                     identifier,
@@ -98,16 +107,24 @@ pub(crate) fn resolve<'a, T: TableAccess + ?Sized>(
 ) -> Result<Current<'a>, Box<ExecutionError<T::Error>>> {
     let item = item.into();
     state.budget.work(1, item.keys.len())?;
+    let operands = item
+        .keys
+        .iter()
+        .try_fold(0usize, |count, key| {
+            count.checked_add(key.value.reads().count())
+        })
+        .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
+    state.budget.work(1, operands)?;
     let mut values: Vec<(&MatchRead, Value)> = Vec::new();
     values
-        .try_reserve_exact(item.keys.len())
+        .try_reserve_exact(operands)
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
     for expression in [false, true] {
         for key in item.keys {
             if key.value.is_expression() != expression {
                 continue;
             }
-            if let Some(read) = key.value.read() {
+            for read in key.value.reads() {
                 if values
                     .iter()
                     .any(|(bound, _)| bound.identifier() == read.identifier())
@@ -161,14 +178,17 @@ pub(crate) fn ordinary<'a, T: TableAccess + ?Sized>(
 }
 
 /// Evaluate every key before considering missingness; never finish an output assignment.
-pub(crate) fn evaluate<'a, E>(
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn evaluate<'a, T: TableAccess + ?Sized>(
     item: impl Into<Request<'a>>,
     current: &Current<'_>,
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
-    state: &mut EvaluationState<'_, E>,
-) -> KeyValues<E> {
+    primary: &T,
+    limits: Limits,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> KeyValues<T::Error> {
     let item = item.into();
     state.budget.work(1, item.keys.len())?;
     let mut keys = Vec::new();
@@ -177,6 +197,58 @@ pub(crate) fn evaluate<'a, E>(
     for key in item.keys {
         state.budget.work(1, 1)?;
         let value = match &key.value {
+            MatchValue::Expression(expression) => {
+                if expression.windowed {
+                    evaluate_raw(
+                        primary,
+                        &expression.assignment,
+                        candidate,
+                        plan,
+                        row,
+                        limits,
+                        state,
+                    )?
+                } else {
+                    // All authored current references were resolved with their
+                    // actual source membership. The scalar evaluator now sees
+                    // one current record, without reusing any physical driver
+                    // coordinate as an operand-table coordinate.
+                    state.budget.work(candidate.values.len(), 2)?;
+                    let mut values = Vec::new();
+                    values
+                        .try_reserve_exact(candidate.values.len())
+                        .map_err(|_| Box::new(ExecutionError::Allocation))?;
+                    for value in &candidate.values {
+                        values.push(clone_value(value, state.budget)?);
+                    }
+                    let mut completed = Vec::new();
+                    completed
+                        .try_reserve_exact(candidate.completed.len())
+                        .map_err(|_| Box::new(ExecutionError::Allocation))?;
+                    completed.extend_from_slice(&candidate.completed);
+                    let scalar = Candidate {
+                        template: candidate.template,
+                        selection_identity: candidate.selection_identity,
+                        members: vec![0],
+                        values,
+                        completed,
+                    };
+                    let snapshot = Operands::<T::Error> {
+                        expression,
+                        current,
+                        marker: core::marker::PhantomData,
+                    };
+                    evaluate_raw(
+                        &snapshot,
+                        &expression.assignment,
+                        &scalar,
+                        plan,
+                        row,
+                        limits,
+                        state,
+                    )?
+                }
+            }
             MatchValue::Contextual(_) => return Err(Box::new(ExecutionError::SchemaMismatch)),
             MatchValue::Variable(read) | MatchValue::Source(read) => {
                 clone_value(current.value(read), state.budget)?
@@ -202,4 +274,30 @@ fn clone_value<E>(value: &Value, budget: &mut Budget) -> Result<Value, Box<Execu
         budget.scalar_text(text.len())?;
     }
     Ok(value.clone())
+}
+
+/// Resolved current operands are an immutable scalar snapshot, not a donor port.
+struct Operands<'a, E> {
+    expression: &'a yamaa_core::dataset::MatchExpression,
+    current: &'a Current<'a>,
+    marker: core::marker::PhantomData<E>,
+}
+impl<E> TableAccess for Operands<'_, E> {
+    type Error = E;
+    fn schema(&self) -> &TableSchema {
+        &self.expression.schema
+    }
+    fn row_count(&self) -> usize {
+        1
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<E>> {
+        if row != 0 {
+            return Err(CellError::OutOfBounds { row, column });
+        }
+        self.expression
+            .reads
+            .get(column)
+            .map(|read| ValueRef::from(self.current.value(read)))
+            .ok_or(CellError::OutOfBounds { row, column })
+    }
 }

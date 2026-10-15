@@ -4,6 +4,7 @@ use crate::{
     key_relation::ComparableType,
     value::{ColumnType, ValueType},
 };
+use alloc::boxed::Box;
 
 /// The current candidate owns these reads, independently of the donor record.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,7 +38,7 @@ impl MatchRead {
             _ => None,
         }
     }
-    fn kind(
+    pub(super) fn kind(
         &self,
         primary: &TableSchema,
         secondary: &[SecondarySource],
@@ -69,6 +70,9 @@ impl MatchRead {
 /// A bound executable read never contains this declaration metadata.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextualMatch {
+    Expression {
+        identifier: String,
+    },
     Variable(String),
     Source(String),
     StrPad {
@@ -79,7 +83,8 @@ pub enum ContextualMatch {
 impl ContextualMatch {
     pub fn identifier(&self) -> &str {
         match self {
-            Self::Variable(name)
+            Self::Expression { identifier: name }
+            | Self::Variable(name)
             | Self::Source(name)
             | Self::StrPad {
                 identifier: name, ..
@@ -88,6 +93,7 @@ impl ContextualMatch {
     }
     pub fn bind(&self, read: MatchRead) -> MatchValue {
         match self {
+            Self::Expression { .. } => MatchValue::Contextual(self.clone()),
             Self::Variable(_) => MatchValue::Variable(read),
             Self::Source(_) => MatchValue::Source(read),
             Self::StrPad { operation, .. } => MatchValue::StrPad {
@@ -103,6 +109,7 @@ impl ContextualMatch {
 #[derive(Clone, Debug, PartialEq)]
 pub enum MatchValue {
     Contextual(ContextualMatch),
+    Expression(alloc::boxed::Box<MatchExpression>),
     Variable(MatchRead),
     Source(MatchRead),
     Literal(Value),
@@ -121,7 +128,22 @@ impl MatchValue {
     pub fn read(&self) -> Option<&MatchRead> {
         match self {
             Self::Variable(read) | Self::Source(read) | Self::StrPad { read, .. } => Some(read),
-            Self::Literal(_) | Self::Contextual(_) => None,
+            Self::Literal(_) | Self::Contextual(_) | Self::Expression(_) => None,
+        }
+    }
+    pub fn reads(&self) -> impl Iterator<Item = &MatchRead> {
+        self.read().into_iter().chain(match self {
+            Self::Expression(expression) => expression.reads.iter(),
+            _ => [].iter(),
+        })
+    }
+    pub fn reads_mut(&mut self) -> Box<dyn Iterator<Item = &mut MatchRead> + '_> {
+        match self {
+            Self::Variable(read) | Self::Source(read) | Self::StrPad { read, .. } => {
+                Box::new(core::iter::once(read))
+            }
+            Self::Expression(expression) => Box::new(expression.reads.iter_mut()),
+            _ => Box::new(core::iter::empty()),
         }
     }
     pub fn contextual(&self) -> Option<ContextualMatch> {
@@ -133,11 +155,12 @@ impl MatchValue {
                 identifier: read.identifier().into(),
                 operation: operation.clone(),
             }),
-            Self::Literal(_) => None,
+            Self::Literal(_) | Self::Expression(_) => None,
         }
     }
     pub fn result_type(&self, read_kind: Option<ColumnType>) -> Option<ComparableType> {
         match self {
+            Self::Expression(expression) => expression.result_type,
             Self::Variable(_) | Self::Source(_) => read_kind.map(Into::into),
             Self::StrPad { .. } | Self::Contextual(ContextualMatch::StrPad { .. }) => {
                 Some(ColumnType::Str.into())
@@ -160,6 +183,9 @@ impl MatchValue {
         output: &TableSchema,
         available: &[bool],
     ) -> Result<Option<ComparableType>, PlanError> {
+        if let Self::Expression(expression) = self {
+            expression.validate(primary, secondary, output, available)?;
+        }
         let read_kind = self
             .read()
             .map(|read| read.kind(primary, secondary, output, available))
@@ -217,10 +243,10 @@ pub(super) fn validate_declaration(
             .columns()
             .get(key.source_column)
             .ok_or(PlanError::InvalidIntermediate)?;
-        if let Some(read) = key.value.read() {
+        for read in key.value.reads() {
             if keys[..index]
                 .iter()
-                .filter_map(|prior| prior.value.read())
+                .flat_map(|prior| prior.value.reads())
                 .any(|prior| prior.identifier() == read.identifier() && prior != read)
             {
                 return Err(PlanError::InvalidIntermediate);

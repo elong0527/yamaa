@@ -311,12 +311,27 @@ pub(super) fn validate_named_read(
     }
     let item = items.get(index).ok_or(PlanError::InvalidIntermediate)?;
     for key in &item.keys {
-        if let Some(MatchRead::Record { column, .. }) = key.value.read() {
-            if source != 0 {
-                return Err(PlanError::InvalidIntermediate);
+        for read in key.value.reads() {
+            if let MatchRead::SecondaryRecord {
+                source: owner,
+                column,
+                ..
+            } = read
+            {
+                if owner + 1 != source {
+                    return Err(PlanError::InvalidIntermediate);
+                }
+                if matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(column)) {
+                    return Err(PlanError::NonGroupSource);
+                }
             }
-            if matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(column)) {
-                return Err(PlanError::NonGroupSource);
+            if let MatchRead::Record { column, .. } = read {
+                if source != 0 {
+                    return Err(PlanError::InvalidIntermediate);
+                }
+                if matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(column)) {
+                    return Err(PlanError::NonGroupSource);
+                }
             }
         }
     }
@@ -330,7 +345,7 @@ pub(super) fn validate_named_read(
             if child >= index {
                 return Err(PlanError::InvalidIntermediate);
             }
-            if items[child].keys.iter().filter_map(|key| key.value.read()).any(|read| matches!(read, MatchRead::Output { column, .. } if !available.get(*column).copied().unwrap_or(false))) {
+            if items[child].keys.iter().flat_map(|key| key.value.reads()).any(|read| matches!(read, MatchRead::Output { column, .. } if !available.get(*column).copied().unwrap_or(false))) {
                     return Err(PlanError::InvalidLookup);
                 }
             validate_named_read(child, items, source, mode, available, depth + 1)?;
