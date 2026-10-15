@@ -1,7 +1,6 @@
 //! Private typed parser observations for independent differential fixtures.
+use super::syntax_spans as spans;
 use serde_json::{json, Value};
-#[path = "syntax_spans.rs"]
-mod spans;
 use yamaa_core::{
     aggregate_parser::{
         parse_aggregate, GrammarFailure, ParseError, ParseLimits, ParseResource, ParsedAggregate,
