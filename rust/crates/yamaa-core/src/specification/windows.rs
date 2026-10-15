@@ -378,6 +378,21 @@ impl Declaration {
         if findings.len() != start {
             return Ok(None);
         }
+        if let Kind::BaselineFlag {
+            date,
+            reference_date,
+        } = &self.kind
+        {
+            let kind = |name: &str| match catalog.bind(name).map_err(BindError::Catalog)? {
+                Some(reference_binding::Binding::Output { column_type, .. })
+                | Some(reference_binding::Binding::Dataset { column_type, .. }) => Ok(column_type),
+                None => Err(BindError::Internal),
+            };
+            if let Some(finding) = self.baseline_type_finding(kind(date)?, kind(reference_date)?) {
+                findings.push(BindFinding::Scalar(finding));
+                return Ok(None);
+            }
+        }
         let filter = filter
             .map(|plan| BoundPredicate::new(plan.clone(), bindings))
             .transpose()
@@ -399,7 +414,100 @@ impl Declaration {
     }
 }
 
+fn type_name(kind: ColumnType) -> &'static str {
+    match kind {
+        ColumnType::Str => "str",
+        ColumnType::Int => "int",
+        ColumnType::Float => "float",
+        ColumnType::Date => "date",
+        ColumnType::DateTime => "datetime",
+    }
+}
+
 impl Declaration {
+    fn baseline_type_finding(
+        &self,
+        date_kind: ColumnType,
+        reference_kind: ColumnType,
+    ) -> Option<crate::diagnostic::Diagnostic> {
+        let Kind::BaselineFlag {
+            date,
+            reference_date,
+        } = &self.kind
+        else {
+            return None;
+        };
+        let invalid = if !matches!(date_kind, ColumnType::Date | ColumnType::DateTime) {
+            Some(("date", date, "date or datetime", date_kind))
+        } else if date_kind != reference_kind {
+            Some((
+                "reference_date",
+                reference_date,
+                type_name(date_kind),
+                reference_kind,
+            ))
+        } else {
+            None
+        };
+        let (operand, source, expected, actual) = invalid?;
+        let mut finding = LookupFinding::new(
+            &format!("{}.{operand}", self.path),
+            crate::diagnostic::ConditionCode::WindowBaselineInputType,
+        );
+        for (name, value) in [
+            ("operation", "baseline_flag"),
+            ("source", source.as_str()),
+            ("expected", expected),
+            ("actual", type_name(actual)),
+        ] {
+            finding.text(name, value);
+        }
+        Some(finding.diagnostic())
+    }
+
+    /// Bare output operands have complete declared types in a column window.
+    /// Row/donor scopes and unknown names remain the binding owner's responsibility.
+    pub(super) fn check_output_types(&self, output: &TableSchema, findings: &mut Vec<BindFinding>) {
+        let Kind::BaselineFlag {
+            date,
+            reference_date,
+        } = &self.kind
+        else {
+            return;
+        };
+        let kind = |name: &str| {
+            output
+                .columns()
+                .iter()
+                .find(|column| column.name == name)
+                .map(|column| column.kind)
+        };
+        if !self.order.is_empty()
+            || self
+                .groups
+                .iter()
+                .enumerate()
+                .any(|(index, name)| kind(name).is_none() || self.groups[..index].contains(name))
+            || self
+                .filter
+                .as_ref()
+                .is_some_and(|(_, filter)| match filter {
+                    Ok(plan) => plan
+                        .identifiers()
+                        .into_iter()
+                        .any(|name| kind(name).is_none()),
+                    Err(_) => true,
+                })
+        {
+            return;
+        }
+        if let (Some(date_kind), Some(reference_kind)) = (kind(date), kind(reference_date)) {
+            if let Some(finding) = self.baseline_type_finding(date_kind, reference_kind) {
+                findings.push(BindFinding::Scalar(finding));
+            }
+        }
+    }
+
     pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
         if matches!(self.kind, Kind::RowValue { offset: 0, .. }) {
             findings.push(BindFinding::Window(WindowFinding::ZeroOffset {

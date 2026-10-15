@@ -77,14 +77,19 @@ pub(super) fn scoped_branch(
         findings.push(BindFinding::Predicate(error.diagnostic()?));
     }
     derivations::declaration_findings(&branch.operation, &branch.path, findings)?;
-    filters(&branch.operation, &branch.path, scope, findings)
+    filters(&branch.operation, &branch.path, scope, None, findings)
 }
 
-fn operation(op: &Operation, path: &str, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+fn operation(
+    op: &Operation,
+    path: &str,
+    output: Option<&TableSchema>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<(), BindError> {
     // Build already uses this declaration pass for flags, padding, nested cases,
     // numeric failures and concatenation operands. Keep exactly its paths/causes.
     derivations::declaration_findings(op, path, findings)?;
-    filters(op, path, None, findings)
+    filters(op, path, None, output, findings)
 }
 
 fn source_filter(
@@ -105,12 +110,13 @@ fn filters(
     op: &Operation,
     path: &str,
     scope: Option<(&str, crate::reference_scope::Phase<'_>)>,
+    output: Option<&TableSchema>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<(), BindError> {
     match op {
         Operation::Case(branches) => {
             for item in branches {
-                filters(&item.operation, &item.path, scope, findings)?;
+                filters(&item.operation, &item.path, scope, output, findings)?;
             }
         }
         Operation::Source(source) => source_filter(source, path, scope, findings)?,
@@ -122,13 +128,18 @@ fn filters(
         Operation::MappingCut(mapping) => {
             source_filter(&mapping.source, &format!("{path}.source"), scope, findings)?
         }
-        Operation::Window(window) => window.check_findings(findings)?,
+        Operation::Window(window) => {
+            window.check_findings(findings)?;
+            if let Some(output) = output {
+                window.check_output_types(output, findings);
+            }
+        }
         Operation::Aggregate(aggregate) => aggregate.check_findings(findings)?,
         Operation::Odm(odm) => odm.check_findings(findings)?,
         Operation::Scalar(scalar) => {
             if let scalar::Declaration::Concat { sources, .. } = &**scalar {
                 for source in sources {
-                    filters(&source.operation, &source.path, scope, findings)?;
+                    filters(&source.operation, &source.path, scope, output, findings)?;
                 }
             }
         }
@@ -147,7 +158,12 @@ impl PreparedSpecification {
             self.intermediates
                 .check_findings(&self.sources, &self.output, findings)?;
             for declaration in &self.declarations {
-                operation(&declaration.operation, &declaration.path, findings)?;
+                operation(
+                    &declaration.operation,
+                    &declaration.path,
+                    self.rows.is_none().then_some(&self.output),
+                    findings,
+                )?;
             }
             if let Some(rows) = &self.rows {
                 rows.check_findings(findings)?;
