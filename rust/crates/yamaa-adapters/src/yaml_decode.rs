@@ -89,7 +89,7 @@ fn build(events: Vec<LocatedEvent>) -> Result<(Vec<Node>, usize), DecodeFailure>
         ) && stack.len() + 1 > Limits::YAML_DEPTH
         {
             return Err(DecodeFailure::Limit(LimitExceeded {
-                resource: "depth",
+                resource: "yaml_depth",
                 limit: Limits::YAML_DEPTH,
                 actual: Some(stack.len() + 1),
             }));
