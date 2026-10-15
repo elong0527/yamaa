@@ -97,6 +97,96 @@ class RepositoryCatalog(unittest.TestCase):
             ):
                 module.require_native_consumer(source, "installed_control.py")
 
+    def test_non_literal_and_indirect_dynamic_imports_are_rejected(self):
+        # A dynamic import whose target is not a constant string cannot be
+        # classified, so it must fail closed instead of being allowed; the
+        # same holds for import functions reached through getattr, a
+        # __dict__ subscript, an assignment alias, or eval/exec.
+        for source in (
+            "import importlib\nimportlib.import_module('yamaa.' + 'io')",
+            "import importlib\nimportlib.import_module(f'yamaa.io')",
+            "import importlib\ntarget = 'yamaa.io'\nimportlib.import_module(target)",
+            "import importlib\nimportlib.import_module()",
+            "__import__('yamaa.' + 'io')",
+            "__import__('io.project', globals(), None, (), level)",
+            "import builtins\nbuiltins.__import__('yamaa.io')",
+            "from builtins import __import__ as load\nload('yamaa.io')",
+            "import importlib\ngetattr(importlib, 'import_module')('yamaa.io')",
+            "import importlib\ngetattr(importlib, attr)('yamaa.io')",
+            "import importlib\nimportlib.__dict__['import_module']('yamaa.io')",
+            "import importlib\nload = importlib.import_module\nload('yamaa.io')",
+            (
+                "import importlib\n"
+                "load = getattr(importlib, 'import_module')\nload('yamaa.io')"
+            ),
+            "eval(\"__import__('yamaa.io')\")",
+            "exec('import yamaa.io')",
+            "eval(code)",
+            # A guard delegation does not exempt the wrapper itself:
+            # direct calls to a delegating function are classified, and
+            # a parameter with a default or a reassignment in the body
+            # (or a lambda parameter) is not an exemption at all.
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "def load(name):\n"
+                "    return original(name)\n"
+                "load('yamaa.io')"
+            ),
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "def reject(name='yamaa.io'):\n"
+                "    return original(name)\n"
+            ),
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "def reject(name):\n"
+                "    name = 'yamaa.io'\n"
+                "    return original(name)\n"
+            ),
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "load = lambda name: original(name)\n"
+                "load('yamaa.io')"
+            ),
+            # Eval/exec bodies share the outer alias tables, and aliases
+            # defined inside an evaluated body are visible outside it.
+            "from importlib import import_module as load\neval(\"load('yamaa.io')\")",
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "exec(\"original('yamaa.io')\")"
+            ),
+            "exec(\"from importlib import import_module as load\")\nload('yamaa.io')",
+            # An import function bound to the name eval is an import
+            # call first: its argument is a module target, not code.
+            "from importlib import import_module as eval\neval('yamaa.io')",
+        ):
+            with (
+                self.subTest(source=source),
+                self.assertRaisesRegex(ValueError, "unresolved|reference semantics"),
+            ):
+                module.require_native_consumer(source, "installed_control.py")
+        # The suites' runtime-guard delegation stays allowed: the saved
+        # builtins.__import__ called with the guard function's own
+        # parameter. The exemption is syntactic; this test does not
+        # exercise runtime validation of that parameter.
+        module.require_native_consumer(
+            "import builtins\n"
+            "original = builtins.__import__\n"
+            "def reject(name, *args, **kwargs):\n"
+            "    return original(name, *args, **kwargs)\n",
+            "installed_control.py",
+        )
+        # Non-import getattr calls and literal native eval stay allowed.
+        module.require_native_consumer(
+            "value = getattr(obj, 'method')()\neval(\"__import__('yamaa')\")\n",
+            "installed_control.py",
+        )
+
     def test_sas_canonical_inputs_and_truth_stage_without_ownership_documents(self):
         prefix = "rust/crates/yamaa-adapters/tests/fixtures/sas/"
         catalog = {

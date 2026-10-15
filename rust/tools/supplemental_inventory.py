@@ -107,74 +107,285 @@ def require_native_consumer(source, name):
         return None
 
     tree = ast.parse(source, filename=name)
+
+    def is_eval_call(node):
+        if not isinstance(node, ast.Call):
+            return False
+        function = node.func
+        return (isinstance(function, ast.Name) and function.id in ("eval", "exec")) or (
+            isinstance(function, ast.Attribute)
+            and function.attr in ("eval", "exec")
+            and isinstance(function.value, ast.Name)
+            and function.value.id == "builtins"
+        )
+
+    def parse_evaluated(code):
+        try:
+            return ast.parse(code)
+        except SyntaxError:
+            try:
+                return ast.parse(code, mode="eval")
+            except SyntaxError:
+                return None
+
+    # Constant eval/exec bodies run in the caller's namespace, so their
+    # code shares the outer alias tables in both directions: collect every
+    # such subtree up front and analyse all of them together instead of
+    # recursing into each body with fresh state.
+    trees = [tree]
+    seen_codes = set()
+    index = 0
+    while index < len(trees):
+        for node in ast.walk(trees[index]):
+            if not is_eval_call(node) or not node.args:
+                continue
+            code = constant_string(node.args[0])
+            if code is None or code in seen_codes:
+                continue
+            seen_codes.add(code)
+            subtree = parse_evaluated(code)
+            if subtree is not None:
+                trees.append(subtree)
+        index += 1
+
+    import_names = ("import_module", "__import__")
+    # Local name -> canonical dynamic-import function it is bound to.
     imports = {
-        alias.asname or alias.name
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom) and node.module == "importlib"
+        alias.asname or alias.name: alias.name
+        for current in trees
+        for node in ast.walk(current)
+        if isinstance(node, ast.ImportFrom) and node.module in ("importlib", "builtins")
         for alias in node.names
-        if alias.name == "import_module"
+        if alias.name in import_names
     }
-    imports.add("__import__")
-    for node in ast.walk(tree):
-        modules = []
-        if isinstance(node, ast.Import):
-            modules = [alias.name for alias in node.names]
-        elif isinstance(node, ast.ImportFrom):
-            modules = [node.module or ""]
-            if node.module == "yamaa":
-                modules.extend("yamaa." + alias.name for alias in node.names)
-        elif isinstance(node, ast.Call):
-            function = node.func
-            is_import_module = (
-                isinstance(function, ast.Name) and function.id in imports
-            ) or (
-                isinstance(function, ast.Attribute) and function.attr == "import_module"
+    imports["__import__"] = "__import__"
+
+    def import_function_kind(node):
+        """Canonical dynamic-import function ``node`` denotes, if any.
+
+        Returns ``"unknown"`` for a ``getattr``/``__dict__`` lookup whose
+        key is not a constant string: the function it yields cannot be
+        known statically, so a call through it must fail closed rather
+        than be classified as not-an-import.
+        """
+        if isinstance(node, ast.Name):
+            return imports.get(node.id)
+        if isinstance(node, ast.Attribute):
+            return node.attr if node.attr in import_names else None
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id == "getattr":
+                attr = constant_string(node.args[1]) if len(node.args) > 1 else None
+                if attr is None:
+                    return "unknown"
+                return attr if attr in import_names else None
+            return None
+        if isinstance(node, ast.Subscript):
+            key = constant_string(node.slice)
+            if key is not None:
+                return key if key in import_names else None
+            if isinstance(node.value, ast.Attribute) and node.value.attr == "__dict__":
+                return "unknown"
+            return None
+        return None
+
+    # Names assigned a dynamic-import function (directly, via getattr, or
+    # via a __dict__ subscript) are themselves dynamic-import functions.
+    # Names assigned the saved ``builtins.__import__`` itself are also
+    # recorded as guard aliases: the installed suites save it to delegate
+    # to from their own runtime import guard (see is_guard_delegation).
+    guard_aliases = {
+        target.id
+        for current in trees
+        for node in ast.walk(current)
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None
+        for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+        if isinstance(target, ast.Name)
+        and (
+            (isinstance(node.value, ast.Attribute) and node.value.attr == "__import__")
+            or (isinstance(node.value, ast.Name) and node.value.id == "__import__")
+        )
+    }
+    parents = {
+        child: node
+        for current in trees
+        for node in ast.walk(current)
+        for child in ast.iter_child_nodes(node)
+    }
+
+    def is_guard_delegation(node):
+        """Whether ``node`` delegates to the saved real ``__import__``.
+
+        The suites' runtime guards have the shape
+        ``original = builtins.__import__`` plus
+        ``def reject(name, *args, **kwargs): ... return original(name, ...)``:
+        the alias is called with the enclosing guard function's own first
+        parameter, and the guard itself checks that name at runtime. Only
+        that exact shape is exempt from the fail-closed target rule; a
+        computed target through the same alias is still rejected.
+        """
+        if not (isinstance(node.func, ast.Name) and node.func.id in guard_aliases):
+            return False
+        target_node = argument(node, 0, "name")
+        if not isinstance(target_node, ast.Name):
+            return False
+        enclosing = parents.get(node)
+        while enclosing is not None and not isinstance(
+            enclosing, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+        ):
+            enclosing = parents.get(enclosing)
+        if not isinstance(enclosing, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return False
+        arguments = enclosing.args
+        positional = arguments.posonlyargs + arguments.args
+        defaulted = {
+            arg.arg for arg in positional[len(positional) - len(arguments.defaults) :]
+        }
+        defaulted |= {
+            arg.arg
+            for arg, default in zip(
+                arguments.kwonlyargs, arguments.kw_defaults, strict=True
             )
-            if is_import_module:
-                target_node = argument(node, 0, "name")
-                target = constant_string(target_node) if target_node else None
-                if target is not None:
-                    is_dunder_import = (
-                        isinstance(function, ast.Name) and function.id == "__import__"
-                    )
-                    resolved = target
-                    if is_dunder_import:
-                        level_node = argument(node, 4, "level")
-                        level = (
-                            constant_int(level_node) if level_node is not None else 0
-                        )
-                        if level:
-                            globals_node = argument(node, 1, "globals")
-                            package = (
-                                globals_package(globals_node)
-                                if globals_node is not None
-                                else None
-                            )
-                            resolved = resolve_relative("." * level + target, package)
-                    else:
-                        package_node = argument(node, 1, "package")
-                        package = (
-                            constant_string(package_node)
-                            if package_node is not None
-                            else None
-                        )
-                        resolved = resolve_relative(target, package)
-                    if resolved is None:
-                        raise ValueError(
-                            "retained suite has an unresolved relative dynamic "
-                            f"import: {name}:{node.lineno}: {target}"
-                        )
-                    modules = [resolved]
-        for module in modules:
-            if reference(module) or module in (
-                "yamaa.yamaa_domain",
-                "yamaa.DomainRun",
-                "yamaa.DomainRunError",
-                "yamaa.generate_study_document",
+            if default is not None
+        }
+        parameters = {arg.arg for arg in positional + arguments.kwonlyargs}
+        reassigned = any(
+            isinstance(item, ast.Name)
+            and item.id == target_node.id
+            and isinstance(item.ctx, (ast.Store, ast.Del))
+            for item in ast.walk(enclosing)
+        )
+        return (
+            target_node.id in parameters
+            and target_node.id not in defaulted
+            and not reassigned
+        )
+
+    # A function that delegates to the saved ``__import__`` is itself an
+    # import function: direct calls to it must have their target
+    # classified like ``__import__`` instead of slipping past the guard
+    # through the delegation exemption. Installing such a function as a
+    # guard (an assignment, not a call) stays allowed.
+    for current in trees:
+        for function in ast.walk(current):
+            if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
+                isinstance(call, ast.Call) and is_guard_delegation(call)
+                for call in ast.walk(function)
             ):
+                imports.setdefault(function.name, "__import__")
+
+    assignments = [
+        node
+        for current in trees
+        for node in ast.walk(current)
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None
+    ]
+    changed = True
+    while changed:
+        changed = False
+        for assignment in assignments:
+            kind = import_function_kind(assignment.value)
+            if kind not in import_names:
+                continue
+            targets = (
+                assignment.targets
+                if isinstance(assignment, ast.Assign)
+                else [assignment.target]
+            )
+            for target in targets:
+                if isinstance(target, ast.Name) and target.id not in imports:
+                    imports[target.id] = kind
+                    changed = True
+
+    def dynamic_import_modules(node, kind):
+        """Resolve a dynamic import call's target, failing closed.
+
+        A target that is not a constant string (concatenation, f-string,
+        variable, starred argument, or no argument at all) cannot be
+        classified, so it is rejected instead of silently allowed.
+        """
+        target_node = argument(node, 0, "name")
+        target = constant_string(target_node) if target_node is not None else None
+        if target is None:
+            raise ValueError(
+                f"retained suite has an unresolved dynamic import: {name}:{node.lineno}"
+            )
+        if kind == "__import__":
+            level_node = argument(node, 4, "level")
+            if level_node is not None and constant_int(level_node) is None:
                 raise ValueError(
-                    f"retained suite imports reference semantics: {name}:{node.lineno}: {module}"
+                    "retained suite has an unresolved dynamic import: "
+                    f"{name}:{node.lineno}"
                 )
+            level = constant_int(level_node) if level_node is not None else 0
+            if level:
+                globals_node = argument(node, 1, "globals")
+                package = (
+                    globals_package(globals_node) if globals_node is not None else None
+                )
+                resolved = resolve_relative("." * level + target, package)
+            else:
+                resolved = target
+        else:
+            package_node = argument(node, 1, "package")
+            package = (
+                constant_string(package_node) if package_node is not None else None
+            )
+            resolved = resolve_relative(target, package)
+        if resolved is None:
+            raise ValueError(
+                "retained suite has an unresolved relative dynamic "
+                f"import: {name}:{node.lineno}: {target}"
+            )
+        return [resolved]
+
+    def check_eval_call(node):
+        """Validate an eval/exec call; fail closed on unresolvable code.
+
+        Constant bodies were already collected into ``trees`` and are
+        checked against the shared alias tables by the main walk, so only
+        the failure cases remain here.
+        """
+        code_node = node.args[0] if node.args else None
+        code = constant_string(code_node) if code_node is not None else None
+        if code is None or parse_evaluated(code) is None:
+            raise ValueError(
+                f"retained suite has an unresolved eval/exec call: {name}:{node.lineno}"
+            )
+
+    for current in trees:
+        for node in ast.walk(current):
+            modules = []
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                modules = [node.module or ""]
+                if node.module == "yamaa":
+                    modules.extend("yamaa." + alias.name for alias in node.names)
+            elif isinstance(node, ast.Call):
+                function = node.func
+                # A name bound to a dynamic-import function (for example
+                # ``import_module`` aliased to ``eval``) is an import call
+                # first: its argument is a module target, not code.
+                kind = import_function_kind(function)
+                if kind == "unknown":
+                    raise ValueError(
+                        "retained suite has an unresolved dynamic import: "
+                        f"{name}:{node.lineno}"
+                    )
+                if kind is not None and not is_guard_delegation(node):
+                    modules = dynamic_import_modules(node, kind)
+                elif kind is None and is_eval_call(node):
+                    check_eval_call(node)
+            for module in modules:
+                if reference(module) or module in (
+                    "yamaa.yamaa_domain",
+                    "yamaa.DomainRun",
+                    "yamaa.DomainRunError",
+                    "yamaa.generate_study_document",
+                ):
+                    raise ValueError(
+                        f"retained suite imports reference semantics: {name}:{node.lineno}: {module}"
+                    )
 
 
 SUITE_LEVELS = ("component", "compile", "shared_run")
