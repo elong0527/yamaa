@@ -44,6 +44,7 @@ class Document:
     root: yaml.Node | None
     content_lines: frozenset[int] = field(default_factory=frozenset)
     suppressions: tuple[Suppression, ...] = ()
+    newline: str = "\n"
 
     def is_blank(self, line: int) -> bool:
         return line not in self.content_lines and not self.lines[line].strip()
@@ -70,7 +71,16 @@ def parse(text: str) -> Document:
     lines = text.split("\n")
     if lines and lines[-1] == "":
         lines.pop()
-    document = Document(text=text, lines=lines, root=root)
+    # A CRLF file's lines keep their carriage return when split on "\n"
+    # alone; it is part of the line ending, not of the line, so width and
+    # layout are judged without it and fixes write the ending back.
+    lines = [line[:-1] if line.endswith("\r") else line for line in lines]
+    document = Document(
+        text=text,
+        lines=lines,
+        root=root,
+        newline="\r\n" if "\r\n" in text else "\n",
+    )
     if root is not None:
         document.content_lines = frozenset(_content_lines(root))
     document.suppressions = tuple(_suppressions(document))

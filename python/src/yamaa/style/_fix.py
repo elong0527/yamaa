@@ -55,8 +55,8 @@ def proved(before: str, after: str) -> bool:
     )
 
 
-def _join(lines: Sequence[str]) -> str:
-    return "\n".join(lines) + "\n"
+def _join(lines: Sequence[str], newline: str = "\n") -> str:
+    return newline.join(lines) + newline
 
 
 def fix_text(
@@ -145,7 +145,7 @@ def _insert_blanks(document: Document, starts: Sequence[int]) -> str:
     lines = list(document.lines)
     for start in reversed(starts):
         lines.insert(start, "")
-    return _join(lines)
+    return _join(lines, document.newline)
 
 
 def _remove_blanks(document: Document) -> str:
@@ -161,7 +161,7 @@ def _remove_blanks(document: Document) -> str:
         kept.pop(0)
     while kept and not kept[-1].strip():
         kept.pop()
-    return _join(kept)
+    return _join(kept, document.newline)
 
 
 def _reorder(
@@ -212,7 +212,7 @@ def _reorder(
         segments[first][0] = prefix + segments[first][0][column:]
         segments[0][0] = " " * column + segments[0][0][column:]
     body = [text for index in sequence for text in segments[index]]
-    return _join(lines[: starts[0]] + body + lines[ends[-1] + 1 :])
+    return _join(lines[: starts[0]] + body + lines[ends[-1] + 1 :], document.newline)
 
 
 def _reorder_root(
@@ -262,7 +262,7 @@ def _reorder_root(
         out.extend(segments[index])
         out.extend(trailing[index])
         previous = index
-    return _join(out)
+    return _join(out, document.newline)
 
 
 def _block_context(document: Document) -> Iterator[tuple[yaml.Node, int, str]]:
@@ -311,7 +311,7 @@ def _wrap(document: Document, line: int) -> str | None:
 
 def _replace(document: Document, line: int, new: Sequence[str]) -> str:
     lines = document.lines
-    return _join(lines[:line] + list(new) + lines[line + 1 :])
+    return _join(lines[:line] + list(new) + lines[line + 1 :], document.newline)
 
 
 def _wrap_sequence(
@@ -343,7 +343,7 @@ def _wrap_sequence(
     if any(len(part) > LINE_WIDTH for part in out):
         return None
     lines = document.lines
-    return _join(lines[:first] + out + lines[final + 1 :])
+    return _join(lines[:first] + out + lines[final + 1 :], document.newline)
 
 
 def _block_mapping(
