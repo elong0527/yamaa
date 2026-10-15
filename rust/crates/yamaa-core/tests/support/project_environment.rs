@@ -56,6 +56,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let findings = project_environment::validate(Language::Python, &d);
     let projected = project_environment_diagnostics::diagnostics(&d, &findings).unwrap();
     let expected = [
+        ("project_environment_invalid", "REQ-0695", "lock"),
         ("runner_language_mismatch", "REQ-0696", "language"),
         (
             "codelist_shape_invalid",
@@ -154,31 +155,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(finding.operand_route, None);
         reached.insert(finding.code);
     }
-    let mut missing_language = d.clone();
-    missing_language.language = None;
-    missing_language.codelists.clear();
-    let findings = project_environment::validate(Language::Python, &missing_language);
-    let projected =
-        project_environment_diagnostics::diagnostics(&missing_language, &findings).unwrap();
-    assert_eq!(projected.len(), 1);
-    let finding = &projected[0];
-    assert_eq!(
-        (
-            finding.definition().phase,
-            finding.definition().condition,
-            finding.definition().requirement,
-        ),
-        (
-            "validation",
-            "project_environment_invalid",
-            Some("REQ-0695")
-        ),
-    );
-    assert_eq!(finding.spec_paths, ["language"]);
-    assert_eq!(finding.context["reason"], "missing_language");
-    assert_eq!(finding.source_span, None);
-    assert_eq!(finding.operand_route, None);
-    reached.insert(finding.code);
     for (failure, cause) in [
         (
             project_environment_diagnostics::ReadFailure::Missing,
