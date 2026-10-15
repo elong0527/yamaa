@@ -6,7 +6,9 @@ use yamaa_core::{
     function_invocation::{FailureKind, InvocationFailure},
     function_signature::ProjectFunctionIdentity,
     project_activation::{BindingFailure, TestFailure},
-    project_diagnostics::{self as projection, DefinitionSource, Error, Fact, HostDetails},
+    project_diagnostics::{
+        self as projection, DefinitionSource, Diagnostic, Error, Fact, HostDetails,
+    },
     value::{ColumnType, FiniteFloat, Value, ValueType},
 };
 
@@ -21,7 +23,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let host = Some(HostDetails::Exception {
         class: "ValueError",
         message: "unchanged",
-        truncated: false,
     });
     let mut reached = BTreeSet::new();
     for (kind, details, condition, requirement) in [
@@ -113,7 +114,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             error: &payload,
         }],
         &[host],
-        projection::MAX_DIAGNOSTIC_BYTES,
     )
     .unwrap();
     assert_eq!(binding[0].code, ConditionCode::ProjectEnvironmentInvalid);
@@ -126,14 +126,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         actual: actual.clone(),
         expected: function.definition().tests[0].result.clone(),
     }];
-    let diagnostic = projection::test_diagnostics(
-        &definitions,
-        &failures,
-        &[None],
-        projection::MAX_DIAGNOSTIC_BYTES,
-    )
-    .unwrap()
-    .remove(0);
+    let diagnostic = projection::test_diagnostics(&definitions, &failures, &[None])
+        .unwrap()
+        .remove(0);
     assert_eq!(diagnostic.spec_path, "functions.id.tests[0]");
     assert_eq!(
         diagnostic.context["reason"],
@@ -175,19 +170,134 @@ fn opaque_payloads_remain_borrowed_with_original_precedence() {
         function: 0,
         error: &payload,
     }];
-    let Err(Error::Opaque(held)) = projection::binding_diagnostics(
-        &definitions,
-        &failure,
-        &[None],
-        projection::MAX_DIAGNOSTIC_BYTES,
-    ) else {
+    let Err(Error::Opaque(held)) = projection::binding_diagnostics(&definitions, &failure, &[None])
+    else {
         panic!("opaque binding")
     };
     assert!(std::ptr::eq(*held, &payload));
 }
 
 #[test]
-fn late_contradictions_and_budget_exhaustion_return_no_partial_report() {
+fn complete_host_details_are_borrowed_in_runtime_binding_and_nested_case_diagnostics() {
+    let function = support::function("id");
+    let definition = function.definition();
+    let definitions = [DefinitionSource {
+        function: &function,
+        path: "functions.id",
+    }];
+    let class = "Exception".repeat(2048);
+    let message = "exact\0\u{e9}\u{1f642}".repeat(2048);
+    let reason = "invalid_native_result".repeat(1024);
+    let returned = "returned\0\u{e9}".repeat(2048);
+    for (host, fields) in [
+        (
+            HostDetails::Exception {
+                class: &class,
+                message: &message,
+            },
+            [
+                ("host_error", class.as_str()),
+                ("host_message", message.as_str()),
+            ],
+        ),
+        (
+            HostDetails::Rejected {
+                reason: &reason,
+                returned: Some(&returned),
+            },
+            [("reason", reason.as_str()), ("returned", returned.as_str())],
+        ),
+    ] {
+        let failure = InvocationFailure {
+            identity: ProjectFunctionIdentity {
+                name: "id".into(),
+                call: "project.id".into(),
+            },
+            kind: FailureKind::CallFailed(()),
+        };
+        let failures = [TestFailure::Invocation {
+            function: 0,
+            case: 0,
+            error: failure,
+        }];
+        let TestFailure::Invocation { error: failure, .. } = &failures[0] else {
+            unreachable!()
+        };
+        let context = [
+            ("function", Fact::Text("id")),
+            ("call", Fact::Text("project.id")),
+            (fields[0].0, Fact::Text(fields[0].1)),
+            (fields[1].0, Fact::Text(fields[1].1)),
+        ]
+        .into();
+        let diagnostic =
+            projection::invocation("columns.X.derivation", failure, None, &[], Some(host)).unwrap();
+        assert_eq!(
+            diagnostic,
+            Diagnostic {
+                code: ConditionCode::RuntimeFunctionCallFailed,
+                spec_path: "columns.X.derivation".into(),
+                context,
+            }
+        );
+        for (key, text) in fields {
+            let Fact::Text(held) = diagnostic.context[key] else {
+                panic!("borrowed host detail")
+            };
+            assert!(std::ptr::eq(held.as_ptr(), text.as_ptr()));
+        }
+        let binding = [BindingFailure {
+            function: 0,
+            error: (),
+        }];
+        assert_eq!(
+            projection::binding_diagnostics(&definitions, &binding, &[Some(host)]).unwrap(),
+            [Diagnostic {
+                code: ConditionCode::ProjectEnvironmentInvalid,
+                spec_path: "functions.id.function".into(),
+                context: diagnostic.context.clone(),
+            }]
+        );
+        assert_eq!(
+            projection::test_diagnostics(&definitions, &failures, &[Some(host)]).unwrap(),
+            [Diagnostic {
+                code: ConditionCode::FunctionConformanceFailed,
+                spec_path: "functions.id.tests[0]".into(),
+                context: [
+                    ("function", Fact::Text("id")),
+                    ("call", Fact::Text("project.id")),
+                    ("case", Fact::Text("normal")),
+                    (
+                        "args",
+                        Fact::Object([("x", Fact::Scalar(&definition.tests[0].args[0].1))].into())
+                    ),
+                    ("expected", Fact::Scalar(&definition.tests[0].result)),
+                    ("comparison_decimals", Fact::Integer(4)),
+                    (
+                        "reason",
+                        Fact::Text("the case failed before it produced a result")
+                    ),
+                    (
+                        "failure",
+                        Fact::Object(
+                            [
+                                ("phase", Fact::Text("derivation")),
+                                ("condition", Fact::Text("function_call_failed")),
+                                ("requirement", Fact::Text("REQ-0701")),
+                                ("context", Fact::Object(diagnostic.context)),
+                            ]
+                            .into()
+                        )
+                    ),
+                ]
+                .into(),
+            }]
+        );
+    }
+}
+
+#[test]
+fn late_contradictions_return_no_partial_report() {
     let function = support::function("id");
     let definitions = [DefinitionSource {
         function: &function,
@@ -210,17 +320,8 @@ fn late_contradictions_and_budget_exhaustion_return_no_partial_report() {
         },
     ];
     assert!(matches!(
-        projection::test_diagnostics(
-            &definitions,
-            &failures,
-            &[None, None],
-            projection::MAX_DIAGNOSTIC_BYTES
-        ),
+        projection::test_diagnostics(&definitions, &failures, &[None, None],),
         Err(Error::InvalidContext)
-    ));
-    assert!(matches!(
-        projection::test_diagnostics(&definitions, &failures[..1], &[None], 1),
-        Err(Error::Limit)
     ));
     let wrong = Value::Int(9);
     let failures: [TestFailure<()>; 1] = [TestFailure::Result {
@@ -230,12 +331,7 @@ fn late_contradictions_and_budget_exhaustion_return_no_partial_report() {
         expected: wrong.clone(),
     }];
     assert!(matches!(
-        projection::test_diagnostics(
-            &definitions,
-            &failures,
-            &[None],
-            projection::MAX_DIAGNOSTIC_BYTES
-        ),
+        projection::test_diagnostics(&definitions, &failures, &[None],),
         Err(Error::InvalidContext)
     ));
 }
@@ -261,13 +357,7 @@ fn nested_invocation_and_row_keys_preserve_borrowed_scalar_geometry() {
             },
         },
     }];
-    let diagnostics = projection::test_diagnostics(
-        &definitions,
-        &failures,
-        &[None],
-        projection::MAX_DIAGNOSTIC_BYTES,
-    )
-    .unwrap();
+    let diagnostics = projection::test_diagnostics(&definitions, &failures, &[None]).unwrap();
     let Fact::Object(held) = &diagnostics[0].context["failure"] else {
         panic!("nested borrowed diagnostic")
     };

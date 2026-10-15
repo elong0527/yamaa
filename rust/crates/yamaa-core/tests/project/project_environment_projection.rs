@@ -1,54 +1,18 @@
 use crate::support::project_environment as support;
 use serde_json::Value as CV;
-use std::{
-    alloc::{GlobalAlloc, Layout, System},
-    cell::Cell,
-    collections::BTreeMap,
-};
+use std::collections::BTreeMap;
 use yamaa_core::{
     diagnostic::{ConditionCode as C, Diagnostic},
     project_environment::{self, Draft, Finding, LockKind, LockReference},
     project_environment_diagnostics::{
         self,
-        projection::{self as p, Admission, Capture, Error, Limits, Origin, Root, ScalarSource},
+        projection::{self as p, Admission, Capture, Error, Origin, Root, ScalarSource},
     },
     project_function::{Case, Definition, Finding as F, Language, Parameter},
     project_function_document::{Finding as SF, Kind},
     schema::{Document, DocumentLimits, DocumentNode as N},
     value::{ColumnType, Value, ValueType},
 };
-struct Allocator;
-thread_local! { static TRACK: Cell<bool> = const { Cell::new(false) }; static COPIES: Cell<usize> = const { Cell::new(0) }; }
-unsafe impl GlobalAlloc for Allocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        TRACK.with(|track| {
-            if track.get() {
-                COPIES.with(|copies| copies.set(copies.get() + 1));
-            }
-        });
-        unsafe { System.alloc(layout) }
-    }
-    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
-        unsafe { System.dealloc(pointer, layout) }
-    }
-    unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8 {
-        TRACK.with(|track| {
-            if track.get() {
-                COPIES.with(|copies| copies.set(copies.get() + 1));
-            }
-        });
-        unsafe { System.realloc(pointer, layout, size) }
-    }
-}
-#[global_allocator]
-static ALLOCATOR: Allocator = Allocator;
-fn allocations<T>(f: impl FnOnce() -> T) -> (T, usize) {
-    COPIES.with(|count| count.set(0));
-    TRACK.with(|track| track.set(true));
-    let result = f();
-    TRACK.with(|track| track.set(false));
-    (result, COPIES.with(Cell::get))
-}
 fn document(nodes: Vec<N>) -> Document {
     let root = nodes.len() - 1;
     Document::new(nodes, root, DocumentLimits::default()).unwrap()
@@ -92,6 +56,118 @@ fn root_document(functions: &[(&str, bool)], codelists: &[bool]) -> Document {
 }
 fn text(value: &str) -> CV {
     CV::String(value.into())
+}
+
+#[test]
+fn captured_reports_keep_all_origins_beyond_the_old_descriptor_array() {
+    let mut draft = draft();
+    let template = draft.functions.take().unwrap().remove(0);
+    let names = (0..129)
+        .map(|index| format!("function_{index}"))
+        .collect::<Vec<_>>();
+    draft.functions = Some(
+        names
+            .iter()
+            .map(|name| {
+                let mut definition = template.clone();
+                definition.name = name.clone();
+                definition
+            })
+            .collect(),
+    );
+    let doc = root_document(
+        &names
+            .iter()
+            .map(|name| (name.as_str(), true))
+            .collect::<Vec<_>>(),
+        &[],
+    );
+    let captured = document(vec![
+        N::Integer("9223372036854775808".into()),
+        N::Text("result".into()),
+        N::Mapping(vec![(1, 0)]),
+    ]);
+    let identities = (0..names.len())
+        .map(|index| format!("held/function_{index}.yaml"))
+        .collect::<Vec<_>>();
+    let captures = names
+        .iter()
+        .zip(&identities)
+        .map(|(name, identity)| Capture {
+            origin: Origin::Function(name),
+            document: &captured,
+            identity,
+        })
+        .collect::<Vec<_>>();
+    let findings = (0..names.len())
+        .map(|function| Finding::Function {
+            function,
+            finding: F::InvalidCallable,
+        })
+        .collect::<Vec<_>>();
+    let root = Root {
+        document: &doc,
+        identity: "held/environment.yaml",
+    };
+    let report = p::admit_admission(
+        Admission {
+            root,
+            draft: &draft,
+            function_origins: &names,
+            codelist_origins: &[],
+            captures: captures.iter().copied(),
+        },
+        &findings,
+    )
+    .unwrap();
+    let want = names
+        .iter()
+        .zip(&identities)
+        .map(|(name, identity)| {
+            expected(
+                C::ProjectEnvironmentInvalid,
+                "function",
+                &[
+                    ("function", text(name)),
+                    ("reason", text("invalid_callable")),
+                ],
+                identity,
+                &format!("functions.{name}"),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(report.diagnostics().unwrap(), want);
+
+    let scalar = [SF {
+        node: 0,
+        path: "result".into(),
+        kind: Kind::IntegerRange,
+    }];
+    let report = p::admit_scalar_sources(
+        root,
+        captures.iter().map(|capture| ScalarSource {
+            capture: *capture,
+            findings: &scalar,
+        }),
+    )
+    .unwrap();
+    let want = names
+        .iter()
+        .zip(&identities)
+        .map(|(name, identity)| {
+            expected(
+                C::ProjectEnvironmentInvalid,
+                "result",
+                &[
+                    ("reason", text("integer_out_of_range")),
+                    ("value", CV::Number("9223372036854775808".parse().unwrap())),
+                ],
+                identity,
+                &format!("functions.{name}"),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(report.diagnostics().unwrap(), want);
 }
 fn expected(
     code: C,
@@ -169,7 +245,6 @@ fn independent_complete_eighteen_record_environment_report_preserves_every_field
             captures: std::iter::empty(),
         },
         &findings,
-        Limits::default(),
     )
     .unwrap()
     .diagnostics()
@@ -442,7 +517,6 @@ fn every_function_route_has_complete_independent_inline_and_external_context() {
                 captures: captures.into_iter(),
             },
             &findings,
-            Limits::default(),
         )
         .unwrap()
         .diagnostics()
@@ -486,72 +560,46 @@ fn every_function_route_has_complete_independent_inline_and_external_context() {
     }
 }
 #[test]
-fn independent_text_and_issue_limits_admit_no_owned_facts_even_on_late_refusal() {
-    let draft = draft();
-    let doc = root_document(&[("id", false)], &[]);
-    let names = ["id".into()];
-    let finding = Finding::Function {
-        function: 0,
-        finding: F::InvalidCallable,
-    };
-    let repeated = vec![finding.clone(); 50_000];
-    let input = || Admission {
-        root: Root {
-            document: &doc,
-            identity: "held/environment.yaml",
+fn retained_findings_keep_complete_context_without_a_copy_quota() {
+    let mut draft = draft();
+    let name = "f".repeat(16_384);
+    draft.functions.as_mut().unwrap()[0].name = name.clone();
+    let doc = root_document(&[(&name, false)], &[]);
+    let names = [name.clone()];
+    let findings = vec![
+        Finding::Function {
+            function: 0,
+            finding: F::InvalidCallable,
+        };
+        600
+    ];
+    let report = p::admit_admission(
+        Admission {
+            root: Root {
+                document: &doc,
+                identity: "held/environment.yaml",
+            },
+            draft: &draft,
+            function_origins: &names,
+            codelist_origins: &[],
+            captures: std::iter::empty(),
         },
-        draft: &draft,
-        function_origins: &names,
-        codelist_origins: &[],
-        captures: std::iter::empty(),
-    };
-    // This fixed independent raw text boundary is inherited from the legacy API.
-    assert!(p::admit_admission(
-        input(),
-        std::slice::from_ref(&finding),
-        Limits {
-            semantic_text_bytes: 181,
-            issue_bytes: usize::MAX
-        }
+        &findings,
     )
-    .is_ok());
-    let pair = [finding.clone(), finding.clone()];
-    let (semantic, copies) = allocations(|| {
-        p::admit_admission(
-            input(),
-            &pair,
-            Limits {
-                semantic_text_bytes: 361,
-                issue_bytes: usize::MAX,
-            },
-        )
-    });
-    // Finding fixture cloning above allocates no authored strings for this cause.
-    assert!(matches!(
-        semantic,
-        Err(Error::Core(project_environment_diagnostics::Error::Limit))
-    ));
-    assert_eq!(copies, 0);
-    let limits = Limits {
-        semantic_text_bytes: usize::MAX,
-        issue_bytes: 2_000,
-    };
-    assert!(p::admit_admission(input(), std::slice::from_ref(&finding), limits).is_ok());
-    let (late, copies) = allocations(|| p::admit_admission(input(), &repeated, limits));
-    assert!(matches!(late, Err(Error::IssueLimit)));
-    assert_eq!(copies, 0);
-    let (tiny, copies) = allocations(|| {
-        p::admit_admission(
-            input(),
-            &repeated,
-            Limits {
-                semantic_text_bytes: usize::MAX,
-                issue_bytes: 1,
-            },
-        )
-    });
-    assert!(matches!(tiny, Err(Error::IssueLimit)));
-    assert_eq!(copies, 0);
+    .unwrap();
+    let actual = report.diagnostics().unwrap();
+    let expected = expected(
+        C::ProjectEnvironmentInvalid,
+        &format!("functions.{name}.function"),
+        &[
+            ("function", text(&name)),
+            ("reason", text("invalid_callable")),
+        ],
+        "held/environment.yaml",
+        &format!("functions.{name}"),
+    );
+    assert_eq!(actual.len(), findings.len());
+    assert!(actual.iter().all(|diagnostic| diagnostic == &expected));
 }
 #[test]
 fn malformed_origin_relationships_and_wrong_held_nodes_refuse_explicitly() {
@@ -585,8 +633,7 @@ fn malformed_origin_relationships_and_wrong_held_nodes_refuse_explicitly() {
                     codelist_origins: &[],
                     captures: captures.into_iter()
                 },
-                &findings,
-                Limits::default()
+                &findings
             ),
             Err(Error::InvalidOrigin)
         ));
@@ -603,8 +650,7 @@ fn malformed_origin_relationships_and_wrong_held_nodes_refuse_explicitly() {
                 identity: "held/environment.yaml"
             },
             &scalar,
-            None,
-            Limits::default()
+            None
         ),
         Err(Error::Core(
             project_environment_diagnostics::Error::InvalidIndex
@@ -622,8 +668,7 @@ fn malformed_origin_relationships_and_wrong_held_nodes_refuse_explicitly() {
                 identity: "held/environment.yaml"
             },
             &scalar,
-            None,
-            Limits::default()
+            None
         ),
         Err(Error::Core(
             project_environment_diagnostics::Error::UnavailableShape
@@ -651,8 +696,7 @@ fn root_headers_and_wide_scalars_are_one_admitted_complete_report() {
         document: &doc,
         identity: "held/environment.yaml",
     };
-    let report =
-        p::admit_root_scalars(root, &findings, Some(Language::Python), Limits::default()).unwrap();
+    let report = p::admit_root_scalars(root, &findings, Some(Language::Python)).unwrap();
     assert_eq!(
         report.diagnostics().unwrap(),
         [
@@ -685,15 +729,6 @@ fn root_headers_and_wide_scalars_are_one_admitted_complete_report() {
             )
         ]
     );
-    let limits = Limits {
-        issue_bytes: 2_000,
-        ..Default::default()
-    };
-    assert!(p::admit_root_scalars(root, &findings, None, limits).is_ok());
-    let (all, copies) =
-        allocations(|| p::admit_root_scalars(root, &findings, Some(Language::Python), limits));
-    assert!(matches!(all, Err(Error::IssueLimit)));
-    assert_eq!(copies, 0);
 }
 #[test]
 fn scalar_sources_admit_all_captures_before_copying_and_keep_authored_holes() {
@@ -730,16 +765,7 @@ fn scalar_sources_admit_all_captures_before_copying_and_keep_authored_holes() {
             findings: &findings,
         },
     ];
-    let limits = Limits {
-        issue_bytes: 2_000,
-        ..Default::default()
-    };
-    assert!(p::admit_scalar_sources(root, sources[..1].iter().copied(), limits).is_ok());
-    let (all, copies) =
-        allocations(|| p::admit_scalar_sources(root, sources.iter().copied(), limits));
-    assert!(matches!(all, Err(Error::IssueLimit)));
-    assert_eq!(copies, 0);
-    let result = p::admit_scalar_sources(root, sources.iter().copied(), Limits::default())
+    let result = p::admit_scalar_sources(root, sources.iter().copied())
         .unwrap()
         .diagnostics()
         .unwrap();
@@ -818,7 +844,6 @@ fn immutable_capture_descriptor_handles_consume_non_clone_input_exactly_once() {
             },
         },
         &findings,
-        Limits::default(),
     )
     .unwrap();
     assert_eq!(calls.get(), 2);
@@ -881,7 +906,6 @@ fn two_hundred_inline_functions_keep_all_six_hundred_independent_findings_in_ord
             captures: std::iter::empty(),
         },
         &findings,
-        Limits::default(),
     )
     .unwrap();
     let mut want = vec![];

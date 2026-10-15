@@ -2,7 +2,7 @@ use crate::support::project_environment as support;
 use serde_json::Value as JsonValue;
 use yamaa_core::{
     project_environment::{self, Draft, Finding, LockKind, LockReference},
-    project_environment_diagnostics::{diagnostics, diagnostics_with_text_limit, Error},
+    project_environment_diagnostics::{diagnostics, Error},
     project_function::{Case, Definition, Finding as F, Language, Parameter},
     value::{ColumnType, Value, ValueType},
 };
@@ -236,28 +236,35 @@ fn every_function_field_route_preserves_authored_indices_and_exact_scalar_kinds(
     }
 }
 #[test]
-fn cumulative_projection_limits_count_paths_context_and_repeated_findings_before_copying() {
-    let draft = draft();
-    let finding = Finding::Function {
-        function: 0,
-        finding: F::InvalidCallable,
+fn repeated_findings_keep_complete_context_without_a_copy_quota() {
+    use yamaa_core::diagnostic::{ConditionCode, Diagnostic};
+    let mut draft = draft();
+    let name = "f".repeat(16_384);
+    draft.functions.as_mut().unwrap()[0].name = name.clone();
+    let findings = vec![
+        Finding::Function {
+            function: 0,
+            finding: F::InvalidCallable,
+        };
+        600
+    ];
+    let actual = diagnostics(&draft, &findings).unwrap();
+    let expected = Diagnostic {
+        code: ConditionCode::ProjectEnvironmentInvalid,
+        spec_paths: vec![format!("functions.{name}.function")],
+        context: [
+            ("function".into(), JsonValue::String(name)),
+            (
+                "reason".into(),
+                JsonValue::String("invalid_callable".into()),
+            ),
+        ]
+        .into(),
+        source_span: None,
+        operand_route: None,
     };
-    // 128 fixed bytes + 10 path prefix + 2 name + 9 suffix + 8 key + 2 name
-    // + 6 reason key + 16 reason bytes = 181 bytes.
-    let exact = 181;
-    assert_eq!(
-        diagnostics_with_text_limit(&draft, std::slice::from_ref(&finding), exact - 1),
-        Err(Error::Limit)
-    );
-    assert!(diagnostics_with_text_limit(&draft, std::slice::from_ref(&finding), exact).is_ok());
-    assert_eq!(
-        diagnostics_with_text_limit(&draft, &[finding.clone(), finding], exact * 2 - 1),
-        Err(Error::Limit)
-    );
-    assert_eq!(
-        diagnostics_with_text_limit(&draft, &vec![Finding::MissingLanguage; 65_537], usize::MAX),
-        Err(Error::Limit)
-    );
+    assert_eq!(actual.len(), findings.len());
+    assert!(actual.iter().all(|diagnostic| diagnostic == &expected));
 }
 #[test]
 fn invalid_held_indices_refuse_projection_without_inventing_a_semantic_diagnostic() {
