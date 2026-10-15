@@ -37,7 +37,9 @@ pub(super) fn convert(decoded: Decoded) -> Result<ArrowTable, Error> {
         for array in batch.columns() {
             if let Some(strings) = array.as_any().downcast_ref::<LargeStringArray>() {
                 // The canonical representation uses signed 32-bit offsets.
-                if !super::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len())) {
+                if !crate::arrow_table::fits_utf8_offsets(
+                    strings.iter().flatten().map(|text| text.len()),
+                ) {
                     return Err(Error::Representation);
                 }
             }

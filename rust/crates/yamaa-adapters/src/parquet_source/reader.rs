@@ -195,7 +195,9 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
                             .transpose()
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                if !super::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len())) {
+                if !crate::arrow_table::fits_utf8_offsets(
+                    strings.iter().flatten().map(|text| text.len()),
+                ) {
                     return Err(Error::Representation);
                 }
                 if matches!(arrow_schema.field(index).data_type(), DataType::LargeUtf8) {
@@ -277,7 +279,7 @@ fn odm_decoded(
         if strings.len() != row_count {
             return Err(Error::Malformed);
         }
-        if !super::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len())) {
+        if !crate::arrow_table::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len())) {
             return Err(Error::Representation);
         }
         arrays.push(Arc::new(StringArray::from(strings)));

@@ -18,7 +18,7 @@ mod shape;
 mod table;
 mod type_name;
 
-use crate::arrow_table::{ArrowTable, TableError};
+use crate::arrow_table::{ArrowTable, TableError, UTF8_OFFSETS};
 
 /// Typed adapter failures; the consuming frontend supplies diagnostic location.
 #[derive(Debug)]
@@ -91,7 +91,7 @@ impl From<reader::Error> for Error {
         match error {
             reader::Error::OdmFields(fields) => Self::OdmFields(fields),
             reader::Error::Representation => Self::Representation {
-                representation: "Arrow Utf8 signed 32-bit offsets",
+                representation: UTF8_OFFSETS,
             },
             reader::Error::Malformed | reader::Error::Profile(profile::Error::Invalid) => {
                 Self::Malformed
@@ -122,16 +122,6 @@ impl From<reader::Error> for Error {
     }
 }
 
-/// Each canonical string array stores its cumulative text offsets as `i32`.
-fn fits_utf8_offsets(lengths: impl IntoIterator<Item = usize>) -> bool {
-    lengths
-        .into_iter()
-        .try_fold(0i32, |offset, length| {
-            offset.checked_add(i32::try_from(length).ok()?)
-        })
-        .is_some()
-}
-
 /// Decode every physical chunk before reporting closed-profile findings. The
 /// resulting snapshot owns its values independently of `content`. Empty strings
 /// remain present here; input declarations apply missing-string policy later.
@@ -149,7 +139,7 @@ fn convert(decoded: reader::Decoded) -> Result<ArrowTable, Error> {
     table::convert(decoded).map_err(|error| match error {
         table::Error::Invalid => Error::Malformed,
         table::Error::Representation => Error::Representation {
-            representation: "Arrow Utf8 signed 32-bit offsets",
+            representation: UTF8_OFFSETS,
         },
         table::Error::Table(error) => Error::Table(error),
     })
@@ -160,12 +150,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn canonical_utf8_offsets_accept_the_signed_width_and_refuse_larger_valid_text() {
-        assert!(fits_utf8_offsets([i32::MAX as usize - 1]));
-        assert!(fits_utf8_offsets([i32::MAX as usize - 1, 1]));
-        assert!(!fits_utf8_offsets([i32::MAX as usize, 1]));
-        assert!(!fits_utf8_offsets([usize::MAX, 1]));
-
+    fn unsupported_text_representation_has_no_invalid_parquet_finding() {
         let error = Error::from(reader::Error::Representation);
         assert!(matches!(
             error,
