@@ -63,10 +63,12 @@ pub(crate) fn portable_definition(
         context.into(),
     )
 }
-/// Project complete retained compiler and codec findings without repeating source reads.
-pub fn findings(
+/// Complete ingestion reports are admitted in core before copying codec facts.
+/// Other existing preparation/binding projections retain their admission policy.
+pub fn findings_with_limit(
     error: &Error,
     source: Option<&SourceDeclaration>,
+    maximum: usize,
 ) -> Result<Option<Vec<Value>>, crate::source_diagnostics::SourceProjectionError> {
     match error {
         Error::Sources(_)
@@ -76,9 +78,10 @@ pub fn findings(
         | Error::Source(_)
         | Error::Ordinal(_)
         | Error::OdmFields(_)
-        | Error::OdmValues(_)
-        | Error::ProducerMetadata(_) => Ok(crate::source_diagnostics::findings(error, source)?
-            .map(|findings| findings.into_iter().map(portable_diagnostic).collect())),
+        | Error::OdmValues(_) => Ok(crate::source_diagnostics::findings_with_limit(
+            error, source, maximum,
+        )?
+        .map(|findings| findings.into_iter().map(portable_diagnostic).collect())),
         Error::Prepare(PrepareError::Invalid(errors)) => {
             Ok(Some(errors.iter().map(preparing).collect()))
         }
@@ -91,12 +94,19 @@ pub fn findings(
 /// unsupported vocabulary and resource/internal rejection; no Debug text leaks.
 /// This envelope is not the final whole-run conformance report.
 pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
-    let projected = findings(error, source);
+    let projected =
+        findings_with_limit(error, source, yamaa_core::diagnostic::MAX_PROJECTION_BYTES);
     let outcome = if let Err(error) = projected {
         let code = match error {
-            crate::source_diagnostics::SourceProjectionError::InvalidContext => {
-                "diagnostic_context"
+            crate::source_diagnostics::SourceProjectionError::TraversalLimit => {
+                "diagnostic_traversal_limit"
             }
+            crate::source_diagnostics::SourceProjectionError::Context(
+                yamaa_core::diagnostic::ProjectionError::Limit,
+            ) => "diagnostic_context_limit",
+            crate::source_diagnostics::SourceProjectionError::Context(
+                yamaa_core::diagnostic::ProjectionError::InvalidContext,
+            ) => "diagnostic_context",
         };
         json!({"status":"rejected","stage":"ingest","code":code})
     } else if let Ok(Some(diagnostics)) = projected {
@@ -132,7 +142,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             })) => ("ingest", "table_limit"),
             Error::Source(_) => ("ingest", "internal"),
             Error::TypedSource(_) => ("ingest", "source_boundary"),
-            Error::ParquetSource(crate::parquet_source::Error::ResourceLimit { .. }) => {
+            Error::ParquetSource(crate::parquet_source::Error::Limit) => {
                 ("ingest", "parquet_limit")
             }
             Error::ParquetSource(crate::parquet_source::Error::Unavailable { .. }) => {
@@ -145,15 +155,15 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             Error::Bind(BindError::Catalog(_)) => ("bind", "reference_catalog"),
             Error::Bind(BindError::DependencyPolicy(_)) => ("bind", "dependency_policy"),
             Error::Bind(BindError::SourceCount) => ("bind", "source_count"),
-            Error::Bind(BindError::InvalidDiagnostic) => ("bind", "diagnostic_context"),
+            Error::Bind(BindError::PredicateDiagnosticLimit) => {
+                ("bind", "predicate_diagnostic_limit")
+            }
             Error::Bind(_) => ("bind", "internal"),
             Error::Execution(error) if error.is_internal() => ("execute", "internal"),
             Error::Execution(_) => ("execute", "execution_boundary"),
             Error::ResourceLimit(_) => ("ingest", "source_limit"),
             Error::Sources(_) => ("ingest", "source_collection_boundary"),
             Error::OdmFields(_) | Error::OdmValues(_) => ("ingest", "odm_projection_boundary"),
-            Error::ProducerContract(_) => ("ingest", "producer_contract"),
-            Error::ProducerMetadata(_) => ("ingest", "producer_metadata"),
         };
         json!({"status":"rejected","stage":stage,"code":code})
     };
@@ -170,13 +180,36 @@ pub(crate) fn preparation_outcome(error: &PrepareError) -> Value {
         }
         return outcome;
     }
-    if let PrepareError::Numeric {
-        path,
-        error: yamaa_core::numeric_parser::ParseError::Limit { limit, .. },
-    } = error
-    {
-        return json!({"status":"rejected","stage":"prepare","code":"numeric_policy",
-            "resource":"semantic_depth","limit":limit,"spec_paths":[path]});
+    if let PrepareError::Numeric { path, error } = error {
+        use yamaa_core::{
+            numeric_compiler::CompileError,
+            numeric_parser::{ParseError, ParseResource},
+        };
+        let bound = match error {
+            CompileError::ResolutionLimit { limit, required } => {
+                Some(("resolutions", *limit, Some(*required)))
+            }
+            CompileError::Parse(ParseError::Limit {
+                resource, limit, ..
+            }) => {
+                let resource = match resource {
+                    ParseResource::Bytes => "bytes",
+                    ParseResource::Tokens => "tokens",
+                    ParseResource::Nodes => "nodes",
+                    ParseResource::Depth => "depth",
+                };
+                Some((resource, *limit, None))
+            }
+            _ => None,
+        };
+        if let Some((resource, limit, actual)) = bound {
+            let mut outcome = json!({"status":"rejected","stage":"prepare","code":"numeric_policy",
+                "resource":resource,"limit":limit,"spec_paths":[path]});
+            if let Some(actual) = actual {
+                outcome["actual"] = json!(actual);
+            }
+            return outcome;
+        }
     }
     let code = match error {
         PrepareError::Numeric { .. } => "numeric_policy",
@@ -193,9 +226,10 @@ pub(crate) fn compiler_failure(error: &PrepareError) -> crate::file_application:
 }
 
 fn capture_response(outcome: Value) -> String {
-    crate::yaml_diagnostics::encode_outcome("specification/prototype", outcome)
+    crate::yaml_diagnostics::encode_outcome("specification/prototype", outcome, 16_777_216)
+        .unwrap_or_else(|_| json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":"diagnostic_context_limit"}}).to_string())
 }
-pub(super) fn decoder_limit(limit: &yamaa_core::limits::LimitExceeded, stage: &str) -> Value {
+pub(super) fn decoder_limit(limit: &crate::yaml_decode::ResourceLimit, stage: &str) -> Value {
     let mut outcome = json!({"status":"resource_limit","stage":stage,"phase":"yaml_decode",
         "resource":limit.resource,"limit":limit.limit});
     if let Some(actual) = limit.actual {
@@ -207,14 +241,6 @@ pub(super) fn decoder_limit(limit: &yamaa_core::limits::LimitExceeded, stage: &s
 /// Findings resolve against the retained schema/pass input or the shared YAML decoder.
 pub fn capture_failure(error: &crate::specification_source::Error) -> String {
     use crate::specification_source::Error;
-    if let Error::Limit(limit) = error {
-        let mut outcome = json!({"status":"resource_limit","stage":"capture","phase":"capture",
-            "resource":limit.resource,"limit":limit.limit});
-        if let Some(actual) = limit.actual {
-            outcome["actual"] = json!(actual);
-        }
-        return capture_response(outcome);
-    }
     if let Error::Decode {
         error: crate::yaml_decode::DecodeFailure::Limit(limit),
         ..
@@ -243,6 +269,7 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> String {
             }
             Err(error) => {
                 let code = match error {
+                    captured_schema::Error::Limit => "diagnostic_context_limit",
                     captured_schema::Error::InvalidContext => "diagnostic_context",
                 };
                 capture_response(json!({"status":"rejected","stage":"capture","code":code}))
@@ -250,7 +277,7 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> String {
         };
     }
     let code = match error {
-        Error::Limit(_) => unreachable!("handled physical capture refusal"),
+        Error::Limit(_) => "capture_limit",
         Error::Decode { .. } => "yaml_decode",
         Error::Bundle(_) => "schema_bundle",
         Error::Normalize(_) => "normalization",
@@ -280,17 +307,19 @@ pub use inherited::failure_ref as inheritance_failure_ref;
 
 mod captured_schema;
 
-pub(crate) use captured_schema::Error as CapturedProjectionError;
-/// Resolve findings against the exact held schema and input arena.
+pub(crate) use captured_schema::{Budget as CapturedBudget, Error as CapturedProjectionError};
+/// Reuse the same held schema/input resolver with an aggregate caller-owned budget.
 pub(crate) fn captured_findings(
     captured: &crate::specification_source::CapturedFindings,
     source_context: &[(&str, &str)],
+    budget: &mut CapturedBudget,
 ) -> Result<Vec<Value>, CapturedProjectionError> {
-    captured_schema::schema_findings(
+    captured_schema::schema_findings_with_budget(
         captured.schema().structure(),
         captured.document(),
         captured.findings(),
         source_context,
+        budget,
     )
 }
 
@@ -298,46 +327,33 @@ pub(crate) fn captured_findings(
 mod resource_refusal_tests {
     use super::*;
     #[test]
-    fn capture_preserves_fixed_decoder_and_normalization_refusals() {
+    fn capture_preserves_nondefault_decoder_and_normalization_bounds() {
         use crate::specification_source::Error;
-        use yamaa_core::{
-            limits::Limits,
-            schema::{NormalizationError, NormalizationResource},
-        };
+        use yamaa_core::schema::{NormalizationError, NormalizationResource};
         for (error, phase, resource, bound) in [
-            (
-                Error::Limit(yamaa_core::limits::LimitExceeded {
-                    resource: "spec_bytes",
-                    limit: Limits::SPEC_BYTES,
-                    actual: Some(Limits::SPEC_BYTES + 1),
-                }),
-                "capture",
-                "spec_bytes",
-                Limits::SPEC_BYTES,
-            ),
             (
                 Error::Decode {
                     identity: "spec.yaml".into(),
                     error: crate::yaml_decode::DecodeFailure::Limit(
-                        yamaa_core::limits::LimitExceeded {
-                            resource: "spec_bytes",
-                            limit: Limits::SPEC_BYTES,
-                            actual: Some(Limits::SPEC_BYTES + 1),
+                        crate::yaml_decode::ResourceLimit {
+                            resource: "events",
+                            limit: 7,
+                            actual: Some(8),
                         },
                     ),
                 },
                 "yaml_decode",
-                "spec_bytes",
-                Limits::SPEC_BYTES,
+                "events",
+                7,
             ),
             (
                 Error::Normalize(NormalizationError::Limit {
-                    resource: NormalizationResource::Depth,
-                    limit: Limits::SEMANTIC_DEPTH,
+                    resource: NormalizationResource::Nodes,
+                    limit: 3,
                 }),
                 "normalization",
-                "semantic_depth",
-                Limits::SEMANTIC_DEPTH,
+                "nodes",
+                3,
             ),
         ] {
             let value: Value = serde_json::from_str(&capture_failure(&error)).unwrap();
@@ -347,27 +363,6 @@ mod resource_refusal_tests {
             assert_eq!(outcome["phase"], phase);
             assert_eq!(outcome["resource"], resource);
             assert_eq!(outcome["limit"], bound);
-            if resource == "spec_bytes" {
-                assert_eq!(outcome["actual"], Limits::SPEC_BYTES + 1);
-            } else {
-                assert!(outcome.get("actual").is_none());
-            }
         }
-    }
-    #[test]
-    fn numeric_preparation_keeps_fixed_semantic_depth_and_authored_path() {
-        let expression = format!("{}1{}", "(".repeat(129), ")".repeat(129));
-        let error = PrepareError::Numeric {
-            path: "columns.VALUE.derivation.compute.expr".into(),
-            error: yamaa_core::numeric_parser::parse_numeric(&expression).unwrap_err(),
-        };
-        assert_eq!(
-            preparation_outcome(&error),
-            json!({
-                "status":"rejected", "stage":"prepare", "code":"numeric_policy",
-                "resource":"semantic_depth", "limit":128,
-                "spec_paths":["columns.VALUE.derivation.compute.expr"]
-            })
-        );
     }
 }

@@ -1,10 +1,23 @@
-//! Borrowed Compact Protocol framing for Parquet metadata and pages.
+//! Bounded, borrowed Compact Protocol framing for Parquet metadata/page admission.
 //! Format: https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
-//! Parquet still validates its own schema.
+//! This admits framing and allocation work; Parquet still validates its own schema.
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Limits {
+    pub nodes: usize,
+    pub depth: usize,
+    pub bytes: usize,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Error {
     Malformed,
+    Limit,
+    ResourceLimit {
+        resource: &'static str,
+        limit: usize,
+        actual: Option<usize>,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -36,13 +49,21 @@ impl<'a> Value<'a> {
 struct Reader<'a> {
     bytes: &'a [u8],
     position: usize,
+    nodes: usize,
+    limits: Limits,
 }
 
 impl<'a> Reader<'a> {
     fn take(&mut self, count: usize) -> Result<&'a [u8], Error> {
         let end = self.position.checked_add(count).ok_or(Error::Malformed)?;
         let value = self.bytes.get(self.position..end).ok_or(Error::Malformed)?;
-
+        if end > self.limits.bytes {
+            return Err(Error::ResourceLimit {
+                resource: "compact_bytes",
+                limit: self.limits.bytes,
+                actual: Some(end),
+            });
+        }
         self.position = end;
         Ok(value)
     }
@@ -79,10 +100,22 @@ impl<'a> Reader<'a> {
         usize::try_from(count).map_err(|_| Error::Malformed)
     }
 
-    fn nesting(depth: usize) -> Result<(), Error> {
-        if depth > yamaa_core::limits::Limits::SEMANTIC_DEPTH {
-            return Err(Error::Malformed);
+    fn node(&mut self, depth: usize) -> Result<(), Error> {
+        if depth > self.limits.depth {
+            return Err(Error::ResourceLimit {
+                resource: "compact_depth",
+                limit: self.limits.depth,
+                actual: Some(depth),
+            });
         }
+        if self.nodes >= self.limits.nodes {
+            return Err(Error::ResourceLimit {
+                resource: "compact_nodes",
+                limit: self.limits.nodes,
+                actual: self.nodes.checked_add(1),
+            });
+        }
+        self.nodes += 1;
         Ok(())
     }
 
@@ -92,13 +125,19 @@ impl<'a> Reader<'a> {
         if count > self.bytes.len() - self.position {
             return Err(Error::Malformed);
         }
-
+        if count > self.limits.nodes - self.nodes {
+            return Err(Error::ResourceLimit {
+                resource: "compact_nodes",
+                limit: self.limits.nodes,
+                actual: self.nodes.checked_add(count),
+            });
+        }
         Ok(())
     }
 
     fn element(&mut self, kind: u8, depth: usize) -> Result<Value<'a>, Error> {
         if kind == 1 {
-            Self::nesting(depth)?;
+            self.node(depth)?;
             return match self.byte()? {
                 1 => Ok(Value::Bool(true)),
                 2 => Ok(Value::Bool(false)),
@@ -112,7 +151,7 @@ impl<'a> Reader<'a> {
     }
 
     fn value(&mut self, kind: u8, depth: usize) -> Result<Value<'a>, Error> {
-        Self::nesting(depth)?;
+        self.node(depth)?;
         Ok(match kind {
             1 => Value::Bool(true),
             2 => Value::Bool(false),
@@ -190,17 +229,36 @@ impl<'a> Reader<'a> {
     }
 }
 
-/// Parse one struct prefix; return its exact extent for page-body slicing.
-/// Binary payloads borrow the held input and collection counts must fit it.
-pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
-    let mut reader = Reader { bytes, position: 0 };
+/// Parse one struct prefix; return its exact byte extent for page-body slicing.
+/// Binary payloads borrow the held input. The node budget bounds all owned AST
+/// collections before count-driven work; no allocation uses an unchecked count.
+pub(super) fn parse(bytes: &[u8], limits: Limits) -> Result<(Value<'_>, usize, usize), Error> {
+    // Bound recursion independently of caller policy so a trusted but overly
+    // permissive request cannot turn malformed nesting into a stack overflow.
+    let limits = Limits {
+        depth: limits.depth.min(64),
+        ..limits
+    };
+    let mut reader = Reader {
+        bytes,
+        position: 0,
+        nodes: 0,
+        limits,
+    };
     let value = reader.value(12, 0)?;
-    Ok((value, reader.position))
+    Ok((value, reader.position, reader.nodes))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn limits() -> Limits {
+        Limits {
+            nodes: 128,
+            depth: 8,
+            bytes: 256,
+        }
+    }
 
     #[test]
     fn authored_fields_boolean_elements_and_borrowed_binary() {
@@ -210,8 +268,9 @@ mod tests {
             0x15, 0xac, 0x02, 0x48, 3, 0xff, 0, 0x61, 0x12, 0x19, 0x21, 1, 2, 0x1b, 1, 0x3c, 0xff,
             0, 0, 0x99,
         ];
-        let (root, used) = parse(&data).unwrap();
+        let (root, used, nodes) = parse(&data, limits()).unwrap();
         assert_eq!(used, 19);
+        assert_eq!(nodes, 10);
         assert_eq!(root.field(1), Some(&Value::Integer(150)));
         assert_eq!(root.field(5), Some(&Value::Binary(&data[5..8])));
         if let Some(Value::Binary(bytes)) = root.field(5) {
@@ -242,7 +301,7 @@ mod tests {
             0x06, 2, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 1, 0x06, 2, 0xfe, 0xff,
             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 1, 0,
         ];
-        let (value, used) = parse(&data).unwrap();
+        let (value, used, _) = parse(&data, limits()).unwrap();
         assert_eq!(used, data.len());
         let Value::Struct(fields) = &value else {
             panic!();
@@ -267,21 +326,109 @@ mod tests {
             vec![0x14, 0x80, 0x80, 4, 0],
             vec![0x05, 0xfe, 0xff, 3, 0, 0x15, 0, 0],
         ] {
-            assert_eq!(parse(&data), Err(Error::Malformed), "{data:?}");
+            assert_eq!(parse(&data, limits()), Err(Error::Malformed), "{data:?}");
         }
     }
 
     #[test]
-    fn unknown_collections_and_shared_recursion_guard_are_checked() {
-        assert!(parse(&[0x19, 0x3c, 0, 0, 0, 0]).is_ok());
-        assert!(parse(&[0x19, 0, 0]).is_ok());
-        for (depth, accepted) in [
-            (yamaa_core::limits::Limits::SEMANTIC_DEPTH - 1, true),
-            (yamaa_core::limits::Limits::SEMANTIC_DEPTH + 1, false),
-        ] {
-            let mut nested = vec![0x1c; depth];
-            nested.extend(vec![0; depth + 1]);
-            assert_eq!(parse(&nested).is_ok(), accepted);
-        }
+    fn policy_limits_are_distinct_and_include_unknown_nested_fields() {
+        let data = [0x19, 0x3c, 0, 0, 0, 0]; // Three empty structs in a list.
+        assert!(parse(
+            &data,
+            Limits {
+                nodes: 5,
+                ..limits()
+            }
+        )
+        .is_ok());
+        assert_eq!(
+            parse(
+                &data,
+                Limits {
+                    nodes: 4,
+                    ..limits()
+                }
+            ),
+            Err(Error::ResourceLimit {
+                resource: "compact_nodes",
+                limit: 4,
+                actual: Some(5),
+            })
+        );
+        assert!(parse(
+            &data,
+            Limits {
+                bytes: 6,
+                ..limits()
+            }
+        )
+        .is_ok());
+        assert_eq!(
+            parse(
+                &data,
+                Limits {
+                    bytes: 5,
+                    ..limits()
+                }
+            ),
+            Err(Error::ResourceLimit {
+                resource: "compact_bytes",
+                limit: 5,
+                actual: Some(6),
+            })
+        );
+        assert!(parse(
+            &data,
+            Limits {
+                depth: 2,
+                ..limits()
+            }
+        )
+        .is_ok());
+        assert_eq!(
+            parse(
+                &data,
+                Limits {
+                    depth: 1,
+                    ..limits()
+                }
+            ),
+            Err(Error::ResourceLimit {
+                resource: "compact_depth",
+                limit: 1,
+                actual: Some(2),
+            })
+        );
+        assert_eq!(
+            parse(
+                &[0],
+                Limits {
+                    nodes: 0,
+                    ..limits()
+                }
+            ),
+            Err(Error::ResourceLimit {
+                resource: "compact_nodes",
+                limit: 0,
+                actual: Some(1),
+            })
+        );
+        let mut nested = vec![0x1c; 65];
+        nested.extend(vec![0; 66]);
+        assert_eq!(
+            parse(
+                &nested,
+                Limits {
+                    depth: usize::MAX,
+                    ..limits()
+                }
+            ),
+            Err(Error::ResourceLimit {
+                resource: "compact_depth",
+                limit: 64,
+                actual: Some(65),
+            })
+        );
+        assert!(parse(&[0x19, 0, 0], limits()).is_ok());
     }
 }

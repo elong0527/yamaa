@@ -2,7 +2,7 @@ use super::*;
 use DocumentNode as N;
 
 fn decode(source: &str) -> DecodedYaml {
-    decode_yaml(source.as_bytes()).unwrap()
+    decode_yaml(source.as_bytes(), DecodeLimits::default()).unwrap()
 }
 
 fn scalar(source: &str) -> N {
@@ -38,7 +38,7 @@ fn compact_flow_pairs_keep_nested_mapping_entries() {
 }
 
 fn error(source: &str) -> DecodeFailure {
-    decode_yaml(source.as_bytes()).unwrap_err()
+    decode_yaml(source.as_bytes(), DecodeLimits::default()).unwrap_err()
 }
 
 fn yaml_error(source: &str, line: usize, column: usize, reason: &str) {
@@ -151,7 +151,7 @@ fn implicit_empty_mapping_keys_share_null_duplicate_identity() {
         "found duplicate key 'None'",
     );
     yaml_error(": first\n~: second\n", 2, 1, "found duplicate key 'None'");
-    assert!(decode_yaml(b"'': text\n: empty\n").is_ok());
+    assert!(decode_yaml(b"'': text\n: empty\n", DecodeLimits::default()).is_ok());
 }
 
 #[test]
@@ -275,7 +275,7 @@ fn numeric_and_nonfinite_duplicate_identity_is_shared_with_core() {
             &format!("found duplicate key '{label}'"),
         );
     }
-    assert!(decode_yaml(b"{'1': a, 1: b, .5: c, -.5: d}").is_ok());
+    assert!(decode_yaml(b"{'1': a, 1: b, .5: c, -.5: d}", DecodeLimits::default()).is_ok());
 }
 
 #[test]
@@ -342,7 +342,7 @@ fn forbidden_metadata_reports_its_prefix_and_precedes_later_errors() {
 #[test]
 fn merge_key_style_and_non_scalar_keys_are_checked() {
     yaml_error("x: {<<: 1}\n", 1, 5, "YAML merge keys are not allowed");
-    assert!(decode_yaml(b"x: {'<<': 1}\ny: <<\n").is_ok());
+    assert!(decode_yaml(b"x: {'<<': 1}\ny: <<\n", DecodeLimits::default()).is_ok());
     yaml_error("? [a]\n: 1\n", 1, 3, "a mapping key must be a scalar");
     yaml_error("? {a: 1}\n: 2\n", 1, 3, "a mapping key must be a scalar");
 }
@@ -419,7 +419,97 @@ fn private_use_keys_remain_distinct_from_recovered_invalid_keys() {
 }
 
 #[test]
-fn duplicate_key_reasons_keep_the_complete_original_text() {
+fn document_and_numeric_quotas_fail_explicitly_and_fresh_retry_succeeds() {
+    let limits = DecodeLimits {
+        numeric_digits: 3,
+        ..DecodeLimits::default()
+    };
+    for source in ["1234", "0xffff", "0o7777", "1.234", "1e9999"] {
+        assert_decode_limit(
+            decode_yaml(source.as_bytes(), limits).unwrap_err(),
+            "numeric_digits",
+            limits.numeric_digits,
+        );
+    }
+    assert!(decode_yaml(b"'1234'", limits).is_ok());
+    for (source, document, resource) in [
+        (
+            "x",
+            DocumentLimits {
+                nodes: 0,
+                ..DocumentLimits::default()
+            },
+            "nodes",
+        ),
+        (
+            "text",
+            DocumentLimits {
+                text_bytes: 3,
+                ..DocumentLimits::default()
+            },
+            "text_bytes",
+        ),
+        (
+            "[1, 2]",
+            DocumentLimits {
+                edges: 1,
+                ..DocumentLimits::default()
+            },
+            "edges",
+        ),
+        (
+            "[[1]]",
+            DocumentLimits {
+                depth: 2,
+                ..DocumentLimits::default()
+            },
+            "depth",
+        ),
+        (
+            r#"[["\uD800"]]"#,
+            DocumentLimits {
+                depth: 2,
+                ..DocumentLimits::default()
+            },
+            "depth",
+        ),
+    ] {
+        assert_decode_limit(
+            decode_yaml(
+                source.as_bytes(),
+                DecodeLimits {
+                    document,
+                    ..DecodeLimits::default()
+                },
+            )
+            .unwrap_err(),
+            resource,
+            match resource {
+                "nodes" => document.nodes,
+                "text_bytes" => document.text_bytes,
+                "edges" => document.edges,
+                "depth" => document.depth.min(64),
+                _ => unreachable!(),
+            },
+        );
+    }
+    assert_decode_limit(
+        decode_yaml(
+            br#"["\uD800"]"#,
+            DecodeLimits {
+                diagnostic_bytes: 1,
+                ..DecodeLimits::default()
+            },
+        )
+        .unwrap_err(),
+        "diagnostic_bytes",
+        1,
+    );
+    assert_eq!(scalar("1234"), N::Integer("1234".into()));
+}
+
+#[test]
+fn duplicate_key_reasons_identify_text_and_respect_diagnostic_limits() {
     yaml_error(
         "{F: Female, M: Male, F: Other}",
         1,
@@ -440,9 +530,22 @@ fn duplicate_key_reasons_keep_the_complete_original_text() {
     );
     let source = b"{long: 1, long: 2}";
     let reason = "found duplicate key 'long'";
-    assert!(
-        matches!(decode_yaml(source).unwrap_err(), DecodeFailure::InvalidYaml { reason: actual, .. } if actual == reason)
-    );
+    for limit in [reason.len() - 1, reason.len()] {
+        let result = decode_yaml(
+            source,
+            DecodeLimits {
+                diagnostic_bytes: limit,
+                ..DecodeLimits::default()
+            },
+        );
+        if limit < reason.len() {
+            assert_decode_limit(result.unwrap_err(), "diagnostic_bytes", limit);
+        } else {
+            assert!(
+                matches!(result.unwrap_err(), DecodeFailure::InvalidYaml { reason: actual, .. } if actual == reason)
+            );
+        }
+    }
 }
 
 fn assert_decode_limit(error: DecodeFailure, resource: &'static str, expected: usize) {
@@ -454,25 +557,4 @@ fn assert_decode_limit(error: DecodeFailure, resource: &'static str, expected: u
     if let Some(actual) = limit.actual {
         assert!(actual > limit.limit);
     }
-}
-
-#[test]
-fn fixed_yaml_depth_is_inclusive_and_wide_integer_lexemes_remain_exact() {
-    for depth in [
-        Limits::YAML_DEPTH - 1,
-        Limits::YAML_DEPTH,
-        Limits::YAML_DEPTH + 1,
-    ] {
-        let source = format!("{}1{}", "[".repeat(depth - 1), "]".repeat(depth - 1));
-        let result = decode_yaml(source.as_bytes());
-        if depth <= Limits::YAML_DEPTH {
-            let decoded = result.unwrap();
-            assert_eq!(decoded.document.nodes().len(), depth);
-        } else {
-            assert_decode_limit(result.unwrap_err(), "yaml_depth", Limits::YAML_DEPTH);
-        }
-    }
-    let digits = "9".repeat(65_537);
-    assert_eq!(scalar(&digits), N::Integer(digits));
-    assert_eq!(scalar("'1234'"), N::Text("1234".into()));
 }

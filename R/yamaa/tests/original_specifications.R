@@ -170,6 +170,13 @@ stopifnot(is.null(refused$output),identical(refused$issues$phase,"validation"),
     json_text(file.path(normalizePath(getwd(),winslash="/"),"absent-environment.yaml")),'}')),
   identical(refused$issues,yamaa_check("absent.yaml",environment="absent-environment.yaml")$issues))
 stopifnot(inherits(tryCatch(yamaa_domain(NULL),error=identity),"error"))
+for(path in c(strrep("x",65537L),strrep("\u00e9",32769L))) {
+  refused <- yamaa_domain(path)
+  stopifnot(is.null(refused$output),identical(refused$issues$condition,"engine_rejected"),
+            identical(refused$issues$context,'{"code":"resource_path","stage":"prepare"}'),
+            identical(yamaa_check(path)$issues,refused$issues),
+            identical(yamaa_domain(path,environment=path)$issues$condition,"engine_rejected"))
+}
 unlink(directory,recursive=TRUE)
 cat("public check without study data, full-range integers, retained save retry and environment refusal passed\n")
 

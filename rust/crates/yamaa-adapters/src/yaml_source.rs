@@ -1,4 +1,4 @@
-//! Fixed-boundary YAML event scanning before document admission.
+//! Bounded YAML event scanning before document admission.
 //!
 //! The parser cannot represent escaped surrogates in a Rust string. For error
 //! reporting only, scan a repaired copy, then compare it with a second copy
@@ -10,7 +10,6 @@
 //! constructs before reporting invalid text. These events are not documents.
 
 use std::borrow::Cow;
-use yamaa_core::limits::{LimitExceeded, Limits};
 
 use saphyr_parser::{Event, Marker, Parser, ScalarStyle, ScanError, Span, Tag};
 
@@ -64,6 +63,36 @@ pub struct LocatedEvent {
     pub end: SourcePosition,
 }
 
+/// Quotas bound retained events, tree depth and cumulative reparsing work.
+#[derive(Clone, Copy, Debug)]
+pub struct ScanLimits {
+    pub source_bytes: usize,
+    pub events: usize,
+    pub depth: usize,
+    pub decoded_bytes: usize,
+    pub parse_bytes: usize,
+}
+
+impl Default for ScanLimits {
+    fn default() -> Self {
+        Self {
+            source_bytes: 8_388_608,
+            events: 262_144,
+            depth: 64,
+            decoded_bytes: 8_388_608,
+            parse_bytes: 33_554_432,
+        }
+    }
+}
+
+/// Decoder/scanner admission preserves the caller's actual policy bound.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResourceLimit {
+    pub resource: &'static str,
+    pub limit: usize,
+    pub actual: Option<usize>,
+}
+
 /// Resource refusal is distinct from language errors and invalid Unicode.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ScanFailure {
@@ -72,9 +101,32 @@ pub enum ScanFailure {
         position: SourcePosition,
         reason: String,
     },
-    Limit(LimitExceeded),
+    Limit(ResourceLimit),
     /// Fail closed if a parser upgrade violates diagnostic reconstruction.
     Reconstruction,
+}
+
+fn charge(
+    used: &mut usize,
+    amount: usize,
+    limit: usize,
+    name: &'static str,
+) -> Result<(), ScanFailure> {
+    *used = used
+        .checked_add(amount)
+        .ok_or(ScanFailure::Limit(ResourceLimit {
+            resource: name,
+            limit,
+            actual: None,
+        }))?;
+    if *used > limit {
+        return Err(ScanFailure::Limit(ResourceLimit {
+            resource: name,
+            limit,
+            actual: Some(*used),
+        }));
+    }
+    Ok(())
 }
 
 fn own(event: Event<'_>) -> Event<'static> {
@@ -107,9 +159,14 @@ enum PassFailure {
     Resource(ScanFailure),
 }
 
-fn parse_pass(source: &str, strict: bool) -> Result<Vec<(Event<'static>, Span)>, PassFailure> {
+fn parse_pass(
+    source: &str,
+    limits: ScanLimits,
+    strict: bool,
+) -> Result<Vec<(Event<'static>, Span)>, PassFailure> {
     let mut events = Vec::new();
     let mut depth = 0_usize;
+    let mut decoded = 0;
     let mut documents = 0;
     let mut boundary = 0;
     for item in Parser::new_from_str(source) {
@@ -161,16 +218,30 @@ fn parse_pass(source: &str, strict: bool) -> Result<Vec<(Event<'static>, Span)>,
             | Event::MappingEnd => boundary = span.end.index(),
             _ => {}
         }
+        if events.len() >= limits.events {
+            return Err(PassFailure::Resource(ScanFailure::Limit(ResourceLimit {
+                resource: "events",
+                limit: limits.events,
+                actual: Some(events.len() + 1),
+            })));
+        }
         match &event {
             Event::SequenceStart(..) | Event::MappingStart(..) => {
-                depth += 1;
-                Limits::yaml_depth(depth)
-                    .map_err(|error| PassFailure::Resource(ScanFailure::Limit(error)))?;
+                charge(&mut depth, 1, limits.depth, "depth").map_err(PassFailure::Resource)?;
             }
             Event::SequenceEnd | Event::MappingEnd => {
                 depth = depth
                     .checked_sub(1)
                     .ok_or(PassFailure::Resource(ScanFailure::Reconstruction))?;
+            }
+            Event::Scalar(text, ..) => {
+                charge(
+                    &mut decoded,
+                    text.len(),
+                    limits.decoded_bytes,
+                    "decoded_bytes",
+                )
+                .map_err(PassFailure::Resource)?;
             }
             _ => {}
         }
@@ -341,18 +412,28 @@ fn convert(event: Event<'static>, text: Option<SourceText>) -> Result<SourceEven
 /// mapping collapse, or lossy Unicode replacement participates in this step.
 /// Multiple documents and forbidden constructs are retained for admission.
 #[cfg(test)]
-pub fn scan(source: &[u8]) -> Result<Vec<LocatedEvent>, ScanFailure> {
-    scan_impl(source, false)
+pub fn scan(source: &[u8], limits: ScanLimits) -> Result<Vec<LocatedEvent>, ScanFailure> {
+    scan_impl(source, limits, false)
 }
 
 /// Reject composition-time restrictions as their events arrive, before later
 /// syntax/constructor errors. Mapping and Unicode admission follows scanning.
-pub fn scan_strict(source: &[u8]) -> Result<Vec<LocatedEvent>, ScanFailure> {
-    scan_impl(source, true)
+pub fn scan_strict(source: &[u8], limits: ScanLimits) -> Result<Vec<LocatedEvent>, ScanFailure> {
+    scan_impl(source, limits, true)
 }
 
-fn scan_impl(source: &[u8], strict: bool) -> Result<Vec<LocatedEvent>, ScanFailure> {
-    Limits::spec_bytes(source.len()).map_err(ScanFailure::Limit)?;
+fn scan_impl(
+    source: &[u8],
+    limits: ScanLimits,
+    strict: bool,
+) -> Result<Vec<LocatedEvent>, ScanFailure> {
+    if source.len() > limits.source_bytes {
+        return Err(ScanFailure::Limit(ResourceLimit {
+            resource: "source_bytes",
+            limit: limits.source_bytes,
+            actual: Some(source.len()),
+        }));
+    }
     if let Some(offset) = source.iter().position(|byte| !byte.is_ascii()) {
         let prefix = &source[..offset];
         return Err(ScanFailure::NonAscii(SourcePosition {
@@ -366,9 +447,17 @@ fn scan_impl(source: &[u8], strict: bool) -> Result<Vec<LocatedEvent>, ScanFailu
     }
     let mut repaired = source.to_vec();
     let mut repairs = Vec::new();
+    let mut parse_bytes = 0;
     let first = loop {
+        // Charge even an empty document; a zero-work budget permits no passes.
+        charge(
+            &mut parse_bytes,
+            source.len().max(1),
+            limits.parse_bytes,
+            "parse_bytes",
+        )?;
         let text = std::str::from_utf8(&repaired).map_err(|_| ScanFailure::Reconstruction)?;
-        match parse_pass(text, strict) {
+        match parse_pass(text, limits, strict) {
             Ok(events) => break events,
             Err(PassFailure::Resource(error)) => return Err(error),
             Err(PassFailure::Syntax(error)) => {
@@ -388,11 +477,17 @@ fn scan_impl(source: &[u8], strict: bool) -> Result<Vec<LocatedEvent>, ScanFailu
     let second = if repairs.is_empty() {
         None
     } else {
+        charge(
+            &mut parse_bytes,
+            source.len().max(1),
+            limits.parse_bytes,
+            "parse_bytes",
+        )?;
         for repair in &repairs {
             replace_escape(&mut repaired, *repair, 0xe800);
         }
         let text = std::str::from_utf8(&repaired).map_err(|_| ScanFailure::Reconstruction)?;
-        let events = parse_pass(text, strict).map_err(|error| match error {
+        let events = parse_pass(text, limits, strict).map_err(|error| match error {
             PassFailure::Resource(error) => error,
             PassFailure::Syntax(_) => ScanFailure::Reconstruction,
         })?;

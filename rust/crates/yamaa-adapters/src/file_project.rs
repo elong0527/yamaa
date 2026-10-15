@@ -40,8 +40,13 @@ impl RejectedOrdinary {
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }
-    pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
-        self.resources.retain_sources()
+    pub fn retained_sources(
+        &self,
+        aliases: usize,
+        text: usize,
+    ) -> Result<crate::file_resources::RetainedSources, crate::file_resources::RetentionFailure>
+    {
+        self.resources.retain_sources(aliases, text)
     }
 }
 impl std::fmt::Debug for RejectedOrdinary {
@@ -59,7 +64,7 @@ impl FileProject {
     pub(crate) fn from_workflow(
         entry: crate::file_graph::CapturedEntry,
     ) -> Result<Self, Box<RejectedOrdinary>> {
-        let (resources, entry, document, environment) = entry.into_ordinary_parts();
+        let (mut resources, entry, document, environment) = entry.into_ordinary_parts();
         match PreparedRun::prepare_with_profile_inspection(
             document,
             environment,
@@ -78,6 +83,7 @@ impl FileProject {
             Ok(run) => {
                 // All capture, selection and compilation has completed. Study
                 // authority uses ordinary build admission, never metadata quota.
+                resources.finish_metadata_budget();
                 Ok(Self {
                     run: Arc::new(run),
                     resources,
@@ -146,6 +152,18 @@ impl FileProject {
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }
+    /// Explicit source-byte capture stays in the owner's original native roots.
+    pub fn capture_input_metadata(
+        &mut self,
+        index: usize,
+        maximum: usize,
+    ) -> Result<std::sync::Arc<[u8]>, Vec<crate::issue_rows::Issue>> {
+        let descriptors = crate::source_metadata::inputs(self.run()).map_err(|_| {
+            crate::file_application::rejected("source_metadata", "descriptor_admission")
+        })?;
+        crate::source_metadata::capture(&mut self.resources, &descriptors, index, maximum)
+    }
+
     pub(crate) fn publication_target(
         &self,
     ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {
@@ -206,6 +224,7 @@ pub(crate) fn capture_environment(
         &mut project_source::Decoder(schema),
         written,
         host,
+        Default::default(),
     ) {
         Ok(prepared) => Ok(prepared),
         Err(yamaa_core::build::EnvironmentFailure::Resource(error)) => {

@@ -15,7 +15,10 @@
   if (identical(Encoding(value), "bytes")) {
     .domain_argument_error("byte-marked R text has no declared Unicode encoding")
   }
-  .scalar_text_bytes(value)
+  # Keep conversion bounded. An oversized prefix still exceeds the native
+  # 65536-byte path limit and is rejected as an issue before any file access.
+  # Every admitted path is passed in full, including its declared encoding.
+  .scalar_text_bytes(substr(value, 1L, 65537L))
 }
 .domain_arguments <- function(specification, environment) {
   list(.domain_path_bytes(specification),
