@@ -38,17 +38,12 @@ and .github/scripts/benchmark-docs/requirements.txt installed in that interprete
   docs              Dashboard generation followed by strict site build.
                     Deployment additionally renders slide decks with Quarto.
 
-Independent evidence audit (PYTHON needs locked table dependencies; no engine run):
-  audit-native      RUN_ID=exact Actions run, OUTPUT=fresh directory; gh API access.
-  audit-replay      AUDIT_INPUT=retained snapshot, OUTPUT=fresh directory; offline.
-                    Both require a passing independent --check verdict.
-
-Release qualification: the approved 21 installed tuples, complete conformance,
-shared Rust/math and independent audit run in .github/workflows/native.yml.
+Release qualification: the approved 21 installed tuples, complete conformance
+and shared Rust/math run in .github/workflows/native.yml.
 Main runs every native check nightly, or on a dispatch on main. Use a
 qualification/issue-* push for complete exact-source checks of a branch; a branch
 dispatch omits shared Rust/math. PR feedback samples Linux hosts.
-See docs/development.md and docs/release.md for current architecture/release gates.
+See docs/development.md and docs/release.md for architecture and supported platforms.
 PYTHON selects the command interpreter; CARGO_TARGET_DIR can isolate Rust builds.
 """
 

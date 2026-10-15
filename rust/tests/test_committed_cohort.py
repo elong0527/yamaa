@@ -24,7 +24,6 @@ def load(name):
 
 public = load("qualify_public_cohort")
 producer = load("qualify_producer_cohort")
-audit_module = load("audit_native_run")
 cohort = public.cohort
 
 
@@ -350,54 +349,6 @@ class CompletePublicTruth(unittest.TestCase):
         (owner / "after-2/out.csv").write_bytes(b"ID\n02\n")
         with self.assertRaisesRegex(ValueError, "CSV bytes"):
             self.compare(True)
-
-    def test_audit_rechecks_exact_source_truth_and_complete_reports(self):
-        result = self.compare(True)
-        audit = object.__new__(audit_module.Audit)
-        audit.directory = self.directory / "audit"
-        audit.source = {"sha": self.revision}
-        audit.run = {"id": 7, "run_attempt": 1, "html_url": "unit:unqualified"}
-        audit.artifacts = []
-        for artifact, filename in (
-            ("native-python-ubuntu-24.04-3.14", "unit-owner.whl"),
-            ("native-r-ubuntu-24.04", "unit-owner.tar.gz"),
-        ):
-            path = audit.directory / "artifacts" / artifact / filename
-            path.parent.mkdir(parents=True)
-            path.write_bytes(b"unit-unqualified bytes; comparator control only")
-            audit.artifacts.append({"name": artifact, "expired": False})
-        source = audit.directory / "source" / cohort.TRUTH_PATHS[producer.NAME]
-        source.parent.mkdir(parents=True)
-        shutil.copyfile(ROOT / cohort.TRUTH_PATHS[producer.NAME], source)
-        checked = audit.committed_cohort(
-            "ubuntu-24.04", "3.12", "wheel", True, self.output, result
-        )
-        self.assertEqual(checked["required_tuples"], 2)
-        retained = self.output / result["coverage"][0]["truth"]["retained_path"]
-        retained.write_bytes(retained.read_bytes() + b"\n")
-        with self.assertRaisesRegex(ValueError, "exact source bytes"):
-            audit.committed_cohort(
-                "ubuntu-24.04", "3.12", "wheel", True, self.output, result
-            )
-        retained.write_bytes(source.read_bytes())
-        report_path = self.output / result["coverage"][0]["report"]
-        original_report = report_path.read_bytes()
-        changed = cohort.read(report_path)
-        changed["tables"][0]["rows"][0][0]["value"] = "changed"
-        cohort.write(report_path, changed)
-        with self.assertRaisesRegex(ValueError, "complete report differs"):
-            audit.committed_cohort(
-                "ubuntu-24.04", "3.12", "wheel", True, self.output, result
-            )
-        report_path.write_bytes(original_report)
-        before_path = self.output / "raw/python" / producer.NAME / "before.json"
-        incomplete = cohort.read(before_path)
-        del incomplete["callbacks"]
-        cohort.write(before_path, incomplete)
-        with self.assertRaisesRegex(ValueError, "incomplete native producer"):
-            audit.committed_cohort(
-                "ubuntu-24.04", "3.12", "wheel", True, self.output, result
-            )
 
     def test_tools_import_without_any_yamaa_package(self):
         program = """

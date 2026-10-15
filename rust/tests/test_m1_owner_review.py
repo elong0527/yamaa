@@ -28,42 +28,6 @@ class ProducerOwnerReview(unittest.TestCase):
             / producer.NAME
         )
 
-    def audit_owner(self):
-        return self.fixture.output / "raw/python" / producer.NAME
-
-    def prepared_audit(self, is_producer=True):
-        fixture = self.fixture
-        inventory = fixture.compare(is_producer)
-        audit = object.__new__(controls.audit_module.Audit)
-        audit.directory = fixture.directory / "independent-audit"
-        audit.source = {"sha": fixture.revision}
-        audit.run = {"id": 7, "run_attempt": 1, "html_url": "unit:unqualified"}
-        audit.artifacts = []
-        for artifact, filename in (
-            ("native-python-ubuntu-24.04-3.14", "unit-owner.whl"),
-            ("native-r-ubuntu-24.04", "unit-owner.tar.gz"),
-        ):
-            path = audit.directory / "artifacts" / artifact / filename
-            path.parent.mkdir(parents=True)
-            path.write_bytes(b"synthetic mutation control; never qualification")
-            audit.artifacts.append({"name": artifact, "expired": False})
-        names = (producer.NAME,) if is_producer else cohort.COHORT
-        for name in names:
-            source = audit.directory / "source" / cohort.TRUTH_PATHS[name]
-            source.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(controls.ROOT / cohort.TRUTH_PATHS[name], source)
-        return audit, inventory
-
-    def check_audit(self, audit, inventory, is_producer=True):
-        return audit.committed_cohort(
-            "ubuntu-24.04",
-            "3.12",
-            "wheel",
-            is_producer,
-            self.fixture.output,
-            inventory,
-        )
-
     def test_qualifier_publication_node_and_flag_types_are_exact(self):
         owner = self.source_owner()
         record = cohort.read(
@@ -100,59 +64,6 @@ class ProducerOwnerReview(unittest.TestCase):
                     )
         cohort.write(saved, original)
 
-    def test_audit_rechecks_publication_node_and_flag_types(self):
-        audit, inventory = self.prepared_audit()
-        saved = self.audit_owner() / "after-2/report.json"
-        original = cohort.read(saved)
-        for label, change in (
-            (
-                "boolean node",
-                lambda j: j["publication"]["entered"][0].update(node=True),
-            ),
-            ("float node", lambda j: j["publication"]["entered"][0].update(node=1.0)),
-            (
-                "integer flag",
-                lambda j: j["publication"]["entered"][0].update(published=1),
-            ),
-        ):
-            with self.subTest(label=label):
-                changed = copy.deepcopy(original)
-                change(changed)
-                cohort.write(saved, changed)
-                with self.assertRaisesRegex(ValueError, "publication"):
-                    self.check_audit(audit, inventory)
-        cohort.write(saved, original)
-
-    def test_audit_raw_reports_must_match_their_actual_host_and_core(self):
-        audit, inventory = self.prepared_audit()
-        owner = self.audit_owner()
-        paths = [
-            owner / path
-            for path in ("before.json", "after-1/report.json", "after-2/report.json")
-        ]
-        originals = [cohort.read(path) for path in paths]
-        for field, value in (
-            ("engine_version", "wrong-core"),
-            ("runtime", "r"),
-            ("runtime_version", "3.14.9"),
-        ):
-            with self.subTest(field=field):
-                for path, original in zip(paths, originals, strict=True):
-                    changed = copy.deepcopy(original)
-                    changed[field] = value
-                    if field == "runtime":
-                        changed["environment"]["lock_source"] = (
-                            changed["environment"]["lock_source"].removesuffix(
-                                "uv.lock"
-                            )
-                            + "renv.lock"
-                        )
-                    cohort.write(path, changed)
-                with self.assertRaisesRegex(ValueError, "host|core|owner|version"):
-                    self.check_audit(audit, inventory)
-        for path, original in zip(paths, originals, strict=True):
-            cohort.write(path, original)
-
     def test_original_seed_read_cannot_be_reassigned_to_consumer(self):
         owner = self.source_owner()
         raw = cohort.read(owner / "before.json")
@@ -175,16 +86,6 @@ class ProducerOwnerReview(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "error|report|identity"):
             self.fixture.compare()
 
-    def test_audit_rejects_nonnull_error_on_actual_complete_public_report(self):
-        audit, inventory = self.prepared_audit(False)
-        path = self.fixture.output / "reports/python/schema-lookup.python.rust.json"
-        raw = cohort.read(path)
-        self.assertEqual(raw["outcome"], "success")
-        raw["error"] = "unexpected infrastructure error"
-        cohort.write(path, raw)
-        with self.assertRaisesRegex(ValueError, "error|report|identity"):
-            self.check_audit(audit, inventory, False)
-
     def test_qualifier_binds_complete_public_reports_to_installed_runtime_version(self):
         self.fixture.compare()
         shutil.rmtree(self.fixture.output)
@@ -197,15 +98,6 @@ class ProducerOwnerReview(unittest.TestCase):
         cohort.write(path, raw)
         with self.assertRaisesRegex(ValueError, "runtime|report|owner|version"):
             self.fixture.compare()
-
-    def test_audit_binds_complete_public_reports_to_installed_runtime_version(self):
-        audit, inventory = self.prepared_audit(False)
-        path = self.fixture.output / "reports/python/schema-lookup.python.rust.json"
-        raw = cohort.read(path)
-        raw["runtime_version"] = "3.14.9"
-        cohort.write(path, raw)
-        with self.assertRaisesRegex(ValueError, "runtime|report|owner|version"):
-            self.check_audit(audit, inventory, False)
 
     def test_qualifier_binds_raw_producer_reports_to_installed_runtime_version(self):
         self.fixture.compare(True)
@@ -229,14 +121,6 @@ class ProducerOwnerReview(unittest.TestCase):
                 expected,
                 self.fixture.directory / "changed-runtime",
             )
-
-    def test_audit_requires_approved_r_runtime_version(self):
-        audit, _ = self.prepared_audit()
-        record = cohort.read(self.fixture.output / "r-installed-evidence.json")
-        audit.evidence(record, "r", "ubuntu-24.04", "4.6.1", "source")
-        record["installation"]["runtime_version"] = "4.6.0"
-        with self.assertRaisesRegex(ValueError, "runtime|version"):
-            audit.evidence(record, "r", "ubuntu-24.04", "4.6.1", "source")
 
 
 if __name__ == "__main__":

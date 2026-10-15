@@ -3,7 +3,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help sync-python check-fast check-repository check-blockers test-rust \
         stage-python test-python stage-r stage-r-tests test-r check-r \
-        docs-test docs-generate docs-build docs audit-native audit-replay
+        docs-test docs-generate docs-build docs
 
 PYTHON ?= python
 DOCS_PYTHON ?= $(PYTHON)
@@ -17,9 +17,6 @@ HOST_ARTIFACT_REFERENCE ?=
 EVIDENCE ?=
 R_STAGE ?=
 R_ARCHIVE ?=
-RUN_ID ?=
-AUDIT_INPUT ?=
-REPOSITORY ?= elong0527/yamaa
 COMMANDS := .github/scripts/commands
 
 help:
@@ -75,11 +72,3 @@ docs-build:
 
 docs: docs-generate
 	$(DOCS_PYTHON) $(COMMANDS)/docs.py build
-
-audit-native:
-	@test -n "$(RUN_ID)" -a -n "$(OUTPUT)" || (echo 'Set RUN_ID and fresh OUTPUT' >&2; exit 2)
-	$(PYTHON) rust/tools/audit_native_run.py --run-id "$(RUN_ID)" --repository "$(REPOSITORY)" --output "$(OUTPUT)" --check
-
-audit-replay:
-	@test -n "$(AUDIT_INPUT)" -a -n "$(OUTPUT)" || (echo 'Set retained AUDIT_INPUT and fresh OUTPUT' >&2; exit 2)
-	$(PYTHON) rust/tools/audit_native_run.py --input "$(AUDIT_INPUT)" --output "$(OUTPUT)" --check
