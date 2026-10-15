@@ -1,10 +1,12 @@
-"""Installed readers must decode floating-point output from public Save."""
+"""Independent installed readers must decode the same public Save bytes."""
 
 import tempfile
 import unittest
 from pathlib import Path
 
 import polars as pl
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 import yamaa
 
@@ -23,6 +25,13 @@ output:
 """
 INPUT = b"ID,COUNT,VALUE\nA,1,1.25\nB,-2,-2.5\nC,0,0.0\nD,,\n"
 SCHEMA = {"ID": pl.String, "COUNT": pl.Int64, "VALUE": pl.Float64}
+ARROW_SCHEMA = pa.schema(
+    [
+        pa.field("ID", pa.string()),
+        pa.field("COUNT", pa.int64()),
+        pa.field("VALUE", pa.float64()),
+    ]
+)
 VALUES = {
     "ID": ["A", "B", "C", "D"],
     "COUNT": [1, -2, 0, None],
@@ -54,6 +63,9 @@ class ParquetReaders(unittest.TestCase):
                 frame = pl.read_parquet(output)
                 self.assertEqual(frame.schema, SCHEMA)
                 self.assertEqual(frame.to_dict(as_series=False), VALUES)
+                table = pq.read_table(pa.BufferReader(saved))
+                self.assertEqual(table.schema, ARROW_SCHEMA)
+                self.assertEqual(table.to_pydict(), VALUES)
                 self.assertTrue(built.save())
                 self.assertEqual(output.read_bytes(), saved)
 
