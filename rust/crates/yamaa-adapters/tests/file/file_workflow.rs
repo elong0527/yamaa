@@ -141,6 +141,40 @@ fn yaml(input: &str, base: &str, output: &str, invalid: bool) -> String {
 }
 
 #[test]
+fn seventeen_column_verifications_keep_their_identities_without_reading_data() {
+    let study = Study::new();
+    let mut verifications = String::from("    verifications:\n");
+    for index in 0..17 {
+        verifications.push_str(&format!("      - not_missing: {{id: CHECK{index}}}\n"));
+    }
+    let source = yaml("{RAW: never-read.csv}", "RAW", "result.csv", false).replace(
+        "    derivation: RAW.VALUE\n",
+        &format!("    derivation: RAW.VALUE\n{verifications}"),
+    );
+    study.write("root.yaml", &source);
+    let graph = study.prepare().unwrap();
+    assert_eq!(graph.capture_reads(), 2);
+    assert!(producer_check::prepared(&graph).unwrap().is_empty());
+    let compiled = yamaa_core::specification::PreparedSpecification::prepare(
+        graph.graph().nodes()[0].document.model(),
+    )
+    .unwrap();
+    for index in 0..17 {
+        let path = format!("columns.VALUE.verifications[{index}].not_missing");
+        assert_eq!(
+            compiled.verification_identity(&path),
+            Some(format!("CHECK{index}").as_str())
+        );
+        assert!(matches!(
+            compiled.column_check(&path),
+            Some(yamaa_core::dataset::Check::NotMissing)
+        ));
+    }
+    assert!(!study.0.join("never-read.csv").exists());
+    assert!(!study.0.join("result.csv").exists());
+}
+
+#[test]
 fn raw_schema_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand() {
     use yamaa_adapters::issue_rows::Issue;
 
