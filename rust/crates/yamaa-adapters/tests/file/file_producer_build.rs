@@ -2467,3 +2467,87 @@ fn original_native_selection_builds_the_retained_rounded_alias_workflow_without_
     assert_eq!(artifact(&attempt, 0), b"ID,VALUE\n1,1.23\n2,2.35\n");
     assert_eq!(artifact(&attempt, 1), b"ID,VALUE\n1,2.46\n2,4.70\n");
 }
+
+#[test]
+fn key_failures_retain_the_verification_log_and_report_as_output_findings() {
+    use yamaa_adapters::producer_result::prepare_owned_classified;
+    // Key failures are output findings, not verification checks: feeding
+    // them to the verification-phase projection used to fail
+    // `prepare_diagnostics`, dropping this node's verification log.
+    for (csv, condition) in [
+        ("ID,GRP,VALUE\n1,a,10\n1,b,20\n", "duplicate_key"),
+        ("ID,GRP,VALUE\n,a,10\n1,b,20\n", "missing_key"),
+    ] {
+        let study = Study::new();
+        fs::create_dir(study.0.join("generated")).unwrap();
+        study.write("input.csv", csv);
+        study.write(
+            "root.yaml",
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, GRP: str, VALUE: int}}}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.GRP]\n    derivations: {ID: {aggregate: 'MAX(SRC.ID)'}, GRP: SRC.GRP, VALUE: {aggregate: 'MAX(SRC.VALUE)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: GRP, type: str, label: Group}\n  - name: VALUE\n    type: int\n    label: Value\n    verifications: [{not_missing: {id: value-present}}]\noutput: {path: generated/root.csv, columns: [ID, GRP, VALUE], verification_log: generated/root-checks.csv, warning_log: generated/root-warnings.csv}\n",
+        );
+        let environment = project_source::prepare(
+            shipped_schema::capture_environment().unwrap(),
+            Source {
+                identity: "held/environment.yaml".into(),
+                bytes: b"schema_version: '1.0'\n".to_vec(),
+            },
+            Language::Python,
+            &mut LockCapture {
+                language: Language::Python,
+            },
+            Default::default(),
+        )
+        .unwrap()
+        .into_owned();
+        let mut build = FileGraph::prepare(
+            Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
+            "root.yaml",
+            environment,
+            shipped_schema::capture().unwrap(),
+            Default::default(),
+        )
+        .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error()))
+        .into_build();
+        let mut activation = Activation::new(&study, Mode::Pass);
+        let owned = build.build_owned_reported(&mut activation, report_id(), Default::default());
+        assert!(!owned.accepted(), "{condition}");
+        assert_eq!(owned.graph.nodes.len(), 1, "{condition}");
+        assert!(activation.trace.is_empty(), "{condition}");
+        let mut result = prepare_owned_classified(&owned, report_id(), 16_777_216, &[]).unwrap();
+        assert!(result.output().is_none(), "{condition}");
+        assert!(result.verification_log().is_some(), "{condition}");
+        let table = result.log_table(false).unwrap();
+        assert_eq!(table.rows(), 1, "{condition}");
+        assert!(
+            result.issues().iter().any(|issue| issue.phase == "output"
+                && issue.condition == condition
+                && issue.requirement.as_deref() == Some("REQ-0240")),
+            "{condition}: {:?}",
+            result.issues()
+        );
+        // The retained log is the completed verification prefix, so a
+        // diagnostic save publishes exactly that one artifact.
+        for name in ["root.csv", "root-warnings.csv"] {
+            study.write(&format!("generated/{name}"), b"held sentinel");
+        }
+        assert!(result.save().is_err(), "{condition}");
+        assert_eq!(
+            result.observations()["artifacts"].as_array().unwrap().len(),
+            1,
+            "{condition}: exactly the retained verification log is published"
+        );
+        assert_eq!(
+            fs::read(study.0.join("generated").join("root.csv")).unwrap(),
+            b"held sentinel"
+        );
+        assert_eq!(
+            fs::read(study.0.join("generated").join("root-warnings.csv")).unwrap(),
+            b"held sentinel"
+        );
+        let checks =
+            String::from_utf8(fs::read(study.0.join("generated").join("root-checks.csv")).unwrap())
+                .unwrap();
+        assert!(checks.contains("value-present"), "{condition}: {checks}");
+        assert!(checks.contains("not_missing"), "{condition}: {checks}");
+    }
+}

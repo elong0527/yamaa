@@ -279,3 +279,364 @@ fn named_driver_column_projection_rejects_hidden_scalar_and_grouping_fields() {
         assert!(!study.0.join("out.csv").exists());
     }
 }
+
+// Preserve the authored inputs and assertions from the runtime tests removed
+// with the Python evaluator. These cases exercise the shared public build;
+// they do not restore the retired Python planner or its extension hooks.
+#[test]
+fn original_filtered_missing_targets_keep_their_value_in_every_arrival_order() {
+    let source = r#"schema_version: "1.0"
+domain: EXAMPLE
+keys: [GROUP_ID]
+input:
+  SOURCE: input.csv
+output:
+  path: example.csv
+  columns: [GROUP_ID, TARGET_VALUE]
+  order_by: [GROUP_ID]
+columns:
+  - name: GROUP_ID
+    type: str
+    label: Group Identifier
+    derivation: SOURCE.GroupID
+  - name: TARGET_VALUE
+    type: str
+    label: Target Value
+    derivation:
+      source:
+        filter: "SOURCE.RecordKind = 'TARGET'"
+        variable: SOURCE.Value
+"#;
+    for records in [
+        [
+            "G1,UNRELATED,g1-unrelated",
+            "G1,TARGET,",
+            "G2,UNRELATED,g2-unrelated",
+            "G2,TARGET,g2-target",
+        ],
+        [
+            "G1,TARGET,",
+            "G1,UNRELATED,g1-unrelated",
+            "G2,TARGET,g2-target",
+            "G2,UNRELATED,g2-unrelated",
+        ],
+        [
+            "G2,UNRELATED,g2-unrelated",
+            "G1,UNRELATED,g1-unrelated",
+            "G2,TARGET,g2-target",
+            "G1,TARGET,",
+        ],
+    ] {
+        let study = Study::new();
+        fs::write(study.0.join("spec.yaml"), source).unwrap();
+        fs::write(
+            study.0.join("input.csv"),
+            format!("GroupID,RecordKind,Value\n{}\n", records.join("\n")),
+        )
+        .unwrap();
+        let mut result = study.build();
+        assert!(result.issues().is_empty(), "{:?}", result.issues());
+        assert!(!study.0.join("example.csv").exists());
+        assert!(result.save().unwrap());
+        assert_eq!(
+            fs::read(study.0.join("example.csv")).unwrap(),
+            b"GROUP_ID,TARGET_VALUE\nG1,\nG2,g2-target\n"
+        );
+    }
+}
+
+fn original_key_identity(source: &str, columns: &str, types: &str) -> String {
+    format!(
+        "schema_version: '1.0'\ndomain: OUT\ninput: {{SRC: {{path: input.csv, types: {types}}}}}\nkeys: [B, A]\noutput: {{path: out.csv, columns: {columns}}}\ncolumns:\n{source}"
+    )
+}
+
+fn save_csv(study: &Study, mut result: file_application::Domain, path: &str) -> Vec<u8> {
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(!study.0.join(path).exists());
+    assert!(result.save().unwrap());
+    fs::read(study.0.join(path)).unwrap()
+}
+
+#[test]
+fn original_reordered_key_names_preserve_typed_values_and_dependencies() {
+    for (source, types, input, expected) in [
+        (
+            "  - {name: A, type: str, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n",
+            "{X: str, Y: str}",
+            "X,Y\nfirst,second\nnext,third\nfirst,second\n",
+            "A,B\nfirst,second\nnext,third\n",
+        ),
+        (
+            "  - {name: A, type: str, derivation: SRC.X}\n  - {name: B, type: int, derivation: SRC.Y}\n",
+            "{X: str, Y: int}",
+            "X,Y\nfirst,2\nnext,3\nfirst,2\n",
+            "A,B\nfirst,2\nnext,3\n",
+        ),
+        (
+            "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: int, derivation: {compute: {expr: 'A + 1'}}}\n",
+            "{X: int}",
+            "X\n4\n2\n4\n",
+            "A,B\n4,5\n2,3\n",
+        ),
+    ] {
+        let study = Study::new();
+        fs::write(
+            study.0.join("spec.yaml"),
+            original_key_identity(source, "[A, B]", types),
+        )
+        .unwrap();
+        fs::write(study.0.join("input.csv"), input).unwrap();
+        let result = study.build();
+        assert!(result.issues().is_empty(), "{:?}", result.issues());
+        assert_eq!(save_csv(&study, result, "out.csv"), expected.as_bytes());
+    }
+}
+
+#[test]
+fn original_missing_key_identity_is_distinct_from_user_text_and_record_order() {
+    for (source, columns, types, input) in [
+        (
+            "  - {name: A, type: str, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n",
+            "[A, B]",
+            "{X: str, Y: str}",
+            "X,Y\n,present\n",
+        ),
+        (
+            "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n",
+            "[A, B]",
+            "{X: int, Y: str}",
+            "X,Y\n1,__missing_key__\n,present\n",
+        ),
+        (
+            "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n  - {name: VALUE, type: str, derivation: SRC.Z}\n",
+            "[A, B, VALUE]",
+            "{X: int, Y: str, Z: str}",
+            "X,Y,Z\n,present,missing\n0,__missing_key__,valid\n",
+        ),
+        (
+            "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n  - {name: VALUE, type: str, derivation: SRC.Z}\n",
+            "[A, B, VALUE]",
+            "{X: int, Y: str, Z: str}",
+            "X,Y,Z\n1,__missing_key__,valid\n,present,missing\n",
+        ),
+    ] {
+        let study = Study::new();
+        fs::write(
+            study.0.join("spec.yaml"),
+            original_key_identity(source, columns, types),
+        )
+        .unwrap();
+        fs::write(study.0.join("input.csv"), input).unwrap();
+        let mut result = study.build();
+        let issues = result.issues();
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        assert_eq!(issues[0].condition, "missing_key");
+        assert_eq!(issues[0].spec_paths, ["keys[1]"]);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
+            serde_json::json!({"column": "A", "missing_count": 1,
+                "keys": [{"B": "present", "A": null}]})
+        );
+        assert!(result.output().is_none());
+        assert!(result.save().is_err());
+        assert!(!study.0.join("out.csv").exists());
+    }
+}
+
+fn original_window_spec(extra_columns: &str, extra_derivations: &str, window: &str) -> String {
+    format!(
+        "schema_version: '1.0'\ndomain: OUT\nbase: SRC\ninput: {{SRC: {{path: input.csv, types: {{G: str, X: float, S: int}}}}}}\nkeys: [GRP, SEQ]\noutput: {{path: out.csv, columns: [GRP, SEQ, VAL, PREV]}}\ncolumns:\n  - {{name: GRP, type: str}}\n  - {{name: SEQ, type: int}}\n  - {{name: VAL, type: float}}\n  - {{name: PREV, type: float}}\n{extra_columns}rows:\n  - id: visits\n    derivations:\n      GRP: SRC.G\n      SEQ: SRC.S\n      VAL: SRC.X\n      PREV: {{row_value: {{source: VAL, offset: -1, window: {window}}}}}\n{extra_derivations}"
+    )
+}
+
+fn original_visits(study: &Study, source: &str) -> file_application::Domain {
+    fs::write(study.0.join("spec.yaml"), source).unwrap();
+    fs::write(
+        study.0.join("input.csv"),
+        "G,X,S\na,1,1\na,2,2\na,3,3\nb,10,1\nb,20,2\n",
+    )
+    .unwrap();
+    let result = study.build();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    result
+}
+
+fn float_column(result: &file_application::Domain, name: &str) -> Vec<Option<f64>> {
+    let (_, values) = result
+        .output_table()
+        .unwrap()
+        .columns()
+        .iter()
+        .find(|(column, _)| column == name)
+        .unwrap();
+    let yamaa_adapters::public_table::Values::Float(values) = values else {
+        panic!("{name}: {values:?}");
+    };
+    values.clone()
+}
+
+#[test]
+fn original_row_window_lags_keep_partition_ties_and_template_ownership() {
+    let expected = vec![None, Some(1.0), Some(2.0), None, Some(10.0)];
+    for window in [
+        "{group_by: [GRP], order_by: [SEQ]}",
+        "{group_by: [GRP], order_by: [GRP]}",
+    ] {
+        let study = Study::new();
+        let result = original_visits(&study, &original_window_spec("", "", window));
+        assert_eq!(float_column(&result, "PREV"), expected);
+    }
+    let study = Study::new();
+    let source = original_window_spec("", "", "{order_by: [SEQ]}").replace(
+        "  - id: visits\n",
+        "  - id: a_only\n    filter: \"SRC.G = 'a'\"\n",
+    );
+    let second = source
+        .split_once("rows:\n")
+        .unwrap()
+        .1
+        .replace("a_only", "b_only")
+        .replace("SRC.G = 'a'", "SRC.G = 'b'");
+    let result = original_visits(&study, &format!("{source}{second}"));
+    assert_eq!(float_column(&result, "PREV"), expected);
+}
+
+#[test]
+fn original_row_window_chains_complete_scalars_before_later_window_reads() {
+    let window = "{group_by: [GRP], order_by: [SEQ]}";
+    for (columns, derivations, column, expected) in [
+        (
+            "  - {name: PREV2, type: float}\n",
+            "      PREV2: {row_value: {source: PREV, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n",
+            "PREV2",
+            vec![None, None, Some(1.0), None, None],
+        ),
+        (
+            "  - {name: CHG, type: float}\n  - {name: DOUBLED, type: float}\n",
+            "      DOUBLED: {compute: {expr: 'CHG * 2'}}\n      CHG: {compute: {expr: 'VAL - PREV'}}\n",
+            "DOUBLED",
+            vec![None, Some(2.0), Some(2.0), None, Some(20.0)],
+        ),
+        (
+            "  - {name: DOUBLED, type: float}\n  - {name: BAD, type: float}\n",
+            "      DOUBLED: {compute: {expr: 'PREV * 2'}}\n      BAD: {row_value: {source: DOUBLED, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n",
+            "BAD",
+            vec![None, None, Some(2.0), None, None],
+        ),
+    ] {
+        let study = Study::new();
+        let source = original_window_spec(columns, derivations, window)
+            .replace("columns: [GRP, SEQ, VAL, PREV]", &format!("columns: [GRP, SEQ, VAL, PREV, {column}]"));
+        let result = original_visits(&study, &source);
+        assert_eq!(float_column(&result, column), expected);
+    }
+}
+
+#[test]
+fn original_windows_in_one_case_column_keep_distinct_orderings() {
+    let study = Study::new();
+    let source = original_window_spec("", "", "{group_by: [GRP], order_by: [SEQ]}")
+        .replace("  - {name: PREV, type: float}", r#"  - name: PREV
+    type: float
+    derivation:
+      case:
+        - when: SEQ = 1
+          then: {row_value: {source: VAL, offset: 1, window: {group_by: [GRP], order_by: [SEQ]}}}
+        - otherwise: {row_value: {source: VAL, offset: 1, window: {group_by: [GRP], order_by: [{variable: SEQ, direction: desc}]}}}"#)
+        .replace("      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n", "");
+    let result = original_visits(&study, &source);
+    assert_eq!(
+        float_column(&result, "PREV"),
+        [Some(2.0), Some(1.0), Some(2.0), Some(20.0), Some(10.0)]
+    );
+}
+
+#[test]
+fn original_source_ordinals_follow_physical_swaps_without_adding_output_fields() {
+    for labels in [["ROW_B", "ROW_A"], ["ROW_A", "ROW_B"]] {
+        let (study, _) = Study::benchmark("schema-source-ordinal");
+        fs::write(
+            study.0.join("input/source.csv"),
+            format!(
+                "GroupID,RecordLabel,Include\nG1,{},Y\nG1,{},Y\n",
+                labels[0], labels[1]
+            ),
+        )
+        .unwrap();
+        let result = study.build();
+        assert!(result.issues().is_empty(), "{:?}", result.issues());
+        assert_eq!(
+            save_csv(&study, result, "records.csv"),
+            format!(
+                "GROUP_ID,ROW_SEQUENCE,RECORD_LABEL,SOURCE_ORDINAL\nG1,1,{},1\nG1,2,{},2\n",
+                labels[0], labels[1]
+            )
+            .as_bytes()
+        );
+    }
+    let (study, _) = Study::benchmark("schema-source-ordinal");
+    let source = fs::read_to_string(study.0.join("spec.yaml")).unwrap();
+    let (before, after) = source.split_once("  - name: SOURCE_ORDINAL\n").unwrap();
+    let rows = after.split_once("rows:\n").unwrap().1;
+    let source = format!("{before}rows:\n{rows}").replace(", SOURCE_ORDINAL]", "]");
+    fs::write(study.0.join("spec.yaml"), source).unwrap();
+    let result = study.build();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert_eq!(
+        save_csv(&study, result, "records.csv"),
+        b"GROUP_ID,ROW_SEQUENCE,RECORD_LABEL\nG1,1,ROW_B\nG1,2,ROW_A\nG1,3,ROW_A\nG2,1,ROW_B\nG2,2,ROW_A\n"
+    );
+}
+
+#[test]
+fn original_ordinal_windows_keep_input_positions_across_reused_templates() {
+    let (study, _) = Study::benchmark("schema-source-ordinal");
+    let mut source = fs::read_to_string(study.0.join("spec.yaml")).unwrap();
+    source.push_str(
+        "  - id: second\n    dataset: SOURCE\n    filter: SOURCE.SourceOrdinal = 1\n    derivations: {}\n",
+    );
+    fs::write(study.0.join("spec.yaml"), source).unwrap();
+    let result = study.build();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert_eq!(
+        save_csv(&study, result, "records.csv"),
+        b"GROUP_ID,ROW_SEQUENCE,RECORD_LABEL,SOURCE_ORDINAL\nG1,1,ROW_B,2\nG1,2,ROW_A,5\nG1,3,ROW_A,6\nG2,1,ROW_B,1\nG2,2,ROW_B,1\nG2,3,ROW_A,4\n"
+    );
+}
+
+#[test]
+fn original_ordinal_group_reductions_run_before_group_numbering() {
+    let (study, _) = Study::benchmark("schema-source-ordinal");
+    fs::write(
+        study.0.join("spec.yaml"),
+        r#"schema_version: "1.0"
+domain: RECORDS
+keys: [GROUP_ID]
+input:
+  SOURCE: {path: input/source.csv, ordinal: SourceOrdinal}
+output:
+  path: records.csv
+  columns: [GROUP_ID, SOURCE_ORDINAL, ROW_SEQUENCE]
+  order_by: [GROUP_ID, ROW_SEQUENCE]
+columns:
+  - {name: GROUP_ID, type: str, derivation: SOURCE.GroupID}
+  - {name: ROW_SEQUENCE, type: int}
+  - {name: SOURCE_ORDINAL, type: int}
+rows:
+  - id: included
+    dataset: SOURCE
+    group_by: [SOURCE.GroupID]
+    derivations:
+      SOURCE_ORDINAL: {aggregate: "MIN(SOURCE.SourceOrdinal)"}
+      ROW_SEQUENCE: {row_number: {window: {order_by: [SOURCE_ORDINAL]}}}
+"#,
+    )
+    .unwrap();
+    let result = study.build();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert_eq!(
+        save_csv(&study, result, "records.csv"),
+        b"GROUP_ID,SOURCE_ORDINAL,ROW_SEQUENCE\nG1,2,2\nG2,1,1\n"
+    );
+}

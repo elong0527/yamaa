@@ -4087,6 +4087,121 @@ fn baseline_uses_row_specific_reference_and_missing_candidates() {
     assert_eq!(source.reads.borrow().len(), 24);
 }
 
+/// Excluded later rows and excluded ties cannot take a baseline or make it ambiguous.
+#[test]
+fn baseline_filters_exclude_later_rows_and_ties_without_dropping_output() {
+    let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+    // Original expressions/test_windows.py inputs: excluding January 6 must
+    // leave January 2 flagged; excluding its January 6 twin must remove the tie.
+    for first in [2, 6] {
+        let source = table(
+            &[
+                ("ID", ColumnType::Int),
+                ("ELIGIBLE", ColumnType::Int),
+                ("ADT", ColumnType::Date),
+                ("TRTSDT", ColumnType::Date),
+            ],
+            vec![
+                vec![Value::Int(1), Value::Int(1), date(first), date(10)],
+                vec![Value::Int(2), Value::Int(0), date(6), date(10)],
+            ],
+        );
+        let result = baseline_plan(&source, vec![], Some(positive(Read::Column(1))))
+            .execute(&source, limits())
+            .unwrap();
+        assert_eq!(
+            result.dataset.rows(),
+            &[
+                vec![
+                    Value::Int(1),
+                    Value::Int(1),
+                    date(first),
+                    date(10),
+                    Value::Str("Y".into()),
+                ],
+                vec![
+                    Value::Int(2),
+                    Value::Int(0),
+                    date(6),
+                    date(10),
+                    Value::Missing,
+                ],
+            ]
+        );
+    }
+}
+
+/// Missing, post-reference and filter-excluded rows never end the partition scan.
+#[test]
+fn baseline_search_keeps_original_candidate_and_row_specific_reference_rules() {
+    let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+    // Original expressions/test_windows.py cases preserve their January dates
+    // and expected flags, including equality with a row's own reference.
+    for (pairs, eligible, expected) in [
+        (
+            vec![(Some(20), 10), (None, 10)],
+            vec![1, 1],
+            vec![Value::Missing, Value::Missing],
+        ),
+        (
+            vec![(Some(6), 10), (Some(2), 10)],
+            vec![1, 1],
+            vec![Value::Str("Y".into()), Value::Missing],
+        ),
+        (
+            vec![(Some(6), 10), (Some(6), 2)],
+            vec![1, 1],
+            vec![Value::Str("Y".into()), Value::Missing],
+        ),
+        (
+            vec![(Some(20), 10), (None, 10), (Some(6), 10)],
+            vec![1, 1, 1],
+            vec![Value::Missing, Value::Missing, Value::Str("Y".into())],
+        ),
+        (
+            vec![(Some(20), 10), (None, 10), (Some(6), 10)],
+            vec![0, 1, 1],
+            vec![Value::Missing, Value::Missing, Value::Str("Y".into())],
+        ),
+        (vec![(Some(6), 6)], vec![1], vec![Value::Str("Y".into())]),
+    ] {
+        let source = table(
+            &[
+                ("ID", ColumnType::Int),
+                ("ELIGIBLE", ColumnType::Int),
+                ("ADT", ColumnType::Date),
+                ("TRTSDT", ColumnType::Date),
+            ],
+            pairs
+                .into_iter()
+                .zip(eligible)
+                .enumerate()
+                .map(|(index, ((day, reference), eligible))| {
+                    vec![
+                        Value::Int(index as i64 + 1),
+                        Value::Int(eligible),
+                        day.map_or(Value::Missing, date),
+                        date(reference),
+                    ]
+                })
+                .collect(),
+        );
+        let result = baseline_plan(&source, vec![], Some(positive(Read::Column(1))))
+            .execute(&source, limits())
+            .unwrap();
+        assert_eq!(result.dataset.row_count(), expected.len());
+        assert_eq!(
+            result
+                .dataset
+                .rows()
+                .iter()
+                .map(|row| row[4].clone())
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+}
+
 /// Equal represented dates tie despite collected precision; diagnostics identify partitions.
 #[test]
 fn baseline_ties_count_all_matches_and_charge_partition_identity() {

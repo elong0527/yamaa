@@ -6,8 +6,10 @@ README describing what the benchmark derives.
 
 ## Required reading
 
-Read `../yaml/agents.md` first; it governs the schema and rules this directory
-exercises. Then read `README.md` here for the benchmark index. The open design
+Read `../rules/README.md` and `../yaml/README.md` first; they govern the
+schema and rules this directory exercises. Then read `README.md` here for
+the lifecycle states; the case directories themselves are the benchmark
+index. The open design
 gaps and the schema work they justify are tracked in this repository's issue
 tracker, one work item per root cause.
 
@@ -52,7 +54,7 @@ functions. The example tests compare public outputs and logs with independent tr
 check exact saved CSV bytes in an isolated study directory.
 
 Every positive benchmark also carries `run.R`, the same snippet in R. It
-targets the `yamaa` R package (issue #200) and mirrors `run.py` line for
+targets the `yamaa` R package and mirrors `run.py` line for
 line:
 
     library(yamaa)
@@ -154,7 +156,7 @@ host's syntax, and share the unchanged specification and expected outputs.
 
 Function implementations are ordinary installed packages. The benchmark program
 packages live in `rust/tests/project-programs/`; no vendored runtime artifact,
-contract fingerprint or activation cache is used. The five original function
+contract fingerprint or activation cache is used. The original function
 studies are copied outside the checkout by `rust/tools/stage_project_inputs.py`.
 It copies the sole existing `python/uv.lock` beside each Python environment;
 committed R locks contain versions without hashes. Each runner names its
@@ -169,7 +171,11 @@ contract. A failure over a completed dataset carries both the expected CSV and
 A positive inherited benchmark also carries the exact resolved YAML data tree.
 Use `expected/resolved.yaml` with `spec.yaml`, or
 `expected/resolved_<variant>.yaml` with `spec_<variant>.yaml`. This fixture
-must be complete, canonical, minimal, and free of `parents`.
+must be complete, canonical, minimal, and free of `parents`; the repository
+validator requires it and compares it with the resolved specification. Only
+the retained historical benchmarks named in `HISTORICAL_RESOLVED_FIXTURES`
+(`../.github/scripts/yaml-validation/repository_artifacts.py`) are exempt;
+every new positive inherited benchmark needs one.
 
 A multi-level benchmark keeps each inheritance level beside the entry as
 `spec_<level>.yaml` and carries no top-level `spec.yaml`. The level no other
@@ -443,15 +449,13 @@ check reports is a variable the README does not explain.
    For a positive inherited benchmark, also write its expected resolved YAML.
 2. Write the README to the contract above. A negative benchmark must include its
    `## How to fix` section.
-3. Add a row to the index table in `README.md`. Its `Derives` column copies
-   the README title, which now carries no standard/domain prefix.
-4. Once the README of a positive `sdtm-*` or `adam-*` benchmark is
+3. Once the README of a positive `sdtm-*` or `adam-*` benchmark is
    `reviewed`, write its full prompt,
    `../evaluations/harbor/prompts/<name>/full.md`, to the
    [benchmark prompt recipe](../automation/benchmark_prompt.md), its
    `conventions.md` from it, and its `brief.md` with
    `evaluations/harbor/brief.py`.
-5. Record any finding it exposes as a gap on the matching work item in the
+4. Record any finding it exposes as a gap on the matching work item in the
    issue tracker, or add the benchmark's name to the gap that already states it.
 
 ## Before deleting a benchmark
@@ -476,7 +480,9 @@ entry when it does not: `study_day` returns an ordinal on a calendar with no
 zero, and folding it into `date_diff` would have allowed `unit: week` with it.
 
 After registering one, update every place that enumerates the vocabulary: the
-input-shape audit in `../yaml/README.md`, the owning operation contract's type
+expression registry in the owning `../yaml/schema_*.yaml` module and the
+generated schema-fields reference it feeds (see `../rules/README.md`), the
+owning operation contract's type
 behavior, and the [local-handlers contract](../rules/execution/handlers.md)
 if it declares handlers. Then delete the gap it closed from its work item in the
 issue tracker, and close the work item when its last gap closes.

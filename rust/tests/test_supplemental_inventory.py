@@ -16,9 +16,21 @@ spec.loader.exec_module(module)
 
 
 class RepositoryCatalog(unittest.TestCase):
-    def test_checkout_fixtures_and_suites_are_all_registered(self):
+    def test_checkout_catalog_materializes_by_discovery(self):
         root = Path(__file__).resolve().parents[2]
-        module.load_catalog(root, root / "rust/qualification/supplemental.json")
+        catalog = module.load_catalog(
+            root, root / "rust/qualification/supplemental.json"
+        )
+        self.assertEqual(
+            {suite["path"] for suite in catalog["suites"]},
+            {
+                p.relative_to(root).as_posix()
+                for pattern in ("rust/tests/installed_*.py", "R/yamaa/tests/*.R")
+                for p in root.glob(pattern)
+            },
+        )
+        self.assertTrue(catalog["contracts"])
+        self.assertTrue(catalog["support_files"])
 
     def test_reference_consumers_cannot_reenter_installed_qualification(self):
         for source in (
@@ -85,6 +97,96 @@ class RepositoryCatalog(unittest.TestCase):
             ):
                 module.require_native_consumer(source, "installed_control.py")
 
+    def test_non_literal_and_indirect_dynamic_imports_are_rejected(self):
+        # A dynamic import whose target is not a constant string cannot be
+        # classified, so it must fail closed instead of being allowed; the
+        # same holds for import functions reached through getattr, a
+        # __dict__ subscript, an assignment alias, or eval/exec.
+        for source in (
+            "import importlib\nimportlib.import_module('yamaa.' + 'io')",
+            "import importlib\nimportlib.import_module(f'yamaa.io')",
+            "import importlib\ntarget = 'yamaa.io'\nimportlib.import_module(target)",
+            "import importlib\nimportlib.import_module()",
+            "__import__('yamaa.' + 'io')",
+            "__import__('io.project', globals(), None, (), level)",
+            "import builtins\nbuiltins.__import__('yamaa.io')",
+            "from builtins import __import__ as load\nload('yamaa.io')",
+            "import importlib\ngetattr(importlib, 'import_module')('yamaa.io')",
+            "import importlib\ngetattr(importlib, attr)('yamaa.io')",
+            "import importlib\nimportlib.__dict__['import_module']('yamaa.io')",
+            "import importlib\nload = importlib.import_module\nload('yamaa.io')",
+            (
+                "import importlib\n"
+                "load = getattr(importlib, 'import_module')\nload('yamaa.io')"
+            ),
+            "eval(\"__import__('yamaa.io')\")",
+            "exec('import yamaa.io')",
+            "eval(code)",
+            # A guard delegation does not exempt the wrapper itself:
+            # direct calls to a delegating function are classified, and
+            # a parameter with a default or a reassignment in the body
+            # (or a lambda parameter) is not an exemption at all.
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "def load(name):\n"
+                "    return original(name)\n"
+                "load('yamaa.io')"
+            ),
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "def reject(name='yamaa.io'):\n"
+                "    return original(name)\n"
+            ),
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "def reject(name):\n"
+                "    name = 'yamaa.io'\n"
+                "    return original(name)\n"
+            ),
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "load = lambda name: original(name)\n"
+                "load('yamaa.io')"
+            ),
+            # Eval/exec bodies share the outer alias tables, and aliases
+            # defined inside an evaluated body are visible outside it.
+            "from importlib import import_module as load\neval(\"load('yamaa.io')\")",
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "exec(\"original('yamaa.io')\")"
+            ),
+            "exec(\"from importlib import import_module as load\")\nload('yamaa.io')",
+            # An import function bound to the name eval is an import
+            # call first: its argument is a module target, not code.
+            "from importlib import import_module as eval\neval('yamaa.io')",
+        ):
+            with (
+                self.subTest(source=source),
+                self.assertRaisesRegex(ValueError, "unresolved|reference semantics"),
+            ):
+                module.require_native_consumer(source, "installed_control.py")
+        # The suites' runtime-guard delegation stays allowed: the saved
+        # builtins.__import__ called with the guard function's own
+        # parameter. The exemption is syntactic; this test does not
+        # exercise runtime validation of that parameter.
+        module.require_native_consumer(
+            "import builtins\n"
+            "original = builtins.__import__\n"
+            "def reject(name, *args, **kwargs):\n"
+            "    return original(name, *args, **kwargs)\n",
+            "installed_control.py",
+        )
+        # Non-import getattr calls and literal native eval stay allowed.
+        module.require_native_consumer(
+            "value = getattr(obj, 'method')()\neval(\"__import__('yamaa')\")\n",
+            "installed_control.py",
+        )
+
     def test_sas_canonical_inputs_and_truth_stage_without_ownership_documents(self):
         prefix = "rust/crates/yamaa-adapters/tests/fixtures/sas/"
         catalog = {
@@ -136,9 +238,10 @@ class SupplementalEvidence(unittest.TestCase):
         self.output = self.directory / "evidence"
         self.contract = "rust/crates/example/tests/fixtures/cases.tsv"
         self.write(self.contract, "id\texpected\na\ttrue\n")
-        self.catalog = {
-            "version": "1",
-            "support_files": [],
+        # The committed catalog keeps only underivable data; suites and
+        # support fixtures below are discovered by glob instead.
+        self.catalog_file = {
+            "version": "2",
             "contracts": [
                 {
                     "path": self.contract,
@@ -147,7 +250,9 @@ class SupplementalEvidence(unittest.TestCase):
                     "consumers": ["rust/tests/installed_first.py"],
                 }
             ],
-            "suites": [],
+            "suite_levels": {},
+            "suite_ids": {},
+            "support_roles": {},
         }
         for name, code in (
             ("first", 'print("failed contract")\nraise SystemExit(1)\n'),
@@ -157,17 +262,9 @@ class SupplementalEvidence(unittest.TestCase):
             path = "rust/tests/" + filename
             self.write(path, code)
             (self.staged / filename).write_text(code)
-            self.catalog["suites"].append(
-                {
-                    "id": "python/" + name,
-                    "runtime": "python",
-                    "path": path,
-                    "staged_path": filename,
-                    "level": "component",
-                }
-            )
         self.catalog_path = self.directory / "catalog.json"
-        self.catalog_path.write_text(json.dumps(self.catalog))
+        self.save_catalog_file()
+        self.catalog = module.load_catalog(self.root, self.catalog_path)
         self.metadata = {
             "runtime_version": "test",
             "core_version": "test",
@@ -179,25 +276,30 @@ class SupplementalEvidence(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(contents)
 
-    def test_reconciliation_rejects_an_added_contract_and_a_removed_suite(self):
-        module.load_catalog(self.root, self.catalog_path)
+    def save_catalog_file(self):
+        self.catalog_path.write_text(json.dumps(self.catalog_file))
+
+    def test_added_fixture_and_suite_are_discovered_without_a_catalog_edit(self):
         self.write("rust/crates/example/tests/fixtures/new.tsv", "id\na\n")
-        with self.assertRaisesRegex(ValueError, "uncataloged"):
-            module.load_catalog(self.root, self.catalog_path)
+        catalog = module.load_catalog(self.root, self.catalog_path)
+        self.assertIn(
+            {"path": "rust/crates/example/tests/fixtures/new.tsv", "role": "input"},
+            catalog["support_files"],
+        )
         (self.root / "rust/crates/example/tests/fixtures/new.tsv").unlink()
+        self.write("R/yamaa/tests/new.R", "stopifnot(TRUE)\n")
+        catalog = module.load_catalog(self.root, self.catalog_path)
+        self.assertIn("r/new", {suite["id"] for suite in catalog["suites"]})
+
+    def test_removed_contract_consumer_is_rejected(self):
         (self.root / "rust/tests/installed_first.py").unlink()
         with self.assertRaisesRegex(ValueError, "missing contract consumer"):
             module.load_catalog(self.root, self.catalog_path)
 
     def test_whole_run_claim_is_invalid_for_supplemental_contracts(self):
-        self.catalog["contracts"][0]["level"] = "shared_run"
-        self.catalog_path.write_text(json.dumps(self.catalog))
+        self.catalog_file["contracts"][0]["level"] = "shared_run"
+        self.save_catalog_file()
         with self.assertRaisesRegex(ValueError, "invalid supplemental level"):
-            module.load_catalog(self.root, self.catalog_path)
-
-    def test_unknown_suite_cannot_disappear_from_inventory(self):
-        self.write("R/yamaa/tests/new.R", "stopifnot(TRUE)\n")
-        with self.assertRaisesRegex(ValueError, "suites differ"):
             module.load_catalog(self.root, self.catalog_path)
 
     def test_failed_command_retains_its_log_and_unrun_suffix(self):
@@ -270,17 +372,44 @@ class SupplementalEvidence(unittest.TestCase):
         self.assertEqual(report["evidence"], evidence)
         self.assertEqual(report["installation"], self.metadata)
 
-    def test_distinct_suite_ids_cannot_overwrite_the_same_log(self):
-        # Both IDs used to map to python-first-nested.log after slash replacement.
-        self.catalog["suites"][0]["id"] = "python/first/nested"
-        self.catalog["suites"][1]["id"] = "python/first-nested"
-        self.catalog_path.write_text(json.dumps(self.catalog))
+    def test_suite_identity_override_must_stay_a_simple_name(self):
+        # A nested identity would map two suites onto the same log name
+        # after slash replacement.
+        self.catalog_file["suite_ids"] = {
+            "rust/tests/installed_first.py": "python/first/nested"
+        }
+        self.save_catalog_file()
         with self.assertRaisesRegex(ValueError, "host/simple-name"):
             module.load_catalog(self.root, self.catalog_path)
 
+    def test_malformed_suite_identity_override_is_not_replaced(self):
+        for value in ("", ["python/first"]):
+            with self.subTest(value=value):
+                self.catalog_file["suite_ids"] = {
+                    "rust/tests/installed_first.py": value
+                }
+                self.save_catalog_file()
+                with self.assertRaisesRegex(ValueError, "host/simple-name"):
+                    module.load_catalog(self.root, self.catalog_path)
+
+    def test_stale_suite_level_override_is_rejected(self):
+        self.catalog_file["suite_levels"] = {"python/ghost": "compile"}
+        self.save_catalog_file()
+        with self.assertRaisesRegex(ValueError, "stale suite level"):
+            module.load_catalog(self.root, self.catalog_path)
+
     def test_inventory_paths_cannot_escape_the_checkout(self):
-        self.catalog["contracts"][0]["consumers"] = ["../catalog.json"]
-        self.catalog_path.write_text(json.dumps(self.catalog))
+        self.catalog_file["contracts"][0]["consumers"] = ["../catalog.json"]
+        self.save_catalog_file()
+        with self.assertRaisesRegex(ValueError, "path leaves root"):
+            module.load_catalog(self.root, self.catalog_path)
+
+    def test_discovered_fixture_cannot_link_outside_the_checkout(self):
+        outside = self.directory / "outside.tsv"
+        outside.write_text("id\na\n")
+        link = self.root / "rust/tests/host-fixtures/linked.tsv"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(outside)
         with self.assertRaisesRegex(ValueError, "path leaves root"):
             module.load_catalog(self.root, self.catalog_path)
 

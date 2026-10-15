@@ -293,3 +293,74 @@ fn local_path_admission_still_rejects_uri_backslash_and_empty_segments() {
     }
     assert_eq!(resources.capture_reads(), 0);
 }
+
+#[test]
+fn retired_python_refused_alias_cannot_become_a_snapshot_verification_dependency() {
+    let study = Study::new();
+    let source = study.0.join("entry/source.csv");
+    let alias = study.0.join("entry/alias.csv");
+    fs::write(&source, b"retained").unwrap();
+    fs::hard_link(&source, &alias).unwrap();
+    let mut resources = study.resources();
+    let (snapshot, created) = resources.capture("source.csv", 8).unwrap();
+    assert!(created);
+    for name in ["source.csv", "alias.csv"] {
+        assert_eq!(resources.capture(name, 7), Err(Error::Limit));
+    }
+    fs::remove_file(alias).unwrap();
+    let (again, created) = resources.capture("source.csv", 8).unwrap();
+    assert!(!created && std::sync::Arc::ptr_eq(&snapshot, &again));
+    assert_eq!(snapshot.as_ref(), b"retained");
+    assert_eq!(resources.capture_reads(), 1);
+}
+
+#[test]
+fn retired_python_unicode_names_and_binary_snapshots_do_not_scale_to_the_byte_ceiling() {
+    let study = Study::new();
+    let name = "donn\u{e9}es-\u{1f9ea}.csv";
+    let content = b"ID\r\n001\x1a\x00\r\n";
+    fs::write(study.0.join("entry").join(name), content).unwrap();
+    let mut resources = study.resources();
+    // The old Python boundary also admitted arbitrary-sized integer ceilings;
+    // the native boundary's largest usize still must only capture this file.
+    let (snapshot, created) = resources.capture(name, usize::MAX).unwrap();
+    assert!(created);
+    assert_eq!(snapshot.as_ref(), content);
+    let (again, created) = resources.capture(name, content.len()).unwrap();
+    assert!(!created && std::sync::Arc::ptr_eq(&snapshot, &again));
+    assert_eq!(resources.capture_reads(), 1);
+}
+
+#[cfg(windows)]
+#[test]
+fn retired_python_junctions_reject_descent_and_keep_caller_selected_root_authority() {
+    use std::os::windows::process::CommandExt;
+    for name in ["store&data", "store & data"] {
+        let study = Study::new();
+        fs::create_dir(study.0.join(name)).unwrap();
+        fs::write(study.0.join(name).join("dm.csv"), b"ID\n001\n").unwrap();
+        let link = study.text("entry/link&data");
+        let target = study.text(name);
+        // Both operands are generated fixture paths, quoted as literal cmd
+        // operands. Ampersands and spaces must never become shell commands.
+        let output = std::process::Command::new("cmd")
+            .arg("/d")
+            .arg("/c")
+            .raw_arg(format!("mklink /J \"{link}\" \"{target}\""))
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        let mut resources = study.resources();
+        assert_eq!(
+            resources.capture("link&data/dm.csv", 7),
+            Err(Error::Symlink)
+        );
+        assert_eq!(resources.capture_reads(), 0);
+        let mut selected = Resources::for_entry(&link).unwrap();
+        let (bytes, created) = selected.capture("dm.csv", 7).unwrap();
+        assert!(created);
+        assert_eq!(bytes.as_ref(), b"ID\n001\n");
+        drop(selected);
+        fs::remove_dir(study.0.join("entry/link&data")).unwrap();
+    }
+}

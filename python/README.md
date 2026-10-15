@@ -77,9 +77,9 @@ share cumulative allowances, and expensive plans can exhaust work before size.
 Validation and normalization share 67,108,864 logical work units; complex or
 inherited specifications can exhaust this separate preparation budget below
 the width ceiling. These are implementation policies, not language constraints
-or process-memory guarantees. Layered work policy and release acceptance remain
-tracked in [#2300](https://github.com/elong0527/yamaa/issues/2300) and
-[#2288](https://github.com/elong0527/yamaa/issues/2288).
+or process-memory guarantees. The
+[release resource policies](../docs/release.md#resource-limits) describe cumulative
+layered allowances and the separate representation budgets.
 
 ## Define documents
 
@@ -137,8 +137,17 @@ Its Python implementation names remain private.
 
 ## Install and verify
 
-Build the source distribution with Rust 1.90.0 and Cargo. For a locked
-development installation from the repository root:
+Download the wheel for your supported OS from the selected
+[GitHub release](https://github.com/elong0527/yamaa/releases), then run
+`python -m pip install ./yamaa-0.4.0-<wheel-tags>.whl`. The standalone source
+asset installs with `python -m pip install ./yamaa-0.4.0.tar.gz`; source builds
+need Rust 1.90.0/Cargo, a C compiler and GNU make. Release wheels are the exact
+qualified artifacts; the attached source archive is the tested Linux archive.
+The other OS source lanes independently build and qualify their own archives.
+GitHub distribution does not imply publication to PyPI.
+
+For a locked development installation of a checkout candidate from the
+repository root:
 
 ```bash
 uv sync --project python --extra test --locked --no-editable

@@ -195,6 +195,22 @@ pub struct InspectionFailure<E> {
     pub error: E,
 }
 
+/// Missing inputs cannot establish current-key cardinality, but captured types
+/// can still refuse a donor filter. Keep other refusals and later declaration
+/// checkpoints separate, and preserve ordinary execution when inputs exist.
+pub fn inspection_declaration_diagnostics<'a, E>(
+    prepared: &'a PreparedSpecification,
+    failures: &[InspectionFailure<E>],
+) -> impl Iterator<Item = &'a yamaa_core::diagnostic::Diagnostic> {
+    let missing = !failures.is_empty()
+        && failures
+            .iter()
+            .all(|failure| failure.failure == Some(ResourceFailure::Missing));
+    prepared
+        .intermediate_filter_type_diagnostics()
+        .filter(move |_| missing)
+}
+
 /// The exact captured bytes and decoded table remain available after failure.
 /// Runtime conditions live in ExecutionAttempt and retain their original payloads.
 pub struct CapturedSource<T> {

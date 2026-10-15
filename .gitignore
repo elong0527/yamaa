@@ -14,3 +14,5 @@ docs/benchmark/index.md
 docs/coverage/
 .coverage
 .coverage.*
+rules/reference/requirements.md
+rules/reference/schema-fields.md

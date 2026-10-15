@@ -241,3 +241,73 @@ fn unused_decimal_option_cannot_own_an_integer_output_byte_refusal() {
         })
     ));
 }
+
+#[test]
+fn retired_python_scalar_text_and_calendar_edges_keep_exact_csv_bytes() {
+    let table = Table {
+        schema: TableSchema::new(
+            [
+                ("ID", ColumnType::Str),
+                ("COUNT", ColumnType::Int),
+                ("WHEN", ColumnType::Date),
+                ("AT", ColumnType::DateTime),
+                ("TEXT", ColumnType::Str),
+            ]
+            .into_iter()
+            .map(|(name, kind)| Column {
+                name: name.into(),
+                kind,
+            })
+            .collect(),
+        )
+        .unwrap(),
+        rows: vec![
+            vec![
+                Value::Str("1".into()),
+                Value::Int(-42),
+                Value::Date("2020-01-02".parse().unwrap()),
+                Value::DateTime("2020-01-02T03:04:05".parse().unwrap()),
+                Value::Str("\u{e9}\u{1d400}".into()),
+            ],
+            vec![
+                Value::Str("2".into()),
+                Value::Int(0),
+                Value::Missing,
+                Value::Missing,
+                Value::Missing,
+            ],
+        ],
+    };
+    assert_eq!(
+        csv_artifact::render(&table, &[0, 1, 2, 3, 4], 1024).unwrap(),
+        "ID,COUNT,WHEN,AT,TEXT\n1,-42,2020-01-02,2020-01-02T03:04:05,\u{e9}\u{1d400}\n2,0,,,\n"
+            .as_bytes()
+    );
+    let edges = Table {
+        schema: TableSchema::new(vec![
+            Column {
+                name: "ID".into(),
+                kind: ColumnType::Str,
+            },
+            table.schema.columns()[2].clone(),
+            table.schema.columns()[3].clone(),
+        ])
+        .unwrap(),
+        rows: vec![
+            vec![
+                Value::Str("1".into()),
+                Value::Date("0001-01-01".parse().unwrap()),
+                Value::DateTime("0001-01-01T00:00:00".parse().unwrap()),
+            ],
+            vec![
+                Value::Str("2".into()),
+                Value::Date("9999-12-31".parse().unwrap()),
+                Value::DateTime("9999-12-31T23:59:59".parse().unwrap()),
+            ],
+        ],
+    };
+    assert_eq!(
+        csv_artifact::render(&edges, &[0, 1, 2], 1024).unwrap(),
+        b"ID,WHEN,AT\n1,0001-01-01,0001-01-01T00:00:00\n2,9999-12-31,9999-12-31T23:59:59\n"
+    );
+}

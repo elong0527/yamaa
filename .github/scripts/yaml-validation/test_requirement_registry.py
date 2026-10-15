@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""Tests for check_requirement_registry.py.
+"""Tests for the requirement-registry scan merged into check_rule_rewrite.py.
 
 Every active requirement ID is defined exactly once as a bold dotted marker
-``**REQ-0001.**``. Citations in rules/ must resolve to current definitions;
-historical numbered IDs are forbidden in active sources.
+``**REQ-0001.**``. Citations in rules/ must resolve to current definitions.
 """
 
 import tempfile
 import unittest
 from pathlib import Path
 
-import check_requirement_registry
+from check_rule_rewrite import requirement_registry_errors
 
 
 class RequirementRegistryTests(unittest.TestCase):
@@ -28,7 +27,7 @@ class RequirementRegistryTests(unittest.TestCase):
         return path
 
     def errors(self):
-        return check_requirement_registry.check(self.root)
+        return requirement_registry_errors(self.root)
 
     def test_valid_registry_passes(self):
         self.write(
@@ -118,18 +117,6 @@ class RequirementRegistryTests(unittest.TestCase):
             "# Compute\n\nThe marker `REQ-0099` is literal text.\n",
         )
         self.assertEqual(self.errors(), [])
-
-    def test_historical_citation_outside_compatibility_records_fails(self):
-        self.write("values/a.md", "**REQ-0001.** First.\n")
-        source = self.root / "python/src/yamaa/module.py"
-        source.parent.mkdir(parents=True)
-        source.write_text('"""Implements R001-1."""\n', encoding="ascii")
-
-        self.assertIn(
-            "historical requirement citation outside compatibility records: "
-            "python/src/yamaa/module.py:1: R001-1",
-            self.errors(),
-        )
 
     def test_no_history_inventory_is_required(self):
         self.write("values/a.md", "**REQ-0001.** First.\n")

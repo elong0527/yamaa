@@ -29,6 +29,73 @@ fn normative_ascii_modes_preserve_foreign_scalars_and_first_scalar_boundaries() 
         assert_eq!(actual.len(), source.len());
     }
 }
+
+#[test]
+fn original_ascii_casing_truth_preserves_range_endpoints_and_unicode_word_boundaries() {
+    // Retain the original Python expression tests' inclusive-range mutation
+    // controls and Unicode cases without consulting a host casing routine.
+    for (source, mode, expected) in [
+        ("abcZ", Case::Upper, "ABCZ"),
+        ("ABCz", Case::Lower, "abcz"),
+        ("a1!_", Case::Upper, "A1!_"),
+        ("A1!_", Case::Lower, "a1!_"),
+        ("z", Case::Upper, "Z"),
+        (
+            "abcdefghijklmnopqrstuvwxyz",
+            Case::Upper,
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        ),
+        ("Z", Case::Lower, "z"),
+        (
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            Case::Lower,
+            "abcdefghijklmnopqrstuvwxyz",
+        ),
+        ("WEEK 8", Case::Sentence, "Week 8"),
+        ("WeEk 8", Case::Sentence, "Week 8"),
+        ("8-WEEK", Case::Sentence, "8-week"),
+        ("a", Case::Sentence, "A"),
+        (
+            "\u{00df}TRA\u{00df}e",
+            Case::Sentence,
+            "\u{00df}tra\u{00df}e",
+        ),
+        ("\u{0131}ABC", Case::Sentence, "\u{0131}abc"),
+        ("\u{0130}ABC", Case::Sentence, "\u{0130}abc"),
+        ("\u{212a}ELVIN", Case::Sentence, "\u{212a}elvin"),
+        ("END OF TREATMENT", Case::Title, "End Of Treatment"),
+        ("WEEK 8", Case::Title, "Week 8"),
+        ("follow-up", Case::Title, "Follow-Up"),
+        ("8-WEEK", Case::Title, "8-Week"),
+        ("\u{00e9}COLE", Case::Title, "\u{00e9}Cole"),
+        (
+            "\u{00e9}cole \u{00c9}COLE",
+            Case::Title,
+            "\u{00e9}Cole \u{00c9}Cole",
+        ),
+        ("Stra\u{00df}e", Case::Upper, "STRA\u{00df}E"),
+        ("Stra\u{00df}e", Case::Lower, "stra\u{00df}e"),
+        ("apple", Case::Title, "Apple"),
+        ("pizza", Case::Title, "Pizza"),
+        ("ABC", Case::Title, "Abc"),
+        ("aZ", Case::Title, "Az"),
+    ] {
+        let actual = transform(source, mode, source.len()).unwrap();
+        assert_eq!(actual, expected, "{source:?}, {mode:?}");
+        assert_eq!(actual.chars().count(), source.chars().count());
+    }
+    for source in [
+        "\u{00df}", "\u{0130}", "\u{0131}", "\u{212a}", "\u{00e9}", "\u{00c9}",
+    ] {
+        for mode in [Case::Upper, Case::Lower, Case::Sentence, Case::Title] {
+            assert_eq!(transform(source, mode, source.len()).unwrap(), source);
+        }
+    }
+    for mode in [Case::Sentence, Case::Title] {
+        assert_eq!(transform("", mode, 0).unwrap(), "");
+    }
+}
+
 #[test]
 fn output_quota_is_checked_on_utf8_bytes_before_substitution() {
     assert_eq!(

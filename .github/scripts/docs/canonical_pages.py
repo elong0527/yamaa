@@ -1,6 +1,7 @@
 """Render repository-owned pages without maintaining copies under docs/."""
 
 import os
+import sys
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
@@ -10,6 +11,12 @@ from mkdocs.exceptions import PluginError
 from mkdocs.structure.files import File
 
 SOURCES = {"index.md": "README.md", "articles/rules.md": "rules/README.md"}
+# Rendered from rules/ and yaml/ on every build; never committed or edited.
+GENERATED = {
+    "reference/requirements.md": "rules/reference/requirements.md",
+    "reference/schema-fields.md": "rules/reference/schema-fields.md",
+}
+RULE_TOOLS = Path(__file__).resolve().parents[1] / "yaml-validation"
 
 
 class RepositoryLinks(Treeprocessor):
@@ -43,6 +50,21 @@ class RepositoryLinksExtension(Extension):
         )
 
 
+def rule_references(root):
+    """Render the requirement and schema-field references from their sources."""
+    if str(RULE_TOOLS) not in sys.path:
+        sys.path.insert(0, str(RULE_TOOLS))
+    from generate_rule_reference import generated
+
+    try:
+        references = generated(root)
+    except ValueError as error:
+        raise PluginError(f"Cannot generate rule references: {error}") from error
+    return {
+        path.relative_to(root).as_posix(): text for path, text in references.items()
+    }
+
+
 def on_files(files, *, config):
     root = Path(config.config_file_path).parent
     for destination, source in SOURCES.items():
@@ -53,6 +75,14 @@ def on_files(files, *, config):
         file = File.generated(config, destination, abs_src_path=str(root / source))
         file.edit_uri = Path(os.path.relpath(root / source, config.docs_dir)).as_posix()
         files.append(file)
+    references = rule_references(root)
+    for destination, source in GENERATED.items():
+        if files.get_file_from_path(destination) is not None:
+            raise PluginError(
+                f"{source} is generated; remove the duplicate docs/{destination}."
+            )
+        # Generated files carry no edit target: edit the contract or schema.
+        files.append(File.generated(config, destination, content=references[source]))
     return files
 
 
@@ -64,7 +94,7 @@ def on_page_markdown(markdown, *, page, config, files):
         for extension in config.markdown_extensions
         if not isinstance(extension, RepositoryLinksExtension)
     ]
-    if source := SOURCES.get(page.file.src_uri):
+    if source := SOURCES.get(page.file.src_uri) or GENERATED.get(page.file.src_uri):
         source_url = f"{config.repo_url.rstrip('/')}/blob/main/{source}"
         config.markdown_extensions.append(RepositoryLinksExtension(source_url))
     return markdown

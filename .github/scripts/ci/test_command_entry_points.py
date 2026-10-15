@@ -2,7 +2,6 @@
 
 import ast
 import importlib.util
-import json
 import os
 import re
 import subprocess
@@ -55,8 +54,13 @@ class CommandEntryPoints(unittest.TestCase):
         )
 
     def test_staging_uses_every_cataloged_suite_and_refuses_overwrite(self):
-        catalog = json.loads(
-            (ROOT / "rust/qualification/supplemental.json").read_text()
+        spec = importlib.util.spec_from_file_location(
+            "supplemental_inventory", ROOT / "rust/tools/supplemental_inventory.py"
+        )
+        inventory = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inventory)
+        catalog = inventory.load_catalog(
+            ROOT, ROOT / "rust/qualification/supplemental.json"
         )
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "staged-r"

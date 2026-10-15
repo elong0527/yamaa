@@ -1,6 +1,6 @@
 version: "1.0"
 
-# Vocabulary coverage for the admission policy in agents.md: an expression
+# Vocabulary coverage for the admission policy in AGENTS.md: an expression
 # enters the vocabulary when an example needs it, a negative example fixes
 # its failure behavior, and R and Python can implement it the same way.
 # Every registered expression and verification names either the negative

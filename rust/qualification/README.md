@@ -2,9 +2,11 @@
 
 The Python and R suites exercise installed `domain`, `check` and `define` APIs.
 Benchmark directories and `tools/public_conformance.py` define the current active
-set and explicit exclusions for both hosts. `public-conformance.json` retains
-prior passing observations and their original source/run/attempt/artifact identities.
-`supplemental.json` declares component contracts and installed probe suites.
+set and explicit exclusions for both hosts. No passing observations are retained:
+each native lane gates directly on every active benchmark passing.
+`supplemental.json` records only underivable catalog data (contract fixtures and
+their consumers, elevated suite levels, renamed suite identities); suites and
+plain fixtures are discovered by glob.
 
 ## Public reports
 
@@ -35,11 +37,9 @@ python -I rust/tests/public_conformance.py --plan /tmp/public-plan --fixtures be
   --python-lock python/uv.lock --output /tmp/public-python --source-revision REVISION
 Rscript --vanilla rust/tests/public_conformance.R /tmp/public-plan benchmarks /tmp/public-r REVISION
 python -I rust/tools/public_conformance.py compare --fixtures benchmarks \
-  --observed /tmp/public-python --output /tmp/public-python/inventory.json \
-  --ratchet rust/qualification/public-conformance.json
+  --observed /tmp/public-python --output /tmp/public-python/inventory.json
 python -I rust/tools/public_conformance.py compare --fixtures benchmarks \
-  --observed /tmp/public-r --output /tmp/public-r/inventory.json \
-  --ratchet rust/qualification/public-conformance.json
+  --observed /tmp/public-r --output /tmp/public-r/inventory.json
 ```
 
 Use absolute script, fixture and lock paths when running outside the checkout.
@@ -61,14 +61,7 @@ issue or marked permanent with a by-design reason; a listed difference that
 stops occurring fails the run as stale, and an unlisted difference fails it as
 a mismatch.
 
-`tools/seed_public_conformance.py` derives passing observations from successful full
-matrix runs on main, dispatched branches, or same-repository
-`qualification/issue-*` pushes. A qualification push requires the original REST
-run metadata, including both repository identities, and every active case must
-pass in all 21 installed lanes. It replays saved observations against expected
-files, requires every platform/interpreter/package tuple from the same revision and refuses
-reductions when given `--previous`. The comparison commands above use
-`--ratchet rust/qualification/public-conformance.json` to require
-every current active case to pass on that host, including a newly added directory
-absent from earlier observations. The prior observations identify new passes;
-they do not act as an executable/runtime registry. Expected data remains unchanged.
+The comparison commands above gate on the current directories alone: every
+active case must pass on that host, including a newly added directory. No
+prior observations are consulted, so adding a benchmark needs no registry
+edit. Expected data remains unchanged.
