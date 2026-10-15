@@ -1,8 +1,8 @@
+use serde_json::Value as C;
 use std::collections::BTreeSet;
 use yamaa_core::{
     csv_source::{parse, Limits},
-    diagnostic::{ConditionCode, ContextValue as C, MAX_PROJECTION_BYTES},
-    value::Value,
+    diagnostic::{ConditionCode, MAX_PROJECTION_BYTES},
 };
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
@@ -12,70 +12,70 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "source_header_absent",
             "REQ-0851",
             1,
-            C::Integer("1".into()),
+            C::Number(("1").parse().expect("canonical integer")),
         ),
         (
             &b"\xef\xbb\xbfID\n"[..],
             "source_byte_order_mark",
             "REQ-0851",
             1,
-            C::Integer("1".into()),
+            C::Number(("1").parse().expect("canonical integer")),
         ),
         (
             &b"ID\nx\r"[..],
             "source_carriage_return",
             "REQ-0851",
             2,
-            C::Integer("1".into()),
+            C::Number(("1").parse().expect("canonical integer")),
         ),
         (
             &b"ID\nx\"y"[..],
             "source_quote_in_bare_field",
             "REQ-0851",
             2,
-            C::Integer("1".into()),
+            C::Number(("1").parse().expect("canonical integer")),
         ),
         (
             &b"ID\n\"x\" "[..],
             "source_text_after_quote",
             "REQ-0851",
             2,
-            C::Integer("1".into()),
+            C::Number(("1").parse().expect("canonical integer")),
         ),
         (
             &b"ID\n\"x"[..],
             "source_quote_unterminated",
             "REQ-0851",
             2,
-            C::Integer("1".into()),
+            C::Number(("1").parse().expect("canonical integer")),
         ),
         (
             &b"ID,V\nx"[..],
             "source_record_width",
             "REQ-0851",
             2,
-            C::Integer("2".into()),
+            C::Number(("2").parse().expect("canonical integer")),
         ),
         (
             &b"ID,\nx,y"[..],
             "source_field_name_empty",
             "REQ-0851",
             1,
-            C::Integer("2".into()),
+            C::Number(("2").parse().expect("canonical integer")),
         ),
         (
             &b"ID,ID\nx,y"[..],
             "source_field_name_duplicate",
             "REQ-0851",
             1,
-            C::Scalar(Value::Str("ID".into())),
+            C::String("ID".into()),
         ),
         (
             &b"\xef\xbb\xbfID\n\"x\ny\",\xff"[..],
             "invalid_text",
             "REQ-0853",
             2,
-            C::Integer("2".into()),
+            C::Number(("2").parse().expect("canonical integer")),
         ),
     ] {
         let error = parse(input, Limits::default()).unwrap_err();
@@ -95,15 +95,9 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         );
         assert_eq!(error.requirement(), Some(requirement));
         assert_eq!(finding.spec_paths, ["input.SRC.path"]);
-        assert_eq!(
-            finding.context["dataset"],
-            C::Scalar(Value::Str("SRC".into()))
-        );
-        assert_eq!(
-            finding.context["path"],
-            C::Scalar(Value::Str("source.csv".into()))
-        );
-        assert_eq!(finding.context["record"], C::Integer(record.to_string()));
+        assert_eq!(finding.context["dataset"], C::String("SRC".into()));
+        assert_eq!(finding.context["path"], C::String("source.csv".into()));
+        assert_eq!(finding.context["record"], C::from(record));
         assert_eq!(finding.context["field"], field);
         assert_eq!(finding.context.len(), 4);
         assert_eq!(finding.source_span, None);
@@ -125,11 +119,9 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
 
 pub(super) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnostic::ConditionCode>
 {
+    use serde_json::Value as JsonValue;
     use yamaa_core::{
-        csv_source,
-        diagnostic::{Context, ContextValue},
-        typed_csv::PreparedTypes,
-        value::{ColumnType, Value},
+        csv_source, diagnostic::Context, typed_csv::PreparedTypes, value::ColumnType,
     };
     let mut reached = std::collections::BTreeSet::new();
     for (declarations, content, phase, condition, requirement, field, extra) in [
@@ -177,7 +169,7 @@ pub(super) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
         let expected: Context = [("dataset", "SRC"), ("field", field)]
             .into_iter()
             .chain(extra)
-            .map(|(key, value)| (key.into(), ContextValue::Scalar(Value::Str(value.into()))))
+            .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
             .collect();
         assert_eq!(diagnostic.context, expected);
         assert_eq!(diagnostic.source_span, None);

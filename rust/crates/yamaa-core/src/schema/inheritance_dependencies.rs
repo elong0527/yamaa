@@ -7,7 +7,7 @@ use super::{
     ValidationError,
 };
 use crate::dependency_analysis;
-use alloc::{format, string::String, vec, vec::Vec};
+use std::vec;
 
 /// Ordered semantic findings; hosts render paths without discovering dependencies again.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,10 +28,13 @@ pub enum InheritanceDependencyIssue {
 }
 
 /// No partially pruned document is published on semantic or resource failure.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum InheritanceDependencyError {
+    #[error("schema inheritance dependencies normalization: {0:?}")]
     Normalization(NormalizationError),
+    #[error("schema inheritance dependencies reference: {0:?}")]
     Reference(InheritanceReferenceError),
+    #[error("schema inheritance dependencies invalid: {0:?}")]
     Invalid(Vec<InheritanceDependencyIssue>),
 }
 impl From<NormalizationError> for InheritanceDependencyError {

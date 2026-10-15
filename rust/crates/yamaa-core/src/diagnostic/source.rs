@@ -1,12 +1,10 @@
 //! Borrowed ingestion facts, admitted as one ordered report before owned copies.
-use super::{
-    ConditionCode as C, Context, ContextValue as V, Diagnostic, ProjectionBudget, ProjectionError,
-};
+use super::{ConditionCode as C, Context, Diagnostic, ProjectionBudget, ProjectionError};
 use crate::{
     csv_source::{Field, ProfileCause},
-    value::{ColumnType, Value},
+    value::ColumnType,
 };
-use alloc::{format, string::ToString, vec};
+use serde_json::Value as V;
 
 /// Exact codec facts. Codec parsing and physical schema conversion remain external.
 #[derive(Clone, Copy, Debug)]
@@ -73,7 +71,7 @@ pub enum SourceFinding<'a> {
     },
 }
 fn text(value: &str) -> V {
-    V::Scalar(Value::Str(value.into()))
+    V::String(value.into())
 }
 fn kind(value: ColumnType) -> &'static str {
     match value {
@@ -244,11 +242,11 @@ impl SourceFinding<'_> {
                 ..
             } => {
                 context.insert("path".into(), text(path));
-                context.insert("record".into(), V::Integer(record.to_string()));
+                context.insert("record".into(), V::from(record));
                 context.insert(
                     "field".into(),
                     match field {
-                        Field::Index(index) => V::Integer(index.to_string()),
+                        Field::Index(index) => V::from(*index),
                         Field::Name(name) => text(name),
                     },
                 );
@@ -274,7 +272,7 @@ impl SourceFinding<'_> {
                 match finding {
                     ParquetFinding::Invalid => {}
                     ParquetFinding::EmptyName { field } => {
-                        context.insert("field".into(), V::Integer(field.to_string()));
+                        context.insert("field".into(), V::from(field));
                     }
                     ParquetFinding::DuplicateName { field } => {
                         context.insert("field".into(), text(field));
@@ -285,8 +283,8 @@ impl SourceFinding<'_> {
                     }
                     ParquetFinding::Value { field, row, value } => {
                         context.insert("field".into(), text(field));
-                        context.insert("row".into(), V::Integer(row.to_string()));
-                        context.insert("value".into(), V::Scalar(Value::Int(value)));
+                        context.insert("row".into(), V::from(row));
+                        context.insert("value".into(), V::from(value));
                     }
                 }
                 format!("input.{dataset}.path")

@@ -13,8 +13,8 @@ use crate::{
     specification::{PreparedSpecification, SourceDeclaration},
     table::TableAccess,
 };
-use alloc::{sync::Arc, vec::Vec};
-use core::{cell::Cell, convert::Infallible};
+use std::sync::Arc;
+use std::{cell::Cell, convert::Infallible};
 
 /// External study requests retain their canonical document context. Generated
 /// producer sources never reach this port, even for location inspection.
@@ -161,30 +161,45 @@ impl Default for Limits {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum CaptureError<E> {
+    #[error("producer build external: {0:?}")]
     External(E),
+    #[error("producer build producer unavailable: producer={producer:?}")]
     ProducerUnavailable { producer: usize },
+    #[error("producer build limit: {0:?}")]
     Limit(&'static str),
 }
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum DecodeError<E> {
+    #[error("producer build codec: {0:?}")]
     Codec(E),
+    #[error("producer build contract: {0:?}")]
     Contract(crate::producer_contract::Error),
+    #[error("producer build metadata: {0:?}")]
     Metadata(crate::diagnostic::Diagnostic),
+    #[error("producer build limit: {0:?}")]
     Limit(&'static str),
+    #[error(
+        "producer build resource limit: resource={resource:?}, limit={limit:?}, actual={actual:?}"
+    )]
     ResourceLimit {
         resource: &'static str,
         limit: usize,
         actual: Option<usize>,
     },
 }
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Failure<E> {
+    #[error("producer build incomplete")]
     Incomplete,
+    #[error("producer build limit: {0:?}")]
     Limit(&'static str),
+    #[error("producer build activation: {0:?}")]
     Activation(project_activation::Failure<E>),
+    #[error("producer build binding: node={node:?}, slot={slot:?}")]
     Binding { node: usize, slot: usize },
+    #[error("producer build node: node={node:?}")]
     Node { node: usize },
 }
 pub(crate) type OutputFailure<R, C> = output::CompleteError<R, C, Infallible>;

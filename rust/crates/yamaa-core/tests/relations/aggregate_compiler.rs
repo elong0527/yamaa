@@ -50,7 +50,7 @@ fn a_bare_identifier_outside_reduction_uses_numeric_coercion() {
     assert_eq!(plan.ungrouped_identifiers().collect::<Vec<_>>(), ["A"]);
 }
 impl NumericResolver for Resolver {
-    type Error = core::convert::Infallible;
+    type Error = std::convert::Infallible;
     fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
         self.calls.push(name.into());
         Ok(Selection::Present(Value::Int(match name {

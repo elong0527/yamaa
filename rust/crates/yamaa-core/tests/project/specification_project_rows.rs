@@ -1,10 +1,10 @@
 use crate::support::id_source_schema as source;
 use crate::support::project_call_compiler as support;
+use serde_json::Value as JsonValue;
 use support::{call, function, specification_with_rows, Tree};
 use yamaa_core::{
     bound_expression::Read,
     dataset::{Expression, FunctionInput},
-    diagnostic::ContextValue,
     schema::DocumentNode as N,
     specification::{BindError, PrepareError, PreparedSpecification},
     table::{Column, TableSchema},
@@ -203,10 +203,10 @@ fn row_function_cycles_report_authored_paths_without_column_forward_rules() {
     );
     assert_eq!(
         diagnostics[0].context["cycle"],
-        ContextValue::Sequence(
+        JsonValue::Array(
             vec!["A", "B", "A"]
                 .into_iter()
-                .map(|s| ContextValue::Scalar(Value::Str(s.into())))
+                .map(|s| JsonValue::String(s.into()))
                 .collect()
         )
     );
@@ -214,7 +214,7 @@ fn row_function_cycles_report_authored_paths_without_column_forward_rules() {
 
 #[test]
 fn transitive_nonlocal_defaults_report_one_issue_per_column_with_all_overriding_rows() {
-    use yamaa_core::diagnostic::ContextValue;
+    use serde_json::Value as JsonValue;
     let spec = specification_with_rows(
         vec![
             (
@@ -249,9 +249,9 @@ fn transitive_nonlocal_defaults_report_one_issue_per_column_with_all_overriding_
         assert_eq!(diagnostic.definition().requirement, Some("REQ-1260"));
         assert_eq!(
             diagnostic.context["rows"],
-            ContextValue::Sequence(vec![
-                ContextValue::Scalar(Value::Str("first".into())),
-                ContextValue::Scalar(Value::Str("second".into())),
+            JsonValue::Array(vec![
+                JsonValue::String("first".into()),
+                JsonValue::String("second".into()),
             ])
         );
     }
@@ -409,7 +409,7 @@ fn grouped_function_arguments_keep_record_reads_and_complete_scope_and_type_find
     );
     assert_eq!(
         diagnostics[0].context["row"],
-        ContextValue::Scalar(Value::Str("group".into()))
+        JsonValue::String("group".into())
     );
     assert_eq!(
         diagnostics[1].definition().condition,
@@ -695,7 +695,7 @@ fn column_windows_stay_global_and_scalar_row_defaults_remain_local() {
                         .expect("duplicate finding");
                     assert_eq!(
                         duplicate.diagnostic().context["not_row_local"],
-                        ContextValue::Scalar(Value::Str("window".into()))
+                        JsonValue::String("window".into())
                     );
                 }
                 continue;
@@ -775,20 +775,14 @@ fn bare_row_reads_of_nonlocal_outputs_keep_complete_phase_diagnostics_without_fu
             [
                 (
                     "available_phase".into(),
-                    ContextValue::Scalar(Value::Str("column_derivation".into()))
+                    JsonValue::String("column_derivation".into())
                 ),
-                (
-                    "identifier".into(),
-                    ContextValue::Scalar(Value::Str("A".into()))
-                ),
+                ("identifier".into(), JsonValue::String("A".into())),
                 (
                     "required_phase".into(),
-                    ContextValue::Scalar(Value::Str("row_construction".into()))
+                    JsonValue::String("row_construction".into())
                 ),
-                (
-                    "row".into(),
-                    ContextValue::Scalar(Value::Str("record".into()))
-                )
+                ("row".into(), JsonValue::String("record".into()))
             ]
             .into_iter()
             .collect()

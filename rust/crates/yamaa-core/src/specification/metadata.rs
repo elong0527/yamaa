@@ -1,8 +1,9 @@
 //! Primary declaration/header witnesses from the complete held compilation owner.
 //! Original Check/Build findings and execution checkpoints remain separate.
 use super::*;
-use crate::diagnostic::{ContextValue, Diagnostic};
-use alloc::collections::BTreeSet;
+use crate::diagnostic::Diagnostic;
+use serde_json::Value as JsonValue;
+use std::collections::BTreeSet;
 
 impl PreparedSpecification {
     /// A metadata witness has no table values, activation or publication port.
@@ -60,8 +61,7 @@ impl PreparedSpecification {
                     {
                         return true;
                     }
-                    let Some(ContextValue::Scalar(crate::value::Value::Str(identifier))) =
-                        finding.context.get("identifier")
+                    let Some(JsonValue::String(identifier)) = finding.context.get("identifier")
                     else {
                         return true;
                     };

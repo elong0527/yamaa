@@ -6,15 +6,16 @@
 //! relationships; they do not manufacture provenance or authorize source reads.
 use super::{finding_diagnostic, scalar_diagnostic, Error as CoreError, Project};
 use crate::{
-    diagnostic::{ConditionCode, ContextValue, Diagnostic},
+    diagnostic::{ConditionCode, Diagnostic},
     project_environment::{Draft, Finding},
     project_function::{Finding as FunctionFinding, Language},
     project_function_document::Finding as ScalarFinding,
     schema::{Document, DocumentNode as N},
     value::Value,
 };
-use alloc::{string::String, vec, vec::Vec};
-use core::fmt::Write;
+use serde_json::Value as JsonValue;
+use std::fmt::Write;
+use std::vec;
 
 // This preserves the pre-existing adapter projection ceiling, independently of
 // project_source's configurable capture admission. Inline functions and findings
@@ -37,10 +38,13 @@ impl Default for Limits {
         }
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    #[error("project environment diagnostics projection core: {0:?}")]
     Core(CoreError),
+    #[error("project environment diagnostics projection invalid origin")]
     InvalidOrigin,
+    #[error("project environment diagnostics projection issue limit")]
     IssueLimit,
 }
 impl From<CoreError> for Error {
@@ -250,10 +254,12 @@ impl<'a> Record<'a> {
             .flatten()
             .map(|field| {
                 let value = match field.value {
-                    FieldValue::Text(text) => ContextValue::Scalar(Value::Str(text.into())),
-                    FieldValue::Scalar(value) => ContextValue::Scalar(value.clone()),
-                    FieldValue::Integer(text) => ContextValue::Integer(text.into()),
-                    FieldValue::Path(path) => ContextValue::Scalar(Value::Str(path.render())),
+                    FieldValue::Text(text) => JsonValue::String(text.into()),
+                    FieldValue::Scalar(value) => JsonValue::from(value.clone()),
+                    FieldValue::Integer(text) => {
+                        JsonValue::Number((text).parse().expect("canonical integer"))
+                    }
+                    FieldValue::Path(path) => JsonValue::String(path.render()),
                 };
                 (field.name.into(), value)
             })

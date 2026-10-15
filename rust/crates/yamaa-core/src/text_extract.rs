@@ -1,11 +1,11 @@
 //! Bounded extraction through the shared portable pattern and matcher authorities.
 use crate::{
-    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
+    diagnostic::{ConditionCode as C, Diagnostic},
     predicate, regex,
     table::ValueRef,
     value::Value,
 };
-use alloc::{format, string::String, vec};
+use serde_json::Value as V;
 
 pub const MAX_DECLARATION_BYTES: usize = 16_777_216;
 #[derive(Clone, Debug, PartialEq)]
@@ -19,10 +19,13 @@ pub struct StringExtract {
     missing: Option<Value>,
     no_match: Option<Value>,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum AdmissionError {
+    #[error("text extract shape")]
     Shape,
+    #[error("text extract limit")]
     Limit,
+    #[error("text extract regex: {0:?}")]
     Regex(regex::CompileError),
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,9 +35,11 @@ pub enum Step<'a> {
     Missing,
     NoMatch(&'a str),
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum Error {
+    #[error("text extract diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
+    #[error("text extract limit: {0:?}")]
     Limit(predicate::LimitError),
 }
 impl StringExtract {
@@ -116,8 +121,8 @@ impl StringExtract {
                         C::RegexInvalidPattern,
                         &format!("{path}.pattern"),
                         [
-                            ("pattern", V::Scalar(Value::Str(pattern.clone()))),
-                            ("reason", V::Scalar(Value::Str(reason.into()))),
+                            ("pattern", V::String(pattern.clone())),
+                            ("reason", V::String(reason.into())),
                         ],
                     ));
                     None
@@ -138,15 +143,12 @@ impl StringExtract {
                         (
                             "group",
                             group.parse::<i64>().map_or_else(
-                                |_| V::Integer(group.clone()),
-                                |n| V::Scalar(Value::Int(n)),
+                                |_| V::Number((group.clone()).parse().expect("canonical integer")),
+                                V::from,
                             ),
                         ),
-                        (
-                            "group_count",
-                            V::Scalar(Value::Int(compiled.group_count() as i64)),
-                        ),
-                        ("pattern", V::Scalar(Value::Str(pattern.clone()))),
+                        ("group_count", V::from(compiled.group_count() as i64)),
+                        ("pattern", V::String(pattern.clone())),
                     ],
                 ));
             }
@@ -182,7 +184,7 @@ impl StringExtract {
         diagnostic(
             C::ExtractUnknown,
             &format!("{}.source", self.path),
-            [("identifier", V::Scalar(Value::Str(self.source.clone())))],
+            [("identifier", V::String(self.source.clone()))],
         )
     }
     pub fn input_diagnostic(&self, actual: &'static str) -> Diagnostic {
@@ -190,9 +192,9 @@ impl StringExtract {
             C::StrCaseInput,
             &format!("{}.source", self.path),
             [
-                ("source", V::Scalar(Value::Str(self.source.clone()))),
-                ("expected", V::Scalar(Value::Str("str".into()))),
-                ("actual", V::Scalar(Value::Str(actual.into()))),
+                ("source", V::String(self.source.clone())),
+                ("expected", V::String("str".into())),
+                ("actual", V::String(actual.into())),
             ],
         )
     }
@@ -270,14 +272,14 @@ impl StringExtract {
                 C::ExtractNoMatch,
                 &self.path,
                 [
-                    ("value", V::Scalar(Value::Str(subject.into()))),
-                    ("pattern", V::Scalar(Value::Str(self.pattern.clone()))),
+                    ("value", V::String(subject.into())),
+                    ("pattern", V::String(self.pattern.clone())),
                 ],
             ),
             None => diagnostic(
                 C::StrCaseMissing,
                 &self.path,
-                [("variable", V::Scalar(Value::Str(self.source.clone())))],
+                [("variable", V::String(self.source.clone()))],
             ),
         })
     }

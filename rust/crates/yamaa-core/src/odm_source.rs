@@ -1,6 +1,5 @@
 //! Fixed ODM metadata admission, independent of physical storage and study reads.
 use crate::value::ColumnType;
-use alloc::{string::String, vec::Vec};
 
 pub const FIELDS: [&str; 11] = [
     "StudyOID",
@@ -34,15 +33,16 @@ pub struct StoredField<'a> {
     pub kind: Option<ColumnType>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum SchemaError {
-    Missing {
-        fields: Vec<&'static str>,
-    },
+    #[error("odm source missing: fields={fields:?}")]
+    Missing { fields: Vec<&'static str> },
+    #[error("odm source ambiguous: field={field:?}, stored={stored:?}")]
     Ambiguous {
         field: &'static str,
         stored: Vec<String>,
     },
+    #[error("odm source type: field={field:?}, stored_field={stored_field:?}, kind={kind:?}")]
     Type {
         field: &'static str,
         stored_field: String,
@@ -73,8 +73,11 @@ impl SchemaError {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum AdmissionError {
+    #[error(
+        "odm source metadata limit: resource={resource:?}, limit={limit:?}, actual={actual:?}"
+    )]
     MetadataLimit {
         resource: &'static str,
         limit: usize,
@@ -104,10 +107,13 @@ impl MissingValues {
         }
     }
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum RecordError<E> {
+    #[error("odm source schema")]
     Schema,
+    #[error("odm source coordinate")]
     Coordinate,
+    #[error("odm source cell: row={row:?}, column={column:?}, error={error:?}")]
     Cell {
         row: usize,
         column: usize,

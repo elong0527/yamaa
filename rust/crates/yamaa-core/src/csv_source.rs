@@ -1,6 +1,6 @@
 //! The closed R023 CSV input profile over one captured byte snapshot.
 //! Pure byte admission; filesystem authority and physical tables are outer boundaries.
-use alloc::{borrow::ToOwned, collections::BTreeSet, string::String, vec::Vec};
+use std::collections::BTreeSet;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -25,13 +25,15 @@ pub enum Field {
     Index(usize),
     Name(String),
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    #[error("csv source profile: cause={cause:?}, record={record:?}, field={field:?}")]
     Profile {
         cause: ProfileCause,
         record: usize,
         field: Field,
     },
+    #[error("csv source limit: resource={resource:?}, limit={limit:?}")]
     Limit {
         resource: &'static str,
         limit: usize,
@@ -166,7 +168,7 @@ pub fn parse_with_admission(
             limit: limits.bytes,
         });
     }
-    let text = core::str::from_utf8(content).map_err(|error| {
+    let text = std::str::from_utf8(content).map_err(|error| {
         let (record, field) = coordinates(&content[..error.valid_up_to()]);
         failure(ProfileCause::InvalidText, record, field)
     })?;

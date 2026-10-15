@@ -22,7 +22,7 @@ pub(super) fn bind(
     let before = findings.len();
     let mut bindings = Vec::new();
     let mut current = Vec::new();
-    let mut seen = alloc::collections::BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     for name in plan.identifiers() {
         if !seen.insert(name) {
             continue;
@@ -153,7 +153,7 @@ pub(super) fn admit_reads<'a>(
     mode: &RowMode,
     findings: &mut Vec<BindFinding>,
 ) {
-    let mut seen = alloc::collections::BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     for expression in expressions {
         crate::dataset::relation_predicates::visit(expression, &mut |index| {
             if !seen.insert(index) {

@@ -1,6 +1,5 @@
 //! Exact, bounded decimal rounding independent of platform math.
 
-use alloc::format;
 use num_bigint::BigUint;
 
 /// Apply the exact REQ-0418 interval to a finite promoted binary64 input.

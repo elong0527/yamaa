@@ -1,10 +1,11 @@
 use crate::support::table_schema as schema;
+use serde_json::Value as V;
 use std::{cell::RefCell, convert::Infallible};
 use yamaa_core::dataset::{
     Assignment, DatasetPlan, ExecutionError, Expression, Limits, RowIdentity, RowMode, RowTemplate,
 };
 use yamaa_core::{
-    diagnostic::{ContextValue as V, ProjectionError},
+    diagnostic::ProjectionError,
     reduction::NumericReducer,
     table::{CellError, TableAccess, TableSchema, ValueRef},
     temporal::{Date, DatePrecision},
@@ -204,7 +205,7 @@ fn projection_never_replays_reads_and_later_source_failure_keeps_its_precedence(
     let reads = source.reads.borrow().clone();
     let finding = error.diagnostic().unwrap();
     assert_eq!(finding.definition().requirement, Some("REQ-0075"));
-    assert_eq!(finding.context["value_count"], V::Scalar(Value::Int(3)));
+    assert_eq!(finding.context["value_count"], V::from(3));
     assert_eq!(error.diagnostic_with_limit(32), Err(ProjectionError::Limit));
     assert_eq!(*source.reads.borrow(), reads);
     assert!(

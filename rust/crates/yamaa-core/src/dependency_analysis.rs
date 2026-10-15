@@ -1,5 +1,5 @@
 //! Deterministic analysis of already-bound dependency graphs, without host effects.
-use alloc::{collections::BTreeSet, vec, vec::Vec};
+use std::{collections::BTreeSet, vec};
 
 /// Graph work limits, separate from language validation conditions.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -20,11 +20,15 @@ impl Default for Limits {
 }
 
 /// Rejected graph shape or resource policy; a dependency cycle is an analysis result.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum Error {
+    #[error("dependency analysis node limit: limit={limit:?}, required={required:?}")]
     NodeLimit { limit: usize, required: usize },
+    #[error("dependency analysis edge limit: limit={limit:?}, required={required:?}")]
     EdgeLimit { limit: usize, required: usize },
+    #[error("dependency analysis size overflow")]
     SizeOverflow,
+    #[error("dependency analysis invalid dependency: node={node:?}, dependency={dependency:?}")]
     InvalidDependency { node: usize, dependency: usize },
 }
 
@@ -152,7 +156,7 @@ fn stable_order(graph: &[Vec<usize>]) -> Vec<usize> {
         if let Some(node) = next {
             order.push(node);
         }
-        Ok::<_, core::convert::Infallible>(())
+        Ok::<_, std::convert::Infallible>(())
     }) {
         Ok(()) => order,
         Err(never) => match never {},
@@ -228,7 +232,7 @@ mod tests {
         let mut attempts = Vec::new();
         visit_stable_order(&graph, |next| {
             attempts.push(next);
-            Ok::<_, core::convert::Infallible>(())
+            Ok::<_, std::convert::Infallible>(())
         })
         .unwrap();
         assert_eq!(attempts, vec![Some(2), Some(0), Some(1), Some(3), None]);
@@ -242,7 +246,7 @@ mod tests {
             if let Some(node) = next {
                 order.push(node);
             }
-            Ok::<_, core::convert::Infallible>(())
+            Ok::<_, std::convert::Infallible>(())
         })
         .unwrap();
         assert_eq!(order, (0..4097).collect::<Vec<_>>());

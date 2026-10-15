@@ -1,17 +1,13 @@
 //! Aggregate causes retain the authored expression and enclosing row grain.
 use super::{
-    ConditionCode as C, ContextValue as V, Diagnostic, ProjectionBudget, ProjectionError,
-    MAX_PROJECTION_BYTES,
+    ConditionCode as C, Diagnostic, ProjectionBudget, ProjectionError, MAX_PROJECTION_BYTES,
 };
 use crate::{
     dataset::AggregatePhase,
     key_relation::ComparableType,
     value::{ColumnType, Value, ValueType},
 };
-use alloc::{
-    string::{String, ToString},
-    vec,
-};
+use serde_json::Value as V;
 
 #[derive(Clone, Copy, Debug)]
 pub enum AggregateFinding<'a> {
@@ -112,7 +108,7 @@ impl AggregateContextCause {
     }
 }
 fn text(value: &str) -> V {
-    V::Scalar(Value::Str(value.into()))
+    V::String(value.into())
 }
 fn type_name(value: ValueType) -> &'static str {
     match value {
@@ -157,7 +153,7 @@ impl AggregateFinding<'_> {
                             "key".into(),
                             match key {
                                 AggregateEmptyKey::Mapping => V::Object(Default::default()),
-                                AggregateEmptyKey::List => V::Sequence(vec![]),
+                                AggregateEmptyKey::List => V::Array(vec![]),
                             },
                         ),
                     ]
@@ -220,7 +216,7 @@ impl AggregateFinding<'_> {
                         ("hint".into(), text(hint)),
                         (
                             "keys".into(),
-                            V::Sequence(keys.iter().map(|key| text(key)).collect()),
+                            V::Array(keys.iter().map(|key| text(key)).collect()),
                         ),
                     ]
                     .into(),
@@ -350,7 +346,7 @@ impl AggregateFinding<'_> {
                 ..
             } => {
                 context.insert("reducer".into(), text("ONLY"));
-                context.insert("record_count".into(), V::Integer(count.to_string()));
+                context.insert("record_count".into(), V::from(count));
                 if let Some(row) = row {
                     context.insert("row".into(), text(row));
                     context.insert(
@@ -358,7 +354,7 @@ impl AggregateFinding<'_> {
                         V::Object(
                             group
                                 .iter()
-                                .map(|(name, value)| (name.clone(), V::Scalar(value.clone())))
+                                .map(|(name, value)| (name.clone(), V::from(value.clone())))
                                 .collect(),
                         ),
                     );
@@ -373,24 +369,21 @@ impl AggregateFinding<'_> {
                 identifier,
                 ..
             } => {
-                context.insert(
-                    "dataset".into(),
-                    dataset.map_or(V::Scalar(Value::Missing), text),
-                );
+                context.insert("dataset".into(), dataset.map_or(V::Null, text));
                 context.insert("identifier".into(), text(identifier));
                 C::AggregateIdentifierNotGrouped
             }
             Self::IncomparableSources { source, types, .. } => {
-                context.insert("sources".into(), V::Sequence(vec![text(source)]));
+                context.insert("sources".into(), V::Array(vec![text(source)]));
                 let mut names = types
                     .iter()
                     .map(|kind| type_name(*kind))
-                    .collect::<alloc::vec::Vec<_>>();
+                    .collect::<std::vec::Vec<_>>();
                 names.sort_unstable();
                 names.dedup();
                 context.insert(
                     "types".into(),
-                    V::Sequence(names.into_iter().map(text).collect()),
+                    V::Array(names.into_iter().map(text).collect()),
                 );
                 C::AggregateIncomparableSources
             }
@@ -401,7 +394,7 @@ impl AggregateFinding<'_> {
             Self::MixedRelations { relations, .. } => {
                 context.insert(
                     "relations".into(),
-                    V::Sequence(relations.iter().map(|relation| text(relation)).collect()),
+                    V::Array(relations.iter().map(|relation| text(relation)).collect()),
                 );
                 C::AggregateMixedRelations
             }

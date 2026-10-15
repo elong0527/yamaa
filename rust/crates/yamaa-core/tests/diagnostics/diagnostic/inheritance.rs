@@ -1,8 +1,6 @@
+use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
-use yamaa_core::{
-    diagnostic::{ConditionCode, ContextValue, InheritanceFinding as F},
-    value::Value,
-};
+use yamaa_core::diagnostic::{ConditionCode, InheritanceFinding as F};
 
 pub fn reached() -> BTreeSet<ConditionCode> {
     let cycle = vec!["entry".into(), "base".into(), "entry".into()];
@@ -93,22 +91,14 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         );
         assert_eq!(finding.spec_paths, [path]);
         for (key, value) in context {
-            assert_eq!(
-                finding.context[key],
-                ContextValue::Scalar(Value::Str(value.into()))
-            );
+            assert_eq!(finding.context[key], JsonValue::String(value.into()));
         }
         assert!(finding.source_span.is_none());
         assert!(finding.operand_route.is_none());
         if condition == "inheritance_cycle" {
             assert_eq!(
                 finding.context["cycle"],
-                ContextValue::Sequence(
-                    cycle
-                        .iter()
-                        .map(|s| ContextValue::Scalar(Value::Str(s.clone())))
-                        .collect()
-                )
+                JsonValue::Array(cycle.iter().map(|s| JsonValue::String(s.clone())).collect())
             );
         }
         reached.insert(finding.code);
@@ -135,14 +125,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(
         dependency.context,
         [
-            (
-                "column".into(),
-                ContextValue::Scalar(Value::Str("VALUE".into()))
-            ),
-            (
-                "dependency".into(),
-                ContextValue::Scalar(Value::Str("MISSING".into()))
-            ),
+            ("column".into(), JsonValue::String("VALUE".into())),
+            ("dependency".into(), JsonValue::String("MISSING".into())),
         ]
         .into_iter()
         .collect()

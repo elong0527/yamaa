@@ -4,8 +4,6 @@
 //! the first failure, but missing operands do not skip later operands. The numeric
 //! compiler supplies validated, bounded trees and maps failures to source spans.
 
-use alloc::{boxed::Box, string::String, vec::Vec};
-
 use crate::numeric::{
     self, ArithmeticErrorKind, BinaryOperator, IntegralFunction, MathFunction, Number,
     SelectionFunction, UnaryOperator,
@@ -131,7 +129,8 @@ pub enum EvaluationErrorKind<E> {
 }
 
 /// An evaluation failure with provenance, ready for later diagnostic transport.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("evaluation: location={location:?}, kind={kind:?}")]
 pub struct EvaluationError<E> {
     pub location: EvaluationLocation,
     pub kind: EvaluationErrorKind<E>,

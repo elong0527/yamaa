@@ -2,17 +2,17 @@
 use super::{BindFinding, SourceDeclaration};
 use crate::{
     column_dependencies,
-    diagnostic::{ConditionCode as C, Context, ContextValue as V, Diagnostic},
+    diagnostic::{ConditionCode as C, Context, Diagnostic},
     numeric_compiler::CompileError,
     numeric_parser::ParseError,
     reference_binding, reference_scope,
     schema::{quoted_diagnostic_text, ValidationBudget},
-    value::Value,
 };
-use alloc::{format, string::String, vec, vec::Vec};
+use serde_json::Value as V;
+use std::vec;
 
 fn text(value: &str) -> V {
-    V::Scalar(Value::Str(value.into()))
+    V::String(value.into())
 }
 fn context<const N: usize>(fields: [(&str, V); N]) -> Context {
     fields.into_iter().map(|(k, v)| (k.into(), v)).collect()
@@ -58,7 +58,7 @@ impl column_dependencies::Diagnostic {
                     .iter()
                     .map(|&id| columns.get(id).map(|v| text(v)))
                     .collect::<Option<_>>()?;
-                (site, context([("cycle", V::Sequence(cycle))]))
+                (site, context([("cycle", V::Array(cycle))]))
             }
             Self::ForwardReference { column, dependency } => (
                 vec![paths.get(*column)?.clone()],
@@ -146,10 +146,7 @@ impl BindFinding {
                         C::GroupedRowReference,
                         context([
                             ("identifier", text(name)),
-                            (
-                                "row",
-                                row.as_deref().map_or(V::Scalar(Value::Missing), text),
-                            ),
+                            ("row", row.as_deref().map_or(V::Null, text)),
                             ("dataset", text(&source.name)),
                         ]),
                     ),
@@ -189,10 +186,7 @@ impl BindFinding {
                 (
                     C::AggregateDriverScope,
                     path,
-                    context([
-                        ("expr", text(expression)),
-                        ("reason", V::Scalar(Value::Str(reason))),
-                    ]),
+                    context([("expr", text(expression)), ("reason", V::String(reason))]),
                 )
             }
             Self::AggregateGroupScope {
@@ -209,9 +203,9 @@ impl BindFinding {
                         ("expr", text(expression)),
                         (
                             "reason",
-                            V::Scalar(Value::Str(format!(
+                            V::String(format!(
                                 "a qualified reduction groups on columns of {relation}"
-                            ))),
+                            )),
                         ),
                     ]),
                 )

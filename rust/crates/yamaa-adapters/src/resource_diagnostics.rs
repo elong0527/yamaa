@@ -44,7 +44,9 @@ impl Refusal {
         ]
     }
     pub(crate) fn value(&self, stage: &str, code: &str) -> Option<Value> {
-        crate::specification_diagnostics::portable_diagnostic(self.diagnostic(stage, code))
+        Some(crate::specification_diagnostics::portable_diagnostic(
+            self.diagnostic(stage, code),
+        ))
     }
 }
 pub(crate) fn resource_name(resource: Resource) -> &'static str {

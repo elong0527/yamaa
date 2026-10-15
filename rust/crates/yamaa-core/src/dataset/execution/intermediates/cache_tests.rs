@@ -1,14 +1,14 @@
 //! Exact cumulative cache boundaries through the real named-selection service.
 use super::*;
 use crate::{table::Column, value::ColumnType};
-use alloc::rc::Rc;
-use core::{
+use std::rc::Rc;
+use std::{
     cell::RefCell,
     mem::{align_of, size_of},
 };
 
 type Trace = Rc<RefCell<Vec<&'static str>>>;
-type Original = core::convert::Infallible;
+type Original = std::convert::Infallible;
 struct Table {
     schema: TableSchema,
     values: Vec<Value>,
@@ -272,7 +272,7 @@ fn retained_index_strings_and_coordinate_capacity_obey_the_admitted_source_bound
     let keys = Keys {
         schema: schema(&[("K", ColumnType::Str)]),
         values: (0..256)
-            .map(|row| Value::Str(alloc::format!("K{:03}", row % 64)))
+            .map(|row| Value::Str(std::format!("K{:03}", row % 64)))
             .collect(),
     };
     let fixture = Fixture::new();
@@ -312,7 +312,7 @@ fn scalar_key_snapshots_read_current_once_and_quota_refusal_runs_no_handler_or_d
                 expression: Expression::StrCase {
                     source: Box::new(Assignment {
                         column: 2,
-                        path: alloc::format!("{path}.source"),
+                        path: std::format!("{path}.source"),
                         expression: Expression::Source(0),
                     }),
                     operation: StringCase::new(
@@ -349,7 +349,7 @@ fn scalar_key_snapshots_read_current_once_and_quota_refusal_runs_no_handler_or_d
         fixture.trace.borrow_mut().clear();
         let mut budget = budget(1000);
         let mut handlers = HandlerCounter::default();
-        handlers.register(&alloc::format!("{path}.missing"), HandlerKind::Missing);
+        handlers.register(&std::format!("{path}.missing"), HandlerKind::Missing);
         let mut state = EvaluationState {
             functions: &mut crate::function_invocation::NoFunctions::new(),
             budget: &mut budget,

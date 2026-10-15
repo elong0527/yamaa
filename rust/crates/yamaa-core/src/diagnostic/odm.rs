@@ -1,17 +1,12 @@
 //! Typed ODM causes preserve fixed-schema metadata and complete row scope.
 use super::{
-    ConditionCode as C, ContextValue as V, Diagnostic, ProjectionBudget, ProjectionError,
-    MAX_PROJECTION_BYTES,
+    ConditionCode as C, Diagnostic, ProjectionBudget, ProjectionError, MAX_PROJECTION_BYTES,
 };
 use crate::{
     dataset::AggregatePhase,
     value::{ColumnType, Value},
 };
-use alloc::{
-    format,
-    string::{String, ToString},
-    vec,
-};
+use serde_json::Value as V;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OdmDeclared {
@@ -85,12 +80,12 @@ pub enum OdmFinding<'a> {
         row: Option<&'a str>,
         phase: AggregatePhase,
         scope: &'a [(String, Value)],
-        differ: &'a [(String, alloc::vec::Vec<Value>)],
+        differ: &'a [(String, std::vec::Vec<Value>)],
         records: usize,
     },
 }
 fn text(value: &str) -> V {
-    V::Scalar(Value::Str(value.into()))
+    V::String(value.into())
 }
 fn type_name(kind: Option<ColumnType>) -> &'static str {
     match kind {
@@ -257,7 +252,7 @@ impl OdmFinding<'_> {
                     ("dataset".into(), text(dataset)),
                     (
                         "fields".into(),
-                        V::Sequence(fields.iter().map(|field| text(field)).collect()),
+                        V::Array(fields.iter().map(|field| text(field)).collect()),
                     ),
                 ]
                 .into(),
@@ -273,7 +268,7 @@ impl OdmFinding<'_> {
                     ("field".into(), text(field)),
                     (
                         "stored".into(),
-                        V::Sequence(stored.iter().map(|name| text(name)).collect()),
+                        V::Array(stored.iter().map(|name| text(name)).collect()),
                     ),
                 ]
                 .into(),
@@ -303,8 +298,8 @@ impl OdmFinding<'_> {
                 [
                     ("dataset".into(), text(dataset)),
                     ("field".into(), text(field)),
-                    ("record".into(), V::Integer(record.to_string())),
-                    ("records".into(), V::Integer(records.to_string())),
+                    ("record".into(), V::from(record)),
+                    ("records".into(), V::from(records)),
                 ]
                 .into(),
             ),
@@ -332,17 +327,17 @@ impl OdmFinding<'_> {
                 path.into(),
                 [
                     ("item".into(), text(item)),
-                    ("row".into(), row.map_or(V::Scalar(Value::Missing), text)),
+                    ("row".into(), row.map_or(V::Null, text)),
                     (
                         "scope".into(),
                         V::Object(
                             scope
                                 .iter()
-                                .map(|(name, value)| (name.clone(), V::Scalar(value.clone())))
+                                .map(|(name, value)| (name.clone(), V::from(value.clone())))
                                 .collect(),
                         ),
                     ),
-                    ("records".into(), V::Integer(records.to_string())),
+                    ("records".into(), V::from(records)),
                     (
                         "differ".into(),
                         V::Object(
@@ -351,15 +346,13 @@ impl OdmFinding<'_> {
                                 .map(|(name, values)| {
                                     (
                                         name.clone(),
-                                        V::Sequence(
-                                            values.iter().cloned().map(V::Scalar).collect(),
-                                        ),
+                                        V::Array(values.iter().cloned().map(V::from).collect()),
                                     )
                                 })
                                 .collect(),
                         ),
                     ),
-                    ("repeated".into(), V::Scalar(Value::Bool(differ.is_empty()))),
+                    ("repeated".into(), V::Bool(differ.is_empty())),
                 ]
                 .into(),
             ),

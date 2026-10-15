@@ -1,6 +1,6 @@
 //! Complete Gregorian dates and zone-free civil datetimes (REQ-0539-0573).
 
-use core::{cmp::Ordering, fmt, str::FromStr};
+use std::{cmp::Ordering, fmt, str::FromStr};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DatePrecision {
@@ -17,10 +17,13 @@ pub enum DateTimePrecision {
 
 /// Construction errors are mapped to the consuming operation's condition.
 /// Parsing, conversion and imputation do not share a diagnostic phase.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum TemporalError {
+    #[error("temporal invalid form")]
     InvalidForm,
+    #[error("temporal invalid date")]
     InvalidDate,
+    #[error("temporal invalid time")]
     InvalidTime,
 }
 

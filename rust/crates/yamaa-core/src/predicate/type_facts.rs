@@ -1,7 +1,6 @@
 //! Types of retained predicate operands, without resolution or scalar evaluation.
 use super::{Condition, Node, Plan, Route, Scalar};
 use crate::value::ValueType;
-use alloc::vec::Vec;
 
 impl Plan {
     pub(crate) fn type_conditions(

@@ -2,7 +2,7 @@
 //! Admission inspects names and column availability, never table cells or hosts.
 
 use crate::{numeric_compiler::CompiledNumeric, predicate};
-use alloc::{boxed::Box, collections::BTreeSet, string::String, vec::Vec};
+use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Read {
@@ -18,23 +18,34 @@ pub struct Binding {
     pub read: Read,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum BindingError {
+    #[error("bound expression empty path")]
     EmptyPath,
+    #[error("bound expression metadata limit")]
     MetadataLimit,
+    #[error("bound expression duplicate name")]
     DuplicateName,
+    #[error("bound expression missing name")]
     MissingName,
+    #[error("bound expression unused name")]
     UnusedName,
+    #[error("bound expression unavailable column")]
     UnavailableColumn,
+    #[error("bound expression invalid source")]
     InvalidSource,
+    #[error("bound expression grouped source")]
     GroupedSource,
 }
 
 /// Only scope failures are possible after the immutable name map is admitted.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ScopeError {
+    #[error("bound expression unavailable column")]
     UnavailableColumn,
+    #[error("bound expression invalid source")]
     InvalidSource,
+    #[error("bound expression grouped source")]
     GroupedSource,
 }
 

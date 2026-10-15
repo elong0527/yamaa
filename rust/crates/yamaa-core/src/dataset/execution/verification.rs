@@ -9,7 +9,6 @@ use crate::{
     temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
     value::{ColumnType, Value},
 };
-use alloc::{boxed::Box, vec::Vec};
 
 /// Nonmissing representatives expose invalid declarations even for empty output.
 fn sample(kind: ColumnType) -> Value {
@@ -75,7 +74,7 @@ fn validate_predicate<T: TableAccess + ?Sized>(
             ErrorKind::Limit(limit) => dataset::predicate_limit(limit),
             _ => ExecutionError::VerificationPredicate {
                 error,
-                records: core::mem::take(records),
+                records: std::mem::take(records),
             },
         })
     })?;
@@ -111,7 +110,7 @@ fn evaluate_predicate<T: TableAccess + ?Sized>(
                 ErrorKind::Limit(limit) => dataset::predicate_limit(limit),
                 _ => ExecutionError::VerificationPredicate {
                     error,
-                    records: core::mem::take(records),
+                    records: std::mem::take(records),
                 },
             })
         });
@@ -128,7 +127,7 @@ fn evaluate_predicate<T: TableAccess + ?Sized>(
                     route: error.route,
                     kind: ErrorKind::Condition(condition),
                 },
-                records: core::mem::take(records),
+                records: std::mem::take(records),
             }),
             _ => Box::new(ExecutionError::Predicate { source_row, error }),
         },
@@ -273,7 +272,7 @@ pub(crate) fn row_count_check<T: TableAccess + ?Sized>(
         crate::table_grouping::partition(dataset, columns, limits.output_rows, limits.key_cells)
             .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?
     } else {
-        alloc::vec![(0..dataset.rows().len()).collect()]
+        std::vec![(0..dataset.rows().len()).collect()]
     };
     state.budget.work(groups.len(), check.bound_work())?;
     let mut offenders = Vec::new();
@@ -318,7 +317,7 @@ pub(crate) fn row_count_check<T: TableAccess + ?Sized>(
 }
 
 use crate::table::{CellError, TableSchema, ValueRef};
-use core::convert::Infallible;
+use std::convert::Infallible;
 
 /// Borrow completed cells while retaining the attempt's candidate selection identities.
 pub(crate) struct CompletedRows<'a> {

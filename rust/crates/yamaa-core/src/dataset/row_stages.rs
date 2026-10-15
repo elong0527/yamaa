@@ -3,7 +3,7 @@ use super::*;
 use crate::bound_expression::Read;
 fn intermediate_deferred(index: usize, deferred: &[bool], intermediates: &[Intermediate]) -> bool {
     let mut pending = vec![index];
-    let mut seen = alloc::collections::BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     while let Some(index) = pending.pop() {
         if !seen.insert(index) {
             continue;

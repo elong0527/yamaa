@@ -3,16 +3,19 @@ use crate::{
     conversion::{convert, ConversionError},
     value::{ColumnType, Value},
 };
-use alloc::{borrow::Cow, string::String};
+use std::borrow::Cow;
 
 pub const MAX_DECLARATION_BYTES: usize = 16_777_216;
 /// Canonical primitive formatting has a fixed bound; authored text stays borrowed.
 pub const MAX_PRIMITIVE_TEXT_BYTES: usize = 327;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum DeclarationError {
+    #[error("text pad shape")]
     Shape,
+    #[error("text pad metadata limit")]
     MetadataLimit,
+    #[error("text pad width")]
     Width,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -138,7 +141,7 @@ impl PreparedText<'_> {
                     return Ok(Value::Str(text.into_owned()));
                 }
                 let mut output = String::with_capacity(required);
-                output.extend(core::iter::repeat_n(' ', padding));
+                output.extend(std::iter::repeat_n(' ', padding));
                 output.push_str(&text);
                 Ok(Value::Str(output))
             }
@@ -161,12 +164,10 @@ impl DeclarationError {
         }
         Some(crate::diagnostic::Diagnostic {
             code: crate::diagnostic::ConditionCode::StrPadWidth,
-            spec_paths: alloc::vec![alloc::format!("{path}.width")],
+            spec_paths: std::vec![std::format!("{path}.width")],
             context: [(
                 "expected".into(),
-                crate::diagnostic::ContextValue::Scalar(Value::Str(
-                    "a positive integer width".into(),
-                )),
+                serde_json::Value::String("a positive integer width".into()),
             )]
             .into_iter()
             .collect(),

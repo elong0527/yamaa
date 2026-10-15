@@ -1,6 +1,6 @@
 //! Bound many-to-one secondary-source reads over immutable normalized snapshots.
 use super::*;
-use core::cmp::Ordering;
+use std::cmp::Ordering;
 
 /// Count all matching records before reading a value or applying output conversion.
 pub(super) fn read<E>(
@@ -182,7 +182,7 @@ fn read_matching<E>(
         if let Some(counter) = handlers.as_mut() {
             counter
                 .record(
-                    &alloc::format!("{}.multiple_matches", context.assignment.path),
+                    &std::format!("{}.multiple_matches", context.assignment.path),
                     HandlerKind::MultipleMatches,
                 )
                 .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
@@ -196,7 +196,7 @@ fn read_matching<E>(
             dataset: donor_name
                 .map(String::from)
                 .unwrap_or_else(|| context.plan.secondary()[source].name.clone()),
-            intermediate: alloc::format!(
+            intermediate: std::format!(
                 "intermediate({})",
                 donor_name.unwrap_or_else(|| context.plan.secondary()[source].name.as_str())
             ),

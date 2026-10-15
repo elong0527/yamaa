@@ -1,7 +1,6 @@
 //! Bounded Python-style diagnostic labels with an explicit Unicode table.
 
 use super::{Document, DocumentNode as N, ValidationBudget, ValidationError};
-use alloc::{format, string::String};
 
 /// Pins label representation independently of a host's Unicode release.
 pub const DIAGNOSTIC_UNICODE_VERSION: &str = "18.0.0";
@@ -36,11 +35,11 @@ fn printable(c: char) -> bool {
     super::printable_data::PRINTABLE
         .binary_search_by(|&(start, end)| {
             if end < value {
-                core::cmp::Ordering::Less
+                std::cmp::Ordering::Less
             } else if start > value {
-                core::cmp::Ordering::Greater
+                std::cmp::Ordering::Greater
             } else {
-                core::cmp::Ordering::Equal
+                std::cmp::Ordering::Equal
             }
         })
         .is_ok()
@@ -203,7 +202,6 @@ fn float_key(value: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::vec;
 
     #[test]
     fn every_scalar_printability_matches_authoritative_category_annotations() {

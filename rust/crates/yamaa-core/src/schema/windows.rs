@@ -7,7 +7,7 @@ use super::{
     ValidationError,
 };
 use crate::diagnostic::ConditionCode;
-use alloc::{collections::BTreeMap, format, string::String, vec, vec::Vec};
+use std::{collections::BTreeMap, vec};
 
 /// Logical use-site and final definition; hosts may attach their retained layer origins.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -271,10 +271,7 @@ fn original_grammar_and_complete_reference_parser_parts_qualify() {
                 .context
                 .iter()
                 .map(|(key, value)| {
-                    let yamaa_core::diagnostic::ContextValue::Scalar(
-                        yamaa_core::value::Value::Str(text),
-                    ) = value
-                    else {
+                    let serde_json::Value::String(text) = value else {
                         panic!("grammar scalar")
                     };
                     (key.clone(), serde_json::json!(text))

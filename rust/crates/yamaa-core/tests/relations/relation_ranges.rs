@@ -203,8 +203,8 @@ fn known_type_mismatch_is_refused_before_any_endpoint_context_exists() {
 
 #[test]
 fn aggregate_type_projection_omits_only_the_intermediate_owner() {
-    use yamaa_core::diagnostic::ContextValue;
-    use yamaa_core::value::Value;
+    use serde_json::Value as JsonValue;
+
     let types = RelationRangeTypes {
         value: ValueType::Date,
         lower: None,
@@ -223,14 +223,8 @@ fn aggregate_type_projection_omits_only_the_intermediate_owner() {
     assert_eq!(
         diagnostic.context,
         [
-            (
-                "value_type".into(),
-                ContextValue::Scalar(Value::Str("date".into()))
-            ),
-            (
-                "upper_type".into(),
-                ContextValue::Scalar(Value::Str("int".into()))
-            )
+            ("value_type".into(), JsonValue::String("date".into())),
+            ("upper_type".into(), JsonValue::String("int".into()))
         ]
         .into()
     );
@@ -240,6 +234,6 @@ fn aggregate_type_projection_omits_only_the_intermediate_owner() {
     assert_eq!(intermediate.context.len(), 3);
     assert_eq!(
         intermediate.context["intermediate"],
-        ContextValue::Scalar(Value::Str("P".into()))
+        JsonValue::String("P".into())
     );
 }

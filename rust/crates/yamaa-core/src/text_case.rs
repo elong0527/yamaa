@@ -1,11 +1,10 @@
 //! The four locale-independent ASCII substitutions admitted by text declarations.
 use crate::{
-    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
+    diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
     value::Value,
 };
-use alloc::string::String;
-use alloc::{format, vec};
+use serde_json::Value as V;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Case {
@@ -33,9 +32,11 @@ pub enum Step {
     Value(Value),
     Recovered,
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum Error {
+    #[error("text case diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
+    #[error("text case limit: {0:?}")]
     Limit(OutputLimit),
 }
 impl StringCase {
@@ -118,7 +119,7 @@ fn diagnostic(code: C, path: &str, fields: &[(&str, Value)]) -> Diagnostic {
         spec_paths: vec![path.into()],
         context: fields
             .iter()
-            .map(|(name, value)| ((*name).into(), V::Scalar(value.clone())))
+            .map(|(name, value)| ((*name).into(), V::from(value.clone())))
             .collect(),
         source_span: None,
         operand_route: None,

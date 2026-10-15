@@ -1239,12 +1239,7 @@ mod domain_usecase {
             diagnostic.context,
             [("dataset", "SRC"), ("path", "input.unknown")]
                 .into_iter()
-                .map(|(key, value)| (
-                    key.into(),
-                    yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
-                        value.into()
-                    ))
-                ))
+                .map(|(key, value)| (key.into(), serde_json::Value::String(value.into())))
                 .collect()
         );
         assert!(port.trace.borrow().is_empty());

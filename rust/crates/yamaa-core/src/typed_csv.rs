@@ -6,16 +6,18 @@ use crate::{
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
-use alloc::{collections::BTreeSet, string::String, vec::Vec};
-use core::convert::Infallible;
+use std::collections::BTreeSet;
+use std::convert::Infallible;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("typed csv invalid declarations")]
     InvalidDeclarations,
+    #[error("typed csv invalid source")]
     InvalidSource,
-    UnknownField {
-        field: String,
-    },
+    #[error("typed csv unknown field: field={field:?}")]
+    UnknownField { field: String },
+    #[error("typed csv field parse: field={field:?}, target={target:?}, value={value:?}")]
     FieldParse {
         field: String,
         target: ColumnType,

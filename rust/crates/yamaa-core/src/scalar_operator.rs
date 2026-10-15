@@ -3,7 +3,6 @@ use crate::{
     numeric::{self, BinaryOperator, Number, UnaryOperator},
     value::{compare_present, Value},
 };
-use alloc::{format, string::String};
 
 /// Closed infix/unary spelling admission before host operands are converted.
 pub fn operator_code(name: &str, unary: bool) -> Option<i32> {
@@ -31,7 +30,7 @@ pub fn exact_float(value: &Value) -> Result<Value, &'static str> {
         return Err("expected an integer scalar");
     };
     let result = Value::float(*number as f64);
-    if compare_present(value, &result) != Ok(core::cmp::Ordering::Equal) {
+    if compare_present(value, &result) != Ok(std::cmp::Ordering::Equal) {
         return Err("integer is not exactly representable as an R double");
     }
     Ok(result)
@@ -63,7 +62,7 @@ pub fn operate(code: i32, left: &Value, right: Option<&Value>) -> Result<Value, 
             return Ok(Value::Missing);
         }
         let order = compare_present(left, right).map_err(|_| "incompatible scalar operands")?;
-        use core::cmp::Ordering::*;
+        use std::cmp::Ordering::*;
         return Ok(Value::Bool(match code {
             8 => order == Equal,
             9 => order != Equal,

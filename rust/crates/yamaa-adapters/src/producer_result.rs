@@ -542,8 +542,7 @@ pub fn prepare_owned_classified<'a, E>(
                 serde_json::json!({"stage":"output","code":"output_projection"});
             let finding = crate::specification_diagnostics::portable_diagnostic(
                 yamaa_core::application_issue::rejected("output", "output_projection"),
-            )
-            .expect("native rejection");
+            );
             observations["diagnostics"]
                 .as_array_mut()
                 .ok_or(Error::Report(ProjectionError::Report(

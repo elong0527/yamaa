@@ -1,12 +1,13 @@
 //! Typed civil arithmetic and duration conversion share the existing temporal binder.
 use super::temporal::{ordinal, ElapsedUnit, Temporal, TemporalKind};
 use crate::{
-    diagnostic::{ConditionCode as C, ContextValue, Diagnostic},
+    diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
     temporal::{Date, DateTime, DateTimePrecision},
     value::{ColumnType, Value},
 };
-use alloc::{vec, vec::Vec};
+use serde_json::Value as JsonValue;
+use std::vec;
 
 #[derive(Debug, PartialEq)]
 pub enum TemporalStep {
@@ -96,7 +97,7 @@ impl Temporal {
                 ("actual", actual),
             ]
             .into_iter()
-            .map(|(key, value)| (key.into(), ContextValue::Scalar(Value::Str(value.into()))))
+            .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
             .collect(),
             source_span: None,
             operand_route: None,

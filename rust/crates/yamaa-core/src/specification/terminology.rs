@@ -133,7 +133,7 @@ pub(super) fn apply(
         ct::Error::Findings(findings) => PrepareError::Invalid(
             findings
                 .into_iter()
-                .map(|finding| PreflightFinding::ProjectCodelist(alloc::boxed::Box::new(finding)))
+                .map(|finding| PreflightFinding::ProjectCodelist(std::boxed::Box::new(finding)))
                 .collect(),
         ),
     })?;
@@ -142,7 +142,7 @@ pub(super) fn apply(
             .iter()
             .filter(|d| d.column == column)
             .filter_map(|d| d.code)
-            .collect::<alloc::collections::BTreeSet<_>>();
+            .collect::<std::collections::BTreeSet<_>>();
         if overrides.is_empty() {
             for check in checks.iter().filter(|c| c.column == column) {
                 group.append_codelist(check.verification.clone());

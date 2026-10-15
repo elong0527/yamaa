@@ -1,14 +1,14 @@
 //! Independent vocabulary/context truth from actual shared parser failures.
+use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
     aggregate_parser::{parse_aggregate, ParseError as A},
-    diagnostic::{ConditionCode, Context, ContextValue as V, Diagnostic},
+    diagnostic::{ConditionCode, Context, Diagnostic},
     numeric_parser::{parse_numeric, ParseError as N},
-    value::Value,
 };
 
 fn text(v: &str) -> V {
-    V::Scalar(Value::Str(v.into()))
+    V::String(v.into())
 }
 fn check(
     finding: Diagnostic,
@@ -51,7 +51,10 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0440",
             vec![
                 ("function", text("abs")),
-                ("argument_count", V::Integer("2".into())),
+                (
+                    "argument_count",
+                    V::Number(("2").parse().expect("canonical integer")),
+                ),
             ],
         ),
     ] {
@@ -109,11 +112,8 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
 
 #[test]
 fn arithmetic_after_an_operand_adds_the_compute_column_suggestion() {
-    use yamaa_core::{
-        diagnostic::ContextValue as V,
-        predicate_parser::{parse_predicate, ParseError},
-        value::Value,
-    };
+    use serde_json::Value as V;
+    use yamaa_core::predicate_parser::{parse_predicate, ParseError};
     let suggestion = "derive the value as a column with compute, then compare that column";
     for (text, position) in [
         ("SBPSTD - SBPSUP <= -20", 7),
@@ -139,7 +139,7 @@ fn arithmetic_after_an_operand_adds_the_compute_column_suggestion() {
             assert_eq!(d.definition().requirement, Some("REQ-0188"));
             assert_eq!(
                 d.context["suggestion"],
-                V::Scalar(Value::Str(suggestion.into())),
+                V::String(suggestion.into()),
                 "{text}"
             );
         }
@@ -176,10 +176,10 @@ fn caller_supplied_function_span_cannot_slice_a_different_expression() {
 
 pub(super) fn predicate_reached(
 ) -> std::collections::BTreeSet<yamaa_core::diagnostic::ConditionCode> {
+    use serde_json::Value as V;
     use yamaa_core::{
-        diagnostic::{ConditionCode as C, ContextValue as V},
+        diagnostic::ConditionCode as C,
         predicate_parser::{parse_predicate, ParseError},
-        value::Value,
     };
     let mut reached = std::collections::BTreeSet::new();
     for (text, code, requirement) in [
@@ -210,11 +210,8 @@ pub(super) fn predicate_reached(
         assert_eq!(failure.condition(), "invalid_predicate");
         assert_eq!(failure.requirement(), requirement);
         assert_eq!(d.spec_paths, ["columns.VALUE.window.filter"]);
-        assert_eq!(d.context["predicate"], V::Scalar(Value::Str(text.into())));
-        assert_eq!(
-            d.context["position"],
-            V::Integer(position.character.to_string())
-        );
+        assert_eq!(d.context["predicate"], V::String(text.into()));
+        assert_eq!(d.context["position"], V::from(position.character));
         assert_eq!(d.source_span, None);
         assert_eq!(d.operand_route, None);
         reached.insert(d.code);
@@ -237,8 +234,11 @@ pub(super) fn predicate_reached(
     assert_eq!(
         d.context,
         [
-            ("predicate".into(), V::Scalar(Value::Str(expression.into()))),
-            ("position".into(), V::Integer("4".into())),
+            ("predicate".into(), V::String(expression.into())),
+            (
+                "position".into(),
+                V::Number(("4").parse().expect("canonical integer"))
+            ),
         ]
         .into()
     );

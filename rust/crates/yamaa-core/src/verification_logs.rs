@@ -3,24 +3,16 @@ use crate::{
     conversion::float_text,
     dataset::VerificationSeverity,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
-    value::{ColumnType, Value},
+    value::{ColumnType, FiniteFloat, Value},
 };
-use alloc::{
+use std::convert::Infallible;
+use std::{
     collections::{BTreeMap, BTreeSet},
-    string::{String, ToString},
     vec,
-    vec::Vec,
 };
-use core::convert::Infallible;
 
-/// Full diagnostic context is distinct from the sampled public issue context.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Json {
-    Scalar(Value),
-    Integer(String),
-    Sequence(Vec<Json>),
-    Object(BTreeMap<String, Json>),
-}
+use serde_json::Value as Json;
+
 #[derive(Clone, Debug)]
 pub struct Failure {
     pub condition: String,
@@ -56,9 +48,11 @@ impl Default for Limits {
         }
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
+    #[error("verification logs invalid record")]
     InvalidRecord,
+    #[error("verification logs limit")]
     Limit,
 }
 
@@ -115,6 +109,15 @@ pub struct Logs {
     pub warning: Option<LogTable>,
 }
 
+// JSON integers may be wider than binary64. Only authored fractional/exponent
+// numbers use the runtime float formatter; integer digits remain exact.
+fn float_number(number: &serde_json::Number) -> bool {
+    number
+        .as_str()
+        .bytes()
+        .any(|byte| matches!(byte, b'.' | b'e' | b'E'))
+}
+
 struct Budget {
     text: usize,
     nodes: usize,
@@ -130,19 +133,21 @@ impl Budget {
         }
         self.nodes = self.nodes.checked_sub(1).ok_or(Error::Limit)?;
         match value {
-            Json::Scalar(Value::Str(text)) => self.text(text)?,
-            Json::Integer(text) => {
-                let digits = text.strip_prefix('-').unwrap_or(text);
-                if digits.is_empty()
-                    || !digits.bytes().all(|byte| byte.is_ascii_digit())
-                    || (digits.len() > 1 && digits.starts_with('0'))
-                    || text == "-0"
-                {
-                    return Err(Error::InvalidRecord);
+            Json::String(text) => self.text(text)?,
+            Json::Number(number) => {
+                let text = number.as_str();
+                if float_number(number) {
+                    if number.as_f64().is_none() {
+                        return Err(Error::InvalidRecord);
+                    }
+                } else {
+                    if text == "-0" {
+                        return Err(Error::InvalidRecord);
+                    }
+                    self.text(text)?;
                 }
-                self.text(text)?;
             }
-            Json::Sequence(values) => {
+            Json::Array(values) => {
                 for value in values {
                     self.json(value, depth + 1)?;
                 }
@@ -180,11 +185,11 @@ impl Writer {
                 '\r' => self.write("\\r")?,
                 '\t' => self.write("\\t")?,
                 c if (' '..='~').contains(&c) => {
-                    self.write(core::str::from_utf8(&[c as u8]).expect("ASCII"))?
+                    self.write(std::str::from_utf8(&[c as u8]).expect("ASCII"))?
                 }
                 c => {
                     for unit in c.encode_utf16(&mut [0; 2]) {
-                        self.write(&alloc::format!("\\u{unit:04x}"))?;
+                        self.write(&std::format!("\\u{unit:04x}"))?;
                     }
                 }
             }
@@ -193,17 +198,18 @@ impl Writer {
     }
     fn json(&mut self, value: &Json) -> Result<(), Error> {
         match value {
-            Json::Integer(value) => self.write(value),
-            Json::Scalar(value) => match value {
-                Value::Missing => self.write("null"),
-                Value::Bool(value) => self.write(if *value { "true" } else { "false" }),
-                Value::Str(value) => self.string(value),
-                Value::Int(value) => self.write(&value.to_string()),
-                Value::Float(value) => self.write(&float_text(*value)),
-                Value::Date(value) => self.string(&value.to_string()),
-                Value::DateTime(value) => self.string(&value.to_string()),
-            },
-            Json::Sequence(values) => self.sequence(values),
+            Json::Null => self.write("null"),
+            Json::Bool(value) => self.write(if *value { "true" } else { "false" }),
+            Json::String(value) => self.string(value),
+            Json::Number(number) if float_number(number) => {
+                let value = number
+                    .as_f64()
+                    .and_then(FiniteFloat::new)
+                    .ok_or(Error::InvalidRecord)?;
+                self.write(&float_text(value))
+            }
+            Json::Number(number) => self.write(number.as_str()),
+            Json::Array(values) => self.sequence(values),
             Json::Object(values) => self.object(values),
         }
     }
@@ -217,9 +223,12 @@ impl Writer {
         }
         self.write("]")
     }
-    fn object(&mut self, values: &BTreeMap<String, Json>) -> Result<(), Error> {
+    fn object<'a>(
+        &mut self,
+        values: impl IntoIterator<Item = (&'a String, &'a Json)>,
+    ) -> Result<(), Error> {
         self.write("{")?;
-        for (index, (name, value)) in values.iter().enumerate() {
+        for (index, (name, value)) in values.into_iter().enumerate() {
             if index > 0 {
                 self.write(",")?;
             }

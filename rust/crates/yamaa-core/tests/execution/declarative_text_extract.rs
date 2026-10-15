@@ -1,8 +1,9 @@
 use crate::support::text_schema as schema;
+use serde_json::Value as JsonValue;
 use std::{cell::RefCell, rc::Rc};
 use yamaa_core::{
     dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
-    diagnostic::{ConditionCode, ContextValue},
+    diagnostic::ConditionCode,
     table::{CellError, TableAccess, TableSchema, ValueRef},
     text_extract::StringExtract,
     value::Value,
@@ -294,11 +295,7 @@ fn unhandled_mapping_failure_preserves_keys_and_context_admission() {
     assert_eq!(diagnostic.code, ConditionCode::StrCaseMissing);
     assert_eq!(
         diagnostic.context,
-        [(
-            "variable".into(),
-            ContextValue::Scalar(Value::Str("SRC.TEXT".into()))
-        )]
-        .into()
+        [("variable".into(), JsonValue::String("SRC.TEXT".into()))].into()
     );
     assert_eq!(identity.unwrap().values, [Value::Str("row1".into())]);
     let mut quota = limits();

@@ -1,6 +1,7 @@
+use serde_json::Value as V;
 use std::{collections::BTreeSet, convert::Infallible};
 use yamaa_core::{
-    diagnostic::{ConditionCode, ContextValue as V, PredicateDiagnosticError as P},
+    diagnostic::{ConditionCode, PredicateDiagnosticError as P},
     predicate::{
         Comparison, Condition, ErrorKind, EvaluationError, LimitError, Limits, Node, Plan,
         Resolver, Resource, Route, Scalar,
@@ -8,7 +9,7 @@ use yamaa_core::{
     value::{Selection, Value},
 };
 fn text(s: &str) -> V {
-    V::Scalar(Value::Str(s.into()))
+    V::String(s.into())
 }
 #[test]
 fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts() {
@@ -45,7 +46,7 @@ fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts()
             finding.context,
             [
                 ("predicate".into(), text(expression)),
-                ("position".into(), V::Integer(character.to_string())),
+                ("position".into(), V::from(character)),
             ]
             .into()
         );
@@ -76,7 +77,10 @@ fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts()
         )
         .unwrap();
     assert_eq!(finding.definition().requirement, Some("REQ-0191"));
-    assert_eq!(finding.context["position"], V::Integer("19".into()));
+    assert_eq!(
+        finding.context["position"],
+        V::Number(("19").parse().expect("canonical integer"))
+    );
     let huge = "\0".repeat(1_400_000);
     assert_eq!(
         GrammarFailure::InvalidExpression.original_diagnostic("rows[0].filter", &huge, usize::MAX),
@@ -85,7 +89,7 @@ fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts()
     let full = GrammarFailure::InvalidExpression
         .original_diagnostic("rows[0].filter", "A >", usize::MAX)
         .unwrap();
-    assert_eq!(full.context["position"], V::Integer(usize::MAX.to_string()));
+    assert_eq!(full.context["position"], V::from(usize::MAX));
 }
 struct Absent;
 impl Resolver for Absent {

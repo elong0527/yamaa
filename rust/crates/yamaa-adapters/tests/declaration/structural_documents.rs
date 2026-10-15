@@ -717,21 +717,21 @@ fn environment_decoder_collects_every_independent_inline_scalar_failure() {
             )
         );
     }
-    use yamaa_core::diagnostic::ContextValue;
+    use serde_json::Value as JsonValue;
     assert_eq!(
         projected[0].context["value"],
-        ContextValue::Integer("9223372036854775808".into())
+        JsonValue::Number(("9223372036854775808").parse().expect("canonical integer"))
     );
     assert_eq!(
         projected[1].context["value"],
-        ContextValue::Scalar(yamaa_core::value::Value::Str("2024-02-30".into()))
+        JsonValue::String("2024-02-30".into())
     );
     assert_eq!(
         projected[2].context["value"],
-        ContextValue::Integer("9223372036854775808".into())
+        JsonValue::Number(("9223372036854775808").parse().expect("canonical integer"))
     );
     assert_eq!(
         projected[3].context["value"],
-        ContextValue::Integer("9223372036854775808".into())
+        JsonValue::Number(("9223372036854775808").parse().expect("canonical integer"))
     );
 }

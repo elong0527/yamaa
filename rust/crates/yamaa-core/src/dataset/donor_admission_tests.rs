@@ -6,7 +6,7 @@ use crate::{
     table::Column,
     value::{ColumnType, ValueType},
 };
-use alloc::format;
+
 fn schema(names: &[&str]) -> TableSchema {
     TableSchema::new(
         names
@@ -121,10 +121,10 @@ fn later_augmented_source_fields_fail_before_a_donor_plan_can_execute() {
             )
             .unwrap(),
         ),
-        assignment: alloc::boxed::Box::new(assignment(1, Expression::Literal(Value::Int(1)))),
+        assignment: std::boxed::Box::new(assignment(1, Expression::Literal(Value::Int(1)))),
     }]);
     let nested = Expression::StrCase {
-        source: alloc::boxed::Box::new(assignment(1, numeric(2))),
+        source: std::boxed::Box::new(assignment(1, numeric(2))),
         operation: StringCase::new(
             "LATER".into(),
             "donor.case".into(),

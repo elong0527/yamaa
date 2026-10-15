@@ -1,6 +1,6 @@
+use serde_json::Value as JsonValue;
 use yamaa_core::{
     dataset::Check,
-    diagnostic::ContextValue,
     project_codelist_binding::{bind, AllowedValues, Binding, Cause, Error},
     project_limits::{Limits, Resource},
     project_terminology::{Catalogue, Codelist, DataType, External, Item, Source},
@@ -91,10 +91,7 @@ fn complete_static_findings_preserve_all_bindings_both_sets_and_original_paths()
             ),
             ("validation", condition, Some(requirement))
         );
-        assert_eq!(
-            d.context["column"],
-            ContextValue::Scalar(Value::Str("VALUE".into()))
-        );
+        assert_eq!(d.context["column"], JsonValue::String("VALUE".into()));
     }
     let d = findings[2].diagnostic();
     assert_eq!(
@@ -106,9 +103,9 @@ fn complete_static_findings_preserve_all_bindings_both_sets_and_original_paths()
     );
     assert_eq!(
         d.context["codelist_values"],
-        ContextValue::Sequence(vec![
-            ContextValue::Scalar(Value::Str("F".into())),
-            ContextValue::Scalar(Value::Str("M\0🙂".into()))
+        JsonValue::Array(vec![
+            JsonValue::String("F".into()),
+            JsonValue::String("M\0🙂".into())
         ])
     );
     assert!(matches!(

@@ -66,7 +66,7 @@ pub(super) fn resolve_current<T: TableAccess + ?Sized>(
                         path,
                         source_row,
                         error: original,
-                    } = core::mem::replace(error.as_mut(), ExecutionError::SchemaMismatch)
+                    } = std::mem::replace(error.as_mut(), ExecutionError::SchemaMismatch)
                     {
                         *error = ExecutionError::SecondaryCell {
                             path,

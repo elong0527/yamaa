@@ -115,7 +115,7 @@ fn independent_partial_dates_preserve_precision_and_calendar_bound_intervals() {
 
 #[test]
 fn original_zero_year_month_prefix_retains_both_operation_diagnostics() {
-    use yamaa_core::diagnostic::ContextValue;
+    use serde_json::Value as JsonValue;
     for (kind, name) in [
         (
             date_policy_kind(P::Year, D::Position("first")),
@@ -132,18 +132,9 @@ fn original_zero_year_month_prefix_retains_both_operation_diagnostics() {
         assert_eq!(
             error.context,
             [
-                (
-                    "operation".into(),
-                    ContextValue::Scalar(Value::Str(name.into()))
-                ),
-                (
-                    "source".into(),
-                    ContextValue::Scalar(Value::Str("S".into()))
-                ),
-                (
-                    "value".into(),
-                    ContextValue::Scalar(Value::Str("0000-01".into()))
-                ),
+                ("operation".into(), JsonValue::String(name.into())),
+                ("source".into(), JsonValue::String("S".into())),
+                ("value".into(), JsonValue::String("0000-01".into())),
             ]
             .into()
         );
@@ -225,8 +216,9 @@ fn independent_diagnostic_truth_reaches_every_imputation_cause() {
 
 #[test]
 fn calendar_policy_preserves_wide_integers_and_unreachable_month_precedence() {
+    use serde_json::Value as JsonValue;
     use yamaa_core::dataset::DatePolicyError;
-    use yamaa_core::diagnostic::{ConditionCode as C, ContextValue};
+    use yamaa_core::diagnostic::ConditionCode as C;
     let wide = "9".repeat(5000);
     let DatePolicyError::Diagnostic(error) =
         date_policy(Some(&wide), D::Number("0"), P::Month, "date").unwrap_err()
@@ -234,21 +226,30 @@ fn calendar_policy_preserves_wide_integers_and_unreachable_month_precedence() {
         panic!("admitted semantic failure")
     };
     assert_eq!(error.code, C::ImputationMonthNotPermitted);
-    assert_eq!(error.context["month"], ContextValue::Integer(wide.clone()));
+    assert_eq!(
+        error.context["month"],
+        JsonValue::Number((wide.clone()).parse().expect("canonical integer"))
+    );
     let DatePolicyError::Diagnostic(error) =
         date_policy(Some(&wide), D::Number("1"), P::Year, "date").unwrap_err()
     else {
         panic!("admitted semantic failure")
     };
     assert_eq!(error.code, C::ImputationMonthRange);
-    assert_eq!(error.context["month"], ContextValue::Integer(wide.clone()));
+    assert_eq!(
+        error.context["month"],
+        JsonValue::Number((wide.clone()).parse().expect("canonical integer"))
+    );
     let DatePolicyError::Diagnostic(error) =
         date_policy(Some("6"), D::Number(&wide), P::Year, "date").unwrap_err()
     else {
         panic!("admitted semantic failure")
     };
     assert_eq!(error.code, C::ImputationDayRange);
-    assert_eq!(error.context["value"], ContextValue::Integer(wide));
+    assert_eq!(
+        error.context["value"],
+        JsonValue::Number((wide).parse().expect("canonical integer"))
+    );
 }
 
 #[test]

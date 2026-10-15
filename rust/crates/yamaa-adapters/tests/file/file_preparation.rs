@@ -1,4 +1,3 @@
-#![cfg(any(unix, windows))]
 use crate::support::ipc_snapshot;
 use serde_json::{json, Value};
 use std::{

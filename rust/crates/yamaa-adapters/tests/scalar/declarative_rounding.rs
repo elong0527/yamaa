@@ -1,4 +1,3 @@
-#![cfg(any(unix, windows))]
 use serde_json::json;
 use std::{
     fs,

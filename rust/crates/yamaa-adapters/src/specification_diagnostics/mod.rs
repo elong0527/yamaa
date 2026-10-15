@@ -29,20 +29,22 @@ pub(crate) fn binding(error: &BindError, source: &SourceDeclaration) -> Option<V
     Some(diagnostics)
 }
 fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Vec<Value>> {
-    error
-        .diagnostics(source)?
-        .into_iter()
-        .map(portable_diagnostic)
-        .collect()
+    Some(
+        error
+            .diagnostics(source)?
+            .into_iter()
+            .map(portable_diagnostic)
+            .collect(),
+    )
 }
 /// Represent the core-owned finding without assigning semantic vocabulary here.
-fn preparing(error: &PreflightFinding) -> Option<Value> {
+fn preparing(error: &PreflightFinding) -> Value {
     portable_diagnostic(error.diagnostic())
 }
 
 /// The original-document report shape retains ordinary JSON context values.
 /// Geometry is retained by the core diagnostic and projected by the report contract.
-pub(crate) fn portable_diagnostic(finding: yamaa_core::diagnostic::Diagnostic) -> Option<Value> {
+pub(crate) fn portable_diagnostic(finding: yamaa_core::diagnostic::Diagnostic) -> Value {
     portable_definition(finding.definition(), finding.spec_paths, finding.context)
 }
 /// Submission findings retain their core-owned definition until their causes
@@ -51,42 +53,15 @@ pub(crate) fn portable_definition(
     definition: yamaa_core::diagnostic::Definition,
     paths: Vec<String>,
     context: yamaa_core::diagnostic::Context,
-) -> Option<Value> {
-    fn value(cell: yamaa_core::diagnostic::ContextValue) -> Option<Value> {
-        use yamaa_core::{diagnostic::ContextValue as C, value::Value as S};
-        Some(match cell {
-            C::Object(values) => Value::Object(
-                values
-                    .into_iter()
-                    .map(|(key, cell)| Some((key, value(cell)?)))
-                    .collect::<Option<_>>()?,
-            ),
-            C::Sequence(values) => {
-                Value::Array(values.into_iter().map(value).collect::<Option<_>>()?)
-            }
-            C::Integer(integer) => Value::Number(integer.parse().ok()?),
-            C::Scalar(scalar) => match scalar {
-                S::Missing => Value::Null,
-                S::Str(v) => json!(v),
-                S::Int(v) => json!(v),
-                S::Float(v) => json!(v.get()),
-                S::Bool(v) => json!(v),
-                S::Date(v) => json!(v.to_string()),
-                S::DateTime(v) => json!(v.to_string()),
-            },
-        })
-    }
-    let context = context
-        .into_iter()
-        .map(|(name, v)| Some((name, value(v)?)))
-        .collect::<Option<serde_json::Map<_, _>>>()?;
-    Some(diagnostic(
+) -> Value {
+    let context: serde_json::Map<_, _> = context.into_iter().collect();
+    diagnostic(
         definition.phase,
         definition.condition,
         definition.requirement,
         paths,
         context.into(),
-    ))
+    )
 }
 /// Complete ingestion reports are admitted in core before copying codec facts.
 /// Other existing preparation/binding projections retain their admission policy.
@@ -103,21 +78,13 @@ pub fn findings_with_limit(
         | Error::Source(_)
         | Error::Ordinal(_)
         | Error::OdmFields(_)
-        | Error::OdmValues(_) => {
-            crate::source_diagnostics::findings_with_limit(error, source, maximum)?
-                .map(|findings| {
-                    findings
-                        .into_iter()
-                        .map(|finding| {
-                            portable_diagnostic(finding).ok_or_else(|| {
-                                yamaa_core::diagnostic::ProjectionError::InvalidContext.into()
-                            })
-                        })
-                        .collect()
-                })
-                .transpose()
+        | Error::OdmValues(_) => Ok(crate::source_diagnostics::findings_with_limit(
+            error, source, maximum,
+        )?
+        .map(|findings| findings.into_iter().map(portable_diagnostic).collect())),
+        Error::Prepare(PrepareError::Invalid(errors)) => {
+            Ok(Some(errors.iter().map(preparing).collect()))
         }
-        Error::Prepare(PrepareError::Invalid(errors)) => Ok(errors.iter().map(preparing).collect()),
         Error::Bind(error) => Ok(source.and_then(|source| binding(error, source))),
         _ => Ok(None),
     }

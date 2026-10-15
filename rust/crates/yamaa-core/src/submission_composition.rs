@@ -6,12 +6,7 @@ use crate::{
     schema::{Document, DocumentNode as N},
     specification_submission_document as spec, submission_document as env,
 };
-use alloc::{
-    collections::{BTreeMap, BTreeSet},
-    format,
-    string::{String, ToString},
-    vec::Vec,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Finding {
@@ -28,11 +23,7 @@ impl Finding {
         Self {
             code,
             path: path.into(),
-            context: [(
-                "detail".into(),
-                crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(detail.into())),
-            )]
-            .into(),
+            context: [("detail".into(), serde_json::Value::String(detail.into()))].into(),
         }
     }
 }
@@ -188,7 +179,7 @@ fn verification(document: &Document, node: usize, operation: &str) -> Vec<usize>
     };
     let nodes = match &document.nodes()[v] {
         N::Sequence(values) => values.as_slice(),
-        _ => core::slice::from_ref(&v),
+        _ => std::slice::from_ref(&v),
     };
     nodes
         .iter()
@@ -824,12 +815,9 @@ fn compose_values(
                     ("testcd", test_code.as_str()),
                     ("row", row.id.value.as_str()),
                 ] {
-                    finding.context.insert(
-                        key.into(),
-                        crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
-                            value.into(),
-                        )),
-                    );
+                    finding
+                        .context
+                        .insert(key.into(), serde_json::Value::String(value.into()));
                 }
                 if finding.code == ConditionCode::SubmissionValueOriginRefuted {
                     let origin = effective
@@ -850,12 +838,9 @@ fn compose_values(
                         ),
                         ("origin_type", origin.kind.value.name()),
                     ] {
-                        finding.context.insert(
-                            key.into(),
-                            crate::diagnostic::ContextValue::Scalar(crate::value::Value::Str(
-                                value.into(),
-                            )),
-                        );
+                        finding
+                            .context
+                            .insert(key.into(), serde_json::Value::String(value.into()));
                     }
                 }
             }
@@ -975,7 +960,7 @@ pub fn compose(
         };
     }
     if !allowed || nodes > 524_288 || text_bytes > 16_777_216 || work > 268_435_456 {
-        return Err(alloc::vec![Finding::cause(
+        return Err(std::vec![Finding::cause(
             crate::diagnostic::ConditionCode::ApplicationRejected,
             "specs",
             "composition_admission_limit"
@@ -1251,7 +1236,7 @@ pub fn compose(
             discriminator,
         });
     }
-    let mut standards = alloc::vec![Standard {
+    let mut standards = std::vec![Standard {
         id: guide.into(),
         name: guide.into(),
         kind: "IG",

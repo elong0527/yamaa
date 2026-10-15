@@ -1,4 +1,3 @@
-#![cfg(any(unix, windows))]
 use crate::support::project_schemas as schemas;
 use std::{
     fs,

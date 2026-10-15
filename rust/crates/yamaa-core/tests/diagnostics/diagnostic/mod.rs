@@ -1,7 +1,8 @@
+use serde_json::Value as JsonValue;
 use std::{collections::BTreeSet, convert::Infallible};
 use yamaa_core::{
     conversion::convert,
-    diagnostic::{ContextValue, CONDITIONS},
+    diagnostic::CONDITIONS,
     evaluation::{EvaluationErrorKind, NumericResolver},
     numeric_compiler::{compile_numeric, compile_numeric_with_policy, CompileLimits, MathPolicy},
     numeric_parser::SourceSpan,
@@ -84,10 +85,16 @@ fn resource_refusals_name_the_incomplete_check_scope_without_reclassifying_prior
         assert_eq!(finding.spec_paths, ["input.SRC"]);
         assert_eq!(
             finding.context["incomplete_checks_from"],
-            ContextValue::Scalar(Value::Str(expected.into()))
+            JsonValue::String(expected.into())
         );
-        assert_eq!(finding.context["limit"], ContextValue::Integer("7".into()));
-        assert_eq!(finding.context["actual"], ContextValue::Integer("8".into()));
+        assert_eq!(
+            finding.context["limit"],
+            JsonValue::Number(("7").parse().expect("canonical integer"))
+        );
+        assert_eq!(
+            finding.context["actual"],
+            JsonValue::Number(("8").parse().expect("canonical integer"))
+        );
     }
     // An opaque failure cannot establish a resource refusal or its completion boundary.
     assert!(
@@ -117,7 +124,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     assert_eq!(publication.spec_paths, ["output.path"]);
     assert_eq!(
         publication.context["path"],
-        ContextValue::Scalar(Value::Str("generated/producer.csv".into()))
+        JsonValue::String("generated/producer.csv".into())
     );
     reached.insert(publication.code);
     for (finding, phase, condition, context) in [
@@ -144,10 +151,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
             (phase, condition, None)
         );
         for &(name, value) in context {
-            assert_eq!(
-                finding.context[name],
-                ContextValue::Scalar(Value::Str(value.into()))
-            );
+            assert_eq!(finding.context[name], JsonValue::String(value.into()));
         }
         reached.insert(finding.code);
     }
@@ -194,7 +198,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         assert_eq!(diagnostic.spec_paths, ["columns.X.compute"]);
         assert_eq!(
             diagnostic.context["expr"],
-            ContextValue::Scalar(Value::Str(expression.into()))
+            JsonValue::String(expression.into())
         );
         reached.insert(diagnostic.code);
     }
@@ -218,7 +222,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
             ),
             ("convert", "conversion_failed", Some(requirement))
         );
-        assert_eq!(diagnostic.context["value"], ContextValue::Scalar(source));
+        assert_eq!(diagnostic.context["value"], JsonValue::from(source));
         assert_eq!(diagnostic.spec_paths, ["columns.X"]);
         assert_eq!(diagnostic.source_span, None);
         assert_eq!(diagnostic.operand_route, None);
@@ -269,11 +273,11 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         assert_eq!(diagnostic.spec_paths, ["input.SRC.path"]);
         assert_eq!(
             diagnostic.context["dataset"],
-            ContextValue::Scalar(Value::Str("SRC".into()))
+            JsonValue::String("SRC".into())
         );
         assert_eq!(
             diagnostic.context["path"],
-            ContextValue::Scalar(Value::Str("input/data.csv".into()))
+            JsonValue::String("input/data.csv".into())
         );
         assert_eq!(diagnostic.context.len(), 2);
         reached.insert(diagnostic.code);
@@ -289,12 +293,9 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     assert_eq!(changed.spec_paths, ["input.SRC.path"]);
     assert_eq!(
         changed.context["path"],
-        ContextValue::Scalar(Value::Str("../authored/data.csv".into()))
+        JsonValue::String("../authored/data.csv".into())
     );
-    assert_eq!(
-        changed.context["dataset"],
-        ContextValue::Scalar(Value::Str("SRC".into()))
-    );
+    assert_eq!(changed.context["dataset"], JsonValue::String("SRC".into()));
     reached.insert(changed.code);
     reached.extend(submission::reached());
     reached.extend(schema::reached());
@@ -304,11 +305,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(project_environment::reached());
     reached.extend(project_lock::reached());
     let lock = yamaa_core::application_issue::lock_mismatch(
-        [(
-            "package".into(),
-            ContextValue::Scalar(Value::Str("project".into())),
-        )]
-        .into(),
+        [("package".into(), JsonValue::String("project".into()))].into(),
     );
     assert_eq!(
         (
@@ -319,10 +316,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         ("validation", "runtime_artifact_mismatch", Some("REQ-0697"))
     );
     assert_eq!(lock.spec_paths, ["lock"]);
-    assert_eq!(
-        lock.context["package"],
-        ContextValue::Scalar(Value::Str("project".into()))
-    );
+    assert_eq!(lock.context["package"], JsonValue::String("project".into()));
     reached.insert(lock.code);
     reached.extend(project_codelist_binding::reached());
     reached.extend(preflight::reached());
@@ -367,13 +361,10 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         diagnostic.spec_paths,
         ["columns.V.verifications[0].not_missing"]
     );
-    assert_eq!(
-        diagnostic.context["column"],
-        ContextValue::Scalar(Value::Str("V".into()))
-    );
+    assert_eq!(diagnostic.context["column"], JsonValue::String("V".into()));
     assert_eq!(
         diagnostic.context["failure_count"],
-        ContextValue::Integer("2".into())
+        JsonValue::Number(("2").parse().expect("canonical integer"))
     );
     assert!(
         yamaa_core::dataset_checks::not_missing(&[Value::Int(0), Value::Str(String::new())])
@@ -429,16 +420,16 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
             ("verification", condition, Some(requirement))
         );
         assert_eq!(diagnostic.spec_paths, ["columns.V.verifications[0]"]);
-        assert_eq!(
-            diagnostic.context["column"],
-            ContextValue::Scalar(Value::Str("V".into()))
-        );
+        assert_eq!(diagnostic.context["column"], JsonValue::String("V".into()));
         assert_eq!(
             diagnostic.context["failure_count"],
-            ContextValue::Integer("1".into())
+            JsonValue::Number(("1").parse().expect("canonical integer"))
         );
         if condition == "length_failed" {
-            assert_eq!(diagnostic.context["max"], ContextValue::Integer("2".into()));
+            assert_eq!(
+                diagnostic.context["max"],
+                JsonValue::Number(("2").parse().expect("canonical integer"))
+            );
         }
         assert!(yamaa_core::dataset_checks::column_diagnostic(
             &check,
@@ -489,7 +480,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     assert_eq!(diagnostic.context.len(), 2);
     assert_eq!(
         diagnostic.context["failure_count"],
-        ContextValue::Integer("1".into())
+        JsonValue::Number(("1").parse().expect("canonical integer"))
     );
     reached.insert(diagnostic.code);
     assert!(matches!(
@@ -509,10 +500,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         ("validation", "invalid_regex", Some("REQ-0827"))
     );
     assert_eq!(diagnostic.context.len(), 1);
-    assert_eq!(
-        diagnostic.context["pattern"],
-        ContextValue::Scalar(Value::Str("(".into()))
-    );
+    assert_eq!(diagnostic.context["pattern"], JsonValue::String("(".into()));
     assert_eq!(diagnostic.source_span, None);
     reached.insert(diagnostic.code);
     reached.extend(dataset::reached());
@@ -580,10 +568,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
         ),
         ("verification", "allowed_values_failed", Some("REQ-0957"))
     );
-    assert_eq!(
-        finding.context["codelist"],
-        ContextValue::Scalar(Value::Str("SEX".into()))
-    );
+    assert_eq!(finding.context["codelist"], JsonValue::String("SEX".into()));
     reached.insert(finding.code);
     let extreme = yamaa_core::scalar_language::incomparable_diagnostic(
         &["DTHDT".into(), "DAY".into()],
@@ -601,9 +586,9 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     assert_eq!(extreme.spec_paths, ["columns.RESULT.derivation.greatest"]);
     assert_eq!(
         extreme.context["types"],
-        ContextValue::Sequence(vec![
-            ContextValue::Scalar(Value::Str("date".into())),
-            ContextValue::Scalar(Value::Str("int".into()))
+        JsonValue::Array(vec![
+            JsonValue::String("date".into()),
+            JsonValue::String("int".into())
         ])
     );
     reached.insert(extreme.code);
@@ -669,16 +654,10 @@ fn nested_failure_retains_location_and_full_width_context() {
     assert_eq!(diagnostic.operand_route, Some(vec!["right".into()]));
     assert_eq!(
         diagnostic.context["value"],
-        ContextValue::Scalar(Value::Str("9223372036854775808".into()))
+        JsonValue::String("9223372036854775808".into())
     );
-    assert_eq!(
-        diagnostic.context["minimum"],
-        ContextValue::Scalar(Value::Int(i64::MIN))
-    );
-    assert_eq!(
-        diagnostic.context["maximum"],
-        ContextValue::Scalar(Value::Int(i64::MAX))
-    );
+    assert_eq!(diagnostic.context["minimum"], JsonValue::from(i64::MIN));
+    assert_eq!(diagnostic.context["maximum"], JsonValue::from(i64::MAX));
     let literal = compile_numeric(
         "9223372036854775808",
         "columns.Y.compute",
@@ -700,15 +679,12 @@ fn conversion_retains_unbounded_diagnostic_integer_as_decimal_text() {
         .unwrap_err()
         .into_diagnostic("columns.X.unconvertible".into());
     assert_eq!(diagnostic.definition().requirement, Some("REQ-0021"));
+    assert_eq!(diagnostic.context["from"], JsonValue::String("int".into()));
+    assert_eq!(diagnostic.context["to"], JsonValue::String("int".into()));
     assert_eq!(
-        diagnostic.context["from"],
-        ContextValue::Scalar(Value::Str("int".into()))
+        diagnostic.context["value"],
+        JsonValue::Number((digits).parse().expect("canonical integer"))
     );
-    assert_eq!(
-        diagnostic.context["to"],
-        ContextValue::Scalar(Value::Str("int".into()))
-    );
-    assert_eq!(diagnostic.context["value"], ContextValue::Integer(digits));
 }
 
 /// The diagnostic projection cannot consume or relabel a host error, and has no
@@ -749,4 +725,29 @@ fn opaque_resolver_failure_is_retained_in_place() {
     };
     assert_eq!(identifier, "BAD");
     assert_eq!(&*value as *const u8, address);
+}
+
+#[test]
+fn scalar_json_context_preserves_wire_types_and_exact_number_spellings() {
+    let context = std::collections::BTreeMap::from([
+        ("bool", serde_json::Value::from(Value::Bool(true))),
+        (
+            "date",
+            serde_json::Value::from(Value::Date("2025-01-02".parse().unwrap())),
+        ),
+        (
+            "datetime",
+            serde_json::Value::from(Value::DateTime("2025-01-02T03:04".parse().unwrap())),
+        ),
+        ("float", serde_json::Value::from(Value::float(1.0))),
+        ("max", serde_json::Value::from(Value::Int(i64::MAX))),
+        ("min", serde_json::Value::from(Value::Int(i64::MIN))),
+        ("missing", serde_json::Value::from(Value::Missing)),
+        ("negzero", serde_json::Value::from(Value::float(-0.0))),
+        ("text", serde_json::Value::from(Value::Str("001".into()))),
+    ]);
+    assert_eq!(
+        serde_json::to_string(&context).unwrap(),
+        r#"{"bool":true,"date":"2025-01-02","datetime":"2025-01-02T03:04:00","float":1.0,"max":9223372036854775807,"min":-9223372036854775808,"missing":null,"negzero":-0.0,"text":"001"}"#,
+    );
 }
