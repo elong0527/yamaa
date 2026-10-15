@@ -12,10 +12,10 @@ impl InheritancePort for NoParents {
     fn canonicalize(&mut self, _: &str, _: &str) -> Result<Identity, SourceError<()>> {
         panic!("entry rejection or standalone preparation must not resolve a parent")
     }
-    fn capture(&mut self, _: &Identity, _: usize) -> Result<Vec<u8>, SourceError<()>> {
+    fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<()>> {
         panic!("entry rejection or standalone preparation must not read a parent")
     }
-    fn rebase(&mut self, _: &Identity, _: &Identity, _: &str, _: usize) -> Result<String, ()> {
+    fn rebase(&mut self, _: &Identity, _: &Identity, _: &str) -> Result<String, ()> {
         panic!("entry rejection or standalone preparation must not rebase a parent")
     }
 }
@@ -169,7 +169,7 @@ fn window_expansion_findings_use_the_retained_normalized_arena() {
     assert_eq!(captured.source().bytes, raw);
     let document = captured.document().unwrap();
     // Shorthand expansion changes this pass input from the authored arena.
-    let decoded = yamaa_adapters::yaml_decode::decode_yaml(&raw, Default::default()).unwrap();
+    let decoded = yamaa_adapters::yaml_decode::decode_yaml(&raw).unwrap();
     assert_ne!(document, &decoded.document);
     let actual: Value = serde_json::from_str(&capture_failure(&error)).unwrap();
     // Independent expected/error.yaml is unchanged.
@@ -180,11 +180,11 @@ fn window_expansion_findings_use_the_retained_normalized_arena() {
 }
 
 #[test]
-fn diagnostic_expansion_limits_do_not_masquerade_as_language_findings() {
+fn large_invalid_version_retains_its_complete_language_finding() {
     use serde_json::{json, Value};
     use yamaa_adapters::specification_diagnostics::capture_failure;
-    // A source string can fit input limits but exceed the conservative escaped-JSON budget.
-    let text = format!("schema_version: '{}'\n", "x".repeat(2_800_000));
+    let version = "x".repeat(2_800_000);
+    let text = format!("schema_version: '{version}'\n");
     let error = shipped_schema::capture()
         .unwrap()
         .prepare_standalone(source(&text))
@@ -193,7 +193,7 @@ fn diagnostic_expansion_limits_do_not_masquerade_as_language_findings() {
     let actual: Value = serde_json::from_str(&capture_failure(&error)).unwrap();
     assert_eq!(
         actual["outcome"],
-        json!({"status":"rejected","stage":"capture","code":"diagnostic_context_limit"})
+        json!({"status":"invalid","diagnostics":[{"phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0281","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":version}}]})
     );
 }
 
@@ -265,18 +265,11 @@ impl InheritancePort for ParentSource {
             display_path: "parent.yaml".into(),
         })
     }
-    fn capture(&mut self, _: &Identity, maximum: usize) -> Result<Vec<u8>, SourceError<()>> {
-        assert!(self.raw.len() <= maximum);
+    fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<()>> {
         self.reads += 1;
         Ok(self.raw.clone())
     }
-    fn rebase(
-        &mut self,
-        _: &Identity,
-        _: &Identity,
-        written: &str,
-        _: usize,
-    ) -> Result<String, ()> {
+    fn rebase(&mut self, _: &Identity, _: &Identity, written: &str) -> Result<String, ()> {
         Ok(written.into())
     }
 }
@@ -355,8 +348,7 @@ fn shipped_environment_version_override_reaches_the_same_owned_submission_model(
             }
             let captured = schema.prepare_structural(source(&text)).unwrap();
             let input = &captured.normalized().document;
-            let owned =
-                submission_document::decode(input, input.root(), Default::default()).unwrap();
+            let owned = submission_document::decode(input, input.root()).unwrap();
             drop(captured);
             let selected = owned.sections()[0].source_versions("0.3.0").unwrap();
             assert_eq!(selected.metadata(), version.unwrap_or("0.3.0"));

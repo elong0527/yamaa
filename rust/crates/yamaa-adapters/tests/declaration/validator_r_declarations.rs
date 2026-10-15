@@ -44,7 +44,6 @@ fn replay(name: &str, expected: Option<(&str, &str, &str)>) {
         },
         Language::R,
         &mut lock,
-        Default::default(),
     )
     .unwrap()
     .into_owned();

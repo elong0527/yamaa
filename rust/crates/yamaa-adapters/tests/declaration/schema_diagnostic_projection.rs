@@ -16,7 +16,7 @@ fn source(identity: &str, text: &str) -> Source {
 fn captured_structural_projection_preserves_complete_ordered_constraint_outcome_and_authority() {
     let schema = CapturedSchema::admit_root(vec![source("schema.yaml", &format!(
         "version: '1.0'\npayload:\n  - schema_version: {{type: str}}\n  - alpha: {{type: str, values: [z, a, z], pattern: '^OK$', min_length: {BIG}}}\n  - items: {{type: 'list[int]', size: {BIG}}}\n"))],
-        0, "payload", Default::default()).unwrap();
+        0, "payload").unwrap();
     let raw = "schema_version: '1.0'\nalpha: \"bad\\\"\\n\\u03BB\"\nitems: [1]\n";
     let error = schema
         .prepare_structural(source("held/entry.yaml", raw))
@@ -48,10 +48,10 @@ fn captured_structural_projection_preserves_complete_ordered_constraint_outcome_
 }
 
 #[test]
-fn a_late_oversized_finding_refuses_the_whole_report_and_retains_the_original() {
+fn large_ordered_findings_retain_complete_values_and_original_authority() {
     let schema = CapturedSchema::admit_root(vec![source("schema.yaml",
         "version: '1.0'\npayload:\n  - schema_version: {type: str}\n  - first: {type: str, values: [OK]}\n  - last: {type: str, values: [OK]}\n")],
-        0, "payload", Default::default()).unwrap();
+        0, "payload").unwrap();
     let raw = format!(
         "schema_version: '1.0'\nfirst: '{}'\nlast: '{}'\n",
         "x".repeat(1_400_000),
@@ -70,10 +70,14 @@ fn a_late_oversized_finding_refuses_the_whole_report_and_retains_the_original() 
     assert_eq!(captured.findings()[0].path, "first");
     assert_eq!(captured.findings()[1].path, "last");
     let original = captured.document().unwrap().nodes().as_ptr();
+    let expected = json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[
+        {"phase":"validation","condition":"value_not_permitted","requirement":"REQ-0287","spec_paths":["first"],"context":{"value":"x".repeat(1_400_000),"permitted":["OK"]}},
+        {"phase":"validation","condition":"value_not_permitted","requirement":"REQ-0287","spec_paths":["last"],"context":{"value":"y".repeat(1_400_000),"permitted":["OK"]}}
+    ]}});
     for _ in 0..2 {
         assert_eq!(
             serde_json::from_str::<Value>(&capture_failure(&error)).unwrap(),
-            json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"capture","code":"diagnostic_context_limit"}})
+            expected
         );
         assert_eq!(captured.document().unwrap().nodes().as_ptr(), original);
         assert_eq!(captured.source().bytes, raw.as_bytes());
