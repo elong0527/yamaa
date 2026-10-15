@@ -23,14 +23,9 @@ packageVersion("yamaa")
 `yamaa_domain` computes without publishing files. Explicit Save publishes retained
 producer bytes before consumers and reuses those bytes on repeated calls. A failed
 build raises `yamaa_domain_error` on Save. Owned result attributes are read only;
-issue context is JSON text. Compiler capacity refusals retain `engine_rejected`
-and a null requirement, with `code: compiler_limit`, `stage: prepare`, the
-`resource`, integer `limit` and counted `actual` in context. `spec_paths`
-identifies the refused declaration; check and build return the same facts with
-or without an environment. Numeric policy refusals retain their applicable
-resource bound under `code: numeric_policy`. Layered preparation and YAML
-resource refusals use `code: resource_limit` and retain the preparation or
-decoder `phase` alongside the resource bound in context. `yamaa_check` reads no study data or project code.
+issue context is JSON text. Capacity refusals retain the shared condition and
+authored paths; [release guidance](../../docs/release.md#resource-refusals)
+describes their context. `yamaa_check` reads no study data or project code.
 Resource paths resolve from their original declaring YAML layer under the
 [local-path policy](../../rules/storage/resources.md).
 
@@ -57,24 +52,9 @@ A failed Define Save raises `yamaa_define_error`. See the
 
 ## Implementation limits
 
-The shared engine admits up to 1,024 declared columns, output columns and fields
-in each input's `types`. CSV, Parquet, SAS, Arrow imports and producer contracts use
-the same width ceiling. An `ordinal` adds one field and counts toward this bound.
-Specifications still admit at most 64 keys and 16 inputs.
-
-The public hosts use the longitudinal profile: 10,000,000 source or output
-rows, 640,000,000 source or output cells, 1 GiB scalar text, 512 MiB output
-text and 1 GiB encoded input/output. CSV admission includes its header in the
-field and record quotas. Finite report and producer budgets account for the
-same profile. Execution permits 2,000,000,000 logical work units; producer nodes
-share cumulative allowances, and expensive plans can exhaust work before size.
-
-Validation and normalization share 67,108,864 logical work units; complex or
-inherited specifications can exhaust this separate preparation budget below
-the width ceiling. These are implementation policies, not language constraints
-or process-memory guarantees. The
-[release resource policies](../../docs/release.md#resource-limits) describe
-cumulative layered allowances and the separate representation budgets.
+The shared hosts use the same [resource policies](../../docs/release.md#resource-limits).
+That page owns all capacity limits and refusal details. These are implementation
+policies, not language constraints or process-memory guarantees.
 
 ## Source installation
 
@@ -102,27 +82,13 @@ complete Rust workspace and the unchanged canonical Cargo lock. Compilation uses
 is needed during R installation. Cargo downloads the already locked dependencies
 when they are absent from its cache.
 
-For a development build, stage this repository
-template before `R CMD build`.
-Direct `devtools::install_github(..., subdir = "R/yamaa")` installation omits the
-shared Rust sources and is unsupported.
+For a repository development build, use the setup and package-check
+targets documented by `make help` and the [contributor guide](../../CONTRIBUTING.md).
+Direct installation of the `R/yamaa/` template omits the shared Rust sources;
+install a staged source archive instead. Staging refuses an existing destination.
 
-For the check and grammar commands below, install the declared test dependencies,
-including jsonlite 2.0.0, in the R library selected for these tests. Run the commands
-from the repository root:
-
-```sh
-python -m pip install py-yaml12==0.2.0
-python -m tools.staging.stage_r_package /tmp/yamaa-stage/yamaa
-R CMD build --no-build-vignettes --no-manual /tmp/yamaa-stage/yamaa
-R CMD INSTALL yamaa_0.4.0.tar.gz
-R CMD check --no-manual yamaa_0.4.0.tar.gz
-Rscript --vanilla R/yamaa/tests/public_grammar.R
-```
-
-Staging refuses to overwrite an existing destination. The source archive includes
-unchanged authored grammar documents and independent installed test inputs.
-The native workflow rebuilds, installs and runs the public suites outside the
-checkout, then requires `Status: OK` from `R CMD check` on all three supported R
-platforms. The [Rust workspace guide](../../rust/README.md) describes the
-crate boundaries and development checks.
+The source archive carries unchanged authored grammar documents and independent
+installed test inputs. Native qualification installs packages outside the
+checkout and requires `Status: OK` from strict `R CMD check` on each supported
+platform. [Installed package checks](../../rust/qualification/README.md) describe
+that separate qualification route.

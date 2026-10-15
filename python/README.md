@@ -39,14 +39,8 @@ issue and log views remain independent. Issues contain `phase`, `condition`,
 `requirement`, `spec_paths` and JSON-text `context`. The public issue table has no
 `severity` field. Signed integers retain their full 64-bit range; strings
 retain Unicode and embedded NUL, and date/datetime columns retain ordinary Polars
-types. A compiler capacity refusal keeps `engine_rejected` and a null
-requirement. Its context names `code: compiler_limit`, `stage: prepare`,
-`resource`, integer `limit` and `actual` when counted; `spec_paths` identifies
-the refused declaration. The same facts are returned by check and build,
-with or without an environment. Numeric policy refusals retain their applicable
-resource bound under `code: numeric_policy`. Layered preparation and YAML
-resource refusals use `code: resource_limit` and retain the preparation or
-decoder `phase` alongside the resource bound in context.
+types. Capacity refusals retain the shared condition and authored paths;
+[release guidance](../docs/release.md#resource-refusals) describes their context.
 
 Numeric operations use PortableLibmV1 with pinned libm 0.2.16;
 the [numeric implementation](../rust/crates/yamaa-core/src/numeric.rs) defines
@@ -62,24 +56,9 @@ writes remain if a later target fails. There is no whole-run file rollback.
 
 ## Implementation limits
 
-The shared engine admits up to 1,024 declared columns, output columns and fields
-in each input's `types`. CSV, Parquet, SAS, Arrow imports and producer contracts use
-the same width ceiling. An `ordinal` adds one field and counts toward this bound.
-Specifications still admit at most 64 keys and 16 inputs.
-
-The public hosts use the longitudinal profile: 10,000,000 source or output
-rows, 640,000,000 source or output cells, 1 GiB scalar text, 512 MiB output
-text and 1 GiB encoded input/output. CSV admission includes its header in the
-field and record quotas. Finite report and producer budgets account for the
-same profile. Execution permits 2,000,000,000 logical work units; producer nodes
-share cumulative allowances, and expensive plans can exhaust work before size.
-
-Validation and normalization share 67,108,864 logical work units; complex or
-inherited specifications can exhaust this separate preparation budget below
-the width ceiling. These are implementation policies, not language constraints
-or process-memory guarantees. The
-[release resource policies](../docs/release.md#resource-limits) describe cumulative
-layered allowances and the separate representation budgets.
+The shared hosts use the same [resource policies](../docs/release.md#resource-limits).
+That page owns all capacity limits and refusal details. These are implementation
+policies, not language constraints or process-memory guarantees.
 
 ## Define documents
 
@@ -135,7 +114,7 @@ it and comments remain unchanged. Authoring lints that require a semantic rewrit
 offer no automatic fix. See the [style contract](../rules/specification/style.md).
 Its Python implementation names remain private.
 
-## Install and verify
+## Installation
 
 Download the wheel for your supported OS from the selected
 [GitHub release](https://github.com/elong0527/yamaa/releases), then run
@@ -146,18 +125,6 @@ qualified artifacts; the attached source archive is the tested Linux archive.
 The other OS source lanes independently build and qualify their own archives.
 GitHub distribution does not imply publication to PyPI.
 
-For a locked development installation of a checkout candidate from the
-repository root:
-
-```bash
-uv sync --project python --extra test --locked --no-editable
-uv run --project python --no-sync ruff format --check python/src/yamaa python/tests
-uv run --project python --no-sync ruff check python/src/yamaa python/tests
-```
-
-The complete installed native workflow qualifies wheel/source packages outside
-the checkout on CPython 3.12-3.14, Linux x86_64, macOS arm64 and Windows x64.
-Public benchmark conformance compares independently committed expected data;
-installed supplemental suites cover argument/result/ownership, callbacks,
-producer order/logs, exact scalar values, grammar, Define and retained ODM I/O.
-A local source import or component test alone does not establish release parity.
+For repository setup and verification, follow the
+[contributor guide](../CONTRIBUTING.md). Supported interpreters, platforms and
+complete installed qualification are defined in [release guidance](../docs/release.md).

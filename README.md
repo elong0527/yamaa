@@ -1,9 +1,7 @@
 # yamaa <img src="https://raw.githubusercontent.com/elong0527/yamaa/main/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
-[![Unit tests](https://github.com/elong0527/yamaa/actions/workflows/unit-tests.yml/badge.svg?branch=main&event=push)](https://github.com/elong0527/yamaa/actions/workflows/unit-tests.yml)
-[![Code coverage](https://elong0527.github.io/yamaa/coverage/badge.svg)](https://elong0527.github.io/yamaa/coverage/)
-[![YAML validation](https://github.com/elong0527/yamaa/actions/workflows/yaml-validation.yml/badge.svg)](https://github.com/elong0527/yamaa/actions/workflows/yaml-validation.yml)
-[![Docs](https://github.com/elong0527/yamaa/actions/workflows/deploy-docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
+[![CI](https://github.com/elong0527/yamaa/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
+[![Docs](https://github.com/elong0527/yamaa/actions/workflows/docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
 
 yamaa is a domain-specific language (DSL) for clinical trial data standardization.
@@ -11,7 +9,7 @@ A yamaa specification transforms ODM XML data, extracted from an EDC system,
 into SDTM and ADaM datasets following CDISC standards. The engine can also
 generate define.xml.
 yamaa's rules fix what every item means, so the same specification with the same
-inputs always produce the same datasets in both the R and Python engines.
+inputs always produces the same datasets through both the R and Python packages.
 
 The one principle behind everything:
 
@@ -31,7 +29,7 @@ engine, and benchmark.
 | --- | --- | --- |
 | Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
 | Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
-| Engine | Runs specifications in Python and R according to the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) |
+| Engine | Executes specifications in Rust for Python and R. | [Rust](https://github.com/elong0527/yamaa/tree/main/rust) / [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/yamaa) |
 | Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmarks) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
 
 ## From ODM XML to SDTM and ADaM
@@ -127,7 +125,7 @@ publication are later distribution work.
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.
 - Coming from Excel specs? [Excel to yamaa](https://elong0527.github.io/yamaa/articles/excel/) translates what you already know.
 - Looking for worked examples? [Benchmarks](https://elong0527.github.io/yamaa/benchmark/) illustrate the ideas.
-- Developing the engine? [Development](docs/development.md) describes the shared architecture and checks; [release guidance](docs/release.md) records supported platforms and migration notes.
+- Developing the engine? [Contributing](CONTRIBUTING.md) describes the shared architecture and checks; [release guidance](docs/release.md) records supported platforms and migration notes.
 
 ## License
 
