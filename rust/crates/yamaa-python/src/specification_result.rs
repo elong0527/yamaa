@@ -9,7 +9,7 @@ use yamaa_adapters::{
     specification_report::{self, Identity},
     specification_run::{CapturedAttempt, PortError, PreparedRun, SourcePort},
 };
-use yamaa_engine::host_values::ResourceFailure;
+use yamaa_core::resource::ResourceFailure;
 
 pub(super) struct CaptureError {
     error: PyErr,
@@ -93,7 +93,7 @@ impl SourcePort for Port<'_, '_> {
     }
     fn inspect(
         &mut self,
-        source: &yamaa_engine::specification::SourceDeclaration,
+        source: &yamaa_core::specification::SourceDeclaration,
     ) -> Result<(), CaptureError> {
         if let Some(inspect) = self.inspect {
             let result = inspect.call1((&source.name, &source.path))?;
@@ -105,11 +105,11 @@ impl SourcePort for Port<'_, '_> {
     }
     fn capture_observed(
         &mut self,
-        source: &yamaa_engine::specification::SourceDeclaration,
+        source: &yamaa_core::specification::SourceDeclaration,
         byte_limit: usize,
-        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
     ) -> Result<Arc<[u8]>, CaptureError> {
-        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
         self.capture(source, byte_limit)
     }
     fn capture_reads(&self) -> usize {
@@ -117,7 +117,7 @@ impl SourcePort for Port<'_, '_> {
     }
     fn capture(
         &mut self,
-        source: &yamaa_engine::specification::SourceDeclaration,
+        source: &yamaa_core::specification::SourceDeclaration,
         maximum: usize,
     ) -> Result<Arc<[u8]>, CaptureError> {
         let result = self.capture.call1((&source.name, &source.path, maximum))?;
@@ -227,10 +227,10 @@ impl BuildResult {
             .save(&mut publisher)
             .map(|report| report.to_string())
             .map_err(|error| match error {
-                yamaa_engine::specification_output::SaveError::FailedBuild => {
+                yamaa_core::specification_output::SaveError::FailedBuild => {
                     pyo3::exceptions::PyValueError::new_err("cannot save a failed build")
                 }
-                yamaa_engine::specification_output::SaveError::Publish(error) => {
+                yamaa_core::specification_output::SaveError::Publish(error) => {
                     pyo3::exceptions::PyValueError::new_err(error.message())
                 }
             })
@@ -251,10 +251,10 @@ impl BuildResult {
             .save(&mut Publisher(publish))
             .map(|report| report.to_string())
             .map_err(|error| match error {
-                yamaa_engine::specification_output::SaveError::FailedBuild => {
+                yamaa_core::specification_output::SaveError::FailedBuild => {
                     pyo3::exceptions::PyValueError::new_err("cannot save a failed build")
                 }
-                yamaa_engine::specification_output::SaveError::Publish(error) => error,
+                yamaa_core::specification_output::SaveError::Publish(error) => error,
             })
     }
 }

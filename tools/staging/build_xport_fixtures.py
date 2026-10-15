@@ -4,8 +4,8 @@ This fixture writer does not import or invoke ReadStat or the yamaa reader.
 The accompanying literal expected tables are the independent test oracle.
 """
 
-from fractions import Fraction
 import struct
+from fractions import Fraction
 
 from tools.paths import ROOT
 

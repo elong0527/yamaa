@@ -35,8 +35,8 @@ impl PublicTable {
         self.rows
     }
     pub fn decode(input: &[u8]) -> Result<Self, Error> {
-        let budget = yamaa_engine::dataset::ExecutionBudget {
-            max_ipc_bytes: yamaa_engine::capacity::OUTPUT_STORAGE_BYTES,
+        let budget = yamaa_core::dataset::ExecutionBudget {
+            max_ipc_bytes: yamaa_core::capacity::OUTPUT_STORAGE_BYTES,
             ..Default::default()
         };
         let table = ipc_table::decode_snapshot_with_budget(input, budget)?;
@@ -101,7 +101,7 @@ impl PublicTable {
         impl Write for Bytes {
             fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
                 if self.0.len().saturating_add(bytes.len())
-                    > yamaa_engine::capacity::OUTPUT_STORAGE_BYTES
+                    > yamaa_core::capacity::OUTPUT_STORAGE_BYTES
                 {
                     return Err(io::Error::other("public table byte limit"));
                 }

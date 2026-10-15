@@ -7,11 +7,11 @@ use crate::{
     specification_source::PreparedDocument,
 };
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use yamaa_engine::domain::{self, CheckedSpecification};
-use yamaa_engine::specification::{
+use yamaa_core::domain::{self, CheckedSpecification};
+use yamaa_core::specification::{
     BindError, PrepareError, PreparedSpecification, SourceDeclaration,
 };
-use yamaa_engine::specification_run as application;
+use yamaa_core::specification_run as application;
 #[derive(Debug)]
 pub enum Error {
     ResourceLimit(crate::resource_diagnostics::Refusal),
@@ -20,14 +20,14 @@ pub enum Error {
     TypedSource(crate::typed_csv::Error),
     ParquetSource(crate::parquet_source::Error),
     SasSource(crate::sas_source::Error),
-    Ordinal(yamaa_engine::source_ingestion::Error),
+    Ordinal(yamaa_core::source_ordinal::Error),
     OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
     OdmValues(Vec<yamaa_core::odm_source::MissingValues>),
     Sources(Vec<(SourceDeclaration, Error)>),
     Bind(BindError),
     Execution(DatasetError),
 }
-pub use yamaa_engine::specification_run::{InspectionFailure, SourcePort, SourceRead};
+pub use yamaa_core::specification_run::{InspectionFailure, SourcePort, SourceRead};
 #[derive(Debug)]
 pub enum PortError<E> {
     Capture(E),
@@ -63,7 +63,7 @@ impl PreparedRun {
         ) -> Option<(yamaa_core::resource::ResourceFailure, String)>,
     ) -> Result<Self, Error> {
         let checked = domain::check(document.compilation_model()).map_err(|error| {
-            Error::Prepare(yamaa_engine::source_profile_inspection::refine(
+            Error::Prepare(yamaa_core::source_profile_inspection::refine(
                 error,
                 |dataset, path| inspect(&document, dataset, path),
             ))
@@ -103,22 +103,20 @@ impl PreparedRun {
     pub fn execute_with_port<P: SourcePort>(&self, port: &mut P) -> CapturedAttempt<P::Error> {
         self.execute_with_observer(
             port,
-            yamaa_engine::application_observer::Scope::new(
-                &yamaa_engine::application_observer::Noop,
-            ),
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
         )
     }
     pub fn execute_with_observer<P: SourcePort>(
         &self,
         port: &mut P,
-        scope: yamaa_engine::application_observer::Scope<'_>,
+        scope: yamaa_core::application_observer::Scope<'_>,
     ) -> CapturedAttempt<P::Error> {
         let mut attempt = application::CapturedAttempt::new(self.source());
         let guarded = catch_unwind(AssertUnwindSafe(|| {
             self.checked.build_with_observer_into(
                 port,
                 &mut SourceDecoder,
-                &mut yamaa_engine::function_invocation::NoFunctions::new(),
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
                 limits(),
                 &mut attempt,
                 scope,
@@ -157,14 +155,14 @@ impl PreparedRun {
 
 pub(crate) fn limits() -> application::Limits {
     application::Limits {
-        source_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+        source_bytes: yamaa_core::capacity::SOURCE_BYTES,
         source_cells: dataset_result::MAX_SOURCE_CELLS,
         execution: dataset_result::LIMITS,
     }
 }
 
 fn response(
-    execution: yamaa_engine::dataset::ExecutionAttempt<crate::callback::CallbackError>,
+    execution: yamaa_core::dataset::ExecutionAttempt<crate::callback::CallbackError>,
 ) -> Result<DatasetResponse, Error> {
     catch_unwind(AssertUnwindSafe(|| {
         dataset_result::specification_response(execution)
@@ -216,7 +214,7 @@ impl application::SourceDecoder for SourceDecoder {
         matches!(
             error,
             Error::Source(TextTableError::Csv(csv_source::Error::Profile { .. }))
-                | Error::Ordinal(yamaa_engine::source_ingestion::Error::Collision)
+                | Error::Ordinal(yamaa_core::source_ordinal::Error::Collision)
                 | Error::TypedSource(crate::typed_csv::Error::Typing(
                     yamaa_core::typed_csv::Error::UnknownField { .. }
                         | yamaa_core::typed_csv::Error::FieldParse { .. }
@@ -255,7 +253,7 @@ impl application::SourceDecoder for SourceDecoder {
 pub(crate) fn decode_source(
     source: &SourceDeclaration,
     bytes: &[u8],
-    bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
+    bounded: Option<yamaa_core::producer_build::DecodeLimits>,
 ) -> Result<ArrowTable, Error> {
     decode_interpreted(
         source,
@@ -268,7 +266,7 @@ pub(crate) fn decode_source(
 pub(crate) fn decode_interpreted(
     source: &SourceDeclaration,
     bytes: &[u8],
-    bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
+    bounded: Option<yamaa_core::producer_build::DecodeLimits>,
     interpretation: yamaa_core::specification::SourceInterpretation,
 ) -> Result<ArrowTable, Error> {
     decode_interpreted_inner(source, bytes, bounded, interpretation, None)
@@ -277,7 +275,7 @@ pub(crate) fn decode_interpreted(
 pub(crate) fn decode_interpreted_with_usage(
     source: &SourceDeclaration,
     bytes: &[u8],
-    limits: yamaa_engine::producer_build::DecodeLimits,
+    limits: yamaa_core::producer_build::DecodeLimits,
     interpretation: yamaa_core::specification::SourceInterpretation,
     usage: &mut crate::source_decode_usage::Usage,
 ) -> Result<ArrowTable, Error> {
@@ -288,17 +286,17 @@ pub(crate) fn decode_interpreted_with_usage(
 fn decode_interpreted_inner(
     source: &SourceDeclaration,
     bytes: &[u8],
-    bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
+    bounded: Option<yamaa_core::producer_build::DecodeLimits>,
     interpretation: yamaa_core::specification::SourceInterpretation,
     mut usage: Option<&mut crate::source_decode_usage::Usage>,
 ) -> Result<ArrowTable, Error> {
     let odm = interpretation == yamaa_core::specification::SourceInterpretation::Odm;
-    let cells = bounded.map_or(yamaa_engine::capacity::SOURCE_CELLS, |l| {
-        l.cells.min(yamaa_engine::capacity::SOURCE_CELLS)
+    let cells = bounded.map_or(yamaa_core::capacity::SOURCE_CELLS, |l| {
+        l.cells.min(yamaa_core::capacity::SOURCE_CELLS)
     });
     let table_limits = TableLimits {
-        max_rows: bounded.map_or(yamaa_engine::capacity::SOURCE_ROWS, |l| {
-            l.rows.min(yamaa_engine::capacity::SOURCE_ROWS)
+        max_rows: bounded.map_or(yamaa_core::capacity::SOURCE_ROWS, |l| {
+            l.rows.min(yamaa_core::capacity::SOURCE_ROWS)
         }),
         max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
         max_batches: 1,
@@ -317,19 +315,16 @@ fn decode_interpreted_inner(
     ) {
         let sas_limits = crate::sas_source::Limits {
             source_bytes: csv_source::Limits::default().bytes,
-            work_bytes: bounded.map_or(yamaa_engine::capacity::SOURCE_STORAGE_BYTES, |limits| {
+            work_bytes: bounded.map_or(yamaa_core::capacity::SOURCE_STORAGE_BYTES, |limits| {
                 limits
                     .work_bytes
-                    .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
+                    .min(yamaa_core::capacity::SOURCE_STORAGE_BYTES)
             }),
-            retained_bytes: bounded.map_or(
-                yamaa_engine::capacity::SOURCE_STORAGE_BYTES,
-                |limits| {
-                    limits
-                        .storage_bytes
-                        .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
-                },
-            ),
+            retained_bytes: bounded.map_or(yamaa_core::capacity::SOURCE_STORAGE_BYTES, |limits| {
+                limits
+                    .storage_bytes
+                    .min(yamaa_core::capacity::SOURCE_STORAGE_BYTES)
+            }),
         };
         let table = if let Some(usage) = usage.as_deref_mut() {
             crate::sas_source::parse_with_usage(bytes, source, sas_limits, table_limits, usage)
@@ -501,10 +496,10 @@ fn project_odm(
     .map_err(|error| Error::Source(TextTableError::Table(error)))
 }
 pub(crate) fn bounded_csv_limits(
-    limits: yamaa_engine::producer_build::DecodeLimits,
+    limits: yamaa_core::producer_build::DecodeLimits,
 ) -> csv_source::Limits {
     let ordinary = csv_source::Limits::default();
-    let cells = limits.cells.min(yamaa_engine::capacity::SOURCE_CELLS);
+    let cells = limits.cells.min(yamaa_core::capacity::SOURCE_CELLS);
     csv_source::Limits {
         bytes: ordinary
             .bytes
@@ -524,7 +519,7 @@ pub(crate) fn bounded_csv_limits(
 fn decode_parquet(
     source: &SourceDeclaration,
     bytes: &[u8],
-    bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
+    bounded: Option<yamaa_core::producer_build::DecodeLimits>,
     odm: bool,
 ) -> Result<ArrowTable, Error> {
     decode_parquet_with_usage(source, bytes, bounded, odm, None)
@@ -533,7 +528,7 @@ fn decode_parquet(
 fn decode_parquet_with_usage(
     source: &SourceDeclaration,
     bytes: &[u8],
-    bounded: Option<yamaa_engine::producer_build::DecodeLimits>,
+    bounded: Option<yamaa_core::producer_build::DecodeLimits>,
     odm: bool,
     usage: Option<&mut crate::source_decode_usage::Usage>,
 ) -> Result<ArrowTable, Error> {
@@ -542,47 +537,46 @@ fn decode_parquet_with_usage(
     use std::sync::Arc;
     use yamaa_core::table::TableAccess;
     let table_limits = TableLimits {
-        max_rows: bounded.map_or(yamaa_engine::capacity::SOURCE_ROWS, |l| {
-            l.rows.min(yamaa_engine::capacity::SOURCE_ROWS)
+        max_rows: bounded.map_or(yamaa_core::capacity::SOURCE_ROWS, |l| {
+            l.rows.min(yamaa_core::capacity::SOURCE_ROWS)
         }),
         max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
         max_batches: 1,
-        max_cells: bounded.map_or(yamaa_engine::capacity::SOURCE_CELLS, |l| {
-            l.cells.min(yamaa_engine::capacity::SOURCE_CELLS)
+        max_cells: bounded.map_or(yamaa_core::capacity::SOURCE_CELLS, |l| {
+            l.cells.min(yamaa_core::capacity::SOURCE_CELLS)
         }),
     };
-    let work_bytes = bounded.map_or(yamaa_engine::capacity::SOURCE_STORAGE_BYTES, |l| {
-        l.work_bytes
-            .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
+    let work_bytes = bounded.map_or(yamaa_core::capacity::SOURCE_STORAGE_BYTES, |l| {
+        l.work_bytes.min(yamaa_core::capacity::SOURCE_STORAGE_BYTES)
     });
-    let storage_bytes = bounded.map_or(yamaa_engine::capacity::SOURCE_STORAGE_BYTES, |l| {
+    let storage_bytes = bounded.map_or(yamaa_core::capacity::SOURCE_STORAGE_BYTES, |l| {
         l.storage_bytes
-            .min(yamaa_engine::capacity::SOURCE_STORAGE_BYTES)
+            .min(yamaa_core::capacity::SOURCE_STORAGE_BYTES)
     });
     let limits = parquet_source::Limits {
         framing: FramingLimits {
             source_bytes: csv_source::Limits::default().bytes,
             // Compact nodes need at least one encoded byte. Headers and
             // footers remain inside the independently admitted source.
-            metadata_bytes: yamaa_engine::capacity::SOURCE_BYTES,
-            metadata_nodes: yamaa_engine::capacity::SOURCE_BYTES,
-            header_bytes: yamaa_engine::capacity::SOURCE_BYTES,
-            header_nodes: yamaa_engine::capacity::SOURCE_BYTES,
-            row_groups: yamaa_engine::dataset::ExecutionBudget::longitudinal().max_batches,
+            metadata_bytes: yamaa_core::capacity::SOURCE_BYTES,
+            metadata_nodes: yamaa_core::capacity::SOURCE_BYTES,
+            header_bytes: yamaa_core::capacity::SOURCE_BYTES,
+            header_nodes: yamaa_core::capacity::SOURCE_BYTES,
+            row_groups: yamaa_core::dataset::ExecutionBudget::longitudinal().max_batches,
             columns: 4096,
             rows: table_limits.max_rows,
             cells: table_limits.max_cells,
-            pages: yamaa_engine::capacity::SOURCE_CELLS,
-            page_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            pages: yamaa_core::capacity::SOURCE_CELLS,
+            page_bytes: yamaa_core::capacity::SOURCE_BYTES,
             decoded_bytes: work_bytes,
         },
         compression: CompressionLimits {
-            page_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+            page_bytes: yamaa_core::capacity::SOURCE_BYTES,
             window_log: 24,
         },
         metadata: MetadataLimits {
-            bytes: yamaa_engine::capacity::SOURCE_BYTES,
-            tables: yamaa_engine::capacity::SOURCE_BYTES,
+            bytes: yamaa_core::capacity::SOURCE_BYTES,
+            tables: yamaa_core::capacity::SOURCE_BYTES,
             depth: 64,
         },
         expanded_bytes: work_bytes,
@@ -755,8 +749,8 @@ mod width_tests {
             };
             // One complete header plus one row must fit: the old 64-header
             // allowance refused this in-range table before width admission.
-            let limits = yamaa_engine::producer_build::DecodeLimits {
-                rows: yamaa_engine::capacity::SOURCE_ROWS,
+            let limits = yamaa_core::producer_build::DecodeLimits {
+                rows: yamaa_core::capacity::SOURCE_ROWS,
                 cells: 1_024,
                 storage_bytes: 1_000_000,
                 work_bytes: 1_000_000,

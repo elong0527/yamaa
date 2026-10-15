@@ -22,7 +22,7 @@ const MAX_ROOTS: usize = 64;
 const MAX_SNAPSHOTS: usize = 1024;
 // Captured study bytes share the longitudinal storage allowance with retained
 // metadata. Each capture still respects its caller's independent byte maximum.
-const MAX_CAPTURED_BYTES: usize = 4 * yamaa_engine::capacity::SOURCE_BYTES;
+const MAX_CAPTURED_BYTES: usize = 4 * yamaa_core::capacity::SOURCE_BYTES;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
@@ -1054,7 +1054,7 @@ fn selected_root(written: &str) -> Result<Root, Error> {
     })
 }
 
-impl yamaa_engine::specification_run::SourcePort for Resources {
+impl yamaa_core::specification_run::SourcePort for Resources {
     type Error = Error;
     fn resource_failure(&self, error: &Error) -> Option<yamaa_core::resource::ResourceFailure> {
         use yamaa_core::resource::ResourceFailure;
@@ -1077,10 +1077,10 @@ impl yamaa_engine::specification_run::SourcePort for Resources {
         &mut self,
         source: &yamaa_core::specification::SourceDeclaration,
         byte_limit: usize,
-        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
     ) -> Result<std::sync::Arc<[u8]>, Error> {
-        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+        <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
     }
     fn capture_reads(&self) -> usize {
         self.reads

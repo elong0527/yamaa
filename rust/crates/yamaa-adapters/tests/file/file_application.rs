@@ -10,7 +10,7 @@ use yamaa_adapters::{
     file_application, file_configuration, file_preparation::FileSpecification,
     specification_report::Identity,
 };
-use yamaa_engine::domain_entry::Request;
+use yamaa_core::domain_entry::Request;
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n";
 struct Study(PathBuf);
@@ -110,7 +110,7 @@ fn changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_sa
     for _ in 0..2 {
         assert!(matches!(
             result.save(&mut NoPublication),
-            Err(yamaa_engine::specification_output::SaveError::FailedBuild)
+            Err(yamaa_core::specification_output::SaveError::FailedBuild)
         ));
     }
     assert_eq!(

@@ -1,7 +1,7 @@
 //! Borrow original host failures from a complete retained native graph attempt.
 //! No report, callback, resource read, clone or publication is performed here.
 use crate::{file_producer_build::Attempt, project_attempt};
-use yamaa_engine::producer_build::Failure;
+use yamaa_core::producer_build::Failure;
 
 /// Visit union activation first, then actually entered node execution prefixes.
 /// Native transport, retention and unwind payloads remain in their original

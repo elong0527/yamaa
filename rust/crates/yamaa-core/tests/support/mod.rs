@@ -42,3 +42,7 @@ pub fn id_source_schema() -> TableSchema {
 pub fn id_value_schema() -> TableSchema {
     int_schema(&["ID", "V"])
 }
+
+pub fn text_schema() -> TableSchema {
+    table_schema(&[("ID", ColumnType::Str), ("TEXT", ColumnType::Str)])
+}

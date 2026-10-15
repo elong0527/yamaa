@@ -224,10 +224,11 @@ impl Domain {
 
 #[cfg(not(any(unix, windows)))]
 fn unavailable() -> Vec<Issue> {
-    vec![
-        Issue::from_core(yamaa_engine::host_values::unavailable_file_transport())
-            .expect("application issue"),
-    ]
+    vec![Issue::from_core(yamaa_core::application_issue::unsupported(
+        "native_file_transport",
+        None,
+    ))
+    .expect("application issue")]
 }
 #[pyfunction]
 #[pyo3(signature=(specification,environment=None))]
@@ -239,18 +240,18 @@ pub fn _domain_file(
     #[cfg(any(unix, windows))]
     {
         let mut ports = yamaa_adapters::file_application::Application {
-            host: yamaa_engine::host_values::Language::Python,
+            host: yamaa_core::project_function::Language::Python,
             runtime: crate::file_domain::Runtime { py, specification },
         };
         let measurements =
             std::sync::Arc::new(yamaa_adapters::application_measurements::Measurements::new());
-        let returned = match yamaa_engine::domain_entry::domain_with_observer(
-            yamaa_engine::domain_entry::Request {
+        let returned = match yamaa_core::domain_entry::domain_with_observer(
+            yamaa_core::domain_entry::Request {
                 specification,
                 environment,
             },
             &mut ports,
-            yamaa_engine::application_observer::Scope::new(measurements.as_ref()),
+            yamaa_core::application_observer::Scope::new(measurements.as_ref()),
         ) {
             Ok(result) => Ok(result),
             Err(yamaa_adapters::file_application::ApplicationError::Runtime(error)) => Err(error),
@@ -298,14 +299,14 @@ pub fn _check_file(
     #[cfg(any(unix, windows))]
     {
         let issues = yamaa_adapters::file_application::check(
-            yamaa_engine::domain_entry::Request {
+            yamaa_core::domain_entry::Request {
                 specification,
                 environment,
             },
             yamaa_adapters::specification_report::Identity {
                 runtime: "python",
                 runtime_version: py.version(),
-                engine_version: yamaa_engine::host_values::VERSION,
+                engine_version: yamaa_core::VERSION,
                 example: "check",
                 specification,
                 base_directory: ".",

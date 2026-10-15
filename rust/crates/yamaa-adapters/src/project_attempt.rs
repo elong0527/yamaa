@@ -1,6 +1,6 @@
 //! Read one retained typed attempt without host calls, retries or publication.
 use crate::project_run::{Attempt, BoundaryFailure};
-use yamaa_engine::{
+use yamaa_core::{
     dataset::{Execution, ExecutionError},
     function_invocation::FailureKind,
     project_activation::{Failure, TestFailure},

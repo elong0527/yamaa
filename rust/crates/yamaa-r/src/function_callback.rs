@@ -1,7 +1,7 @@
 //! Synchronous R callback capability; all R access stays on the calling thread.
 use extendr_api::prelude::*;
 use yamaa_adapters::callback::{BoundaryError as Error, CallbackError, MAX_ERROR_BYTES};
-use yamaa_engine::function_invocation::HostError;
+use yamaa_core::function_invocation::HostError;
 
 /// Unexpected dispatcher failures are boundary errors, not repaired host results.
 fn internal() -> HostError<CallbackError> {

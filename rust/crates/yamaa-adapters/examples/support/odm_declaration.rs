@@ -7,7 +7,7 @@ use yamaa_adapters::{
 };
 fn projected_findings(
     error: &Error,
-    source: Option<&yamaa_engine::specification::SourceDeclaration>,
+    source: Option<&yamaa_core::specification::SourceDeclaration>,
 ) -> Option<Vec<Value>> {
     specification_diagnostics::findings_with_limit(
         error,
