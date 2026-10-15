@@ -41,7 +41,11 @@ impl Catalog {
         };
         let mut record_keys = None;
         let row_pairs;
-        let inferred = if let Some(scope) = &self.row_joins {
+        // Raw record keys are the row scope's plan; a donor key the driver does
+        // not store raw but the row itself constructs still matches, through
+        // the constructed output keys, so the whole read uses that plan.
+        let mut raw_pairs = None;
+        if let Some(scope) = &self.row_joins {
             use crate::reference_scope::{self, Phase, Reach, Scope};
             let groups = scope
                 .groups
@@ -49,7 +53,8 @@ impl Catalog {
                 .map(|names| names.iter().map(String::as_str).collect::<Vec<_>>());
             let mut pairs = Vec::new();
             let mut records = Vec::new();
-            for (index, (name, _)) in donor.keys.iter().enumerate() {
+            let mut constructed = false;
+            for (index, (name, output_column)) in donor.keys.iter().enumerate() {
                 let Some(&(_, actual)) = donor.fields.get(name) else {
                     continue;
                 };
@@ -70,6 +75,12 @@ impl Catalog {
                     Default::default(),
                 )?;
                 if let Some(&finding) = findings.first() {
+                    if finding == reference_scope::Finding::UnknownField
+                        && scope.row_keys.contains(output_column)
+                    {
+                        constructed = true;
+                        break;
+                    }
                     return Ok(Some(Err(JoinedFinding::CurrentKey {
                         identifier,
                         finding,
@@ -91,13 +102,18 @@ impl Catalog {
                 pairs.push(index);
                 records.push(field);
             }
-            if pairs.is_empty() {
-                return Ok(Some(Err(JoinedFinding::NoApplicableKeys {
-                    dataset: owner.into(),
-                    keys: donor.keys.iter().map(|(name, _)| name.clone()).collect(),
-                })));
+            if !constructed {
+                if pairs.is_empty() {
+                    return Ok(Some(Err(JoinedFinding::NoApplicableKeys {
+                        dataset: owner.into(),
+                        keys: donor.keys.iter().map(|(name, _)| name.clone()).collect(),
+                    })));
+                }
+                record_keys = Some(records);
+                raw_pairs = Some(pairs);
             }
-            record_keys = Some(records);
+        }
+        let inferred = if let Some(pairs) = raw_pairs {
             row_pairs = pairs;
             &row_pairs
         } else {

@@ -1327,22 +1327,35 @@ impl Rows {
                     &mut findings,
                 )?;
             }
-            let row_catalog = row_drivers::catalog_visible(
-                output,
-                row_source,
-                &template.driver,
-                named_driver.and_then(|index| intermediates[index].as_ref()),
-            )?;
-            let row_catalog = row_drivers::extend_catalog(
-                row_catalog,
-                source,
-                name,
-                keys,
-                &secondary,
-                &template.driver,
-            )?;
-            let row_catalog = row_catalog
-                .with_row_joins(&template.driver, template.groups.as_deref())
+            // A column default expanded into this template retains its authored
+            // column scope, so build the template catalog with and without the
+            // row-join scope: row-authored derivations match raw driver keys,
+            // while column defaults match constructed output keys.
+            let build_catalog = || {
+                let visible = row_drivers::catalog_visible(
+                    output,
+                    row_source,
+                    &template.driver,
+                    named_driver.and_then(|index| intermediates[index].as_ref()),
+                )?;
+                row_drivers::extend_catalog(
+                    visible,
+                    source,
+                    name,
+                    keys,
+                    &secondary,
+                    &template.driver,
+                )
+            };
+            let column_catalog = build_catalog()?;
+            let row_keys = template
+                .declarations
+                .iter()
+                .filter(|declaration| !declaration.path.starts_with("columns."))
+                .map(|declaration| declaration.column)
+                .collect::<Vec<_>>();
+            let row_catalog = build_catalog()?
+                .with_row_joins(&template.driver, template.groups.as_deref(), &row_keys)
                 .map_err(BindError::Catalog)?;
             let mode = match &template.groups {
                 None => RowMode::Records,
@@ -1455,10 +1468,22 @@ impl Rows {
                 }
             }
             for declaration in &template.declarations {
+                // Column defaults retain their authored paths when expanded
+                // into a template; in the primary driver's template they bind
+                // in column scope (above), not in the row-join scope that
+                // governs row-authored derivations. A foreign driver's
+                // template keeps the row scope: its defaults cannot bootstrap
+                // their own matching key (REQ-0156/0157).
+                let catalog = if declaration.path.starts_with("columns.") && template.driver == name
+                {
+                    &column_catalog
+                } else {
+                    &row_catalog
+                };
                 if let Some(value) = assignment(
                     row_source,
                     &template.driver,
-                    &row_catalog,
+                    catalog,
                     declaration,
                     phase,
                     Some(&template.id),

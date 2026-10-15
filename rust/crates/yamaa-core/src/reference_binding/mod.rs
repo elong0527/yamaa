@@ -106,6 +106,9 @@ pub struct Catalog {
 struct RowJoinScope {
     driver: String,
     groups: Option<alloc::vec::Vec<String>>,
+    /// Output columns the row template itself derives; a donor key the driver
+    /// does not store raw may still match one of these constructed values.
+    row_keys: alloc::vec::Vec<usize>,
 }
 #[derive(Debug)]
 pub(crate) struct JoinedRelation {
@@ -275,6 +278,7 @@ impl Catalog {
         mut self,
         driver: &str,
         groups: Option<&[String]>,
+        row_keys: &[usize],
     ) -> Result<Self, Error> {
         let bytes = groups
             .into_iter()
@@ -283,9 +287,13 @@ impl Catalog {
                 n.checked_add(name.len()).ok_or(Error::SizeOverflow)
             })?;
         limit("scope_context_bytes", bytes, self.limits.catalog_bytes)?;
+        if row_keys.iter().any(|&key| key >= self.outputs.len()) {
+            return Err(Error::InvalidAvailableOutput);
+        }
         self.row_joins = Some(RowJoinScope {
             driver: driver.into(),
             groups: groups.map(<[String]>::to_vec),
+            row_keys: row_keys.to_vec(),
         });
         Ok(self)
     }
