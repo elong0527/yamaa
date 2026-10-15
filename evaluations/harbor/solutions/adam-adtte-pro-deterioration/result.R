@@ -36,21 +36,26 @@ ds <- read_csv(
 )
 
 # Flag deteriorations as an internal step: the baseline is the earliest
-# assessment, and an assessment deteriorates when it is dated after the
-# baseline and its score is at least 10 points below the baseline score.
-qs_flagged <- qs |>
+# dated assessment with a score (a scoreless row cannot be the baseline:
+# its null score would leave no later row able to meet the cutoff), and
+# an assessment deteriorates when it is dated after the baseline and its
+# score is at least 10 points below the baseline score.
+baseline <- qs |>
+  filter(!is.na(ADT), !is.na(AVAL)) |>
   arrange(STUDYID, USUBJID, ADT, QSSEQ) |>
-  group_by(STUDYID, USUBJID) |>
+  distinct(STUDYID, USUBJID, .keep_all = TRUE) |>
+  select(STUDYID, USUBJID, BASEDT = ADT, BASEVAL = AVAL)
+
+qs_flagged <- qs |>
+  left_join(baseline, by = c("STUDYID", "USUBJID")) |>
   mutate(
-    BASEDT = first(ADT),
-    BASEVAL = first(AVAL),
     DETERFL = if_else(
-      !is.na(ADT) & !is.na(BASEDT) & ADT > BASEDT & AVAL <= BASEVAL - 10L,
+      !is.na(ADT) & !is.na(BASEDT) & ADT > BASEDT & !is.na(AVAL) &
+        AVAL <= BASEVAL - 10L,
       "Y",
       NA_character_
     )
   ) |>
-  ungroup() |>
   select(STUDYID, USUBJID, QSSEQ, AVISIT, ADT, AVAL, DETERFL) |>
   arrange(USUBJID, QSSEQ)
 
@@ -73,11 +78,12 @@ reason <- ds |>
   distinct(STUDYID, USUBJID, .keep_all = TRUE) |>
   select(STUDYID, USUBJID, CENSORRSNDT = DSDTC, CENSORRSN = DSDECOD)
 
-# The latest assessment dated on or before the censoring reason, with the
-# latest sequence breaking a tied date.
+# The latest assessment with a score dated on or before the censoring
+# reason, with the latest sequence breaking a tied date; a scoreless row
+# is not an evaluable assessment and cannot set the censoring date.
 censor_qs <- qs_flagged |>
   inner_join(reason, by = c("STUDYID", "USUBJID")) |>
-  filter(!is.na(ADT), ADT <= CENSORRSNDT) |>
+  filter(!is.na(ADT), !is.na(AVAL), ADT <= CENSORRSNDT) |>
   group_by(STUDYID, USUBJID) |>
   summarize(
     LASTQSLE = max(ADT),

@@ -37,14 +37,19 @@ ds = pl.read_csv("/app/input/ds.csv", infer_schema=False, null_values="").with_c
 )
 
 # Flag deteriorations as an internal step: the baseline is the earliest
-# assessment, and an assessment deteriorates when it is dated after the
-# baseline and its score is at least 10 points below the baseline score.
+# dated assessment with a score (a scoreless row cannot be the baseline:
+# its null score would leave no later row able to meet the cutoff), and
+# an assessment deteriorates when it is dated after the baseline and its
+# score is at least 10 points below the baseline score.
+baseline = (
+    qs.filter(pl.col("ADT").is_not_null() & pl.col("AVAL").is_not_null())
+    .sort(["STUDYID", "USUBJID", "ADT", "QSSEQ"])
+    .unique(["STUDYID", "USUBJID"], keep="first", maintain_order=True)
+    .select("STUDYID", "USUBJID", BASEDT="ADT", BASEVAL="AVAL")
+)
 qs_flagged = (
-    qs.sort(["STUDYID", "USUBJID", "ADT", "QSSEQ"], nulls_last=True)
-    .with_columns(
-        BASEDT=pl.col("ADT").first().over(["STUDYID", "USUBJID"]),
-        BASEVAL=pl.col("AVAL").first().over(["STUDYID", "USUBJID"]),
-    )
+    qs.join(baseline, on=["STUDYID", "USUBJID"], how="left")
+    .sort(["STUDYID", "USUBJID", "ADT", "QSSEQ"], nulls_last=True)
     .with_columns(
         DETERFL=pl.when(
             pl.col("ADT").is_not_null()
@@ -79,11 +84,16 @@ reason = (
     .select("STUDYID", "USUBJID", CENSORRSNDT="DSDTC", CENSORRSN="DSDECOD")
 )
 
-# The latest assessment dated on or before the censoring reason, with the
-# latest sequence breaking a tied date.
+# The latest assessment with a score dated on or before the censoring
+# reason, with the latest sequence breaking a tied date; a scoreless row
+# is not an evaluable assessment and cannot set the censoring date.
 censor_qs = (
     qs_flagged.join(reason, on=["STUDYID", "USUBJID"], how="inner")
-    .filter(pl.col("ADT").is_not_null() & (pl.col("ADT") <= pl.col("CENSORRSNDT")))
+    .filter(
+        pl.col("ADT").is_not_null()
+        & pl.col("AVAL").is_not_null()
+        & (pl.col("ADT") <= pl.col("CENSORRSNDT"))
+    )
     .group_by(["STUDYID", "USUBJID"])
     .agg(
         LASTQSLE=pl.col("ADT").max(),

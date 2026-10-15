@@ -419,6 +419,106 @@ def test_missing_censor_date_follows_dated_reason(tmp_path, language):
     assert row["ADT"] == "2026-03-12"
 
 
+# The opensas track is not parametrized here: #2426 scopes the fix to the
+# spec and the Python and R reference solutions, and result.sas still
+# selects scoreless rows (left for a follow-up).
+@pytest.fixture(params=["yamaa", "python", "r"])
+def pro_deterioration_track(request):
+    return request.param
+
+
+def _pro_deterioration_rows(tmp_path, track, qs):
+    name = "adam-adtte-pro-deterioration"
+    if track != "yamaa":
+        return _run(tmp_path, name, track, {"qs.csv": qs})["adtte.csv"]
+    try:
+        import_module("yamaa._native")
+    except ModuleNotFoundError as error:
+        if error.name != "yamaa._native":
+            raise
+        pytest.skip("the compiled native extension is not installed")
+    from yamaa import domain
+
+    study = tmp_path / "study"
+    shutil.copytree(ROOT / "benchmarks" / name, study)
+    header, _ = _read(study / "input" / "qs.csv")
+    with (study / "input" / "qs.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=header)
+        writer.writeheader()
+        writer.writerows(qs)
+    result = domain(study / "spec.yaml").output
+    result.write_csv(study / "actual.csv")
+    return _read(study / "actual.csv")[1]
+
+
+def test_scoreless_rows_are_neither_baseline_nor_last_assessment(
+    tmp_path, pro_deterioration_track
+):
+    # #2426: baseline and last-assessment selections exclude scoreless QS
+    # rows (AVAL IS NOT NULL), but the frozen fixture scores every row, so
+    # it cannot tell the selections apart. This changed input blanks the
+    # score on three rows of the frozen qs.csv: subject 101's earliest
+    # row, subject 104's latest row, and subject 105's only row. The
+    # expected values below were derived from the corrected reference
+    # solutions (the Python reference was run on this input and returned
+    # exactly these values), not from the native spec, and hand-checked:
+    # 101's baseline becomes the WEEK 8 score 74 (cutoff 64), so the
+    # WEEK 16 score 60 is a deterioration; with the scoreless row as
+    # baseline no deterioration could ever flag and 101 would end as a
+    # death on 2026-08-20. 104 is censored at its last scored assessment
+    # (WEEK 8, sequence 2), not at the scoreless WEEK 16 row. 105 has no
+    # scored assessment at all, so it is censored at randomization.
+    # Subject 102, whose rows are untouched, keeps its frozen death row.
+    name = "adam-adtte-pro-deterioration"
+    qs = _input(name, "qs.csv")
+    for row in qs:
+        if (row["USUBJID"], row["QSSEQ"]) in {
+            ("YAMAA-01-101", "1"),
+            ("YAMAA-01-104", "3"),
+            ("YAMAA-01-105", "1"),
+        }:
+            row["AVAL"] = ""
+    rows = _pro_deterioration_rows(tmp_path, pro_deterioration_track, qs)
+    assert len(rows) == 6
+    by_subject = {r["USUBJID"]: r for r in rows}
+
+    baseline = by_subject["YAMAA-01-101"]
+    assert baseline["EVNTDESC"] == "PRO DETERIORATION"
+    assert baseline["ADT"] == "2026-05-07"
+    assert baseline["AVAL"] == "3"
+    assert baseline["CNSR"] == "0"
+    assert baseline["SRCDOM"] == "QS"
+    assert baseline["SRCVAR"] == "ADT"
+    assert baseline["SRCSEQ"] == "3"
+
+    latest = by_subject["YAMAA-01-104"]
+    assert latest["EVNTDESC"] == "CENSORED"
+    assert latest["CNSDTDSC"] == "WITHDRAWAL OF CONSENT"
+    assert latest["ADT"] == "2026-03-12"
+    assert latest["AVAL"] == "1"
+    assert latest["CNSR"] == "1"
+    assert latest["SRCDOM"] == "QS"
+    assert latest["SRCVAR"] == "ADT"
+    assert latest["SRCSEQ"] == "2"
+
+    only = by_subject["YAMAA-01-105"]
+    assert only["EVNTDESC"] == "CENSORED"
+    assert only["CNSDTDSC"] == "STUDY DISCONTINUATION"
+    assert only["ADT"] == "2026-01-15"
+    assert only["AVAL"] == "0"
+    assert only["SRCDOM"] == "ADSL"
+    assert only["SRCVAR"] == "RANDDT"
+    assert only["SRCSEQ"] == ""
+
+    control = by_subject["YAMAA-01-102"]
+    assert control["EVNTDESC"] == "DEATH"
+    assert control["ADT"] == "2026-06-10"
+    assert control["AVAL"] == "4"
+    assert control["SRCDOM"] == "ADSL"
+    assert control["SRCVAR"] == "DTHDT"
+    assert control["SRCSEQ"] == ""
+
+
 def test_missing_exposure_date_sorts_last(tmp_path, language):
     name = "sdtm-ex-from-ec"
     odm = _input(name, "odm.csv")
