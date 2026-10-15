@@ -20,7 +20,9 @@ use std::{
 const MAX_PATH_BYTES: usize = 65_536;
 const MAX_ROOTS: usize = 64;
 const MAX_SNAPSHOTS: usize = 1024;
-const MAX_CAPTURED_BYTES: usize = 67_108_864;
+// Captured study bytes share the longitudinal storage allowance with retained
+// metadata. Each capture still respects its caller's independent byte maximum.
+const MAX_CAPTURED_BYTES: usize = 4 * yamaa_engine::capacity::SOURCE_BYTES;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {

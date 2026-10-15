@@ -324,7 +324,7 @@ impl Publication {
         }
         let mut paths = limits.path_bytes;
         let mut bytes = limits.artifact_bytes;
-        let mut budget = Budget::new(16_777_216);
+        let mut budget = Budget::new(yamaa_engine::capacity::REPORT_ENCODED_BYTES);
         let mut count = 0usize;
         each(attempt, primary, logs, |request| {
             count += 1;

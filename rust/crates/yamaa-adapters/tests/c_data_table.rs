@@ -283,9 +283,22 @@ fn rejection_releases_once_and_empty_streams_cannot_evade_the_batch_limit() {
 
 #[test]
 fn aliased_text_and_multiple_sources_use_cumulative_limits() {
-    let values = StringViewArray::from(vec!["x".repeat(128 * 1024)]);
+    let text = "x".repeat(128 * 1024);
+    let values = StringViewArray::from(vec![text.as_str()]);
     let (views, buffers, _) = values.into_parts();
-    let values = StringViewArray::new(ScalarBuffer::from(vec![views[0]; 129]), buffers, None);
+    // Repeated views charge their logical text without allocating a giant
+    // payload; all aliases retain the one independently authored buffer.
+    let exact = yamaa_engine::capacity::SOURCE_BYTES / text.len();
+    let values = StringViewArray::new(
+        ScalarBuffer::from(vec![views[0]; exact]),
+        buffers.clone(),
+        None,
+    );
+    let table = import(batch(vec![("S", Arc::new(values))])).unwrap();
+    assert_eq!(table.row_count(), exact);
+    assert_eq!(table.cell(exact - 1, 0).unwrap(), ValueRef::Str(&text));
+    drop(table);
+    let values = StringViewArray::new(ScalarBuffer::from(vec![views[0]; exact + 1]), buffers, None);
     assert!(matches!(
         import(batch(vec![("S", Arc::new(values))])),
         Err(Error::Limit)

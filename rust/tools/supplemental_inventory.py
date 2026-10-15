@@ -197,18 +197,27 @@ def load_catalog(root, catalog_path):
 
 def host_fixture_files(catalog):
     """Return the shared installed-host inputs/codecs, excluding ownership docs."""
-    prefix = "rust/tests/host-fixtures/"
+    prefixes = (
+        ("rust/tests/host-fixtures/", "host-fixtures/"),
+        ("rust/crates/yamaa-adapters/tests/fixtures/sas/", "host-fixtures/sas/"),
+    )
     names = [contract["path"] for contract in catalog["contracts"]]
     names += [
         support["path"]
         for support in catalog["support_files"]
         if support["role"] == "input"
     ]
-    return [
-        (name, "host-fixtures/" + name.removeprefix(prefix))
-        for name in names
-        if name.startswith(prefix)
-    ]
+    files, staged = [], set()
+    for name in names:
+        for prefix, destination in prefixes:
+            if name.startswith(prefix):
+                relative = destination + name.removeprefix(prefix)
+                if relative in staged:
+                    raise ValueError(f"duplicate staged host fixture path: {relative}")
+                staged.add(relative)
+                files.append((name, relative))
+                break
+    return files
 
 
 def installed_metadata(runtime, staged_root):

@@ -38,9 +38,11 @@ impl Default for Limits {
     fn default() -> Self {
         Self {
             engine: Default::default(),
-            resource_bytes: 67_108_864,
+            resource_bytes: 4 * yamaa_engine::capacity::SOURCE_BYTES,
             resource_text: 16_777_216,
-            resource_work: 67_108_864,
+            // Initial reads, content comparison and immutable rereads each
+            // charge bytes independently from dataset execution work.
+            resource_work: 4 * yamaa_engine::capacity::SOURCE_BYTES,
             snapshots: 1024,
             evidence_text: 16_777_216,
             evidence_aliases: 1024,
@@ -428,8 +430,8 @@ impl CodecPort for Codec {
                 projection,
                 crate::parquet_artifact::Limits {
                     output_bytes: maximum,
-                    staged_bytes: 8_388_608,
-                    cells: 1_048_576,
+                    staged_bytes: yamaa_engine::capacity::SOURCE_BYTES,
+                    cells: yamaa_engine::capacity::OUTPUT_CELLS,
                     columns: 4096,
                 },
             )

@@ -285,53 +285,66 @@ unlink(work,recursive=TRUE)
 stopifnot(any(vapply(preparation(failed),function(item) identical(item$bytes,charToRaw("schema_version: [\n")),logical(1))))
 cat("R public metadata and early raw rejections retain original evidence without fallback\n")
 
+# Explicit small copy-policy refusals remain in native producer_result controls.
+# The approved longitudinal public defaults admit both original geometries.
+assert_large_projection_admitted <- function(result, work, ids, columns, expected) {
+  stopifnot(isTRUE(evidence(result)$accepted), !is.null(result$output),
+    identical(unlist(evidence(result)$entered),c(1,0)), nrow(result$issues)==0L,
+    identical(names(result$output),columns), identical(as.character(result$output$ID),ids),
+    identical(result$output$VALUE,rep(2.46,length(ids))),
+    is.null(reply(.Call(private("wrap__domain_projection_failure"),handle(result)))),
+    grepl('"outcome":"success"',observe(result),fixed=TRUE),
+    !dir.exists(file.path(work,"generated")))
+  held <- result$output
+  produced <- paste0("ID,VALUE\n",paste0(ids,",1.23\n",collapse=""))
+  dir.create(file.path(work,"generated"))
+  unlink(file.path(work,fixture_strings(host_truth[["owned_directories"]])),recursive=TRUE)
+  invisible(gc())
+  for(index in 1:2) {
+    stopifnot(isTRUE(result$save()), identical(result$output,held), isTRUE(evidence(result)$accepted))
+    root_path <- file.path(work,"generated/root.csv")
+    producer_path <- file.path(work,"generated/producer.csv")
+    stopifnot(
+      identical(readBin(root_path,"raw",n=file.info(root_path)$size),charToRaw(expected)),
+      identical(readBin(producer_path,"raw",n=file.info(producer_path)$size),charToRaw(produced)),
+      is.null(reply(.Call(private("wrap__domain_projection_failure"),handle(result)))))
+  }
+}
 work <- study()
 write(work,"producer/layers/base.yaml",sub("name: ID, type: int","name: ID, type: str",
   sub("ID: int","ID: str",producer,fixed=TRUE),fixed=TRUE))
-extra <- paste0(vapply(0:58,function(index) paste0("  - {name: EXTRA",index,
+extras <- paste0("EXTRA",0:58)
+extra <- paste0(vapply(extras,function(name) paste0("  - {name: ",name,
   host_truth[["extra_null_column_suffix"]]),character(1)),collapse="")
-names <- paste(c("ID","VALUE",paste0("EXTRA",0:58)),collapse=", ")
+columns <- c("ID","VALUE",extras)
 text <- sub("output: {path:",paste0(extra,"output: {path:"),consumer,fixed=TRUE)
 text <- sub("name: ID, type: int","name: ID, type: str",text,fixed=TRUE)
-text <- sub("columns: [ID, VALUE], decimals: 2",paste0("columns: [",names,"], decimals: 2"),text,fixed=TRUE)
+text <- sub("columns: [ID, VALUE], decimals: 2",paste0("columns: [",paste(columns,collapse=", "),"], decimals: 2"),text,fixed=TRUE)
 write(work,"consumer/root.yaml",text)
-# Three public-copy passes over 23,000 rows and 63 owned columns visit
-# 4,347,000 cells, exceeding the independent 4,194,304-cell allowance.
-write(work,"raw/raw.csv",paste0("ID,VALUE\n",paste0(1:23000,",1.234\n",collapse="")))
+ids <- as.character(1:23000)
+write(work,"raw/raw.csv",paste0("ID,VALUE\n",paste0(ids,",1.234\n",collapse="")))
 result <- build(work)
-refusal <- function(result) reply(.Call(private("wrap__domain_projection_failure"),handle(result)))
-stopifnot(isTRUE(evidence(result)$accepted),is.null(result$output),
-  identical(unlist(evidence(result)$entered),c(1,0)),
-  identical(refusal(result),"table output exceeds byte limit"),
-  grepl('"code":"output_projection"',result$issues$context,fixed=TRUE),
-  grepl('"outcome":"success"',observe(result),fixed=TRUE),
-  !dir.exists(file.path(work,"generated")))
+stopifnot(!is.null(result$output), all(vapply(extras,function(name)
+  identical(result$output[[name]],rep(NA_character_,length(ids))),logical(1))))
+expected <- paste0(paste(columns,collapse=","),"\n",paste0(ids,",2.46",strrep(",",length(extras)),"\n",collapse=""))
+assert_large_projection_admitted(result,work,ids,columns,expected)
 unlink(work,recursive=TRUE); invisible(gc())
-stopifnot(identical(refusal(result),"table output exceeds byte limit"),isTRUE(evidence(result)$accepted),
-  inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
-cat("R public copy quota preserves accepted whole attempt and typed original refusal without output or Save\n")
+cat("R public copies admit original large cell geometry and preserve exact held Saves\n")
 
-# Text stays below the execution allowance, while IPC offsets and numeric
-# columns take the public copy beyond its 8 MiB byte cap.
 work <- study()
-extra <- paste0(host_truth[["large_payload_column"]],
-  strrep("x",2048),'"}}\n')
+payload <- strrep("x",2048)
+extra <- paste0(host_truth[["large_payload_column"]],payload,'"}}\n')
 text <- sub("output: {path:",paste0(extra,"output: {path:"),consumer,fixed=TRUE)
 text <- sub("columns: [ID, VALUE], decimals: 2",host_truth[["payload_projection"]],text,fixed=TRUE)
 write(work,"consumer/root.yaml",text)
-write(work,"raw/raw.csv",paste0("ID,VALUE\n",paste0(1:4095,",1.234\n",collapse="")))
+ids <- as.character(1:4095)
+write(work,"raw/raw.csv",paste0("ID,VALUE\n",paste0(ids,",1.234\n",collapse="")))
 result <- build(work)
-refusal <- function(result) reply(.Call(private("wrap__domain_projection_failure"),handle(result)))
-stopifnot(isTRUE(evidence(result)$accepted),is.null(result$output),
-  identical(unlist(evidence(result)$entered),c(1,0)),
-  identical(refusal(result),"table output exceeds byte limit"),
-  grepl('"code":"output_projection"',result$issues$context,fixed=TRUE),
-  grepl('"outcome":"success"',observe(result),fixed=TRUE),
-  !dir.exists(file.path(work,"generated")))
+stopifnot(!is.null(result$output), identical(result$output$PAYLOAD,rep(payload,length(ids))))
+expected <- paste0("ID,VALUE,PAYLOAD\n",paste0(ids,",2.46,",payload,"\n",collapse=""))
+assert_large_projection_admitted(result,work,ids,c("ID","VALUE","PAYLOAD"),expected)
 unlink(work,recursive=TRUE); invisible(gc())
-stopifnot(identical(refusal(result),"table output exceeds byte limit"),isTRUE(evidence(result)$accepted),
-  inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
-cat("R public byte copy quota preserves accepted whole attempt and typed original refusal without output or Save\n")
+cat("R public copies admit original large byte geometry and preserve exact held Saves\n")
 
 work <- study();dir.create(file.path(work,"generated"));dir.create(file.path(work,"generated/root.csv"))
 result <- build(work)
@@ -443,3 +456,24 @@ result <- with_caps(poison,poison,{
 })
 unlink(work,recursive=TRUE)
 cat("R absent environment graphs capture no environment and repeat Save from held bytes\n")
+
+# Paired public graph witness: seven independently authored records become one
+# counted producer row, then one consumer row, through each artifact profile.
+# REQ-0047 makes the copied producer count an explicit scalar group key.
+for(profile in c("csv","parquet")) {
+  work <- study()
+  write(work,"raw/raw.csv",paste0("ID,VALUE\n",paste0("1,",1:7,"\n",collapse="")))
+  write(work,"producer/p.yaml",paste0("schema_version: '1.0'\ndomain: COUNTED\nkeys: [ID]\ninput: {RAW: {path: ../raw/raw.csv, types: {ID: int, VALUE: int}}}\nrows:\n  - id: counted\n    dataset: RAW\n    group_by: [RAW.ID]\n    derivations: {ID: RAW.ID, VALUE: {aggregate: 'COUNT(RAW.*)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: VALUE, type: int, label: Count}\noutput: {path: ../generated/producer.",profile,", columns: [ID, VALUE]}\n"))
+  write(work,"consumer/root.yaml",paste0("schema_version: '1.0'\ndomain: ROOT\nkeys: [ID]\ninput: {FIRST: {path: ../generated/producer.",profile,", schema: ../producer/p.yaml}}\nrows:\n  - id: counted\n    dataset: FIRST\n    group_by: [FIRST.ID, FIRST.VALUE]\n    derivations: {ID: FIRST.ID, SOURCE_COUNT: FIRST.VALUE, VALUE: {aggregate: 'COUNT(FIRST.*)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: SOURCE_COUNT, type: int, label: Original source count}\n  - {name: VALUE, type: int, label: Count}\noutput: {path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}\n"))
+  result <- yamaa_domain(file.path(work,"consumer/root.yaml"))
+  stopifnot(nrow(result$issues)==0L,nrow(result$output)==1L,
+    identical(names(result$output),c("ID","SOURCE_COUNT","VALUE")),
+    identical(as.numeric(result$output$ID),1),identical(as.numeric(result$output$SOURCE_COUNT),7),
+    identical(as.numeric(result$output$VALUE),1))
+  dir.create(file.path(work,"generated"),showWarnings=FALSE)
+  for(index in 1:2) stopifnot(isTRUE(result$save()),
+    identical(readBin(file.path(work,"generated/root.csv"),"raw",n=100),charToRaw("ID,SOURCE_COUNT,VALUE\n1,7,1\n")))
+  if(profile=="csv") stopifnot(identical(readBin(file.path(work,"generated/producer.csv"),"raw",n=100),charToRaw("ID,VALUE\n1,7\n")))
+  unlink(work,recursive=TRUE)
+}
+cat("R uneven seven-to-one producer graphs retain independent counts through CSV and Parquet\n")

@@ -106,10 +106,8 @@ fn paths_and_capacity_are_checked_before_any_target_change() {
         publisher.publish("different.csv", b"new"),
         Err(Error::PathMismatch)
     ));
-    assert!(matches!(
-        publisher.publish("declared.csv", &vec![0; 67_108_865]),
-        Err(Error::Limit)
-    ));
+    // Byte-capacity exact/one-over coverage lives with the private selected
+    // limit in file_publication's unit controls; no giant payload is allocated.
     assert_eq!(fs::read(directory.target()).unwrap(), b"old");
     assert_eq!(directory.names(), vec!["output.csv"]);
     assert!(matches!(

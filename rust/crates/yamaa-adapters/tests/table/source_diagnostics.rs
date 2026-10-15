@@ -20,6 +20,7 @@ fn source(name: &str, path: &str) -> SourceDeclaration {
         path: path.into(),
         types: vec![],
         profile: SourceProfile::from_path(path).unwrap(),
+        encoding: None,
         empty_string_present: false,
         ordinal: None,
     }

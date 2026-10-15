@@ -37,11 +37,29 @@ pub trait StudyPort {
 /// engine independently admits the resulting complete shape before retaining it.
 #[derive(Clone, Copy, Debug)]
 pub struct DecodeLimits {
+    pub rows: usize,
     pub cells: usize,
     pub storage_bytes: usize,
     pub work_bytes: usize,
 }
+/// Actual modeled charges admitted by independently bounded decoder stages.
+/// Reused stage allowances report their maximum; cumulative stages retain sums.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DecodeUsage {
+    pub storage_bytes: usize,
+    pub work_bytes: usize,
+}
 pub trait DecodePort: SourceDecoder {
+    /// Opt into graph pools only with complete, bounded native charge receipts.
+    /// Legacy ports retain their existing conservative reservations.
+    fn pool_capacity(&self) -> bool {
+        false
+    }
+    /// The most recent bounded decode's admitted prefix, including failures.
+    /// None keeps the complete reservation; an unknown prefix is never guessed.
+    fn usage(&self) -> Option<DecodeUsage> {
+        None
+    }
     fn decode_bounded(
         &mut self,
         source: &SourceDeclaration,
@@ -115,10 +133,12 @@ pub struct Ports<'a, A, P, D, R, C> {
     pub codec: &'a mut C,
 }
 
-/// Source rows reserve a share weighted by admitted input slots before host
-/// entry; WorkCells has one actual cumulative owner across entered datasets.
-/// Other cell/text capacities keep an equal share per node. Byte reads and serialized output share cumulative budgets;
-/// alias re-ingestion consumes read/work budget while borrowing the same Arc.
+/// Legacy ports reserve source rows by input slots and other capacities by node.
+/// Accountable native decoders opt into actual graph pools for admitted source
+/// geometry, decoder bytes, retained outputs, text, identities and predicates.
+/// Work, byte reads and serialized outputs retain one cumulative graph owner.
+/// Grouping storage is transient within one entered node. Alias re-ingestion
+/// consumes read/decode charges while borrowing the same artifact Arc.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     pub nodes: usize,
@@ -135,31 +155,23 @@ pub struct Limits {
 }
 impl Default for Limits {
     fn default() -> Self {
+        let budget = dataset::ExecutionBudget::longitudinal();
         Self {
             nodes: 64,
-            source_bytes: 16_777_216,
-            source_cells: crate::capacity::SOURCE_CELLS,
-            source_storage_bytes: 67_108_864,
-            decode_work_bytes: 268_435_456,
-            output_bytes: 16_777_216,
+            source_bytes: budget.max_ipc_bytes,
+            source_cells: budget.max_decoded_cells,
+            source_storage_bytes: crate::capacity::SOURCE_STORAGE_BYTES,
+            decode_work_bytes: crate::capacity::SOURCE_STORAGE_BYTES,
+            output_bytes: budget.max_output_bytes,
             report_bytes: crate::capacity::REPORT_ENCODED_BYTES,
-            routing_work: 67_108_864,
-            execution: dataset::Limits {
-                source_rows: 1_048_576,
-                output_rows: 1_048_576,
-                output_cells: crate::capacity::GRAPH_OUTPUT_CELLS,
-                key_cells: 1_048_576,
-                work_cells: crate::capacity::EXECUTION_WORK,
-                scalar_text_bytes: 16_777_216,
-                output_text_bytes: 16_777_216,
-                identity_cells: 1_048_576,
-                identity_text_bytes: 16_777_216,
-            },
+            routing_work: crate::capacity::EXECUTION_WORK,
+            execution: budget.execution,
             activation: Default::default(),
             publication: Default::default(),
         }
     }
 }
+
 #[derive(Debug)]
 pub enum CaptureError<E> {
     External(E),
@@ -172,6 +184,11 @@ pub enum DecodeError<E> {
     Contract(yamaa_core::producer_contract::Error),
     Metadata(yamaa_core::diagnostic::Diagnostic),
     Limit(&'static str),
+    ResourceLimit {
+        resource: &'static str,
+        limit: usize,
+        actual: Option<usize>,
+    },
 }
 #[derive(Debug)]
 pub enum Failure<E> {
@@ -369,6 +386,7 @@ impl PreparedBuild {
         // without deriving an identity or trusting post-allocation size checks.
         let decode_storage = limits.source_storage_bytes / source_count;
         let decode_work = limits.decode_work_bytes / source_count;
+        let pooled = ports.decoder.pool_capacity();
         let environment = graph.environment();
         let selected = graph
             .called_functions()
@@ -418,7 +436,17 @@ impl PreparedBuild {
         let mut output_left = limits.output_bytes;
         let routing_left = Cell::new(limits.routing_work);
         let e = limits.execution;
-        let execution_work = crate::execution_work::WorkBudget::new(e.work_cells);
+        let execution_work = if pooled {
+            crate::execution_work::WorkBudget::pooled(e)
+        } else {
+            crate::execution_work::WorkBudget::new(e.work_cells)
+        };
+        let mut decode_pools = DecodePools {
+            rows_limit: e.source_rows,
+            rows_left: e.source_rows,
+            storage_left: limits.source_storage_bytes,
+            work_left: limits.decode_work_bytes,
+        };
         let node_limits = run::Limits {
             source_bytes: limits.source_bytes,
             source_cells: limits.source_cells,
@@ -446,6 +474,14 @@ impl PreparedBuild {
                 },
                 ..node_limits
             };
+            let node_limits = if let Some(execution) = execution_work.node_limits() {
+                run::Limits {
+                    execution,
+                    ..node_limits
+                }
+            } else {
+                node_limits
+            };
             attempt.nodes.push(NodeAttempt {
                 node: index,
                 dataset: CapturedAttempt::new(plan.source()),
@@ -472,9 +508,11 @@ impl PreparedBuild {
                     node,
                     decoder: ports.decoder,
                     cells_left: &mut cells_left,
+                    cell_limit: limits.source_cells,
                     storage_bytes: decode_storage,
                     work_bytes: decode_work,
                     work_left: &routing_left,
+                    pools: pooled.then_some(&mut decode_pools),
                 },
                 &mut functions,
                 node_limits,
@@ -557,9 +595,17 @@ struct NodeDecoder<'a, D> {
     node: &'a Node,
     decoder: &'a mut D,
     cells_left: &'a mut usize,
+    cell_limit: usize,
     storage_bytes: usize,
     work_bytes: usize,
     work_left: &'a Cell<usize>,
+    pools: Option<&'a mut DecodePools>,
+}
+struct DecodePools {
+    rows_limit: usize,
+    rows_left: usize,
+    storage_left: usize,
+    work_left: usize,
 }
 impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
     type Error = DecodeError<D::Error>;
@@ -568,7 +614,9 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
         match error {
             DecodeError::Codec(error) => self.decoder.continue_after(error),
             DecodeError::Metadata(_) => true,
-            DecodeError::Contract(_) | DecodeError::Limit(_) => false,
+            DecodeError::Contract(_)
+            | DecodeError::Limit(_)
+            | DecodeError::ResourceLimit { .. } => false,
         }
     }
     fn decode(
@@ -596,17 +644,51 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
                 break;
             }
         }
-        let table = self.decoder.decode_bounded_interpreted(
-            source,
-            bytes,
-            declaration.map(|p| p.contract()),
+        let bounded = if let Some(pools) = &self.pools {
             DecodeLimits {
+                rows: pools.rows_left,
+                cells: *self.cells_left,
+                storage_bytes: pools.storage_left,
+                work_bytes: pools.work_left,
+            }
+        } else {
+            DecodeLimits {
+                rows: crate::capacity::SOURCE_ROWS,
                 cells: *self.cells_left,
                 storage_bytes: self.storage_bytes,
                 work_bytes: self.work_bytes,
-            },
+            }
+        };
+        if let Some(pools) = &mut self.pools {
+            // An unwind or unobservable prefix cannot release this reservation.
+            pools.storage_left = 0;
+            pools.work_left = 0;
+        }
+        let result = self.decoder.decode_bounded_interpreted(
+            source,
+            bytes,
+            declaration.map(|p| p.contract()),
+            bounded,
             interpretation,
-        )?;
+        );
+        if let Some(pools) = &mut self.pools {
+            if let Some(used) = self.decoder.usage() {
+                match (
+                    bounded.storage_bytes.checked_sub(used.storage_bytes),
+                    bounded.work_bytes.checked_sub(used.work_bytes),
+                ) {
+                    (Some(storage), Some(work)) => {
+                        pools.storage_left = storage;
+                        pools.work_left = work;
+                    }
+                    _ if result.is_ok() => {
+                        return Err(DecodeError::Limit("producer_decode_receipt"))
+                    }
+                    _ => (),
+                }
+            }
+        }
+        let table = result?;
         let schema = table.schema();
         if let Some(declaration) = declaration {
             // Stored order and native logical schema only: no cardinality/cell
@@ -629,11 +711,31 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
                 return Err(DecodeError::Metadata(diagnostic));
             }
         }
-        let cells = table
-            .row_count()
-            .checked_mul(schema.columns().len())
-            .filter(|cells| *cells <= *self.cells_left)
-            .ok_or(DecodeError::Limit("producer_source_cells"))?;
+        let rows = table.row_count();
+        if let Some(pools) = &mut self.pools {
+            pools.rows_left =
+                pools
+                    .rows_left
+                    .checked_sub(rows)
+                    .ok_or(DecodeError::ResourceLimit {
+                        resource: "rows",
+                        limit: pools.rows_limit,
+                        actual: (pools.rows_limit - pools.rows_left).checked_add(rows),
+                    })?;
+        }
+        let cells = rows.checked_mul(schema.columns().len());
+        let cells = match cells.filter(|cells| *cells <= *self.cells_left) {
+            Some(cells) => cells,
+            None if self.pools.is_some() => {
+                return Err(DecodeError::ResourceLimit {
+                    resource: "cells",
+                    limit: self.cell_limit,
+                    actual: cells
+                        .and_then(|cells| (self.cell_limit - *self.cells_left).checked_add(cells)),
+                })
+            }
+            None => return Err(DecodeError::Limit("producer_source_cells")),
+        };
         *self.cells_left -= cells;
         Ok(table)
     }

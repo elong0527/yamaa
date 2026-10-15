@@ -114,6 +114,53 @@ def member_sources(member_root: Path):
             raise ValueError("restored workspace sources must not be symlinks")
         if path.is_file() and path.suffix == ".rs":
             yield path
+    # ReadStat is compiled from this exact licensed vendored source tree. A
+    # source archive must restore and byte-verify its C/header/license inputs,
+    # just as it restores Rust sources and the unchanged canonical Cargo.lock.
+    vendor = member_root / "vendor" / "readstat"
+    if (member_root / "vendor").is_symlink():
+        raise ValueError("native vendor sources must not be symlinks")
+    if vendor.exists():
+        if member_root.name != "yamaa-adapters" or vendor.is_symlink():
+            raise ValueError("unreviewed native vendor source tree")
+        for path in sorted(vendor.rglob("*")):
+            if path.is_symlink():
+                raise ValueError("native vendor sources must not be symlinks")
+            if path.is_file():
+                if path.suffix not in {".c", ".h", ".md"} and path.name != "LICENSE":
+                    raise ValueError("unreviewed native vendor source input")
+                yield path
+
+
+def local_patch_sources(workspace: Path):
+    """Retain complete, regular local dependency sources and licensing notices."""
+    manifest = tomllib.loads((workspace / "Cargo.toml").read_text())
+    for package, declaration in manifest.get("patch", {}).get("crates-io", {}).items():
+        if declaration != {"path": f"vendor/{package}"}:
+            raise ValueError("local Cargo patches must use vendor/package paths")
+        if not re.fullmatch(r"[a-z0-9_-]+", package):
+            raise ValueError("invalid local Cargo patch package")
+        root = workspace / "vendor" / package
+        if root.parent.is_symlink() or root.is_symlink():
+            raise ValueError("local Cargo patches must not be symlinks")
+        for name in (
+            "Cargo.toml",
+            "LICENSE",
+            "README.md",
+            "PROVENANCE.md",
+            "src/lib.rs",
+        ):
+            if not (root / name).is_file():
+                raise ValueError(f"local Cargo patch is missing {name}")
+        for path in sorted(root.rglob("*")):
+            if path.is_symlink():
+                raise ValueError("local Cargo patch sources must not be symlinks")
+            if any(part in {"target", ".git", "__pycache__"} for part in path.parts):
+                raise ValueError("local Cargo patch contains build or cache files")
+            if path.name == "Cargo.lock" or path.suffix == ".pyc":
+                raise ValueError("local Cargo patch contains build or cache files")
+            if path.is_file():
+                yield path
 
 
 def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> None:
@@ -196,6 +243,40 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
                             )
                     else:
                         additions.append((name, path))
+
+            patch_sources = list(local_patch_sources(workspace))
+            patch_names = {
+                f"{root}/rust/{path.relative_to(workspace).as_posix()}"
+                for path in patch_sources
+            }
+            if any(
+                entry.name.startswith(f"{root}/rust/vendor/")
+                and not (entry.isfile() or entry.isdir())
+                for entry in entries
+            ):
+                raise ValueError(
+                    "source archive local Cargo patches must not contain links"
+                )
+            if any(
+                entry.isfile()
+                and entry.name.startswith(f"{root}/rust/vendor/")
+                and entry.name not in patch_names
+                for entry in entries
+            ):
+                raise ValueError(
+                    "source archive contains an unexpected local Cargo patch file"
+                )
+            for path in patch_sources:
+                name = f"{root}/rust/{path.relative_to(workspace).as_posix()}"
+                if name in names:
+                    entry = source.getmember(name)
+                    if (
+                        not entry.isfile()
+                        or source.extractfile(entry).read() != path.read_bytes()
+                    ):
+                        raise ValueError("source archive changed a local Cargo patch")
+                else:
+                    additions.append((name, path))
 
             for relative, path in fixture_sources:
                 if (
