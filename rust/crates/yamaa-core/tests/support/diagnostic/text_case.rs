@@ -6,7 +6,7 @@ use yamaa_core::{
     text_case::{Case, Error, StringCase},
     value::Value,
 };
-pub(super) fn reached() -> BTreeSet<ConditionCode> {
+pub fn reached() -> BTreeSet<ConditionCode> {
     let operation = StringCase::new(
         "SRC.V".into(),
         "columns.V.derivation.str_case".into(),

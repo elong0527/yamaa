@@ -158,7 +158,3 @@ fn check(
     assert_eq!(finding.source_span, None);
     assert_eq!(finding.operand_route, None);
 }
-#[test]
-fn failures_have_complete_independently_authored_geometry() {
-    assert_eq!(reached().len(), 7);
-}

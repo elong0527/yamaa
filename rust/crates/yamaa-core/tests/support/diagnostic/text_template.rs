@@ -1,7 +1,7 @@
 use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{diagnostic::ConditionCode, text_template::StringTemplate};
-pub(super) fn reached() -> BTreeSet<ConditionCode> {
+pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     for (template, reason, placeholder) in [
         ("{A + B}", "invalid_placeholder", Some("A + B")),

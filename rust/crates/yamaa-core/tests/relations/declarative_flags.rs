@@ -1,4 +1,4 @@
-#[allow(dead_code, clippy::duplicate_mod)]
+#[allow(dead_code)]
 use crate::support::project_call_compiler as support;
 use support::{specification, Tree};
 use yamaa_core::{
@@ -167,52 +167,6 @@ fn regex_input_type_is_flag_owned_without_changing_generic_predicate_mapping() {
     assert_eq!(diagnostic.code, C::PredicateInputType);
     assert_eq!(diagnostic.definition().requirement, Some("REQ-0190"));
     assert_eq!(diagnostic.operand_route, Some(vec!["Value".into()]));
-}
-
-#[allow(dead_code)]
-pub fn reached() -> std::collections::BTreeSet<C> {
-    let mut reached = diagnostics(vec![(
-        "F",
-        "str",
-        flag("ABSENT = 1", Some(Tree::text("N")), None),
-    )])
-    .into_iter()
-    .map(|d| d.code)
-    .collect::<std::collections::BTreeSet<_>>();
-    reached.extend(
-        diagnostics(vec![("F", "str", flag("EXTRA = 1", None, None))])
-            .into_iter()
-            .map(|d| d.code),
-    );
-    struct IntPort;
-    impl yamaa_core::predicate::Resolver for IntPort {
-        type Error = std::convert::Infallible;
-        fn resolve(&mut self, _: &str) -> Result<yamaa_core::value::Selection, Self::Error> {
-            Ok(yamaa_core::value::Selection::Present(Value::Int(1)))
-        }
-    }
-    let plan = predicate_compiler::compile(
-        "str_contains(SRC.EXTRA,'a')",
-        "flag.condition",
-        Default::default(),
-    )
-    .unwrap();
-    let finding =
-        yamaa_core::dataset::flag_condition_diagnostic(&plan.evaluate(&mut IntPort).unwrap_err())
-            .unwrap();
-    assert_eq!(finding.definition().requirement, Some("REQ-0190"));
-    reached.insert(finding.code);
-    assert_eq!(
-        reached,
-        [
-            C::FlagMissingValueRequired,
-            C::PredicateUnknownField,
-            C::PredicateUnresolvableName,
-            C::PredicateInputType
-        ]
-        .into()
-    );
-    reached
 }
 
 #[test]

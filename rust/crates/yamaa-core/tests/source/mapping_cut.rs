@@ -3,8 +3,6 @@ use yamaa_core::{
     table::ValueRef,
     value::Value,
 };
-#[path = "../diagnostics/diagnostic/mapping_cut.rs"]
-mod diagnostic;
 
 #[test]
 fn dictionary_results_retain_literal_types_and_missing_is_not_unmapped() {

@@ -112,8 +112,7 @@ fn public_constructor_bounds_all_metadata_and_retained_path_multiplicity() {
         assert_eq!(op.missing(), Some(&value));
     }
 }
-#[path = "../diagnostics/diagnostic/text_template.rs"]
-mod diagnostic;
+use crate::support::diagnostic::text_template as diagnostic;
 #[test]
 fn complete_canonical_grammar_causes_are_reached() {
     assert_eq!(diagnostic::reached().len(), 1);

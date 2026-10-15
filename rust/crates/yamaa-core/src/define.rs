@@ -575,8 +575,8 @@ impl<P: Ports> Application<P> {
     ) -> Result<bool, SaveFailure<P::Error, P::PublicationError>> {
         self.save_inner(ports, |_| {})
     }
-    /// Test-only operational checkpoint; production hosts receive no callback.
-    #[cfg(any(test, feature = "test-support"))]
+    /// Operational checkpoint variant of `save`; production hosts use
+    /// `save`, which passes a no-op checkpoint.
     pub fn save_with_checkpoint(
         &mut self,
         ports: &mut P,

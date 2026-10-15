@@ -1,7 +1,7 @@
 //! Single-consumption scripted outcomes for the actual application port traits.
 use super::*;
-use crate::function_signature::InvocationPlan;
-use crate::function_signature::ProjectInvocationPlan;
+use yamaa_core::function_signature::InvocationPlan;
+use yamaa_core::function_signature::ProjectInvocationPlan;
 use function_invocation::Argument;
 use function_invocation::FunctionPort;
 use function_invocation::HostError;
@@ -66,12 +66,12 @@ impl<E> metadata::CapturePort for ScriptedMetadata<E> {
 #[derive(Debug)]
 pub struct MetadataDocument {
     pub source: metadata::Source,
-    pub document: crate::schema::Document,
+    pub document: yamaa_core::schema::Document,
 }
 pub struct MetadataDecodeStep<E> {
     pub source: metadata::Source,
     pub target: metadata::DecodeTarget,
-    pub outcome: Result<crate::schema::Document, E>,
+    pub outcome: Result<yamaa_core::schema::Document, E>,
 }
 pub struct ScriptedMetadataDecoder<E> {
     pub steps: VecDeque<MetadataDecodeStep<E>>,
@@ -105,7 +105,7 @@ impl<E> metadata::DecodePort for ScriptedMetadataDecoder<E> {
         step.outcome
             .map(|document| MetadataDocument { source, document })
     }
-    fn document(document: &MetadataDocument) -> &crate::schema::Document {
+    fn document(document: &MetadataDocument) -> &yamaa_core::schema::Document {
         &document.document
     }
     fn source(document: &MetadataDocument) -> &metadata::Source {
@@ -141,16 +141,16 @@ impl<E> ScriptedSource<E> {
 }
 impl<E> SourcePort for ScriptedSource<E> {
     type Error = E;
-    fn resource_failure(&self, _error: &E) -> Option<crate::resource::ResourceFailure> {
+    fn resource_failure(&self, _error: &E) -> Option<yamaa_core::resource::ResourceFailure> {
         None
     }
     fn capture_observed(
         &mut self,
         source: &SourceDeclaration,
         byte_limit: usize,
-        origin: &mut Option<crate::specification_run::SourceOrigin>,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
     ) -> Result<Arc<[u8]>, E> {
-        *origin = Some(crate::specification_run::SourceOrigin::Resource);
+        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
         self.capture(source, byte_limit)
     }
     fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), E> {
@@ -213,7 +213,7 @@ impl<E, T: TableAccess> SourceDecoder for ScriptedDecoder<E, T> {
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
-        _interpretation: crate::specification::SourceInterpretation,
+        _interpretation: yamaa_core::specification::SourceInterpretation,
     ) -> Result<T, E> {
         self.decode(source, bytes)
     }

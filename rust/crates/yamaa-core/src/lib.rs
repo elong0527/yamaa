@@ -159,9 +159,6 @@ pub mod project_activation;
 
 pub mod inheritance_capture;
 
-#[cfg(any(test, feature = "test-support"))]
-pub mod test_support;
-
 pub mod source_profile_inspection;
 
 pub mod producer_publication;

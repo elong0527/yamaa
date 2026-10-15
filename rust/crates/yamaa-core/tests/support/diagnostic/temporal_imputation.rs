@@ -23,7 +23,7 @@ fn operation(kind: K) -> Imputation {
     )
     .unwrap()
 }
-pub(super) fn reached() -> BTreeSet<ConditionCode> {
+pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     let mut check = |diagnostic: Diagnostic,
                      phase: &str,

@@ -138,8 +138,7 @@ fn constructor_and_failure_context_are_admitted_before_copying_or_parsing() {
         .is_none());
     assert!(op.failure_diagnostic(Step::NoMatch("x"), size).is_some());
 }
-#[path = "../diagnostics/diagnostic/text_extract.rs"]
-mod diagnostic;
+use crate::support::diagnostic::text_extract as diagnostic;
 #[test]
 fn all_extraction_semantic_causes_preserve_independent_complete_facts() {
     assert_eq!(diagnostic::reached().len(), 6);

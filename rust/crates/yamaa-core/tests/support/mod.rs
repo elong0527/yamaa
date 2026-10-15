@@ -4,7 +4,9 @@ use yamaa_core::{
     value::ColumnType,
 };
 
+pub mod diagnostic;
 pub mod producer;
+pub mod test_support;
 pub mod producer_graph;
 pub mod project_call_compiler;
 pub mod project_codelist_compiler;

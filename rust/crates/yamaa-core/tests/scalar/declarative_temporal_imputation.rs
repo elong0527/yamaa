@@ -207,8 +207,7 @@ fn datetime_edges_precision_and_explicit_date_conversion_are_field_copies() {
         );
     }
 }
-#[path = "../diagnostics/diagnostic/temporal_imputation.rs"]
-mod diagnostic;
+use crate::support::diagnostic::temporal_imputation as diagnostic;
 #[test]
 fn independent_diagnostic_truth_reaches_every_imputation_cause() {
     assert_eq!(diagnostic::reached().len(), 16);

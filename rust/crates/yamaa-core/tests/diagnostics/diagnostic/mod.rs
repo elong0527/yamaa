@@ -9,23 +9,19 @@ use yamaa_core::{
     value::{ColumnType, Selection, Value},
 };
 
-#[path = "../../relations/declarative_flags.rs"]
-mod declarative_flags;
+use crate::support::diagnostic::{
+    declarative_flags, mapping_cut, temporal_imputation, text_case, text_extract, text_template,
+};
 
 mod aggregate;
 mod dataset;
 mod odm;
 mod predicate_evaluation;
 
-mod mapping_cut;
 mod schema;
 mod submission;
 mod temporal_arithmetic;
-mod temporal_imputation;
-mod text_case;
-mod text_extract;
 mod text_pad;
-mod text_template;
 mod verification;
 mod yaml_source;
 struct Bindings;
@@ -745,4 +741,9 @@ fn scalar_json_context_preserves_wire_types_and_exact_number_spellings() {
         serde_json::to_string(&context).unwrap(),
         r#"{"bool":true,"date":"2025-01-02","datetime":"2025-01-02T03:04:00","float":1.0,"max":9223372036854775807,"min":-9223372036854775808,"missing":null,"negzero":-0.0,"text":"001"}"#,
     );
+}
+
+#[test]
+fn failures_have_complete_independently_authored_geometry() {
+    assert_eq!(mapping_cut::reached().len(), 7);
 }

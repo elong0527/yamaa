@@ -105,8 +105,7 @@ fn output_quota_is_checked_on_utf8_bytes_before_substitution() {
     assert_eq!(transform("\u{00e9}A", Case::Upper, 3).unwrap(), "\u{00e9}A");
     assert_eq!(transform("", Case::Title, 0).unwrap(), "");
 }
-#[path = "../diagnostics/diagnostic/text_case.rs"]
-mod diagnostic;
+use crate::support::diagnostic::text_case as diagnostic;
 #[test]
 fn owned_declarations_preserve_missing_literal_presence_and_semantic_truth() {
     use yamaa_core::{

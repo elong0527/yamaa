@@ -1,5 +1,4 @@
 [package]
-autotests = false
 name = "yamaa-adapters"
 version.workspace = true
 edition.workspace = true
@@ -41,34 +40,7 @@ rustix = { version = "=1.1.5", features = ["fs", "process"] }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Threading", "Win32_Security_Authorization", "Win32_Globalization"] }
 
-[dev-dependencies]
-yamaa-core = { path = "../yamaa-core", features = ["test-support"] }
-
 [build-dependencies]
 # Builds the reviewed vendored read-only ReadStat subset on every native host.
 cc = "=1.7.0"
 
-# Integration targets are finite and explicit; support files are never discovered as binaries.
-[[test]]
-name = "declaration_tests"
-path = "tests/declaration_tests.rs"
-
-[[test]]
-name = "execution_tests"
-path = "tests/execution_tests.rs"
-
-[[test]]
-name = "scalar_tests"
-path = "tests/scalar_tests.rs"
-
-[[test]]
-name = "project_tests"
-path = "tests/project_tests.rs"
-
-[[test]]
-name = "file_tests"
-path = "tests/file_tests.rs"
-
-[[test]]
-name = "table_tests"
-path = "tests/table_tests.rs"

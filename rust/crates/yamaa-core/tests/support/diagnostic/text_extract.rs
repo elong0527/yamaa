@@ -6,7 +6,7 @@ use yamaa_core::{
     table::ValueRef,
     text_extract::{Error, Step, StringExtract},
 };
-pub(super) fn reached() -> BTreeSet<ConditionCode> {
+pub fn reached() -> BTreeSet<ConditionCode> {
     let path = "columns.TEXT.derivation.str_extract";
     let mut reached = BTreeSet::new();
     let make = |pattern: &str, group: &str| {
