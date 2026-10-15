@@ -1015,13 +1015,15 @@ impl<'a> Evaluator<'a> {
                             .reduce(Summary::union)
                             .map(|value| Summary::one(value.span))
                     } else {
-                        values.try_fold(
+                        let value = values.try_fold(
                             Summary::one(Span {
                                 min: 0,
                                 max: Some(0),
                             }),
                             |a, b| b.map(|b| a.add(b)),
-                        )
+                        );
+                        drop(values);
+                        value
                     };
                     self.values.push(value);
                 }
