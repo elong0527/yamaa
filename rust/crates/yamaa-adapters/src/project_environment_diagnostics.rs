@@ -308,6 +308,10 @@ pub(crate) fn root_boundary(error: &SourceError, written: &str) -> Result<Vec<Is
     decode_issues(error, written, written, "$")
 }
 
+pub(crate) fn root_limit(error: &SourceError) -> Option<Error> {
+    source_limit(error).map(|bound| resource_limit(bound, "$"))
+}
+
 /// Native metadata failures retain the authored dependency path and declaration.
 /// A fixed resource boundary refuses the whole projection beside its original owner.
 pub(crate) fn capture_sources(

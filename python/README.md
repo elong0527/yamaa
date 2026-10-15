@@ -27,6 +27,11 @@ both its data path and producer `schema` link; output settings cover all logs
 and the primary artifact.
 There is no upward project-root discovery or public backend selector in this API.
 
+Project functions need their installed callable and declared conformance tests.
+The environment's packaging `lock` is optional. Declare it to verify installed
+called-package versions before activation; omit it to use the installed packages
+without a version audit. A declared lock must exist and be valid.
+
 A shared parent can use each study's own inputs and save in its own output folder:
 
 ```yaml
@@ -41,11 +46,6 @@ output:
 Each study's entry inherits that parent. `save()` publishes its held bytes at
 the selected study destinations without rerunning the build. A producer linked
 through `schema` uses its own entry file, which may also inherit shared code.
-
-Project functions need their installed callable and declared conformance tests.
-The environment's packaging `lock` is optional. Declare it to verify installed
-called-package versions before activation; omit it to use the installed packages
-without a version audit. A declared lock must exist and be valid.
 
 Inputs can use CSV, Parquet, SAS datasets (`.sas7bdat`), or SAS Transport v5/v8
 (`.xpt`). SAS inputs explicitly declare `encoding`, for example

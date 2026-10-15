@@ -127,6 +127,7 @@ mod file {
         struct Activation {
             trace: Vec<&'static str>,
             reject: bool,
+            reject_binding: bool,
             mismatch: bool,
         }
         impl ActivationPort for Activation {
@@ -154,7 +155,11 @@ mod file {
                 _: &LogicalSignature,
             ) -> Result<(), Self::Error> {
                 self.trace.push("bind");
-                Ok(())
+                if self.reject_binding {
+                    Err("original binding rejection")
+                } else {
+                    Ok(())
+                }
             }
             fn invoke(
                 &mut self,
@@ -237,9 +242,9 @@ mod file {
         fn project_functions_build_without_any_adjacent_packaging_lock() {
             let study = Study::new();
             study.write(
-        "env/environment.yaml",
-        "schema_version: '1.0'\nlanguage: python\nfunctions: {id: id.yaml}\ncodelists: [ct.yaml]\n",
-    );
+                "env/environment.yaml",
+                "schema_version: '1.0'\nlanguage: python\nfunctions: {id: id.yaml}\ncodelists: [ct.yaml]\n",
+            );
             fs::remove_file(study.0.join("uv.lock")).unwrap();
             study.write("entry/input.csv", "ID\n1\n");
             let mut project = study.prepare(&study.text(""), &[]).unwrap();
@@ -264,6 +269,45 @@ mod file {
                     .rows(),
                 &[vec![Value::Int(1), Value::Int(1)]]
             );
+        }
+
+        #[test]
+        fn functions_without_a_lock_still_reject_bindings_and_cases_before_study_reads() {
+            let study = Study::new();
+            study.write(
+                "env/environment.yaml",
+                "schema_version: '1.0'\nlanguage: python\nfunctions: {id: id.yaml}\ncodelists: [ct.yaml]\n",
+            );
+            fs::remove_file(study.0.join("uv.lock")).unwrap();
+            let mut project = study.prepare(&study.text(""), &[]).unwrap();
+            let reads = project.capture_reads();
+            assert!(!study.0.join("entry/input.csv").exists());
+            for reject_binding in [true, false] {
+                let mut activation = Activation {
+                    reject: true,
+                    reject_binding,
+                    mismatch: true,
+                    ..Default::default()
+                };
+                let attempt = project.build(&mut activation);
+                if reject_binding {
+                    assert!(matches!(
+                        attempt.boundary,
+                        Err(BoundaryFailure::Activation(Failure::Bindings(_)))
+                    ));
+                    assert_eq!(activation.trace, ["bind"]);
+                } else {
+                    assert!(matches!(
+                        attempt.boundary,
+                        Err(BoundaryFailure::Activation(Failure::Tests(_)))
+                    ));
+                    assert_eq!(activation.trace, ["bind", "call", "call"]);
+                }
+                assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
+                assert!(attempt.dataset.sources.is_empty());
+                assert!(matches!(attempt.dataset.result, Err(PortError::Incomplete)));
+                assert_eq!(project.capture_reads(), reads);
+            }
         }
 
         #[test]
@@ -1640,9 +1684,9 @@ mod file {
         fn metadata_failures_name_each_written_dependency_and_cause_before_study_reads() {
             let study = Study::new();
             study.write(
-        "environment.yaml",
-        "schema_version: '1.0'\nlanguage: python\nlock: missing.lock\nfunctions: {id: absent-function.yaml}\ncodelists: [absent-codelists.yaml]\n",
-    );
+                "environment.yaml",
+                "schema_version: '1.0'\nlanguage: python\nlock: missing.lock\nfunctions: {id: absent-function.yaml}\ncodelists: [absent-codelists.yaml]\n",
+            );
             let entry = study.path("root.yaml");
             let environment = study.path("environment.yaml");
             let file_workflow::SelectionError::Preparation(error) =
@@ -1736,63 +1780,163 @@ mod file {
         }
 
         #[test]
-        fn oversized_dependency_refuses_partial_metadata_diagnostics_with_the_fixed_bound() {
+        fn per_source_resource_and_decoder_limits_keep_original_facts_without_partial_diagnostics()
+        {
             use yamaa_adapters::{
                 file_resources::Error as ResourceError,
                 project_source::{CaptureFailure, Failure},
+                specification_source::Error as SourceError,
+                yaml_decode::DecodeFailure,
             };
-            use yamaa_core::limits::Limits;
-            let study = Study::new();
-            study.write(
-                "environment.yaml",
-                "schema_version: '1.0'\ncodelists: [missing.yaml, ct.yaml]\n",
-            );
-            study.write("ct.yaml", &"#".repeat(Limits::SPEC_BYTES + 1));
-            let error = study.rejected();
-            let Error::Environment(owner) = &error else {
-                panic!("metadata failure precedes entry reads")
-            };
-            let yamaa_adapters::file_project::Error::Environment(Failure::Rejected(rejected)) =
-                owner.error()
-            else {
-                panic!("original source failures remain owned: {:?}", owner.error())
-            };
-            assert_eq!(rejected.sources.len(), 2);
-            assert!(matches!(
-                rejected.sources[0].error,
-                CaptureFailure::Port(ResourceError::Missing)
-            ));
-            let CaptureFailure::Port(ResourceError::Limit(bound)) = rejected.sources[1].error
-            else {
-                panic!("native fixed metadata boundary")
-            };
-            assert_eq!(
-                bound,
-                Limits::spec_bytes(Limits::SPEC_BYTES + 1).unwrap_err()
-            );
-            let producer_check::Error::ResourceLimit(refusal) =
-                producer_check::rejected(&error, Language::Python).unwrap_err()
-            else {
-                panic!("whole projection retains the typed refusal")
-            };
-            assert_eq!(refusal.resource, "spec_bytes");
-            assert_eq!(refusal.limit, Limits::SPEC_BYTES);
-            assert_eq!(refusal.actual, Some(Limits::SPEC_BYTES + 1));
-            assert_eq!(refusal.spec_paths, ["codelists[1]"]);
-            let public = yamaa_adapters::project_application::check(
-                &study.path("root.yaml"),
-                &study.path("environment.yaml"),
-                Language::Python,
-            );
-            assert_eq!(public, refusal.issues("environment", "resource_limit"));
-            let reads = owner.capture_reads();
-            assert!(!study.0.join("root.yaml").exists());
-            fs::remove_dir_all(&study.0).unwrap();
-            assert!(matches!(
-                producer_check::rejected(&error, Language::Python),
-                Err(producer_check::Error::ResourceLimit(again)) if again == refusal
-            ));
-            assert_eq!(owner.capture_reads(), reads);
+            use yamaa_core::limits::{LimitExceeded, Limits};
+
+            for structural in [false, true] {
+                let study = Study::new();
+                let environment = "schema_version: '1.0'\ncodelists: [missing.yaml, ct.yaml]\n";
+                study.write("environment.yaml", environment);
+                let metadata = if structural {
+                    format!(
+                        "{}0{}",
+                        "[".repeat(Limits::YAML_DEPTH + 1),
+                        "]".repeat(Limits::YAML_DEPTH + 1),
+                    )
+                } else {
+                    "#".repeat(Limits::SPEC_BYTES + 1)
+                };
+                study.write("ct.yaml", &metadata);
+                let expected = if structural {
+                    LimitExceeded {
+                        resource: "yaml_depth",
+                        limit: Limits::YAML_DEPTH,
+                        actual: Some(Limits::YAML_DEPTH + 1),
+                    }
+                } else {
+                    LimitExceeded {
+                        resource: "spec_bytes",
+                        limit: Limits::SPEC_BYTES,
+                        actual: Some(Limits::SPEC_BYTES + 1),
+                    }
+                };
+                let selection = file_workflow::select(
+                    &study.path("root.yaml"),
+                    &study.path("environment.yaml"),
+                    Language::Python,
+                )
+                .err()
+                .unwrap();
+                let file_workflow::SelectionError::Preparation(error) = &selection else {
+                    panic!("retained metadata failure precedes entry reads")
+                };
+                let Error::Environment(owner) = error else {
+                    panic!("original environment owner")
+                };
+                let yamaa_adapters::file_project::Error::Environment(Failure::Rejected(rejected)) =
+                    owner.error()
+                else {
+                    panic!("original source failures remain owned: {:?}", owner.error())
+                };
+                assert_eq!(rejected.sources.len(), 2);
+                assert_eq!(rejected.sources[0].written, "missing.yaml");
+                assert!(matches!(
+                    rejected.sources[0].error,
+                    CaptureFailure::Port(ResourceError::Missing)
+                ));
+                assert_eq!(rejected.sources[1].written, "ct.yaml");
+                let actual = match &rejected.sources[1].error {
+                    CaptureFailure::Port(ResourceError::Limit(limit)) if !structural => limit,
+                    CaptureFailure::Structural(SourceError::Decode {
+                        error: DecodeFailure::Limit(limit),
+                        ..
+                    }) if structural => limit,
+                    failure => panic!("retained typed limit: {failure:?}"),
+                };
+                assert_eq!(actual, &expected);
+                assert_eq!(rejected.root.source().bytes, environment.as_bytes());
+                assert_eq!(owner.capture_reads(), if structural { 2 } else { 1 });
+                let reads = owner.capture_reads();
+                let held_root = rejected.root.source().bytes.as_ptr();
+                let held_error = owner.error() as *const _;
+                let producer_check::Error::ResourceLimit(refusal) =
+                    producer_check::rejected(error, Language::Python).unwrap_err()
+                else {
+                    panic!("whole projection retains the typed refusal")
+                };
+                assert_eq!(refusal.resource, expected.resource);
+                assert_eq!(refusal.limit, expected.limit);
+                assert_eq!(refusal.actual, expected.actual);
+                assert_eq!(refusal.spec_paths, ["codelists[1]"]);
+                let expected_rows = refusal.issues("environment", "resource_limit");
+                assert_eq!(
+                    yamaa_adapters::project_application::check(
+                        &study.path("root.yaml"),
+                        &study.path("environment.yaml"),
+                        Language::Python,
+                    ),
+                    expected_rows,
+                );
+                let application_error = yamaa_adapters::project_application::prepare(
+                    &study.path("root.yaml"),
+                    &study.path("environment.yaml"),
+                    Language::Python,
+                )
+                .err()
+                .unwrap();
+                let yamaa_adapters::project_application::Error::Project(
+                    yamaa_adapters::file_project::Error::Environment(Failure::Rejected(
+                        application_owner,
+                    )),
+                ) = &application_error
+                else {
+                    panic!("public preparation retains the native environment failure")
+                };
+                assert_eq!(application_owner.sources.len(), 2);
+                let held_application_root = application_owner.root.source().bytes.as_ptr();
+                assert!(!study.0.join("root.yaml").exists());
+                fs::remove_dir_all(&study.0).unwrap();
+                for _ in 0..2 {
+                    assert!(matches!(
+                        producer_check::rejected(error, Language::Python),
+                        Err(producer_check::Error::ResourceLimit(again)) if again == refusal
+                    ));
+                    let rows = yamaa_adapters::project_application::selection_failure(
+                        &selection,
+                        Language::Python,
+                    );
+                    assert_eq!(rows.len(), 1);
+                    assert_eq!(rows[0].phase, "engine");
+                    assert_eq!(rows[0].condition, "engine_rejected");
+                    assert_eq!(rows[0].requirement, None);
+                    assert_eq!(rows[0].spec_paths, ["codelists[1]"]);
+                    assert_eq!(rows, expected_rows);
+                    assert_eq!(
+                        serde_json::from_str::<yamaa_core::json::Value>(&rows[0].context).unwrap(),
+                        yamaa_core::json::json!({
+                            "stage": "environment", "code": "resource_limit",
+                            "resource": expected.resource, "limit": expected.limit,
+                            "actual": expected.actual,
+                        }),
+                    );
+                    assert_eq!(
+                        yamaa_adapters::project_application::failure(
+                            &application_error,
+                            Language::Python,
+                        ),
+                        rows,
+                    );
+                    assert_eq!(owner.capture_reads(), reads);
+                    assert_eq!(owner.error() as *const _, held_error);
+                    assert_eq!(rejected.root.source().bytes.as_ptr(), held_root);
+                    assert_eq!(rejected.root.source().bytes, environment.as_bytes());
+                    assert_eq!(
+                        application_owner.root.source().bytes.as_ptr(),
+                        held_application_root,
+                    );
+                    assert_eq!(
+                        application_owner.root.source().bytes,
+                        environment.as_bytes(),
+                    );
+                }
+            }
         }
 
         #[test]
@@ -2169,9 +2313,9 @@ mod file {
                 .any(|row| row.requirement.as_deref() == Some("REQ-0534")
                     && row.condition == "invalid_producer_contract"));
             study.write(
-        "environment.yaml",
-        "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {id: broken.yaml}\n",
-    );
+                "environment.yaml",
+                "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {id: broken.yaml}\n",
+            );
             study.write("uv.lock", "version = 1\npackage = []\n");
             let malformed = "function: [\n";
             study.write("broken.yaml", malformed);

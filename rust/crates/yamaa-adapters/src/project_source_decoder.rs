@@ -200,6 +200,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "readstat")]
     #[test]
     fn both_sas_source_profiles_preserve_rows_across_repeated_decoding() {
         for (profile, bytes) in [
