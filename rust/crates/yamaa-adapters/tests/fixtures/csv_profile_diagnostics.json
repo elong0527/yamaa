@@ -137,7 +137,7 @@
       "unsupported": [],
       "verifications": []
     },
-    "source_bytes": "﻿ID\n"
+    "source_bytes": "\ufeffID\n"
   },
   {
     "case": "cr",

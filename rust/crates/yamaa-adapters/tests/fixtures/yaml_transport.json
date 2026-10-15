@@ -214,7 +214,7 @@
           "nodes": [
             {
               "kind": "text",
-              "value": "é"
+              "value": "e\u0301"
             }
           ],
           "root": 0

@@ -224,7 +224,7 @@
     "case": "ascii_fold",
     "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {'yes': 'matched', \"\\u00e9a\": 'foreign', \"\\u00c9a\": 'capital', \"\\u00df\": 'sharp', 'ss': 'double'}, case_sensitive: false, unmapped: 'other'}\n",
     "inputs": {
-      "SRC": "ID,X\na,YES\nb,éA\nc,ÉA\nd,ß\ne,SS\nf,éB\n"
+      "SRC": "ID,X\na,YES\nb,\u00e9A\nc,\u00c9A\nd,\u00df\ne,SS\nf,\u00e9B\n"
     },
     "expected": {
       "artifacts": [
@@ -319,7 +319,7 @@
               },
               {
                 "type": "str",
-                "value": "éA"
+                "value": "\u00e9A"
               }
             ],
             [
@@ -329,7 +329,7 @@
               },
               {
                 "type": "str",
-                "value": "ÉA"
+                "value": "\u00c9A"
               }
             ],
             [
@@ -339,7 +339,7 @@
               },
               {
                 "type": "str",
-                "value": "ß"
+                "value": "\u00df"
               }
             ],
             [
@@ -359,7 +359,7 @@
               },
               {
                 "type": "str",
-                "value": "éB"
+                "value": "\u00e9B"
               }
             ]
           ],
@@ -450,7 +450,7 @@
       "verifications": []
     },
     "artifact": "ID,V\na,matched\nb,foreign\nc,capital\nd,sharp\ne,double\nf,other\n",
-    "expected_wire": "{\"artifacts\":[{\"byte_length\":60,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,matched\\nb,foreign\\nc,capital\\nd,sharp\\ne,double\\nf,other\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,matched\",\"b,foreign\",\"c,capital\",\"d,sharp\",\"e,double\",\"f,other\"],\"row_count\":6,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-ascii_fold\",\"handler_counts\":[{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"YES\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"éA\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"ÉA\"}],[{\"type\":\"str\",\"value\":\"d\"},{\"type\":\"str\",\"value\":\"ß\"}],[{\"type\":\"str\",\"value\":\"e\"},{\"type\":\"str\",\"value\":\"SS\"}],[{\"type\":\"str\",\"value\":\"f\"},{\"type\":\"str\",\"value\":\"éB\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"matched\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"foreign\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"capital\"}],[{\"type\":\"str\",\"value\":\"d\"},{\"type\":\"str\",\"value\":\"sharp\"}],[{\"type\":\"str\",\"value\":\"e\"},{\"type\":\"str\",\"value\":\"double\"}],[{\"type\":\"str\",\"value\":\"f\"},{\"type\":\"str\",\"value\":\"other\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
+    "expected_wire": "{\"artifacts\":[{\"byte_length\":60,\"columns\":[\"ID\",\"V\"],\"content\":\"ID,V\\na,matched\\nb,foreign\\nc,capital\\nd,sharp\\ne,double\\nf,other\\n\",\"name\":\"result\",\"profile\":\"csv\",\"records\":[\"ID,V\",\"a,matched\",\"b,foreign\",\"c,capital\",\"d,sharp\",\"e,double\",\"f,other\"],\"row_count\":6,\"types\":[\"str\",\"str\"]}],\"backend\":\"rust\",\"callbacks\":[],\"diagnostics\":[],\"engine_version\":\"fixture-engine\",\"error\":null,\"example\":\"mapping-cut-ascii_fold\",\"handler_counts\":[{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"nodes\":[{\"diagnostics\":[],\"handler_counts\":[{\"count\":1,\"handler\":\"unmapped\",\"spec_path\":\"columns.V.derivation.mapping.unmapped\"}],\"outcome\":\"success\",\"specification\":\"spec.yaml\",\"unsupported\":[]}],\"outcome\":\"success\",\"report_version\":\"0.3.0-draft\",\"runtime\":\"python\",\"runtime_version\":\"fixture-runtime\",\"source_reads\":[{\"base_directory\":\".\",\"condition\":null,\"outcome\":\"captured\",\"path\":\"src.csv\",\"snapshots_created\":1}],\"tables\":[{\"columns\":[\"ID\",\"X\"],\"name\":\"SRC\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"YES\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"\u00e9A\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"\u00c9A\"}],[{\"type\":\"str\",\"value\":\"d\"},{\"type\":\"str\",\"value\":\"\u00df\"}],[{\"type\":\"str\",\"value\":\"e\"},{\"type\":\"str\",\"value\":\"SS\"}],[{\"type\":\"str\",\"value\":\"f\"},{\"type\":\"str\",\"value\":\"\u00e9B\"}]],\"specification\":\"spec.yaml\",\"stage\":\"source\",\"types\":[\"str\",\"str\"]},{\"columns\":[\"ID\",\"V\"],\"name\":\"output\",\"rows\":[[{\"type\":\"str\",\"value\":\"a\"},{\"type\":\"str\",\"value\":\"matched\"}],[{\"type\":\"str\",\"value\":\"b\"},{\"type\":\"str\",\"value\":\"foreign\"}],[{\"type\":\"str\",\"value\":\"c\"},{\"type\":\"str\",\"value\":\"capital\"}],[{\"type\":\"str\",\"value\":\"d\"},{\"type\":\"str\",\"value\":\"sharp\"}],[{\"type\":\"str\",\"value\":\"e\"},{\"type\":\"str\",\"value\":\"double\"}],[{\"type\":\"str\",\"value\":\"f\"},{\"type\":\"str\",\"value\":\"other\"}]],\"specification\":\"spec.yaml\",\"stage\":\"derived\",\"types\":[\"str\",\"str\"]}],\"unsupported\":[],\"verifications\":[]}"
   },
   {
     "case": "missing_separate",

@@ -150,7 +150,7 @@
     "expected": [
       {
         "condition": "invalid_regex",
-        "context": "{\"pattern\":\"é(\"}",
+        "context": "{\"pattern\":\"\u00e9(\"}",
         "phase": "validation",
         "requirement": "REQ-0827",
         "spec_paths": [

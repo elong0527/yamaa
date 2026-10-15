@@ -2095,7 +2095,7 @@
   {
     "case": "length_held",
     "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
-    "input": "ID,V\na,é🙂\nb,a\n",
+    "input": "ID,V\na,\u00e9\ud83d\ude42\nb,a\n",
     "expected": {
       "artifacts": [
         {
@@ -2105,12 +2105,12 @@
             "V",
             "LATER"
           ],
-          "content": "ID,V,LATER\na,é🙂,2\nb,a,2\n",
+          "content": "ID,V,LATER\na,\u00e9\ud83d\ude42,2\nb,a,2\n",
           "name": "result",
           "profile": "csv",
           "records": [
             "ID,V,LATER",
-            "a,é🙂,2",
+            "a,\u00e9\ud83d\ude42,2",
             "b,a,2"
           ],
           "row_count": 2,
@@ -2165,7 +2165,7 @@
               },
               {
                 "type": "str",
-                "value": "é🙂"
+                "value": "\u00e9\ud83d\ude42"
               }
             ],
             [
@@ -2201,7 +2201,7 @@
               },
               {
                 "type": "str",
-                "value": "é🙂"
+                "value": "\u00e9\ud83d\ude42"
               },
               {
                 "type": "int",
@@ -2269,12 +2269,12 @@
         }
       ]
     },
-    "artifact": "ID,V,LATER\na,é🙂,2\nb,a,2\n"
+    "artifact": "ID,V,LATER\na,\u00e9\ud83d\ude42,2\nb,a,2\n"
   },
   {
     "case": "length_failed",
     "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
-    "input": "ID,V\na,é🙂x\nb,abcd\n",
+    "input": "ID,V\na,\u00e9\ud83d\ude42x\nb,abcd\n",
     "expected": {
       "artifacts": [],
       "backend": "rust",
@@ -2367,7 +2367,7 @@
               },
               {
                 "type": "str",
-                "value": "é🙂x"
+                "value": "\u00e9\ud83d\ude42x"
               }
             ],
             [
@@ -2464,7 +2464,7 @@
   {
     "case": "length_missing",
     "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"max_length\": {\"max\": 2, \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
-    "input": "ID,V\na,é🙂\nb,\n",
+    "input": "ID,V\na,\u00e9\ud83d\ude42\nb,\n",
     "expected": {
       "artifacts": [
         {
@@ -2474,12 +2474,12 @@
             "V",
             "LATER"
           ],
-          "content": "ID,V,LATER\na,é🙂,2\nb,,2\n",
+          "content": "ID,V,LATER\na,\u00e9\ud83d\ude42,2\nb,,2\n",
           "name": "result",
           "profile": "csv",
           "records": [
             "ID,V,LATER",
-            "a,é🙂,2",
+            "a,\u00e9\ud83d\ude42,2",
             "b,,2"
           ],
           "row_count": 2,
@@ -2534,7 +2534,7 @@
               },
               {
                 "type": "str",
-                "value": "é🙂"
+                "value": "\u00e9\ud83d\ude42"
               }
             ],
             [
@@ -2570,7 +2570,7 @@
               },
               {
                 "type": "str",
-                "value": "é🙂"
+                "value": "\u00e9\ud83d\ude42"
               },
               {
                 "type": "int",
@@ -2638,7 +2638,7 @@
         }
       ]
     },
-    "artifact": "ID,V,LATER\na,é🙂,2\nb,,2\n"
+    "artifact": "ID,V,LATER\na,\u00e9\ud83d\ude42,2\nb,,2\n"
   },
   {
     "case": "length_empty_zero",

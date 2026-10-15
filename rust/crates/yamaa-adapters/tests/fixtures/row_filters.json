@@ -1834,7 +1834,7 @@
   {
     "case": "unicode",
     "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: str}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: str, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V = '\\U0001f642'\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
-    "input": "ID,V\na,é\nb,🙂\n",
+    "input": "ID,V\na,\u00e9\nb,\ud83d\ude42\n",
     "expected": {
       "artifacts": [
         {
@@ -1844,12 +1844,12 @@
             "V",
             "LATER"
           ],
-          "content": "ID,V,LATER\nb,🙂,2\n",
+          "content": "ID,V,LATER\nb,\ud83d\ude42,2\n",
           "name": "result",
           "profile": "csv",
           "records": [
             "ID,V,LATER",
-            "b,🙂,2"
+            "b,\ud83d\ude42,2"
           ],
           "row_count": 1,
           "types": [
@@ -1903,7 +1903,7 @@
               },
               {
                 "type": "str",
-                "value": "é"
+                "value": "\u00e9"
               }
             ],
             [
@@ -1913,7 +1913,7 @@
               },
               {
                 "type": "str",
-                "value": "🙂"
+                "value": "\ud83d\ude42"
               }
             ]
           ],
@@ -1939,7 +1939,7 @@
               },
               {
                 "type": "str",
-                "value": "🙂"
+                "value": "\ud83d\ude42"
               },
               {
                 "type": "int",
@@ -1959,7 +1959,7 @@
       "unsupported": [],
       "verifications": []
     },
-    "artifact": "ID,V,LATER\nb,🙂,2\n"
+    "artifact": "ID,V,LATER\nb,\ud83d\ude42,2\n"
   },
   {
     "case": "converted",

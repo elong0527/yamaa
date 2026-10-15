@@ -1933,7 +1933,7 @@
   {
     "case": "count_utf8",
     "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: str}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: {expr: 'COUNT(SRC.V)'}}\n",
-    "input": "ID,V\na,é\na,🙂\n",
+    "input": "ID,V\na,\u00e9\na,\ud83d\ude42\n",
     "expected": {
       "artifacts": [
         {
@@ -2002,7 +2002,7 @@
               },
               {
                 "type": "str",
-                "value": "é"
+                "value": "\u00e9"
               }
             ],
             [
@@ -2012,7 +2012,7 @@
               },
               {
                 "type": "str",
-                "value": "🙂"
+                "value": "\ud83d\ude42"
               }
             ]
           ],

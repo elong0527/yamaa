@@ -17,12 +17,12 @@
             "MISSING",
             "EMPTY"
           ],
-          "content": "ID,TEXT,MAX,MIN,FLOAT,DATE,TIME,MISSING,EMPTY\n1,\"λ,\"\"quoted\"\"\",9223372036854775807,-9223372036854775808,1.5,2026-01-02,2026-01-02T03:04:05,,\"\"\n",
+          "content": "ID,TEXT,MAX,MIN,FLOAT,DATE,TIME,MISSING,EMPTY\n1,\"\u03bb,\"\"quoted\"\"\",9223372036854775807,-9223372036854775808,1.5,2026-01-02,2026-01-02T03:04:05,,\"\"\n",
           "name": "result",
           "profile": "csv",
           "records": [
             "ID,TEXT,MAX,MIN,FLOAT,DATE,TIME,MISSING,EMPTY",
-            "1,\"λ,\"\"quoted\"\"\",9223372036854775807,-9223372036854775808,1.5,2026-01-02,2026-01-02T03:04:05,,\"\""
+            "1,\"\u03bb,\"\"quoted\"\"\",9223372036854775807,-9223372036854775808,1.5,2026-01-02,2026-01-02T03:04:05,,\"\""
           ],
           "row_count": 1,
           "types": [
@@ -108,7 +108,7 @@
               },
               {
                 "type": "str",
-                "value": "λ,\"quoted\""
+                "value": "\u03bb,\"quoted\""
               },
               {
                 "type": "int",
@@ -158,7 +158,7 @@
       "unsupported": [],
       "verifications": []
     },
-    "output": "ID,TEXT,MAX,MIN,FLOAT,DATE,TIME,MISSING,EMPTY\n1,\"λ,\"\"quoted\"\"\",9223372036854775807,-9223372036854775808,1.5,2026-01-02,2026-01-02T03:04:05,,\"\"\n"
+    "output": "ID,TEXT,MAX,MIN,FLOAT,DATE,TIME,MISSING,EMPTY\n1,\"\u03bb,\"\"quoted\"\"\",9223372036854775807,-9223372036854775808,1.5,2026-01-02,2026-01-02T03:04:05,,\"\"\n"
   },
   {
     "case": "boolean",
