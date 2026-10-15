@@ -86,7 +86,7 @@ impl Define {
         result
     }
     fn refuse(&mut self, failure: Failure) {
-        self.issues = issues(&failure, self.host);
+        self.issues = crate::issue_rows::collect(issues(&failure, self.host));
         self.failure = Some(failure);
     }
     pub fn issues(&self) -> &[Issue] {

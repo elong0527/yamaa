@@ -5,6 +5,47 @@ use std::{
 };
 static NEXT: AtomicU64 = AtomicU64::new(0);
 #[test]
+fn public_define_issue_prefix_keeps_complete_raw_metadata_and_diagnostics_in_both_hosts() {
+    use yamaa_core::{application_issue, limits::Limits};
+    for host in [Language::Python, Language::R] {
+        for length in [Limits::FINDINGS, Limits::FINDINGS + 1] {
+            let diagnostics = (0..length)
+                .map(|index| {
+                    let mut finding = application_issue::rejected("define", "authored_failure");
+                    finding.spec_paths = vec![format!("datasets.D{index}.artifact")];
+                    finding
+                })
+                .collect::<Vec<_>>();
+            let metadata = diagnostics
+                .iter()
+                .map(|finding| Finding {
+                    code: finding.code,
+                    path: finding.spec_paths[0].clone(),
+                    context: finding.context.clone(),
+                })
+                .collect();
+            for failure in [
+                Failure::Metadata(metadata),
+                Failure::Diagnostic(diagnostics),
+            ] {
+                let mut result = Define::prepare("", "sdtm", None, "0.4.0", host);
+                result.refuse(failure);
+                assert_eq!(result.issues().len(), Limits::FINDINGS);
+                for (index, issue) in result.issues().iter().enumerate() {
+                    assert_eq!(issue.spec_paths, [format!("datasets.D{index}.artifact")]);
+                }
+                let held = match result.failure().unwrap() {
+                    Failure::Metadata(findings) => findings.len(),
+                    Failure::Diagnostic(findings) => findings.len(),
+                    _ => panic!("original metadata or diagnostic owner must remain held"),
+                };
+                assert_eq!(held, length);
+            }
+        }
+    }
+}
+
+#[test]
 fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot_in_both_hosts() {
     let directory = std::env::temp_dir().join(format!(
         "yamaa-define-resource-change-{}-{}",
