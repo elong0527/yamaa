@@ -288,12 +288,14 @@ def _literal_form(document: Document) -> Iterator[Departure]:
                 and len(value.value) == 1
             ):
                 continue
-            literal_key, literal_value = value.value[0]
+            literal_key, _literal_value = value.value[0]
+            # REQ-1250 names the block form itself, whatever the literal
+            # holds: a collection value, or a scalar written on the line
+            # below `literal:`, parses to the same value as the flow
+            # spelling and is reported the same way.
             if (
                 isinstance(literal_key, yaml.ScalarNode)
                 and literal_key.value == "literal"
-                and isinstance(literal_value, yaml.ScalarNode)
-                and literal_value.start_mark.line == literal_key.start_mark.line
                 and key.start_mark.line < literal_key.start_mark.line
             ):
                 yield Departure(
