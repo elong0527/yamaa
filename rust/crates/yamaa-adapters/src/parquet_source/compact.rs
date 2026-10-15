@@ -9,94 +9,83 @@ pub(super) enum Error {
     Representation,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Value<'a> {
-    /// A selected field had a different wire shape. Keep its presence so a
-    /// later duplicate can replace it, without retaining the irrelevant value.
-    TypeMismatch,
     Bool(bool),
     Integer(i64),
     Double(&'a [u8]),
     Binary(&'a [u8]),
     Uuid(&'a [u8]),
-    Struct(Vec<(i16, Value<'a>)>),
-    Sequence(Vec<Value<'a>>),
-    Map(Vec<(Value<'a>, Value<'a>)>),
-}
-
-#[derive(Clone, Copy)]
-enum Fields {
-    Metadata,
-    SchemaElement,
-    RowGroup,
-    ColumnChunk,
-    ColumnMetadata,
-    Page,
-    DataV1,
-    Dictionary,
-    DataV2,
-}
-
-#[derive(Clone, Copy)]
-enum Projection {
-    #[cfg(test)]
-    All,
-    Skip,
-    Integer,
-    Bool,
-    Struct(Fields),
-    StructList(Fields),
-}
-
-impl Fields {
-    fn field(self, id: i16) -> Projection {
-        use Projection::{Bool, Integer, Skip, Struct, StructList};
-        match (self, id) {
-            (Self::Metadata, 2) => StructList(Self::SchemaElement),
-            (Self::Metadata, 3) => Integer,
-            (Self::Metadata, 4) => StructList(Self::RowGroup),
-            (Self::SchemaElement, 1 | 5) => Integer,
-            (Self::RowGroup, 1) => StructList(Self::ColumnChunk),
-            (Self::RowGroup, 3) => Integer,
-            (Self::ColumnChunk, 3) => Struct(Self::ColumnMetadata),
-            (Self::ColumnMetadata, 4 | 7 | 9 | 11) => Integer,
-            (Self::Page, 1..=3) => Integer,
-            (Self::Page, 5) => Struct(Self::DataV1),
-            (Self::Page, 7) => Struct(Self::Dictionary),
-            (Self::Page, 8) => Struct(Self::DataV2),
-            (Self::DataV1, 1..=4) | (Self::Dictionary, 1 | 2) => Integer,
-            (Self::DataV2, 1 | 2 | 4..=6) => Integer,
-            (Self::DataV2, 7) => Bool,
-            _ => Skip,
-        }
-    }
-}
-
-impl Projection {
-    fn accepts(self, kind: u8) -> bool {
-        match self {
-            #[cfg(test)]
-            Self::All => true,
-            Self::Skip => true,
-            Self::Integer => matches!(kind, 3..=6),
-            Self::Bool => matches!(kind, 1 | 2),
-            Self::Struct(_) => kind == 12,
-            Self::StructList(_) => matches!(kind, 9 | 10),
-        }
-    }
+    Struct(&'a [u8]),
+    Sequence(Sequence<'a>),
+    Map(&'a [u8]),
 }
 
 impl<'a> Value<'a> {
     /// Like the downstream decoder, the last occurrence supplies a field value.
-    pub(super) fn field(&self, id: i16) -> Option<&Self> {
-        let Self::Struct(fields) = self else {
-            return None;
+    pub(super) fn field(&self, id: i16) -> Result<Option<Self>, Error> {
+        let Self::Struct(bytes) = self else {
+            return Ok(None);
         };
-        fields
-            .iter()
-            .rev()
-            .find(|(key, _)| *key == id)
-            .map(|(_, value)| value)
+        let mut reader = Reader { bytes, position: 0 };
+        let mut previous = 0;
+        let mut found = None;
+        while let Some((key, value)) = reader.field(previous, 0)? {
+            if key == id {
+                found = Some(value);
+            }
+            previous = key;
+        }
+        Ok(found)
+    }
+}
+
+/// Child nodes borrow their validated wire ranges, including unknown fields.
+/// Neither a list element nor a map pair allocates a retained metadata node.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Sequence<'a> {
+    bytes: &'a [u8],
+    kind: u8,
+    count: usize,
+}
+
+impl Sequence<'_> {
+    pub(super) fn len(self) -> usize {
+        self.count
+    }
+}
+
+pub(super) struct Elements<'a> {
+    reader: Reader<'a>,
+    kind: u8,
+    remaining: usize,
+}
+
+impl<'a> IntoIterator for Sequence<'a> {
+    type Item = Result<Value<'a>, Error>;
+    type IntoIter = Elements<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Elements {
+            reader: Reader {
+                bytes: self.bytes,
+                position: 0,
+            },
+            kind: self.kind,
+            remaining: self.count,
+        }
+    }
+}
+
+impl<'a> Iterator for Elements<'a> {
+    type Item = Result<Value<'a>, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
+        Some(self.reader.element(self.kind, 0))
     }
 }
 
@@ -163,37 +152,40 @@ impl<'a> Reader<'a> {
         Ok(())
     }
 
-    fn element(
-        &mut self,
-        kind: u8,
-        depth: usize,
-        projection: Projection,
-    ) -> Result<Option<Value<'a>>, Error> {
-        let kind = match kind {
-            1 => match self.byte()? {
-                boolean @ (1 | 2) => Ok(boolean),
+    fn element(&mut self, kind: u8, depth: usize) -> Result<Value<'a>, Error> {
+        if kind == 1 {
+            Self::nesting(depth)?;
+            return match self.byte()? {
+                1 => Ok(Value::Bool(true)),
+                2 => Ok(Value::Bool(false)),
                 _ => Err(Error::Malformed),
-            }?,
-            0 | 2 => return Err(Error::Malformed),
-            kind => kind,
-        };
-        self.value(kind, depth, projection)
+            };
+        }
+        if kind == 0 || kind == 2 {
+            return Err(Error::Malformed);
+        }
+        self.value(kind, depth)
     }
 
-    fn value(
-        &mut self,
-        kind: u8,
-        depth: usize,
-        projection: Projection,
-    ) -> Result<Option<Value<'a>>, Error> {
-        Self::nesting(depth)?;
-        let mismatch = !projection.accepts(kind);
-        let projection = if mismatch {
-            Projection::Skip
+    fn field(&mut self, previous: i16, depth: usize) -> Result<Option<(i16, Value<'a>)>, Error> {
+        let header = self.byte()?;
+        let kind = header & 15;
+        if kind == 0 {
+            return Ok(None);
+        }
+        let id = if header >> 4 == 0 {
+            i16::try_from(self.integer()?).map_err(|_| Error::Malformed)?
         } else {
-            projection
+            previous
+                .checked_add(i16::from(header >> 4))
+                .ok_or(Error::Malformed)?
         };
-        let value = match kind {
+        Ok(Some((id, self.value(kind, depth)?)))
+    }
+
+    fn value(&mut self, kind: u8, depth: usize) -> Result<Value<'a>, Error> {
+        Self::nesting(depth)?;
+        Ok(match kind {
             1 => Value::Bool(true),
             2 => Value::Bool(false),
             3 => Value::Integer(i64::from(self.byte()? as i8)),
@@ -222,124 +214,50 @@ impl<'a> Reader<'a> {
                     return Err(Error::Malformed);
                 }
                 self.collection(count)?;
-                let wrong_element =
-                    matches!(projection, Projection::StructList(_)) && count != 0 && kind != 12;
-                let child_projection = match projection {
-                    Projection::StructList(fields) if !wrong_element => Projection::Struct(fields),
-                    #[cfg(test)]
-                    Projection::All => Projection::All,
-                    _ => Projection::Skip,
-                };
-                let mut values = Vec::new();
+                let start = self.position;
                 for _ in 0..count {
-                    if let Some(value) = self.element(kind, depth + 1, child_projection)? {
-                        values.push(value);
-                    }
+                    self.element(kind, depth + 1)?;
                 }
-                if wrong_element {
-                    Value::TypeMismatch
-                } else {
-                    Value::Sequence(values)
-                }
+                Value::Sequence(Sequence {
+                    bytes: &self.bytes[start..self.position],
+                    kind,
+                    count,
+                })
             }
             11 => {
+                let start = self.position;
                 let count = self.length()?;
-                let mut values = Vec::new();
                 if count != 0 {
                     let kinds = self.byte()?;
                     self.collection(count.checked_mul(2).ok_or(Error::Malformed)?)?;
-                    #[cfg(not(test))]
-                    let child_projection = Projection::Skip;
-                    #[cfg(test)]
-                    let child_projection = if matches!(projection, Projection::All) {
-                        Projection::All
-                    } else {
-                        Projection::Skip
-                    };
                     for _ in 0..count {
-                        let key = self.element(kinds >> 4, depth + 1, child_projection)?;
-                        let value = self.element(kinds & 15, depth + 1, child_projection)?;
-                        if let (Some(key), Some(value)) = (key, value) {
-                            values.push((key, value));
-                        }
+                        self.element(kinds >> 4, depth + 1)?;
+                        self.element(kinds & 15, depth + 1)?;
                     }
                 }
-                Value::Map(values)
+                Value::Map(&self.bytes[start..self.position])
             }
             12 => {
-                let mut fields = Vec::new();
+                let start = self.position;
                 let mut previous = 0i16;
-                loop {
-                    let header = self.byte()?;
-                    let kind = header & 15;
-                    if kind == 0 {
-                        break;
-                    }
-                    let id = if header >> 4 == 0 {
-                        i16::try_from(self.integer()?).map_err(|_| Error::Malformed)?
-                    } else {
-                        previous
-                            .checked_add(i16::from(header >> 4))
-                            .ok_or(Error::Malformed)?
-                    };
-                    let child_projection = match projection {
-                        Projection::Struct(layout) => layout.field(id),
-                        #[cfg(test)]
-                        Projection::All => Projection::All,
-                        _ => Projection::Skip,
-                    };
-                    if let Some(value) = self.value(kind, depth + 1, child_projection)? {
-                        // Only the last duplicate is read. Projected layouts
-                        // retain a fixed set of fields, not overwritten trees.
-                        if matches!(projection, Projection::Struct(_)) {
-                            if let Some((_, previous)) =
-                                fields.iter_mut().find(|(key, _)| *key == id)
-                            {
-                                *previous = value;
-                            } else {
-                                fields.push((id, value));
-                            }
-                        } else {
-                            fields.push((id, value));
-                        }
-                    }
+                while let Some((id, _)) = self.field(previous, depth + 1)? {
                     previous = id;
                 }
-                Value::Struct(fields)
+                Value::Struct(&self.bytes[start..self.position])
             }
             13 => Value::Uuid(self.take(16)?),
             _ => return Err(Error::Malformed),
-        };
-        Ok(if mismatch {
-            Some(Value::TypeMismatch)
-        } else if matches!(projection, Projection::Skip) {
-            None
-        } else {
-            Some(value)
         })
     }
 }
 
 /// Parse one struct prefix; return its exact extent for page-body slicing.
-/// Binary payloads borrow the held input and collection counts must fit it.
-/// Unselected fields use this same validation without retaining their values.
-fn parse_projected(bytes: &[u8], projection: Projection) -> Result<(Value<'_>, usize), Error> {
+/// Every container and binary payload borrows the held input. Validate all
+/// children, including ignored metadata, without retaining a node per child.
+pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
     let mut reader = Reader { bytes, position: 0 };
-    let value = reader.value(12, 0, projection)?.ok_or(Error::Malformed)?;
+    let value = reader.value(12, 0)?;
     Ok((value, reader.position))
-}
-
-pub(super) fn metadata(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
-    parse_projected(bytes, Projection::Struct(Fields::Metadata))
-}
-
-pub(super) fn page(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
-    parse_projected(bytes, Projection::Struct(Fields::Page))
-}
-
-#[cfg(test)]
-fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
-    parse_projected(bytes, Projection::All)
 }
 
 #[cfg(test)]
@@ -355,89 +273,82 @@ mod tests {
     }
 
     #[test]
-    fn ignored_field_fanout_is_consumed_without_retaining_its_tree() {
-        // schema=[{num_children:0}], rows=7, row_groups=[]; unknown field 15
-        // contains many structs, each with a bool list and a byte->struct map.
-        let mut bytes = vec![0x29, 0x1c, 0x55, 0, 0, 0x16, 14, 0x19, 0x0c, 0xb9, 0xfc];
+    fn known_schema_and_group_lists_borrow_empty_elements_before_admission() {
+        let mut bytes = vec![0x29, 0xfc]; // schema: a wide struct list
         unsigned(65_536, &mut bytes);
+        let schema_start = bytes.len();
+        bytes.resize(bytes.len() + 65_536, 0);
+        bytes.extend([0x29, 0xfc]); // row_groups: another wide struct list
+        unsigned(65_536, &mut bytes);
+        let groups_start = bytes.len();
+        bytes.resize(bytes.len() + 65_536, 0);
+        bytes.push(0);
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len());
+        for (id, start) in [(2, schema_start), (4, groups_start)] {
+            let Some(Value::Sequence(values)) = root.field(id).unwrap() else {
+                panic!()
+            };
+            assert_eq!(values.len(), 65_536);
+            assert_eq!(values.bytes.as_ptr(), bytes[start..].as_ptr());
+            assert_eq!(values.bytes.len(), 65_536);
+        }
+    }
+
+    #[test]
+    fn mixed_nested_unknown_fanout_stays_borrowed_and_keeps_later_fields() {
+        // Unknown field 15 contains structs with a bool list and byte->struct
+        // map. An explicit duplicate of the row field follows the collection.
+        let mut bytes = vec![0x36, 14, 0xc9, 0xfc];
+        unsigned(65_536, &mut bytes);
+        let elements = bytes.len();
         for _ in 0..65_536 {
             bytes.extend([0x19, 0x21, 1, 2, 0x1b, 1, 0x3c, 0xff, 0, 0]);
         }
-        // The known field after the skipped collection still uses its explicit
-        // ID, replacing the original row count rather than adding a new field.
         bytes.extend([0x06, 6, 18, 0]);
-        let (root, used) = metadata(&bytes).unwrap();
+        let (root, used) = parse(&bytes).unwrap();
         assert_eq!(used, bytes.len());
-        assert_eq!(root.field(3), Some(&Value::Integer(9)));
-        assert!(root.field(15).is_none());
-        let Value::Struct(fields) = root else {
+        assert_eq!(root.field(3).unwrap(), Some(Value::Integer(9)));
+        let Some(Value::Sequence(values)) = root.field(15).unwrap() else {
             panic!()
         };
-        assert_eq!(fields.len(), 3);
+        assert_eq!(values.bytes.as_ptr(), bytes[elements..].as_ptr());
+        assert_eq!(values.len(), 65_536);
     }
 
     #[test]
-    fn wrong_selected_container_shapes_keep_only_a_type_marker() {
-        // schema is a bool->bool map, rows is a bool list, and row_groups is a
-        // bool list. Every byte is well formed, but none has its selected shape.
-        let mut bytes = vec![0x2b];
-        unsigned(65_536, &mut bytes);
-        bytes.push(0x11);
-        for _ in 0..65_536 {
-            bytes.extend([1, 2]);
-        }
-        for _ in 0..2 {
-            bytes.extend([0x19, 0xf1]);
-            unsigned(65_536, &mut bytes);
-            bytes.resize(bytes.len() + 65_536, 1);
-        }
-        bytes.push(0);
-        let (root, used) = metadata(&bytes).unwrap();
+    fn duplicates_keep_the_last_value_even_when_its_wire_shape_changes() {
+        let bytes = [0x39, 0x31, 1, 2, 1, 0x06, 6, 18, 0];
+        let (root, used) = parse(&bytes).unwrap();
         assert_eq!(used, bytes.len());
-        for field in [2, 3, 4] {
-            assert_eq!(root.field(field), Some(&Value::TypeMismatch));
-        }
-        let Value::Struct(fields) = root else {
+        assert_eq!(root.field(3).unwrap(), Some(Value::Integer(9)));
+
+        let bytes = [0x36, 18, 0x09, 6, 0x31, 1, 2, 1, 0];
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len());
+        let Some(Value::Sequence(values)) = root.field(3).unwrap() else {
             panic!()
         };
-        assert_eq!(fields.len(), 3);
-    }
-
-    #[test]
-    fn projected_duplicates_keep_the_last_value_and_wrong_type_presence() {
-        for (bytes, expected) in [
-            // A wrong-type selected value may be superseded by a valid one.
-            (vec![0x39, 0x31, 1, 2, 1, 0x06, 6, 18, 0], Value::Integer(9)),
-            // A final wrong-type value still shadows the earlier valid value.
-            (
-                vec![0x36, 18, 0x09, 6, 0x31, 1, 2, 1, 0],
-                Value::TypeMismatch,
-            ),
-        ] {
-            let (root, used) = metadata(&bytes).unwrap();
-            assert_eq!(used, bytes.len());
-            assert_eq!(root.field(3), Some(&expected));
-            let Value::Struct(fields) = root else {
-                panic!()
-            };
-            assert_eq!(fields.len(), 1);
-        }
-        // A child mismatch also must not reject a schema list that is replaced
-        // by a later duplicate of its ancestor field.
-        let bytes = [0x29, 0x1c, 0x59, 0x11, 1, 0, 0x09, 4, 0x0c, 0];
-        let (root, used) = metadata(&bytes).unwrap();
-        assert_eq!(used, bytes.len());
-        assert_eq!(root.field(2), Some(&Value::Sequence(vec![])));
-        // Invalid wire data remains invalid even if a later duplicate would
-        // otherwise replace it: the skipped bool element must still be read.
         assert_eq!(
-            metadata(&[0x39, 0x11, 3, 0x06, 6, 18, 0]),
+            values.into_iter().collect::<Result<Vec<_>, _>>().unwrap(),
+            [Value::Bool(true), Value::Bool(false), Value::Bool(true)]
+        );
+        // A child with an unexpected shape can be superseded together with its
+        // ancestor. Invalid wire data must still fail before that replacement.
+        let bytes = [0x29, 0x1c, 0x59, 0x11, 1, 0, 0x09, 4, 0x0c, 0];
+        let (root, _) = parse(&bytes).unwrap();
+        let Some(Value::Sequence(values)) = root.field(2).unwrap() else {
+            panic!()
+        };
+        assert_eq!(values.len(), 0);
+        assert_eq!(
+            parse(&[0x39, 0x11, 3, 0x06, 6, 18, 0]),
             Err(Error::Malformed)
         );
     }
 
     #[test]
-    fn skipped_fields_still_validate_lengths_scalars_bool_elements_and_depth() {
+    fn ignored_fields_still_validate_lengths_scalars_bool_elements_and_depth() {
         for bytes in [
             vec![0x98, 5, 1],                            // truncated binary
             vec![0x99, 0x21, 1, 3, 0],                   // invalid bool list element
@@ -447,8 +358,7 @@ mod tests {
             vec![0x99, 0xf3, 0x80, 0x80, 1, 0],          // impossible collection count
             vec![0x95, 0x80, 0x80, 0x80, 0x80, 0x10, 0], // i32 overflow
         ] {
-            assert_eq!(metadata(&bytes), Err(Error::Malformed), "{bytes:?}");
-            assert_eq!(page(&bytes), Err(Error::Malformed), "{bytes:?}");
+            assert_eq!(parse(&bytes), Err(Error::Malformed), "{bytes:?}");
         }
         for (depth, accepted) in [
             (yamaa_core::limits::Limits::SEMANTIC_DEPTH, true),
@@ -457,56 +367,68 @@ mod tests {
             let mut bytes = vec![0x9c]; // unknown field 9, nested struct
             bytes.extend(vec![0x1c; depth - 1]);
             bytes.extend(vec![0; depth + 1]);
-            assert_eq!(metadata(&bytes).is_ok(), accepted);
-            assert_eq!(page(&bytes).is_ok(), accepted);
+            assert_eq!(parse(&bytes).is_ok(), accepted);
         }
     }
 
     #[test]
-    fn ordinary_footer_and_page_projections_keep_every_framing_field() {
-        // Two schema nodes (message + INT64 X), one row, one chunk. Unknown
-        // names/version/type details are consumed; framing's integers remain.
+    fn ordinary_footer_and_page_fields_keep_metadata_and_exact_body_extent() {
         let footer = [
             0x15, 2, 0x19, 0x2c, 0x48, 1, b's', 0x15, 2, 0, 0x15, 4, 0x25, 0, 0x18, 1, b'X', 0,
             0x16, 2, 0x19, 0x1c, 0x19, 0x1c, 0x3c, 0x15, 4, 0x35, 0, 0x36, 8, 0x26, 8, 0x26, 8, 0,
             0, 0x26, 2, 0, 0,
         ];
-        let (root, used) = metadata(&footer).unwrap();
+        let (root, used) = parse(&footer).unwrap();
         assert_eq!(used, footer.len());
-        assert!(root.field(1).is_none());
-        assert_eq!(root.field(3), Some(&Value::Integer(1)));
-        let Some(Value::Sequence(schema)) = root.field(2) else {
+        assert_eq!(root.field(1).unwrap(), Some(Value::Integer(1)));
+        assert_eq!(root.field(3).unwrap(), Some(Value::Integer(1)));
+        let Some(Value::Sequence(schema)) = root.field(2).unwrap() else {
             panic!()
         };
-        assert_eq!(schema[0].field(5), Some(&Value::Integer(1)));
-        assert_eq!(schema[1].field(1), Some(&Value::Integer(2)));
-        let Some(Value::Sequence(groups)) = root.field(4) else {
+        let mut schema = schema.into_iter();
+        assert_eq!(
+            schema.next().unwrap().unwrap().field(5).unwrap(),
+            Some(Value::Integer(1))
+        );
+        assert_eq!(
+            schema.next().unwrap().unwrap().field(1).unwrap(),
+            Some(Value::Integer(2))
+        );
+        let Some(Value::Sequence(groups)) = root.field(4).unwrap() else {
             panic!()
         };
-        assert_eq!(groups[0].field(3), Some(&Value::Integer(1)));
-        let Some(Value::Sequence(chunks)) = groups[0].field(1) else {
+        let group = groups.into_iter().next().unwrap().unwrap();
+        assert_eq!(group.field(3).unwrap(), Some(Value::Integer(1)));
+        let Some(Value::Sequence(chunks)) = group.field(1).unwrap() else {
             panic!()
         };
-        let chunk = chunks[0].field(3).unwrap();
+        let chunk = chunks
+            .into_iter()
+            .next()
+            .unwrap()
+            .unwrap()
+            .field(3)
+            .unwrap()
+            .unwrap();
         for (id, expected) in [(4, 0), (7, 4), (9, 4), (11, 4)] {
-            assert_eq!(chunk.field(id), Some(&Value::Integer(expected)));
+            assert_eq!(chunk.field(id).unwrap(), Some(Value::Integer(expected)));
         }
 
         let bytes = [
             0x15, 0, 0x15, 8, 0x15, 8, 0x2c, 0x15, 2, 0x15, 0, 0x15, 6, 0x15, 6, 0x1c, 0, 0, 0x4b,
             0, 0, 0xaa, 0xbb, 0xcc, 0xdd,
         ];
-        let (root, used) = page(&bytes).unwrap();
+        let (root, used) = parse(&bytes).unwrap();
         assert_eq!(used, bytes.len() - 4);
-        assert_eq!(root.field(1), Some(&Value::Integer(0)));
-        assert_eq!(root.field(2), Some(&Value::Integer(4)));
-        assert_eq!(root.field(3), Some(&Value::Integer(4)));
-        assert!(root.field(9).is_none());
-        let detail = root.field(5).unwrap();
+        assert_eq!(root.field(1).unwrap(), Some(Value::Integer(0)));
+        assert_eq!(root.field(2).unwrap(), Some(Value::Integer(4)));
+        assert_eq!(root.field(3).unwrap(), Some(Value::Integer(4)));
+        assert!(matches!(root.field(9).unwrap(), Some(Value::Map(_))));
+        let detail = root.field(5).unwrap().unwrap();
         for (id, expected) in [(1, 1), (2, 0), (3, 3), (4, 3)] {
-            assert_eq!(detail.field(id), Some(&Value::Integer(expected)));
+            assert_eq!(detail.field(id).unwrap(), Some(Value::Integer(expected)));
         }
-        assert!(detail.field(5).is_none());
+        assert!(matches!(detail.field(5).unwrap(), Some(Value::Struct(_))));
     }
 
     #[test]
@@ -519,28 +441,22 @@ mod tests {
         ];
         let (root, used) = parse(&data).unwrap();
         assert_eq!(used, 19);
-        assert_eq!(root.field(1), Some(&Value::Integer(150)));
-        assert_eq!(root.field(5), Some(&Value::Binary(&data[5..8])));
-        if let Some(Value::Binary(bytes)) = root.field(5) {
+        assert_eq!(root.field(1).unwrap(), Some(Value::Integer(150)));
+        assert_eq!(root.field(5).unwrap(), Some(Value::Binary(&data[5..8])));
+        if let Some(Value::Binary(bytes)) = root.field(5).unwrap() {
             assert_eq!(bytes.as_ptr(), data[5..].as_ptr());
         } else {
             panic!();
         }
-        assert_eq!(root.field(6), Some(&Value::Bool(false)));
+        assert_eq!(root.field(6).unwrap(), Some(Value::Bool(false)));
+        let Some(Value::Sequence(values)) = root.field(7).unwrap() else {
+            panic!();
+        };
         assert_eq!(
-            root.field(7),
-            Some(&Value::Sequence(vec![
-                Value::Bool(true),
-                Value::Bool(false)
-            ]))
+            values.into_iter().collect::<Result<Vec<_>, _>>().unwrap(),
+            vec![Value::Bool(true), Value::Bool(false)]
         );
-        assert_eq!(
-            root.field(8),
-            Some(&Value::Map(vec![(
-                Value::Integer(-1),
-                Value::Struct(vec![])
-            )]))
-        );
+        assert_eq!(root.field(8).unwrap(), Some(Value::Map(&data[14..18])));
     }
 
     #[test]
@@ -551,11 +467,64 @@ mod tests {
         ];
         let (value, used) = parse(&data).unwrap();
         assert_eq!(used, data.len());
-        let Value::Struct(fields) = &value else {
+        let Value::Struct(bytes) = value else {
             panic!();
         };
-        assert_eq!(fields[0], (1, Value::Integer(i64::MIN)));
-        assert_eq!(value.field(1), Some(&Value::Integer(i64::MAX)));
+        let mut fields = Reader { bytes, position: 0 };
+        assert_eq!(
+            fields.field(0, 0).unwrap(),
+            Some((1, Value::Integer(i64::MIN)))
+        );
+        assert_eq!(value.field(1).unwrap(), Some(Value::Integer(i64::MAX)));
+    }
+
+    #[test]
+    fn wide_unknown_collections_borrow_the_source_and_still_validate_every_child() {
+        fn unsigned(bytes: &mut Vec<u8>, mut value: usize) {
+            while value >= 128 {
+                bytes.push(value as u8 | 128);
+                value >>= 7;
+            }
+            bytes.push(value as u8);
+        }
+        const COUNT: usize = 65536;
+        for kind in [1, 12, 11] {
+            // Unknown field 99 is a bool list, empty-struct list, or bool map.
+            // A known field follows it, so lookup must consume the whole value.
+            let mut data = vec![if kind == 11 { 0x0b } else { 0x09 }, 0xc6, 1];
+            let value_start = data.len();
+            if kind != 11 {
+                data.push(0xf0 | kind);
+            }
+            unsigned(&mut data, COUNT);
+            if kind == 11 {
+                data.push(0x11);
+            }
+            let elements = data.len();
+            for _ in 0..COUNT {
+                match kind {
+                    1 => data.push(1),
+                    12 => data.push(0),
+                    11 => data.extend([1, 2]),
+                    _ => unreachable!(),
+                }
+            }
+            let last_element = data.len() - 1;
+            data.extend([0x06, 6, 14, 0]); // field 3 = i64 7; root STOP
+            let (root, used) = parse(&data).unwrap();
+            assert_eq!(used, data.len());
+            assert_eq!(root.field(3).unwrap(), Some(Value::Integer(7)));
+            match root.field(99).unwrap().unwrap() {
+                Value::Sequence(values) => {
+                    assert_eq!(values.len(), COUNT);
+                    assert_eq!(values.bytes.as_ptr(), data[elements..].as_ptr());
+                }
+                Value::Map(bytes) => assert_eq!(bytes.as_ptr(), data[value_start..].as_ptr()),
+                _ => panic!(),
+            }
+            data[last_element] = if kind == 12 { 0x1e } else { 3 };
+            assert_eq!(parse(&data), Err(Error::Malformed));
+        }
     }
 
     #[test]
