@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime
 
 MAX_PATHS = 300
 SHA = re.compile(r"[0-9a-f]{40}\Z")
@@ -24,6 +25,13 @@ MODES = {
     "120000": "blob",
     "160000": "commit",
 }
+REVIEW_RANGE = re.compile(
+    r"Reviewing files that changed from the base of the PR and between "
+    r"([0-9a-f]{40}) and ([0-9a-f]{40})\."
+)
+FINAL_MARKER = "final_review_risk_coverage:"
+FINAL_REVIEW = re.compile(r"<!-- final_review_risk_coverage:(.*?) -->", re.DOTALL)
+TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\Z")
 
 
 class CoverageError(ValueError):
@@ -153,7 +161,7 @@ class Objects:
     def get(self, endpoint):
         return self.api.request("GET", f"repos/{self.api.repository}/{endpoint}")
 
-    def tree_id(self, commit):
+    def commit(self, commit):
         if commit not in self.commits:
             data = self.get(f"git/commits/{commit}")
             require(
@@ -163,8 +171,23 @@ class Objects:
                 and object_id(data["tree"].get("sha")),
                 "invalid Git commit identity",
             )
-            self.commits[commit] = data["tree"]["sha"]
+            self.commits[commit] = data
         return self.commits[commit]
+
+    def tree_id(self, commit):
+        return self.commit(commit)["tree"]["sha"]
+
+    def parents(self, commit):
+        parents = self.commit(commit).get("parents")
+        require(
+            isinstance(parents, list)
+            and all(
+                isinstance(parent, dict) and object_id(parent.get("sha"))
+                for parent in parents
+            ),
+            "invalid Git commit parents",
+        )
+        return tuple(parent["sha"] for parent in parents)
 
     def leaves(self, commit):
         tree = self.tree_id(commit)
@@ -266,6 +289,121 @@ def check_files(api, pull, changes):
     require(paths == changes.keys(), "PR files do not cover the exact Git leaf delta")
 
 
+def check_binding(api, pull):
+    associated = api.pages(f"commits/{pull.head}/pulls")
+    require(
+        isinstance(associated, list)
+        and len(associated) == 1
+        and isinstance(associated[0], dict),
+        "review batch head must belong exclusively to its review PR",
+    )
+    data = associated[0]
+    base, head = data.get("base"), data.get("head")
+    require(
+        data.get("number") == pull.number
+        and data.get("state") == "open"
+        and isinstance(base, dict)
+        and isinstance(head, dict)
+        and base.get("sha") == pull.base
+        and base.get("ref") == pull.base_ref
+        and head.get("sha") == pull.head
+        and head.get("ref") == pull.head_ref
+        and same_repository(api, base.get("repo"))
+        and same_repository(api, head.get("repo")),
+        "review completion is associated with a different PR or base",
+    )
+    events = api.pages(f"issues/{pull.number}/timeline")
+    require(isinstance(events, list), "invalid review batch timeline")
+    committed = False
+    for event in events:
+        require(
+            isinstance(event, dict)
+            and isinstance(event.get("event"), str)
+            and event["event"],
+            "invalid review batch timeline event",
+        )
+        kind = event["event"]
+        require(
+            not kind.startswith(("base_ref_", "automatic_base_change_")),
+            "review batch base history changed; a fresh review PR and head are required",
+        )
+        committed |= kind == "committed" and event.get("sha") == pull.head
+    require(committed, "review batch timeline does not identify its head commit")
+
+
+def timestamp(value):
+    require(
+        isinstance(value, str) and TIMESTAMP.fullmatch(value),
+        "missing or invalid review evidence timestamp",
+    )
+    try:
+        return datetime.fromisoformat(value.removesuffix("Z") + "+00:00")
+    except ValueError as error:
+        raise CoverageError("invalid review evidence timestamp") from error
+
+
+def attest_completed_range(api, pull, status, authentic):
+    """Bind a completed status to this PR's exact reviewed base and head.
+
+    Commit statuses alone do not name a PR or base. Use the authentic app's
+    latest walkthrough and final reviewed footer as bounded-review evidence.
+    A status predating that walkthrough cannot complete its newer review.
+    """
+    completed_at = timestamp(status.get("created_at"))
+    candidates, identifiers = [], set()
+    for comment in api.pages(f"issues/{pull.number}/comments"):
+        require(isinstance(comment, dict), "invalid review walkthrough comment")
+        if not authentic(comment.get("user")):
+            continue
+        body = comment.get("body")
+        require(isinstance(body, str), "invalid authentic review comment body")
+        if FINAL_MARKER not in body and REVIEW_RANGE.search(body) is None:
+            continue
+        identity = comment.get("id")
+        require(
+            positive_integer(identity)
+            and identity not in identifiers
+            and comment.get("issue_url")
+            == f"https://api.github.com/repos/{api.repository}/issues/{pull.number}",
+            "invalid or repeated review walkthrough identity",
+        )
+        identifiers.add(identity)
+        created, updated = (
+            timestamp(comment.get("created_at")),
+            timestamp(comment.get("updated_at")),
+        )
+        require(created <= updated, "invalid review walkthrough chronology")
+        candidates.append((updated, identity, body))
+    require(
+        candidates,
+        "bounded review requires an authentic completed base/head walkthrough",
+    )
+    updated, _, body = max(candidates)
+    require(
+        updated <= completed_at, "completion predates the latest review walkthrough"
+    )
+    require(
+        REVIEW_RANGE.findall(body) == [(pull.base, pull.head)],
+        "completed review walkthrough names a different base or head",
+    )
+    markers = list(FINAL_REVIEW.finditer(body))
+    require(
+        body.count(FINAL_MARKER) == 1 and len(markers) == 1,
+        "bounded review needs one explicit final reviewed footer",
+    )
+    try:
+        footer = json.loads(markers[0][1])
+    except (ValueError, TypeError) as error:
+        raise CoverageError("invalid final reviewed footer JSON") from error
+    require(
+        isinstance(footer, dict)
+        and footer.get("sourceCommitId") == pull.head
+        and footer.get("coveredCommitId") == pull.head
+        and footer.get("kind") == "reviewed",
+        "final review footer does not cover the exact current head",
+    )
+
+
 @dataclass(frozen=True)
 class Coverage:
     target: Pull
@@ -277,6 +415,8 @@ class Coverage:
                 snapshot(api, pull.number, target=pull == self.target) == pull,
                 "review-coverage PR head, base or batch metadata changed",
             )
+            if pull != self.target:
+                check_binding(api, pull)
 
 
 def prove(api, number, head):
@@ -307,6 +447,11 @@ def prove(api, number, head):
             "review batch head does not have the complete target source tree",
         )
         require(
+            objects.parents(chunk.head) == (chunk.base,)
+            and objects.parents(chunk.base) == (head,),
+            "review batch must be one synthetic base child of the target and its single head child",
+        )
+        require(
             objects.merge_base(chunk.base, chunk.head) == chunk.base,
             "review batch base must be its actual review merge base",
         )
@@ -324,6 +469,7 @@ def prove(api, number, head):
             "review batch changes do not match original old/new Git leaves",
         )
         check_files(api, chunk, subset)
+        check_binding(api, chunk)
         seen.update(subset)
         chunks.append(chunk)
     require(seen == changes.keys(), "review batches leave original changes unreviewed")

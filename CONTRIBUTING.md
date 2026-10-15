@@ -125,12 +125,14 @@ separately; the workflow's token cannot administer repository rules.
 An atomic change above CodeRabbit's 300-file review limit can use bounded
 review-only PRs. Each review PR must have a distinct head commit with the
 **complete target head tree**, a synthetic base in this repository, and at
-most 300 changed raw leaf paths (a rename can consume two paths). Its base
-restores only the original old leaves for that batch, including file modes,
-symlinks and gitlinks. The batch deltas must cover the target's merge-base to
-head delta exactly once; unrelated changes, gaps and overlaps fail. Keep these
-review PRs open and do not merge them. List their actual numbers once in the
-target PR body as JSON, for example:
+most 300 changed raw leaf paths (a rename can consume two paths). Create the
+base as a single child of the target head, restoring only that batch's original
+old leaves, including file modes, symlinks and gitlinks. Its single head child
+restores the full target tree. The batch deltas must cover the target's
+merge-base to head delta exactly once; unrelated changes, gaps and overlaps
+fail. Each synthetic head must belong to only its review PR. Keep these PRs
+open, preserve their bases, and do not merge them. List their actual numbers
+once in the target PR body as JSON, for example:
 
 ```html
 <!-- yamaa-review-batches: [123, 124] -->
@@ -140,7 +142,12 @@ The gate permits this path only after the authentic target status explicitly
 says the diff exceeded the 300-file limit. Missing or pending target reviews
 cannot use it. Every batch still needs its own authentic `Review completed`
 status and resolved threads; target threads must also be resolved. The gate
-checks complete Git trees and paginated PR files through the authenticated API,
+also binds each completion to the authentic walkthrough's exact base/head
+range and final reviewed footer; the completion must follow the walkthrough's
+last update. Missing evidence, another PR sharing the head, or any recorded
+base retarget/force-push history requires a fresh review PR and head. This
+prevents a completion for an earlier base from covering a different diff.
+The gate checks complete Git trees and paginated PR files through the authenticated API,
 then rechecks all PR heads, bases, batch metadata and review statuses. It fails
 on truncated trees or incomplete evidence. Moving the target source requires
 new matching batch heads and fresh completed reviews. Batch metadata belongs

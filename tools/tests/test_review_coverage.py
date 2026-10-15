@@ -2,6 +2,7 @@
 
 import copy
 import unittest
+from unittest.mock import Mock
 
 from tools.ci import review_coverage as coverage
 from tools.ci import review_gate as gate
@@ -32,6 +33,7 @@ def review(
         "context": "CodeRabbit",
         "creator": dict(gate.REVIEW_CREATOR),
         "url": gate.status_url(REPOSITORY, head),
+        "created_at": "2026-10-15T14:16:05Z",
         **fields,
     }
 
@@ -125,6 +127,7 @@ class Payloads:
             ]
         }
         self.thread_versions = {}
+        self.timeline_versions, self.comment_versions = {}, {}
         self.add_commit(ORIGINAL, oid(2000), self.old)
         self.add_commit(
             MAIN,
@@ -149,8 +152,8 @@ class Payloads:
                 restored.pop(destination, None)
                 if index != 4:
                     restored[name] = self.old[name]
-            self.add_commit(base, identity, restored)
-            self.add_commit(head, TARGET_TREE, self.new)
+            self.add_commit(base, identity, restored, parents=(HEAD,))
+            self.add_commit(head, TARGET_TREE, self.new, parents=(base,))
             self.add_compare(base, head, base)
             self.pull_versions[number] = [
                 pull(
@@ -159,15 +162,37 @@ class Payloads:
             ]
             self.file_pages[number] = [self.files[index] for index in group]
             self.status_versions[head] = [[review(head)]]
+            self.timeline_versions[number] = [[{"event": "committed", "sha": head}]]
+            self.comment_versions[number] = [
+                [
+                    {
+                        "id": number + 1000,
+                        "user": dict(gate.REVIEW_CREATOR),
+                        "issue_url": f"https://api.github.com/repos/{REPOSITORY}/issues/{number}",
+                        "created_at": "2026-10-15T14:00:26Z",
+                        "updated_at": "2026-10-15T14:16:02Z",
+                        "body": (
+                            "Reviewing files that changed from the base of the PR and between "
+                            f"{base} and {head}.\n"
+                            '<!-- final_review_risk_coverage:{"sourceCommitId":"'
+                            + head
+                            + '","coveredCommitId":"'
+                            + head
+                            + '","kind":"reviewed"} -->'
+                        ),
+                    }
+                ]
+            ]
 
     @staticmethod
     def next(versions):
         return copy.deepcopy(versions.pop(0) if len(versions) > 1 else versions[0])
 
-    def add_commit(self, commit, identity, leaves):
+    def add_commit(self, commit, identity, leaves, *, parents=()):
         self.requests[f"git/commits/{commit}"] = {
             "sha": commit,
             "tree": {"sha": identity},
+            "parents": [{"sha": parent} for parent in parents],
         }
         self.requests[f"git/trees/{identity}?recursive=1"] = tree(identity, leaves)
 
@@ -194,6 +219,10 @@ class Payloads:
         self.history.append(("pages", endpoint))
         if endpoint.startswith("pulls/") and endpoint.endswith("/files"):
             return copy.deepcopy(self.file_pages[int(endpoint.split("/")[1])])
+        if endpoint.startswith("issues/") and endpoint.endswith("/timeline"):
+            return self.next(self.timeline_versions[int(endpoint.split("/")[1])])
+        if endpoint.startswith("issues/") and endpoint.endswith("/comments"):
+            return self.next(self.comment_versions[int(endpoint.split("/")[1])])
         if endpoint == "pulls?state=open&base=main":
             return [copy.deepcopy(self.pull_versions[NUMBER][0])]
         if endpoint.startswith("commits/") and endpoint.endswith("/pulls"):
@@ -278,7 +307,10 @@ class ExactTrees(unittest.TestCase):
         self.assertEqual([chunk.number for chunk in proof.chunks], list(BATCHES))
         self.assertEqual(proof.target.head, HEAD)
         proof.recheck(api)
-        self.assertEqual([row[1] for row in api.history[-3:]], [NUMBER, *BATCHES])
+        self.assertEqual(
+            [row[1] for row in api.history if row[0] == "pull"][-3:],
+            [NUMBER, *BATCHES],
+        )
         self.assertEqual(api.published, [])
 
     def test_300_raw_paths_pass_and_a_301_path_chunk_refuses_even_with_300_files(self):
@@ -357,7 +389,9 @@ class ExactTrees(unittest.TestCase):
             api.pull_versions[BATCHES[1]][0]["head"]["sha"] = replacement
             with (
                 self.subTest(replacement=replacement),
-                self.assertRaisesRegex(coverage.CoverageError, "distinct head commits"),
+                self.assertRaisesRegex(
+                    coverage.CoverageError, "distinct head commits|exclusively"
+                ),
             ):
                 coverage.prove(api, NUMBER, HEAD)
 
@@ -567,6 +601,225 @@ class CompletedBoundedReviews(unittest.TestCase):
         with self.assertRaises(gate.GateError):
             gate.verify(api, NUMBER, publish=True)
         self.assertEqual([v.state for v in api.published], ["pending", "failure"])
+
+
+class ReviewScope(unittest.TestCase):
+    def test_other_pr_associations_even_with_moved_heads_cannot_supply_the_status(self):
+        for final_only in [False, True]:
+            api = Payloads()
+            original_pages, reads = api.pages, []
+
+            def pages(endpoint):
+                rows = original_pages(endpoint)
+                if endpoint == f"commits/{CHUNK_HEADS[0]}/pulls":
+                    reads.append(endpoint)
+                    if not final_only or len(reads) == 2:
+                        other = copy.deepcopy(rows[0])
+                        other["number"] = 999
+                        other["state"] = "closed"
+                        other["head"]["sha"] = ORIGINAL
+                        rows.append(other)
+                return rows
+
+            api.pages = pages
+            with (
+                self.subTest(final_only=final_only),
+                self.assertRaisesRegex(gate.GateError, "exclusively"),
+            ):
+                gate.verify(api, NUMBER, publish=True)
+            self.assertNotIn("success", [v.state for v in api.published])
+
+    def test_the_synthetic_base_and_head_have_the_exact_immutable_parents(self):
+        for commit, parents in [
+            (CHUNK_HEADS[0], [HEAD]),
+            (CHUNK_BASES[0], [ORIGINAL]),
+            (CHUNK_HEADS[0], [CHUNK_BASES[0], HEAD]),
+            (CHUNK_BASES[0], []),
+        ]:
+            api = Payloads()
+            api.requests[f"git/commits/{commit}"]["parents"] = [
+                {"sha": parent} for parent in parents
+            ]
+            with (
+                self.subTest(commit=commit, parents=parents),
+                self.assertRaisesRegex(coverage.CoverageError, "synthetic base child"),
+            ):
+                coverage.prove(api, NUMBER, HEAD)
+
+    def test_any_base_retarget_force_push_or_automatic_change_requires_fresh_review_pr(
+        self,
+    ):
+        for event in [
+            "base_ref_changed",
+            "base_ref_force_pushed",
+            "automatic_base_change_succeeded",
+            "automatic_base_change_failed",
+        ]:
+            api = Payloads()
+            api.timeline_versions[BATCHES[0]][0].append({"event": event})
+            with (
+                self.subTest(event=event),
+                self.assertRaisesRegex(coverage.CoverageError, "base history changed"),
+            ):
+                coverage.prove(api, NUMBER, HEAD)
+
+    def test_missing_or_partial_timeline_is_not_evidence_of_an_unchanged_base(self):
+        for events in [[], [{"event": "committed", "sha": HEAD}], [{"event": None}]]:
+            api = Payloads()
+            api.timeline_versions[BATCHES[0]] = [events]
+            with self.subTest(events=events), self.assertRaises(coverage.CoverageError):
+                coverage.prove(api, NUMBER, HEAD)
+
+    def test_base_history_on_a_second_api_page_cannot_be_omitted(self):
+        source = Payloads()
+        chunk = coverage.snapshot(source, BATCHES[0], target=False)
+        api = object.__new__(gate.GitHub)
+        api.repository, api.repository_id = REPOSITORY, REPOSITORY_ID
+        first = [{"event": "committed", "sha": chunk.head}] + [
+            {"event": "commented"} for _ in range(99)
+        ]
+        api.request = Mock(
+            side_effect=[
+                [source.pull_versions[chunk.number][0]],
+                first,
+                [{"event": "base_ref_force_pushed"}],
+            ]
+        )
+        with self.assertRaisesRegex(coverage.CoverageError, "base history changed"):
+            coverage.check_binding(api, chunk)
+        self.assertTrue(
+            api.request.call_args_list[-1]
+            .args[1]
+            .endswith("timeline?per_page=100&page=2")
+        )
+
+    def test_authentic_walkthrough_after_100_other_comments_is_read(self):
+        source = Payloads()
+        chunk = coverage.snapshot(source, BATCHES[0], target=False)
+        api = object.__new__(gate.GitHub)
+        api.repository, api.repository_id = REPOSITORY, REPOSITORY_ID
+        api.request = Mock(
+            side_effect=[
+                [{"user": {"login": "untrusted"}} for _ in range(100)],
+                source.comment_versions[chunk.number][0],
+            ]
+        )
+        coverage.attest_completed_range(
+            api, chunk, source.status_versions[chunk.head][0][0], gate.authentic
+        )
+        self.assertTrue(
+            api.request.call_args_list[-1]
+            .args[1]
+            .endswith("comments?per_page=100&page=2")
+        )
+
+    def test_a_retarget_during_verification_invalidates_success(self):
+        api = Payloads()
+        initial = api.timeline_versions[BATCHES[0]][0]
+        api.timeline_versions[BATCHES[0]] = [
+            initial,
+            [*initial, {"event": "base_ref_changed"}],
+        ]
+        with self.assertRaisesRegex(gate.GateError, "base history changed"):
+            gate.verify(api, NUMBER, publish=True)
+        self.assertNotIn("success", [v.state for v in api.published])
+
+    def test_authentic_walkthrough_must_explicitly_name_this_base_and_head(self):
+        for mutation in [
+            "old-base",
+            "old-head",
+            "fake-user",
+            "missing",
+            "wrong-issue",
+            "no-footer",
+            "skipped-footer",
+        ]:
+            api = Payloads()
+            comment = api.comment_versions[BATCHES[0]][0][0]
+            if mutation == "old-base":
+                comment["body"] = comment["body"].replace(CHUNK_BASES[0], ORIGINAL)
+            elif mutation == "old-head":
+                comment["body"] = comment["body"].replace(CHUNK_HEADS[0], HEAD)
+            elif mutation == "fake-user":
+                comment["user"]["id"] = 1
+            elif mutation == "missing":
+                api.comment_versions[BATCHES[0]] = [[]]
+            elif mutation == "wrong-issue":
+                comment["issue_url"] = (
+                    f"https://api.github.com/repos/{REPOSITORY}/issues/999"
+                )
+            elif mutation == "no-footer":
+                comment["body"] = comment["body"].split("\n")[0]
+            else:
+                comment["body"] = comment["body"].replace('"reviewed"', '"skipped"')
+            with self.subTest(mutation=mutation), self.assertRaises(gate.GateError):
+                gate.verify(api, NUMBER, publish=True)
+            self.assertNotIn("success", [v.state for v in api.published])
+
+    def test_a_walkthrough_updated_after_completion_cannot_borrow_that_old_status(self):
+        api = Payloads()
+        api.comment_versions[BATCHES[0]][0][0]["updated_at"] = "2026-10-15T14:16:06Z"
+        with self.assertRaisesRegex(gate.GateError, "completion predates"):
+            gate.verify(api, NUMBER)
+
+    def test_latest_authentic_walkthrough_wins_instead_of_an_older_matching_range(self):
+        api = Payloads()
+        old = api.comment_versions[BATCHES[0]][0][0]
+        newer = copy.deepcopy(old)
+        newer["id"] += 100
+        newer["updated_at"] = "2026-10-15T14:16:04Z"
+        newer["body"] = newer["body"].replace(CHUNK_BASES[0], ORIGINAL)
+        api.comment_versions[BATCHES[0]][0].append(newer)
+        with self.assertRaisesRegex(gate.GateError, "different base or head"):
+            gate.verify(api, NUMBER)
+
+    def test_normal_base_fast_forward_still_needs_a_completed_review_of_the_final_base(
+        self,
+    ):
+        # A normal fast-forward has no retarget/force-push timeline event.
+        # The exact app-authored reviewed range must independently bind it.
+        api = Payloads()
+        comment = api.comment_versions[BATCHES[0]][0][0]
+        comment["body"] = comment["body"].replace(CHUNK_BASES[0], ORIGINAL)
+        with self.assertRaisesRegex(gate.GateError, "different base or head"):
+            gate.verify(api, NUMBER)
+
+    def test_status_change_while_reading_the_walkthrough_invalidates_success(self):
+        api = Payloads()
+        head = CHUNK_HEADS[0]
+        current = api.status_versions[head][0]
+        api.status_versions[head] = [
+            current,
+            current,
+            current,
+            [review(head, identity=8, state="pending")],
+        ]
+        self.assertEqual(gate.verify(api, NUMBER).state, "pending")
+
+    def test_malformed_footer_timestamps_and_repeated_walkthroughs_fail_closed(self):
+        for mutation in [
+            "timestamp",
+            "status-time",
+            "json",
+            "duplicate-footer",
+            "duplicate-comment",
+        ]:
+            api = Payloads()
+            comment = api.comment_versions[BATCHES[0]][0][0]
+            if mutation == "timestamp":
+                comment["updated_at"] = "unknown"
+            elif mutation == "status-time":
+                api.status_versions[CHUNK_HEADS[0]][0][0].pop("created_at")
+            elif mutation == "json":
+                comment["body"] = comment["body"].replace(
+                    '"kind":"reviewed"', '"kind":'
+                )
+            elif mutation == "duplicate-footer":
+                comment["body"] += "\n" + comment["body"].split("\n")[1]
+            else:
+                api.comment_versions[BATCHES[0]][0].append(copy.deepcopy(comment))
+            with self.subTest(mutation=mutation), self.assertRaises(gate.GateError):
+                gate.verify(api, NUMBER)
 
 
 class BoundedRouting(unittest.TestCase):

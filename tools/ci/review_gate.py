@@ -264,7 +264,7 @@ def current_pull(api, number):
     return head
 
 
-def latest_review(api, head):
+def latest_review_record(api, head):
     matching = []
     for status in api.statuses(head):
         require(isinstance(status, dict), "invalid commit status")
@@ -282,8 +282,17 @@ def latest_review(api, head):
         matching.append(status)
     if not matching:
         return None
-    latest = max(matching, key=lambda status: status["id"])
-    return latest["id"], latest.get("state"), latest.get("description")
+    return max(matching, key=lambda status: status["id"])
+
+
+def review_identity(status):
+    if status is None:
+        return None
+    return status["id"], status.get("state"), status.get("description")
+
+
+def latest_review(api, head):
+    return review_identity(latest_review_record(api, head))
 
 
 def review_verdict(head, review):
@@ -351,6 +360,15 @@ def bounded_review(api, number, head, skipped, original):
         # Git objects are immutable, but PR heads, bases, metadata and review
         # statuses are not. Re-read every live reference before publication.
         proof.recheck(api)
+        for chunk, review in reviews:
+            record = latest_review_record(api, chunk.head)
+            if review_identity(record) != review:
+                return Verdict(
+                    head,
+                    "pending",
+                    "Review changed before base/head attestation; retry required",
+                )
+            coverage.attest_completed_range(api, chunk, record, authentic)
         if latest_review(api, head) != skipped or any(
             latest_review(api, chunk.head) != review for chunk, review in reviews
         ):
