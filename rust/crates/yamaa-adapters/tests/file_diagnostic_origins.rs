@@ -908,11 +908,78 @@ mod file {
                     environment,
                 };
                 assert!(file_application::check(request(), identity(&spec)).is_empty());
-                let mut domain = file_application::domain(request(), identity(&spec)).unwrap();
-                assert!(domain.issues().is_empty());
-                assert!(domain.save().unwrap());
-                assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n2\n");
             }
+            let mut domain = file_application::domain(
+                Request {
+                    specification: &spec,
+                    environment: None,
+                },
+                identity(&spec),
+            )
+            .unwrap();
+            assert!(domain.issues().is_empty());
+            assert!(domain.save().unwrap());
+            assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n2\n");
+
+            // Native::project deliberately has no installed host. Exercise the
+            // environment build through the public project service and a host
+            // port that proves this functionless specification never activates.
+            struct NoFunctions;
+            impl yamaa_core::project_activation::ActivationPort for NoFunctions {
+                type Handle = ();
+                type Error = ();
+                fn verify_lock(
+                    &mut self,
+                    _: yamaa_core::project_function::Language,
+                    _: &yamaa_core::project_environment::LockReference,
+                    _: &[yamaa_core::function_signature::ProjectFunctionIdentity],
+                ) -> Result<(), ()> {
+                    panic!("functionless row build must not verify a lock")
+                }
+                fn bind(
+                    &mut self,
+                    _: &yamaa_core::function_signature::ProjectFunctionIdentity,
+                    _: &yamaa_core::function_signature::LogicalSignature,
+                ) -> Result<(), ()> {
+                    panic!("functionless row build must not bind")
+                }
+                fn invoke(
+                    &mut self,
+                    _: &(),
+                    _: &[yamaa_core::function_invocation::Argument<'_>],
+                ) -> Result<yamaa_core::value::Value, yamaa_core::function_invocation::HostError<()>>
+                {
+                    panic!("functionless row build must not invoke")
+                }
+            }
+            let mut project = yamaa_adapters::project_application::prepare(
+                &spec,
+                &environment,
+                yamaa_core::project_function::Language::Python,
+            )
+            .unwrap();
+            let attempt = project.build(&mut NoFunctions);
+            assert!(attempt.boundary.is_ok());
+            let result = yamaa_adapters::project_report::build_result(
+                project.run(),
+                &attempt,
+                identity(&spec),
+                &[],
+            )
+            .unwrap();
+            assert!(result.issues().is_empty());
+            assert_eq!(result.output().unwrap(), b"ID\n1\n2\n");
+            struct Save(Vec<(String, Vec<u8>)>);
+            impl yamaa_core::specification_output::ArtifactPort for Save {
+                type Error = ();
+                fn publish(&mut self, path: &str, bytes: &[u8]) -> Result<(), ()> {
+                    self.0.push((path.into(), bytes.into()));
+                    Ok(())
+                }
+            }
+            let mut saved = Save(Vec::new());
+            result.save(&mut saved).unwrap();
+            assert_eq!(saved.0, [("output.csv".into(), b"ID\n1\n2\n".to_vec())]);
         }
 
         #[test]
