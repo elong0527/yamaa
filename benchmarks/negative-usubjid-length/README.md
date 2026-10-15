@@ -1,8 +1,5 @@
 # Reject Long Identifier
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-usubjid-length.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one demographics record per subject, carrying the
 unique subject identifier (`USUBJID`) and the site identifier
 (`SITEID`).
@@ -22,8 +19,6 @@ identifier, the site identifier (`SITEID`) and the subject number
 record. A site identifier long enough to push it past that limit
 rejects the run after the dataset completes, so no artifact is
 accepted.
-
-**Standard:** SDTM | **Domain:** DM
 
 ## How to fix
 

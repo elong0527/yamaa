@@ -1,0 +1,9 @@
+lifecycle: reviewed
+standard: ADaM
+domain: ADSL
+validation:
+  rule: R006
+  validator: schema
+covers:
+- case
+- literal

@@ -1,8 +1,5 @@
 # Reject a Day Count from Text
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-epoch-day-non-date.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** count the exposure start (`EXSTDY`) in days since
 1970-01-01, for exposure records with sequence number 1.
 
@@ -16,8 +13,6 @@ sequence, carrying the start date as collected text (`EXSTDT`).
   counted, and the start is still text that nothing has read as a
   date, so the run is rejected before any data is read and no
   artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADEX
 
 ## How to fix
 

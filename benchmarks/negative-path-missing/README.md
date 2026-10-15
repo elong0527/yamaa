@@ -1,8 +1,5 @@
 # Reject Missing Table
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-path-missing.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one analysis row for each collected laboratory
 result, carrying `SEX` and `AVAL` through and adding `ANRHI` from
 a reference table of limits by test and sex.
@@ -24,8 +21,6 @@ plus the reference table of upper limits by test code and sex.
 
 **Note:** the reference table is absent from the study, so the run
 is rejected before any data is read and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

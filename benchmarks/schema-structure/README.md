@@ -1,8 +1,5 @@
 # Show Where Each Column Comes From
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-structure.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** show where each column of the artifact comes from: the
 artifact carries exactly the columns the specification declares, and
 every declared column has a stated value, whether it is computed once
@@ -27,5 +24,3 @@ sequencing field the specification never declares.
 **Note:** the undeclared sequencing field never reaches the artifact,
 and the working value behind `FLAG` is checked for completeness but
 stays out of the artifact.
-
-**Standard:** ADaM | **Domain:** ADLB

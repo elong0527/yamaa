@@ -1,8 +1,5 @@
 # Governing Intercurrent Event
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adice-governing-event.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** identify the single governing intercurrent event in each subject's
 completed event history for an Analysis Data Model (ADaM) occurrence dataset.
 
@@ -27,5 +24,3 @@ event sequence, type and complete event date.
 uses the earliest date, then lowest sequence. A subject without events has
 no record. This is a completed-history summary; it does not choose the event
 applicable at an earlier efficacy assessment.
-
-**Standard:** ADaM | **Domain:** ADICE

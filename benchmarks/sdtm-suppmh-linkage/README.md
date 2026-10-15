@@ -1,8 +1,5 @@
 # Parent Linkage
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-suppmh-linkage.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** create one supplemental record per collected qualifier,
 carrying `IDVARVAL`, `QLABEL`, `QVAL`, `QORIG`, and `QEVAL`.
 
@@ -26,5 +23,3 @@ two collected qualifiers.
 rather than a record with an empty link, so every supplemental
 record points at a real parent. A parent record with no collected
 qualifiers simply contributes nothing.
-
-**Standard:** SDTM | **Domain:** SUPPMH

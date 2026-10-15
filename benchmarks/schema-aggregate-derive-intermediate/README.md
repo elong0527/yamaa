@@ -1,8 +1,5 @@
 # Aggregate Derive Reads an Intermediate
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-aggregate-derive-intermediate.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** demonstrate the aggregate `derive` step for #789: a
 binding reads a named intermediate that declares `keep`, so one
 row-scoped value is visible to every record the aggregate reduces.
@@ -29,5 +26,3 @@ holds one record per subject. The `derive` step binds `CAP` from
 sums the capped values. The `keep` declaration is what makes the
 intermediate read valid. Each output row is built from the
 subject's first exposure record (`EXSEQ` 1), one row per subject.
-
-**Standard:** ADaM | **Domain:** ADEX

@@ -1,8 +1,5 @@
 # Reject Redefined Date
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-redefined-date.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry the subject randomization date `RANDDT` from
 demographics into the subject-level analysis file.
 
@@ -20,8 +17,6 @@ demographics file is produced. Stating it again beside the source
 would leave two authorities for the same field even when they
 agree, so the run is rejected before any data is read and no
 artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

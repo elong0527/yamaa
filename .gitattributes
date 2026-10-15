@@ -10,3 +10,6 @@ python/LICENSE-YAML.txt text eol=lf
 R/yamaa/inst/LICENSE-YAML.txt text eol=lf
 # Unified diff context represents an empty source line with one leading space.
 rust/vendor/saphyr-parser/compact-flow-pairs.patch whitespace=-blank-at-eol
+
+# Preserve authored benchmark CSV fixture bytes on every platform.
+benchmarks/**/expected/*.csv text eol=lf

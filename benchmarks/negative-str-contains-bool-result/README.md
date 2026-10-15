@@ -1,8 +1,5 @@
 # Reject Boolean str_contains Result in a Text Column
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-str-contains-bool-result.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** flag adverse events whose term mentions dermatitis or
 erythema, writing the structured `str_contains` result straight into
 `SKIN_FLAG`.
@@ -21,8 +18,6 @@ form, so the run fails and no artifact is accepted. The `missing`
 value is accepted and stands in for a missing term, but a record that
 carries a term yields true or false whether or not it matches, so a
 run succeeds only when every term is missing.
-
-**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

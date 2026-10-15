@@ -1,0 +1,6 @@
+lifecycle: reviewed
+standard: ADaM
+domain: ADEX
+validation:
+  rule: R013
+  validator: aggregate_expression

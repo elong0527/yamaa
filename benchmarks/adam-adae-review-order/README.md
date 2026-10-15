@@ -1,8 +1,5 @@
 # Review Ordering
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-review-order.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build a reviewer-ordered adverse event listing carrying
 `ASEQ`, `AETERM`, `ASTDT`, and `ASEV` for every event, worst severity
 first.
@@ -27,5 +24,3 @@ reported severity comes after every reported severity, because an
 absent severity is not a mild one. Events the reviewer cannot tell
 apart -- the same severity on the same date -- stay in collection
 (`AESEQ`) order.
-
-**Standard:** ADaM | **Domain:** ADAE

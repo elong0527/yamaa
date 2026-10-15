@@ -1,8 +1,5 @@
 # Arm Assignment
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-arms.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** assign each subject a planned arm (`ARMCD`, `ARM`) and
 an actual arm (`ACTARMCD`, `ACTARM`), with a reason (`ARMNRS`)
 when an arm is blank and a free-text fallback (`ACTARMUD`) for a
@@ -31,5 +28,3 @@ records carrying the treatment received.
 **Note:** the planned arm follows randomization while the actual arm
 follows exposure, so a subject treated with the other planned arm
 carries different codes in each.
-
-**Standard:** SDTM | **Domain:** DM

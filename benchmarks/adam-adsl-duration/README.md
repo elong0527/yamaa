@@ -1,8 +1,5 @@
 # Derive Exposure Duration in Weeks and Months
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-duration.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry each subject's exposure start (`STDT`) and end
 (`ENDT`) dates, and derive whole-week (`DURW`) and whole-month
 (`DURM`) exposure durations.
@@ -21,5 +18,3 @@ start and end dates.
 **Note:** both durations are missing when either date is missing.
 When the end date falls before the start date, each duration is
 the negated count computed with the dates exchanged.
-
-**Standard:** ADaM | **Domain:** ADSL

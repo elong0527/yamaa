@@ -1,8 +1,5 @@
 # Sum the Target Lesion Diameters
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adtr-sum.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one record for each subject and scheduled tumor
 assessment holding the visit order (`AVISITN`), the assessment
 date (`ADT`), the summed diameters in millimeters (`AVAL`), the
@@ -44,5 +41,3 @@ at study entry with lesion group and lesion identifier.
 sum, and a sum over an incomplete set of target lesions is still
 reported; `ANL01FL` marks the assessments where every target
 lesion was measured.
-
-**Standard:** ADaM | **Domain:** ADTR

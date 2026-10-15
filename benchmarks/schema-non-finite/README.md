@@ -1,8 +1,5 @@
 # Non-Finite Values
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-non-finite.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** show that a non-finite number (positive infinity, negative
 infinity, or Not-a-Number, NaN) is stored as missing, whichever of
 three routes brings it into a column: a value written in the
@@ -31,5 +28,3 @@ converted to a numeric type.
 in `rust/tests/project-programs`. The explicit `python/environment.yaml` and
 `r/environment.yaml` carry equivalent versionless definitions and inline tests.
 Both return the same three non-finite constants.
-
-**Standard:** ADaM | **Domain:** ADSL

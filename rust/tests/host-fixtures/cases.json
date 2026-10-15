@@ -439,7 +439,10 @@
             "requirement": "REQ-1298",
             "spec_path": "columns.RESULT.derivation.date_shift.source"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "date_shift"
+          ]
         },
         {
           "name": "date_shift_float_days",
@@ -460,7 +463,10 @@
             "requirement": "REQ-1298",
             "spec_path": "columns.RESULT.derivation.date_shift.days"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "date_shift"
+          ]
         },
         {
           "name": "datetime_diff_date_source",
@@ -481,7 +487,10 @@
             "requirement": "REQ-1299",
             "spec_path": "columns.RESULT.derivation.datetime_diff.start"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "datetime_diff"
+          ]
         },
         {
           "name": "datetime_shift_date_source",
@@ -502,7 +511,10 @@
             "requirement": "REQ-1300",
             "spec_path": "columns.RESULT.derivation.datetime_shift.source"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "datetime_shift"
+          ]
         },
         {
           "name": "datetime_shift_text_amount",
@@ -523,7 +535,10 @@
             "requirement": "REQ-1300",
             "spec_path": "columns.RESULT.derivation.datetime_shift.amount"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "datetime_shift"
+          ]
         },
         {
           "name": "datetime_shift_fractional_seconds",
@@ -544,7 +559,10 @@
             "requirement": "REQ-1300",
             "spec_path": "columns.RESULT.derivation.datetime_shift.amount"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "datetime_shift"
+          ]
         },
         {
           "name": "duration_value_numeric_source",
@@ -565,7 +583,10 @@
             "requirement": "REQ-1301",
             "spec_path": "columns.RESULT.derivation.duration_value.source"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "duration_value"
+          ]
         },
         {
           "name": "duration_text_temporal_source",
@@ -586,7 +607,10 @@
             "requirement": "REQ-1302",
             "spec_path": "columns.RESULT.derivation.duration_text.source"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "duration_text"
+          ]
         },
         {
           "name": "date_shift_upper_overflow",
@@ -602,7 +626,10 @@
             "requirement": "REQ-1298",
             "spec_path": "columns.RESULT.derivation.date_shift"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "date_shift"
+          ]
         },
         {
           "name": "date_shift_lower_overflow",
@@ -618,7 +645,10 @@
             "requirement": "REQ-1298",
             "spec_path": "columns.RESULT.derivation.date_shift"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "date_shift"
+          ]
         },
         {
           "name": "datetime_shift_upper_overflow",
@@ -634,7 +664,10 @@
             "requirement": "REQ-1300",
             "spec_path": "columns.RESULT.derivation.datetime_shift"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "datetime_shift"
+          ]
         },
         {
           "name": "datetime_shift_lower_overflow",
@@ -650,7 +683,10 @@
             "requirement": "REQ-1300",
             "spec_path": "columns.RESULT.derivation.datetime_shift"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "datetime_shift"
+          ]
         },
         {
           "name": "duration_text_overflow",
@@ -666,7 +702,10 @@
             "requirement": "REQ-1302",
             "spec_path": "columns.RESULT.derivation.duration_text"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "duration_text"
+          ]
         },
         {
           "name": "duration_invalid_without_handler",
@@ -682,7 +721,10 @@
             "requirement": "REQ-1301",
             "spec_path": "columns.RESULT.derivation.duration_value"
           },
-          "invalid_count": 0
+          "invalid_count": 0,
+          "covers": [
+            "duration_value"
+          ]
         },
         {
           "name": "duration_literal_handler_and_missing",

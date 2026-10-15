@@ -1,8 +1,5 @@
 # Derive period-scoped treatments and dates across a washout
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-crossover-periods.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive `TR01SDT`, `TR01EDT`, `TR02SDT`, `TR02EDT`,
 `TRT01A`, `TRT02A`, and `WASHDUR` to capture each treatment
 period and the washout between them, with one record per
@@ -46,5 +43,3 @@ own period, so period-one dates and treatment never mix with
 period-two records. A subject with no period-two exposure
 leaves `TR02SDT`, `TR02EDT`, `TRT02A`, and `WASHDUR` empty
 together.
-
-**Standard:** ADaM | **Domain:** ADSL

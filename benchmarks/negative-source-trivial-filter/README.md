@@ -1,8 +1,5 @@
 # Reject Trivial Filter
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-source-trivial-filter.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry the planned arm (ARM) and the actual arm (ACTARM) for each
 subject.
 
@@ -16,8 +13,6 @@ subject.
   copy also states which collected rows to choose among. The planned arm
   is one value by then rather than a set of rows, so the run is rejected
   before any data is read and no artifact is accepted.
-
-**Standard:** SDTM | **Domain:** DM
 
 ## How to fix
 

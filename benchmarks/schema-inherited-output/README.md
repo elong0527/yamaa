@@ -1,8 +1,5 @@
 # Inherited Output
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-inherited-output.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** show a study inheriting the whole artifact layout from the
 level it shares with other studies, so the list of published
 variables is written once rather than copied into every study.
@@ -32,5 +29,3 @@ in the specification dropdown.
 `output.path` names a file beside the level that wrote it. Here both
 levels share one directory, so the study publishes `adsl.csv` beside
 itself.
-
-**Standard:** ADaM | **Domain:** ADSL

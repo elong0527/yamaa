@@ -1,8 +1,5 @@
 # Uncollected Exposure
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adex-uncollected.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** summarize each subject-treatment, carrying `EXTRT`
 (treatment name) through and adding `DOSECUM` (cumulative dose),
 `NDOSREC` (exposure-record count), and `NDOSVAL` (recorded-dose
@@ -29,5 +26,3 @@ numbers (`EXSEQ`).
 distinguishable from one that was never given: the first has
 exposure records with a zero `NDOSVAL`, while the second has
 nothing to count and leaves all three measures empty.
-
-**Standard:** ADaM | **Domain:** ADEX

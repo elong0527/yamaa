@@ -1,8 +1,5 @@
 # Reject Repeated Order
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-order-repeated.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** arrange adverse event (AE) records so each subject's
 events read together, newest onset first, carrying the reported
 term (`AETERM`) and onset date (`ASTDT`).
@@ -23,8 +20,6 @@ descending again. The subject takes two places with opposite
 directions, and the second can never change the order the first
 already fixed, so the intended order is unclear. The run is
 rejected before any data is read and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

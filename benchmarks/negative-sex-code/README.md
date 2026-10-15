@@ -1,8 +1,5 @@
 # Reject Bad Sex
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-sex-code.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry the recorded sex (`SEX`) for each subject from
 collected demographics, accepting only `M`, `F`, and `U`.
 
@@ -17,8 +14,6 @@ identifiers and recorded sex (`SEX`).
 
 A non-missing code outside the accepted set is rejected after the
 dataset is completed, so no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

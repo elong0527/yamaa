@@ -1,8 +1,5 @@
 # Derive Investigator Overall Response Records
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adrs-response-records.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry each investigator-scored overall response assessment
 into the analysis dataset as one record under the `OVR` (Overall
 Response by Investigator) parameter, adding the completed date
@@ -45,5 +42,3 @@ comparison that follows, so grouping by date and measuring from the
 treatment start never depend on how much of the date was collected. An
 assessment dated exactly on the treatment start lands on study day
 one.
-
-**Standard:** ADaM | **Domain:** ADRS

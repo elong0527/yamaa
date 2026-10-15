@@ -1,8 +1,5 @@
 # Reject Unit Suffix
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-ingest-unit.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one record per subject and treatment carrying
 `DOSECUM`, the total dose administered across the matching
 exposure records.
@@ -20,8 +17,6 @@ component exposure records carrying `EXTRT`, `EXSEQ`, and
 A stored dose that is not a plain number, such as `200 mg` with
 its unit attached, is rejected while the exposure records are
 read, so no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADEX
 
 ## How to fix
 

@@ -1,8 +1,5 @@
 # Progression-Free Survival
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adtte-pfs.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build the progression-free survival record for each
 subject under the fixed `PFS` code (`Progression-Free Survival`),
 setting `STARTDT`, `ADT`, `AVAL`, `CNSR`, `EVNTDESC`, `SRCDOM`,
@@ -49,5 +46,3 @@ usable: a progression or death dated after therapy start is not an
 event, and the subject is censored at the last adequate assessment
 dated on or before therapy start. A subject with no usable adequate
 assessment at all is censored at randomization, for a 1-day PFS.
-
-**Standard:** ADaM | **Domain:** ADTTE

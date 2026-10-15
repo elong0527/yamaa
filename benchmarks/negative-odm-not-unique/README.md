@@ -1,8 +1,5 @@
 # Reject an Answer Recorded at Two Visits
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-odm-not-unique.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive `SEX` for one record per subject from the subject's
 collected answer.
 
@@ -17,8 +14,6 @@ again at baseline, and gives the same answer both times.
 That subject's question has two records, one per visit. Two records are not
 one answer even when they agree, so the run stops rather than choosing one,
 and it names the visit as the field that tells them apart.
-
-**Standard:** SDTM | **Domain:** DM
 
 ## How to fix
 

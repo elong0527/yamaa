@@ -1,8 +1,5 @@
 # Reject Missing Age
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-not-missing-age.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** record `AGE` for every subject from the collected
 demographics, requiring a value for each subject.
 
@@ -15,8 +12,6 @@ demographics, requiring a value for each subject.
 
 **Note:** a subject with no recorded age leaves it missing, so the
 check on the completed dataset fails and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

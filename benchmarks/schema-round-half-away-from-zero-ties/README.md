@@ -1,8 +1,5 @@
 # Pin ties half away from zero
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-round-half-away-from-zero-ties.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build `RND1` and `RND0` by rounding collected values,
 with halfway values moving away from zero.
 
@@ -26,5 +23,3 @@ rule's small binary tolerance below the mark; further below, the
 value rounds to the nearer candidate. A result that would print as
 negative zero is written as zero, and a missing input stays
 missing.
-
-**Standard:** ADaM | **Domain:** ADSL

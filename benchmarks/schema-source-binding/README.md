@@ -1,8 +1,5 @@
 # Source Binding
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-source-binding.html)
-[![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** show how each source reference resolves: a qualified name
 reads its named dataset, and a bare name reads the output columns.
 
@@ -27,5 +24,3 @@ sequence (`VSSEQ`), test (`VSTESTCD`), result (`VSSTRESN`), and units
 `DM` and `VS` may carry same-named variables without colliding; a bare
 name always addresses the output columns, so one column can build on
 an earlier column.
-
-**Standard:** ADaM | **Domain:** ADVS

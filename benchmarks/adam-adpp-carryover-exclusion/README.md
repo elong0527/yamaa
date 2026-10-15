@@ -1,8 +1,5 @@
 # Carry-Over Exclusion of a Crossover Period
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adpp-carryover-exclusion.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry each pharmacokinetic (PK) parameter of a two-period
 bioequivalence crossover into ADPP with the period's pre-dose
 concentration (`PRECONC`), that concentration as a percentage of the
@@ -37,5 +34,3 @@ concentrations (PC) with planned time point (`PCTPT`), standard result
 period is the unit left out: the subject's other period keeps `Y`, and
 every record stays in the dataset. The pre-dose result, the percentage
 and the flag repeat on every parameter of the period.
-
-**Standard:** ADaM | **Domain:** ADPP

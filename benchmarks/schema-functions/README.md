@@ -1,8 +1,5 @@
 # Call a Project Routine
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-functions.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive an adjusted ratio (`RATIO`) and its variants by calling
 the project's own ratio routine, showing how the call fills in
 defaults, handles missing values, and switches the result to a
@@ -30,5 +27,3 @@ own Python project root (`python/`); the expected result is
 **Note:** a blank value the routine does not accept skips the call
 entirely, so that record has no result; a blank value it accepts
 arrives as missing and counts as zero.
-
-**Standard:** TEST | **Domain:** TEST

@@ -1,8 +1,5 @@
 # Lab BDS Build
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adlb-bds.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build a laboratory (LB) basic data structure (BDS)
 analysis dataset for alanine aminotransferase (ALT) and
 aspartate aminotransferase (AST): flag each subject's baseline
@@ -39,5 +36,3 @@ treatment dates enrich records that already exist and never add
 one. A subject with a single collected result still gets a
 baseline flag, and a result collected on the treatment start
 date itself counts as baseline.
-
-**Standard:** ADaM | **Domain:** ADLB

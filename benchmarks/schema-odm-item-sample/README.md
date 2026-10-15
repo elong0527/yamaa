@@ -1,8 +1,5 @@
 # Lab Results with Their Own Sample Dates
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/schema-odm-item-sample.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive one laboratory record per collected result, dated by the
 sample the result came from.
 
@@ -23,5 +20,3 @@ of the lab item group: a collection date and its results.
 
 **Note:** field names match whatever their case, and the vendor's own
 fields take no part. A date recorded twice for one sample stops the run.
-
-**Standard:** SDTM | **Domain:** LB

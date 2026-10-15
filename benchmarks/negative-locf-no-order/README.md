@@ -1,8 +1,5 @@
 # Reject carry-forward without an assessment order
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-locf-no-order.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** fill the analysis value (`AVAL`) of each planned vital-sign
 visit with the value collected there, or carry forward the latest
 earlier collected value for the same subject and parameter.
@@ -24,8 +21,6 @@ must not be confused with a gap, and a parameter collected nowhere.
 But carrying a value forward needs an order that says which visits
 count as earlier, and the window names none, so the run is rejected
 before any data is read and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADVS
 
 ## How to fix
 

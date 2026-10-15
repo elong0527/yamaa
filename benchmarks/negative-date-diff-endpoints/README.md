@@ -1,8 +1,5 @@
 # Reject Mixed Endpoints
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-date-diff-endpoints.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build a subject-level record carrying the moment
 treatment started in `RFSTDTM` and the calendar date of death in
 `DTHDT` and counting whole days between them in `SURVDD`.
@@ -19,8 +16,6 @@ moment (`RFSTDTC`) and the death date (`DTHDT`).
 **Note:** a day count has no meaning between a moment and a date: the hours
 on either side could give two different answers, so the run is rejected
 before any data is read and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

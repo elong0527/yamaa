@@ -1,0 +1,8 @@
+lifecycle: reviewed
+standard: ADaM
+domain: ADLB
+validation:
+  rule: R006
+  validator: schema
+covers:
+- row_number

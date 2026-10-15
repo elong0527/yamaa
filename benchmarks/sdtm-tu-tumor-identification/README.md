@@ -1,7 +1,5 @@
 # Tumor Identification
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-tu-tumor-identification.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one record per identified tumor or lesion, carrying
 the link identifier, the identification test and result, the
 anatomical location, the identification method, the evaluator, and
@@ -42,5 +40,3 @@ target lesion: it keeps a `T` link identifier and its category stays
 domain measures its short axis. A new lesion is identified once, at
 the visit where it first appears, and earlier visits keep no record
 of it.
-
-**Standard:** SDTM | **Domain:** TU

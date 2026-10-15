@@ -1,0 +1,14 @@
+lifecycle: draft
+standard: ADaM
+domain: ADAE
+entries:
+  python:
+  - specification: spec_risk.yaml
+    environment: null
+  - specification: spec_rate.yaml
+    environment: null
+  r:
+  - specification: spec_risk.yaml
+    environment: null
+  - specification: spec_rate.yaml
+    environment: null

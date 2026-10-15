@@ -1,8 +1,5 @@
 # Subscale Scoring
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adqs-subscale-score.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry each physical functioning item response into
 `PARAMCD`, `PARAM`, and `AVAL`, and add a subscale score record
 coded `PFSCORE` holding the mean answered-item response multiplied
@@ -33,5 +30,3 @@ dataset.
 carries a score record, so a visit with too few answers to score
 keeps an empty score and stays apart from a visit with no records
 at all.
-
-**Standard:** ADaM | **Domain:** ADQS

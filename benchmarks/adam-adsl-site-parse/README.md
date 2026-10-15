@@ -1,8 +1,5 @@
 # Parse the Site from the Subject Identifier
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-site-parse.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive the parsed site, the site to use, and the display
 reference (`SITEIDP`, `SITEID`, and `SUBJREF`) for each subject.
 
@@ -22,5 +19,3 @@ identifier, the collected subject number, and the collected site.
 **Note:** keeping both the parsed and the final site shows which
 subjects fell back to the collected site and which had no usable site
 at all.
-
-**Standard:** ADaM | **Domain:** ADSL

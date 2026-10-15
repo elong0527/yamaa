@@ -1,8 +1,5 @@
 # Study Eye Flag
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adoe-study-eye.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** one row per collected ophthalmic examination (OE)
 measurement, adding `AFEYE`.
 
@@ -26,5 +23,3 @@ empty.
 **Note:** the assigned eye belongs to the subject, so the same eye
 is the study eye at every visit; only the collected laterality
 moves a record between roles.
-
-**Standard:** ADaM | **Domain:** ADOE

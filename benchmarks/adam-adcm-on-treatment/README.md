@@ -1,8 +1,5 @@
 # On-Treatment Flags
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adcm-on-treatment.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** flag each concomitant medication taken while the subject is on
 treatment, adding `ONTRTFL`.
 
@@ -28,5 +25,3 @@ date leaves the period open-ended, while a subject with no treatment start
 date is never flagged. The fixture also covers the negative side: a
 medication with a missing start date that ends before treatment starts is
 left unflagged.
-
-**Standard:** ADaM | **Domain:** ADCM

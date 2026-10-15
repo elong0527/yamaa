@@ -1,8 +1,5 @@
 # Reject Absolute Path
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-path-absolute.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 This fixture retains the reference engine's historical containment rejection
 and locked expected report. Under the approved declaring-file policy (#1905),
 absolute and parent-relative local spellings are permitted; an absent file
@@ -35,8 +32,6 @@ that runs the study rather than a file the study carries. The historical
 reference-engine run opens only files inside the study or in a location the
 runner approved, so it rejects this fixture before any data is read and no
 artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

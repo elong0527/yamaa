@@ -1,8 +1,5 @@
 # Planned Time Points Around Dosing
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-vs-planned-time-points.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry each collected vital-signs result with its actual
 collection datetime, and add the planned time point it was
 scheduled for: `VSTESTCD`, `VSORRES`, `VSTPT`, `VSTPTNUM`,
@@ -57,5 +54,3 @@ planned keeps its late actual datetime and the gap shows when the
 two are compared. Each reading is also checked against the
 first-dose datetime: a post-dose reading dated before the dose, or
 a pre-dose reading dated after it, stops the run.
-
-**Standard:** SDTM | **Domain:** VS
