@@ -1,5 +1,8 @@
 # Combination Regimen
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-ex-combination.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry each administered combination component with its
 dose, unit, administration interval, and adjustment reason, adding
 `EXSEQ`, `EXTRT`, `EXDOSE`, `EXDOSU`, `EXSTDTC`, `EXENDTC`, and
@@ -22,3 +25,5 @@ and adjustment reason.
 
 **Note:** a saline placebo component is administered, so it keeps its
 `EXDOSE` of `0`; a zero dose is not an uncollected dose.
+
+**Standard:** SDTM | **Domain:** EX

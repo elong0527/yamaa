@@ -1,5 +1,8 @@
 # Discontinuation Reasons
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-ds-reasons.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one Disposition (DS) record per subject
 for each of two milestones: end of treatment and end of
 study, carrying the reported reason (`DSTERM`), the
@@ -42,3 +45,5 @@ Provenance: `DSCAT`/`DSSCAT`/`DSTERM`/`DSDECOD` follow
 the CDISC SDTMIG DS assumptions, and the controlled terms
 follow the FDA Technical Conformance Guide DS guidance.
 All subjects, dates and reasons are invented fixtures.
+
+**Standard:** SDTM | **Domain:** DS

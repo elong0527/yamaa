@@ -1,5 +1,8 @@
 # Event Findings
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-fa-event-findings.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive `FASEQ`, `FATESTCD`, `FATEST`, `FAOBJ`, `FACAT`,
 `FAORRES`, `FAORRESU`, `FASTRESC`, `FASTRESN`, `FASTRESU`,
 `FALNKID`, and `FADTC` for findings collected about individual
@@ -43,3 +46,5 @@ needed.
 events can share the same term, so `FAOBJ` alone does not distinguish them;
 `FALNKID` is what ties each finding to its specific event record. A finding
 whose event term is absent stops the run.
+
+**Standard:** SDTM | **Domain:** FA

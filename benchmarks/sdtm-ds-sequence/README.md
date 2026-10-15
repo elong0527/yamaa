@@ -1,5 +1,8 @@
 # Disposition Sequence
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-ds-sequence.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one output record per collected disposition
 record, carrying `DSDECOD`, `DSCAT` and `DSDTC`, with `DSSEQ`
 numbering each subject's records from the earliest collection
@@ -25,3 +28,5 @@ feed any output column.
   `2024-01` is completed to the 15th of that month, and a year
   alone is completed to June 15th. It is empty when the date is
   missing or cannot be read.
+
+**Standard:** SDTM | **Domain:** DS

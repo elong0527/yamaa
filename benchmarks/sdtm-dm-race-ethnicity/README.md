@@ -1,5 +1,8 @@
 # Record race and ethnicity, with one supplemental record per race
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-race-ethnicity.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one Demographics (DM) record per subject carrying race
 (`RACE`) and ethnicity (`ETHNIC`), and one supplemental Demographics
 (SUPPDM) record per reported race for each subject who marked several.
@@ -32,3 +35,5 @@ and ethnicity contributes its own row. A race marked twice counts once.
 
 **Note:** SUPPDM carries race records exactly for the subjects whose DM
 record says `MULTIPLE`, however many races they marked.
+
+**Standard:** SDTM | **Domain:** DM

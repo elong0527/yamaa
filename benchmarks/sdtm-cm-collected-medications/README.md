@@ -1,5 +1,8 @@
 # Collected Medications with Dose Text and Timing References
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-cm-collected-medications.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build the CM record for each collected medication from the
 concomitant-medication form, carrying the reported name, indication, dose,
 frequency, route, and dates as collected, and the form's "taken before
@@ -40,3 +43,5 @@ collected as a range.
 run rather than passing through unmapped. An ongoing medication has no end
 date, and `CMENRTPT` records why, so an empty `CMENDTC` is never left to
 stand for "ongoing" on its own.
+
+**Standard:** SDTM | **Domain:** CM

@@ -1,5 +1,8 @@
 # Basic Demographics
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-basic.html)
+[![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one Demographics (DM) record per subject: sex (SEX), age
 (AGE), planned arm (ARM), actual arm (ACTARM) and reason not assigned
 (ARMNRS).
@@ -27,3 +30,5 @@ does not become two records. Each variable names the collected item it
 reads; the mapping default fills **SEX** when the subject has no usable
 row for it, while **AGE**, **ARM** and **ACTARM** stay null and the
 unassigned reason is recorded in **ARMNRS**.
+
+**Standard:** SDTM | **Domain:** DM

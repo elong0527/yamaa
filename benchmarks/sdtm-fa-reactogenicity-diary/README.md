@@ -1,5 +1,8 @@
 # Reactogenicity Diary
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-fa-reactogenicity-diary.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive `FASEQ`, `FATESTCD`, `FATEST`, `FAOBJ`, `FACAT`,
 `FASCAT`, `FAORRES`, `FAORRESU`, `FASTRESC`, `FASTRESN`,
 `FASTRESU`, `FASTAT`, `FATPT`, and `FADTC` for each solicited
@@ -41,3 +44,5 @@ and whether the diary day was completed.
 
 **Note:** temperature stays in Vital Signs (VS) and is not a
 reactogenicity diary record, so it never becomes an FA record here.
+
+**Standard:** SDTM | **Domain:** FA
