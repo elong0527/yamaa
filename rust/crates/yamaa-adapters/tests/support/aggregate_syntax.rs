@@ -3,19 +3,18 @@ use super::syntax_spans as spans;
 use serde_json::{json, Value};
 use yamaa_core::{
     aggregate_parser::{
-        parse_aggregate, GrammarFailure, ParseError, ParseLimits, ParseResource, ParsedAggregate,
-        ParsedKind,
+        parse_aggregate, GrammarFailure, ParseError, ParseResource, ParsedAggregate, ParsedKind,
     },
     numeric::{BinaryOperator, UnaryOperator},
 };
 pub fn observe_with_spans(expression: &str) -> Value {
     let mut outcome = observe(expression);
-    if let Ok(parsed) = parse_aggregate(expression, ParseLimits::default()) {
+    if let Ok(parsed) = parse_aggregate(expression) {
         annotate(&parsed, parsed.root(), &mut outcome["outcome"]["ast"]);
     } else if let Err(ParseError::Grammar {
         failure: GrammarFailure::ProhibitedFunction { name, .. },
         ..
-    }) = parse_aggregate(expression, ParseLimits::default())
+    }) = parse_aggregate(expression)
     {
         outcome["outcome"]["span"] = spans::span(expression, name);
     }
@@ -63,7 +62,7 @@ fn annotate(parsed: &ParsedAggregate, id: usize, value: &mut Value) {
     value["span"] = spans::span(expression, node.span);
 }
 pub fn observe(expression: &str) -> Value {
-    let outcome = match parse_aggregate(expression, ParseLimits::default()) {
+    let outcome = match parse_aggregate(expression) {
         Ok(parsed) => json!({"status":"parsed", "ast": ast(&parsed, parsed.root()),
                 "identifiers":parsed.identifiers().collect::<Vec<_>>(),
                 "star_datasets":parsed.star_datasets().collect::<Vec<_>>(),
@@ -95,9 +94,6 @@ pub fn observe(expression: &str) -> Value {
             limit,
         }) => {
             let resource = match resource {
-                ParseResource::Bytes => "bytes",
-                ParseResource::Tokens => "tokens",
-                ParseResource::Nodes => "nodes",
                 ParseResource::Depth => "depth",
             };
             json!({"status":"resource_limit","resource":resource,"limit":limit,
@@ -108,7 +104,7 @@ pub fn observe(expression: &str) -> Value {
 }
 
 /// Serialize each tree occurrence once, eliding groups but retaining reducer text.
-/// The validated arena caps recursion at 64 and retains numbers as exact strings.
+/// The validated arena caps recursion at 128 and retains numbers as exact strings.
 fn ast(parsed: &ParsedAggregate, id: usize) -> Value {
     let node = &parsed.nodes()[id];
     let written = &parsed.expression()[node.span.start..node.span.end];
