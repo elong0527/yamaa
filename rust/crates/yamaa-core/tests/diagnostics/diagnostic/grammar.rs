@@ -1,0 +1,249 @@
+//! Independent vocabulary/context truth from actual shared parser failures.
+use serde_json::Value as V;
+use std::collections::BTreeSet;
+use yamaa_core::{
+    aggregate_parser::{parse_aggregate, ParseError as A},
+    diagnostic::{ConditionCode, Context, Diagnostic},
+    numeric_parser::{parse_numeric, ParseError as N},
+};
+
+fn text(v: &str) -> V {
+    V::String(v.into())
+}
+fn check(
+    finding: Diagnostic,
+    expression: &str,
+    condition: &str,
+    requirement: &str,
+    fields: Vec<(&str, V)>,
+) -> ConditionCode {
+    let definition = finding.definition();
+    assert_eq!(
+        (
+            definition.phase,
+            definition.condition,
+            definition.requirement
+        ),
+        ("validation", condition, Some(requirement))
+    );
+    assert_eq!(finding.spec_paths, ["columns.VALUE.derivation.expr"]);
+    let mut expected: Context = fields.into_iter().map(|(k, v)| (k.into(), v)).collect();
+    expected.insert("expr".into(), text(expression));
+    assert_eq!(finding.context, expected);
+    assert_eq!(finding.source_span, None);
+    assert_eq!(finding.operand_route, None);
+    finding.code
+}
+pub(super) fn reached() -> BTreeSet<ConditionCode> {
+    let path = "columns.VALUE.derivation.expr";
+    let mut reached = BTreeSet::new();
+    for (expression, condition, requirement, extra) in [
+        ("1 +", "invalid_numeric_expression", "REQ-0439", vec![]),
+        (
+            "1 < 2",
+            "prohibited_construct",
+            "REQ-0441",
+            vec![("construct", text("comparison"))],
+        ),
+        (
+            "abs(1, 2)",
+            "prohibited_function",
+            "REQ-0440",
+            vec![
+                ("function", text("abs")),
+                (
+                    "argument_count",
+                    V::Number(("2").parse().expect("canonical integer")),
+                ),
+            ],
+        ),
+    ] {
+        let Err(N::Grammar { failure, .. }) = parse_numeric(expression, Default::default()) else {
+            panic!("numeric grammar failure")
+        };
+        reached.insert(check(
+            failure.diagnostic(path, expression).unwrap(),
+            expression,
+            condition,
+            requirement,
+            extra,
+        ));
+    }
+    for (expression, condition, requirement, extra) in [
+        (
+            "SUM(SRC.ID) +",
+            "invalid_aggregate_expression",
+            "REQ-0499",
+            vec![],
+        ),
+        (
+            "SUM(SRC.ID) < 2",
+            "prohibited_construct",
+            "REQ-0512",
+            vec![("construct", text("comparison"))],
+        ),
+        (
+            "sumx(SRC.ID)",
+            "prohibited_function",
+            "REQ-0500",
+            vec![("function", text("sumx"))],
+        ),
+        (
+            "SUM(SUM(SRC.ID))",
+            "nested_reduction",
+            "REQ-0502",
+            vec![("outer", text("SUM")), ("inner", text("SUM"))],
+        ),
+    ] {
+        let Err(A::Grammar { failure, .. }) = parse_aggregate(expression, Default::default())
+        else {
+            panic!("aggregate grammar failure")
+        };
+        reached.insert(check(
+            failure.diagnostic(path, expression).unwrap(),
+            expression,
+            condition,
+            requirement,
+            extra,
+        ));
+    }
+    reached
+}
+
+#[test]
+fn arithmetic_after_an_operand_adds_the_compute_column_suggestion() {
+    use serde_json::Value as V;
+    use yamaa_core::predicate_parser::{parse_predicate, ParseError};
+    let suggestion = "derive the value as a column with compute, then compare that column";
+    for (text, position) in [
+        ("SBPSTD - SBPSUP <= -20", 7),
+        ("VS.SBPSTD - VS.SBPSUP < 0", 10),
+        ("ASTDT <= TRTEDT + 30", 16),
+    ] {
+        let Err(ParseError::Grammar {
+            position: actual,
+            failure,
+            ..
+        }) = parse_predicate(text, Default::default())
+        else {
+            panic!("predicate must fail: {text}")
+        };
+        assert_eq!(actual.character, position, "{text}");
+        for d in [
+            failure.diagnostic("columns.OHYPO.derivation.case[0].when", text, position),
+            failure
+                .original_diagnostic("columns.OHYPO.derivation.case[0].when", text, position)
+                .unwrap(),
+        ] {
+            assert_eq!(d.definition().condition, "invalid_predicate");
+            assert_eq!(d.definition().requirement, Some("REQ-0188"));
+            assert_eq!(
+                d.context["suggestion"],
+                V::String(suggestion.into()),
+                "{text}"
+            );
+        }
+    }
+    // A failure at any other character keeps the two-field context.
+    for text in ["AGE >> 65", "A >"] {
+        let Err(ParseError::Grammar {
+            position, failure, ..
+        }) = parse_predicate(text, Default::default())
+        else {
+            panic!("predicate must fail: {text}")
+        };
+        let d = failure
+            .original_diagnostic("filter", text, position.character)
+            .unwrap();
+        assert!(!d.context.contains_key("suggestion"), "{text}");
+    }
+}
+
+#[test]
+fn caller_supplied_function_span_cannot_slice_a_different_expression() {
+    let Err(N::Grammar { failure, .. }) = parse_numeric("  foo(1)", Default::default()) else {
+        panic!("prohibited function");
+    };
+    assert!(failure
+        .diagnostic("columns.VALUE", "\u{03b2}\u{03b2}\u{03b2}")
+        .is_none());
+    let Err(A::Grammar { failure, .. }) = parse_aggregate("  sumx(SRC.ID)", Default::default())
+    else {
+        panic!("prohibited function");
+    };
+    assert!(failure.diagnostic("columns.VALUE", "").is_none());
+}
+
+pub(super) fn predicate_reached(
+) -> std::collections::BTreeSet<yamaa_core::diagnostic::ConditionCode> {
+    use serde_json::Value as V;
+    use yamaa_core::{
+        diagnostic::ConditionCode as C,
+        predicate_parser::{parse_predicate, ParseError},
+    };
+    let mut reached = std::collections::BTreeSet::new();
+    for (text, code, requirement) in [
+        ("A >", C::PredicateInvalidExpression, "REQ-0188"),
+        (
+            "A LIKE 'a' ESCAPE 'ab'",
+            C::PredicateInvalidEscape,
+            "REQ-0191",
+        ),
+        ("STR_CONTAINS(A, '(')", C::PredicateInvalidRegex, "REQ-1244"),
+        (
+            "A = DATE '2026-02-30'",
+            C::PredicateInvalidExpression,
+            "REQ-0188",
+        ),
+    ] {
+        let Err(ParseError::Grammar {
+            position, failure, ..
+        }) = parse_predicate(text, Default::default())
+        else {
+            panic!("predicate must fail")
+        };
+        let d = failure.diagnostic("columns.VALUE.window.filter", text, position.character);
+        assert_eq!(d.code, code);
+        assert_eq!(d.definition().phase, "validation");
+        assert_eq!(d.definition().condition, "invalid_predicate");
+        assert_eq!(d.definition().requirement, Some(requirement));
+        assert_eq!(failure.condition(), "invalid_predicate");
+        assert_eq!(failure.requirement(), requirement);
+        assert_eq!(d.spec_paths, ["columns.VALUE.window.filter"]);
+        assert_eq!(d.context["predicate"], V::String(text.into()));
+        assert_eq!(d.context["position"], V::from(position.character));
+        assert_eq!(d.source_span, None);
+        assert_eq!(d.operand_route, None);
+        reached.insert(d.code);
+    }
+    let expression = "A = 9223372036854775808";
+    let Err(ParseError::Grammar {
+        position, failure, ..
+    }) = parse_predicate(expression, Default::default())
+    else {
+        panic!("overflowing integer literal must fail parsing")
+    };
+    let d = failure
+        .original_diagnostic("filter", expression, position.character)
+        .unwrap();
+    assert_eq!(d.code, C::PredicateIntegerOverflow);
+    assert_eq!(d.definition().phase, "parse");
+    assert_eq!(d.definition().condition, "integer_overflow");
+    assert_eq!(d.definition().requirement, Some("REQ-0014"));
+    assert_eq!(d.spec_paths, ["filter"]);
+    assert_eq!(
+        d.context,
+        [
+            ("predicate".into(), V::String(expression.into())),
+            (
+                "position".into(),
+                V::Number(("4").parse().expect("canonical integer"))
+            ),
+        ]
+        .into()
+    );
+    assert_eq!(d.source_span, None);
+    assert_eq!(d.operand_route, None);
+    reached.insert(d.code);
+    reached
+}
