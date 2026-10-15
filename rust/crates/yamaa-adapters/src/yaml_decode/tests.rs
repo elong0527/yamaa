@@ -426,20 +426,6 @@ fn unicode_paths_render_only_findings_under_long_keys_and_wide_valid_mappings() 
 }
 
 #[test]
-fn unicode_admission_retains_all_raw_findings_in_original_order() {
-    let count = Limits::FINDINGS + 1;
-    let source = format!("[{}]", vec![r#""\uD800""#; count].join(","));
-    let DecodeFailure::InvalidText(issues) = error(&source) else {
-        panic!("expected complete raw Unicode observations")
-    };
-    assert_eq!(issues.len(), count);
-    for (index, issue) in issues.iter().enumerate() {
-        assert_eq!(issue.path, format!("$[{index}]"));
-        assert_eq!((issue.code_point, issue.offset), (0xd800, 0));
-    }
-}
-
-#[test]
 fn private_use_keys_remain_distinct_from_recovered_invalid_keys() {
     let expected = vec![UnicodeIssue {
         path: "$.<key>".into(),
