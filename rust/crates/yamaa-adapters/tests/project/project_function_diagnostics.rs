@@ -1,12 +1,12 @@
 use std::rc::Rc;
 use yamaa_adapters::project_function_diagnostics::{invocation, Error, HostDetails};
 use yamaa_core::{
-    function_signature::ProjectFunctionIdentity,
-    value::{ColumnType, Value, ValueType},
-};
-use yamaa_engine::{
     dataset::RowIdentity,
     function_invocation::{FailureKind, InvocationFailure},
+};
+use yamaa_core::{
+    function_signature::ProjectFunctionIdentity,
+    value::{ColumnType, Value, ValueType},
 };
 
 fn make_failure(kind: FailureKind<Rc<str>>) -> InvocationFailure<Rc<str>, ProjectFunctionIdentity> {
@@ -204,8 +204,8 @@ fn malformed_identity_keys_and_escaped_amplification_return_no_partial_issue() {
 
 #[test]
 fn actual_engine_failures_project_without_a_second_callback_or_payload_consumption() {
+    use yamaa_core::function_invocation::{invoke_project, Argument, FunctionPort, HostError};
     use yamaa_core::function_signature::ProjectInvocationPlan;
-    use yamaa_engine::function_invocation::{invoke_project, Argument, FunctionPort, HostError};
     struct Port {
         calls: usize,
         result: Option<Result<Value, HostError<Rc<str>>>>,

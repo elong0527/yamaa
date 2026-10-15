@@ -23,7 +23,7 @@ mod specification_service;
 
 #[extendr]
 fn core_version() -> &'static str {
-    yamaa_engine::host_values::VERSION
+    yamaa_core::VERSION
 }
 
 extendr_module! {

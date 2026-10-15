@@ -8,7 +8,7 @@ use yamaa_adapters::{
     specification_diagnostics::inheritance_failure,
     specification_source::{InheritancePort, Source},
 };
-use yamaa_engine::inheritance::{Source as Identity, SourceError};
+use yamaa_core::inheritance::{Source as Identity, SourceError};
 
 /// Package-owned schema and shared standalone/inherited selection.
 #[pyfunction]

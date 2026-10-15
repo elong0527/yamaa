@@ -161,7 +161,7 @@ mod tests {
     use super::*;
     #[test]
     fn longitudinal_source_geometry_and_payload_fit_before_the_exact_next_byte_refusal() {
-        let maximum = yamaa_engine::capacity::SOURCE_STORAGE_BYTES;
+        let maximum = yamaa_core::capacity::SOURCE_STORAGE_BYTES;
         let mut used = 0;
         // Physical/canonical slots and payload admission need no giant fixture.
         charge(&mut used, Some(32 * 640_000_000), maximum).unwrap();

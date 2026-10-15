@@ -128,7 +128,7 @@ fn native_diamond_aliases_own_one_canonical_document_and_no_artifact_authority()
     let nodes = graph.graph().nodes();
     assert_eq!(nodes.len(), 4);
     assert_eq!(nodes[0].document.source().bytes, root.as_bytes());
-    assert_eq!(graph.graph().checked().metadata().order(), [3, 1, 2, 0]);
+    assert_eq!(graph.graph().metadata().order(), [3, 1, 2, 0]);
     assert!(Arc::ptr_eq(
         &nodes[0].producers[1].document,
         &nodes[0].producers[2].document
@@ -138,11 +138,11 @@ fn native_diamond_aliases_own_one_canonical_document_and_no_artifact_authority()
         &nodes[2].producers[0].document
     ));
     assert_eq!(
-        graph.graph().checked().metadata().nodes()[0].dependencies(),
+        graph.graph().metadata().nodes()[0].dependencies(),
         [1, 2, 2]
     );
     assert!(matches!(
-        graph.graph().checked().metadata().execution_refusal(),
+        graph.graph().metadata().execution_refusal(),
         PrepareError::Unsupported(_)
     ));
     let paths = graph.captured_sources().map(|(p, _)| p).collect::<Vec<_>>();
@@ -187,7 +187,7 @@ fn inherited_schema_input_and_output_origins_resolve_independently() {
     );
     let graph = study.graph(Limits::default()).unwrap();
     let p = &graph.graph().nodes()[0].producers[0];
-    let declaration = &graph.graph().checked().metadata().nodes()[0].producers()[0];
+    let declaration = &graph.graph().metadata().nodes()[0].producers()[0];
     assert_eq!(p.schema_identity, study.path("producer/p.yaml"));
     assert_eq!(p.source_identity, study.path("data/p.csv"));
     assert_eq!(p.output_identity, study.path("data/p.csv"));

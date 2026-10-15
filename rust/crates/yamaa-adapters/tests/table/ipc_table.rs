@@ -79,7 +79,7 @@ fn every_truncation_and_bad_frame_is_rejected_before_use() {
     assert_eq!(
         yamaa_adapters::ipc_table::decode_snapshot_with_budget(
             input,
-            yamaa_engine::dataset::ExecutionBudget {
+            yamaa_core::dataset::ExecutionBudget {
                 max_ipc_bytes: input.len() - 1,
                 ..Default::default()
             },
@@ -432,7 +432,7 @@ fn aliased_text_and_json_expansion_are_bounded() {
                 body.len() as i64,
                 false,
             ),
-            yamaa_engine::dataset::ExecutionBudget::bounded(),
+            yamaa_core::dataset::ExecutionBudget::bounded(),
         ),
         Err(E::ShapeLimit)
     );

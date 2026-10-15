@@ -325,7 +325,7 @@ mod resource_tests {
         use yamaa_core::schema::{ConstraintError, ValidationError};
         let error = crate::specification_source::InheritanceError::<crate::file_resources::Error>::Preparation {
             schema: crate::shipped_schema::capture().unwrap(),
-            error: Box::new(yamaa_engine::inheritance_preparation::Error::Validation(
+            error: Box::new(yamaa_core::inheritance_preparation::Error::Validation(
                 ValidationError::Constraint(ConstraintError::Work { limit: 7 }),
             )),
             captured_parents: Vec::new(),

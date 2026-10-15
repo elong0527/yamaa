@@ -9,7 +9,7 @@ use yamaa_core::schema::{
     Document, InheritanceDependencyError, InheritanceReferenceError, NormalizationError,
     SchemaStructure,
 };
-use yamaa_engine::{inheritance as graph, inheritance_preparation::Error as E};
+use yamaa_core::{inheritance as graph, inheritance_preparation::Error as E};
 
 fn source<E>(error: SourceFailure<E>) -> Result<String, E> {
     match error {
@@ -64,7 +64,7 @@ fn traversal_finding<E>(error: &graph::Error<E>) -> Result<Option<Value>, captur
 // The engine classifies the typed error. This boundary only serializes its
 // already-owned fields; no source request or JSON reply crosses a host callback.
 fn traversal_outcome<E>(schema: &SchemaStructure, error: graph::Error<E>) -> Result<Value, E> {
-    use yamaa_engine::inheritance_outcome::{self, Outcome};
+    use yamaa_core::inheritance_outcome::{self, Outcome};
     let error = match inheritance_outcome::traversal_outcome(error, 16_777_216) {
         Ok(Outcome::Diagnostic(finding)) => {
             return Ok(match super::portable_diagnostic(finding) {
@@ -108,13 +108,13 @@ fn traversal_outcome<E>(schema: &SchemaStructure, error: graph::Error<E>) -> Res
 }
 fn dictionary_failure_ref<'a, T>(
     document: &crate::specification_source::PreparedDocument,
-    error: &'a yamaa_engine::dictionary_preparation::Error<
+    error: &'a yamaa_core::dictionary_preparation::Error<
         T,
         crate::specification_source::Error,
         crate::yaml_decode::DecodedYaml,
     >,
 ) -> Result<String, &'a T> {
-    use yamaa_engine::dictionary_preparation::Cause;
+    use yamaa_core::dictionary_preparation::Cause;
     let outcome = match &error.cause {
         Cause::Capture {
             reference,
@@ -279,7 +279,7 @@ pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
             match dictionary_failure_ref(&document, &error) {
                 Ok(value) => return Ok(value),
                 Err(_) => match error.cause {
-                    yamaa_engine::dictionary_preparation::Cause::Capture {
+                    yamaa_core::dictionary_preparation::Cause::Capture {
                         error: graph::SourceError::Raised(error),
                         ..
                     } => return Err(error),

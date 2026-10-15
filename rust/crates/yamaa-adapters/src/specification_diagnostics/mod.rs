@@ -5,7 +5,7 @@ use crate::{
     specification_run::Error,
 };
 use serde_json::{json, Value};
-use yamaa_engine::specification::{
+use yamaa_core::specification::{
     BindError, BindFinding, PreflightFinding, PrepareError, SourceDeclaration,
 };
 

@@ -4,7 +4,7 @@ use extendr_api::prelude::*;
 use yamaa_adapters::{
     specification_diagnostics::inheritance_failure, specification_source::InheritancePort,
 };
-use yamaa_engine::inheritance::{Source, SourceError};
+use yamaa_core::inheritance::{Source, SourceError};
 
 struct Port(Function);
 impl Port {

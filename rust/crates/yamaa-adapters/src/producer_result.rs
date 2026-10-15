@@ -80,12 +80,12 @@ impl RootResult {
     pub fn save(&mut self) -> Result<bool, crate::file_application::FailedBuild> {
         self.save_with_limits(
             Default::default(),
-            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+            yamaa_core::capacity::REPORT_ENCODED_BYTES,
         )
     }
     pub fn save_with_limits(
         &mut self,
-        limits: yamaa_engine::producer_publication::Limits,
+        limits: yamaa_core::producer_publication::Limits,
         maximum: usize,
     ) -> Result<bool, crate::file_application::FailedBuild> {
         if self.log_publication.is_some() {
@@ -156,7 +156,7 @@ impl RootResult {
         };
         let mut attempt = crate::producer_publication::Attempt::default();
         publication.save_into(limits, &mut attempt);
-        use yamaa_engine::producer_publication::Failure;
+        use yamaa_core::producer_publication::Failure;
         let (saved, code, node) = if let Some(failure) = publication.admission_failure() {
             use crate::producer_publication::AdmissionFailure;
             match failure {
@@ -221,7 +221,7 @@ impl RootResult {
     }
     fn save_logs_with(
         &mut self,
-        limits: yamaa_engine::producer_publication::Limits,
+        limits: yamaa_core::producer_publication::Limits,
         maximum: usize,
         publish: impl FnMut(
             &mut crate::file_publication::Publisher,
@@ -674,14 +674,14 @@ mod log_tests {
         sync::atomic::{AtomicUsize, Ordering},
     };
     use yamaa_core::{
+        function_invocation::{Argument, HostError},
+        project_activation::ActivationPort,
+    };
+    use yamaa_core::{
         function_signature::{LogicalSignature, ProjectFunctionIdentity},
         project_environment::LockReference,
         project_function::Language,
         value::Value as Scalar,
-    };
-    use yamaa_engine::{
-        function_invocation::{Argument, HostError},
-        project_activation::ActivationPort,
     };
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     struct Study(PathBuf);
@@ -1206,19 +1206,19 @@ mod log_tests {
                 })
                 .sum::<usize>();
         for limits in [
-            yamaa_engine::producer_publication::Limits {
+            yamaa_core::producer_publication::Limits {
                 nodes: 1,
                 ..Default::default()
             },
-            yamaa_engine::producer_publication::Limits {
+            yamaa_core::producer_publication::Limits {
                 path_bytes: 1,
                 ..Default::default()
             },
-            yamaa_engine::producer_publication::Limits {
+            yamaa_core::producer_publication::Limits {
                 artifact_bytes: bytes - 1,
                 ..Default::default()
             },
-            yamaa_engine::producer_publication::Limits {
+            yamaa_core::producer_publication::Limits {
                 work: 1,
                 ..Default::default()
             },
@@ -1607,16 +1607,13 @@ mod log_tests {
         );
         study.remove_inputs();
         for _ in 0..2 {
-            let maximum = yamaa_engine::capacity::REPORT_ENCODED_BYTES;
+            let maximum = yamaa_core::capacity::REPORT_ENCODED_BYTES;
             let observations = producer_report::attempt_report(&owned, id(), maximum).unwrap();
             assert_eq!(observations["outcome"], "success");
             assert_eq!(observations["artifacts"].as_array().unwrap().len(), 2);
             assert!(observations["error"].is_null());
-            let mut budget = Budget::selected_projection_limits(
-                bytes,
-                cells,
-                yamaa_engine::capacity::REPORT_WORK,
-            );
+            let mut budget =
+                Budget::selected_projection_limits(bytes, cells, yamaa_core::capacity::REPORT_WORK);
             let error = match prepare_observations_with_budget(
                 &owned,
                 observations,
@@ -1663,7 +1660,7 @@ mod log_tests {
             0,
             &"x".repeat(2_048),
             8_388_608,
-            yamaa_engine::capacity::REPORT_CELLS,
+            yamaa_core::capacity::REPORT_CELLS,
         );
     }
 }

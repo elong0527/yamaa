@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
-use yamaa_engine::domain_entry::Request;
+use yamaa_core::domain_entry::Request;
 
 struct Fixture(PathBuf);
 impl Fixture {

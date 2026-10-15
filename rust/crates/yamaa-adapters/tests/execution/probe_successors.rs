@@ -1,12 +1,10 @@
 //! Unique prototype assertions retained over typed source, engine and issue APIs.
 use yamaa_adapters::{arrow_table::TableLimits, issue_rows::Issue, typed_csv};
+use yamaa_core::dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate};
 use yamaa_core::{
     reduction::NumericReducer,
     table::{Column, TableAccess, TableSchema},
     value::{ColumnType as T, Value},
-};
-use yamaa_engine::dataset::{
-    Assignment, DatasetExecution, DatasetPlan, Expression, RowMode, RowTemplate,
 };
 #[test]
 fn grouped_reduction_preserves_authored_identifier_missingness_and_fresh_attempts() {
@@ -67,7 +65,7 @@ fn grouped_reduction_preserves_authored_identifier_missingness_and_fresh_attempt
             for _ in 0..2 {
                 match plan.execute(
                     &source,
-                    yamaa_engine::dataset::Limits {
+                    yamaa_core::dataset::Limits {
                         source_rows: 10,
                         output_rows: 10,
                         output_cells: 20,

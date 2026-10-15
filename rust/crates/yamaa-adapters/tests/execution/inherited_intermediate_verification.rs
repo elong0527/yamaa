@@ -11,7 +11,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 use yamaa_adapters::{file_application, specification_report::Identity};
-use yamaa_engine::domain_entry::Request;
+use yamaa_core::domain_entry::Request;
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 struct Fixture(PathBuf);
 impl Fixture {

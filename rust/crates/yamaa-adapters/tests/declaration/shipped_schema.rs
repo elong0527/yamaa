@@ -4,7 +4,7 @@ use yamaa_adapters::{
     shipped_schema,
     specification_source::{Error, InheritanceError, InheritancePort, Source},
 };
-use yamaa_engine::inheritance::{Source as Identity, SourceError};
+use yamaa_core::inheritance::{Source as Identity, SourceError};
 
 struct NoParents;
 impl InheritancePort for NoParents {
@@ -321,7 +321,7 @@ fn inherited_layer_and_composed_findings_resolve_without_exposing_context_arenas
     let InheritanceError::Preparation { error, .. } = &missing else {
         panic!("expected lifecycle failure");
     };
-    let yamaa_engine::inheritance_preparation::Error::Normalize(context) = error.as_ref() else {
+    let yamaa_core::inheritance_preparation::Error::Normalize(context) = error.as_ref() else {
         panic!("expected normalization failure");
     };
     assert!(context.input.is_some());

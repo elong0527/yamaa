@@ -288,7 +288,7 @@ fn aliased_text_and_multiple_sources_use_cumulative_limits() {
     let (views, buffers, _) = values.into_parts();
     // Repeated views charge their logical text without allocating a giant
     // payload; all aliases retain the one independently authored buffer.
-    let exact = yamaa_engine::capacity::SOURCE_BYTES / text.len();
+    let exact = yamaa_core::capacity::SOURCE_BYTES / text.len();
     let values = StringViewArray::new(
         ScalarBuffer::from(vec![views[0]; exact]),
         buffers.clone(),

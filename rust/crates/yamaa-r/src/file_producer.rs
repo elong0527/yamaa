@@ -108,7 +108,7 @@ pub(crate) mod platform {
         let prepared = file_workflow::prepare(
             path(&specification)?,
             path(&environment)?,
-            yamaa_engine::host_values::Language::R,
+            yamaa_core::project_function::Language::R,
         )
         .map(|graph| graph.into_build());
         register(State::Specification(RefCell::new(prepared)), slot)
@@ -176,9 +176,7 @@ pub(crate) mod platform {
             verify,
             resolve_host,
             maximum,
-            yamaa_engine::application_observer::Scope::new(
-                &yamaa_engine::application_observer::Noop,
-            ),
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
         )
     }
     fn build_selected_attempt_with_observer(
@@ -187,7 +185,7 @@ pub(crate) mod platform {
         verify: Function,
         resolve_host: Function,
         maximum: usize,
-        scope: yamaa_engine::application_observer::Scope<'_>,
+        scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Rc<Attempt> {
         let provenance = std::sync::Arc::clone(prepared.provenance());
         let mut port = crate::project_activation::Port::new(
@@ -224,7 +222,7 @@ pub(crate) mod platform {
         verify: Function,
         resolve_host: Function,
         formatter: Function,
-        scope: yamaa_engine::application_observer::Scope<'_>,
+        scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<PublicResult, String> {
         let slot = Slot::reserve()?;
         let attempt = build_selected_attempt_with_observer(
@@ -232,27 +230,27 @@ pub(crate) mod platform {
             fields,
             verify,
             resolve_host,
-            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+            yamaa_core::capacity::REPORT_ENCODED_BYTES,
             scope,
         );
-        scope.phase(yamaa_engine::application_observer::Phase::Output);
+        scope.phase(yamaa_core::application_observer::Phase::Output);
         let converted = (|| {
             Ok(PublicResult {
                 state: format_attempt(
                     attempt,
                     &formatter,
-                    yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+                    yamaa_core::capacity::REPORT_ENCODED_BYTES,
                     true,
                 )?,
                 _slot: slot,
             })
         })();
         scope.exit(
-            yamaa_engine::application_observer::Phase::Output,
+            yamaa_core::application_observer::Phase::Output,
             if converted.is_ok() {
-                yamaa_engine::application_observer::Outcome::Succeeded
+                yamaa_core::application_observer::Outcome::Succeeded
             } else {
-                yamaa_engine::application_observer::Outcome::Failed
+                yamaa_core::application_observer::Outcome::Failed
             },
         );
         converted
@@ -758,7 +756,7 @@ pub(crate) mod platform {
             .ok_or("producer preparation has no rejection")?;
         let issues = yamaa_adapters::producer_check::rejected_with_limit(
             error,
-            yamaa_engine::host_values::Language::R,
+            yamaa_core::project_function::Language::R,
             maximum,
         )
         .map_err(|_| "rejection projection refused; original rejection remains retained")?;

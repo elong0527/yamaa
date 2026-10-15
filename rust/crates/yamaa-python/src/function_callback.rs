@@ -8,8 +8,10 @@ use pyo3::{
 use yamaa_adapters::callback::{
     BoundaryError as Error, CallbackError, MAX_ERROR_BYTES, MAX_RESULT_BYTES,
 };
-use yamaa_engine::host_values::{
-    Date, DatePrecision, DateTime, DateTimePrecision, Value, ValueRef,
+use yamaa_core::{
+    table::ValueRef,
+    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+    value::Value,
 };
 
 /// Function argument encoding drops collected precision only at this boundary.

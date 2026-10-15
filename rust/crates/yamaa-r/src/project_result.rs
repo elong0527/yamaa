@@ -267,10 +267,10 @@ pub(crate) mod platform {
             .save(&mut crate::specification_result::Publisher(publish))
             .map(|report| r!(report.to_string()))
             .map_err(|error| match error {
-                yamaa_engine::specification_output::SaveError::FailedBuild => {
+                yamaa_core::specification_output::SaveError::FailedBuild => {
                     "cannot save a failed build".into()
                 }
-                yamaa_engine::specification_output::SaveError::Publish(error) => error,
+                yamaa_core::specification_output::SaveError::Publish(error) => error,
             })
     }
     pub(super) fn save_file(handle: Robj, publisher: Robj) -> std::result::Result<Robj, String> {
