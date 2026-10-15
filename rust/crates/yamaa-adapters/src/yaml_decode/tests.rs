@@ -518,8 +518,27 @@ fn unicode_walk_does_not_copy_long_ancestor_paths_for_valid_siblings() {
 
 #[test]
 fn unicode_decoder_retains_every_raw_finding_before_the_public_issue_sink() {
-    let source = format!("[{}]", [r#""\uD800""#; 10_001].join(","));
-    let DecodeFailure::InvalidText(issues) = error(&source) else {
+    // Start at the repaired source tree so this control measures the Unicode
+    // walker independently of the unchanged scanner's recovery work.
+    let position = SourcePosition {
+        offset: 0,
+        line: 1,
+        column: 1,
+    };
+    let mut nodes: Vec<_> = (0..10_001)
+        .map(|_| Node {
+            value: Value::InvalidText(vec![0xd800]),
+            start: position,
+            merge: false,
+        })
+        .collect();
+    let root = nodes.len();
+    nodes.push(Node {
+        value: Value::Sequence((0..10_001).collect()),
+        start: position,
+        merge: false,
+    });
+    let DecodeFailure::InvalidText(issues) = check_unicode(&nodes, root).unwrap_err() else {
         panic!("expected complete Unicode admission findings");
     };
     assert_eq!(issues.len(), 10_001);
