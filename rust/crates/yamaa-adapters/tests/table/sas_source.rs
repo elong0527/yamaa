@@ -1,9 +1,6 @@
 //! Binary source truth is authored independently of the candidate parser.
 use std::path::Path;
-use yamaa_adapters::{
-    arrow_table::TableLimits,
-    sas_source::{self, Error, Limits},
-};
+use yamaa_adapters::sas_source::{self, Error};
 use yamaa_core::{
     specification::{SourceDeclaration, SourceProfile},
     table::{TableAccess, ValueRef},
@@ -29,31 +26,11 @@ fn declaration(name: &str) -> SourceDeclaration {
         ordinal: None,
     }
 }
-fn limits() -> Limits {
-    Limits {
-        source_bytes: 1_048_576,
-        work_bytes: 4_194_304,
-        retained_bytes: 4_194_304,
-    }
-}
-fn table_limits() -> TableLimits {
-    TableLimits {
-        max_rows: 1000,
-        max_columns: 200,
-        max_batches: 1,
-        max_cells: 100_000,
-    }
-}
 #[test]
 fn rle_and_rdc_compression_equal_independent_upstream_csv_truth() {
-    let expected = yamaa_adapters::csv_source::parse(
-        &bytes("compressed-truth.csv"),
-        yamaa_adapters::csv_source::Limits::default(),
-    )
-    .unwrap();
+    let expected = yamaa_adapters::csv_source::parse(&bytes("compressed-truth.csv")).unwrap();
     for file in ["rle.sas7bdat", "rdc.sas7bdat"] {
-        let table =
-            sas_source::parse(&bytes(file), &declaration(file), limits(), table_limits()).unwrap();
+        let table = sas_source::parse(&bytes(file), &declaration(file)).unwrap();
         assert_eq!(table.row_count(), expected.records.len());
         assert_eq!(table.schema().columns().len(), 100);
         for (column, field) in table.schema().columns().iter().enumerate() {
@@ -93,7 +70,7 @@ fn malformed_compressed_controls_fail_closed() {
         let mut data = bytes(file);
         data[offset] = byte;
         assert!(
-            sas_source::parse(&data, &declaration(file), limits(), table_limits()).is_err(),
+            sas_source::parse(&data, &declaration(file)).is_err(),
             "{file}"
         );
     }
@@ -104,7 +81,7 @@ fn rdc_overlapping_back_reference_propagates_newly_emitted_bytes() {
     let mut data = bytes(file);
     assert_eq!(&data[120922..120924], &[0x8d, 0x00]);
     data[120922..120924].copy_from_slice(&[0x81, 0x00]);
-    let table = sas_source::parse(&data, &declaration(file), limits(), table_limits()).unwrap();
+    let table = sas_source::parse(&data, &declaration(file)).unwrap();
     let independent_original = 0.621f64.to_be_bytes();
     let mut repeated = [0; 8];
     repeated[..4].copy_from_slice(&independent_original[4..]);
@@ -118,7 +95,7 @@ fn rdc_overlapping_back_reference_propagates_newly_emitted_bytes() {
 fn both_xport_versions_preserve_order_padding_unicode_and_default_float() {
     for (file, text) in [("v5.xpt", "TEXT"), ("v8.xpt", "LONG_TEXT_NAME")] {
         let mut source = declaration(file);
-        let table = sas_source::parse(&bytes(file), &source, limits(), table_limits()).unwrap();
+        let table = sas_source::parse(&bytes(file), &source).unwrap();
         assert_eq!(table.row_count(), 3);
         assert_eq!(table.schema().columns()[0].kind, ColumnType::Float);
         assert_eq!(table.schema().columns()[1].name, text);
@@ -142,7 +119,7 @@ fn both_xport_versions_preserve_order_padding_unicode_and_default_float() {
             ("DAY".into(), ColumnType::Date),
             ("STAMP".into(), ColumnType::DateTime),
         ];
-        let table = sas_source::parse(&bytes(file), &source, limits(), table_limits()).unwrap();
+        let table = sas_source::parse(&bytes(file), &source).unwrap();
         assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(2));
         assert_eq!(table.cell(1, 1).unwrap(), ValueRef::Str(""));
         assert_eq!(
@@ -162,13 +139,7 @@ fn both_xport_versions_preserve_order_padding_unicode_and_default_float() {
 #[test]
 fn sas_dataset_numeric_date_formats_never_infer_and_epoch_narrowing_is_explicit() {
     let mut source = declaration("datetime.sas7bdat");
-    let table = sas_source::parse(
-        &bytes("datetime.sas7bdat"),
-        &source,
-        limits(),
-        table_limits(),
-    )
-    .unwrap();
+    let table = sas_source::parse(&bytes("datetime.sas7bdat"), &source).unwrap();
     assert_eq!(table.schema().columns().len(), 5);
     assert!(table
         .schema()
@@ -182,13 +153,7 @@ fn sas_dataset_numeric_date_formats_never_infer_and_epoch_narrowing_is_explicit(
         ("VAR4".into(), ColumnType::Date),
         ("VAR5".into(), ColumnType::Int),
     ];
-    let table = sas_source::parse(
-        &bytes("datetime.sas7bdat"),
-        &source,
-        limits(),
-        table_limits(),
-    )
-    .unwrap();
+    let table = sas_source::parse(&bytes("datetime.sas7bdat"), &source).unwrap();
     assert_eq!(
         table.cell(0, 0).unwrap(),
         ValueRef::DateTime("2015-02-02T14:42:12".parse().unwrap())
@@ -203,13 +168,7 @@ fn sas_dataset_numeric_date_formats_never_infer_and_epoch_narrowing_is_explicit(
 }
 #[test]
 fn all_numeric_missing_tags_map_to_missing() {
-    let table = sas_source::parse(
-        &bytes("missing.xpt"),
-        &declaration("missing.xpt"),
-        limits(),
-        table_limits(),
-    )
-    .unwrap();
+    let table = sas_source::parse(&bytes("missing.xpt"), &declaration("missing.xpt")).unwrap();
     assert_eq!(table.row_count(), 28);
     for row in 0..28 {
         assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Missing);
@@ -230,7 +189,7 @@ fn nonfinite_numeric_source_is_missing_before_every_authored_narrowing() {
     ] {
         let mut source = declaration("fractional.xpt");
         source.types = vec![("NUM".into(), kind)];
-        let table = sas_source::parse(&payload, &source, limits(), table_limits()).unwrap();
+        let table = sas_source::parse(&payload, &source).unwrap();
         assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Missing);
     }
 }
@@ -238,17 +197,11 @@ fn nonfinite_numeric_source_is_missing_before_every_authored_narrowing() {
 fn utf8_and_integer_boundaries_have_independent_exact_truth() {
     let mut source = declaration("utf8.xpt");
     source.encoding = Some("utf-8".into());
-    let table = sas_source::parse(&bytes("utf8.xpt"), &source, limits(), table_limits()).unwrap();
+    let table = sas_source::parse(&bytes("utf8.xpt"), &source).unwrap();
     assert_eq!(table.cell(0, 1).unwrap(), ValueRef::Str(" café"));
     let mut source = declaration("integer-bounds.xpt");
     source.types = vec![("NUM".into(), ColumnType::Int)];
-    let table = sas_source::parse(
-        &bytes("integer-bounds.xpt"),
-        &source,
-        limits(),
-        table_limits(),
-    )
-    .unwrap();
+    let table = sas_source::parse(&bytes("integer-bounds.xpt"), &source).unwrap();
     for (row, number) in [i64::MIN, 0, 9_007_199_254_740_992, i64::MAX - 1023]
         .into_iter()
         .enumerate()
@@ -257,12 +210,7 @@ fn utf8_and_integer_boundaries_have_independent_exact_truth() {
     }
     source.path = "integer-overflow.xpt".into();
     assert!(matches!(
-        sas_source::parse(
-            &bytes("integer-overflow.xpt"),
-            &source,
-            limits(),
-            table_limits()
-        ),
+        sas_source::parse(&bytes("integer-overflow.xpt"), &source,),
         Err(Error::Typing(
             yamaa_core::typed_csv::Error::FieldParse { .. }
         ))
@@ -272,7 +220,7 @@ fn utf8_and_integer_boundaries_have_independent_exact_truth() {
 fn unsupported_compression_has_a_specific_retained_cause() {
     let source = declaration("unsupported-compression.sas7bdat");
     assert!(matches!(
-        sas_source::parse(&bytes(&source.path), &source, limits(), table_limits()),
+        sas_source::parse(&bytes(&source.path), &source),
         Err(Error::Invalid("compression"))
     ));
 }
@@ -280,7 +228,7 @@ fn unsupported_compression_has_a_specific_retained_cause() {
 fn reject_multiple_members_in_both_transport_versions() {
     for name in ["multi-v5.xpt", "multi-v8.xpt"] {
         assert!(matches!(
-            sas_source::parse(&bytes(name), &declaration(name), limits(), table_limits()),
+            sas_source::parse(&bytes(name), &declaration(name)),
             Err(Error::Invalid("members"))
         ));
     }
@@ -288,7 +236,7 @@ fn reject_multiple_members_in_both_transport_versions() {
 #[test]
 fn member_header_shaped_character_data_is_an_ordinary_value() {
     let source = declaration("member-text.xpt");
-    let table = sas_source::parse(&bytes(&source.path), &source, limits(), table_limits()).unwrap();
+    let table = sas_source::parse(&bytes(&source.path), &source).unwrap();
     assert_eq!(table.row_count(), 1);
     assert_eq!(
         table.cell(0, 0).unwrap(),
@@ -304,7 +252,7 @@ fn ordinary_float_keeps_readstat_conversion_while_exact_narrowing_is_guarded() {
         ("precision.xpt", 9_007_199_254_740_992.0),
     ] {
         let source = declaration(file);
-        let table = sas_source::parse(&bytes(file), &source, limits(), table_limits()).unwrap();
+        let table = sas_source::parse(&bytes(file), &source).unwrap();
         assert_eq!(
             table.cell(0, 0).unwrap(),
             ValueRef::Float(yamaa_core::value::FiniteFloat::new(expected).unwrap())
@@ -318,7 +266,7 @@ fn narrowing_never_truncates_or_accepts_an_ibm_precision_loss() {
             let mut source = declaration(name);
             source.types = vec![("NUM".into(), kind)];
             assert!(matches!(
-                sas_source::parse(&bytes(name), &source, limits(), table_limits()),
+                sas_source::parse(&bytes(name), &source),
                 Err(Error::Typing(
                     yamaa_core::typed_csv::Error::FieldParse { .. }
                 ))
@@ -327,119 +275,31 @@ fn narrowing_never_truncates_or_accepts_an_ibm_precision_loss() {
     }
 }
 #[test]
-fn malformed_truncated_encoding_unknown_fields_and_capacities_fail_before_execution() {
+fn malformed_truncated_encoding_and_unknown_fields_fail_before_execution() {
     let source = declaration("v5.xpt");
     let payload = bytes("v5.xpt");
     for length in [0, 1, 79, 640, payload.len() - 1] {
-        assert!(sas_source::parse(&payload[..length], &source, limits(), table_limits()).is_err());
+        assert!(sas_source::parse(&payload[..length], &source).is_err());
     }
     let mut source = source;
     source.encoding = Some("utf-8".into());
     assert!(matches!(
-        sas_source::parse(&payload, &source, limits(), table_limits()),
+        sas_source::parse(&payload, &source),
         Err(Error::Invalid("encoding"))
     ));
     source.encoding = Some("windows-1252".into());
     source.types = vec![("ABSENT".into(), ColumnType::Int)];
     assert!(matches!(
-        sas_source::parse(&payload, &source, limits(), table_limits()),
+        sas_source::parse(&payload, &source),
         Err(Error::Typing(
             yamaa_core::typed_csv::Error::UnknownField { .. }
         ))
     ));
-    source.types.clear();
-    for table_limits in [
-        TableLimits {
-            max_rows: 2,
-            ..table_limits()
-        },
-        TableLimits {
-            max_columns: 4,
-            ..table_limits()
-        },
-        TableLimits {
-            max_cells: 14,
-            ..table_limits()
-        },
-    ] {
-        assert!(matches!(
-            sas_source::parse(&payload, &source, limits(), table_limits),
-            Err(Error::Limit { .. })
-        ));
-    }
-    assert!(matches!(
-        sas_source::parse(
-            &payload,
-            &source,
-            Limits {
-                work_bytes: 32,
-                ..limits()
-            },
-            table_limits()
-        ),
-        Err(Error::Limit { .. })
-    ));
     let sas = bytes("datetime.sas7bdat");
     for length in [0, 31, 1024, sas.len() - 1] {
         assert!(matches!(
-            sas_source::parse(
-                &sas[..length],
-                &declaration("datetime.sas7bdat"),
-                limits(),
-                table_limits()
-            ),
+            sas_source::parse(&sas[..length], &declaration("datetime.sas7bdat"),),
             Err(Error::Invalid(_))
         ));
     }
-}
-#[test]
-fn resource_refusals_retain_actual_rows_columns_cells_and_bytes() {
-    let payload = bytes("v5.xpt");
-    let source = declaration("v5.xpt");
-    for (resource, quota, actual, table_limits) in [
-        (
-            "rows",
-            2,
-            3,
-            TableLimits {
-                max_rows: 2,
-                ..table_limits()
-            },
-        ),
-        (
-            "columns",
-            4,
-            5,
-            TableLimits {
-                max_columns: 4,
-                ..table_limits()
-            },
-        ),
-        (
-            "cells",
-            14,
-            15,
-            TableLimits {
-                max_cells: 14,
-                ..table_limits()
-            },
-        ),
-    ] {
-        match sas_source::parse(&payload, &source, limits(), table_limits) {
-            Err(Error::Limit {
-                resource: observed,
-                limit,
-                actual: required,
-            }) => {
-                assert_eq!(observed, resource);
-                assert_eq!(limit, quota);
-                assert_eq!(required, Some(actual));
-            }
-            result => panic!("expected retained {resource} refusal, got {result:?}"),
-        }
-    }
-    assert!(
-        matches!(sas_source::parse(&payload, &source, Limits { source_bytes: payload.len() - 1, ..limits() }, table_limits()),
-        Err(Error::Limit { resource: "source_bytes", limit, actual: Some(actual) }) if limit + 1 == actual && actual == payload.len())
-    );
 }

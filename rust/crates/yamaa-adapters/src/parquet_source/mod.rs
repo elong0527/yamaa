@@ -1,12 +1,11 @@
 //! Held Parquet source bytes to an owned engine table under the closed profile.
 //!
-//! Resource policies are supplied by a trusted caller; they are not language
-//! defaults or total-process memory guarantees. This codec performs no filesystem
+//! Fixed source and table boundaries are logical admission checks, not process
+//! memory guarantees. This codec performs no filesystem
 //! access, resource lookup, host callbacks, semantic fallback, or publication.
 mod compact;
 mod compression;
 mod delta;
-mod expansion;
 mod framing;
 mod metadata;
 mod payload;
@@ -19,18 +18,13 @@ mod shape;
 mod table;
 mod type_name;
 
-use crate::arrow_table::{ArrowTable, TableError, TableLimits};
-pub use compression::Limits as CompressionLimits;
-pub use framing::Limits as FramingLimits;
-pub use metadata::Limits as MetadataLimits;
-pub use reader::Limits;
+use crate::arrow_table::{ArrowTable, TableError};
 
 /// Typed adapter failures; the consuming frontend supplies diagnostic location.
 #[derive(Debug)]
 pub enum Error {
     OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
     Malformed,
-    Limit,
     ResourceLimit {
         resource: &'static str,
         limit: usize,
@@ -76,7 +70,6 @@ impl Error {
                 value: *value,
             },
             Self::OdmFields(_)
-            | Self::Limit
             | Self::ResourceLimit { .. }
             | Self::Unavailable { .. }
             | Self::Table(_) => return None,
@@ -96,7 +89,6 @@ impl From<reader::Error> for Error {
             reader::Error::Malformed | reader::Error::Profile(profile::Error::Invalid) => {
                 Self::Malformed
             }
-            reader::Error::Limit => Self::Limit,
             reader::Error::ResourceLimit {
                 resource,
                 limit,
@@ -126,56 +118,19 @@ impl From<reader::Error> for Error {
 /// Decode every physical chunk before reporting closed-profile findings. The
 /// resulting snapshot owns its values independently of `content`. Empty strings
 /// remain present here; input declarations apply missing-string policy later.
-/// Canonical table conversion shares the explicit retained-byte staging budget.
-pub fn parse(
-    content: &[u8],
-    limits: Limits,
-    table_limits: TableLimits,
-) -> Result<ArrowTable, Error> {
-    let decoded = reader::read(content, limits)?;
-    table::convert(decoded, limits.retained_bytes, table_limits).map_err(|error| match error {
-        table::Error::Invalid => Error::Malformed,
-        table::Error::Table(error) => Error::Table(error),
-    })
+pub fn parse(content: &[u8]) -> Result<ArrowTable, Error> {
+    convert(reader::read(content)?)
 }
 
 /// Admit the fixed ODM schema before decoding values, then expose its eleven
 /// canonical text fields. Physical vendor chunks are validated and discarded.
-pub fn parse_odm(
-    content: &[u8],
-    limits: Limits,
-    table_limits: TableLimits,
-) -> Result<ArrowTable, Error> {
-    let decoded = reader::read_odm(content, limits)?;
-    table::convert(decoded, limits.retained_bytes, table_limits).map_err(|error| match error {
+pub fn parse_odm(content: &[u8]) -> Result<ArrowTable, Error> {
+    convert(reader::read_odm(content)?)
+}
+
+fn convert(decoded: reader::Decoded) -> Result<ArrowTable, Error> {
+    table::convert(decoded).map_err(|error| match error {
         table::Error::Invalid => Error::Malformed,
         table::Error::Table(error) => Error::Table(error),
     })
-}
-
-/// Internal sequential decoder receipt; public codec entry points keep their
-/// existing admission behavior and signatures.
-pub(crate) fn parse_with_usage(
-    content: &[u8],
-    limits: Limits,
-    table_limits: TableLimits,
-    odm: bool,
-    usage: &mut crate::source_decode_usage::Usage,
-) -> Result<ArrowTable, Error> {
-    let mut copied = 0;
-    crate::source_decode_usage::charge(
-        &mut copied,
-        content.len(),
-        limits.retained_bytes,
-        "retained_bytes",
-    )
-    .map_err(Error::Table)?;
-    usage.storage(copied);
-    let decoded = reader::read_with_usage(content, limits, odm, Some(usage))?;
-    table::convert_with_usage(decoded, limits.retained_bytes, table_limits, Some(usage)).map_err(
-        |error| match error {
-            table::Error::Invalid => Error::Malformed,
-            table::Error::Table(error) => Error::Table(error),
-        },
-    )
 }

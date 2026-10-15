@@ -5,7 +5,6 @@ use super::compact::{self, Value};
 #[derive(Debug)]
 pub(super) enum Error {
     Malformed,
-    Limit,
     ResourceLimit {
         resource: &'static str,
         limit: usize,
@@ -13,37 +12,18 @@ pub(super) enum Error {
     },
 }
 impl From<compact::Error> for Error {
-    fn from(error: compact::Error) -> Self {
-        match error {
-            compact::Error::Malformed => Self::Malformed,
-            compact::Error::Limit => Self::Limit,
-            compact::Error::ResourceLimit {
-                resource,
-                limit,
-                actual,
-            } => Self::ResourceLimit {
-                resource,
-                limit,
-                actual,
-            },
-        }
+    fn from(_: compact::Error) -> Self {
+        Self::Malformed
     }
 }
-
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub source_bytes: usize,
-    pub metadata_bytes: usize,
-    pub metadata_nodes: usize,
-    pub header_bytes: usize,
-    pub header_nodes: usize,
-    pub row_groups: usize,
-    pub columns: usize,
-    pub rows: usize,
-    pub cells: usize,
-    pub pages: usize,
-    pub page_bytes: usize,
-    pub decoded_bytes: usize,
+impl From<yamaa_core::limits::LimitExceeded> for Error {
+    fn from(error: yamaa_core::limits::LimitExceeded) -> Self {
+        Self::ResourceLimit {
+            resource: error.resource,
+            limit: error.limit,
+            actual: error.actual,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -104,37 +84,11 @@ fn sequence<'a, 'b>(value: Option<&'b Value<'a>>) -> Result<&'b [Value<'a>], Err
         Err(Error::Malformed)
     }
 }
-fn charge(
-    used: &mut usize,
-    amount: usize,
-    limit: usize,
-    resource: &'static str,
-) -> Result<(), Error> {
-    let actual = used.checked_add(amount);
-    *used = actual.filter(|n| *n <= limit).ok_or(Error::ResourceLimit {
-        resource,
-        limit,
-        actual,
-    })?;
-    Ok(())
-}
-fn bound(value: usize, limit: usize, resource: &'static str) -> Result<(), Error> {
-    if value > limit {
-        Err(Error::ResourceLimit {
-            resource,
-            limit,
-            actual: Some(value),
-        })
-    } else {
-        Ok(())
-    }
-}
-
 // A compact list's length bounds its own allocation, but not allocations made
 // later from integer fields within each SchemaElement. The general reader
 // reserves num_children slots before discovering a truncated schema tree.
-fn admit_schema(schema: &[Value<'_>], limits: Limits) -> Result<(), Error> {
-    bound(schema.len().saturating_sub(1), limits.columns, "columns")?;
+fn admit_schema(schema: &[Value<'_>]) -> Result<(), Error> {
+    yamaa_core::limits::Limits::columns(schema.len().saturating_sub(1))?;
     let mut remaining_children = Vec::new();
     for (index, element) in schema.iter().enumerate() {
         while remaining_children.last() == Some(&0) {
@@ -145,7 +99,9 @@ fn admit_schema(schema: &[Value<'_>], limits: Limits) -> Result<(), Error> {
         }
         // Flat Thrift metadata can describe a deeply recursive schema tree.
         // Admit its depth independently of the compact parser's own depth.
-        bound(remaining_children.len() + 1, 64, "schema_depth")?;
+        if remaining_children.len() + 1 > yamaa_core::limits::Limits::SEMANTIC_DEPTH {
+            return Err(Error::Malformed);
+        }
         if let Some(value) = element.field(5) {
             let children = count(Some(value))?;
             if children > schema.len() - index - 1 {
@@ -155,92 +111,43 @@ fn admit_schema(schema: &[Value<'_>], limits: Limits) -> Result<(), Error> {
                 remaining_children.push(children);
             }
         }
-        if let Some(value) = element.field(2) {
-            let length = integer(Some(value))?;
-            if length > 0 {
-                bound(
-                    usize::try_from(length).map_err(|_| Error::Limit)?,
-                    limits.page_bytes,
-                    "page_bytes",
-                )?;
-            }
-        }
     }
     Ok(())
 }
 
-/// Collect bounded borrowed page bodies from every stored column chunk, in
-/// row-group/column/page order. Unknown metadata is still included in node/work
-/// admission. The downstream codec remains responsible for format semantics.
-pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> {
-    admit_inner(bytes, limits, None)
-}
-
-pub(super) fn admit_with_usage<'a>(
-    bytes: &'a [u8],
-    limits: Limits,
-    usage: &mut crate::source_decode_usage::Usage,
-) -> Result<Framing<'a>, Error> {
-    admit_inner(bytes, limits, Some(usage))
-}
-
-fn admit_inner<'a>(
-    bytes: &'a [u8],
-    limits: Limits,
-    mut usage: Option<&mut crate::source_decode_usage::Usage>,
-) -> Result<Framing<'a>, Error> {
-    bound(bytes.len(), limits.source_bytes, "bytes")?;
+/// Collect borrowed page bodies from every stored column chunk in source order.
+/// The downstream codec remains responsible for physical format semantics.
+pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
+    yamaa_core::limits::Limits::source_bytes(bytes.len())?;
     if bytes.len() < 12 || &bytes[..4] != b"PAR1" || &bytes[bytes.len() - 4..] != b"PAR1" {
         return Err(Error::Malformed);
     }
     let footer = bytes.len() - 8;
     let length = u32::from_le_bytes(bytes[footer..footer + 4].try_into().unwrap()) as usize;
-    bound(length, limits.metadata_bytes, "metadata_bytes")?;
     let start = footer
         .checked_sub(length)
         .filter(|n| *n >= 4)
         .ok_or(Error::Malformed)?;
     let metadata = &bytes[start..footer];
-    let (root, _, _) = compact::parse(
-        metadata,
-        compact::Limits {
-            nodes: limits.metadata_nodes,
-            depth: 64,
-            bytes: limits.metadata_bytes,
-        },
-    )?;
-    bound(count(root.field(3))?, limits.rows, "rows")?;
+    let (root, _) = compact::parse(metadata)?;
+    let declared_rows = count(root.field(3))?;
     let groups = sequence(root.field(4))?;
-    bound(groups.len(), limits.row_groups, "row_groups")?;
-    // Include the root schema element in metadata-node accounting. Leaf/field
-    // matching and the closed type contract are checked by the actual decoder.
     let schema = sequence(root.field(2))?;
-    admit_schema(schema, limits)?;
+    admit_schema(schema)?;
+    yamaa_core::limits::Limits::table(declared_rows, schema.len().saturating_sub(1))?;
     let mut result = Framing {
         metadata,
         pages: Vec::new(),
     };
-    let mut rows = 0;
-    let mut cells = 0;
-    let mut decoded = 0;
-    let mut header_nodes = 0;
-    let mut data_values = 0;
-    let mut dictionary_values = 0;
+    let mut rows = 0usize;
     for (row_group, group) in groups.iter().enumerate() {
         let count_rows = count(group.field(3))?;
-        charge(&mut rows, count_rows, limits.rows, "rows")?;
+        rows = rows.checked_add(count_rows).ok_or(Error::Malformed)?;
         let columns = sequence(group.field(1))?;
-        bound(columns.len(), limits.columns, "columns")?;
-        charge(
-            &mut cells,
-            count_rows.checked_mul(columns.len()).ok_or(Error::Limit)?,
-            limits.cells,
-            "cells",
-        )?;
+        yamaa_core::limits::Limits::table(rows, columns.len())?;
         for (column, chunk) in columns.iter().enumerate() {
             let meta = chunk.field(3).ok_or(Error::Malformed)?;
             let codec = integer(meta.field(4))?;
-            bound(count(meta.field(5))?, limits.cells, "cells")?;
             let data = count(meta.field(9))?;
             let mut offset = match meta.field(11) {
                 // Match the reader's exact chunk start. Empty columns may have
@@ -257,45 +164,9 @@ fn admit_inner<'a>(
                 return Err(Error::Malformed);
             }
             while offset < end {
-                bound(
-                    result.pages.len().checked_add(1).ok_or(Error::Limit)?,
-                    limits.pages,
-                    "pages",
-                )?;
-                let (header, used, nodes) = compact::parse(
-                    &bytes[offset..end],
-                    compact::Limits {
-                        nodes: limits.header_nodes.saturating_sub(header_nodes),
-                        depth: 64,
-                        bytes: limits.header_bytes,
-                    },
-                )?;
-                charge(
-                    &mut header_nodes,
-                    nodes,
-                    limits.header_nodes,
-                    "header_nodes",
-                )?;
+                let (header, used) = compact::parse(&bytes[offset..end])?;
                 let uncompressed = count(header.field(2))?;
                 let compressed = count(header.field(3))?;
-                bound(uncompressed, limits.page_bytes, "page_bytes")?;
-                bound(compressed, limits.page_bytes, "page_bytes")?;
-                charge(
-                    &mut decoded,
-                    uncompressed,
-                    limits.decoded_bytes,
-                    "decoded_bytes",
-                )?;
-                if let Some(usage) = usage.as_deref_mut() {
-                    usage.work(decoded);
-                }
-                // Value counts control downstream dictionary/column staging,
-                // including headers inconsistent with their page-type tag.
-                for field in [5, 7, 8] {
-                    if let Some(detail) = header.field(field) {
-                        bound(count(detail.field(1))?, limits.cells, "cells")?;
-                    }
-                }
                 let payload = match integer(header.field(1))? {
                     0 => {
                         let detail = header.field(5).ok_or(Error::Malformed)?;
@@ -316,8 +187,6 @@ fn admit_inner<'a>(
                     }
                     3 => {
                         let detail = header.field(8).ok_or(Error::Malformed)?;
-                        bound(count(detail.field(2))?, limits.cells, "cells")?;
-                        bound(count(detail.field(3))?, limits.rows, "rows")?;
                         Payload::DataV2 {
                             encoding: integer(detail.field(4))?,
                             values: count(detail.field(1))?,
@@ -328,15 +197,6 @@ fn admit_inner<'a>(
                     }
                     _ => return Err(Error::Malformed),
                 };
-                match payload {
-                    Payload::DataV1 { values, .. } | Payload::DataV2 { values, .. } => {
-                        charge(&mut data_values, values, limits.cells, "cells")?
-                    }
-                    Payload::Dictionary { values, .. } => {
-                        charge(&mut dictionary_values, values, limits.cells, "cells")?
-                    }
-                    Payload::Index => {}
-                }
                 let v2 = if matches!(payload, Payload::DataV2 { .. }) {
                     header.field(8)
                 } else {
@@ -383,22 +243,7 @@ fn admit_inner<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn limits() -> Limits {
-        Limits {
-            source_bytes: 1024,
-            metadata_bytes: 512,
-            metadata_nodes: 128,
-            header_bytes: 128,
-            header_nodes: 128,
-            row_groups: 4,
-            columns: 4,
-            rows: 16,
-            cells: 64,
-            pages: 16,
-            page_bytes: 64,
-            decoded_bytes: 128,
-        }
-    }
+
     fn container(page: &[u8]) -> Vec<u8> {
         assert!(page.len() < 64);
         let mut bytes = b"PAR1".to_vec();
@@ -445,43 +290,32 @@ mod tests {
         ]
     }
     #[test]
-    fn schema_integer_claims_and_flattened_tree_depth_are_admitted_before_allocation() {
+    fn schema_integer_claims_and_flattened_tree_recursion_are_checked() {
         let element = |children| Value::Struct(vec![(5, Value::Integer(children))]);
         assert!(matches!(
-            admit_schema(&[element(i32::MAX.into())], limits()),
+            admit_schema(&[element(i32::MAX.into())]),
             Err(Error::Malformed)
         ));
         assert!(matches!(
-            admit_schema(&[element(-1)], limits()),
+            admit_schema(&[element(-1)]),
             Err(Error::Malformed)
         ));
-        let fixed = |length| Value::Struct(vec![(2, Value::Integer(length))]);
-        admit_schema(&[element(1), fixed(64)], limits()).unwrap();
-        assert!(matches!(
-            admit_schema(&[element(1), fixed(65)], limits()),
-            Err(Error::ResourceLimit { .. })
-        ));
-        let mut nested: Vec<_> = (0..63).map(|_| element(1)).collect();
+        let mut nested: Vec<_> = (0..yamaa_core::limits::Limits::SEMANTIC_DEPTH - 1)
+            .map(|_| element(1))
+            .collect();
         nested.push(element(0));
-        let generous = Limits {
-            columns: 128,
-            ..limits()
-        };
-        admit_schema(&nested, generous).unwrap();
+        admit_schema(&nested).unwrap();
         nested.insert(0, element(1));
-        assert!(matches!(
-            admit_schema(&nested, generous),
-            Err(Error::ResourceLimit { .. })
-        ));
-        // Siblings exhaust their parent rather than incrementing tree depth.
+        assert!(matches!(admit_schema(&nested), Err(Error::Malformed)));
         let mut flat = vec![element(100)];
         flat.extend((0..100).map(|_| element(0)));
-        admit_schema(&flat, generous).unwrap();
+        admit_schema(&flat).unwrap();
     }
+
     #[test]
-    fn borrowed_page_ranges_and_aggregate_limits_are_checked_before_codec_use() {
+    fn borrowed_page_ranges_preserve_exact_body_and_metadata() {
         let bytes = container(&page());
-        let admitted = admit(&bytes, limits()).unwrap();
+        let admitted = admit(&bytes).unwrap();
         assert_eq!(admitted.pages.len(), 1);
         let page = &admitted.pages[0];
         assert_eq!(page.body.as_ptr(), bytes[21..].as_ptr());
@@ -491,124 +325,61 @@ mod tests {
         assert_eq!(page.uncompressed_prefix, 0);
         assert!(page.compressed);
         assert_eq!(admitted.metadata.len(), 26);
-        for restricted in [
-            Limits {
-                source_bytes: bytes.len() - 1,
-                ..limits()
-            },
-            Limits {
-                metadata_bytes: 25,
-                ..limits()
-            },
-            Limits {
-                metadata_nodes: 1,
-                ..limits()
-            },
-            Limits {
-                header_bytes: 16,
-                ..limits()
-            },
-            Limits {
-                header_nodes: 1,
-                ..limits()
-            },
-            Limits {
-                row_groups: 0,
-                ..limits()
-            },
-            Limits {
-                columns: 0,
-                ..limits()
-            },
-            Limits {
-                rows: 0,
-                ..limits()
-            },
-            Limits {
-                cells: 0,
-                ..limits()
-            },
-            Limits {
-                pages: 0,
-                ..limits()
-            },
-            Limits {
-                page_bytes: 3,
-                ..limits()
-            },
-            Limits {
-                decoded_bytes: 3,
-                ..limits()
-            },
-        ] {
-            assert!(
-                matches!(admit(&bytes, restricted), Err(Error::ResourceLimit { .. })),
-                "{restricted:?}"
-            );
-        }
     }
+
     #[test]
     fn footer_bounds_page_body_lengths_and_v2_prefixes_are_not_trusted() {
         let mut bytes = container(&page());
         bytes[0] = 0;
-        assert!(matches!(admit(&bytes, limits()), Err(Error::Malformed)));
+        assert!(matches!(admit(&bytes), Err(Error::Malformed)));
         let mut bytes = container(&page());
         let footer = bytes.len() - 8;
         bytes[footer..footer + 4].copy_from_slice(&u32::MAX.to_le_bytes());
-        assert!(matches!(
-            admit(&bytes, limits()),
-            Err(Error::ResourceLimit { .. })
-        ));
+        assert!(matches!(admit(&bytes), Err(Error::Malformed)));
         let mut bad = page();
         bad[5] = 10; // claims five body bytes; only four exist
-        assert!(matches!(
-            admit(&container(&bad), limits()),
-            Err(Error::Malformed)
-        ));
-        let mut bad = page();
-        bad[3] = 0x7e; // claimed expansion exceeds decoded budget
-        assert!(matches!(
-            admit(
-                &container(&bad),
-                Limits {
-                    decoded_bytes: 62,
-                    ..limits()
-                }
-            ),
-            Err(Error::ResourceLimit { .. })
-        ));
+        assert!(matches!(admit(&container(&bad)), Err(Error::Malformed)));
         // V2: one value, zero nulls, one row, PLAIN, 3 definition bytes,
         // 2 repetition bytes, no compression; sizes claim only four bytes.
         let bad = [
             0x15, 6, 0x15, 8, 0x15, 8, 0x5c, 0x15, 2, 0x15, 0, 0x15, 2, 0x15, 0, 0x15, 6, 0x15, 4,
             0x12, 0, 0, 0, 0, 0, 0,
         ];
-        assert!(matches!(
-            admit(&container(&bad), limits()),
-            Err(Error::Malformed)
-        ));
+        assert!(matches!(admit(&container(&bad)), Err(Error::Malformed)));
         let mut good = bad;
         good[18] = 0; // Prefix is now three bytes, no compression.
         let bytes = container(&good);
-        let admitted = admit(&bytes, limits()).unwrap();
+        let admitted = admit(&bytes).unwrap();
         assert_eq!(admitted.pages[0].uncompressed_prefix, 3);
         assert!(!admitted.pages[0].compressed);
     }
     #[test]
-    fn actual_page_value_work_is_bounded_even_if_footer_row_counts_are_small() {
-        let mut pages = page();
-        pages.extend(page());
-        let bytes = container(&pages);
-        assert_eq!(admit(&bytes, limits()).unwrap().pages.len(), 2);
-        assert!(matches!(
-            admit(
-                &bytes,
-                Limits {
-                    cells: 1,
-                    ..limits()
-                }
-            ),
-            Err(Error::ResourceLimit { .. })
-        ));
+    fn declared_row_boundary_is_checked_before_decoding_page_values() {
+        let fixture = container(&page());
+        let footer_start = fixture.len() - 8 - 26;
+        for rows in [
+            yamaa_core::limits::Limits::TABLE_ROWS - 1,
+            yamaa_core::limits::Limits::TABLE_ROWS + 1,
+        ] {
+            let mut encoded = Vec::new();
+            let mut value = (rows as u64) << 1;
+            while value >= 128 {
+                encoded.push(value as u8 | 128);
+                value >>= 7;
+            }
+            encoded.push(value as u8);
+            let mut bytes = fixture[..footer_start + 6].to_vec();
+            bytes.extend(&encoded);
+            bytes.extend(&fixture[footer_start + 7..fixture.len() - 8]);
+            bytes.extend((25u32 + encoded.len() as u32).to_le_bytes());
+            bytes.extend(b"PAR1");
+            if rows <= yamaa_core::limits::Limits::TABLE_ROWS {
+                admit(&bytes).unwrap();
+            } else {
+                assert!(
+                    matches!(admit(&bytes), Err(Error::ResourceLimit { resource: "table_rows", actual: Some(actual), .. }) if actual == rows)
+                );
+            }
+        }
     }
 }

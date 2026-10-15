@@ -129,20 +129,15 @@ pub(super) fn values<'a>(
     }))
 }
 
-/// Return bytes reconstructed by delta string decoding for aggregate admission.
-pub(super) fn admit(
-    page: &Page<'_>,
-    decoded: &[u8],
-    column: &ColumnDescriptor,
-    reconstructed_bytes: usize,
-) -> Result<usize, Error> {
+/// Validate delta counts and strings against their physical page framing.
+fn delta_values(page: &Page<'_>, decoded: &[u8], column: &ColumnDescriptor) -> Result<(), Error> {
     let Some(Values {
         encoding,
         count: values,
         body,
     }) = values(page, decoded, column)?
     else {
-        return Ok(0);
+        return Ok(());
     };
     let physical = column.physical_type();
     match encoding {
@@ -150,33 +145,106 @@ pub(super) fn admit(
             body,
             encoding,
             if physical == Type::INT32 { 32 } else { 64 },
-            delta::Limits {
-                values,
-                reconstructed_bytes,
-            },
+            values,
         ),
-        6 if physical == Type::BYTE_ARRAY => delta::admit(
-            body,
-            encoding,
-            32,
-            delta::Limits {
-                values,
-                reconstructed_bytes,
-            },
-        ),
-        7 if matches!(physical, Type::BYTE_ARRAY | Type::FIXED_LEN_BYTE_ARRAY) => delta::admit(
-            body,
-            encoding,
-            32,
-            delta::Limits {
-                values,
-                reconstructed_bytes,
-            },
-        ),
+        6 if physical == Type::BYTE_ARRAY => delta::admit(body, encoding, 32, values),
+        7 if matches!(physical, Type::BYTE_ARRAY | Type::FIXED_LEN_BYTE_ARRAY) => {
+            delta::admit(body, encoding, 32, values)
+        }
         // The remaining encodings use bounded caller buffers or borrowed byte
         // slices in the pinned library. It still validates their data/types.
-        _ => Ok(0),
+        _ => Ok(()),
     }
+}
+
+/// Preserve dictionary state across pages of each physical column chunk.
+pub(super) struct Validation {
+    chunk: Option<(usize, usize)>,
+    dictionary: Option<usize>,
+}
+impl Validation {
+    pub(super) fn new() -> Self {
+        Self {
+            chunk: None,
+            dictionary: None,
+        }
+    }
+
+    pub(super) fn admit(
+        &mut self,
+        page: &Page<'_>,
+        decoded: &[u8],
+        column: &ColumnDescriptor,
+    ) -> Result<(), Error> {
+        let chunk = (page.row_group, page.column);
+        if self.chunk != Some(chunk) {
+            self.chunk = Some(chunk);
+            self.dictionary = None;
+        }
+        let Some(Values {
+            encoding,
+            count,
+            body,
+        }) = values(page, decoded, column)?
+        else {
+            return Ok(());
+        };
+        if matches!(page.payload, Payload::Dictionary { .. }) {
+            if self.dictionary.is_some() || !matches!(encoding, 0 | 2) {
+                return Err(Error::Malformed);
+            }
+            plain(body, count, column)?;
+            self.dictionary = Some(count);
+            return Ok(());
+        }
+        match encoding {
+            2 | 8 => {
+                let entries = self.dictionary.ok_or(Error::Malformed)?;
+                let (&width, indices) = body.split_first().ok_or(Error::Malformed)?;
+                rle::hybrid(indices, u32::from(width), count, |index, _| {
+                    if index as usize >= entries {
+                        Err(Error::Malformed)
+                    } else {
+                        Ok(())
+                    }
+                })
+            }
+            0 => plain(body, count, column),
+            5..=7 => delta_values(page, decoded, column),
+            _ => Ok(()), // The physical reader checks the remaining encodings/types.
+        }
+    }
+}
+
+fn plain(mut bytes: &[u8], values: usize, column: &ColumnDescriptor) -> Result<(), Error> {
+    if column.physical_type() == Type::BYTE_ARRAY {
+        for _ in 0..values {
+            let header = bytes.get(..4).ok_or(Error::Malformed)?;
+            let length = u32::from_le_bytes(header.try_into().unwrap()) as usize;
+            let end = length.checked_add(4).ok_or(Error::Malformed)?;
+            bytes = bytes.get(end..).ok_or(Error::Malformed)?;
+        }
+    } else {
+        let length = match column.physical_type() {
+            Type::BOOLEAN => 1,
+            Type::INT32 | Type::FLOAT => 4,
+            Type::INT64 | Type::DOUBLE => 8,
+            Type::INT96 => 12,
+            Type::FIXED_LEN_BYTE_ARRAY => {
+                usize::try_from(column.type_length()).map_err(|_| Error::Malformed)?
+            }
+            Type::BYTE_ARRAY => unreachable!(),
+        };
+        let stored = if column.physical_type() == Type::BOOLEAN {
+            values.div_ceil(8)
+        } else {
+            values.checked_mul(length).ok_or(Error::Malformed)?
+        };
+        if stored > bytes.len() {
+            return Err(Error::Malformed);
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -197,5 +265,85 @@ mod tests {
         assert!(matches!(levels(&[0], 2, 4, 5), Err(Error::Malformed)));
         assert_eq!(levels(&[0, 0, 42], 2, 4, 5).unwrap(), [42]);
         assert!(matches!(levels(&[0], 1, 9, 1), Err(Error::Malformed)));
+    }
+    use parquet::{
+        basic::Repetition,
+        schema::types::{SchemaDescriptor, Type as SchemaType},
+    };
+    use std::sync::Arc;
+    fn column() -> SchemaDescriptor {
+        let field = Arc::new(
+            SchemaType::primitive_type_builder("S", Type::BYTE_ARRAY)
+                .with_repetition(Repetition::REQUIRED)
+                .build()
+                .unwrap(),
+        );
+        SchemaDescriptor::new(Arc::new(
+            SchemaType::group_type_builder("s")
+                .with_fields(vec![field])
+                .build()
+                .unwrap(),
+        ))
+    }
+    fn page(payload: Payload) -> Page<'static> {
+        Page {
+            codec: 0,
+            body: &[],
+            decoded_bytes: 0,
+            uncompressed_prefix: 0,
+            compressed: false,
+            column: 0,
+            row_group: 0,
+            payload,
+        }
+    }
+    fn dictionary(lengths: &[usize]) -> Vec<u8> {
+        let mut out = Vec::new();
+        for &length in lengths {
+            out.extend((length as u32).to_le_bytes());
+            out.extend(std::iter::repeat_n(b'x', length));
+        }
+        out
+    }
+    fn data(values: usize) -> Page<'static> {
+        page(Payload::DataV1 {
+            encoding: 8,
+            values,
+            definition_encoding: 3,
+            repetition_encoding: 3,
+        })
+    }
+    #[test]
+    fn missing_dictionary_bad_indices_and_truncated_plain_strings_fail_safely() {
+        let schema = column();
+        let column = schema.column(0);
+        let mut state = Validation::new();
+        assert_eq!(
+            state.admit(&data(1), &[1, 2, 0], &column),
+            Err(Error::Malformed)
+        );
+        state
+            .admit(
+                &page(Payload::Dictionary {
+                    encoding: 0,
+                    values: 1,
+                }),
+                &dictionary(&[1]),
+                &column,
+            )
+            .unwrap();
+        assert_eq!(
+            state.admit(&data(1), &[1, 2, 1], &column),
+            Err(Error::Malformed)
+        );
+        let mut next = data(1);
+        next.row_group = 1;
+        assert_eq!(
+            state.admit(&next, &[1, 2, 0], &column),
+            Err(Error::Malformed)
+        );
+        for bytes in [&[0][..], &[5, 0, 0, 0, 1], &[255, 255, 255, 255]] {
+            assert!(matches!(plain(bytes, 1, &column), Err(Error::Malformed)));
+        }
     }
 }
