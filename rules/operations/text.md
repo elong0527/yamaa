@@ -568,6 +568,11 @@ steps per complete match call. Each match starts a fresh counter covering search
 starts, backtracking, and nested assertions. This implementation boundary is
 separate from the regex grammar.
 
+Predicate `LIKE` lowers its validated literal and wildcard tokens directly to
+this matcher and applies the same fresh per-match step counter. Its `%` and `_`
+wildcards still match all Unicode scalars, including line terminators, under
+[Predicates](predicates.md#req-0176).
+
 A matching step refusal is reported as `engine_rejected`, with
 `resource: regex_steps`, the applied `limit`, and `actual` when known.
 For a column `matches` check, `spec_paths` names its declaring pattern, such as
