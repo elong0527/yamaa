@@ -165,15 +165,15 @@ class DashboardTests(unittest.TestCase):
             expected_cells.extend(value for row in rows[1:] for value in row)
         self.assertEqual(content.cells, expected_cells)
         spec_lines = (BENCHMARK / "spec.yaml").read_text().splitlines()
-        run_lines = (BENCHMARK / "run.py").read_text().splitlines()
-        run_r_lines = (BENCHMARK / "run.R").read_text().splitlines()
+        python_lines = ["import yamaa", "", 'yamaa.domain("spec.yaml").output']
+        r_lines = ["library(yamaa)", "", 'yamaa_domain("spec.yaml")$output']
         solution_lines = [
             line
             for name in generate.SOLUTION_FILES
             for line in (SOLUTIONS / name).read_text().splitlines()
         ]
         self.assertEqual(
-            content.code, spec_lines + run_r_lines + run_lines + solution_lines
+            content.code, spec_lines + r_lines + python_lines + solution_lines
         )
         self.assertEqual(
             content.sections,
@@ -196,7 +196,7 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertTrue(all("hidden" not in pane for pane in content.file_panes))
 
-    def test_readme_taxonomy_moves_above_title_and_short_summary_is_one_column(self):
+    def test_metadata_taxonomy_moves_above_title_and_short_summary_is_one_column(self):
         # adam-advs-bmi's README grew past the short-summary line cap
         # (PR #1097 rewrote it to the data-contract format); the corpus'
         # remaining short-summary benchmark is negative-str-pad-width.
@@ -290,9 +290,10 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("<script>", readme)
         self.assertIn('href="https://benchmark.org/fixture/input/ae.csv"', readme)
 
-    def test_readme_taxonomy_is_metadata_not_summary_content(self):
-        source = "# Benchmark\n\nBody.\n\n**Standard:** ADaM | **Domain:** ADAE\n"
-        self.assertEqual(generate.readme_taxonomy(source), ("ADaM", "ADAE"))
+    def test_taxonomy_lives_in_metadata_and_not_in_summary_prose(self):
+        metadata = generate.load_metadata(BENCHMARK)
+        self.assertEqual((metadata["standard"], metadata["domain"]), ("ADaM", "ADAE"))
+        source = "# Benchmark\n\nBody.\n"
         title, readme = generate.render_readme(source, "https://benchmark.org/fixture")
         self.assertEqual(title, "Benchmark")
         self.assertEqual(readme, "<p>Body.</p>\n")
@@ -403,20 +404,20 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("transform: none !important", theme)
         self.assertIn(".gsc-social-reaction-summary-item-count", theme)
 
-    def test_code_panel_lists_benchmark_scripts(self):
+    def test_code_panel_generates_host_calls_and_edits_the_metadata_owner(self):
         benchmark = generate.BENCHMARKS / "sdtm-dm-basic"
         page = generate.render_benchmark(benchmark).decode("ascii")
         self.assertIn('id="code"', page)
-        self.assertIn('data-filename="run.py"', page)
-        self.assertIn('data-filename="run.R"', page)
+        self.assertIn('data-filename="Python"', page)
+        self.assertIn('data-filename="R"', page)
         self.assertIn("import yamaa", page)
         self.assertIn("library(yamaa)", page)
         self.assertIn(
-            '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/benchmarks/sdtm-dm-basic/run.py">Edit</a>',
+            '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/benchmarks/sdtm-dm-basic/benchmark.yaml">Edit</a>',
             page,
         )
         self.assertIn(
-            '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/benchmarks/sdtm-dm-basic/run.R">Edit</a>',
+            '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/benchmarks/sdtm-dm-basic/benchmark.yaml">Edit</a>',
             page,
         )
         self.assertIn('id="code-select"', page)
@@ -486,9 +487,9 @@ class DashboardTests(unittest.TestCase):
             page,
         )
         self.assertIn("Does it follow CDISC SDTM:", ask("sdtm-dm-basic")[1])
-        # A README that names no SDTM or ADaM standard reads as CDISC standards.
+        # Metadata outside SDTM or ADaM reads as CDISC standards.
         self.assertIn(
-            "Does it follow CDISC standards:", ask("sdtm-cm-whodrug-coding")[1]
+            "Does it follow CDISC standards:", ask("schema-source-ordinal")[1]
         )
         _, negative = ask("negative-ambiguous-type")
         self.assertEqual(
@@ -661,8 +662,8 @@ class DashboardTests(unittest.TestCase):
                     "spec_compound.yaml",
                     "spec_study.yaml",
                     "spec_resolved.yaml",
-                    "run.R",
-                    "run.py",
+                    "R",
+                    "Python",
                 ],
             )
             self.assertIn("Choose specification document", page)
@@ -719,8 +720,8 @@ class DashboardTests(unittest.TestCase):
                 "prompts/sdtm-dm-race-ethnicity/full.md",
                 "prompts/sdtm-dm-race-ethnicity/conventions.md",
                 "prompts/sdtm-dm-race-ethnicity/brief.md",
-                "run.R",
-                "run.py",
+                "R",
+                "Python",
                 "solutions/sdtm-dm-race-ethnicity/result.R",
                 "solutions/sdtm-dm-race-ethnicity/result.py",
                 "solutions/sdtm-dm-race-ethnicity/result.sas",
@@ -742,33 +743,32 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("badge/Dashboard", page)
         self.assertIn("Basic Demographics", page)
 
-    def test_readme_lifecycle_extracts_state_and_badge_url(self):
-        text = (
-            "# Benchmark\n\n"
-            "[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://benchmark.org/x.html)"
-            " [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)]"
-            "(https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)\n"
-        )
-        self.assertEqual(
-            generate.readme_lifecycle(text),
-            (
-                "finalized",
-                "https://img.shields.io/badge/Lifecycle-finalized-brightgreen",
-            ),
-        )
+    def test_dashboard_lifecycle_requires_metadata_and_never_defaults_from_readme(self):
+        source = generate.BENCHMARKS / "sdtm-dm-basic"
+        with tempfile.TemporaryDirectory() as temporary:
+            benchmark = Path(temporary) / source.name
+            shutil.copytree(source, benchmark)
+            metadata = benchmark / "benchmark.yaml"
+            metadata.write_text("lifecycle: reviewed\nstandard: SDTM\ndomain: DM\n")
+            page = generate.render_benchmark(benchmark).decode("ascii")
+            self.assertIn('alt="Lifecycle: reviewed"', page)
+            metadata.unlink()
+            with self.assertRaisesRegex(ValueError, "benchmark.yaml"):
+                generate.render_benchmark(benchmark)
 
-    def test_readme_lifecycle_defaults_to_draft_without_badge(self):
-        self.assertEqual(
-            generate.readme_lifecycle("# Benchmark\n\nBody.\n"),
-            ("draft", "https://img.shields.io/badge/Lifecycle-draft-lightgrey"),
+    def test_generated_calls_preserve_multifile_order_and_host_environment(self):
+        snippets = dict(
+            generate.benchmark_code(generate.BENCHMARKS / "sdtm-dm-race-ethnicity")
         )
-
-    def test_readme_lifecycle_defaults_to_draft_for_unknown_state(self):
-        text = "[![Lifecycle: archived](https://img.shields.io/badge/Lifecycle-archived-red)](https://benchmark.org)\n"
         self.assertEqual(
-            generate.readme_lifecycle(text),
-            ("draft", "https://img.shields.io/badge/Lifecycle-draft-lightgrey"),
+            snippets["Python"],
+            'import yamaa\n\nyamaa.domain("spec_dm.yaml").output\nyamaa.domain("spec_suppdm.yaml").output\n',
         )
+        snippets = dict(
+            generate.benchmark_code(generate.BENCHMARKS / "schema-functions")
+        )
+        self.assertIn('environment="python/environment.yaml"', snippets["Python"])
+        self.assertIn('environment="r/environment.yaml"', snippets["R"])
 
     def test_dashboard_renders_lifecycle_badge_beside_summary(self):
         finalized = generate.render_benchmark(
@@ -964,8 +964,8 @@ class DashboardTests(unittest.TestCase):
                 "spec_organization.yaml",
                 "spec_compound.yaml",
                 "spec_study.yaml",
-                "run.R",
-                "run.py",
+                "R",
+                "Python",
             ],
         )
         self.assertIn("Choose specification document", page)

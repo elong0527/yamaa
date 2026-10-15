@@ -7,7 +7,6 @@ views compare exactly; Parquet compares logical fields, types, nulls and rows.
 from __future__ import annotations
 
 import argparse
-import ast
 import collections
 import csv
 import datetime as dt
@@ -18,13 +17,12 @@ import shutil
 import struct
 from pathlib import Path
 
+from tools.benchmark import directories as benchmark_directories
+from tools.benchmark import entries as benchmark_entries
+from tools.benchmark import load_metadata
+
 PROTOCOL = "public-conformance/1"
-METAMORPHIC_PROTOCOL = "public-conformance-metamorphic/1"
 FIELD_REFERENCE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
-EXCLUDED = {
-    "negative-path-absolute": "reference-only path history (#1905)",
-    "negative-path-parent-escape": "reference-only path history (#1905)",
-}
 RESOLVED_REASON = "reference-only resolved specification until cutover (#1973.14)"
 LOG_INTS = {"EVALUATED_COUNT", "FAILURE_COUNT"}
 
@@ -64,85 +62,15 @@ def read_json(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def python_entries(path):
-    entries = []
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if not (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "yamaa"
-            and node.func.attr in {"domain", "yamaa_domain"}
-        ):
-            continue
-        if len(node.args) != 1 or any(k.arg != "environment" for k in node.keywords):
-            raise ValueError(f"unsupported runner arguments: {path}")
-        specification = ast.literal_eval(node.args[0])
-        environment = (
-            ast.literal_eval(node.keywords[0].value) if node.keywords else None
-        )
-        if not isinstance(specification, str) or (
-            environment is not None and not isinstance(environment, str)
-        ):
-            raise ValueError(f"runner paths must be literal strings: {path}")
-        entries.append(
-            (node.lineno, {"specification": specification, "environment": environment})
-        )
-    if not entries:
-        raise ValueError(f"no public domain entry in {path}")
-    return [entry for _, entry in sorted(entries)]
-
-
-def r_entries(path):
-    # Reject a changed runner shape instead of guessing its invocation.
-    source = "\n".join(
-        line.split("#", 1)[0] for line in path.read_text(encoding="utf-8").splitlines()
-    )
-    pattern = (
-        r'yamaa_domain\(\s*"([^"\n]+)"\s*(?:,\s*environment\s*=\s*"([^"\n]+)"\s*)?\)'
-    )
-    calls = list(re.finditer(pattern, source))
-    if not calls or len(calls) != len(re.findall(r"\byamaa_domain\s*\(", source)):
-        raise ValueError(f"unsupported literal R runner: {path}")
-    return [{"specification": c.group(1), "environment": c.group(2)} for c in calls]
-
-
-def benchmark_directories(fixtures):
-    """Authored cases, independent of runtime labels or qualification results."""
-    return [
-        case
-        for case in sorted(fixtures.iterdir())
-        if case.is_dir() and list(case.glob("spec*.yaml"))
-    ]
-
-
 def plan(fixtures):
     examples = []
     for case in benchmark_directories(fixtures):
-        entries = {}
-        for runtime, filename, extractor in (
-            ("python", "run.py", python_entries),
-            ("r", "run.R", r_entries),
-        ):
-            if (case / filename).exists():
-                entries[runtime] = extractor(case / filename)
-            else:
-                specs = list(case.glob("spec*.yaml"))
-                if len(specs) != 1:
-                    raise ValueError(f"ambiguous negative entry: {case}")
-                environment = f"{runtime}/environment.yaml"
-                entries[runtime] = [
-                    {
-                        "specification": specs[0].name,
-                        "environment": environment
-                        if (case / environment).is_file()
-                        else None,
-                    }
-                ]
+        metadata = load_metadata(case)
+        entries = benchmark_entries(case, metadata)
         example = {
             "name": case.name,
             "entries": entries,
-            "excluded": EXCLUDED.get(case.name),
+            "excluded": metadata.get("conformance", {}).get("excluded"),
         }
         example["variants"], _ = example_variants(fixtures, example)
         examples.append(example)
@@ -337,7 +265,7 @@ def stage_r_inputs(fixtures, output, payload):
             fixtures / example["name"],
             output / example["name"],
             symlinks=True,
-            ignore=shutil.ignore_patterns("expected", "run.py", "run.R", "README.md"),
+            ignore=shutil.ignore_patterns("expected", "README.md"),
         )
 
 
@@ -569,23 +497,15 @@ def load_metamorphic_expectations(fixtures):
     permanent. A non-permanent entry whose difference no longer occurs is
     stale and fails the run, so fixed issues prune their entries.
     """
-    path = (
-        fixtures.parent
-        / "rust"
-        / "qualification"
-        / "public-conformance-metamorphic.json"
-    )
-    if not path.is_file():
-        return {}
-    payload = read_json(path)
-    if payload.get("protocol") != METAMORPHIC_PROTOCOL:
-        raise ValueError("unknown metamorphic expectations protocol")
     expectations = {}
-    for item in payload["expected_failures"]:
-        key = (item["benchmark"], item["check"])
-        if key in expectations:
-            raise ValueError(f"duplicate metamorphic expectation: {key}")
-        expectations[key] = item
+    for case in benchmark_directories(fixtures):
+        declared = load_metadata(case).get("conformance", {}).get("metamorphic", {})
+        for check, value in declared.items():
+            expectations[(case.name, check)] = {
+                "benchmark": case.name,
+                "check": check,
+                **value,
+            }
     return expectations
 
 

@@ -100,6 +100,24 @@ class BenchmarkMetadata(unittest.TestCase):
             {**self.metadata, "covers": ["flag", "flag"]},
             {**self.metadata, "covers": ["Flag"]},
             {**self.metadata, "covers": [None]},
+            {**self.metadata, "conformance": {"excluded": ""}},
+            {**self.metadata, "conformance": {"metamorphic": []}},
+            {
+                **self.metadata,
+                "conformance": {"metamorphic": {"unknown": {"reason": "by design"}}},
+            },
+            {
+                **self.metadata,
+                "conformance": {"metamorphic": {"empty_child": {"permanent": True}}},
+            },
+            {
+                **self.metadata,
+                "conformance": {
+                    "metamorphic": {
+                        "empty_child": {"reason": "by design", "permanent": "yes"}
+                    }
+                },
+            },
             {**self.metadata, "validation": {"rule": "R007"}},
             {
                 **self.metadata,

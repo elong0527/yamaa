@@ -64,7 +64,10 @@ commits its own expected artifact beside the entry's. Multi-level inheritance
 and alternative specifications also declare their entries; source files are
 not guessed from a parent graph. The metadata is the shared owner for native
 conformance and the dashboard's generated Python and R usage snippets. Do not
-add per-case runner scripts.
+add per-case runner scripts. Approved exclusions and metamorphic differences
+also belong to their case's `conformance` metadata, with their reviewed reason;
+they have no separate registry. A permanent difference states its by-design
+reason, and a temporary difference must be pruned when it becomes stale.
 
 Inspect the complete plan from the repository root:
 

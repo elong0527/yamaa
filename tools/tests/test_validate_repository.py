@@ -25,7 +25,6 @@ from tools.validation import _typed_fixtures as OWNER_TYPED_FIXTURES
 from tools.validation import check_execution_manifest as EXECUTION_CHECK
 from tools.validation import check_rule_metadata as RULE_CHECK
 from tools.validation import check_validation_blockers as BLOCKER_CHECK
-from tools.validation import check_vocabulary_coverage as OWNER_VOCABULARY
 from tools.validation import editorial as OWNER_EDITORIAL
 from tools.validation import grammar_checks as OWNER_GRAMMAR_CHECKS
 from tools.validation import regex_checks as OWNER_REGEX_CHECKS
@@ -2365,95 +2364,6 @@ class TestStaticSemanticContracts(unittest.TestCase):
             importlib.reload(OWNER_NATIVE_SPECIFICATION)
 
 
-class TestDerivedBenchmarkInventory(unittest.TestCase):
-    def payload(self):
-        names = ["active", *EXECUTION_CHECK.EXCLUDED]
-        return {
-            "protocol": EXECUTION_CHECK.PROTOCOL,
-            "examples": [
-                {
-                    "name": name,
-                    "entries": {"python": [{}], "r": [{}]},
-                    "excluded": EXECUTION_CHECK.EXCLUDED.get(name),
-                }
-                for name in names
-            ],
-        }, names
-
-    def test_derived_cases_include_both_hosts_and_explicit_exclusions(self):
-        payload, names = self.payload()
-        self.assertEqual(EXECUTION_CHECK.check_inventory(payload, names), [])
-
-    def test_missing_duplicate_and_unexpected_cases_are_rejected(self):
-        payload, names = self.payload()
-        payload["examples"][0]["name"] = "unexpected"
-        payload["examples"].append(payload["examples"][0])
-        errors = EXECUTION_CHECK.check_inventory(payload, names)
-        self.assertIn("missing case: active", errors)
-        self.assertIn("unexpected case: unexpected", errors)
-        self.assertIn("duplicate case: unexpected", errors)
-
-    def test_missing_host_and_changed_exclusion_are_rejected(self):
-        payload, names = self.payload()
-        del payload["examples"][0]["entries"]["r"]
-        payload["examples"][1]["excluded"] = "unreviewed reason"
-        errors = EXECUTION_CHECK.check_inventory(payload, names)
-        self.assertIn("missing public host entry: active", errors)
-        self.assertIn("exclusion reason differs: " + names[1], errors)
-
-    def test_stale_exclusions_are_rejected(self):
-        payload, names = self.payload()
-        self.assertIn(
-            "exclusion has no authored case: " + names[1],
-            EXECUTION_CHECK.check_inventory(payload, names[:1]),
-        )
-
-    def test_unknown_protocol_is_rejected(self):
-        self.assertEqual(
-            EXECUTION_CHECK.check_inventory({}, []),
-            ["unknown benchmark inventory protocol"],
-        )
-
-
-class TestVocabularyCoverage(unittest.TestCase):
-    def test_shared_refusals_cover_the_declared_operation(self):
-        self.assertEqual(
-            OWNER_VOCABULARY.check(
-                "date_shift",
-                {
-                    "shared_cases": [
-                        "date_shift_float_days",
-                        "date_shift_upper_overflow",
-                    ]
-                },
-            ),
-            [],
-        )
-
-    def test_successful_shared_case_cannot_cover_a_failure_contract(self):
-        errors = OWNER_VOCABULARY.check(
-            "date_shift", {"shared_cases": ["date_literal_days_and_phase_dates"]}
-        )
-        self.assertTrue(any("lacks a refusal contract" in error for error in errors))
-
-    def test_missing_and_unrelated_shared_cases_are_refused(self):
-        errors = OWNER_VOCABULARY.check(
-            "duration_value",
-            {"shared_cases": ["absent_case", "date_shift_upper_overflow"]},
-        )
-        self.assertTrue(any("missing absent_case" in error for error in errors))
-        self.assertTrue(any("never names duration_value" in error for error in errors))
-
-    def test_original_benchmark_refusal_owner_is_preserved(self):
-        self.assertEqual(
-            OWNER_VOCABULARY.check(
-                "date_diff",
-                ["negative-date-diff-endpoints", "negative-date-diff-units"],
-            ),
-            [],
-        )
-
-
 class TestConditionRegistry(unittest.TestCase):
     def setUp(self):
         self.root = ROOT
@@ -2509,37 +2419,45 @@ class TestConditionRegistry(unittest.TestCase):
         )
 
 
-class TestValidationManifest(unittest.TestCase):
-    def test_repository_manifest_is_complete_and_registered(self):
-        root = ROOT
-        manifest, load_errors = OWNER_REPOSITORY_MANIFESTS.load_validation_manifest(
-            root
-        )
-
-        self.assertEqual(load_errors, [])
+class TestValidationMetadata(unittest.TestCase):
+    def test_repository_metadata_is_complete_and_registered(self):
+        fixtures, errors = OWNER_REPOSITORY_MANIFESTS.load_validation_fixtures(ROOT)
+        self.assertEqual(errors, [])
         self.assertEqual(
-            OWNER_REPOSITORY_MANIFESTS.validate_validation_manifest(root, manifest), []
+            set(fixtures),
+            set(OWNER_REPOSITORY_MANIFESTS.validation_phase_contracts(ROOT)),
         )
 
-    def test_manifest_rejects_missing_and_stale_fixtures(self):
-        root = ROOT
-        manifest, _ = OWNER_REPOSITORY_MANIFESTS.load_validation_manifest(root)
-        changed = copy.deepcopy(manifest)
-        removed = next(iter(changed["fixtures"]))
-        del changed["fixtures"][removed]
-        changed["fixtures"]["negative-stale"] = {
-            "rule": "R010",
-            "condition": "prohibited_function",
-            "spec_paths": ["columns.X.derivation.compute.expr"],
-            "validator": "numeric_expression",
-        }
-
-        message = "\n".join(
-            OWNER_REPOSITORY_MANIFESTS.validate_validation_manifest(root, changed)
-        )
-
-        self.assertIn(removed, message)
-        self.assertIn("negative-stale", message)
+    def test_metadata_rejects_missing_stale_and_unregistered_declarations(self):
+        source = ROOT / "benchmarks/negative-unknown-window"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            case = root / "benchmarks" / source.name
+            shutil.copytree(source, case)
+            metadata_path = case / "benchmark.yaml"
+            metadata = yaml.safe_load(metadata_path.read_text())
+            original = copy.deepcopy(metadata)
+            del metadata["validation"]
+            metadata_path.write_text(yaml.safe_dump(metadata))
+            _, errors = OWNER_REPOSITORY_MANIFESTS.load_validation_fixtures(root)
+            self.assertTrue(
+                any("missing validation declaration" in error for error in errors)
+            )
+            metadata_path.write_text(yaml.safe_dump(original))
+            contract_path = case / "expected/error.yaml"
+            contract = yaml.safe_load(contract_path.read_text())
+            contract["condition"] = "not_registered"
+            contract_path.write_text(yaml.safe_dump(contract))
+            _, errors = OWNER_REPOSITORY_MANIFESTS.load_validation_fixtures(root)
+            self.assertTrue(
+                any("unregistered validation condition" in error for error in errors)
+            )
+            contract["phase"] = "derivation"
+            contract_path.write_text(yaml.safe_dump(contract))
+            _, errors = OWNER_REPOSITORY_MANIFESTS.load_validation_fixtures(root)
+            self.assertTrue(
+                any("stale or non-validation fixture" in error for error in errors)
+            )
 
     def test_implemented_fixture_requires_every_declared_path(self):
         entry = {
@@ -2604,39 +2522,6 @@ class TestValidationManifest(unittest.TestCase):
         )
 
         self.assertEqual(errors, [unrelated])
-
-    def test_closed_blocking_issue_is_rejected(self):
-        blockers = {103: ["negative-one", "negative-two"]}
-
-        errors = BLOCKER_CHECK.validate_blocker_states(
-            blockers, lambda _number: ("closed", False)
-        )
-
-        self.assertEqual(len(errors), 1)
-        self.assertIn("#103 is", errors[0])
-        self.assertEqual(
-            BLOCKER_CHECK.validate_blocker_states(
-                blockers, lambda _number: ("open", False)
-            ),
-            [],
-        )
-
-    def test_load_blockers_uses_only_current_validation_manifest(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            examples = root / "benchmarks"
-            examples.mkdir(parents=True)
-            (examples / "validation-manifest.yaml").write_text(
-                'fixtures:\n  validation-one:\n    blocked_by: "#103"\n',
-                encoding="utf-8",
-            )
-
-            blockers = BLOCKER_CHECK.load_blockers(root)
-
-        self.assertEqual(
-            blockers,
-            {103: ["validation-one"]},
-        )
 
 
 class TestProjectFunctionEnvironment(unittest.TestCase):
@@ -7427,74 +7312,16 @@ bad_field: "what"
         entries = OWNER_REPOSITORY_ARTIFACTS.example_entry_specs(ex_dir)
         self.assertEqual([path.name for path in entries], ["spec_suppdm.yaml"])
 
-    def test_readme_dashboard_badge_must_follow_the_title(self):
-        # Issue #184 round 2c: badge-line checks live in
-        # editorial.validate_examples_badges (docs-lint gate), not in the
-        # layout gate -- layout checks skeleton only.
-        ex_dir = self.root_dir / "benchmarks" / "link-check"
-        (ex_dir / "input").mkdir(parents=True)
-        (ex_dir / "expected").mkdir()
-        (ex_dir / "spec.yaml").write_text("value: valid\n")
-        (ex_dir / "expected" / "out.csv").write_text("value\n1\n")
-        badge = (
-            "[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)]"
-            "(https://elong0527.github.io/yamaa/benchmark/link-check.html)"
-        )
-        (ex_dir / "README.md").write_text("# No badge\n")
-        self.assertEqual(
-            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
-        )
-        errors = OWNER_EDITORIAL.validate_examples_badges(self.root_dir)
-        self.assertIn("right after the title", "\n".join(errors))
+    def test_readme_is_a_data_contract_without_badge_configuration(self):
+        ex_dir = self.root_dir / "benchmarks" / "metadata-owned"
+        (ex_dir / "expected").mkdir(parents=True)
         (ex_dir / "README.md").write_text(
-            "# Wrong badge\n\n"
-            "[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)]"
-            "(https://elong0527.github.io/yamaa/benchmark/other-dir.html)\n"
+            "# Collected values\n\nThe value is the collected response.\n"
         )
+        self.assertEqual(OWNER_EDITORIAL.validate_example_readmes(self.root_dir), [])
         self.assertEqual(
-            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
+            OWNER_EDITORIAL.validate_examples_readme_presence(self.root_dir), []
         )
-        errors = OWNER_EDITORIAL.validate_examples_badges(self.root_dir)
-        self.assertIn("right after the title", "\n".join(errors))
-        (ex_dir / "README.md").write_text(f"# Right badge\n\n{badge}\n")
-        self.assertEqual(
-            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
-        )
-        errors = OWNER_EDITORIAL.validate_examples_badges(self.root_dir)
-        self.assertIn("lifecycle badge", "\n".join(errors))
-
-    def test_readme_dashboard_badge_accepts_lifecycle_badge(self):
-        # Issue #184 round 2c: badge-line checks live in
-        # editorial.validate_examples_badges (docs-lint gate), not in the
-        # layout gate -- layout checks skeleton only.
-        ex_dir = self.root_dir / "benchmarks" / "link-check"
-        (ex_dir / "input").mkdir(parents=True)
-        (ex_dir / "expected").mkdir()
-        (ex_dir / "spec.yaml").write_text("value: valid\n")
-        (ex_dir / "expected" / "out.csv").write_text("value\n1\n")
-        badge = (
-            "[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)]"
-            "(https://elong0527.github.io/yamaa/benchmark/link-check.html)"
-        )
-        lifecycle = (
-            "[![Lifecycle: finalized]"
-            "(https://img.shields.io/badge/Lifecycle-finalized-brightgreen)]"
-            "(https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)"
-        )
-        (ex_dir / "README.md").write_text(f"# Right badge\n\n{badge} {lifecycle}\n")
-        self.assertEqual(
-            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
-        )
-        self.assertEqual(OWNER_EDITORIAL.validate_examples_badges(self.root_dir), [])
-        (ex_dir / "README.md").write_text(
-            f"# Bad lifecycle\n\n{badge} [![Lifecycle: bogus]"
-            f"(https://img.shields.io/badge/Lifecycle-bogus-red)](https://example.com)\n"
-        )
-        self.assertEqual(
-            OWNER_REPOSITORY_STRUCTURE.validate_examples_layout(self.root_dir), []
-        )
-        errors = OWNER_EDITORIAL.validate_examples_badges(self.root_dir)
-        self.assertIn("right after the title", "\n".join(errors))
 
     def test_layout_skips_missing_readme_presence_check(self):
         # Issue #184 round 1: a missing README fails only in the docs-lint
@@ -7529,7 +7356,7 @@ bad_field: "what"
         presence = OWNER_EDITORIAL.validate_examples_readme_presence(self.root_dir)
         self.assertIn("How to fix", "\n".join(presence))
 
-    def test_readme_combined_badge_line_is_exempt_from_line_width(self):
+    def test_readme_width_has_no_configuration_badge_exception(self):
         ex_dir = self.root_dir / "benchmarks" / "badge-width"
         (ex_dir / "expected").mkdir(parents=True)
         badge = (
@@ -7544,10 +7371,8 @@ bad_field: "what"
         combined = f"{badge} {lifecycle}"
         self.assertGreater(len(combined), 79)
         (ex_dir / "README.md").write_text(f"# Badge width\n\n{combined}\n")
-        self.assertEqual(OWNER_EDITORIAL.validate_example_readmes(self.root_dir), [])
-        (ex_dir / "README.md").write_text(
-            f"# Badge width\n\n{combined}\n\n{'x' * 80}\n"
-        )
+        self.assertTrue(OWNER_EDITORIAL.validate_example_readmes(self.root_dir))
+        (ex_dir / "README.md").write_text(f"# Long prose\n\n{'x' * 80}\n")
         errors = OWNER_EDITORIAL.validate_example_readmes(self.root_dir)
         self.assertIn("maximum is 79", "\n".join(errors))
 

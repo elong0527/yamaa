@@ -45,7 +45,15 @@ def load_metadata(case):
     require(
         not (
             set(metadata)
-            - {"lifecycle", "standard", "domain", "entries", "validation", "covers"}
+            - {
+                "lifecycle",
+                "standard",
+                "domain",
+                "entries",
+                "validation",
+                "covers",
+                "conformance",
+            }
         ),
         f"{label}: unknown metadata field",
     )
@@ -89,6 +97,38 @@ def load_metadata(case):
             isinstance(validation[key], str) and re.fullmatch(pattern, validation[key]),
             f"{label}: invalid validation {key}",
         )
+    if "conformance" in metadata:
+        conformance = metadata["conformance"]
+        require(
+            isinstance(conformance, dict)
+            and not (set(conformance) - {"excluded", "metamorphic"}),
+            f"{label}: invalid conformance metadata",
+        )
+        if "excluded" in conformance:
+            require(
+                isinstance(conformance["excluded"], str)
+                and conformance["excluded"].strip(),
+                f"{label}: exclusion must state its reason",
+            )
+        differences = conformance.get("metamorphic", {})
+        require(
+            isinstance(differences, dict), f"{label}: metamorphic must be a mapping"
+        )
+        for check, declaration in differences.items():
+            require(
+                check in {"empty_child", "key_order"}
+                and isinstance(declaration, dict)
+                and not (set(declaration) - {"reason", "issue", "permanent"})
+                and type(declaration.get("permanent", False)) is bool
+                and ("reason" in declaration or "issue" in declaration)
+                and all(
+                    isinstance(declaration[field], str) and declaration[field].strip()
+                    for field in ("reason", "issue")
+                    if field in declaration
+                )
+                and (not declaration.get("permanent") or "reason" in declaration),
+                f"{label}: malformed metamorphic declaration: {check}",
+            )
     return metadata
 
 
