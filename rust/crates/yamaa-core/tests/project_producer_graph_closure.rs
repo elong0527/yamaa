@@ -243,6 +243,60 @@ mod project {
         }
 
         #[test]
+        fn absent_packaging_lock_still_binds_and_runs_every_conformance_case() {
+            use yamaa_core::project_activation::{
+                activate_references_observed, LockObservation, Observations,
+            };
+            let function = function("identity");
+            let mut port = Port::new();
+            port.lock_failure = true;
+            let mut observations = Observations::default();
+            let activated = activate_references_observed(
+                Language::Python,
+                None,
+                &[&function],
+                &mut port,
+                &mut observations,
+            )
+            .unwrap();
+            assert_eq!(activated.len(), 1);
+            assert_eq!(activated[0].cases.len(), function.definition().tests.len());
+            assert_eq!(observations.lock, LockObservation::NotRequested);
+            assert_eq!(port.trace.first().unwrap(), "bind:identity");
+            assert_eq!(observations.tests.len(), function.definition().tests.len());
+            assert!(!port.trace.iter().any(|entry| entry.starts_with("lock:")));
+
+            port.trace.clear();
+            port.bind_failure = Some("identity".into());
+            assert!(matches!(
+                activate_references_observed(
+                    Language::Python,
+                    None,
+                    &[&function],
+                    &mut port,
+                    &mut observations,
+                ),
+                Err(Failure::Bindings(_))
+            ));
+            assert_eq!(port.trace, ["bind:identity"]);
+            assert_eq!(observations.lock, LockObservation::NotRequested);
+            assert!(observations.tests.is_empty());
+
+            port.bind_failure = None;
+            port.mismatch = true;
+            assert!(matches!(
+                activate_references_observed(
+                    Language::Python,
+                    None,
+                    &[&function],
+                    &mut port,
+                    &mut observations,
+                ),
+                Err(Failure::Tests(_))
+            ));
+        }
+
+        #[test]
         fn successful_activation_handles_feed_versionless_dataset_without_rebinding_or_retesting() {
             use std::cell::RefCell;
             use yamaa_core::bound_expression::Read;
@@ -613,7 +667,8 @@ mod project {
             port.bind_failure = Some("first".into());
             for _ in 0..2 {
                 let activated =
-                    activate_references(Language::Python, &lock(), &selected, &mut port).unwrap();
+                    activate_references(Language::Python, Some(&lock()), &selected, &mut port)
+                        .unwrap();
                 assert_eq!(
                     activated
                         .iter()
@@ -644,8 +699,8 @@ mod project {
             );
             port.trace.clear();
             port.bind_failure = Some("second".into());
-            let error =
-                activate_references(Language::Python, &lock(), &selected, &mut port).unwrap_err();
+            let error = activate_references(Language::Python, Some(&lock()), &selected, &mut port)
+                .unwrap_err();
             assert_eq!(
                 error,
                 Failure::Bindings(vec![yamaa_core::project_activation::BindingFailure {
@@ -666,7 +721,7 @@ mod project {
             let mut port = Port::new();
             port.lock_failure = true;
             assert!(
-                activate_references(Language::Python, &lock(), &[], &mut port)
+                activate_references(Language::Python, Some(&lock()), &[], &mut port)
                     .unwrap()
                     .is_empty()
             );
@@ -674,7 +729,7 @@ mod project {
             assert_eq!(
                 activate_references(
                     Language::Python,
-                    &lock(),
+                    Some(&lock()),
                     &[&environment[0], &environment[0]],
                     &mut port
                 )
@@ -759,7 +814,7 @@ mod project {
             ) -> Result<Vec<ActivatedFunction<Handle>>, Failure<Payload>> {
                 activate_references_observed(
                     Language::Python,
-                    &lock(),
+                    Some(&lock()),
                     &functions.iter().collect::<Vec<_>>(),
                     port,
                     observations,

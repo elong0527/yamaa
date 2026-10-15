@@ -269,14 +269,14 @@ pub fn activate<P: ActivationPort>(
     port: &mut P,
 ) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
     let selected = functions.iter().collect::<Vec<_>>();
-    activate_references(language, lock, &selected, port)
+    activate_references(language, Some(lock), &selected, port)
 }
 
 /// Activate compiler-selected definitions borrowed from the one owned environment.
 /// Selection order defines stable dataset slots; no test collection is recopied.
 pub fn activate_references<P: ActivationPort>(
     language: Language,
-    lock: &LockReference,
+    lock: Option<&LockReference>,
     functions: &[&Function],
     port: &mut P,
 ) -> Result<Vec<ActivatedFunction<P::Handle>>, Failure<P::Error>> {
@@ -287,7 +287,7 @@ pub fn activate_references<P: ActivationPort>(
 /// later activation fails. Each call resets prior evidence before any host port.
 pub fn activate_references_observed<P: ActivationPort>(
     language: Language,
-    lock: &LockReference,
+    lock: Option<&LockReference>,
     functions: &[&Function],
     port: &mut P,
     observations: &mut Observations,
@@ -298,7 +298,7 @@ pub fn activate_references_observed<P: ActivationPort>(
 
 fn activate_observed<P: ActivationPort>(
     language: Language,
-    lock: &LockReference,
+    lock: Option<&LockReference>,
     functions: &[&Function],
     port: &mut P,
     mut observations: Option<&mut Observations>,
@@ -306,14 +306,16 @@ fn activate_observed<P: ActivationPort>(
     if functions.is_empty() {
         return Ok(Vec::new());
     }
-    if !matches!(
-        (language, lock.kind),
-        (Language::Python, LockKind::Uv) | (Language::R, LockKind::Renv)
-    ) {
-        return Err(Failure::LockKindMismatch {
-            language,
-            actual: lock.kind,
-        });
+    if let Some(lock) = lock {
+        if !matches!(
+            (language, lock.kind),
+            (Language::Python, LockKind::Uv) | (Language::R, LockKind::Renv)
+        ) {
+            return Err(Failure::LockKindMismatch {
+                language,
+                actual: lock.kind,
+            });
+        }
     }
     let mut names = BTreeSet::new();
     let mut plans = Vec::with_capacity(functions.len());
@@ -334,28 +336,30 @@ fn activate_observed<P: ActivationPort>(
                 .map_err(|error| Failure::Plan { function, error })?,
         );
     }
-    let identities = plans
-        .iter()
-        .map(|plan| plan.identity().clone())
-        .collect::<Vec<_>>();
-    if let Some(observations) = observations.as_deref_mut() {
-        observations.lock = LockObservation::Attempted;
-    }
-    match port.verify_lock(language, lock, &identities) {
-        Ok(()) => {
-            if let Some(observations) = observations.as_deref_mut() {
-                observations.lock = LockObservation::Verified;
-            }
+    if let Some(lock) = lock {
+        let identities = plans
+            .iter()
+            .map(|plan| plan.identity().clone())
+            .collect::<Vec<_>>();
+        if let Some(observations) = observations.as_deref_mut() {
+            observations.lock = LockObservation::Attempted;
         }
-        Err(error) => {
-            if let Some(observations) = observations.as_deref_mut() {
-                observations.lock = if port.is_interrupt(&error) {
-                    LockObservation::Interrupted
-                } else {
-                    LockObservation::Rejected
-                };
+        match port.verify_lock(language, lock, &identities) {
+            Ok(()) => {
+                if let Some(observations) = observations.as_deref_mut() {
+                    observations.lock = LockObservation::Verified;
+                }
             }
-            return Err(Failure::Lock(error));
+            Err(error) => {
+                if let Some(observations) = observations.as_deref_mut() {
+                    observations.lock = if port.is_interrupt(&error) {
+                        LockObservation::Interrupted
+                    } else {
+                        LockObservation::Rejected
+                    };
+                }
+                return Err(Failure::Lock(error));
+            }
         }
     }
     let mut activated = Vec::with_capacity(plans.len());

@@ -165,9 +165,7 @@ where
     let language = environment
         .language()
         .expect("admitted called functions declare a language");
-    let lock = environment
-        .lock()
-        .expect("admitted called functions declare a lock");
+    let lock = environment.lock();
     scope.phase(crate::application_observer::Phase::Activation);
     let activated = match observations {
         Some(observations) => project_activation::activate_references_observed(
