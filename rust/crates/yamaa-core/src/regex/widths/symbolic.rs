@@ -241,9 +241,10 @@ impl Arena {
             .iter()
             .filter_map(|&id| self.entries[id].bounds)
             .reduce(Summary::union);
-        let free = arms.iter().fold(Some((choice, choice)), |free, &id| {
-            join_span(free, self.entries[id].free)
-        });
+        let mut free = Some((choice, choice));
+        for &id in &arms {
+            free = join_span(free, self.entries[id].free);
+        }
         let total = arms.iter().all(|&id| self.entries[id].total);
         self.push(Entry {
             expression: Expression::Choice(choice, arms),
@@ -1007,19 +1008,19 @@ impl<'a> Evaluator<'a> {
                 }
                 Work::Join { count, collapse } => {
                     let offset = self.values.len() - count;
-                    let values = self.values.drain(offset..);
+                    let mut values = self.values.drain(offset..);
                     let value = if collapse {
                         values
                             .flatten()
                             .reduce(Summary::union)
                             .map(|value| Summary::one(value.span))
                     } else {
-                        values.fold(
-                            Some(Summary::one(Span {
+                        values.try_fold(
+                            Summary::one(Span {
                                 min: 0,
                                 max: Some(0),
-                            })),
-                            |a, b| a.zip(b).map(|(a, b)| a.add(b)),
+                            }),
+                            |a, b| b.map(|b| a.add(b)),
                         )
                     };
                     self.values.push(value);
