@@ -88,6 +88,23 @@ fn prepare_kind(
             N::Text(name) => name.clone(),
             _ => text(d, field(d, payload, "variable")?)?.into(),
         }),
+        "first_available" | "greatest" | "least" => {
+            let mut kinds = sequence(d, field(d, payload, "sources")?)?
+                .iter()
+                .map(|&source| {
+                    Ok(Kind::Reference(match &d.nodes()[source] {
+                        N::Text(name) => name.clone(),
+                        _ => text(d, field(d, source, "variable")?)?.into(),
+                    }))
+                })
+                .collect::<Result<Vec<_>, PrepareError>>()?;
+            if op == "first_available" {
+                if let Some(missing) = d.field(payload, "missing") {
+                    kinds.push(Kind::Literal(value_kind(&d.nodes()[missing])));
+                }
+            }
+            Kind::Choice(kinds)
+        }
         "compute" => {
             match crate::numeric_parser::parse_numeric(text(d, field(d, payload, "expr")?)?) {
                 Ok(plan) => Kind::Numeric(plan),
@@ -398,18 +415,15 @@ pub(super) fn bind(
                     .map(|column| column.kind)
             }
         };
-        let kind = declaration
-            .typed
-            .or_else(|| declaration.kind.infer(&lookup))
-            .unwrap_or({
-                // An unresolved numeric operand must not turn a later read of
-                // this computed field into a spurious text-input diagnostic.
-                if matches!(declaration.kind, Kind::Numeric(_)) {
-                    ColumnType::Float
-                } else {
-                    ColumnType::Str
-                }
-            });
+        let kind = declaration.result_kind(&lookup).unwrap_or({
+            // An unresolved numeric operand must not turn a later read of
+            // this computed field into a spurious text-input diagnostic.
+            if matches!(declaration.kind, Kind::Numeric(_)) {
+                ColumnType::Float
+            } else {
+                ColumnType::Str
+            }
+        });
         driver_kinds.push(declaration.typed.or_else(|| {
             declaration.driver_kind.infer(&|name| {
                 let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
