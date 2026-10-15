@@ -80,9 +80,6 @@ impl<E> SourceDecoder for Decoder<E> {
 }
 
 impl<E> yamaa_engine::producer_build::DecodePort for Decoder<E> {
-    fn pool_capacity(&self) -> bool {
-        true
-    }
     fn usage(&self) -> Option<yamaa_engine::producer_build::DecodeUsage> {
         self.usage
             .complete

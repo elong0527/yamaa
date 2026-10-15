@@ -147,10 +147,13 @@ fn environment_parents_and_retired_runtime_fields_are_complete_schema_findings()
         assert_eq!(finding.path, field);
         assert_eq!(finding.definition().condition, "unknown_field");
         assert_eq!(finding.definition().requirement, Some("REQ-0285"));
-        assert_eq!(finding.context, vec![
-            ("field", C::Text(field.into())),
-            ("class", C::Text("environment_class".into())),
-        ]);
+        assert_eq!(
+            finding.context,
+            vec![
+                ("field", C::Text(field.into())),
+                ("class", C::Text("environment_class".into())),
+            ]
+        );
     }
 }
 

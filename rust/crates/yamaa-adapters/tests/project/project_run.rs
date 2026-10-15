@@ -185,6 +185,21 @@ struct Study {
     inspections: usize,
 }
 impl SourcePort for Study {
+    fn capture_observed(
+        &mut self,
+        source: &SourceDeclaration,
+        byte_limit: usize,
+        origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, Self::Error> {
+        *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
+        <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+    }
+    fn resource_failure(
+        &self,
+        _error: &Self::Error,
+    ) -> Option<yamaa_core::resource::ResourceFailure> {
+        None
+    }
     type Error = std::convert::Infallible;
     fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Self::Error> {
         assert_eq!(source.path, "input.csv");
@@ -1135,6 +1150,21 @@ fn row_callbacks_join_primary_or_secondary_records_by_completed_keys() {
         reads: usize,
     }
     impl SourcePort for TwoSources {
+        fn capture_observed(
+            &mut self,
+            source: &SourceDeclaration,
+            byte_limit: usize,
+            origin: &mut Option<yamaa_engine::specification_run::SourceOrigin>,
+        ) -> Result<Arc<[u8]>, Self::Error> {
+            *origin = Some(yamaa_engine::specification_run::SourceOrigin::Resource);
+            <Self as yamaa_engine::specification_run::SourcePort>::capture(self, source, byte_limit)
+        }
+        fn resource_failure(
+            &self,
+            _error: &Self::Error,
+        ) -> Option<yamaa_core::resource::ResourceFailure> {
+            None
+        }
         type Error = std::convert::Infallible;
         fn inspect(&mut self, _: &SourceDeclaration) -> Result<(), Self::Error> {
             self.trace.borrow_mut().push("inspect");

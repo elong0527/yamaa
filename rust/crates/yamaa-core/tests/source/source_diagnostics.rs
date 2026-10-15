@@ -191,7 +191,11 @@ fn source_types_keep_declaration_then_stored_row_field_precedence_and_all_value_
         target: ColumnType::Int,
         value: long.clone(),
     };
-    let actual = error.finding("SRC").unwrap().diagnostic_with_limit(MAX_PROJECTION_BYTES).unwrap();
+    let actual = error
+        .finding("SRC")
+        .unwrap()
+        .diagnostic_with_limit(MAX_PROJECTION_BYTES)
+        .unwrap();
     assert_eq!(actual.context["value"], text(&long));
 }
 

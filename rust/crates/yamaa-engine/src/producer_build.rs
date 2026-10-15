@@ -20,9 +20,7 @@ use yamaa_core::{
 /// producer sources never reach this port, even for location inspection.
 pub trait StudyPort {
     type Error;
-    fn resource_failure(&self, _error: &Self::Error) -> Option<ResourceFailure> {
-        None
-    }
+    fn resource_failure(&self, error: &Self::Error) -> Option<ResourceFailure>;
     fn inspect(&mut self, node: &Node, source: &SourceDeclaration) -> Result<(), Self::Error>;
     fn capture_reads(&self) -> usize;
     fn capture(
@@ -50,16 +48,9 @@ pub struct DecodeUsage {
     pub work_bytes: usize,
 }
 pub trait DecodePort: SourceDecoder {
-    /// Opt into graph pools only with complete, bounded native charge receipts.
-    /// Legacy ports retain their existing conservative reservations.
-    fn pool_capacity(&self) -> bool {
-        false
-    }
     /// The most recent bounded decode's admitted prefix, including failures.
     /// None keeps the complete reservation; an unknown prefix is never guessed.
-    fn usage(&self) -> Option<DecodeUsage> {
-        None
-    }
+    fn usage(&self) -> Option<DecodeUsage>;
     fn decode_bounded(
         &mut self,
         source: &SourceDeclaration,
@@ -68,18 +59,16 @@ pub trait DecodePort: SourceDecoder {
         limits: DecodeLimits,
     ) -> Result<Self::Table, DecodeError<Self::Error>>;
     /// Carry the authored fixed-source interpretation through producer routing.
-    /// Trusted legacy ports retain their explicit table profile; canonical ODM
-    /// coordinates and identifiers are independently admitted by the engine.
+    /// Canonical ODM coordinates and identifiers are independently admitted
+    /// by the engine.
     fn decode_bounded_interpreted(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
         contract: Option<&yamaa_core::producer_contract::Contract>,
         limits: DecodeLimits,
-        _interpretation: yamaa_core::specification::SourceInterpretation,
-    ) -> Result<Self::Table, DecodeError<Self::Error>> {
-        self.decode_bounded(source, bytes, contract, limits)
-    }
+        interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Result<Self::Table, DecodeError<Self::Error>>;
 }
 /// Encode through the exact node's admitted profile/precision. The engine enters
 /// this port only after execution and ordinary output gates have passed.
@@ -384,9 +373,6 @@ impl PreparedBuild {
         // Every declared source, including aliases, reserves a codec share. This
         // conservative reservation bounds all retained/staged decoded ownership
         // without deriving an identity or trusting post-allocation size checks.
-        let decode_storage = limits.source_storage_bytes / source_count;
-        let decode_work = limits.decode_work_bytes / source_count;
-        let pooled = ports.decoder.pool_capacity();
         let environment = graph.environment();
         let selected = graph
             .called_functions()
@@ -436,11 +422,7 @@ impl PreparedBuild {
         let mut output_left = limits.output_bytes;
         let routing_left = Cell::new(limits.routing_work);
         let e = limits.execution;
-        let execution_work = if pooled {
-            crate::execution_work::WorkBudget::pooled(e)
-        } else {
-            crate::execution_work::WorkBudget::new(e.work_cells)
-        };
+        let execution_work = crate::execution_work::WorkBudget::pooled(e);
         let mut decode_pools = DecodePools {
             rows_limit: e.source_rows,
             rows_left: e.source_rows,
@@ -509,10 +491,8 @@ impl PreparedBuild {
                     decoder: ports.decoder,
                     cells_left: &mut cells_left,
                     cell_limit: limits.source_cells,
-                    storage_bytes: decode_storage,
-                    work_bytes: decode_work,
                     work_left: &routing_left,
-                    pools: pooled.then_some(&mut decode_pools),
+                    pools: &mut decode_pools,
                 },
                 &mut functions,
                 node_limits,
@@ -596,10 +576,8 @@ struct NodeDecoder<'a, D> {
     decoder: &'a mut D,
     cells_left: &'a mut usize,
     cell_limit: usize,
-    storage_bytes: usize,
-    work_bytes: usize,
     work_left: &'a Cell<usize>,
-    pools: Option<&'a mut DecodePools>,
+    pools: &'a mut DecodePools,
 }
 struct DecodePools {
     rows_limit: usize,
@@ -644,26 +622,15 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
                 break;
             }
         }
-        let bounded = if let Some(pools) = &self.pools {
-            DecodeLimits {
-                rows: pools.rows_left,
-                cells: *self.cells_left,
-                storage_bytes: pools.storage_left,
-                work_bytes: pools.work_left,
-            }
-        } else {
-            DecodeLimits {
-                rows: crate::capacity::SOURCE_ROWS,
-                cells: *self.cells_left,
-                storage_bytes: self.storage_bytes,
-                work_bytes: self.work_bytes,
-            }
+        let bounded = DecodeLimits {
+            rows: self.pools.rows_left,
+            cells: *self.cells_left,
+            storage_bytes: self.pools.storage_left,
+            work_bytes: self.pools.work_left,
         };
-        if let Some(pools) = &mut self.pools {
-            // An unwind or unobservable prefix cannot release this reservation.
-            pools.storage_left = 0;
-            pools.work_left = 0;
-        }
+        // An unwind or unobservable prefix cannot release this reservation.
+        self.pools.storage_left = 0;
+        self.pools.work_left = 0;
         let result = self.decoder.decode_bounded_interpreted(
             source,
             bytes,
@@ -671,21 +638,17 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
             bounded,
             interpretation,
         );
-        if let Some(pools) = &mut self.pools {
-            if let Some(used) = self.decoder.usage() {
-                match (
-                    bounded.storage_bytes.checked_sub(used.storage_bytes),
-                    bounded.work_bytes.checked_sub(used.work_bytes),
-                ) {
-                    (Some(storage), Some(work)) => {
-                        pools.storage_left = storage;
-                        pools.work_left = work;
-                    }
-                    _ if result.is_ok() => {
-                        return Err(DecodeError::Limit("producer_decode_receipt"))
-                    }
-                    _ => (),
+        if let Some(used) = self.decoder.usage() {
+            match (
+                bounded.storage_bytes.checked_sub(used.storage_bytes),
+                bounded.work_bytes.checked_sub(used.work_bytes),
+            ) {
+                (Some(storage), Some(work)) => {
+                    self.pools.storage_left = storage;
+                    self.pools.work_left = work;
                 }
+                _ if result.is_ok() => return Err(DecodeError::Limit("producer_decode_receipt")),
+                _ => (),
             }
         }
         let table = result?;
@@ -712,21 +675,19 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
             }
         }
         let rows = table.row_count();
-        if let Some(pools) = &mut self.pools {
-            pools.rows_left =
-                pools
-                    .rows_left
-                    .checked_sub(rows)
-                    .ok_or(DecodeError::ResourceLimit {
-                        resource: "rows",
-                        limit: pools.rows_limit,
-                        actual: (pools.rows_limit - pools.rows_left).checked_add(rows),
-                    })?;
-        }
+        self.pools.rows_left =
+            self.pools
+                .rows_left
+                .checked_sub(rows)
+                .ok_or(DecodeError::ResourceLimit {
+                    resource: "rows",
+                    limit: self.pools.rows_limit,
+                    actual: (self.pools.rows_limit - self.pools.rows_left).checked_add(rows),
+                })?;
         let cells = rows.checked_mul(schema.columns().len());
         let cells = match cells.filter(|cells| *cells <= *self.cells_left) {
             Some(cells) => cells,
-            None if self.pools.is_some() => {
+            None => {
                 return Err(DecodeError::ResourceLimit {
                     resource: "cells",
                     limit: self.cell_limit,
@@ -734,7 +695,6 @@ impl<D: DecodePort> SourceDecoder for NodeDecoder<'_, D> {
                         .and_then(|cells| (self.cell_limit - *self.cells_left).checked_add(cells)),
                 })
             }
-            None => return Err(DecodeError::Limit("producer_source_cells")),
         };
         *self.cells_left -= cells;
         Ok(table)

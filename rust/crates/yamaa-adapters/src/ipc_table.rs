@@ -277,7 +277,6 @@ fn encode_dataset_projection<T: TableAccess<Error = std::convert::Infallible>>(
     encode_table_projection(table, projection, budget)
 }
 
-
 fn encode_table_projection<T: TableAccess<Error = std::convert::Infallible>>(
     table: &T,
     projection: Option<&[usize]>,
@@ -297,7 +296,6 @@ pub(crate) struct DatasetBatches<'a, T = Dataset> {
     batch_rows: usize,
     remaining: usize,
 }
-
 
 fn table_batches<'a, T: TableAccess<Error = std::convert::Infallible>>(
     table: &'a T,
@@ -372,7 +370,6 @@ impl<T: TableAccess<Error = std::convert::Infallible>> std::iter::FusedIterator
     for DatasetBatches<'_, T>
 {
 }
-
 
 fn write_table_projection<T: TableAccess<Error = std::convert::Infallible>>(
     table: &T,

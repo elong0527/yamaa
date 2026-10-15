@@ -89,11 +89,10 @@ fn assert_complete(error: &Error, source: &SourceDeclaration, expected: &Value) 
 fn all_independent_csv_profile_reports_survive_bounded_original_projection() {
     let declaration = source("SRC", "source.csv");
     let mut count = 0;
-    for row in serde_json::from_str::<Vec<Value>>(include_str!(
-        "../fixtures/csv_profile_diagnostics.json"
-    ))
-    .unwrap()
-    .iter()
+    for row in
+        serde_json::from_str::<Vec<Value>>(include_str!("../fixtures/csv_profile_diagnostics.json"))
+            .unwrap()
+            .iter()
     {
         let expected: Value = row["expected"].clone();
         let source_bytes: Vec<u8> = if let Some(text) = row["source_bytes"].as_str() {
@@ -138,13 +137,8 @@ fn all_independent_typing_reports_keep_original_first_bad_field_and_value() {
             bytes(row["source_bytes"]["hex"].as_str().unwrap())
         };
         let error = Error::TypedSource(
-            typed_csv::parse(
-                &source_bytes,
-                &types,
-                Default::default(),
-                table_limits(),
-            )
-            .unwrap_err(),
+            typed_csv::parse(&source_bytes, &types, Default::default(), table_limits())
+                .unwrap_err(),
         );
         assert_complete(&error, &declaration, &expected["diagnostics"]);
         count += 1;
@@ -560,7 +554,10 @@ fn reached_opaque_barrier_stops_before_later_deep_and_oversized_semantic_facts()
         source_diagnostics::findings_with_limit(&error, None, 0),
         Ok(None)
     );
-    assert_eq!(source_diagnostics::findings_with_limit(&error, None, MAX_PROJECTION_BYTES), Ok(None));
+    assert_eq!(
+        source_diagnostics::findings_with_limit(&error, None, MAX_PROJECTION_BYTES),
+        Ok(None)
+    );
     let failure: Value = serde_json::from_str(&projection::failure(&error, None)).unwrap();
     assert_eq!(
         failure["outcome"],
@@ -583,9 +580,10 @@ fn structural_frame_refusal_precedes_only_unreached_late_barriers_and_preserves_
     };
     let pointer = stored_type.as_ptr();
     let admitted = nested(leaf, source_diagnostics::MAX_SOURCE_REPORT_FRAMES);
-    let diagnostics = source_diagnostics::findings_with_limit(&admitted, None, MAX_PROJECTION_BYTES)
-        .unwrap()
-        .unwrap();
+    let diagnostics =
+        source_diagnostics::findings_with_limit(&admitted, None, MAX_PROJECTION_BYTES)
+            .unwrap()
+            .unwrap();
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].spec_paths, ["input.DEEP.path"]);
     // The outer collection requires one more active frame, and must refuse before

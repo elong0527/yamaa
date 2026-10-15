@@ -232,9 +232,7 @@ fn normalize(
                         diagnostics.push(
                             finding
                                 .finding(&source.dataset)
-                                .diagnostic_with_limit(
-                                    yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
-                                )
+                                .diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
                                 .map_err(|_| Error::Projection)?,
                         );
                     }

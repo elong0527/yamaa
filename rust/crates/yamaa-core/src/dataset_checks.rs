@@ -21,9 +21,12 @@ pub fn not_missing<'a>(values: impl IntoIterator<Item = &'a Value>) -> NotMissin
     }
 }
 
-
 /// Preserve core-owned vocabulary and base context without inventing host keys.
-pub(crate) fn not_missing_diagnostic(path: String, column: String, failures: usize) -> Option<Diagnostic> {
+pub(crate) fn not_missing_diagnostic(
+    path: String,
+    column: String,
+    failures: usize,
+) -> Option<Diagnostic> {
     column_diagnostic(&Check::NotMissing, path, column, failures)
 }
 

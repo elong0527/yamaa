@@ -5,7 +5,6 @@ import csv
 import json
 import datetime
 import shutil
-import importlib.util
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[2]

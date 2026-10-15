@@ -14,14 +14,10 @@ pub trait SourcePort {
     type Error;
     /// Opt in only for known resource causes. Opaque host errors retain their
     /// identity and are not converted by inspecting their text or class name.
-    fn resource_failure(&self, _error: &Self::Error) -> Option<ResourceFailure> {
-        None
-    }
+    fn resource_failure(&self, error: &Self::Error) -> Option<ResourceFailure>;
     /// Inspect location and file kind without reading study bytes or creating a
-    /// snapshot. Existing explicit byte callbacks opt out through this default.
-    fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-        Ok(())
-    }
+    /// snapshot.
+    fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Self::Error>;
     fn capture_reads(&self) -> usize;
     fn capture(
         &mut self,
@@ -36,10 +32,7 @@ pub trait SourcePort {
         source: &SourceDeclaration,
         byte_limit: usize,
         origin: &mut Option<SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(SourceOrigin::Resource);
-        self.capture(source, byte_limit)
-    }
+    ) -> Result<Arc<[u8]>, Self::Error>;
 }
 
 /// Decode one captured source with its declared logical types. The returned table
@@ -49,24 +42,19 @@ pub trait SourceDecoder {
     type Table: TableAccess;
     /// Semantic ingestion findings can be collected across the remaining declared
     /// sources. Resource, transport and opaque boundary failures must abort.
-    fn continue_after(&self, _error: &Self::Error) -> bool {
-        false
-    }
+    fn continue_after(&self, error: &Self::Error) -> bool;
     fn decode(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
     ) -> Result<Self::Table, Self::Error>;
     /// The engine supplies the interpretation selected by the authored compiler.
-    /// Legacy trusted table ports keep their existing ordinary decoding behavior.
     fn decode_with_interpretation(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
-        _interpretation: SourceInterpretation,
-    ) -> Result<Self::Table, Self::Error> {
-        self.decode(source, bytes)
-    }
+        interpretation: SourceInterpretation,
+    ) -> Result<Self::Table, Self::Error>;
 }
 
 #[derive(Clone, Copy, Debug)]
