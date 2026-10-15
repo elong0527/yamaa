@@ -596,6 +596,15 @@ fn failed_observations<'a, E>(
                 }
             }
         }
+        Err(PortError::Run(RunError::Bind(error))) => {
+            if let Some(findings) =
+                crate::specification_diagnostics::binding(error, view.compiled().source())
+            {
+                diagnostics.extend(findings);
+            } else {
+                portable = false;
+            }
+        }
         Err(PortError::Run(error)) => {
             if let Some(refusal) =
                 crate::resource_diagnostics::run_limit(error, view.compiled().sources())

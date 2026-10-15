@@ -1347,6 +1347,112 @@ columns:
         }
 
         #[test]
+        fn producer_filter_type_failure_retains_the_complete_original_findings() {
+            use yamaa_adapters::{
+                file_application, file_preparation::FileSpecification, producer_result,
+            };
+
+            for (language, runtime, filter_count) in [
+                (Language::Python, "python", 1),
+                (Language::R, "r", 1),
+                (Language::Python, "python", 2),
+                (Language::R, "r", 2),
+            ] {
+                let study = Study::new();
+                // This filter is genuinely invalid independently of inferred choice types:
+                // EXSTDT is produced by to_date, while the right operand is a string.
+                study.write("producer/p.yaml", "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {EX: {path: ../raw/ex.csv}}\nbase: EX\nintermediates:\n  - id: EXP\n    dataset: EX\n    derivations: {EXSTDT: {to_date: {source: EXSTDTC}}}\n    filter: \"EX.EXSTDT >= 'not-a-date'\"\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: EX.USUBJID}\n  - {name: TRTSDT, type: date, label: First Dose Date, derivation: EXP.EXSTDT}\noutput: {path: ../generated/adsl.csv, columns: [USUBJID, TRTSDT]}\n");
+                if filter_count == 2 {
+                    let path = study.0.join("producer/p.yaml");
+                    let source = fs::read_to_string(&path).unwrap().replace(
+                        "\ncolumns:\n",
+                        "\n  - id: SECOND\n    dataset: EX\n    derivations: {EXSTDT: {to_date: {source: EXSTDTC}}}\n    filter: \"EX.EXSTDT >= 'also-not-a-date'\"\n    no_match: null\ncolumns:\n",
+                    );
+                    fs::write(path, source).unwrap();
+                }
+                study.write("consumer/root.yaml", "schema_version: '1.0'\ndomain: ADEX\nkeys: [USUBJID]\ninput: {ADSL: {path: ../generated/adsl.csv, schema: ../producer/p.yaml}}\nbase: ADSL\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: ADSL.USUBJID}\n  - {name: TRTSDT, type: date, label: First Dose Date, derivation: ADSL.TRTSDT}\noutput: {path: ../generated/consumer.csv, columns: [USUBJID, TRTSDT]}\n");
+                study.write("raw/ex.csv", "USUBJID,EXSTDTC\nS01,2024-01-01\n");
+                study.write("generated/adsl.csv", b"untouched producer output");
+                study.write("generated/consumer.csv", b"untouched consumer output");
+                let id = || yamaa_adapters::specification_report::Identity {
+                    runtime,
+                    ..report_id()
+                };
+                let expected = serde_json::Value::Array((0..filter_count).map(|index| serde_json::json!({
+                    "phase": "validation", "condition": "incompatible_input_type",
+                    "requirement": "REQ-0190", "spec_paths": [format!("intermediates[{index}].filter")],
+                    "context": {"left_type": "date", "right_type": "str"},
+                })).collect());
+                let prepared = FileSpecification::prepare(
+                    Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
+                    "producer/p.yaml",
+                )
+                .unwrap();
+                let mut direct = file_application::plain(prepared, id()).unwrap();
+                assert_eq!(direct.observations()["diagnostics"], expected);
+                assert!(direct.output().is_none());
+                assert!(direct.save().is_err());
+
+                let mut build = study.build(language);
+                let mut activation = Activation::new(&study, Mode::Pass);
+                let attempt = build.build_owned_reported(&mut activation, id(), scope());
+                assert!(!attempt.accepted());
+                assert!(activation.trace.is_empty());
+                assert_eq!(attempt.graph.nodes.len(), 1);
+                let producer_node = attempt.graph.nodes[0].node;
+                let producer = build.provenance().metadata().nodes()[producer_node]
+                    .identity()
+                    .to_owned();
+                assert!(producer.ends_with("/producer/p.yaml"));
+                assert!(
+                    matches!(attempt.graph.outcome, Err(Failure::Node { node }) if node == producer_node)
+                );
+                assert!(matches!(
+                    &attempt.graph.nodes[0].dataset.result,
+                    Err(PortError::Run(yamaa_core::specification_run::RunError::Bind(
+                        yamaa_core::specification::BindError::Invalid(findings)
+                    ))) if findings.len() == filter_count
+                ));
+                drop(build);
+                for path in ["producer/p.yaml", "consumer/root.yaml", "raw/ex.csv"] {
+                    fs::remove_file(study.0.join(path)).unwrap();
+                }
+                let mut result = producer_result::prepare_owned_classified(&attempt, id(), &[])
+                    .unwrap_or_else(|error| {
+                        panic!("{runtime}: typed producer filter cause was refused: {error:?}")
+                    });
+                assert_eq!(result.observations()["diagnostics"], expected);
+                assert_eq!(result.observations()["nodes"][0]["diagnostics"], expected);
+                assert_eq!(result.observations()["nodes"][0]["specification"], producer);
+                assert_eq!(result.issues().len(), filter_count);
+                for (index, issue) in result.issues().iter().enumerate() {
+                    assert_eq!(issue.condition, "incompatible_input_type");
+                    assert_eq!(issue.requirement, Some("REQ-0190".into()));
+                    assert_eq!(issue.spec_paths, [format!("intermediates[{index}].filter")]);
+                }
+                assert_eq!(
+                    producer_result::prepare_owned_classified(&attempt, id(), &[])
+                        .unwrap()
+                        .observations(),
+                    result.observations(),
+                );
+                assert!(result.output().is_none() && result.output_table().is_none());
+                for _ in 0..2 {
+                    assert!(result.save().is_err());
+                }
+                assert_eq!(
+                    fs::read(study.0.join("generated/adsl.csv")).unwrap(),
+                    b"untouched producer output"
+                );
+                assert_eq!(
+                    fs::read(study.0.join("generated/consumer.csv")).unwrap(),
+                    b"untouched consumer output"
+                );
+                assert_eq!(activation.trace, Vec::<String>::new());
+            }
+        }
+
+        #[test]
         fn public_root_result_keeps_independent_unrounded_truth_after_all_other_owners_and_files_drop(
         ) {
             use yamaa_adapters::{producer_result, public_table::Values};
