@@ -1,6 +1,6 @@
 //! Admission of held Parquet framing before the general codec sees metadata.
 //! No decompression or semantic type decisions occur here.
-use super::compact::{self, Value};
+use super::compact::{self, Sequence, Value};
 
 #[derive(Debug)]
 pub(super) enum Error {
@@ -67,30 +67,31 @@ pub(super) struct Framing<'a> {
     pub pages: Vec<Page<'a>>,
 }
 
-fn integer(value: Option<&Value<'_>>) -> Result<i64, Error> {
+fn integer(value: Option<Value<'_>>) -> Result<i64, Error> {
     if let Some(Value::Integer(value)) = value {
-        Ok(*value)
+        Ok(value)
     } else {
         Err(Error::Malformed)
     }
 }
-fn count(value: Option<&Value<'_>>) -> Result<usize, Error> {
+fn count(value: Option<Value<'_>>) -> Result<usize, Error> {
     usize::try_from(integer(value)?).map_err(|_| Error::Malformed)
 }
-fn sequence<'a, 'b>(value: Option<&'b Value<'a>>) -> Result<&'b [Value<'a>], Error> {
+fn sequence(value: Option<Value<'_>>) -> Result<Sequence<'_>, Error> {
     if let Some(Value::Sequence(values)) = value {
         Ok(values)
     } else {
         Err(Error::Malformed)
     }
 }
-// A compact list's length bounds its own allocation, but not allocations made
-// later from integer fields within each SchemaElement. The general reader
+// Borrowed compact nodes do not allocate, but integer claims within each
+// SchemaElement can cause later allocations. The general reader
 // reserves num_children slots before discovering a truncated schema tree.
-fn admit_schema(schema: &[Value<'_>]) -> Result<(), Error> {
-    yamaa_core::limits::Limits::columns(schema.len().saturating_sub(1))?;
+fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
+    let mut leaves = 0;
     let mut remaining_children = Vec::new();
-    for (index, element) in schema.iter().enumerate() {
+    for (index, element) in schema.into_iter().enumerate() {
+        let element = element?;
         while remaining_children.last() == Some(&0) {
             remaining_children.pop();
         }
@@ -102,8 +103,16 @@ fn admit_schema(schema: &[Value<'_>]) -> Result<(), Error> {
         if remaining_children.len() + 1 > yamaa_core::limits::Limits::SEMANTIC_DEPTH {
             return Err(Error::Malformed);
         }
-        if let Some(value) = element.field(5) {
-            let children = count(Some(value))?;
+        let children = element
+            .field(5)?
+            .map(|value| count(Some(value)))
+            .transpose()?;
+        // A zero child count can describe either a primitive (some writers
+        // emit it explicitly) or an empty group. Only primitives have a type.
+        if index != 0 && children.is_none_or(|count| count == 0) && element.field(1)?.is_some() {
+            leaves += 1;
+        }
+        if let Some(children) = children {
             if children > schema.len() - index - 1 {
                 return Err(Error::Malformed);
             }
@@ -112,7 +121,8 @@ fn admit_schema(schema: &[Value<'_>]) -> Result<(), Error> {
             }
         }
     }
-    Ok(())
+    yamaa_core::limits::Limits::columns(leaves)?;
+    Ok(leaves)
 }
 
 /// Collect borrowed page bodies from every stored column chunk in source order.
@@ -130,32 +140,34 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
         .ok_or(Error::Malformed)?;
     let metadata = &bytes[start..footer];
     let (root, _) = compact::parse(metadata)?;
-    let declared_rows = count(root.field(3))?;
-    let groups = sequence(root.field(4))?;
-    let schema = sequence(root.field(2))?;
-    admit_schema(schema)?;
-    yamaa_core::limits::Limits::table(declared_rows, schema.len().saturating_sub(1))?;
+    let declared_rows = count(root.field(3)?)?;
+    let groups = sequence(root.field(4)?)?;
+    let schema = sequence(root.field(2)?)?;
+    let leaves = admit_schema(schema)?;
+    yamaa_core::limits::Limits::table(declared_rows, leaves)?;
     let mut result = Framing {
         metadata,
         pages: Vec::new(),
     };
     let mut rows = 0usize;
-    for (row_group, group) in groups.iter().enumerate() {
-        let count_rows = count(group.field(3))?;
+    for (row_group, group) in groups.into_iter().enumerate() {
+        let group = group?;
+        let count_rows = count(group.field(3)?)?;
         rows = rows.checked_add(count_rows).ok_or(Error::Malformed)?;
-        let columns = sequence(group.field(1))?;
+        let columns = sequence(group.field(1)?)?;
         yamaa_core::limits::Limits::table(rows, columns.len())?;
-        for (column, chunk) in columns.iter().enumerate() {
-            let meta = chunk.field(3).ok_or(Error::Malformed)?;
-            let codec = integer(meta.field(4))?;
-            let data = count(meta.field(9))?;
-            let mut offset = match meta.field(11) {
+        for (column, chunk) in columns.into_iter().enumerate() {
+            let chunk = chunk?;
+            let meta = chunk.field(3)?.ok_or(Error::Malformed)?;
+            let codec = integer(meta.field(4)?)?;
+            let data = count(meta.field(9)?)?;
+            let mut offset = match meta.field(11)? {
                 // Match the reader's exact chunk start. Empty columns may have
                 // data_page_offset=0 and a real, empty dictionary at offset 4.
                 Some(value) => count(Some(value))?,
                 None => data,
             };
-            let length = count(meta.field(7))?;
+            let length = count(meta.field(7)?)?;
             let end = offset
                 .checked_add(length)
                 .filter(|end| *end <= start)
@@ -165,52 +177,52 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
             }
             while offset < end {
                 let (header, used) = compact::parse(&bytes[offset..end])?;
-                let uncompressed = count(header.field(2))?;
-                let compressed = count(header.field(3))?;
-                let payload = match integer(header.field(1))? {
+                let uncompressed = count(header.field(2)?)?;
+                let compressed = count(header.field(3)?)?;
+                let payload = match integer(header.field(1)?)? {
                     0 => {
-                        let detail = header.field(5).ok_or(Error::Malformed)?;
+                        let detail = header.field(5)?.ok_or(Error::Malformed)?;
                         Payload::DataV1 {
-                            encoding: integer(detail.field(2))?,
-                            values: count(detail.field(1))?,
-                            definition_encoding: integer(detail.field(3))?,
-                            repetition_encoding: integer(detail.field(4))?,
+                            encoding: integer(detail.field(2)?)?,
+                            values: count(detail.field(1)?)?,
+                            definition_encoding: integer(detail.field(3)?)?,
+                            repetition_encoding: integer(detail.field(4)?)?,
                         }
                     }
                     1 => Payload::Index,
                     2 => {
-                        let detail = header.field(7).ok_or(Error::Malformed)?;
+                        let detail = header.field(7)?.ok_or(Error::Malformed)?;
                         Payload::Dictionary {
-                            encoding: integer(detail.field(2))?,
-                            values: count(detail.field(1))?,
+                            encoding: integer(detail.field(2)?)?,
+                            values: count(detail.field(1)?)?,
                         }
                     }
                     3 => {
-                        let detail = header.field(8).ok_or(Error::Malformed)?;
+                        let detail = header.field(8)?.ok_or(Error::Malformed)?;
                         Payload::DataV2 {
-                            encoding: integer(detail.field(4))?,
-                            values: count(detail.field(1))?,
-                            nulls: count(detail.field(2))?,
-                            definition_bytes: count(detail.field(5))?,
-                            repetition_bytes: count(detail.field(6))?,
+                            encoding: integer(detail.field(4)?)?,
+                            values: count(detail.field(1)?)?,
+                            nulls: count(detail.field(2)?)?,
+                            definition_bytes: count(detail.field(5)?)?,
+                            repetition_bytes: count(detail.field(6)?)?,
                         }
                     }
                     _ => return Err(Error::Malformed),
                 };
                 let v2 = if matches!(payload, Payload::DataV2 { .. }) {
-                    header.field(8)
+                    header.field(8)?
                 } else {
                     None
                 };
                 let (prefix, should_decompress) = match v2 {
                     Some(v2) => {
-                        let prefix = count(v2.field(5))?
-                            .checked_add(count(v2.field(6))?)
+                        let prefix = count(v2.field(5)?)?
+                            .checked_add(count(v2.field(6)?)?)
                             .ok_or(Error::Malformed)?;
                         if prefix > compressed || prefix > uncompressed {
                             return Err(Error::Malformed);
                         }
-                        let compress = match v2.field(7) {
+                        let compress = match v2.field(7)? {
                             None | Some(Value::Bool(true)) => true,
                             Some(Value::Bool(false)) => false,
                             _ => return Err(Error::Malformed),
@@ -243,6 +255,14 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn unsigned(bytes: &mut Vec<u8>, mut value: u64) {
+        while value >= 128 {
+            bytes.push(value as u8 | 128);
+            value >>= 7;
+        }
+        bytes.push(value as u8);
+    }
 
     fn container(page: &[u8]) -> Vec<u8> {
         assert!(page.len() < 64);
@@ -291,25 +311,154 @@ mod tests {
     }
     #[test]
     fn schema_integer_claims_and_flattened_tree_recursion_are_checked() {
-        let element = |children| Value::Struct(vec![(5, Value::Integer(children))]);
+        fn admit_children(children: &[i64]) -> Result<usize, Error> {
+            let mut bytes = vec![0x19, 0xfc]; // field 1: extended struct list
+            unsigned(&mut bytes, children.len() as u64);
+            for (index, &children) in children.iter().enumerate() {
+                if index != 0 && children == 0 {
+                    bytes.extend([0x15, 4, 0x45]); // INT64 primitive; field 5
+                } else {
+                    bytes.push(0x55); // SchemaElement field 5: i32 num_children
+                }
+                unsigned(&mut bytes, ((children << 1) ^ (children >> 63)) as u64);
+                bytes.push(0);
+            }
+            bytes.push(0);
+            let (root, _) = compact::parse(&bytes)?;
+            admit_schema(sequence(root.field(1)?)?)
+        }
         assert!(matches!(
-            admit_schema(&[element(i32::MAX.into())]),
+            admit_children(&[i32::MAX.into()]),
             Err(Error::Malformed)
         ));
-        assert!(matches!(
-            admit_schema(&[element(-1)]),
-            Err(Error::Malformed)
-        ));
-        let mut nested: Vec<_> = (0..yamaa_core::limits::Limits::SEMANTIC_DEPTH - 1)
-            .map(|_| element(1))
+        assert!(matches!(admit_children(&[-1]), Err(Error::Malformed)));
+        let mut nested = vec![1; yamaa_core::limits::Limits::SEMANTIC_DEPTH - 1];
+        nested.push(0);
+        assert_eq!(admit_children(&nested).unwrap(), 1);
+        nested.insert(0, 1);
+        assert!(matches!(admit_children(&nested), Err(Error::Malformed)));
+        let mut flat = vec![100];
+        flat.extend([0; 100]);
+        assert_eq!(admit_children(&flat).unwrap(), 100);
+    }
+
+    #[test]
+    fn nested_group_nodes_do_not_replace_the_supported_profile_finding() {
+        use parquet::{file::writer::SerializedFileWriter, schema::types::Type};
+        use std::sync::Arc;
+        let fields = (0..yamaa_core::limits::Limits::COLUMNS)
+            .map(|index| {
+                Arc::new(
+                    Type::group_type_builder(&format!("G{index}"))
+                        .with_repetition(parquet::basic::Repetition::OPTIONAL)
+                        .with_fields(vec![Arc::new(
+                            Type::primitive_type_builder("ID", parquet::basic::Type::INT64)
+                                .build()
+                                .unwrap(),
+                        )])
+                        .build()
+                        .unwrap(),
+                )
+            })
             .collect();
-        nested.push(element(0));
-        admit_schema(&nested).unwrap();
-        nested.insert(0, element(1));
-        assert!(matches!(admit_schema(&nested), Err(Error::Malformed)));
-        let mut flat = vec![element(100)];
-        flat.extend((0..100).map(|_| element(0)));
-        admit_schema(&flat).unwrap();
+        let schema = Arc::new(
+            Type::group_type_builder("schema")
+                .with_fields(fields)
+                .build()
+                .unwrap(),
+        );
+        let mut bytes = Vec::new();
+        SerializedFileWriter::new(&mut bytes, schema, Default::default())
+            .unwrap()
+            .close()
+            .unwrap();
+        let result = super::super::parse(&bytes);
+        assert!(
+            matches!(&result, Err(super::super::Error::Unsupported { .. })),
+            "1024 physical leaves remain within geometry; got {:?}",
+            result.as_ref().err()
+        );
+    }
+
+    #[test]
+    fn unknown_footer_collections_preserve_independent_cells_and_reject_bad_children() {
+        use yamaa_core::table::{TableAccess, ValueRef};
+        let fixture = include_bytes!("../../tests/fixtures/pq/none-1-0.parquet");
+        let footer = fixture.len() - 8;
+        let old_length =
+            u32::from_le_bytes(fixture[footer..footer + 4].try_into().unwrap()) as usize;
+        let start = footer - old_length;
+        assert_eq!(
+            compact::parse(&fixture[start..footer]).unwrap().1,
+            old_length
+        );
+        assert_eq!(fixture[footer - 1], 0); // FileMetaData STOP
+        let mut bytes = fixture[..footer - 1].to_vec();
+        bytes.push(0x09); // explicit unknown field 30000: empty-struct list
+        unsigned(&mut bytes, 60000);
+        bytes.push(0xfc);
+        unsigned(&mut bytes, 65536);
+        let elements = bytes.len();
+        bytes.resize(elements + 65536, 0);
+        bytes.push(0);
+        let length = bytes.len() - start;
+        bytes.extend((length as u32).to_le_bytes());
+        bytes.extend(b"PAR1");
+        let table = super::super::parse(&bytes).unwrap();
+        assert_eq!(table.row_count(), 3);
+        assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str(""));
+        assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Str("β\0z"));
+        assert_eq!(table.cell(0, 1).unwrap(), ValueRef::Int(i64::MIN));
+        assert_eq!(table.cell(2, 1).unwrap(), ValueRef::Int(i64::MAX));
+        for column in 0..5 {
+            assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing);
+        }
+        for (row, bits) in [(0, (-0.0f64).to_bits()), (2, 1)] {
+            let ValueRef::Float(value) = table.cell(row, 2).unwrap() else {
+                panic!();
+            };
+            assert_eq!(value.get().to_bits(), bits);
+        }
+        bytes[elements + 65535] = 0x1e;
+        assert!(matches!(
+            super::super::parse(&bytes),
+            Err(super::super::Error::Malformed)
+        ));
+    }
+
+    #[test]
+    fn declared_cells_use_physical_leaves_instead_of_group_nodes() {
+        const LEAVES: usize = 1024;
+        for rows in [625000, 625001] {
+            let mut footer = vec![0x29, 0xfc]; // schema: root + group/leaf pairs
+            unsigned(&mut footer, (1 + 2 * LEAVES) as u64);
+            footer.push(0x55);
+            unsigned(&mut footer, (2 * LEAVES) as u64);
+            footer.push(0);
+            for _ in 0..LEAVES {
+                footer.extend([0x55, 2, 0]); // one-child group
+                footer.extend([0x15, 4, 0]); // INT64 primitive, no child count
+            }
+            footer.push(0x16); // declared num_rows
+            unsigned(&mut footer, 2 * rows);
+            footer.extend([0x19, 0, 0]); // no row groups; metadata STOP
+            let mut bytes = b"PAR1".to_vec();
+            bytes.extend(&footer);
+            bytes.extend((footer.len() as u32).to_le_bytes());
+            bytes.extend(b"PAR1");
+            if rows == 625000 {
+                admit(&bytes).unwrap();
+            } else {
+                assert!(matches!(
+                    admit(&bytes),
+                    Err(Error::ResourceLimit {
+                        resource: "table_cells",
+                        actual: Some(640001024),
+                        ..
+                    })
+                ));
+            }
+        }
     }
 
     #[test]

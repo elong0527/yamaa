@@ -1502,6 +1502,234 @@ mod numeric {
             assert_eq!(port.trace, ["a", "b"]);
         }
         #[test]
+        fn data_driven_like_uses_the_actual_match_guard_and_preserves_fresh_retry() {
+            let expression = "a LIKE b AND c = 1";
+            let plan = predicate_compiler::compile(expression, "flag.condition").unwrap();
+            let mut port = owned(&[
+                ("a", Value::Str("a".repeat(100))),
+                ("b", Value::Str("%a".repeat(100) + "b")),
+                ("c", Value::Int(1)),
+            ]);
+            let error = plan.evaluate(&mut port).unwrap_err();
+            assert_eq!(error.spec_path, "flag.condition");
+            assert_eq!(error.expression, expression);
+            assert_eq!(error.route, [yamaa_core::predicate::Route::Left]);
+            assert!(matches!(
+                error.kind,
+                ErrorKind::Regex(yamaa_core::regex::MatchError {
+                    resource: yamaa_core::regex::Resource::Work,
+                    limit: 1_000_000
+                })
+            ));
+            assert_eq!(port.trace, ["a", "b"]);
+            port.values.insert("a".into(), Value::Str("\n😀".into()));
+            port.values.insert("b".into(), Value::Str("_%".into()));
+            port.trace.clear();
+            assert_eq!(plan.evaluate(&mut port).unwrap(), Truth::True);
+            assert_eq!(port.trace, ["a", "b", "c"]);
+        }
+        #[test]
+        fn like_preserves_full_scalar_truth_without_regex_syntax_or_line_rules() {
+            let plan = predicate_compiler::compile("a LIKE b", "flag.condition").unwrap();
+            let negated = predicate_compiler::compile("a NOT LIKE b", "flag.condition").unwrap();
+            for (value, pattern, expected) in [
+                ("", "", Truth::True),
+                ("", "%", Truth::True),
+                ("", "_", Truth::False),
+                ("a", "", Truth::False),
+                ("a", "__", Truth::False),
+                ("ab", "_", Truth::False),
+                ("ab", "a", Truth::False),
+                ("ba", "a", Truth::False),
+                ("ab", "a%", Truth::True),
+                ("ba", "%a", Truth::True),
+                ("abab", "%ab%ab", Truth::True),
+                ("Ab", "a%", Truth::False),
+                ("😀", "_", Truth::True),
+                ("é", "__", Truth::False),
+                ("e\u{301}", "__", Truth::True),
+                ("e\u{301}", "é", Truth::False),
+                ("\r\n", "__", Truth::True),
+                ("\n😀\u{2028}", "_%_", Truth::True),
+                (".^$[](){}*+?|\\", ".^$[](){}*+?|\\", Truth::True),
+                ("a\\b", "a\\b", Truth::True),
+                ("%_", "\\%\\_", Truth::False),
+            ] {
+                let values = [
+                    ("a", Value::Str(value.into())),
+                    ("b", Value::Str(pattern.into())),
+                ];
+                let mut port = owned(&values);
+                assert_eq!(
+                    plan.evaluate(&mut port).unwrap(),
+                    expected,
+                    "{value:?} LIKE {pattern:?}"
+                );
+                assert_eq!(port.trace, ["a", "b"]);
+                let mut borrowed = Borrowed {
+                    values: port.values,
+                    trace: vec![],
+                };
+                assert_eq!(plan.evaluate(&mut borrowed).unwrap(), expected);
+                assert_eq!(borrowed.trace, ["a", "b"]);
+                assert_eq!(negated.evaluate(&mut borrowed).unwrap(), expected.negate());
+            }
+            for character in [
+                '\0',
+                '\n',
+                '\r',
+                '\u{b}',
+                '\u{c}',
+                '\u{85}',
+                '\u{2028}',
+                '\u{2029}',
+                '\u{10ffff}',
+            ] {
+                let mut port = owned(&[
+                    ("a", Value::Str(character.into())),
+                    ("b", Value::Str("_".into())),
+                ]);
+                assert_eq!(
+                    plan.evaluate(&mut port).unwrap(),
+                    Truth::True,
+                    "{character:?}"
+                );
+            }
+            for (value, pattern) in [
+                ("a".repeat(3000), "a".repeat(3000)),
+                ("\n😀".repeat(1000), "%".repeat(10_000)),
+            ] {
+                let mut port = owned(&[("a", Value::Str(value)), ("b", Value::Str(pattern))]);
+                assert_eq!(plan.evaluate(&mut port).unwrap(), Truth::True);
+            }
+        }
+        #[test]
+        fn like_validates_complete_escape_spelling_and_preserves_missing_and_type_owners() {
+            use yamaa_core::predicate::{Condition, Route};
+            use yamaa_core::value::ValueType;
+
+            for (expression, value, pattern) in [
+                ("a LIKE b ESCAPE '!'", "%_!", "!%!_!!"),
+                ("a LIKE b ESCAPE '😀'", "%_😀", "😀%😀_😀😀"),
+                ("a LIKE b ESCAPE '%'", "_", "%_"),
+                ("a LIKE b ESCAPE '_'", "%", "_%"),
+            ] {
+                let plan = predicate_compiler::compile(expression, "flag.condition").unwrap();
+                let mut port = owned(&[
+                    ("a", Value::Str(value.into())),
+                    ("b", Value::Str(pattern.into())),
+                ]);
+                assert_eq!(
+                    plan.evaluate(&mut port).unwrap(),
+                    Truth::True,
+                    "{expression}"
+                );
+            }
+            let expression = "a LIKE b ESCAPE '!'";
+            let plan = predicate_compiler::compile(expression, "flag.condition").unwrap();
+            for (value, pattern) in [
+                ("".into(), "!".into()),
+                ("unrelated".into(), "z!".into()),
+                ("a".repeat(100), "%a".repeat(100) + "!"),
+            ] {
+                let mut port = owned(&[("a", Value::Str(value)), ("b", Value::Str(pattern))]);
+                let error = plan.evaluate(&mut port).unwrap_err();
+                assert_eq!(error.kind, ErrorKind::Condition(Condition::DanglingEscape));
+                assert_eq!(error.spec_path, "flag.condition");
+                assert_eq!(error.expression, expression);
+                assert!(error.route.is_empty());
+                assert_eq!(port.trace, ["a", "b"]);
+            }
+            for (value, pattern) in [
+                (Value::Missing, Value::Str("!".into())),
+                (Value::Str("a".into()), Value::Missing),
+                (Value::Missing, Value::Int(1)),
+                (Value::Int(1), Value::Missing),
+            ] {
+                let mut port = owned(&[("a", value), ("b", pattern)]);
+                assert_eq!(plan.evaluate(&mut port).unwrap(), Truth::Unknown);
+                assert_eq!(port.trace, ["a", "b"]);
+                let negated =
+                    predicate_compiler::compile("a NOT LIKE b ESCAPE '!'", "flag.condition")
+                        .unwrap();
+                assert_eq!(negated.evaluate(&mut port).unwrap(), Truth::Unknown);
+            }
+            for (value, pattern, actual) in [
+                (Value::Int(1), Value::Str("%".into()), ValueType::Int),
+                (Value::Str("a".into()), Value::Bool(true), ValueType::Bool),
+            ] {
+                let mut port = owned(&[("a", value), ("b", pattern)]);
+                let error = plan.evaluate(&mut port).unwrap_err();
+                assert_eq!(
+                    error.kind,
+                    ErrorKind::Condition(Condition::ExpectedText { actual })
+                );
+                assert_eq!(error.spec_path, "flag.condition");
+                assert!(error.route.is_empty());
+                assert_eq!(port.trace, ["a", "b"]);
+            }
+            let mut port = owned(&[("a", Value::Missing)]);
+            let error = plan.evaluate(&mut port).unwrap_err();
+            assert_eq!(error.route, [Route::Pattern]);
+            assert_eq!(
+                error.kind,
+                ErrorKind::Condition(Condition::UnknownField {
+                    identifier: "b".into()
+                })
+            );
+            assert_eq!(port.trace, ["a", "b"]);
+        }
+        #[test]
+        fn like_preserves_an_opaque_pattern_resolution_error_before_later_work() {
+            struct Port {
+                trace: Vec<String>,
+                payload: Option<Box<u8>>,
+                marker: Rc<()>,
+            }
+            impl Resolver for Port {
+                type Error = (Box<u8>, Rc<()>);
+                fn resolve(&mut self, identifier: &str) -> Result<Selection, Self::Error> {
+                    self.trace.push(identifier.into());
+                    match identifier {
+                        "a" => Ok(Selection::Present(Value::Str("a".into()))),
+                        "b" => Err((self.payload.take().unwrap(), self.marker.clone())),
+                        _ => panic!("later operand was resolved"),
+                    }
+                }
+            }
+            let marker = Rc::new(());
+            let payload = Box::new(7);
+            let address = &*payload as *const u8;
+            let mut port = Port {
+                trace: vec![],
+                payload: Some(payload),
+                marker: marker.clone(),
+            };
+            let expression = "a LIKE b AND c = 1";
+            let plan = predicate_compiler::compile(expression, "rows[0].filter").unwrap();
+            let error = plan.evaluate(&mut port).unwrap_err();
+            assert_eq!(error.spec_path, "rows[0].filter");
+            assert_eq!(error.expression, expression);
+            assert_eq!(
+                error.route,
+                [
+                    yamaa_core::predicate::Route::Left,
+                    yamaa_core::predicate::Route::Pattern
+                ]
+            );
+            let ErrorKind::Resolution {
+                identifier,
+                error: (payload, retained),
+            } = error.kind
+            else {
+                panic!("original resolution error")
+            };
+            assert_eq!(identifier, "b");
+            assert_eq!(&*payload as *const u8, address);
+            assert!(Rc::ptr_eq(&marker, &retained));
+            assert_eq!(port.trace, ["a", "b"]);
+        }
+        #[test]
         fn opaque_error_moves_once_without_later_resolution_and_retains_site_route() {
             let plan = predicate_compiler::compile("a = 1 OR b = 2", "flag.condition").unwrap();
             let marker = Rc::new(());

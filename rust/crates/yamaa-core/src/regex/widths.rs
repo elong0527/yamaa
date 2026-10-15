@@ -590,9 +590,56 @@ impl Expressions {
         // first constructed operation, independently of concrete path expansion.
         let checks = self.checks.clone();
         for (expression, byte) in checks {
+            let query = self.query(expression, byte);
+            // A single reachable overflow proves refusal. Check a completely
+            // conditioned query first so a huge independent summand need not
+            // wait for exact optimization of the other connected summands.
+            // A non-overflowing witness proves nothing about other choices;
+            // they still require the complete arithmetic query below.
+            let witness = self.arithmetic_witness(query);
+            self.evaluate(witness)?;
             self.extent(expression, byte)?;
         }
         Ok(())
+    }
+    fn arithmetic_witness(&mut self, mut query: Query) -> Query {
+        let choices: BTreeSet<_> = query
+            .terms
+            .iter()
+            .flat_map(|(id, _)| self.support(*id))
+            .collect();
+        for choice in choices.into_iter().rev() {
+            let mut preferred = None;
+            for branch in 0..self.arities[choice] {
+                let candidate = self.conditioned(&query, choice, branch);
+                if candidate.absent {
+                    continue;
+                }
+                // These observations choose a promising assignment only.
+                // They never establish overflow or safety by themselves.
+                let mut minimum = candidate.constant.min.clone();
+                let mut finite = candidate.constant.max.clone();
+                for (id, weight) in &candidate.terms {
+                    let bounds = self.arithmetic[*id];
+                    minimum += BigUint::from(bounds.min) * weight;
+                    finite = finite
+                        .zip(bounds.finite)
+                        .map(|(sum, max)| sum + BigUint::from(max) * weight);
+                }
+                let priority = minimum.max(finite.unwrap_or_default());
+                if preferred
+                    .as_ref()
+                    .is_none_or(|(known, _)| priority > *known)
+                {
+                    preferred = Some((priority, candidate));
+                }
+            }
+            let Some((_, candidate)) = preferred else {
+                return self.query(self.absent, query.byte);
+            };
+            query = candidate;
+        }
+        query
     }
     fn add(&mut self, a: usize, b: usize, byte: usize) -> usize {
         if a == self.absent || b == self.absent {
@@ -1622,6 +1669,105 @@ mod tests {
         }
         source.push(')');
         source
+    }
+
+    fn inspect_arithmetic(source: &str) -> (Result<(), CompileError>, usize) {
+        let mut pattern = Pattern::compile(&source.replacen("(?<=", "(?=", 1)).unwrap();
+        let assertion = pattern
+            .nodes
+            .iter()
+            .find(|node| matches!(node.kind, Kind::Look { .. }))
+            .unwrap()
+            .byte;
+        for node in &mut pattern.nodes {
+            // Restore exact source coordinates after removing '<' for parsing.
+            if node.byte > assertion {
+                node.byte += 1;
+            }
+            if let Kind::Look { behind, .. } = &mut node.kind {
+                *behind = true;
+            }
+        }
+        let mut analysis = Analysis::new(&pattern.nodes, pattern.root);
+        let initial = Path {
+            width: analysis.expressions.zero,
+            captures: 0,
+            domain: analysis.expressions.zero,
+        };
+        analysis.visit(pattern.root, initial, false).unwrap();
+        let result = analysis.expressions.check_arithmetic();
+        (result, analysis.expressions.ranges.len())
+    }
+
+    #[test]
+    fn reachable_overflow_does_not_require_exact_dense_choice_extrema() {
+        for count in [4, 8, 16] {
+            let dense = dense_reference_choices(count);
+            let mut sources = vec![(
+                dense.clone() + &format!(r"\1{{{}}}", usize::MAX),
+                dense.len(),
+            )];
+            // Lookbehind visits these sums backwards: the dense sum has been
+            // built before its huge independent or correlated summand is added.
+            // The two last captures require opposite branches for overflow.
+            for term in [
+                "a".to_owned(),
+                format!(r"\{}", 4 * count - 3),
+                format!(r"\{}", 4 * count),
+            ] {
+                sources.push((
+                    dense.replacen("(?<=", &format!(r"(?<={term}{{{}}}", usize::MAX), 1),
+                    dense.find("(?<=").unwrap() + 4,
+                ));
+            }
+            for (source, byte) in sources {
+                let expected = CompileError::Unsupported {
+                    byte,
+                    feature: "pattern width exceeds addressable range",
+                };
+                let (result, queries) = inspect_arithmetic(&source);
+                assert_eq!(result, Err(expected.clone()), "{source}");
+                assert_eq!(Pattern::compile(&source), Err(expected), "{source}");
+                assert!(
+                    queries < count * count * 8,
+                    "{count} choices retained {queries} exact arithmetic queries"
+                );
+                eprintln!("{count} dense arithmetic choices: {queries} exact queries");
+            }
+        }
+    }
+
+    #[test]
+    fn non_overflowing_witness_still_requires_complete_arithmetic_and_fixedness_proofs() {
+        // Each branch has exactly one participating capture, so the relaxed
+        // two-MAX sum is unreachable and the actual width is exactly MAX.
+        Pattern::compile(&format!(
+            r"(?:(a)()|()(a))(?<=\1{{{0}}}\4{{{0}}})",
+            usize::MAX
+        ))
+        .unwrap();
+        // The promising MAX branch is safe, but another branch has width two.
+        assert!(matches!(
+            Pattern::compile(&format!(r"(?:(a)()|()(aa))(?<=\1{{{}}}\4)", usize::MAX)),
+            Err(CompileError::Invalid {
+                reason: "variable-length lookbehind",
+                ..
+            })
+        ));
+        // The first outer alternative has incompatible per-term maxima, so
+        // its promising assignment is safe. The other outer alternative has
+        // two participating captures and really overflows at the final sum.
+        let source = format!(
+            r"(?:(?:(a)()|()(a))|(a)(a))(?<=\6{{{0}}}\5{{{0}}}\1{{{0}}}\4{{{0}}})",
+            usize::MAX
+        );
+        assert_eq!(
+            Pattern::compile(&source),
+            Err(CompileError::Unsupported {
+                byte: source.find(r"\6").unwrap(),
+                feature: "pattern width exceeds addressable range",
+            })
+        );
     }
 
     #[test]
