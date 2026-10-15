@@ -31,7 +31,7 @@ pub fn decode_renv(bytes: &[u8]) -> Result<RenvLock, Error> {
     let root: Value = serde_json::from_slice(bytes).map_err(Error::Json)?;
     // JSON syntax is established first; the shared decoder then enforces
     // duplicate-key/node/text/depth bounds throughout this JSON subset of YAML.
-    decode_yaml(bytes::default()).map_err(Error::Document)?;
+    decode_yaml(bytes).map_err(Error::Document)?;
     let runtime = root
         .get("R")
         .and_then(|value| value.as_object())

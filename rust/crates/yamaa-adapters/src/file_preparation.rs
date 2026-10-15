@@ -123,7 +123,7 @@ impl FileSpecification {
     pub(crate) fn from_workflow(
         entry: crate::file_graph::CapturedEntry,
     ) -> Result<Self, Box<RejectedPlain>> {
-        let (mut resources, entry, document, _) = entry.into_ordinary_parts();
+        let (resources, entry, document, _) = entry.into_ordinary_parts();
         let result =
             PreparedRun::prepare_with_profile_inspection(document, |document, dataset, path| {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)

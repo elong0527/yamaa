@@ -137,7 +137,7 @@ impl FileGraph {
     pub(crate) fn capture_entry(
         mut resources: Resources,
         written: &str,
-        environment: OwnedEnvironment,
+        mut environment: OwnedEnvironment,
         schema: Arc<CapturedSchema>,
     ) -> Result<CapturedEntry, Box<RejectedGraph>> {
         let written = written.to_owned();

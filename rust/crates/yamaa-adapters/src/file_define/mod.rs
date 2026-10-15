@@ -222,7 +222,7 @@ impl Ports for NativePorts {
             .map(|duration| duration.as_secs())
     }
     fn capture_environment(&mut self, written: &str) -> Result<Self::Environment, Failure> {
-        let (mut resources, entry) = file_configuration::resources(written)
+        let (resources, entry) = file_configuration::resources(written)
             .map_err(|error| Failure::Project(project_application::Error::Configuration(error)))?;
         self.resources = Some(resources);
         self.environment_written = written.into();

@@ -59,7 +59,7 @@ impl FileProject {
     pub(crate) fn from_workflow(
         entry: crate::file_graph::CapturedEntry,
     ) -> Result<Self, Box<RejectedOrdinary>> {
-        let (mut resources, entry, document, environment) = entry.into_ordinary_parts();
+        let (resources, entry, document, environment) = entry.into_ordinary_parts();
         match PreparedRun::prepare_with_profile_inspection(
             document,
             environment,
@@ -217,7 +217,6 @@ pub(crate) fn capture_environment(
         &mut project_source::Decoder(schema),
         written,
         host,
-        Default::default(),
     ) {
         Ok(prepared) => Ok(prepared),
         Err(yamaa_core::build::EnvironmentFailure::Resource(error)) => {
