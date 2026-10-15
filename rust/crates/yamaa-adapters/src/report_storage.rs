@@ -13,60 +13,6 @@ use std::{
 };
 use yamaa_core::table::{TableAccess, ValueRef};
 
-struct RowWriter<'a> {
-    bytes: Vec<u8>,
-    budget: Option<&'a mut crate::report_projection::Budget>,
-    limit: usize,
-    refused: bool,
-}
-impl std::io::Write for RowWriter<'_> {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        let admitted = (|| {
-            let needed = self
-                .bytes
-                .len()
-                .checked_add(bytes.len())
-                .ok_or(Error::OutputLimit)?;
-            if needed > self.limit {
-                return Err(Error::OutputLimit);
-            }
-            if let Some(budget) = self.budget.as_deref_mut() {
-                budget.work(bytes.len())?;
-            }
-            if needed > self.bytes.capacity() {
-                let capacity = needed
-                    .max(self.bytes.capacity().saturating_mul(2).max(256))
-                    .min(self.limit);
-                // Bound requested old/new buffer coexistence, shrinking to a
-                // boxed str and copying into Arc<RawValue>. Admission precedes
-                // every reserve, and the charge follows actual requested capacity.
-                if let Some(budget) = self.budget.as_deref_mut() {
-                    budget.retained_bytes(
-                        capacity
-                            .checked_sub(self.bytes.capacity())
-                            .and_then(|n| n.checked_mul(3))
-                            .ok_or(Error::OutputLimit)?,
-                    )?;
-                }
-                self.bytes
-                    .try_reserve_exact(capacity - self.bytes.len())
-                    .map_err(|_| Error::OutputLimit)?;
-            }
-            self.bytes.extend_from_slice(bytes);
-            Ok::<_, Error>(())
-        })();
-        match admitted {
-            Ok(()) => Ok(bytes.len()),
-            Err(_) => {
-                self.refused = true;
-                Err(std::io::Error::other("encoded row capacity"))
-            }
-        }
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
 struct WireCell<'a>(ValueRef<'a>);
 impl Serialize for WireCell<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -116,57 +62,51 @@ impl Serialize for WireCell<'_> {
         map.end()
     }
 }
-pub(crate) fn encode_rows<T: TableAccess>(
-    table: &T,
-    budget: Option<&mut crate::report_projection::Budget>,
-) -> Result<Arc<RawValue>, Error> {
+pub(crate) fn encode_rows<T: TableAccess>(table: &T) -> Result<Arc<RawValue>, Error> {
     use std::io::Write;
-    let mut writer = RowWriter {
-        bytes: Vec::new(),
-        budget,
-        limit: yamaa_core::capacity::REPORT_ENCODED_BYTES,
-        refused: false,
-    };
-    writer.write_all(b"[").map_err(|_| Error::OutputLimit)?;
+    yamaa_core::limits::Limits::table(table.row_count(), table.schema().columns().len()).map_err(
+        |error| {
+            Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                error.resource,
+                error.limit,
+                error.actual,
+                Vec::new(),
+            ))
+        },
+    )?;
+    let mut bytes = Vec::new();
+    bytes
+        .write_all(b"[")
+        .map_err(|_| Error::InvalidObservation)?;
     for row in 0..table.row_count() {
         if row != 0 {
-            writer.write_all(b",").map_err(|_| Error::OutputLimit)?;
+            bytes
+                .write_all(b",")
+                .map_err(|_| Error::InvalidObservation)?;
         }
-        writer.write_all(b"[").map_err(|_| Error::OutputLimit)?;
+        bytes
+            .write_all(b"[")
+            .map_err(|_| Error::InvalidObservation)?;
         for column in 0..table.schema().columns().len() {
             if column != 0 {
-                writer.write_all(b",").map_err(|_| Error::OutputLimit)?;
+                bytes
+                    .write_all(b",")
+                    .map_err(|_| Error::InvalidObservation)?;
             }
-            // Preserve the exact row/column read prefix and source failure.
             let value = table
                 .cell(row, column)
                 .map_err(|_| Error::InvalidObservation)?;
-            if serde_json::to_writer(&mut writer, &WireCell(value)).is_err() {
-                return Err(if writer.refused {
-                    Error::OutputLimit
-                } else {
-                    Error::InvalidObservation
-                });
-            }
+            serde_json::to_writer(&mut bytes, &WireCell(value))
+                .map_err(|_| Error::InvalidObservation)?;
         }
-        writer.write_all(b"]").map_err(|_| Error::OutputLimit)?;
+        bytes
+            .write_all(b"]")
+            .map_err(|_| Error::InvalidObservation)?;
     }
-    writer.write_all(b"]").map_err(|_| Error::OutputLimit)?;
-    if let Some(budget) = writer.budget.as_deref_mut() {
-        budget.work(writer.bytes.len())?;
-    }
-    if std::env::var_os("YAMAA_REPORT_CAPACITY_TRACE").is_some() {
-        use std::io::Write;
-        let _ = writeln!(
-            std::io::stderr(),
-            "row-capacity rows={} columns={} encoded_bytes={} requested_buffer_capacity={}",
-            table.row_count(),
-            table.schema().columns().len(),
-            writer.bytes.len(),
-            writer.bytes.capacity()
-        );
-    }
-    let string = String::from_utf8(writer.bytes).map_err(|_| Error::InvalidObservation)?;
+    bytes
+        .write_all(b"]")
+        .map_err(|_| Error::InvalidObservation)?;
+    let string = String::from_utf8(bytes).map_err(|_| Error::InvalidObservation)?;
     let rows = RawValue::from_string(string).map_err(|_| Error::InvalidObservation)?;
     Ok(Arc::from(rows))
 }
@@ -233,9 +173,6 @@ impl StoredReport {
             );
         self.rows.append(&mut other.rows);
         Ok(())
-    }
-    pub(crate) fn row_blocks(&self) -> usize {
-        self.rows.len()
     }
     pub(crate) fn without_artifacts_cloned(&self) -> Result<Self, Error> {
         let mut metadata = Value::Object(
@@ -401,22 +338,6 @@ mod tests {
         }
     }
     #[test]
-    fn row_buffer_equality_and_one_over_admit_before_any_owned_bytes() {
-        use std::io::Write;
-        let minimum = 48usize.div_ceil(yamaa_core::capacity::REPORT_RETAINED_FACTOR);
-        for (allowance, accepted) in [(minimum, true), (minimum - 1, false)] {
-            let mut budget = crate::report_projection::Budget::new(allowance);
-            let mut writer = RowWriter {
-                bytes: Vec::new(),
-                budget: Some(&mut budget),
-                limit: 16,
-                refused: false,
-            };
-            assert_eq!(writer.write_all(b"[").is_ok(), accepted);
-            assert_eq!(writer.bytes.is_empty(), !accepted);
-        }
-    }
-    #[test]
     fn row_encoding_stops_at_the_original_cell_failure_prefix() {
         use std::cell::RefCell;
         use yamaa_core::{
@@ -462,7 +383,7 @@ mod tests {
             visited: Default::default(),
         };
         assert!(matches!(
-            encode_rows(&table, None),
+            encode_rows(&table),
             Err(Error::InvalidObservation)
         ));
         assert_eq!(*table.visited.borrow(), vec![(0, 0), (0, 1), (1, 0)]);
