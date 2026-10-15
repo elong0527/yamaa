@@ -219,7 +219,7 @@ fn check_mappings(nodes: &[Node], root: usize) -> Result<(), DecodeFailure> {
                         reason.push_str("found duplicate key '");
                         let label = key_label(&nodes[key])?;
                         reason.push_str(&label);
-                        reason.push_str("'");
+                        reason.push('\'');
                         return Err(DecodeFailure::InvalidYaml {
                             position: nodes[key].start,
                             reason,

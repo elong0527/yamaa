@@ -82,7 +82,7 @@ impl yamaa_core::file_preparation::NativePort for Reader<'_> {
     ) -> Result<Vec<u8>, SourceError<ResourceError>> {
         self.resources
             .capture_metadata_from(declaring, written)
-            .and_then(|(bytes, _)| Ok(bytes.to_vec()))
+            .map(|(bytes, _)| bytes.to_vec())
             .map_err(SourceError::Raised)
     }
     fn resource_failure(
@@ -106,7 +106,7 @@ impl yamaa_core::file_preparation::NativePort for Reader<'_> {
     ) -> Result<Vec<u8>, SourceError<ResourceError>> {
         self.resources
             .capture_metadata_from(declaring, written)
-            .and_then(|(bytes, _)| Ok(bytes.to_vec()))
+            .map(|(bytes, _)| bytes.to_vec())
             .map_err(available)
     }
     fn rebase(

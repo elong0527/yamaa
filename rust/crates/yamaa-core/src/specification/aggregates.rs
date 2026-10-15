@@ -142,15 +142,11 @@ pub(super) fn prepare(
         format!("{path}.expr")
     };
     let compiled = compile_aggregate(expr, &expression_path);
-    match &compiled {
-        Err(error @ crate::aggregate_parser::ParseError::Limit { .. }) => {
-            return Err(PrepareError::aggregate_parse(
-                error.clone(),
-                Some(&expression_path),
-            ));
-        }
-
-        _ => (),
+    if let Err(error @ crate::aggregate_parser::ParseError::Limit { .. }) = &compiled {
+        return Err(PrepareError::aggregate_parse(
+            error.clone(),
+            Some(&expression_path),
+        ));
     }
     let mut extra = Vec::new();
     let mut derive_relations = Vec::<String>::new();

@@ -76,10 +76,9 @@ impl Run<'_> {
         if matches!(
             kind,
             InheritanceReferenceKind::Variable | InheritanceReferenceKind::PredicateVariable
-        ) {
-            if self.local_variables.iter().any(|local| local == name) {
-                return Ok(());
-            }
+        ) && self.local_variables.iter().any(|local| local == name)
+        {
+            return Ok(());
         }
         if !self
             .references

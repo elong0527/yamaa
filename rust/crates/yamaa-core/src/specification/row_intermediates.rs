@@ -68,8 +68,6 @@ pub(super) fn common_driver<'a>(
     common.ok_or(PrepareError::Internal)
 }
 
-/// Whole-occurrence admission precedes expanded defaults and owned read paths.
-
 /// Borrow references from admitted key occurrences, without lowering them again.
 /// Named reads in every expression promote their matching output defaults.
 pub(super) fn default_dependencies(
@@ -291,8 +289,7 @@ pub(super) fn bind(
         let read_kind = key
             .value
             .read()
-            .map(|read| catalog.bind(read.identifier()))
-            .flatten()
+            .and_then(|read| catalog.bind(read.identifier()))
             .map(|read| match read {
                 reference_binding::Binding::Output { column_type, .. }
                 | reference_binding::Binding::Dataset { column_type, .. } => column_type,
