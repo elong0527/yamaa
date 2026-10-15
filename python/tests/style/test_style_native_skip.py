@@ -53,6 +53,7 @@ def test_style_tests_skip_when_native_extension_is_absent() -> None:
         capture_output=True,
         text=True,
         timeout=120,
+        cwd=STYLE_TEST.resolve().parents[3],
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "SKIPPED" in result.stdout
