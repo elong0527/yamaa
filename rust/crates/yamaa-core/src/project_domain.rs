@@ -12,15 +12,6 @@ use crate::{
     table::TableAccess,
 };
 
-pub(crate) type BuildEvidence<'a, P, D> = (
-    &'a mut CapturedAttempt<
-        <P as SourcePort>::Error,
-        <D as SourceDecoder>::Error,
-        <D as SourceDecoder>::Table,
-    >,
-    &'a mut project_activation::Observations,
-);
-
 /// The private fields tie compilation and selected indices to the same immutable
 /// environment. No caller can swap a different definition collection at build.
 #[derive(Debug)]
@@ -54,57 +45,7 @@ impl CheckedProject<'_> {
         source: &mut P,
         decoder: &mut D,
         attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
-    ) -> Result<(), Failure<A::Error>>
-    where
-        D::Table: TableAccess<Error = A::Error>,
-    {
-        build(
-            (&self.checked, self.environment),
-            activation,
-            source,
-            decoder,
-            attempt,
-            (
-                None,
-                crate::application_observer::Scope::new(&crate::application_observer::Noop),
-            ),
-        )
-    }
-
-    /// Keep activation evidence outside the host boundary and dataset attempt.
-    /// Successful cases remain observable after a later activation/build failure.
-    pub fn build_observed_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
-        &self,
-        activation: &mut A,
-        source: &mut P,
-        decoder: &mut D,
-        attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
-        observations: &mut project_activation::Observations,
-    ) -> Result<(), Failure<A::Error>>
-    where
-        D::Table: TableAccess<Error = A::Error>,
-    {
-        build(
-            (&self.checked, self.environment),
-            activation,
-            source,
-            decoder,
-            attempt,
-            (
-                Some(observations),
-                crate::application_observer::Scope::new(&crate::application_observer::Noop),
-            ),
-        )
-    }
-
-    /// Retain activation evidence and forward trusted application events without
-    /// adding measurement fields to the semantic attempt.
-    pub fn build_with_observer_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
-        &self,
-        activation: &mut A,
-        source: &mut P,
-        decoder: &mut D,
-        evidence: BuildEvidence<'_, P, D>,
+        observations: Option<&mut project_activation::Observations>,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<(), Failure<A::Error>>
     where
@@ -115,8 +56,8 @@ impl CheckedProject<'_> {
             activation,
             source,
             decoder,
-            evidence.0,
-            (Some(evidence.1), scope),
+            attempt,
+            (observations, scope),
         )
     }
 }
@@ -169,53 +110,7 @@ impl CheckedOwnedProject {
         source: &mut P,
         decoder: &mut D,
         attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
-    ) -> Result<(), Failure<A::Error>>
-    where
-        D::Table: TableAccess<Error = A::Error>,
-    {
-        build(
-            (&self.checked, &self.environment),
-            activation,
-            source,
-            decoder,
-            attempt,
-            (
-                None,
-                crate::application_observer::Scope::new(&crate::application_observer::Noop),
-            ),
-        )
-    }
-
-    pub fn build_observed_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
-        &self,
-        activation: &mut A,
-        source: &mut P,
-        decoder: &mut D,
-        attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
-        observations: &mut project_activation::Observations,
-    ) -> Result<(), Failure<A::Error>>
-    where
-        D::Table: TableAccess<Error = A::Error>,
-    {
-        build(
-            (&self.checked, &self.environment),
-            activation,
-            source,
-            decoder,
-            attempt,
-            (
-                Some(observations),
-                crate::application_observer::Scope::new(&crate::application_observer::Noop),
-            ),
-        )
-    }
-
-    pub fn build_with_observer_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
-        &self,
-        activation: &mut A,
-        source: &mut P,
-        decoder: &mut D,
-        evidence: BuildEvidence<'_, P, D>,
+        observations: Option<&mut project_activation::Observations>,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<(), Failure<A::Error>>
     where
@@ -226,8 +121,8 @@ impl CheckedOwnedProject {
             activation,
             source,
             decoder,
-            evidence.0,
-            (Some(evidence.1), scope),
+            attempt,
+            (observations, scope),
         )
     }
 }
