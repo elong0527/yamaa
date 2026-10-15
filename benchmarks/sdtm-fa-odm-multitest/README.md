@@ -1,8 +1,5 @@
 # Multiple Findings About from ODM
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-fa-odm-multitest.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** create one FA record for each collected reaction finding from a
 long-form Operational Data Model (ODM) diary, while carrying the reported
 reaction name and date from the same diary occurrence.
@@ -28,5 +25,3 @@ tests. A form repeat number can be reused on another diary day.
 
 **Note:** a reaction without a severity or diameter item produces no such FA
 test, while a present item with a blank result still produces its FA record.
-
-**Standard:** SDTM | **Domain:** FA

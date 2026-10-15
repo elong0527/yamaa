@@ -1,8 +1,5 @@
 # Disposition from Several Source Forms
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-ds-multi-form-disposition.html)
-[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one Disposition (DS) record per subject
 for each of four study events carried in a single ODM
 item extract: informed consent and randomization as
@@ -53,5 +50,3 @@ carry the same value in `DSTERM` and `DSDECOD`), and the
 controlled terms follow the FDA Technical Conformance
 Guide DS guidance. All subjects, dates and reasons are
 invented fixtures.
-
-**Standard:** SDTM | **Domain:** DS

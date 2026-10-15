@@ -1,8 +1,5 @@
 # Metadata Contract
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-metadata.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one DM record per subject carrying `SITEID`, `AGE`,
 `AGEU`, `SEX`, and `COUNTRY`.
 
@@ -28,5 +25,3 @@ standard version a review needs. The same declarations produce the
 data-definition document beside the data and the exchange file
 `dm.json`, which carries the rows and the column metadata together and
 is the file the document points at.
-
-**Standard:** SDTM | **Domain:** DM

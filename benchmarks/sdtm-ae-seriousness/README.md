@@ -1,8 +1,5 @@
 # Seriousness Criteria
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-ae-seriousness.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive `AESER` for each adverse event (AE) from its collected
 seriousness criteria while retaining the reported term and criterion flags.
 
@@ -20,5 +17,3 @@ defect (`AESCONG`), and another medically important serious event
 
 **Note:** the term and the six criterion flags are kept as collected, so
 an empty flag stays empty rather than becoming `N`.
-
-**Standard:** SDTM | **Domain:** AE

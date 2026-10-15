@@ -1,7 +1,5 @@
 # Dose Intervals
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-ex-intervals.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one Exposure (EX) record per constant-dose interval from
 collected administration records, carrying `EXSEQ`, `EXTRT`, `EXDOSE`,
 `EXDOSU`, `EXDOSFRQ`, `EXSTDTC`, `EXENDTC`, and `EXADJ`.
@@ -36,5 +34,3 @@ Provenance: one record per constant dosing interval follows the CDISC
 SDTMIG exposure assumption, with the adjustment reason on the record
 where the new dose took effect. All subjects, dates, doses, and reasons
 are invented fixtures.
-
-**Standard:** SDTM | **Domain:** EX

@@ -1,8 +1,5 @@
 # Reference Dates
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-dates.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build one record per enrolled subject carrying informed
 consent date (`RFICDTC`), first and last exposure dates (`RFXSTDTC`,
 `RFXENDTC`), reference start date (`RFSTDTC`), last participation
@@ -35,5 +32,3 @@ the subject with the same study and subject identifiers, so the same
 subject identifier in two studies gives two independent records, and a
 subject with no exposure has missing exposure, reference start, and
 reference end dates.
-
-**Standard:** SDTM | **Domain:** DM
