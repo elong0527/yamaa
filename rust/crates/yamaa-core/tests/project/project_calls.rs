@@ -191,8 +191,7 @@ fn fully_overridden_calls_are_validated_once_without_activation_or_binding() {
     assert!(admitted.selected().is_empty());
     assert!(admitted.plans().is_empty());
     assert_eq!(admitted.calls()[0].slot(), None);
-    let catalog =
-        yamaa_core::reference_binding::Catalog::compile(&[], &[], Default::default()).unwrap();
+    let catalog = yamaa_core::reference_binding::Catalog::compile(&[], &[]).unwrap();
     let context = yamaa_core::project_call_binding::Context {
         source_dataset: 0,
         source_mode: yamaa_core::project_call_binding::SourceMode::Record,
