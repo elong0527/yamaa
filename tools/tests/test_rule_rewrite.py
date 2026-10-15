@@ -21,6 +21,9 @@ class RuleRewriteTests(unittest.TestCase):
         self.root = Path(temporary.name)
         shutil.copytree(REPO / "yaml", self.root / "yaml")
         shutil.copytree(REPO / "rules", self.root / "rules")
+        # Contracts link to the implementation policy's single owning page.
+        (self.root / "docs").mkdir()
+        shutil.copy2(REPO / "docs/release.md", self.root / "docs/release.md")
         (self.root / "benchmarks").symlink_to(
             REPO / "benchmarks", target_is_directory=True
         )

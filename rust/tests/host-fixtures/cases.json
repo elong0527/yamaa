@@ -3887,6 +3887,18 @@
         "AE": "input/ae.csv",
         "DM": "input/dm.csv",
         "MEDDRA": "input/meddict.csv"
+      },
+      "entry_relative": {
+        "shared": {
+          "ordinary.yaml": "schema_version: '1.0'\ndomain: DIRECT\nkeys: [ID]\ninput: {RAW: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], warning_log: output/warnings.csv, verification_log: output/verifications.csv}\n",
+          "producer.yaml": "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\ninput: {RAW: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: output/produced.csv, relative_to: entry, columns: [ID]}\n",
+          "consumer.yaml": "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], warning_log: output/warnings.csv, verification_log: output/verifications.csv}\n"
+        },
+        "studies": {
+          "first": "ID\n1\n",
+          "second": "ID\n2\n"
+        },
+        "producer_entry": "schema_version: '1.0'\nparents: ../shared/producer.yaml\n"
       }
     },
     "public-environment": {
@@ -3965,8 +3977,7 @@
         "context": {
           "code": "execution_limit",
           "stage": "execute",
-          "incomplete_checks_from": "data",
-          "resource": "predicate_regex_state_cells",
+          "resource": "regex_steps",
           "limit": 1000000
         }
       }
