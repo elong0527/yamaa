@@ -292,21 +292,14 @@ fn invalid_held_indices_refuse_projection_without_inventing_a_semantic_diagnosti
 
 #[test]
 fn retained_admission_reports_all_independent_root_errors_and_captured_lock_syntax() {
-    use yamaa_core::{
-        project_environment::{Environment, Submission},
-        project_limits::{AdmissionError, Limits},
-    };
+    use yamaa_core::project_environment::{Environment, Submission};
     let mut d = draft();
     d.language = None;
     d.lock = None;
     d.functions = Some(vec![]);
     d.submissions = vec![Submission::Adam];
-    let rejection = Environment::admit_retained_with_limits(Language::Python, d, Limits::default())
-        .unwrap_err();
-    let AdmissionError::Findings(findings) = &rejection.error else {
-        panic!("semantic admission")
-    };
-    let projected = diagnostics(&rejection.draft, findings).unwrap();
+    let rejection = Environment::admit_retained(Language::Python, d).unwrap_err();
+    let projected = diagnostics(&rejection.draft, &rejection.error).unwrap();
     assert_eq!(projected.len(), 3);
     for (finding, (path, reason)) in projected.iter().zip([
         ("language", "missing_language"),
