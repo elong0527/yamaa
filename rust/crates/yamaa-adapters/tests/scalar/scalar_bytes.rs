@@ -1,4 +1,4 @@
-use yamaa_adapters::scalar_bytes::{decode, encode, exact_float, operate, MAX_SCALAR_BYTES};
+use yamaa_adapters::scalar_bytes::{decode, encode, exact_float, operate};
 use yamaa_core::value::Value;
 
 /// Every i64 endpoint remains distinct from missing and every raw float bit survives.
@@ -6,7 +6,7 @@ use yamaa_core::value::Value;
 fn lossless_primitive_carriers() {
     for n in [i64::MIN, i64::MAX, 9007199254740993, -2147483648, 0] {
         assert_eq!(decode(1, n.to_string().as_bytes()), Ok(Value::Int(n)));
-        let bytes = encode(Value::Int(n)).unwrap();
+        let bytes = encode(Value::Int(n));
         assert_eq!(bytes.tag, 1);
         assert_eq!(bytes.payload, n.to_string().as_bytes());
     }
@@ -18,13 +18,13 @@ fn lossless_primitive_carriers() {
         0x3ff0000000000000,
     ] {
         let scalar = decode(2, &bits.to_le_bytes()).unwrap();
-        assert_eq!(encode(scalar).unwrap().payload, bits.to_le_bytes());
+        assert_eq!(encode(scalar).payload, bits.to_le_bytes());
     }
     for f in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         assert_eq!(decode(2, &f.to_le_bytes()), Ok(Value::Missing));
     }
     for text in ["", "a\0b", "\u{96ea}\u{1f980}", "e\u{301}", "\u{e9}"] {
-        let bytes = encode(Value::Str(text.into())).unwrap();
+        let bytes = encode(Value::Str(text.into()));
         assert_eq!(bytes.tag, 3);
         assert_eq!(decode(3, &bytes.payload), Ok(Value::Str(text.into())));
     }
@@ -62,10 +62,18 @@ fn reject_invalid_payloads() {
     ] {
         assert!(decode(tag, &bytes).is_err());
     }
-    assert_eq!(
-        decode(3, &vec![b'x'; MAX_SCALAR_BYTES + 1]),
-        Err("scalar exceeds byte limit")
-    );
+}
+
+#[test]
+fn large_scalar_text_keeps_unicode_nul_and_strict_utf8_validation() {
+    let text = "\u{e9}\0".repeat(400_000);
+    let bytes = encode(Value::Str(text.clone()));
+    assert_eq!(bytes.tag, 3);
+    assert_eq!(bytes.payload, text.as_bytes());
+    assert_eq!(decode(3, &bytes.payload), Ok(Value::Str(text)));
+    let mut invalid = bytes.payload;
+    invalid.push(0xff);
+    assert_eq!(decode(3, &invalid), Err("invalid UTF-8 scalar"));
 }
 
 /// Scalar operations compose the same exact arithmetic/comparison primitives.
@@ -146,7 +154,7 @@ fn temporal_host_epochs_have_exact_values() {
         (9999, 12, 31, 2932896.0),
     ] {
         let date = Date::new(year, month, day, DatePrecision::Year).unwrap();
-        let bytes = encode(Value::Date(date)).unwrap();
+        let bytes = encode(Value::Date(date));
         assert_eq!(bytes.tag, 5);
         assert_eq!(bytes.payload, days.to_le_bytes());
         let Value::Date(decoded) = decode(5, &bytes.payload).unwrap() else {
@@ -168,7 +176,7 @@ fn temporal_host_epochs_have_exact_values() {
     ] {
         let date = Date::new(year, month, day, DatePrecision::Day).unwrap();
         let value = DateTime::new(date, hour, minute, second, DateTimePrecision::Day).unwrap();
-        let bytes = encode(Value::DateTime(value)).unwrap();
+        let bytes = encode(Value::DateTime(value));
         assert_eq!(bytes.tag, 6);
         assert_eq!(bytes.payload, epoch.to_le_bytes());
         let Value::DateTime(decoded) = decode(6, &bytes.payload).unwrap() else {

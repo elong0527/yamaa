@@ -239,8 +239,7 @@ impl ActivationPort for Port<'_> {
                 ValueRef::Date(value) => Value::Date(value),
                 ValueRef::DateTime(value) => Value::DateTime(value),
             };
-            let value =
-                scalar_bytes::encode(value).map_err(|_| HostError::Raised(Error::Protocol))?;
+            let value = scalar_bytes::encode(value);
             encoded.push((
                 argument.name,
                 Robj::from(list!(
