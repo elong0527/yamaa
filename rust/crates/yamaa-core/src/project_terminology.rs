@@ -1,6 +1,5 @@
 //! Pure static codelist admission and binding for environment sources.
-//! Source bytes, schema admission and storage budgets belong to captured inputs.
-use crate::project_limits::{AdmissionError, Budget, Limit, Limits};
+//! Source bytes and schema admission belong to captured inputs.
 use crate::value::{compare_present, ColumnType, Value};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
@@ -140,7 +139,6 @@ pub struct Finding {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BindingFinding {
-    Limit(Limit),
     UnknownCodelist,
     TypeMismatch {
         expected: ColumnType,
@@ -159,21 +157,12 @@ impl Catalogue {
     pub(crate) fn from_admitted(sources: Vec<Source>) -> Self {
         Self { sources }
     }
-    pub fn admit(sources: Vec<Source>) -> Result<Self, AdmissionError<Finding>> {
-        Self::admit_with_limits(sources, Limits::default())
-    }
-    pub fn admit_with_limits(
-        sources: Vec<Source>,
-        limits: Limits,
-    ) -> Result<Self, AdmissionError<Finding>> {
-        Budget::new(limits)
-            .sources(&sources)
-            .map_err(AdmissionError::Limit)?;
+    pub fn admit(sources: Vec<Source>) -> Result<Self, Vec<Finding>> {
         let findings = validate(&sources);
         if findings.is_empty() {
             Ok(Self { sources })
         } else {
-            Err(AdmissionError::Findings(findings))
+            Err(findings)
         }
     }
     pub fn sources(&self) -> &[Source] {
@@ -211,9 +200,6 @@ impl Catalogue {
             });
         }
         if let (Some(items), Some(allowed)) = (self.enforced_items(id), allowed_values) {
-            if let Err(limit) = Budget::new(Limits::default()).binding(items, allowed) {
-                return std::vec![BindingFinding::Limit(limit)];
-            }
             let items: BTreeSet<_> = items
                 .iter()
                 .map(|item| ValueKey::new(list.data_type, &item.value))

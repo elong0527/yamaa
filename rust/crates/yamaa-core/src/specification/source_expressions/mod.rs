@@ -141,7 +141,6 @@ impl Declaration {
                 Some(predicate_compiler::compile(
                     expression,
                     &format!("{path}.filter"),
-                    Default::default(),
                 ))
             } else {
                 None
@@ -294,9 +293,7 @@ impl Declaration {
                 },
             )) => {
                 findings.push(BindFinding::Source(SourceFinding(
-                    failure
-                        .original_diagnostic(&path, expression, position.character)
-                        .map_err(|_| BindError::PredicateDiagnosticLimit)?,
+                    failure.original_diagnostic(&path, expression, position.character),
                 )));
                 return Ok(None);
             }
@@ -389,9 +386,7 @@ impl Declaration {
                 },
             )) => {
                 findings.push(BindFinding::Source(SourceFinding(
-                    failure
-                        .original_diagnostic(&path, expression, position.character)
-                        .map_err(|_| BindError::PredicateDiagnosticLimit)?,
+                    failure.original_diagnostic(&path, expression, position.character),
                 )));
                 return Ok(None);
             }
@@ -413,8 +408,7 @@ impl Declaration {
                 continue;
             }
             if dataset == driver {
-                if let Some(reference_binding::Binding::Dataset { field, .. }) =
-                    catalog.bind(name).map_err(BindError::Catalog)?
+                if let Some(reference_binding::Binding::Dataset { field, .. }) = catalog.bind(name)
                 {
                     bindings.push(Binding {
                         name: name.into(),
@@ -619,13 +613,8 @@ pub(super) fn bind(
                         column_type: field.kind,
                     })
                     .collect::<Vec<_>>();
-                match crate::key_relation::infer(
-                    catalog,
-                    &key_names,
-                    &donor_fields,
-                    Default::default(),
-                )
-                .map_err(BindError::Catalog)?
+                match crate::key_relation::infer(catalog, &key_names, &donor_fields)
+                    .map_err(BindError::Catalog)?
                 {
                     crate::key_relation::Inference::Keys { keys } => {
                         let keys = keys
@@ -718,7 +707,7 @@ pub(super) fn bind(
                 findings,
             )?;
             let selection = declaration.bind_selection(path, dataset, driver, findings);
-            let fields = catalog.bind(name).map_err(BindError::Catalog)?;
+            let fields = catalog.bind(name);
             if let Some(reference_binding::Binding::Dataset { field, .. }) = fields {
                 if prepared.keys.contains(&column) && filter.is_none() && selection.is_none() {
                     Some(Expression::Source(field))
@@ -768,9 +757,7 @@ pub(super) fn bind(
             &prepared.intermediates,
             findings,
         )?;
-        if let Some(reference_binding::Binding::Output { column, .. }) =
-            catalog.bind(name).map_err(BindError::Catalog)?
-        {
+        if let Some(reference_binding::Binding::Output { column, .. }) = catalog.bind(name) {
             edges.push(column);
             Some(Expression::Column(column))
         } else if declaration.absent.is_some() {
@@ -842,9 +829,7 @@ pub(super) fn bind_implicit(
             column_type: column.kind,
         })
         .collect::<Vec<_>>();
-    match crate::key_relation::infer(catalog, &key_names, &donor, Default::default())
-        .map_err(BindError::Catalog)?
-    {
+    match crate::key_relation::infer(catalog, &key_names, &donor).map_err(BindError::Catalog)? {
         crate::key_relation::Inference::Keys { keys: inferred } => {
             let mut bound = Vec::new();
             for key in inferred {

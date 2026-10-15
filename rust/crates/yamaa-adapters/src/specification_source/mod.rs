@@ -1,11 +1,10 @@
 //! Captured raw YAML entry point. Hosts supply bytes and source identities only.
 //! Filesystem authority, include discovery and publication remain explicit host ports.
-use crate::yaml_decode::{decode_yaml, DecodeFailure, DecodeLimits, DecodedYaml, SourcePosition};
+use crate::yaml_decode::{decode_yaml, DecodeFailure, DecodedYaml, SourcePosition};
 use std::sync::Arc;
 use yamaa_core::schema::{
-    BundleError, BundleLimits, NormalizationBudget, NormalizationError, NormalizationLimits,
-    NormalizedDocument, SchemaDiagnostic, SchemaOrigin, SchemaStructure, SpecificationDocument,
-    ValidationError, WindowReference,
+    BundleError, NormalizationError, NormalizedDocument, SchemaDiagnostic, SchemaOrigin,
+    SchemaStructure, SpecificationDocument, ValidationError, WindowReference,
 };
 use yamaa_core::schema_capture::{self as capture, RootSelection};
 mod inheritance;
@@ -13,28 +12,9 @@ pub use inheritance::{CapturedParent, InheritanceError, InheritancePort, SourceF
 
 /// The engine-owned identity and byte snapshot shared with metadata preparation.
 pub use yamaa_core::project_preparation::Source;
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub captured_bytes: usize,
-    pub identity_bytes: usize,
-    pub decode: DecodeLimits,
-    pub bundle: BundleLimits,
-    pub normalization: NormalizationLimits,
-}
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            captured_bytes: 16_777_216,
-            identity_bytes: 65_536,
-            decode: Default::default(),
-            bundle: Default::default(),
-            normalization: Default::default(),
-        }
-    }
-}
 #[derive(Debug)]
 pub enum Error {
-    Limit(&'static str),
+    Limit(yamaa_core::limits::LimitExceeded),
     Decode {
         identity: String,
         error: DecodeFailure,
@@ -81,7 +61,6 @@ pub struct CapturedSchema {
     sources: Vec<Source>,
     locations: Vec<Vec<SourcePosition>>,
     structure: SchemaStructure,
-    limits: Limits,
 }
 
 /// An owned structural root. It grants no specification, code or data authority.
@@ -111,8 +90,8 @@ impl CapturedDocument {
     }
 }
 /// Physical schema YAML representation; closure ordering and admission belong
-/// to the engine. DecodeLimits and original occurrence locations stay here.
-struct SchemaDecoder(DecodeLimits);
+/// to the engine. Original occurrence locations stay here.
+struct SchemaDecoder;
 impl capture::DecodePort for SchemaDecoder {
     type Error = DecodeFailure;
     type Locations = Vec<SourcePosition>;
@@ -121,7 +100,7 @@ impl capture::DecodePort for SchemaDecoder {
         _: &str,
         bytes: &[u8],
     ) -> Result<capture::DecodedModule<Self::Locations>, DecodeFailure> {
-        let decoded = decode_yaml(bytes, self.0)?;
+        let decoded = decode_yaml(bytes)?;
         Ok(capture::DecodedModule {
             document: decoded.document,
             locations: decoded.locations,
@@ -152,51 +131,33 @@ impl yamaa_core::structural_preparation::DecodePort for StructuralDecoder<'_> {
 impl CapturedSchema {
     /// Decode the complete host-captured closure using the shared YAML semantics.
     /// Cumulative byte/count admission happens before any source is decoded.
-    pub fn admit(sources: Vec<Source>, entry: usize, limits: Limits) -> Result<Arc<Self>, Error> {
-        Self::admit_with_root(sources, entry, RootSelection::Default, limits)
+    pub fn admit(sources: Vec<Source>, entry: usize) -> Result<Arc<Self>, Error> {
+        Self::admit_with_root(sources, entry, RootSelection::Default)
     }
     /// Capture a closed schema root without interpreting it as a specification.
     pub fn admit_root(
         sources: Vec<Source>,
         entry: usize,
         root_class: &str,
-        limits: Limits,
     ) -> Result<Arc<Self>, Error> {
-        Self::admit_with_root(sources, entry, RootSelection::Named(root_class), limits)
+        Self::admit_with_root(sources, entry, RootSelection::Named(root_class))
     }
     fn admit_with_root(
         sources: Vec<Source>,
         entry: usize,
         root: RootSelection<'_>,
-        limits: Limits,
     ) -> Result<Arc<Self>, Error> {
-        let closure = capture::admit(
-            sources,
-            entry,
-            root,
-            capture::Limits {
-                captured_bytes: limits.captured_bytes,
-                identity_bytes: limits.identity_bytes,
-                bundle: limits.bundle,
+        let closure = capture::admit(sources, entry, root, &mut SchemaDecoder).map_err(
+            |error| match error {
+                capture::Error::Decode { identity, error } => Error::Decode { identity, error },
+                capture::Error::Bundle(error) => Error::Bundle(error),
             },
-            &mut SchemaDecoder(limits.decode),
-        )
-        .map_err(|error| match error {
-            capture::Error::Limit(resource) => Error::Limit(match resource {
-                capture::Resource::RootClass => "root_class",
-                capture::Resource::SchemaModules => "schema_modules",
-                capture::Resource::CapturedBytes => "captured_bytes",
-                capture::Resource::IdentityBytes => "identity_bytes",
-            }),
-            capture::Error::Decode { identity, error } => Error::Decode { identity, error },
-            capture::Error::Bundle(error) => Error::Bundle(error),
-        })?;
+        )?;
         let (sources, locations, structure) = closure.into_parts();
         Ok(Arc::new(Self {
             sources,
             locations,
             structure,
-            limits,
         }))
     }
     /// Preserve the exact captured bytes for provenance and direct equality checks.
@@ -248,14 +209,9 @@ impl CapturedSchema {
             &self.structure,
             source,
             selection,
-            structural_preparation::Limits {
-                class_name_bytes: self.limits.identity_bytes,
-                normalization: self.limits.normalization,
-            },
             &mut StructuralDecoder(self),
         )
         .map_err(|error| match error {
-            StructuralError::ClassNameLimit => Error::Limit("class_name"),
             StructuralError::UnknownClass(name) => Error::UnknownClass(name),
             StructuralError::VersionedRootRequired => Error::VersionedRootRequired,
             StructuralError::Decode(error) => error,
@@ -291,13 +247,7 @@ impl CapturedSchema {
         self.prepare_standalone_decoded(source, raw)
     }
     fn decode_entry(&self, source: &Source) -> Result<DecodedYaml, Error> {
-        if source.bytes.len() > self.limits.captured_bytes {
-            return Err(Error::Limit("captured_bytes"));
-        }
-        if source.identity.len() > self.limits.identity_bytes {
-            return Err(Error::Limit("identity_bytes"));
-        }
-        decode_yaml(&source.bytes, self.limits.decode).map_err(|error| Error::Decode {
+        decode_yaml(&source.bytes).map_err(|error| Error::Decode {
             identity: source.identity.clone(),
             error,
         })
@@ -312,9 +262,7 @@ impl CapturedSchema {
             document,
             locations,
         } = raw;
-        let mut budget = NormalizationBudget::for_application(self.limits.normalization);
-        let prepared = match standalone_preparation::prepare(&self.structure, document, &mut budget)
-        {
+        let prepared = match standalone_preparation::prepare(&self.structure, document) {
             Ok(prepared) => prepared,
             Err(StandaloneError::InheritanceRequired) => return Err(Error::InheritanceRequired),
             Err(StandaloneError::Normalize(failure)) => {
@@ -374,22 +322,13 @@ impl CapturedSchema {
             source,
             display_path,
             &mut DocumentEntry(self),
-            &mut inheritance::Decoder::new(self.limits.decode),
+            &mut inheritance::Decoder,
             port,
-            yamaa_core::inheritance_capture::Limits {
-                captured_bytes: self.limits.captured_bytes,
-                identity_bytes: self.limits.identity_bytes,
-                normalization: self.limits.normalization,
-                ..Default::default()
-            },
         )
         .map_err(|error| match error {
             Failure::Entry(error) => InheritanceError::Entry(error),
             Failure::Standalone { source, error } => {
                 InheritanceError::Entry(standalone_dispatch_error(self, source, error))
-            }
-            Failure::Inherited(yamaa_core::inheritance_capture::Error::Entry(error)) => {
-                InheritanceError::Entry(error)
             }
             Failure::Inherited(yamaa_core::inheritance_capture::Error::Preparation {
                 error,
@@ -550,11 +489,10 @@ impl yamaa_core::file_preparation::PreparedView for PreparedDocument {
                 }
             }
         }
-        let mut budget = NormalizationBudget::new(self.schema.limits.normalization);
         let references = self
             .schema
             .structure
-            .mapping_dictionary_references(self.model().document(), &mut budget)
+            .mapping_dictionary_references(self.model().document())
             .ok()?;
         references.into_iter().find_map(|reference| {
             (reference.written() == written
@@ -648,12 +586,7 @@ impl PreparedDocument {
             origins,
             &seeds,
             port,
-            &mut inheritance::Decoder::new(self.schema.limits.decode),
-            application::Limits {
-                captured_bytes: self.schema.limits.captured_bytes,
-                identity_bytes: self.schema.limits.identity_bytes,
-                normalization: self.schema.limits.normalization,
-            },
+            &mut inheritance::Decoder,
         );
         match prepared {
             Ok(prepared) => {

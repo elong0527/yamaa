@@ -2,8 +2,8 @@
 
 use super::{
     scalar_diagnostic_label, ComposedValue, CompositionOrigin, Document, DocumentNode as N,
-    NormalizationBudget, NormalizationError, NormalizationResource, SchemaContext,
-    SchemaDiagnostic, SchemaField, SchemaStructure, ValidationError,
+    NormalizationError, NormalizationResource, SchemaContext, SchemaDiagnostic, SchemaField,
+    SchemaStructure, ValidationError,
 };
 use crate::diagnostic::ConditionCode;
 use std::vec;
@@ -82,28 +82,24 @@ enum Change {
     Remove,
 }
 
-struct Run<'a, 'b, 'c> {
+struct Run<'a, 'c> {
     schema: &'a SchemaStructure,
-    budget: &'b mut NormalizationBudget,
     diagnostics: &'c mut Vec<SchemaDiagnostic>,
     nodes: Vec<N>,
     origins: Vec<Option<CompositionOrigin>>,
 }
-impl Run<'_, '_, '_> {
+impl Run<'_, '_> {
     fn step(&mut self, depth: usize) -> Result<(), NormalizationError> {
-        let limit = self.budget.limits.depth.min(128);
+        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
         if depth > limit {
             return Err(NormalizationError::Limit {
                 resource: NormalizationResource::Depth,
                 limit,
             });
         }
-        self.budget.work(1)
+        Ok(())
     }
     fn join(&mut self, prefix: &str, name: &str) -> Result<String, NormalizationError> {
-        self.budget
-            .validation
-            .text(prefix.len().saturating_add(name.len()).saturating_add(1))?;
         Ok(if prefix.is_empty() {
             name.into()
         } else {
@@ -117,8 +113,6 @@ impl Run<'_, '_, '_> {
     ) -> Result<Option<Site<'a>>, NormalizationError> {
         for &(key, value) in site.mapping()? {
             let candidate = site.child(key).text()?;
-            self.budget
-                .work(candidate.len().saturating_add(name.len()).saturating_add(1))?;
             if candidate == name {
                 return Ok(Some(site.child(value)));
             }
@@ -134,13 +128,8 @@ impl Run<'_, '_, '_> {
     fn copy(&mut self, site: Site<'_>, depth: usize) -> Result<usize, NormalizationError> {
         self.step(depth)?;
         let value = match site.value() {
-            N::Text(text) | N::Integer(text) => {
-                self.budget.work(text.len())?;
-                self.budget.reserve(text.len(), 0)?;
-                site.value().clone()
-            }
+            N::Text(_) | N::Integer(_) => site.value().clone(),
             N::Sequence(items) => {
-                self.budget.reserve(0, items.len())?;
                 let mut output = Vec::with_capacity(items.len());
                 for &item in items {
                     output.push(self.copy(site.child(item), depth + 1)?);
@@ -148,7 +137,6 @@ impl Run<'_, '_, '_> {
                 N::Sequence(output)
             }
             N::Mapping(items) => {
-                self.budget.reserve(0, items.len().saturating_mul(2))?;
                 let mut output = Vec::with_capacity(items.len());
                 for &(key, value) in items {
                     output.push((
@@ -158,10 +146,7 @@ impl Run<'_, '_, '_> {
                 }
                 N::Mapping(output)
             }
-            value => {
-                self.budget.reserve(0, 0)?;
-                value.clone()
-            }
+            value => value.clone(),
         };
         Ok(self.push(value, site.origin()))
     }
@@ -173,15 +158,6 @@ impl Run<'_, '_, '_> {
     ) -> Result<usize, NormalizationError> {
         let offset = self.nodes.len();
         for (index, node) in composed.document.nodes().iter().enumerate() {
-            let (bytes, edges) = match node {
-                N::Text(s) | N::Integer(s) => (s.len(), 0),
-                N::Sequence(items) => (0, items.len()),
-                N::Mapping(items) => (0, items.len().saturating_mul(2)),
-                _ => (0, 0),
-            };
-            self.budget
-                .work(bytes.saturating_add(edges).saturating_add(1))?;
-            self.budget.reserve(bytes, edges)?;
             let value = match node {
                 N::Sequence(items) => N::Sequence(items.iter().map(|n| n + offset).collect()),
                 N::Mapping(items) => N::Mapping(
@@ -205,11 +181,11 @@ impl Run<'_, '_, '_> {
         Ok(offset + composed.document.root())
     }
     fn invalid_clear(&mut self, path: &str, name: &str) -> Result<(), NormalizationError> {
-        self.diagnostics.push(self.budget.validation.diagnostic(
+        self.diagnostics.push(super::validation::diagnostic(
             path,
             ConditionCode::SchemaLayerInvalidClear,
             vec![("field", SchemaContext::Text(name.into()))],
-        )?);
+        ));
         Ok(())
     }
     fn boundary(
@@ -224,7 +200,6 @@ impl Run<'_, '_, '_> {
         let before = old.map(Site::mapping).transpose()?.unwrap_or(&[]);
         let after = new.mapping()?;
         let capacity = before.len().saturating_add(after.len());
-        self.budget.reserve(0, capacity.saturating_mul(2))?;
         let mut changes = Vec::with_capacity(after.len());
         let fields = match kind {
             Boundary::Root => &self.schema.root_class().fields,
@@ -238,8 +213,6 @@ impl Run<'_, '_, '_> {
                 changes.push(Change::Remove);
                 continue;
             }
-            self.budget
-                .work(fields.len().saturating_mul(name.len().saturating_add(1)))?;
             let field = fields
                 .iter()
                 .find(|field| field.name == name)
@@ -268,7 +241,6 @@ impl Run<'_, '_, '_> {
                         value.node,
                         &logical,
                         false,
-                        &mut self.budget.validation,
                     )?);
                     changes.push(Change::Value(self.copy(value, depth + 1)?));
                 } else {
@@ -284,7 +256,6 @@ impl Run<'_, '_, '_> {
                         field.descriptor,
                         (previous.document, previous.node),
                         (value.document, value.node),
-                        self.budget,
                     )?;
                     self.import(composed, previous, value)?
                 }
@@ -298,11 +269,6 @@ impl Run<'_, '_, '_> {
             let name = old.child(key).text()?;
             let mut change = Change::Keep;
             for (index, &(candidate, _)) in after.iter().enumerate() {
-                self.budget.work(
-                    name.len()
-                        .saturating_add(new.child(candidate).text()?.len())
-                        .saturating_add(1),
-                )?;
                 if name == new.child(candidate).text()? {
                     change = changes[index];
                     break;
@@ -360,7 +326,6 @@ impl Run<'_, '_, '_> {
         let before = old.map(Site::mapping).transpose()?.unwrap_or(&[]);
         let after = new.mapping()?;
         let capacity = before.len().saturating_add(after.len());
-        self.budget.reserve(0, capacity.saturating_mul(2))?;
         let mut changed = Vec::with_capacity(after.len());
         for &(key, value) in after {
             let name = new.child(key).text()?;
@@ -398,11 +363,6 @@ impl Run<'_, '_, '_> {
             let name = old.child(key).text()?;
             let mut selected = None;
             for (index, &(candidate, _)) in after.iter().enumerate() {
-                self.budget.work(
-                    name.len()
-                        .saturating_add(new.child(candidate).text()?.len())
-                        .saturating_add(1),
-                )?;
                 if name == new.child(candidate).text()? {
                     selected = Some(changed[index]);
                     break;
@@ -446,7 +406,6 @@ impl Run<'_, '_, '_> {
         let before = old.map(Site::sequence).transpose()?.unwrap_or(&[]);
         let after = new.sequence()?;
         let capacity = before.len().saturating_add(after.len());
-        self.budget.reserve(0, capacity)?;
         let fields = &self
             .schema
             .class_named(class)
@@ -458,8 +417,6 @@ impl Run<'_, '_, '_> {
             let name = self.identity(incoming, identity)?;
             for &prior in &after[..index] {
                 let prior = self.identity(new.child(prior), identity)?;
-                self.budget
-                    .work(prior.len().saturating_add(name.len()).saturating_add(1))?;
                 if prior == name {
                     return Err(ValidationError::InvalidDescriptor.into());
                 }
@@ -468,12 +425,6 @@ impl Run<'_, '_, '_> {
             for &node in before {
                 let candidate = old.expect("nonempty before").child(node);
                 let candidate_name = self.identity(candidate, identity)?;
-                self.budget.work(
-                    candidate_name
-                        .len()
-                        .saturating_add(name.len())
-                        .saturating_add(1),
-                )?;
                 if candidate_name == name {
                     previous = Some(candidate);
                     break;
@@ -499,8 +450,6 @@ impl Run<'_, '_, '_> {
             let mut selected = None;
             for (index, &node) in after.iter().enumerate() {
                 let candidate = self.identity(new.child(node), identity)?;
-                self.budget
-                    .work(candidate.len().saturating_add(name.len()).saturating_add(1))?;
                 if candidate == name {
                     selected = Some(changed[index]);
                     break;
@@ -517,8 +466,6 @@ impl Run<'_, '_, '_> {
             for &node in before {
                 let candidate =
                     self.identity(old.expect("nonempty before").child(node), identity)?;
-                self.budget
-                    .work(candidate.len().saturating_add(name.len()).saturating_add(1))?;
                 if candidate == name {
                     seen = true;
                     break;
@@ -535,7 +482,6 @@ impl Run<'_, '_, '_> {
 fn provenance(
     document: &Document,
     origins: &[Option<CompositionOrigin>],
-    budget: &mut NormalizationBudget,
 ) -> Result<Vec<LayerProvenance>, NormalizationError> {
     fn record(
         document: &Document,
@@ -543,18 +489,15 @@ fn provenance(
         path: String,
         origins: &[Option<CompositionOrigin>],
         output: &mut Vec<LayerProvenance>,
-        budget: &mut NormalizationBudget,
         depth: usize,
     ) -> Result<(), NormalizationError> {
-        let limit = budget.limits.depth.min(128);
+        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
         if depth > limit {
             return Err(NormalizationError::Limit {
                 resource: NormalizationResource::Depth,
                 limit,
             });
         }
-        budget.work(1)?;
-        budget.validation.text(path.len())?;
         let origin = origins[node].ok_or(ValidationError::InvalidDescriptor)?;
         output.push(LayerProvenance {
             path: path.clone(),
@@ -564,16 +507,12 @@ fn provenance(
             for &(key, value) in items {
                 let label = scalar_diagnostic_label(&document.nodes()[key])
                     .ok_or(ValidationError::InvalidDescriptor)?;
-                budget
-                    .validation
-                    .text(path.len().saturating_add(label.len()).saturating_add(1))?;
                 record(
                     document,
                     value,
                     format!("{path}.{label}"),
                     origins,
                     output,
-                    budget,
                     depth + 1,
                 )?;
             }
@@ -588,7 +527,6 @@ fn provenance(
         let N::Text(name) = &document.nodes()[key] else {
             return Err(ValidationError::InvalidDescriptor.into());
         };
-        budget.work(1)?;
         match name.as_str() {
             "input" | "windows" if matches!(document.nodes()[value], N::Mapping(_)) => {
                 let N::Mapping(items) = &document.nodes()[value] else {
@@ -598,16 +536,12 @@ fn provenance(
                     let N::Text(id) = &document.nodes()[key] else {
                         return Err(ValidationError::InvalidDescriptor.into());
                     };
-                    budget
-                        .validation
-                        .text(name.len().saturating_add(id.len()).saturating_add(1))?;
                     record(
                         document,
                         node,
                         format!("{name}.{id}"),
                         origins,
                         &mut output,
-                        budget,
                         0,
                     )?;
                 }
@@ -620,34 +554,23 @@ fn provenance(
                 };
                 let identity = if name == "columns" { "name" } else { "id" };
                 for &node in items {
-                    budget.work(
-                        document.nodes()[node]
-                            .length()
-                            .unwrap_or(0)
-                            .saturating_mul(identity.len().saturating_add(1)),
-                    )?;
                     let id = document
                         .field(node, identity)
                         .ok_or(ValidationError::InvalidDescriptor)?;
                     let N::Text(id) = &document.nodes()[id] else {
                         return Err(ValidationError::InvalidDescriptor.into());
                     };
-                    budget
-                        .validation
-                        .text(name.len().saturating_add(id.len()).saturating_add(1))?;
                     record(
                         document,
                         node,
                         format!("{name}.{id}"),
                         origins,
                         &mut output,
-                        budget,
                         0,
                     )?;
                 }
             }
             _ => {
-                budget.validation.text(name.len())?;
                 output.push(LayerProvenance {
                     path: name.clone(),
                     layer: origins[value]
@@ -667,18 +590,14 @@ impl SchemaStructure {
     pub fn compose_layer_fragments(
         &self,
         layers: &[Document],
-        budget: &mut NormalizationBudget,
     ) -> Result<ComposedLayers, NormalizationError> {
-        budget.reserve(0, 0)?;
-        let mut document = Document::new(vec![N::Mapping(vec![])], 0, budget.limits.storage)
-            .map_err(NormalizationError::Document)?;
+        let mut document =
+            Document::new(vec![N::Mapping(vec![])], 0).map_err(NormalizationError::Document)?;
         let mut origins = vec![None];
         let mut diagnostics = Vec::new();
         for (layer, input) in layers.iter().enumerate() {
-            budget.work(1)?;
             let mut run = Run {
                 schema: self,
-                budget,
                 diagnostics: &mut diagnostics,
                 nodes: Vec::new(),
                 origins: Vec::new(),
@@ -700,11 +619,10 @@ impl SchemaStructure {
                 "",
                 0,
             )?;
-            document = Document::new(run.nodes, root, run.budget.limits.storage)
-                .map_err(NormalizationError::Document)?;
+            document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;
             origins = run.origins;
         }
-        let provenance = provenance(&document, &origins, budget)?;
+        let provenance = provenance(&document, &origins)?;
         Ok(ComposedLayers {
             document,
             provenance,

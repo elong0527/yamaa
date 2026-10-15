@@ -200,6 +200,25 @@ run_contract <- function() {
     expected <- if (stage=="conformance") 1L else if (stage=="derivation") 3L else 0L
     stopifnot(identical(seen,interrupted),identical(invoked,expected),!file.exists(file.path(project,"test.csv")))
   }
+  long_condition <- structure(list(message=paste0(strrep("\u00e9\n",30000L),"complete failure"),call=NULL),
+    class=c("public_contract_error","error","condition"))
+  invoked <- 0L
+  resolve_long <- function(call,parameters) {
+    resolved <- capabilities$resolve(call,parameters)
+    if(resolved[[1L]] != 0L) return(resolved)
+    invoke <- resolved[[2L]]
+    list(0L,function(encoded) {
+      invoked <<- invoked+1L
+      if(invoked>2L) return(list(1L,long_condition))
+      invoke(encoded)
+    })
+  }
+  long_failed <- with_capabilities(capabilities$verify,resolve_long,yamaa_domain(entry,environment))
+  stopifnot(identical(invoked,3L),is.null(long_failed$output),
+    identical(long_failed$issues$condition,"function_call_failed"))
+  context <- jsonlite::fromJSON(long_failed$issues$context[[1L]],simplifyVector=FALSE)
+  stopifnot(identical(context$host_error,"public_contract_error"),
+    identical(context$host_message,long_condition$message),is.null(context$host_details_truncated))
   calls <- list()
   resolve_reentrant <- function(call, parameters) {
     resolved <- capabilities$resolve(call, parameters)
@@ -298,3 +317,22 @@ qualify_public_integer_callback <- function() {
   cat("public integer callbacks preserve exact int64, missing short-circuiting, repeated activation and held Saves\n")
 }
 qualify_public_integer_callback()
+
+qualify_public_large_text_callback <- function() {
+  directory <- tempfile("public-large-text-callback-"); dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  lock <- charToRaw(paste0('{"R":{"Version":"',getRversion(),'"},"Packages":{"yamaa":{"Version":"',utils::packageVersion("yamaa"),'"}}}'))
+  writeBin(lock,file.path(directory,"renv.lock"))
+  writeBin(charToRaw("schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions:\n  text:\n    function: base::identity\n    description: Return text unchanged.\n    params: [{name: x, type: str}]\n    returns: str\n    tests:\n      - {id: normal, covers: [normal], args: {x: short}, result: short}\n      - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"),file.path(directory,"environment.yaml"))
+  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEXT\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: str}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: V, type: str, derivation: {function: {name: text, args: {x: SRC.V}}}}\noutput: {path: held.csv, columns: [ID, V]}\n"),file.path(directory,"domain.yaml"))
+  value <- paste0(strrep("\u00e9",524289L),"complete")
+  expected <- charToRaw(paste0("ID,V\n1,",value,"\n"))
+  writeBin(expected,file.path(directory,"input.csv"))
+  built <- yamaa_domain(file.path(directory,"domain.yaml"),file.path(directory,"environment.yaml"))
+  stopifnot(nrow(built$issues)==0L,identical(built$output$V,value))
+  unlink(file.path(directory,c("domain.yaml","environment.yaml","input.csv")))
+  for(attempt in seq_len(2L)) stopifnot(isTRUE(built$save()),
+    identical(readBin(file.path(directory,"held.csv"),"raw",n=length(expected)+1L),expected))
+  cat("public callback text beyond one MiB remains owned and saves exact bytes\n")
+}
+qualify_public_large_text_callback()

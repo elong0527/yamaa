@@ -64,7 +64,16 @@ pub(crate) fn resource_failure(stage: &str, error: &crate::file_resources::Error
         E::Symlink => "resource_link",
         E::Changed => "resource_changed",
         E::InvalidLock => "invalid_packaging_lock",
-        E::Limit => "resource_limit",
+        E::Limit(error) => {
+            return resource_rejected(
+                stage,
+                "resource_limit",
+                error.resource,
+                error.limit,
+                error.actual,
+                Vec::new(),
+            )
+        }
     };
     rejected(stage, code)
 }
@@ -75,7 +84,17 @@ pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Fai
     let code = match error {
         E::Cleanup { .. } => "cleanup_incomplete",
         E::Changed => "target_changed",
-        E::Limit => "publication_limit",
+        E::Limit(error) => {
+            return resource_rejected(
+                "output",
+                "publication_limit",
+                error.resource,
+                error.limit,
+                error.actual,
+                Vec::new(),
+            )
+        }
+        E::StagingCollision => "staging_collision",
         E::InvalidTarget => "invalid_target",
         E::PathMismatch => "path_mismatch",
         E::Io(_) => {
@@ -121,12 +140,7 @@ pub(crate) fn preparation_failure(message: String) -> Failure {
             else {
                 return rejected("prepare", "issue_projection");
             };
-            if !crate::issue_rows::within_limit(
-                &issues,
-                crate::specification_check::MAX_ISSUE_BYTES,
-            ) {
-                return rejected("prepare", "issue_limit");
-            }
+
             issues
         }
         Some("unsupported") => {
@@ -183,12 +197,7 @@ pub(crate) fn preparation_failure(message: String) -> Failure {
                     issue.context = context.to_string();
                 }
             }
-            if !crate::issue_rows::within_limit(
-                &issues,
-                crate::specification_check::MAX_ISSUE_BYTES,
-            ) {
-                return rejected("prepare", "issue_limit");
-            }
+
             issues
         }
         _ => rejected("prepare", "preparation_boundary"),
@@ -315,12 +324,13 @@ impl Domain {
         self.result.log_table(warning)
     }
     pub fn issues(&self) -> Failure {
-        self.result
-            .issues()
-            .iter()
-            .cloned()
-            .chain(self.publication_issues.iter().cloned())
-            .collect()
+        crate::issue_rows::collect(
+            self.result
+                .issues()
+                .iter()
+                .cloned()
+                .chain(self.publication_issues.iter().cloned()),
+        )
     }
     /// Retain complete run observations without recapture. Artifacts describe
     /// only a successful latest save; a refused save returns build observations.
@@ -340,14 +350,10 @@ impl Domain {
     /// Failed builds may publish their diagnostic log on explicit Save and still
     /// raise the original failed-build result. Build itself never writes.
     pub fn save(&mut self) -> Result<bool, FailedBuild> {
-        self.save_with(
-            yamaa_core::capacity::REPORT_ENCODED_BYTES,
-            |publisher, path, bytes| publisher.publish(path, bytes),
-        )
+        self.save_with(|publisher, path, bytes| publisher.publish(path, bytes))
     }
     fn save_with(
         &mut self,
-        report_limit: usize,
         mut publish: impl FnMut(
             &mut crate::file_publication::Publisher,
             &str,
@@ -368,18 +374,14 @@ impl Domain {
         // publication. Every prefix fits the admitted complete encoded report;
         // its artifact slots are reserved before the first publisher. Later
         // success only moves an already-owned entry into an admitted slot.
-        let mut budget = crate::report_projection::Budget::new(report_limit);
         let report = (|| {
-            let mut report = self
-                .result
-                .publication_observations(items.len(), &mut budget)?;
+            let mut report = self.result.publication_observations(items.len())?;
             let Value::Array(artifacts) = report["artifacts"].take() else {
                 return Err(specification_report::Error::InvalidObservation);
             };
             if artifacts.len() != items.len() {
                 return Err(specification_report::Error::InvalidObservation);
             }
-            budget.entries(artifacts.len())?;
             report["artifacts"] = Value::Array(Vec::with_capacity(artifacts.len()));
             Ok((report, artifacts.into_iter()))
         })();
@@ -610,7 +612,7 @@ impl RuntimePort for Native<'_> {
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<Domain, Failure> {
         let attempt = prepared.build_with_observer(scope);
-        if let Some(error) = file_preparation::public_opaque_resource_failure(&attempt) {
+        if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
             return Err(resource_failure("capture", error));
         }
         scope.phase(yamaa_core::application_observer::Phase::Output);
@@ -677,21 +679,25 @@ fn native(identity: Identity<'_>) -> Application<Native<'_>> {
 }
 pub fn check(request: Request<'_>, identity: Identity<'_>) -> Failure {
     let mut application = native(identity);
-    domain_entry::check(request, &mut application).unwrap_or_else(|error| match error {
-        ApplicationError::Preparation(error) => {
-            crate::project_application::selection_failure(&error, application.host)
-        }
-        ApplicationError::Runtime(issues) => issues,
-    })
+    crate::issue_rows::collect(
+        domain_entry::check(request, &mut application).unwrap_or_else(|error| match error {
+            ApplicationError::Preparation(error) => {
+                crate::project_application::selection_failure(&error, application.host)
+            }
+            ApplicationError::Runtime(issues) => issues,
+        }),
+    )
 }
 pub fn domain(request: Request<'_>, identity: Identity<'_>) -> Result<Domain, Failure> {
     let mut application = native(identity);
-    domain_entry::domain(request, &mut application).map_err(|error| match error {
-        ApplicationError::Preparation(error) => {
-            crate::project_application::selection_failure(&error, application.host)
-        }
-        ApplicationError::Runtime(issues) => issues,
-    })
+    domain_entry::domain(request, &mut application)
+        .map_err(|error| match error {
+            ApplicationError::Preparation(error) => {
+                crate::project_application::selection_failure(&error, application.host)
+            }
+            ApplicationError::Runtime(issues) => issues,
+        })
+        .map_err(crate::issue_rows::collect)
 }
 
 #[cfg(test)]
@@ -706,10 +712,9 @@ mod tests {
             Arc,
         },
     };
-    use yamaa_core::diagnostic::ConditionCode;
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     #[test]
-    fn primary_encoding_limit_retains_completed_verification_without_warning_authority() {
+    fn primary_above_the_former_eight_megabyte_quota_retains_logs_and_saves_held_bytes() {
         let root = std::env::temp_dir().join(format!(
             "yamaa-output-log-cap-{}-{}",
             std::process::id(),
@@ -718,7 +723,7 @@ mod tests {
         fs::create_dir_all(root.join("input")).unwrap();
         let study = Study(fs::canonicalize(root).unwrap());
         const VERIFICATION_HEADER: &str = "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n";
-        // Valid precision can still exceed the artifact byte budget: each large
+        // The output preserves declared precision: each large
         // finite float needs 309 whole digits plus the declared 18 fractional digits.
         let mut input = String::from("ID,VALUE\n");
         for id in 1..=26_000 {
@@ -733,7 +738,7 @@ mod tests {
             crate::file_preparation::prepare_document(&mut resources, &entry, None).unwrap();
         let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
         let attempt = prepared.execute_with_port(&mut resources);
-        let result = specification_report::build_result_with_output_limit(
+        let result = specification_report::build_result(
             &prepared,
             &attempt,
             Identity {
@@ -744,7 +749,6 @@ mod tests {
                 specification: written,
                 base_directory: ".",
             },
-            8 * 1024 * 1024,
         )
         .unwrap();
         let mut result = Domain::from_build(result, |field| {
@@ -755,43 +759,28 @@ mod tests {
             resources.publication_target_from(origin.base_source, origin.written)
         })
         .unwrap();
-        assert!(result.output().is_none());
-        assert!(result.warning_log().is_none());
+        assert!(result.output().is_some());
+        assert!(result.result.publication_items().last().unwrap().1.len() > 8 * 1024 * 1024);
+        assert!(result.warning_log().is_some());
         assert_eq!(result.log_table(false).unwrap().rows(), 2);
-        assert_eq!(result.issues().len(), 1);
-        assert_eq!(
-            result.issues()[0].condition,
-            ConditionCode::ApplicationRejected.definition().condition
-        );
-        let context: serde_json::Value = serde_json::from_str(&result.issues()[0].context).unwrap();
-        assert_eq!(context["stage"], "output");
-        assert_eq!(context["code"], "output_limit");
-        fs::write(study.0.join("out.csv"), "primary sentinel").unwrap();
-        fs::write(study.0.join("warnings.csv"), "warning sentinel").unwrap();
+        assert!(result.issues().is_empty());
         fs::remove_file(study.0.join("input/input.csv")).unwrap();
         fs::remove_file(study.0.join("spec.yaml")).unwrap();
         for _ in 0..2 {
-            assert!(result.save().is_err());
-            assert_eq!(
-                fs::read(study.0.join("out.csv")).unwrap(),
-                b"primary sentinel"
-            );
-            assert_eq!(
-                fs::read(study.0.join("warnings.csv")).unwrap(),
-                b"warning sentinel"
-            );
+            assert!(result.save().unwrap());
+            let bytes = fs::read(study.0.join("out.csv")).unwrap();
+            assert!(bytes.len() > 8 * 1024 * 1024);
+            assert!(bytes.starts_with(b"ID,VALUE\n1,"));
+            assert!(study.0.join("warnings.csv").exists());
             let checks = fs::read_to_string(study.0.join("checks.csv")).unwrap();
             assert!(checks.starts_with(VERIFICATION_HEADER));
             assert!(checks.contains("not_missing,VALUE,REQ-0375,error,held"));
             assert!(checks.contains("range,VALUE,REQ-0377,warning,violated,range_failed"));
             assert_eq!(
                 result.observations()["artifacts"].as_array().unwrap().len(),
-                1
+                3
             );
-            assert_eq!(
-                result.issues()[0].condition,
-                ConditionCode::ApplicationRejected.definition().condition
-            );
+            assert!(result.issues().is_empty());
         }
     }
 
@@ -924,11 +913,11 @@ mod tests {
         let marker = Arc::new(());
         measurements.save_entered();
         assert!(!result
-            .save_with(16_777_216, |_, _, _| Err(
-                crate::file_publication::Error::Io(std::io::Error::other(Marker(Arc::clone(
-                    &marker
-                ))))
-            ))
+            .save_with(
+                |_, _, _| Err(crate::file_publication::Error::Io(std::io::Error::other(
+                    Marker(Arc::clone(&marker))
+                )))
+            )
             .unwrap());
         measurements.save_completed("refused");
         let Some(crate::file_publication::Error::Io(error)) = &result.publication_attempt.failure
@@ -984,7 +973,7 @@ mod tests {
             let marker = Arc::new(());
             let mut entered = 0;
             assert!(!result
-                .save_with(16_777_216, |publisher, path, bytes| {
+                .save_with(|publisher, path, bytes| {
                     let index = entered;
                     entered += 1;
                     if index == fail_at {
@@ -1051,7 +1040,7 @@ mod tests {
         let original = result.observations();
         let marker = Arc::new(());
         assert!(result
-            .save_with(16_777_216, |_, _, _| {
+            .save_with(|_, _, _| {
                 Err(crate::file_publication::Error::Io(std::io::Error::other(
                     Marker(Arc::clone(&marker)),
                 )))
@@ -1096,9 +1085,7 @@ mod tests {
         fs::create_dir(study.0.join("foreign")).unwrap();
         std::os::unix::fs::symlink("foreign", study.0.join("nested")).unwrap();
         assert!(!result
-            .save_with(16_777_216, |_, _, _| panic!(
-                "linked parent entered publisher"
-            ))
+            .save_with(|_, _, _| panic!("linked parent entered publisher"))
             .unwrap());
         assert_eq!(result.publication_attempt.entered, 0);
         assert_eq!(result.publication_attempt.completed, 0);
@@ -1123,7 +1110,7 @@ mod tests {
         let marker = Arc::new(());
         let mut entered = 0;
         assert!(!result
-            .save_with(16_777_216, |publisher, path, bytes| {
+            .save_with(|publisher, path, bytes| {
                 entered += 1;
                 if entered == 2 {
                     std::panic::panic_any(Arc::clone(&marker));
@@ -1152,24 +1139,6 @@ mod tests {
         assert!(!study.0.join("adsl.csv").exists());
         assert!(result.save().unwrap());
         assert!(result.publication_attempt.unwind.is_none());
-    }
-    #[test]
-    fn report_copy_refusal_precedes_every_publication_port() {
-        let (study, mut result) = built();
-        assert!(!result
-            .save_with(1, |_, _, _| panic!("refused report entered publisher"))
-            .unwrap());
-        assert_eq!(result.publication_attempt.entered, 0);
-        let issues = result.issues();
-        let issue = issues.last().unwrap();
-        let context: Value = serde_json::from_str(&issue.context).unwrap();
-        assert_eq!(context["code"], "publication_report_limit");
-        assert_eq!(context["resource"], "report_retained_bytes");
-        assert_eq!(context["limit"], 6);
-        for name in ["adsl-checks.csv", "adsl-warnings.csv", "adsl.csv"] {
-            assert!(!study.0.join(name).exists());
-        }
-        assert!(result.save().unwrap());
     }
     #[test]
     fn actual_host_view_admits_metadata_beyond_the_old_64k_limit_and_saves_held_bytes() {
@@ -1206,14 +1175,9 @@ mod tests {
             fs::write(&entry, raw).unwrap();
             let written = entry.to_str().unwrap();
             let (mut resources, entry) = file_configuration::resources(written).unwrap();
-            let mut limits = crate::specification_source::Limits::default();
-            limits.normalization.validation.regex.state_cells = 32_000_000;
-            limits.normalization.validation.regex.work = 32_000_000;
-            limits.normalization.validation.regex.subject_bytes = 32_000_000;
             let schema = crate::specification_source::CapturedSchema::admit(
                 crate::shipped_schema::capture().unwrap().sources().to_vec(),
                 0,
-                limits,
             )
             .unwrap();
             let document =

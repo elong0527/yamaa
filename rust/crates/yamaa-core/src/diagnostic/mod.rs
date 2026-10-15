@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use crate::numeric_parser::SourceSpan;
 
 mod dataset;
+pub(crate) use dataset::lookup_key_type;
 pub use dataset::DatasetFinding;
 
 mod aggregate;
@@ -24,7 +25,7 @@ mod inheritance;
 pub use inheritance::InheritanceFinding;
 
 mod source;
-pub use source::{admit_source_diagnostics, ParquetFinding, SourceDiagnosticReport, SourceFinding};
+pub use source::{source_diagnostics, ParquetFinding, SourceFinding};
 
 mod inherited_dependencies;
 pub use inherited_dependencies::inheritance_dependency_diagnostics;
@@ -32,51 +33,17 @@ pub use inherited_dependencies::inheritance_dependency_diagnostics;
 mod grammar;
 mod numeric;
 mod predicate;
-pub use predicate::{
-    PredicateDiagnosticError, PredicateGrammarDiagnosticError, MAX_PREDICATE_DIAGNOSTIC_BYTES,
-};
+pub use predicate::PredicateDiagnosticError;
 mod project_lock;
 pub use project_lock::{
-    lock_diagnostics, lock_diagnostics_with_limit, LockDiagnosticError, LockFinding, LockOrigins,
-    LockReason, MAX_LOCK_DIAGNOSTIC_BYTES,
+    lock_diagnostics, LockDiagnosticError, LockFinding, LockOrigins, LockReason,
 };
 
-/// Context projection failures are resource/representation refusals, never a
-/// replacement semantic cause. Admission precedes every owned context copy.
+/// Contradictory retained facts have no semantic projection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ProjectionError {
-    #[error("diagnostic limit")]
-    Limit,
     #[error("diagnostic invalid context")]
     InvalidContext,
-}
-
-pub const MAX_PROJECTION_BYTES: usize = 16_777_216;
-
-pub(crate) struct ProjectionBudget(usize);
-impl ProjectionBudget {
-    pub(crate) fn new(maximum: usize) -> Result<Self, ProjectionError> {
-        Ok(Self(
-            maximum.checked_sub(256).ok_or(ProjectionError::Limit)?,
-        ))
-    }
-    pub(crate) fn charge(&mut self, bytes: usize) -> Result<(), ProjectionError> {
-        self.0 = self.0.checked_sub(bytes).ok_or(ProjectionError::Limit)?;
-        Ok(())
-    }
-    pub(crate) fn text(&mut self, text: &str) -> Result<(), ProjectionError> {
-        self.charge(
-            text.len()
-                .checked_mul(6)
-                .and_then(|n| n.checked_add(2))
-                .ok_or(ProjectionError::Limit)?,
-        )
-    }
-    pub(crate) fn field(&mut self, name: &str, text: &str) -> Result<(), ProjectionError> {
-        self.text(name)?;
-        self.text(text)?;
-        self.charge(2)
-    }
 }
 
 /// A cause's canonical public vocabulary, including explicit application refusals.

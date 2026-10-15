@@ -32,7 +32,6 @@ pub fn without_environment(
 /// activate code, read study data, or publish artifacts.
 pub trait MetadataAdmissionPort {
     type Error;
-    fn charge_work(&mut self, work: usize) -> Result<(), Self::Error>;
     fn verify_metadata(&mut self) -> Result<(), (String, Self::Error)>;
 }
 
@@ -49,11 +48,9 @@ pub trait ResourceReader:
     fn capture_root(
         &mut self,
         written: &str,
-        maximum: usize,
     ) -> Result<crate::project_preparation::Source, <Self as MetadataAdmissionPort>::Error> {
         let identity = crate::file_preparation::NativePort::resolve_entry(self, None, written)?;
-        let bytes =
-            crate::file_preparation::NativePort::capture_entry(self, None, written, maximum)?;
+        let bytes = crate::file_preparation::NativePort::capture_entry(self, None, written)?;
         Ok(crate::project_preparation::Source { identity, bytes })
     }
 }
@@ -93,26 +90,16 @@ pub fn prepare_environment<R: ResourceReader, D: crate::project_preparation::Dec
     decoder: &mut D,
     written: &str,
     host: crate::project_function::Language,
-    limits: crate::project_preparation::Limits,
 ) -> EnvironmentPreparation<R, D> {
     let source = reader
-        .capture_root(written, limits.bytes)
+        .capture_root(written)
         .map_err(EnvironmentFailure::Resource)?;
-    crate::project_preparation::prepare(decoder, source, host, reader, limits)
+    crate::project_preparation::prepare(decoder, source, host, reader)
         .map_err(EnvironmentFailure::Preparation)
 }
 
-pub struct EntryView<'a> {
-    /// The retained pre-default arena; defaults cannot invent producer inputs.
-    pub original: &'a Document,
-    pub model_nodes: usize,
-}
 #[derive(Debug, thiserror::Error)]
 pub enum SelectionFailure<E> {
-    #[error("build resource: {0:?}")]
-    Resource(E),
-    #[error("build limit: {0:?}")]
-    Limit(&'static str),
     #[error("build snapshot: identity={identity:?}, error={error:?}")]
     Snapshot { identity: String, error: E },
 }
@@ -131,16 +118,9 @@ impl EntrySelection {
 /// Complete admission and whole original-input inspection precede selection.
 /// Opaque refusal and changed-snapshot payloads retain their original identity.
 pub fn select_entry<P: MetadataAdmissionPort>(
-    view: EntryView<'_>,
-    model_node_limit: usize,
+    document: &Document,
     port: &mut P,
 ) -> Result<EntrySelection, SelectionFailure<P::Error>> {
-    let document = view.original;
-    port.charge_work(document.nodes().len())
-        .map_err(SelectionFailure::Resource)?;
-    if view.model_nodes > model_node_limit {
-        return Err(SelectionFailure::Limit("producer_graph_document_nodes"));
-    }
     let mut producer = false;
     if let Some(input) = document.field(document.root(), "input") {
         if let DocumentNode::Mapping(entries) = &document.nodes()[input] {

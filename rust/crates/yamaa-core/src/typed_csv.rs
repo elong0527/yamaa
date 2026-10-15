@@ -11,6 +11,8 @@ use std::convert::Infallible;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("typed csv boundary: {0}")]
+    Limit(crate::limits::LimitExceeded),
     #[error("typed csv invalid declarations")]
     InvalidDeclarations,
     #[error("typed csv invalid source")]
@@ -39,7 +41,7 @@ impl Error {
                 target: *target,
                 value,
             }),
-            Self::InvalidDeclarations | Self::InvalidSource => None,
+            Self::InvalidDeclarations | Self::InvalidSource | Self::Limit(_) => None,
         }
     }
 }
@@ -48,10 +50,8 @@ impl Error {
 pub struct PreparedTypes<'a>(&'a [(String, ColumnType)]);
 impl<'a> PreparedTypes<'a> {
     /// Declaration policy/shape is checked before callers decode source bytes.
-    pub fn new(declarations: &'a [(String, ColumnType)], maximum: usize) -> Result<Self, Error> {
-        if declarations.len() > maximum {
-            return Err(Error::InvalidDeclarations);
-        }
+    pub fn new(declarations: &'a [(String, ColumnType)]) -> Result<Self, Error> {
+        crate::limits::Limits::columns(declarations.len()).map_err(Error::Limit)?;
         let mut names = BTreeSet::new();
         for (name, _) in declarations {
             if name.is_empty() || !names.insert(name.as_str()) {

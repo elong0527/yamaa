@@ -24,10 +24,10 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         state.functions,
     );
     match result {
-        Ok(value) => retain_result(value, state.budget),
+        Ok(value) => retain_result(value),
         Err(error) => Err(Box::new(ExecutionError::Function {
             path: context.assignment.path.clone(),
-            identity: failure_identity(candidate, context.plan.keys(), context.row, state.budget)?,
+            identity: failure_identity(candidate, context.plan.keys(), context.row)?,
             error,
         })),
     }
@@ -48,10 +48,10 @@ pub(super) fn evaluate_project<T: TableAccess + ?Sized>(
         state.functions,
     );
     match result {
-        Ok(value) => retain_result(value, state.budget),
+        Ok(value) => retain_result(value),
         Err(error) => Err(Box::new(ExecutionError::ProjectFunction {
             path: context.assignment.path.clone(),
-            identity: failure_identity(candidate, context.plan.keys(), context.row, state.budget)?,
+            identity: failure_identity(candidate, context.plan.keys(), context.row)?,
             error,
         })),
     }
@@ -66,9 +66,7 @@ fn supplied<T: TableAccess + ?Sized>(
 ) -> Result<BTreeMap<String, Value>, Box<ExecutionError<T::Error>>> {
     let mut supplied = BTreeMap::new();
     for argument in arguments {
-        state.budget.work(1, 1)?;
         if let FunctionInput::Collect { column, identifier } = &argument.input {
-            state.budget.work(candidate.members.len(), 1)?;
             let value = key_grain::collect_bound(
                 table,
                 key_grain::Collection {
@@ -83,7 +81,6 @@ fn supplied<T: TableAccess + ?Sized>(
                     plan: context.plan,
                     row: context.row,
                 },
-                state.budget,
                 state.handlers,
             )?;
             supplied.insert(argument.name.clone(), value);
@@ -99,9 +96,6 @@ fn supplied<T: TableAccess + ?Sized>(
                 context.row,
                 state,
             )?;
-            if let Value::Str(text) = &value {
-                state.budget.scalar_text(text.len())?;
-            }
             supplied.insert(argument.name.clone(), value);
             continue;
         }
@@ -116,9 +110,6 @@ fn supplied<T: TableAccess + ?Sized>(
                 table,
                 state,
             )?;
-            if let Value::Str(text) = &value {
-                state.budget.scalar_text(text.len())?;
-            }
             supplied.insert(argument.name.clone(), value);
             continue;
         }
@@ -140,20 +131,14 @@ fn supplied<T: TableAccess + ?Sized>(
                 })?
             }
         };
-        if let ValueRef::Str(text) = value {
-            state.budget.scalar_text(text.len())?;
-        }
         supplied.insert(argument.name.clone(), own(value));
     }
     // This charges a potential call; missing-value short circuit never executes host code.
-    state.budget.work(1, 1)?;
+
     Ok(supplied)
 }
 
-fn retain_result<E>(value: Value, budget: &mut Budget) -> Result<Value, Box<ExecutionError<E>>> {
-    if let Value::Str(text) = &value {
-        budget.scalar_text(text.len())?;
-    }
+fn retain_result<E>(value: Value) -> Result<Value, Box<ExecutionError<E>>> {
     Ok(value)
 }
 

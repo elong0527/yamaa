@@ -15,7 +15,7 @@ use yamaa_core::producer_publication::{
 #[derive(Debug)]
 pub enum AdmissionFailure {
     Incomplete,
-    Limit(&'static str),
+    Rejected(&'static str),
     Resource { node: usize, error: ResourceError },
 }
 struct Target {
@@ -44,63 +44,18 @@ impl Publication {
         prepared: PreparedPublication,
         provenance: &Provenance,
         resources: &Resources,
-        limits: engine::Limits,
     ) -> Self {
-        let targets = Self::targets(&prepared, provenance, resources, limits);
+        let targets = Self::targets(&prepared, provenance, resources);
         Self { prepared, targets }
     }
     fn targets(
         prepared: &PreparedPublication,
         provenance: &Provenance,
         resources: &Resources,
-        limits: engine::Limits,
     ) -> Result<Vec<Target>, AdmissionFailure> {
         let count = prepared.artifacts().len();
-        if count == 0 || count > limits.nodes || count > provenance.metadata().nodes().len() {
-            return Err(AdmissionFailure::Limit("producer_publication_nodes"));
-        }
-        let mut text = limits.path_bytes;
-        let mut work = limits.work;
-        // Whole authored/canonical path admission precedes target/descriptor
-        // ownership, including the temporary text used by native comparisons.
-        for artifact in prepared.artifacts() {
-            work = work
-                .checked_sub(artifact.node().saturating_add(1))
-                .ok_or(AdmissionFailure::Limit("producer_publication_work"))?;
-            let view = provenance
-                .report_views()
-                .nth(artifact.node())
-                .ok_or(AdmissionFailure::Incomplete)?;
-            let origin = view
-                .document()
-                .written_output_origin()
-                .ok_or(AdmissionFailure::Incomplete)?;
-            for path in [origin.base_source, origin.written, artifact.path()] {
-                text = text
-                    .checked_sub(path.len())
-                    .ok_or(AdmissionFailure::Limit("producer_publication_paths"))?;
-            }
-            let selected = selected_bound(origin.base_source, origin.written)?;
-            // Location and AnchoredTarget each retain a canonical copy. Lexical
-            // normalization removes components and cannot exceed this bound.
-            text = text
-                .checked_sub(
-                    selected
-                        .checked_mul(2)
-                        .ok_or(AdmissionFailure::Limit("producer_publication_paths"))?,
-                )
-                .ok_or(AdmissionFailure::Limit("producer_publication_paths"))?;
-            // Each path can participate in every duplicate comparison. This
-            // covers path traversal and Windows ordinal UTF-16 comparison text
-            // before either Resources call or any comparison allocates it.
-            work = work
-                .checked_sub(
-                    selected
-                        .checked_mul(count.saturating_add(1))
-                        .and_then(|n| n.checked_mul(4))
-                        .ok_or(AdmissionFailure::Limit("producer_publication_work"))?,
-                )
-                .ok_or(AdmissionFailure::Limit("producer_publication_work"))?;
+        if count == 0 || count > provenance.metadata().nodes().len() {
+            return Err(AdmissionFailure::Incomplete);
         }
         let mut targets = Vec::with_capacity(count);
         for artifact in prepared.artifacts() {
@@ -119,16 +74,9 @@ impl Publication {
             let selected = resources
                 .location_from(origin.base_source, origin.written)
                 .map_err(failure)?;
-            if selected.len() > selected_bound(origin.base_source, origin.written)? {
-                return Err(AdmissionFailure::Limit("producer_publication_paths"));
-            }
             let target = resources
                 .publication_target_from(origin.base_source, origin.written)
                 .map_err(failure)?;
-            // Bound the full duplicate-target scan before retaining this target.
-            work = work
-                .checked_sub(targets.len())
-                .ok_or(AdmissionFailure::Limit("producer_publication_work"))?;
             if targets
                 .iter()
                 .any(|target: &Target| same_location(&target.selected, &selected))
@@ -152,7 +100,7 @@ impl Publication {
     pub fn admission_failure(&self) -> Option<&AdmissionFailure> {
         self.targets.as_ref().err()
     }
-    pub fn save_into(&self, limits: engine::Limits, attempt: &mut Attempt) {
+    pub fn save_into(&self, attempt: &mut Attempt) {
         *attempt = Default::default();
         let Ok(targets) = &self.targets else {
             return;
@@ -163,19 +111,11 @@ impl Publication {
             next: 0,
         };
         if let Err(payload) = catch_unwind(AssertUnwindSafe(|| {
-            self.prepared
-                .save_into(&mut port, limits, &mut attempt.entered)
+            self.prepared.save_into(&mut port, &mut attempt.entered)
         })) {
             attempt.unwind = Some(payload);
         }
     }
-}
-pub(crate) fn selected_bound(declaring: &str, written: &str) -> Result<usize, AdmissionFailure> {
-    declaring
-        .len()
-        .checked_add(written.len())
-        .and_then(|n| n.checked_add(2))
-        .ok_or(AdmissionFailure::Limit("producer_publication_paths"))
 }
 pub(crate) fn same_location(left: &str, right: &str) -> bool {
     #[cfg(windows)]
