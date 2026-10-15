@@ -339,7 +339,9 @@ mod tests {
     fn repeated_prefixes_cannot_expand_past_arrow_string_offsets() {
         // Only 64 KiB of stored suffixes, but prefix reconstruction produces
         // lengths 1, 2, ... count before the physical decoder copies them.
-        for (count, expected) in [(65_535, Ok(())), (65_536, Err(Error::Malformed))] {
+        // Crossing Arrow's offset range is a representation refusal, while the
+        // stored Parquet suffixes remain structurally valid.
+        for (count, expected) in [(65_535, Ok(())), (65_536, Err(Error::Representation))] {
             let mut data = progression(0, 1, count);
             data.extend(progression(1, 0, count));
             data.resize(data.len() + count, b'x');
