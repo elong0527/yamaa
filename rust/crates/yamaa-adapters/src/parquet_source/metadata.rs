@@ -102,6 +102,66 @@ mod tests {
     }
 
     #[test]
+    fn shared_schema_tables_keep_the_flatbuffer_verifiers_default_work_bounds() {
+        let mut builder = flatbuffers::FlatBufferBuilder::new();
+        let name = builder.create_string("shared");
+        let null = arrow_ipc::Null::create(&mut builder, &Default::default());
+        let mut field = arrow_ipc::Field::create(
+            &mut builder,
+            &arrow_ipc::FieldArgs {
+                name: Some(name),
+                type_type: arrow_ipc::Type::Null,
+                type_: Some(null.as_union_value()),
+                ..Default::default()
+            },
+        );
+        // This DAG occupies less than 2 KiB but expands to over two million
+        // table visits, well below the fixed semantic nesting boundary.
+        for _ in 0..20 {
+            let children = builder.create_vector(&[field, field]);
+            let structure = arrow_ipc::Struct_::create(&mut builder, &Default::default());
+            field = arrow_ipc::Field::create(
+                &mut builder,
+                &arrow_ipc::FieldArgs {
+                    name: Some(name),
+                    type_type: arrow_ipc::Type::Struct_,
+                    type_: Some(structure.as_union_value()),
+                    children: Some(children),
+                    ..Default::default()
+                },
+            );
+        }
+        let fields = builder.create_vector(&[field]);
+        let schema = arrow_ipc::Schema::create(
+            &mut builder,
+            &arrow_ipc::SchemaArgs {
+                fields: Some(fields),
+                ..Default::default()
+            },
+        );
+        let message = arrow_ipc::Message::create(
+            &mut builder,
+            &arrow_ipc::MessageArgs {
+                header_type: arrow_ipc::MessageHeader::Schema,
+                header: Some(schema.as_union_value()),
+                ..Default::default()
+            },
+        );
+        builder.finish(message, None);
+        let bytes = builder.finished_data();
+        assert!(bytes.len() < 2048);
+        assert!(matches!(
+            arrow_ipc::root_as_message(bytes),
+            Err(flatbuffers::InvalidFlatbuffer::TooManyTables)
+        ));
+        let metadata = vec![KeyValue {
+            key: "ARROW:schema".into(),
+            value: Some(BASE64_STANDARD.encode(bytes)),
+        }];
+        assert_eq!(admit(Some(&metadata)), Err(Error::Malformed));
+    }
+
+    #[test]
     fn invalid_schema_hints_and_encoding_are_not_ignored() {
         admit(None).unwrap();
         let data = vec![KeyValue {

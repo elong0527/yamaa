@@ -796,6 +796,51 @@ mod tests {
     }
 
     #[test]
+    fn repeated_sas_text_pointers_cannot_retain_more_than_the_source_extent() {
+        // The independent haven MIX page has thirteen subheader pointers, four
+        // forty-byte observations, and one 100-byte COLUMN_TEXT subheader at
+        // offset 3200. Extra pointers alias that same stored blob; moving the
+        // observation bytes past the enlarged pointer list keeps their truth.
+        let fixture = include_bytes!("../tests/fixtures/sas/datetime.sas7bdat");
+        assert_eq!(fixture.len(), 5120);
+        let original = &fixture[1024..];
+        let mut source = source();
+        source.profile = SourceProfile::Sas7bdat;
+        source.path = "datetime.sas7bdat".into();
+        for extra in [52, 53, 128] {
+            let mut page = original.to_vec();
+            page[18..20].copy_from_slice(&((17 + extra) as u16).to_le_bytes());
+            page[20..22].copy_from_slice(&((13 + extra) as u16).to_le_bytes());
+            let row_start = (24usize + (13 + extra) * 12).div_ceil(8) * 8;
+            page[row_start..row_start + 160].copy_from_slice(&original[184..344]);
+            for index in 13..13 + extra {
+                let pointer = 24 + index * 12;
+                page[pointer..pointer + 12].copy_from_slice(&original[60..72]);
+            }
+            let mut bytes = fixture[..1024].to_vec();
+            bytes.extend(page);
+            // Each retained blob omits its four-byte signature: 53 * 96 fits
+            // the 5120-byte source; the next repeated blob would exceed it.
+            if extra == 52 {
+                let table = parse(&bytes, &source).unwrap();
+                assert_eq!(table.row_count(), 4);
+                assert_eq!(table.schema().columns().len(), 5);
+                assert_eq!(
+                    table.cell(3, 1).unwrap(),
+                    ValueRef::Float(yamaa_core::value::FiniteFloat::new(-4124.0).unwrap()),
+                );
+            } else {
+                let result = parse(&bytes, &source);
+                assert!(
+                    matches!(&result, Err(Error::Invalid("malformed"))),
+                    "{extra} aliases: expected malformed input, got error {:?}",
+                    result.as_ref().err()
+                );
+            }
+        }
+    }
+
+    #[test]
     fn semantic_and_encoding_refusals_keep_their_exact_causes() {
         let bytes = include_bytes!("../tests/fixtures/sas/fractional.xpt");
         let mut source = source();
