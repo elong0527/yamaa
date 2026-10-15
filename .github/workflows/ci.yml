@@ -58,6 +58,10 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: make test-python
+      - name: Test the minimum supported Polars reader
+        run: |
+          uv pip install --python python/.venv/bin/python 'polars==1.43.2'
+          make test-python
   r:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
