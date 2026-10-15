@@ -43,7 +43,9 @@ explicit environment files.
 
 A case with several specifications declares the public calls in order. Both
 hosts must be present; each call names its specification and may override its
-host environment, including an explicit `null` to call without one:
+host environment, including an explicit `null` to call without one. Put the
+primary entry last in both host lists; the dashboard selects the final Python
+call as the page's entry specification:
 
 ```yaml
 entries:

@@ -25,8 +25,8 @@ where every active benchmark must pass on every lane.
 
 Pass benchmark names instead of `--all` to regenerate only those pages, and
 `--check` to compare bytes without writing. Pinned dependencies and sorted,
-ASCII, timestamp-free output make generation byte-reproducible; the repository
-checks compare generation across two time zones and hash seeds. The
+ASCII, timestamp-free output make generation byte-reproducible. The index test
+checks that repeated rendering is stable. The
 generator only displays expected artifacts, it never executes yamaa; comments
 are giscus threads keyed by directory name, with the category ID in `GISCUS`.
 

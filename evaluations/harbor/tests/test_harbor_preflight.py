@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shlex
 import shutil
 import sys
 from pathlib import Path
@@ -683,11 +684,15 @@ def test_upload_rejects_incomplete_or_preflight_jobs(completed_job, monkeypatch,
 
 
 @pytest.mark.parametrize("failure", ["partial", "network"])
+@pytest.mark.parametrize("job_name", ["plain", "job with spaces", "job's results"])
 def test_upload_failure_preserves_results_and_records_retry(
-    completed_job, monkeypatch, failure
+    completed_job, monkeypatch, capsys, failure, job_name
 ):
     uploader = pytest.importorskip("harbor.upload.uploader")
     runner = _load("run")
+    completed_job = shutil.copytree(
+        completed_job, completed_job.with_name(f"{completed_job.name}-{job_name}")
+    )
     before = (completed_job / "result.json").read_bytes()
 
     class FakeUploader:
@@ -706,6 +711,18 @@ def test_upload_failure_preserves_results_and_records_retry(
     assert (completed_job / "result.json").read_bytes() == before
     receipt = json.loads((completed_job / "hub-upload.json").read_text())
     assert receipt["status"] == "failed" and receipt["error"]
+    retry = next(
+        line.removeprefix("Retry with: ")
+        for line in capsys.readouterr().err.splitlines()
+        if line.startswith("Retry with: ")
+    )
+    assert shlex.split(retry) == [
+        "python",
+        "-m",
+        "evaluations.harbor.run",
+        "--upload-only",
+        str(completed_job),
+    ]
 
 
 @pytest.mark.parametrize("failure", ["publish", "link"])

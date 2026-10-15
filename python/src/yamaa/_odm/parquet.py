@@ -54,7 +54,7 @@ def write_odm_parquet(
         raise ODMError("batch_size must be a positive integer")
     if batch_size < 1:
         raise ODMError("batch_size must be at least 1")
-    if compression not in _PARQUET_COMPRESSIONS:
+    if not isinstance(compression, str) or compression not in _PARQUET_COMPRESSIONS:
         choices = ", ".join(sorted(_PARQUET_COMPRESSIONS))
         raise ODMError(f"unsupported compression {compression!r}: {choices}")
 
