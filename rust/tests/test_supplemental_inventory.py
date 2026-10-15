@@ -45,6 +45,11 @@ class RepositoryCatalog(unittest.TestCase):
                 "importlib.import_module('..io.project', package='yamaa.subpackage')"
             ),
             "__import__(name='yamaa.io.project')",
+            (
+                "__import__(name='io.project', "
+                "globals={'__package__': 'yamaa'}, level=1)"
+            ),
+            "__import__('io.project', {'__package__': 'yamaa'}, None, (), 1)",
         ):
             with (
                 self.subTest(source=source),
@@ -65,6 +70,20 @@ class RepositoryCatalog(unittest.TestCase):
             "importlib.import_module('..helpers', package='installed_suite.sub')",
             "installed_control.py",
         )
+
+    def test_unresolved_relative_dynamic_imports_are_rejected(self):
+        # A relative name whose anchor package cannot be read statically
+        # must not be classified as native from its remainder alone.
+        for source in (
+            "import importlib\nimportlib.import_module('.io.project')",
+            "import importlib\nimportlib.import_module('.io.project', package=package)",
+            "__import__('io.project', globals(), None, (), 1)",
+        ):
+            with (
+                self.subTest(source=source),
+                self.assertRaisesRegex(ValueError, "unresolved relative"),
+            ):
+                module.require_native_consumer(source, "installed_control.py")
 
     def test_sas_canonical_inputs_and_truth_stage_without_ownership_documents(self):
         prefix = "rust/crates/yamaa-adapters/tests/fixtures/sas/"
