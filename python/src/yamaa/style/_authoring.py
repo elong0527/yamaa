@@ -33,6 +33,22 @@ def _filter_identifiers(predicate: object) -> frozenset[str]:
     return frozenset(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", predicate))
 
 
+def _bare_identifiers(text: str) -> frozenset[str]:
+    """Identifiers `text` reads bare, not as part of a qualified name.
+
+    A predicate or flag string reads the columns it names (`"AGG > 0"`
+    reads AGG), so a whole-string comparison misses those reads. A token
+    beside a `.` is a dataset or a qualified column instead: `ADSL.AGE`
+    reads neither a bare ADSL nor a bare AGE.
+    """
+    return frozenset(
+        match.group()
+        for match in re.finditer(r"[A-Za-z_][A-Za-z0-9_]*", text)
+        if (match.start() == 0 or text[match.start() - 1] != ".")
+        and (match.end() == len(text) or text[match.end()] != ".")
+    )
+
+
 def _reads_qualified_name(text: str, identifier: str) -> bool:
     """True when `text` reads `IDENTIFIER.` at an identifier boundary.
 
@@ -141,11 +157,10 @@ def _blocked_columns(
             derivation, intermediate_ids
         ):
             blocked.add(name)
-        bare = {
-            text
-            for text in _walk_strings(derivation)
-            if isinstance(text, str) and "." not in text
-        }
+        bare: set[str] = set()
+        for text in _walk_strings(derivation):
+            if isinstance(text, str):
+                bare |= _bare_identifiers(text)
         reads[name] = frozenset(bare)
     changed = True
     while changed:
@@ -387,7 +402,7 @@ def repeated_row_derivations(document: Document, value: Mapping) -> Iterator[Dep
             # driver-independent and safe to hoist.
             continue
         if any(
-            isinstance(text, str) and "." not in text and text in blocked
+            isinstance(text, str) and _bare_identifiers(text) & blocked
             for text in _walk_strings(derivation)
         ):
             continue

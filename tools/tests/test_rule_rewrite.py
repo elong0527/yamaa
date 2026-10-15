@@ -9,7 +9,7 @@ from pathlib import Path
 
 from tools.paths import ROOT
 from tools.validation.check_rule_rewrite import check, requirement_owners
-from tools.validation.generate_rule_reference import generated
+from tools.validation.generate_rule_reference import cell, generated
 
 REPO = ROOT
 
@@ -289,6 +289,13 @@ class RuleRewriteTests(unittest.TestCase):
         self.assertIn(
             "schema comment has no canonical owner: schema_shared.yaml", errors
         )
+
+    def test_reference_cells_escape_backtick_runs(self):
+        # An embedded backtick must not end the code span early: the fence
+        # grows past the longest backtick run in the rendered value.
+        self.assertEqual(cell("plain"), '`"plain"`')
+        self.assertEqual(cell("a`b"), '``"a`b"``')
+        self.assertEqual(cell("a``b"), '```"a``b"```')
 
     def test_generated_references_match_sources(self):
         # References are generated at docs build time, not committed; the
