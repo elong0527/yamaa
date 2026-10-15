@@ -420,7 +420,7 @@ impl OutputReport for NativeReport<'_, '_> {
                 budget.text(text)?;
             }
         }
-        let diagnostics = report::output_diagnostics(findings);
+        let diagnostics = report::output_diagnostics(findings)?;
         let mut value = self.value.take().ok_or(Error::InvalidObservation)?;
         report::set_diagnostics(&mut value, diagnostics);
         self.finish(value)
@@ -582,9 +582,10 @@ fn push_diagnostic(
     for _ in 0..4 {
         budget.diagnostic(diagnostic)?;
     }
-    findings.push(crate::specification_diagnostics::portable_diagnostic(
-        diagnostic.clone(),
-    ));
+    findings.push(
+        crate::specification_diagnostics::portable_diagnostic(diagnostic.clone())
+            .ok_or(Error::InvalidObservation)?,
+    );
     Ok(())
 }
 fn source_finding(

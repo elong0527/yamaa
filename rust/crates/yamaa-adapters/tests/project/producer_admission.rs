@@ -65,6 +65,9 @@ fn original_documents_and_distinct_metadata_remain_held_without_study_authority(
             .collect::<Vec<_>>(),
         ["ID", "VALUE"]
     );
+    assert!(
+        matches!(admitted.metadata().execution_refusal(),PrepareError::Unsupported(features) if features[0].path=="input.SRC.schema")
+    );
 }
 struct Parent {
     text: Vec<u8>,
@@ -335,7 +338,9 @@ fn shared_producer_identities_require_the_same_original_byte_snapshot() {
     assert_eq!(findings[0].spec_paths, ["input.OTHER.schema"]);
     assert_eq!(
         findings[0].context["reason"],
-        serde_json::Value::String("contradictory_snapshot".into())
+        yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+            "contradictory_snapshot".into()
+        ))
     );
 }
 #[test]
@@ -367,7 +372,9 @@ fn undeclared_and_schema_less_supplied_metadata_retain_the_portable_cause() {
         assert_eq!(findings[0].spec_paths, [format!("input.{dataset}.schema")]);
         assert_eq!(
             findings[0].context["reason"],
-            serde_json::Value::String("undeclared_metadata".into())
+            yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                "undeclared_metadata".into()
+            ))
         );
     }
     // The shipped structural root rejects explicit-null schema before this

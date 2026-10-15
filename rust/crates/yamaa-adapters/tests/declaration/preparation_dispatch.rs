@@ -269,6 +269,7 @@ fn invalid_schema_default_precedes_authored_version_through_live_dispatch() {
     );
 }
 
+#[cfg(any(unix, windows))]
 mod native {
     use super::*;
     use std::{

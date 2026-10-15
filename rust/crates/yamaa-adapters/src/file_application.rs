@@ -70,8 +70,7 @@ pub(crate) fn resource_failure(stage: &str, error: &crate::file_resources::Error
 }
 pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Failure {
     use crate::file_publication::Error as E;
-    use serde_json::Value as JsonValue;
-
+    use yamaa_core::{diagnostic::ContextValue, value::Value};
     let code = match error {
         E::Cleanup { .. } => "cleanup_incomplete",
         E::Changed => "target_changed",
@@ -98,7 +97,7 @@ pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Fai
         ] {
             finding
                 .context
-                .insert(name.into(), JsonValue::String(value));
+                .insert(name.into(), ContextValue::Scalar(Value::Str(value)));
         }
     }
     vec![Issue::from_core(finding).expect("application issue")]

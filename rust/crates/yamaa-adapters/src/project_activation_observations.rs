@@ -14,6 +14,7 @@ use yamaa_core::{
 mod sealed {
     pub trait Sealed {}
     impl Sealed for super::PreparedRun {}
+    #[cfg(any(unix, windows))]
     impl Sealed for crate::file_producer_build::Provenance {}
     impl<T: super::ActivationView + ?Sized> Sealed for std::sync::Arc<T> {}
 }
@@ -47,6 +48,7 @@ impl ActivationView for PreparedRun {
         self.captured_environment()
     }
 }
+#[cfg(any(unix, windows))]
 impl ActivationView for crate::file_producer_build::Provenance {
     fn called_functions(&self) -> &[usize] {
         self.metadata().called_functions()

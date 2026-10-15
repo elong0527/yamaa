@@ -6,12 +6,14 @@ use std::{
     collections::BTreeMap,
     rc::{Rc, Weak},
 };
+#[cfg(any(unix, windows))]
 type State = yamaa_adapters::file_define::Define;
+#[cfg(not(any(unix, windows)))]
+struct State;
 struct Handle {
     state: Rc<RefCell<State>>,
     identity: Cell<usize>,
 }
-
 thread_local! { static HANDLES: RefCell<BTreeMap<usize, Weak<RefCell<State>>>> = const { RefCell::new(BTreeMap::new()) }; }
 impl Drop for Handle {
     fn drop(&mut self) {
@@ -61,6 +63,7 @@ fn define_file(environment: Raw, standard: Raw, created: Robj, installed: Raw) -
             )
         };
         let created = created.as_ref().map(text).transpose()?;
+        #[cfg(any(unix, windows))]
         {
             store(State::prepare(
                 environment,
@@ -69,6 +72,11 @@ fn define_file(environment: Raw, standard: Raw, created: Robj, installed: Raw) -
                 installed,
                 yamaa_core::project_function::Language::R,
             ))
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (environment, standard, created, installed);
+            store(State)
         }
     })
 }
@@ -79,8 +87,14 @@ fn define_issues(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "Define result already borrowed")?;
+        #[cfg(any(unix, windows))]
         {
             crate::issue_frame::frame(state.issues())
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = state;
+            crate::issue_frame::frame(&[])
         }
     })
 }
@@ -91,6 +105,7 @@ fn define_artifacts(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "Define result already borrowed")?;
+        #[cfg(any(unix, windows))]
         {
             Ok(
                 List::from_values(state.artifacts().map(|(path, bytes, state)| {
@@ -103,6 +118,11 @@ fn define_artifacts(handle: Robj) -> List {
                 .into_robj(),
             )
         }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = state;
+            Ok(List::new(0).into_robj())
+        }
     })
 }
 #[extendr]
@@ -112,6 +132,7 @@ fn define_save(handle: Robj) -> List {
         let mut state = state
             .try_borrow_mut()
             .map_err(|_| "Define result already borrowed")?;
+        #[cfg(any(unix, windows))]
         {
             match state.save() {
                 Ok(saved) => Ok(list!(saved = saved, failed = false).into_robj()),
@@ -125,6 +146,16 @@ fn define_save(handle: Robj) -> List {
                     Ok(list!(saved = false, failed = true, cause = cause).into_robj())
                 }
             }
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = &mut state;
+            Ok(list!(
+                saved = false,
+                failed = true,
+                cause = "native file transport unavailable"
+            )
+            .into_robj())
         }
     })
 }

@@ -61,7 +61,8 @@ impl Error {
                     "protocol": "specification/prototype",
                     "outcome": {
                         "status": "invalid",
-                        "diagnostics": [crate::specification_diagnostics::portable_diagnostic(*diagnostic)],
+                        "diagnostics": [crate::specification_diagnostics::portable_diagnostic(*diagnostic)
+                            .expect("classified resource facts")],
                     },
                 }).to_string()
             }
@@ -362,7 +363,9 @@ mod profile_inspection_tests {
             if kind == 0 || kind == 3 {
                 assert_eq!(
                     issue.context["path"],
-                    serde_json::Value::String("input/unknown".into())
+                    yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                        "input/unknown".into()
+                    ))
                 );
             }
             match kind {
@@ -570,7 +573,13 @@ mod dispatch_policy_tests {
         assert_eq!(diagnostic.spec_paths, [field]);
         assert_eq!(
             diagnostic.context,
-            [("path".into(), serde_json::Value::String(written.into()))].into()
+            [(
+                "path".into(),
+                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                    written.into()
+                ))
+            )]
+            .into()
         );
     }
     #[test]
@@ -709,7 +718,13 @@ mod dispatch_policy_tests {
         );
         assert_eq!(
             diagnostic.context,
-            [("path".into(), serde_json::Value::String("dict.yaml".into()))].into()
+            [(
+                "path".into(),
+                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                    "dict.yaml".into()
+                ))
+            )]
+            .into()
         );
         assert_eq!(resources.capture_reads(), 2);
         assert_eq!(resources.resolve("root.yaml").unwrap(), original);
@@ -747,7 +762,9 @@ mod dispatch_policy_tests {
             diagnostic.context,
             [(
                 "path".into(),
-                serde_json::Value::String("../parent/base.yaml".into())
+                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                    "../parent/base.yaml".into()
+                ))
             )]
             .into()
         );

@@ -181,7 +181,9 @@ pub fn graph_check(
             if index != metadata.root() {
                 finding.context.insert(
                     "source_identity".into(),
-                    serde_json::Value::String(identity.into()),
+                    yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                        identity.into(),
+                    )),
                 );
             }
             finding

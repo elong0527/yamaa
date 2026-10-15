@@ -499,10 +499,17 @@ fn inherited_unknown_profile_retains_written_layer_and_location_before_study_eff
     assert_eq!(
         diagnostic.context,
         [
-            ("dataset".into(), serde_json::Value::String("LB".into())),
+            (
+                "dataset".into(),
+                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                    "LB".into()
+                ))
+            ),
             (
                 "path".into(),
-                serde_json::Value::String("input/lb.xlsx".into())
+                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                    "input/lb.xlsx".into()
+                ))
             )
         ]
         .into()

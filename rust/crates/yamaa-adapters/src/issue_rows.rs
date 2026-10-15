@@ -22,11 +22,13 @@ impl Issue {
         context: yamaa_core::diagnostic::Context,
     ) -> Result<Self, InvalidIssue> {
         let value =
-            crate::specification_diagnostics::portable_definition(definition, paths, context);
+            crate::specification_diagnostics::portable_definition(definition, paths, context)
+                .ok_or(InvalidIssue)?;
         Self::from_diagnostic(value)
     }
     pub fn from_core(diagnostic: yamaa_core::diagnostic::Diagnostic) -> Result<Self, InvalidIssue> {
-        let value = crate::specification_diagnostics::portable_diagnostic(diagnostic);
+        let value = crate::specification_diagnostics::portable_diagnostic(diagnostic)
+            .ok_or(InvalidIssue)?;
         Self::from_diagnostic(value)
     }
     /// Accept only the complete portable diagnostic shape, not a prototype envelope.

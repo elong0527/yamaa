@@ -1,4 +1,5 @@
 //! Independent fixed-byte DM and structural AE/VS shared-generation witnesses.
+#![cfg(any(unix, windows))]
 use std::{
     fs,
     path::{Path, PathBuf},

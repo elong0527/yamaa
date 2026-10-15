@@ -4,9 +4,9 @@ use serde_json::Value;
 use yamaa_core::{diagnostic::ProjectionError, table::CellError};
 pub(crate) type Diagnostic = Value;
 pub(crate) fn project(diagnostic: yamaa_core::diagnostic::Diagnostic) -> Result<Box<Value>, Error> {
-    Ok(Box::new(
-        crate::specification_diagnostics::portable_diagnostic(diagnostic),
-    ))
+    crate::specification_diagnostics::portable_diagnostic(diagnostic)
+        .map(Box::new)
+        .ok_or(Error::Internal)
 }
 pub(crate) fn predicate<E>(
     error: &yamaa_core::predicate::EvaluationError<CellError<E>>,

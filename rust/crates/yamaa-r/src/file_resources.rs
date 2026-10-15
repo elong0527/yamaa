@@ -2,6 +2,7 @@
 use crate::specification_service::boundary;
 use extendr_api::prelude::*;
 
+#[cfg(any(unix, windows))]
 mod platform {
     use super::*;
     use crate::specification_service::address;
@@ -112,18 +113,58 @@ mod platform {
 }
 #[extendr]
 fn create_file_resources(root: Raw, base: Raw, data_roots: List) -> List {
-    boundary(|| platform::initialize(root, base, data_roots))
+    boundary(|| {
+        #[cfg(any(unix, windows))]
+        {
+            platform::initialize(root, base, data_roots)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (root, base, data_roots);
+            Err("native file resources unavailable on this platform".into())
+        }
+    })
 }
 #[extendr]
 fn inspect_file_resource(handle: Robj, path: Raw) -> List {
-    boundary(|| platform::inspect(handle, path))
+    boundary(|| {
+        #[cfg(any(unix, windows))]
+        {
+            platform::inspect(handle, path)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (handle, path);
+            Err("native file resources unavailable on this platform".into())
+        }
+    })
 }
 #[extendr]
 fn capture_file_resource(handle: Robj, path: Raw, maximum: i32) -> List {
-    boundary(|| platform::capture(handle, path, maximum))
+    boundary(|| {
+        #[cfg(any(unix, windows))]
+        {
+            platform::capture(handle, path, maximum)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (handle, path, maximum);
+            Err("native file resources unavailable on this platform".into())
+        }
+    })
 }
 #[extendr]
 fn file_resource_reads(handle: Robj) -> List {
-    boundary(|| platform::reads(handle))
+    boundary(|| {
+        #[cfg(any(unix, windows))]
+        {
+            platform::reads(handle)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = handle;
+            Err("native file resources unavailable on this platform".into())
+        }
+    })
 }
 extendr_module! { mod file_resources; fn create_file_resources; fn inspect_file_resource; fn capture_file_resource; fn file_resource_reads; }

@@ -5,11 +5,13 @@ pyo3::create_exception!(yamaa, DefineError, PyException);
 
 #[pyclass(frozen, module = "yamaa._native", name = "_DefineResult")]
 pub struct Define {
+    #[cfg(any(unix, windows))]
     inner: Mutex<yamaa_adapters::file_define::Define>,
 }
 #[pymethods]
 impl Define {
     fn issues(&self) -> PyResult<Vec<crate::specification_result::IssueRow>> {
+        #[cfg(any(unix, windows))]
         {
             self.inner
                 .try_lock()
@@ -18,11 +20,16 @@ impl Define {
                     pyo3::exceptions::PyRuntimeError::new_err("Define result already borrowed")
                 })
         }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Ok(Vec::new())
+        }
     }
     fn artifacts<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<Vec<(String, Bound<'py, PyBytes>, String)>> {
+        #[cfg(any(unix, windows))]
         {
             self.inner
                 .try_lock()
@@ -38,8 +45,14 @@ impl Define {
                     pyo3::exceptions::PyRuntimeError::new_err("Define result already borrowed")
                 })
         }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = py;
+            Ok(Vec::new())
+        }
     }
     fn capture_reads(&self) -> PyResult<usize> {
+        #[cfg(any(unix, windows))]
         {
             self.inner
                 .try_lock()
@@ -48,8 +61,13 @@ impl Define {
                     pyo3::exceptions::PyRuntimeError::new_err("Define result already borrowed")
                 })
         }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Ok(0)
+        }
     }
     fn save(&self) -> PyResult<bool> {
+        #[cfg(any(unix, windows))]
         {
             let mut result = self.inner.try_lock().map_err(|_| {
                 pyo3::exceptions::PyRuntimeError::new_err("Define result already borrowed")
@@ -63,6 +81,10 @@ impl Define {
                 })
             })
         }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Err(DefineError::new_err("native file transport unavailable"))
+        }
     }
 }
 #[pyfunction]
@@ -73,6 +95,7 @@ pub fn _define_file(
     created: Option<&str>,
     installed_version: &str,
 ) -> Define {
+    #[cfg(any(unix, windows))]
     {
         Define {
             inner: Mutex::new(yamaa_adapters::file_define::Define::prepare(
@@ -83,5 +106,10 @@ pub fn _define_file(
                 yamaa_core::project_function::Language::Python,
             )),
         }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (environment, standard, created, installed_version);
+        Define {}
     }
 }

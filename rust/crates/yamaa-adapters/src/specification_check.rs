@@ -30,8 +30,10 @@ pub fn issue_rows(run: &dyn RunView) -> Result<Vec<crate::issue_rows::Issue>, Er
         .check_diagnostics()
         .into_iter()
         .map(|finding| {
-            crate::issue_rows::Issue::from_diagnostic(portable_diagnostic(finding))
-                .map_err(|_| Error::InvalidContext)
+            crate::issue_rows::Issue::from_diagnostic(
+                portable_diagnostic(finding).ok_or(Error::InvalidContext)?,
+            )
+            .map_err(|_| Error::InvalidContext)
         })
         .collect::<Result<Vec<_>, _>>()?;
     if !crate::issue_rows::within_limit(&rows, MAX_ISSUE_BYTES) {

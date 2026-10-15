@@ -1,5 +1,6 @@
 //! Public-request argument/result conversion; the shared engine owns the lifecycle.
 use pyo3::{exceptions::PyException, prelude::*, types::PyBytes};
+#[cfg(any(unix, windows))]
 use std::sync::Mutex;
 use yamaa_adapters::issue_rows::Issue;
 
@@ -9,9 +10,13 @@ pyo3::create_exception!(yamaa, DomainError, PyException);
 pub struct Domain {
     pub(crate) measurements:
         Option<std::sync::Arc<yamaa_adapters::application_measurements::Measurements>>,
+    #[cfg(any(unix, windows))]
     pub(crate) inner: Option<Mutex<yamaa_adapters::file_application::Domain>>,
+    #[cfg(any(unix, windows))]
     pub(crate) project: Option<crate::file_project::Attempt>,
+    #[cfg(any(unix, windows))]
     pub(crate) _preparation: Option<yamaa_adapters::file_workflow::SelectionError>,
+    #[cfg(any(unix, windows))]
     pub(crate) producer: Option<crate::file_producer::Report>,
     pub(crate) failures: Vec<Issue>,
 }
@@ -19,6 +24,7 @@ pub struct Domain {
 impl Domain {
     /// The public facade propagates control flow from this retained owner.
     fn propagate_interrupt(&self, py: Python<'_>) -> PyResult<()> {
+        #[cfg(any(unix, windows))]
         if let Some(producer) = &self.producer {
             return producer.propagate_domain_interrupt(py);
         }
@@ -27,12 +33,14 @@ impl Domain {
     }
     /// Private qualification borrows the actual retained whole attempt.
     fn producer_attempt(&self) -> Option<crate::file_producer::Attempt> {
+        #[cfg(any(unix, windows))]
         if let Some(producer) = &self.producer {
             return Some(producer.domain_attempt());
         }
         None
     }
     fn producer_projection_failure(&self) -> Option<String> {
+        #[cfg(any(unix, windows))]
         if let Some(producer) = &self.producer {
             return producer.domain_projection_failure();
         }
@@ -42,6 +50,7 @@ impl Domain {
         &self,
         py: Python<'py>,
     ) -> PyResult<Vec<(String, Bound<'py, PyBytes>)>> {
+        #[cfg(any(unix, windows))]
         if let Some(error) = &self._preparation {
             let sources = error
                 .retained_sources(
@@ -68,9 +77,11 @@ impl Domain {
     }
     /// Qualification can inspect original host failures even if report projection refuses.
     fn project_failures(&self, py: Python<'_>) -> PyResult<Vec<(&'static str, Py<PyAny>)>> {
+        #[cfg(any(unix, windows))]
         if let Some(project) = &self.project {
             return project.host_failures(py);
         }
+        #[cfg(any(unix, windows))]
         if let Some(producer) = &self.producer {
             return producer.domain_failures(py);
         }
@@ -81,6 +92,7 @@ impl Domain {
     #[pyo3(signature=(include_measurements=false))]
     fn observations(&self, include_measurements: bool) -> PyResult<Option<String>> {
         let observed = (|| {
+            #[cfg(any(unix, windows))]
             if let Some(inner) = &self.inner {
                 return inner
                     .try_lock()
@@ -89,6 +101,7 @@ impl Domain {
                         pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
                     });
             }
+            #[cfg(any(unix, windows))]
             if let Some(producer) = &self.producer {
                 return producer.domain_observations();
             }
@@ -100,6 +113,7 @@ impl Domain {
         })
     }
     fn output<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyBytes>>> {
+        #[cfg(any(unix, windows))]
         if let Some(inner) = &self.inner {
             return inner
                 .try_lock()
@@ -108,6 +122,7 @@ impl Domain {
                     pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
                 });
         }
+        #[cfg(any(unix, windows))]
         if let Some(producer) = &self.producer {
             return producer.domain_output(py);
         }
@@ -115,6 +130,7 @@ impl Domain {
         Ok(None)
     }
     fn issues(&self) -> PyResult<Vec<crate::specification_result::IssueRow>> {
+        #[cfg(any(unix, windows))]
         if let Some(inner) = &self.inner {
             return inner
                 .try_lock()
@@ -123,6 +139,7 @@ impl Domain {
                     pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
                 });
         }
+        #[cfg(any(unix, windows))]
         if let Some(producer) = &self.producer {
             return Ok(crate::specification_result::issue_rows(
                 &producer.domain_issues()?,
@@ -131,6 +148,7 @@ impl Domain {
         Ok(crate::specification_result::issue_rows(&self.failures))
     }
     fn log<'py>(&self, py: Python<'py>, warning: bool) -> PyResult<Option<Bound<'py, PyBytes>>> {
+        #[cfg(any(unix, windows))]
         if let Some(inner) = &self.inner {
             return inner
                 .try_lock()
@@ -146,6 +164,7 @@ impl Domain {
                     pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
                 });
         }
+        #[cfg(any(unix, windows))]
         if let Some(producer) = &self.producer {
             return producer.domain_log(py, warning);
         }
@@ -157,6 +176,7 @@ impl Domain {
             measurements.save_entered();
         }
         let returned = (|| {
+            #[cfg(any(unix, windows))]
             if let Some(inner) = &self.inner {
                 return inner
                     .try_lock()
@@ -166,6 +186,7 @@ impl Domain {
                     .save()
                     .map_err(|_| DomainError::new_err("cannot save a failed build"));
             }
+            #[cfg(any(unix, windows))]
             if let Some(producer) = &self.producer {
                 return producer.domain_save();
             }
@@ -184,6 +205,7 @@ impl Domain {
 
 impl Domain {
     fn measurement_accepted(&self) -> bool {
+        #[cfg(any(unix, windows))]
         {
             if let Some(inner) = &self.inner {
                 return inner
@@ -200,6 +222,14 @@ impl Domain {
     }
 }
 
+#[cfg(not(any(unix, windows)))]
+fn unavailable() -> Vec<Issue> {
+    vec![Issue::from_core(yamaa_core::application_issue::unsupported(
+        "native_file_transport",
+        None,
+    ))
+    .expect("application issue")]
+}
 #[pyfunction]
 #[pyo3(signature=(specification,environment=None))]
 pub fn _domain_file(
@@ -207,6 +237,7 @@ pub fn _domain_file(
     specification: &str,
     environment: Option<&str>,
 ) -> PyResult<Domain> {
+    #[cfg(any(unix, windows))]
     {
         let mut ports = yamaa_adapters::file_application::Application {
             host: yamaa_core::project_function::Language::Python,
@@ -249,6 +280,14 @@ pub fn _domain_file(
             }
         }
     }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (py, specification, environment);
+        Ok(Domain {
+            measurements: None,
+            failures: unavailable(),
+        })
+    }
 }
 #[pyfunction]
 #[pyo3(signature=(specification,environment=None))]
@@ -257,6 +296,7 @@ pub fn _check_file(
     specification: &str,
     environment: Option<&str>,
 ) -> Vec<crate::specification_result::IssueRow> {
+    #[cfg(any(unix, windows))]
     {
         let issues = yamaa_adapters::file_application::check(
             yamaa_core::domain_entry::Request {
@@ -273,5 +313,10 @@ pub fn _check_file(
             },
         );
         crate::specification_result::issue_rows(&issues)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (py, specification, environment);
+        crate::specification_result::issue_rows(&unavailable())
     }
 }

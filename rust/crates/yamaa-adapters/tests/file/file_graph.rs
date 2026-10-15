@@ -1,3 +1,4 @@
+#![cfg(any(unix, windows))]
 use std::{
     collections::BTreeMap,
     fs,
@@ -15,7 +16,9 @@ use yamaa_adapters::{
     shipped_schema,
     specification_source::Source,
 };
-use yamaa_core::{producer_graph::Error as CoreError, project_function::Language};
+use yamaa_core::{
+    producer_graph::Error as CoreError, project_function::Language, specification::PrepareError,
+};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 struct Study(PathBuf);
@@ -138,6 +141,10 @@ fn native_diamond_aliases_own_one_canonical_document_and_no_artifact_authority()
         graph.graph().metadata().nodes()[0].dependencies(),
         [1, 2, 2]
     );
+    assert!(matches!(
+        graph.graph().metadata().execution_refusal(),
+        PrepareError::Unsupported(_)
+    ));
     let paths = graph.captured_sources().map(|(p, _)| p).collect::<Vec<_>>();
     assert!(paths.iter().all(|p| p.ends_with(".yaml")));
     for path in [
@@ -506,7 +513,9 @@ fn already_captured_changed_metadata_keeps_original_snapshot_and_native_failure(
     assert_eq!(diagnostic.spec_paths, ["specification"]);
     assert_eq!(
         diagnostic.context["path"],
-        serde_json::Value::String("root.yaml".into())
+        yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+            "root.yaml".into()
+        ))
     );
     assert_eq!(failure.capture_reads(), 1);
     assert_eq!(

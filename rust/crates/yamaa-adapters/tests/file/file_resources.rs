@@ -1,3 +1,4 @@
+#![cfg(any(unix, windows))]
 #[cfg(unix)]
 use std::path::Path;
 use std::{

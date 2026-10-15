@@ -3,6 +3,7 @@ use extendr_api::prelude::*;
 mod arrow_input;
 mod define_entry;
 mod domain_entry;
+#[cfg(any(unix, windows))]
 mod file_domain;
 mod file_producer;
 mod file_project;
@@ -11,6 +12,7 @@ mod file_resources;
 mod file_specification;
 mod function_callback;
 mod issue_frame;
+#[cfg(any(unix, windows))]
 mod project_activation;
 mod project_result;
 mod public_table;
