@@ -285,6 +285,18 @@ def test_blank_lines(tmp_path: Path, text: str, message: str) -> None:
     assert remaining == []
 
 
+def test_missing_line_break_is_reported_at_the_last_line(tmp_path: Path) -> None:
+    # REQ-1280: a finding carries the line and column where the departure
+    # starts; a missing final line break starts at the end of the last line.
+    text = CANONICAL.rstrip("\n")
+    path = tmp_path / "spec.yaml"
+    path.write_text(text, encoding="utf-8")
+    findings = check_file(path, orders=ORDERS)
+    assert [(item.name, item.line, item.column) for item in findings] == [
+        ("blank_lines", len(text.splitlines()), len(text.splitlines()[-1]) + 1)
+    ]
+
+
 def test_blank_lines_inside_a_block_scalar_are_value_text(tmp_path: Path) -> None:
     text = CANONICAL.replace(
         "    derivation: DM.STUDYID\n",
@@ -396,6 +408,28 @@ def test_a_long_comment_is_reported_and_left_to_its_author(tmp_path: Path) -> No
     assert remaining == ["line_width"]
 
 
+def test_line_width_boundary_is_seventy_nine(tmp_path: Path) -> None:
+    # REQ-1285: a line holds at most 79 characters, and a longer line is
+    # reported at its eightieth character.
+    at_limit = CANONICAL.replace(
+        "    label: Study Identifier\n", "    label: " + "x" * 68 + "\n"
+    )
+    assert _names(_spec(tmp_path, at_limit)) == []
+    over_limit = CANONICAL.replace(
+        "    label: Study Identifier\n", "    label: " + "x" * 69 + "\n"
+    )
+    path = _spec(tmp_path, over_limit, "over.yaml")
+    findings = check_file(path, orders=ORDERS)
+    label_line = next(
+        number
+        for number, line in enumerate(over_limit.splitlines(), start=1)
+        if "label:" in line
+    )
+    assert [(item.name, item.line, item.column) for item in findings] == [
+        ("line_width", label_line, 80)
+    ]
+
+
 def test_a_long_block_scalar_at_the_end_is_left_to_its_author(
     tmp_path: Path,
 ) -> None:
@@ -446,6 +480,25 @@ def test_sources_outside_the_shorthand_positions_keep_the_mapping(
         ),
     )
     assert _names(path) == []
+
+
+def test_literal_and_source_forms_need_a_single_key_mapping(
+    tmp_path: Path,
+) -> None:
+    # REQ-1250 and REQ-1255 name the single-key mappings {literal: X} and
+    # {source: X}: a block mapping with another key beside literal/source
+    # is a different value and stays silent, and an empty mapping is
+    # neither form (and must not crash the check).
+    for derivation in (
+        "    derivation:\n      literal: DM\n      note: x\n",
+        "    derivation:\n      source: DM.USUBJID\n      note: x\n",
+        "    derivation: {}\n",
+    ):
+        path = _spec(
+            tmp_path,
+            CANONICAL.replace("    derivation: DM.USUBJID\n", derivation),
+        )
+        assert _names(path) == []
 
 
 def test_a_suppression_with_a_reason_covers_its_entry(tmp_path: Path) -> None:
