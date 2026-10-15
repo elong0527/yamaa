@@ -92,6 +92,69 @@ const PRODUCER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [I
 const CONSUMER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\nintermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n  - {name: VALUE, type: float, label: Reported value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\noutput: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}\n";
 
 #[test]
+fn native_uneven_csv_and_parquet_graphs_fit_ten_and_exact_eight_source_rows() {
+    for format in ["csv", "parquet"] {
+        let study = Study::new();
+        study.write(
+            "raw/raw.csv",
+            "ID,VALUE\n1,1\n1,2\n1,3\n1,4\n1,5\n1,6\n1,7\n",
+        );
+        study.write("producer/p.yaml", format!("schema_version: '1.0'\ndomain: COUNTED\nkeys: [ID]\ninput: {{RAW: {{path: ../raw/raw.csv, types: {{ID: int, VALUE: int}}}}}}\nrows:\n  - id: counted\n    dataset: RAW\n    group_by: [RAW.ID]\n    derivations: {{ID: RAW.ID, VALUE: {{aggregate: 'COUNT(RAW.*)'}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier}}\n  - {{name: VALUE, type: int, label: Count}}\noutput: {{path: ../generated/producer.{format}, columns: [ID, VALUE]}}\n"));
+        study.write("consumer/root.yaml", format!("schema_version: '1.0'\ndomain: ROOT\nkeys: [ID]\ninput: {{FIRST: {{path: ../generated/producer.{format}, schema: ../producer/p.yaml}}}}\nrows:\n  - id: counted\n    dataset: FIRST\n    group_by: [FIRST.ID, FIRST.VALUE]\n    derivations: {{ID: FIRST.ID, SOURCE_COUNT: FIRST.VALUE, VALUE: {{aggregate: 'COUNT(FIRST.*)'}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier}}\n  - {{name: SOURCE_COUNT, type: int, label: Original source count}}\n  - {{name: VALUE, type: int, label: Count}}\noutput: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}\n"));
+        let mut build = study.build(Language::Python);
+        let mut activation = Activation::new(&study, Mode::Lock);
+        for rows in [10, 8, 7] {
+            let mut limits = Limits::default();
+            limits.engine.execution.source_rows = rows;
+            limits.engine.source_cells = 16;
+            limits.engine.source_storage_bytes = 4_096;
+            limits.engine.decode_work_bytes = 4_096;
+            limits.engine.execution.output_rows = 2;
+            limits.engine.execution.output_cells = 5;
+            let attempt = build.build(&mut activation, &mut Report::default(), limits);
+            assert_eq!(
+                attempt.accepted(),
+                rows >= 8,
+                "{format} rows={rows}: {:?}",
+                attempt.graph.outcome
+            );
+            assert!(activation.trace.is_empty());
+            if rows >= 8 {
+                assert_eq!(artifact(&attempt, 1), b"ID,SOURCE_COUNT,VALUE\n1,7,1\n");
+                let producer = attempt.graph.nodes[0]
+                    .dataset
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .result
+                    .as_ref()
+                    .unwrap();
+                assert_eq!(producer.dataset.row_count(), 1);
+                assert_eq!(producer.dataset.cell(0, 1).unwrap(), ValueRef::Int(7));
+                assert_eq!(
+                    attempt.graph.nodes[0].dataset.sources[0]
+                        .table
+                        .as_ref()
+                        .unwrap()
+                        .row_count(),
+                    7
+                );
+                assert_eq!(
+                    attempt.graph.nodes[1].dataset.sources[0]
+                        .table
+                        .as_ref()
+                        .unwrap()
+                        .row_count(),
+                    1
+                );
+            } else {
+                assert!(attempt.graph.nodes[1].dataset.sources[0].table.is_none());
+            }
+        }
+    }
+}
+
+#[test]
 fn producer_link_reduces_daily_doses_then_counts_days_before_any_publication() {
     use yamaa_adapters::producer_result::prepare_owned_classified;
     for language in [Language::Python, Language::R] {
@@ -1540,8 +1603,9 @@ fn public_root_result_refuses_limited_or_contradictory_whole_attempts_before_out
     assert!(matches!(
         producer_result::prepare_classified(&attempt, report_id(), 1, &[]),
         Err(producer_result::Error::Report(ProjectionError::Report(
-            Error::OutputLimit
-        )))
+            Error::ResourceLimit(refusal)
+        ))) if refusal.resource == "report_retained_bytes"
+            && refusal.limit == 6 && refusal.actual == Some(8192)
     ));
     attempt.graph.nodes.swap(0, 1);
     assert!(matches!(
@@ -1555,8 +1619,8 @@ fn public_root_result_refuses_limited_or_contradictory_whole_attempts_before_out
 }
 
 #[test]
-fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_refusal() {
-    use yamaa_adapters::{ipc_table::TableError, producer_result};
+fn public_root_copy_admits_the_prior_frontier_and_keeps_retained_truth_after_resources_drop() {
+    use yamaa_adapters::producer_result;
     let study = Study::new();
     study.rounded();
     study.write(
@@ -1595,51 +1659,36 @@ fn public_root_copy_quota_keeps_the_complete_accepted_graph_and_original_typed_r
     let attempt = build.build_reported(&mut host, report_id(), Limits::default());
     assert!(attempt.accepted());
     let before = host.trace.clone();
-    // Three actual typed-copy passes visit 4,347,000 cells, exceeding the
-    // cumulative 4,194,304-cell copying allowance.
-    // The complete indexed graph and encoded report remain accepted first.
-    match producer_result::prepare_classified(
+    // Three actual typed-copy passes visit 4,209,000 cells. The former
+    // 4,194,304-cell copying policy refused this already accepted graph.
+    let result = producer_result::prepare_classified(
         &attempt,
         report_id(),
         yamaa_engine::capacity::REPORT_ENCODED_BYTES,
         &[],
-    ) {
-        Err(producer_result::Error::Output {
-            attempt: held,
-            observations,
-            error: TableError::OutputLimit,
-        }) => {
-            assert!(std::ptr::eq(&attempt, held));
-            assert_eq!(observations["outcome"], "success");
-            assert_eq!(observations["nodes"].as_array().unwrap().len(), 2);
-            assert_eq!(observations["artifacts"].as_array().unwrap().len(), 2);
-        }
-        other => panic!(
-            "original output quota owner expected: {}",
-            match other {
-                Ok(_) => "unexpected success",
-                Err(_) => "wrong refusal",
-            }
-        ),
-    }
+    )
+    .unwrap_or_else(|_| panic!("accepted graph remains within the longitudinal copying policy"));
+    assert!(result.issues().is_empty());
+    let output = result.output_table().unwrap();
+    assert_eq!((output.rows(), output.columns().len()), (23_000, 61));
+    let observations = result.observations();
+    assert_eq!(observations["outcome"], "success");
+    assert_eq!(observations["nodes"].as_array().unwrap().len(), 2);
+    assert_eq!(observations["artifacts"].as_array().unwrap().len(), 2);
     assert_eq!(host.trace, before);
     assert!(!study.0.join("generated").exists());
     drop(build);
     drop(host);
     fs::remove_dir_all(&study.0).unwrap();
     assert!(attempt.accepted());
-    assert!(matches!(
-        producer_result::prepare_classified(
-            &attempt,
-            report_id(),
-            yamaa_engine::capacity::REPORT_ENCODED_BYTES,
-            &[]
-        ),
-        Err(producer_result::Error::Output {
-            error: TableError::OutputLimit,
-            ..
-        })
-    ));
+    let repeated = producer_result::prepare_classified(
+        &attempt,
+        report_id(),
+        yamaa_engine::capacity::REPORT_ENCODED_BYTES,
+        &[],
+    )
+    .unwrap_or_else(|_| panic!("public projection owns its accepted truth"));
+    assert_eq!(repeated.output(), result.output());
 }
 
 #[test]
@@ -1745,8 +1794,10 @@ fn classified_graph_reports_keep_actual_host_causes_and_authored_origins_without
         assert!(matches!(
             attempt_report_classified(&attempt, report_id(), 1, &facts),
             Err(ProjectionError::Report(
-                yamaa_adapters::specification_report::Error::OutputLimit
-            ))
+                yamaa_adapters::specification_report::Error::ResourceLimit(refusal)
+            )) if refusal.resource == "report_retained_bytes"
+                && refusal.limit == 6
+                && refusal.actual == Some(if facts.is_empty() { 8192 } else { 128 * facts.len() })
         ));
     }
 }
@@ -2240,7 +2291,10 @@ fn report_context_pointer_and_table_count_admission_precede_table_authority_and_
     };
     assert!(matches!(
         report.select(node, &fake, 16_777_216),
-        Err(Error::OutputLimit)
+        Err(Error::ResourceLimit(refusal))
+            if refusal.resource == "report_cells"
+                && refusal.limit == yamaa_engine::capacity::REPORT_CELLS
+                && refusal.actual.is_none()
     ));
     assert_eq!(reads.get(), 0);
     assert!(matches!(report.failure(), Err(Error::InvalidObservation)));
@@ -2273,7 +2327,7 @@ fn whole_report_rejects_contradictory_actual_activation_and_node_order_without_r
 }
 
 #[test]
-fn a_larger_caller_budget_cannot_bypass_retained_formatter_admission_before_identity_copy() {
+fn caller_report_quota_refuses_borrowed_identity_before_formatter_copy() {
     let study = Study::new();
     study.write(
         "producer/p.yaml",
@@ -2295,9 +2349,11 @@ fn a_larger_caller_budget_cannot_bypass_retained_formatter_admission_before_iden
     );
     let text = "small";
     study.write("raw/raw.csv", format!("ID,VALUE\n1,{text}\n"));
-    // Borrowed caller metadata exceeds the fixed retained admission by itself.
-    // It must be rejected before report JSON copies it, even with usize::MAX.
-    let oversized_runtime = "x".repeat(yamaa_engine::capacity::REPORT_RETAINED_BYTES / 12 + 1);
+    // Borrowed caller metadata exceeds this explicit retained admission by
+    // itself. No full-profile allocation is needed to exercise the refusal.
+    let report_bytes = 8192;
+    let oversized_runtime =
+        "x".repeat(report_bytes * yamaa_engine::capacity::REPORT_RETAINED_FACTOR / 12 + 1);
     let identity = yamaa_adapters::specification_report::Identity {
         runtime_version: &oversized_runtime,
         ..report_id()
@@ -2305,7 +2361,7 @@ fn a_larger_caller_budget_cannot_bypass_retained_formatter_admission_before_iden
     let mut build = study.build(Language::Python);
     let mut host = Activation::new(&study, Mode::Lock);
     let mut limits = Limits::default();
-    limits.engine.report_bytes = usize::MAX;
+    limits.engine.report_bytes = report_bytes;
     let attempt = build.build_reported(&mut host, identity, limits);
     assert!(!attempt.accepted());
     assert!(host.trace.is_empty());
@@ -2320,8 +2376,10 @@ fn a_larger_caller_budget_cannot_bypass_retained_formatter_admission_before_iden
     assert!(matches!(
         attempt.graph.nodes[0].output,
         Err(CompleteError::Report(
-            yamaa_adapters::specification_report::Error::OutputLimit
-        ))
+            yamaa_adapters::specification_report::Error::ResourceLimit(ref refusal)
+        )) if refusal.resource == "report_retained_bytes"
+            && refusal.limit == 49_152
+            && refusal.actual == Some(54_228)
     ));
     assert_eq!(
         attempt.graph.nodes[0].dataset.sources[0]

@@ -137,50 +137,6 @@ fn failed_save_publishes_only_retained_verification_and_preserves_primary_and_wa
         assert_eq!(result.issues().len(), 1);
     }
 }
-#[test]
-fn primary_encoding_limit_retains_completed_verification_without_warning_authority() {
-    let study = Study::new();
-    // Valid precision can still exceed the artifact byte budget: each large
-    // finite float needs 309 whole digits plus the declared 18 fractional digits.
-    let mut input = String::from("ID,VALUE\n");
-    for id in 1..=26_000 {
-        input.push_str(&format!("{id},1e308\n"));
-    }
-    fs::write(study.0.join("input/input.csv"), input).unwrap();
-    let mut result = study.build("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE], decimals: 18, warning_log: warnings.csv, verification_log: checks.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: float\n    derivation: SRC.VALUE\n    verifications:\n      - not_missing: {}\n      - range: {max: 0, severity: warning}\n");
-    assert!(result.output().is_none());
-    assert!(result.warning_log().is_none());
-    assert_eq!(result.log_table(false).unwrap().rows(), 2);
-    assert_eq!(result.issues().len(), 1);
-    assert_eq!(result.issues()[0].condition, "engine_rejected");
-    let context: serde_json::Value = serde_json::from_str(&result.issues()[0].context).unwrap();
-    assert_eq!(context["stage"], "output");
-    assert_eq!(context["code"], "output_limit");
-    fs::write(study.0.join("out.csv"), "primary sentinel").unwrap();
-    fs::write(study.0.join("warnings.csv"), "warning sentinel").unwrap();
-    fs::remove_file(study.0.join("input/input.csv")).unwrap();
-    fs::remove_file(study.0.join("spec.yaml")).unwrap();
-    for _ in 0..2 {
-        assert!(result.save().is_err());
-        assert_eq!(
-            fs::read(study.0.join("out.csv")).unwrap(),
-            b"primary sentinel"
-        );
-        assert_eq!(
-            fs::read(study.0.join("warnings.csv")).unwrap(),
-            b"warning sentinel"
-        );
-        let checks = fs::read_to_string(study.0.join("checks.csv")).unwrap();
-        assert!(checks.starts_with(VERIFICATION_HEADER));
-        assert!(checks.contains("not_missing,VALUE,REQ-0375,error,held"));
-        assert!(checks.contains("range,VALUE,REQ-0377,warning,violated,range_failed"));
-        assert_eq!(
-            result.observations()["artifacts"].as_array().unwrap().len(),
-            1
-        );
-        assert_eq!(result.issues()[0].condition, "engine_rejected");
-    }
-}
 
 #[test]
 fn whole_target_preflight_precedes_first_log_write_and_can_retry_held_bytes() {

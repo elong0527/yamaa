@@ -173,6 +173,22 @@ fn admit_schema(schema: &[Value<'_>], limits: Limits) -> Result<(), Error> {
 /// row-group/column/page order. Unknown metadata is still included in node/work
 /// admission. The downstream codec remains responsible for format semantics.
 pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> {
+    admit_inner(bytes, limits, None)
+}
+
+pub(super) fn admit_with_usage<'a>(
+    bytes: &'a [u8],
+    limits: Limits,
+    usage: &mut crate::source_decode_usage::Usage,
+) -> Result<Framing<'a>, Error> {
+    admit_inner(bytes, limits, Some(usage))
+}
+
+fn admit_inner<'a>(
+    bytes: &'a [u8],
+    limits: Limits,
+    mut usage: Option<&mut crate::source_decode_usage::Usage>,
+) -> Result<Framing<'a>, Error> {
     bound(bytes.len(), limits.source_bytes, "bytes")?;
     if bytes.len() < 12 || &bytes[..4] != b"PAR1" || &bytes[bytes.len() - 4..] != b"PAR1" {
         return Err(Error::Malformed);
@@ -270,6 +286,9 @@ pub(super) fn admit(bytes: &[u8], limits: Limits) -> Result<Framing<'_>, Error> 
                     limits.decoded_bytes,
                     "decoded_bytes",
                 )?;
+                if let Some(usage) = usage.as_deref_mut() {
+                    usage.work(decoded);
+                }
                 // Value counts control downstream dictionary/column staging,
                 // including headers inconsistent with their page-type tag.
                 for field in [5, 7, 8] {

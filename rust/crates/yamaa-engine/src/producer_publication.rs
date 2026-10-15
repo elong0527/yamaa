@@ -16,8 +16,8 @@ impl Default for Limits {
         Self {
             nodes: 64,
             path_bytes: 1_048_576,
-            artifact_bytes: 16_777_216,
-            work: 67_108_864,
+            artifact_bytes: crate::dataset::ExecutionBudget::longitudinal().max_output_bytes,
+            work: crate::capacity::EXECUTION_WORK,
         }
     }
 }
