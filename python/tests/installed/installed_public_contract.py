@@ -8,6 +8,7 @@ import json
 import shutil
 import tempfile
 import unittest
+import weakref
 from pathlib import Path
 from unittest.mock import patch
 
@@ -289,6 +290,56 @@ class PublicContract(unittest.TestCase):
         gc.collect()
         self.assertEqual(calls[0].output["VALUE"].to_list(), VALUES)
         self.assertFalse((self.root / "output.csv").exists())
+
+    def assert_callback_exception_lifetime(self, reentrant):
+        source, environment = self.function_study()
+        reentries = []
+
+        class OriginalError(RuntimeError):
+            def __str__(error):
+                if reentrant:
+                    nested = yamaa.domain(self.spec)
+                    self.assertTrue(nested.issues.is_empty(), nested.issues)
+                    self.assertEqual(nested.output["VALUE"].to_list(), VALUES)
+                    reentries.append(nested.output.height)
+                return "retained callback failure"
+
+        held = [OriginalError()]
+        failure_reference = weakref.ref(held[0])
+
+        def resolve(*_):
+            def callback(**_):
+                raise held[0]
+
+            return callback
+
+        with patch.object(host, "resolve_callable", side_effect=resolve):
+            result = yamaa.domain(source, environment=environment)
+        self.assertIsNone(result.output)
+        self.assertFalse(result.issues.is_empty())
+        failures = result._native.project_failures()
+        self.assertTrue(failures)
+        self.assertTrue(all(error is failure_reference() for _, error in failures))
+        del failures
+        held.clear()
+        gc.collect()
+        self.assertIsNotNone(failure_reference())
+        failures = result._native.project_failures()
+        self.assertTrue(all(error is failure_reference() for _, error in failures))
+        del failures
+        with self.assertRaises(yamaa.DomainError):
+            result.save()
+        del result
+        gc.collect()
+        self.assertIsNone(failure_reference())
+        self.assertFalse((source.parent / "test.csv").exists())
+        self.assertEqual(bool(reentries), reentrant)
+
+    def test_callback_exception_lives_exactly_as_long_as_its_public_result(self):
+        self.assert_callback_exception_lifetime(False)
+
+    def test_reentrant_exception_rendering_keeps_owned_failures_collectable(self):
+        self.assert_callback_exception_lifetime(True)
 
     def test_public_define_signature_and_missing_environment(self):
         parameters = inspect.signature(yamaa.define).parameters
