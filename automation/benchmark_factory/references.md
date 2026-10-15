@@ -477,7 +477,7 @@ task specs).
 - **PHUSE Define-XML v2.0 Completion Guidelines** -
   https://phuse.s3.eu-central-1.amazonaws.com/Deliverables/Optimizing+the+Use+of+Data+Standards/Define-XML+Version+2.0+Completion+Guidelines.pdf -
   Origin types, MethodDef usage, worked RFSTDTC/CMENDY/AWTDIFF examples.
-  TA: cross-TA. Grounding: task-spec material for "write/validate define.xml
+  TA: cross-TA. Grounding: work-item material for "write/validate define.xml
   metadata" benchmarks.
 
 - **PHUSE Best Practices for Submission of Event Adjudication Data** -

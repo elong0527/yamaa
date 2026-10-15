@@ -16,22 +16,22 @@ Python and R programs have different callable names. Environment languages,
 locks, ABI handles and callbacks remain host-owned. Public-contract data retains
 the different Python and R i64 vectors, including R's value beyond 2^53.
 
-| Paired family | Shared data and existing owners | Python assertion sites | R assertion sites |
-| --- | --- | ---: | ---: |
-| producer-builds | Producer/consumer YAML, function cases, exact rounded CSV, aliases and graph variants | 95 | 30 |
-| public-producer-builds | Same producer graph, retained-source names, exact precision CSV, refusal variants | 171 | 44 |
-| producer-cohort | `project-original/shared-producer-parquet`, source filenames and exact output CSV | 12 | 9 |
-| original-specifications | Original case selection, lookup/ordering/casing inputs and exact CSV; existing independent TSV/JSON reports | 637 | 421 |
-| file-resources | Named lookup paths, issue schema and exact alias context; existing inspection/capture reports | 39 | 17 |
-| public-environment | Original case selection, graph references, quota/version inputs and exact callback CSV | 157 | 52 |
-| verification-logs | `specification-original/schema-verification-log`, artifact names, evaluated counts and fatal outcomes | 53 | 22 |
-| producer-logs | Decimal i64 keys, aliased/diamond inputs and complete verification/warning CSV goldens | 85 | 43 |
-| public-define | Existing Define input/XML/JSON owners, creation time, column schemas and numeric metadata variants | 144 | 56 |
-| public-contract | Shared YAML, issue/argument/view names, empty/fatal log variants; distinct host i64 vectors | 70 | 30 |
-| public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions | 2 | 4 |
+| Paired family | Shared data and existing owners |
+| --- | --- |
+| producer-builds | Producer/consumer YAML, function cases, exact rounded CSV, aliases and graph variants |
+| public-producer-builds | Same producer graph, retained-source names, exact precision CSV, refusal variants |
+| producer-cohort | `project-original/shared-producer-parquet`, source filenames and exact output CSV |
+| original-specifications | Original case selection, lookup/ordering/casing inputs and exact CSV; existing independent TSV/JSON reports |
+| file-resources | Named lookup paths, issue schema and exact alias context; existing inspection/capture reports |
+| public-environment | Original case selection, graph references, quota/version inputs and exact callback CSV |
+| verification-logs | `specification-original/schema-verification-log`, artifact names, evaluated counts and fatal outcomes |
+| producer-logs | Decimal i64 keys, aliased/diamond inputs and complete verification/warning CSV goldens |
+| public-define | Existing Define input/XML/JSON owners, creation time, column schemas and numeric metadata variants |
+| public-contract | Shared YAML, issue/argument/view names, empty/fatal log variants; distinct host i64 vectors |
+| public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
 
-All 186 Python test methods, 1,465 Python assertion sites and 728 R assertion
-sites remain in the named paired suites above. Source controls and decoded
+All Python test methods and assertion sites remain in the named paired
+suites above. Source controls and decoded
 independent literals were checked before and after consolidation.
 The R grammar suite's conditional failure and legacy
 CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid
@@ -64,13 +64,13 @@ introducing null values, empty children and inherited clears in both hosts.
 
 ## Public conformance mapping
 
-The existing public-conformance plan owns 329 authored benchmark names, including
-327 active cases. Its runtime observations, saved outputs and independent golden
+The existing public-conformance plan owns the authored benchmark names,
+including every active case. Its runtime observations, saved outputs and independent golden
 comparison remain the complete public benchmark gate. The following supplemental
 controls reuse those same independently authored source/report owners while
 adding host or private lifecycle assertions:
 
-- `original-specifications.original_case_names` names 17 active public cases,
+- `original-specifications.original_case_names` names its active public cases,
   including `schema-lookup`, `schema-inheritance`, `schema-window-functions`,
   `adam-adlb-ordered-sum` and the original negative specification families.
 - `public-environment.original_case_names` names the active `schema-functions`,

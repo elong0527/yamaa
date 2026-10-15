@@ -1,7 +1,9 @@
 # Original shared-producer cohort
 
 `shared-producer-parquet` copies the three authored inputs byte for byte from
-`python/tests/planning/test_workflow.py::test_shared_producer_executes_once_and_shares_generated_snapshot`.
+the shared-producer literals in `rust/tests/support/producer_input_literals.py`
+(`test_shared_producer_executes_once_and_shares_generated_snapshot`, exercised
+by `rust/tests/test_producer_cohort.py`).
 The original test independently requires one producer execution, shared generated
 snapshots for aliases A/B, and the exact root value `{"ID": "01"}`.
 

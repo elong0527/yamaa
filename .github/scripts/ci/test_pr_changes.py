@@ -33,7 +33,7 @@ class PRChanges(unittest.TestCase):
             "python/README.md",
             "R/yamaa/README.md",
             "benchmarks/example/README.md",
-            ".github/ci.md",
+            "CONTRIBUTING.md",
         ]
         self.assertEqual(pr_changes.coverage(paths), {"rust": False, "python": False})
 

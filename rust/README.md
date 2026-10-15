@@ -6,12 +6,12 @@ documents for the Python and R packages. Language contracts live in
 and executable examples with authored expected results in
 [benchmarks/](../benchmarks/README.md).
 
-The [development guide](../docs/development.md) owns crate boundaries, Rust
+The [contributor guide](../CONTRIBUTING.md) owns crate boundaries, Rust
 1.90.0/locked builds and local verification commands. The
 [release guide](../docs/release.md) owns supported platforms, approved decisions
 and migration notes. Declared exports are read from the host sources
 themselves; there is no committed API inventory. Current rule checks and
-schema-owner controls are described in the [development guide](../docs/development.md#local-checks).
+schema-owner controls are described in the [contributor guide](../CONTRIBUTING.md#commands).
 [Installed package checks](qualification/README.md) compare actual Python and R
 results with authored expected data. The workflow recipes in
 [.github/workflows/](../.github/workflows/) define the platform matrix and

@@ -44,7 +44,7 @@ class MainPushSelection(unittest.TestCase):
                 self.assertTrue(push_selected("unit-tests.yml", path))
         for path in (
             "README.md",
-            "docs/development.md",
+            "docs/release.md",
             "rules/README.md",
             "rules/values/types.md",
             "rust/README.md",

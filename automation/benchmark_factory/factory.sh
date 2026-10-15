@@ -10,9 +10,11 @@
 #   factory.sh packet <name>      print a Stage 4/5 review packet as markdown
 #   factory.sh retire-check <name> list every repo reference to a benchmark
 #                                 (evidence for a retire/combine work item)
-#   factory.sh drift-check <name>  run the repo's example tests scoped to a
-#                                 benchmark: the spec must still produce the
-#                                 golden (needs uv)
+#   factory.sh drift-check <name>  re-run one benchmark through the engine
+#                                 and compare with its golden: a positive
+#                                 benchmark's output must match expected/,
+#                                 a negative one's first issue must match
+#                                 expected/error.yaml (needs uv)
 set -u
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -190,17 +192,88 @@ if [ "$1" = "retire-check" ]; then
 fi
 
 # ------------------------------------------------------------ drift-check
-# drift-check: the repo's example tests, scoped to one benchmark. The
-# spec must still produce the golden (positive) or still fail as the
-# error contract says (negative). Needs uv; skipped without it.
+# drift-check: re-run one benchmark through the shared engine and compare
+# with its authored golden. Positive: execute run.py in the benchmark
+# directory and compare the resulting frame with the single expected CSV
+# (numeric cells compared with a small tolerance, everything else exact).
+# Negative: run yamaa.check on the entry spec and compare the first issue
+# with expected/error.yaml. Benchmarks whose shape the comparison does
+# not cover (multiple frames or expected files) pass on a clean run and
+# say so. Needs uv; skipped without it.
 if [ "$1" = "drift-check" ]; then
   [ -d "$DIR" ] || die "no such benchmark: $DIR"
   command -v uv >/dev/null 2>&1 || { echo "SKIP: drift-check needs uv"; exit 0; }
-  cd "$ROOT" || die "cannot cd to $ROOT"
+  cd "$DIR" || die "cannot cd to $DIR"
   # shellcheck disable=SC2086
-  $PY pytest python/tests/test_examples.py -k "$name" -q >/tmp/factory-drift.log 2>&1
+  $PY python - "$name" <<'PYEOF'
+import csv, glob, re, runpy, sys
+from pathlib import Path
+
+name = sys.argv[1]
+here = Path.cwd()
+
+def fail(msg):
+    print(f"DRIFT: {msg}")
+    sys.exit(1)
+
+if name.startswith("negative-"):
+    import yamaa
+    specs = sorted(glob.glob("spec*.yaml"))
+    if not specs:
+        fail("no spec*.yaml")
+    env = "python/environment.yaml" if Path("python/environment.yaml").exists() else None
+    result = yamaa.check(specs[0], environment=env) if env else yamaa.check(specs[0])
+    issues = result.issues
+    rows = issues.to_dicts() if hasattr(issues, "to_dicts") else list(issues)
+    if not rows:
+        fail("negative benchmark produced no issues")
+    first = rows[0]
+    expected = {}
+    for line in Path("expected/error.yaml").read_text().splitlines():
+        m = re.match(r"^(phase|condition|requirement):\s*(.+)$", line)
+        if m:
+            expected[m.group(1)] = m.group(2).strip().strip("'\"")
+    for field, want in expected.items():
+        got = str(first.get(field, ""))
+        if got != want:
+            fail(f"first issue {field}={got!r}, expected {want!r}")
+    print(f"OK: {name} still fails as its error contract says")
+    sys.exit(0)
+
+if not Path("run.py").exists():
+    fail("positive benchmark has no run.py")
+namespace = runpy.run_path("run.py")
+frames = [v for v in namespace.values() if type(v).__name__ == "DataFrame"]
+expected_files = sorted(glob.glob("expected/*.csv"))
+if not frames:
+    fail("run.py produced no output frame (the engine rejected the spec, "
+         "or the runner has an unexpected shape; run it directly for the issues)")
+if len(frames) != 1 or len(expected_files) != 1:
+    print(f"OK: {name} runs clean "
+          f"(comparison skipped: {len(frames)} frames, {len(expected_files)} expected files)")
+    sys.exit(0)
+frame = frames[0]
+with open(expected_files[0], newline="") as handle:
+    expected_rows = list(csv.reader(handle))
+if list(frame.columns) != expected_rows[0]:
+    fail(f"columns {list(frame.columns)} != expected {expected_rows[0]}")
+if frame.height != len(expected_rows) - 1:
+    fail(f"row count {frame.height} != expected {len(expected_rows) - 1}")
+for r, expected_row in enumerate(expected_rows[1:]):
+    for c, want in enumerate(expected_row):
+        value = frame[r, c]
+        got = "" if value is None else str(value)
+        if got == want:
+            continue
+        try:
+            if abs(float(got) - float(want)) <= 1e-9 * max(1.0, abs(float(want))):
+                continue
+        except ValueError:
+            pass
+        fail(f"row {r + 1} column {frame.columns[c]}: {got!r} != expected {want!r}")
+print(f"OK: {name} still produces its golden")
+PYEOF
   CODE=$?
-  tail -3 /tmp/factory-drift.log
   exit $CODE
 fi
 
@@ -256,7 +329,7 @@ need git
       echo
     done
   fi
-  echo "## Verdict (fill per judges.md)"
+  echo "## Verdict (fill per README.md, Judge review)"
   echo
   echo '```'
   echo "Benchmark: $name (revision <n>)"

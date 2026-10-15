@@ -36,14 +36,13 @@ and .github/scripts/benchmark-docs/requirements.txt installed in that interprete
   docs-generate     Generate all benchmark dashboards.
   docs-build        Strict MkDocs build; generate dashboards first.
   docs              Dashboard generation followed by strict site build.
-                    Deployment additionally renders slide decks with Quarto.
 
 Release qualification: the approved 21 installed tuples, complete conformance
 and shared Rust/math run in .github/workflows/native.yml.
 Main runs every native check nightly, or on a dispatch on main. Use a
 qualification/issue-* push for complete exact-source checks of a branch; a branch
 dispatch omits shared Rust/math. PR feedback samples Linux hosts.
-See docs/development.md and docs/release.md for architecture and supported platforms.
+See CONTRIBUTING.md and docs/release.md for architecture and supported platforms.
 PYTHON selects the command interpreter; CARGO_TARGET_DIR can isolate Rust builds.
 """
 

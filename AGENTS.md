@@ -16,7 +16,7 @@ their prerequisites. Local targets and CI share the owned scripts under
 - `.github/` -- CI workflows and the owned check, docs, and validation scripts they run.
 - `automation/` -- the benchmark factory and other maintainer automation, with its own guides.
 - `benchmarks/` -- one directory per benchmark: spec, inputs, and authored expected output; see `benchmarks/AGENTS.md`.
-- `docs/` -- the site pages other than the two canonical sources, plus development and release guides.
+- `docs/` -- the site pages other than the two canonical sources, plus the release guide.
 - `evaluations/` -- the Harbor agent evaluation: prompts, solutions, grading, and leaderboards.
 - `python/` -- the Python host package: a thin facade over the shared Rust engine.
 - `R/` -- the R host package under `R/yamaa/`, likewise a facade over the shared engine.
@@ -70,7 +70,7 @@ for every area a change touches.
   `cargo test --locked -p <crate>` for each crate touched, then
   `cargo clippy --locked --all-targets -- -D warnings` and
   `cargo fmt --all --check`. The portable-math golden command lives in
-  `docs/development.md`.
+  `CONTRIBUTING.md`.
 - **Python host change** (`python/`): run
   `uv run --project python --no-sync pytest python/tests`.
 - **New or changed benchmark** (`benchmarks/`): follow
@@ -85,17 +85,17 @@ for every area a change touches.
 - **Anything else, or a cross-area change:** `make check-fast` gives
   repository feedback; `make check-repository` runs the full repository
   checks. Installed-host checks and complete native release
-  qualification are separate routes described in `docs/development.md`.
+  qualification are separate routes described in `CONTRIBUTING.md`.
 
 ## Pointers
 
 - Language contracts and terminology: `rules/README.md`
 - Schemas, grammars, and conformance fixtures: `yaml/README.md`
 - Benchmark authoring: `benchmarks/AGENTS.md`
-- Architecture, crate boundaries, and local verification: `docs/development.md`
+- Architecture, crate boundaries, and local verification: `CONTRIBUTING.md`
 - Rust workspace entry point: `rust/README.md`
 - Host usage: `python/README.md` and `R/yamaa/README.md`
-- Site build and canonical pages: `.github/scripts/docs/README.md`
+- Site build and canonical pages: `CONTRIBUTING.md` (Documentation build)
 - Benchmark factory: `automation/benchmark_factory/README.md`
 - Harbor evaluation: `evaluations/harbor/README.md`
 - Release, platforms, and migrations (not needed for normal changes): `docs/release.md`

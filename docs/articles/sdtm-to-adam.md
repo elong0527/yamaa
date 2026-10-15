@@ -1,6 +1,8 @@
 # SDTM to ADaM derivation recipe
 
 Canonical recipe for deriving ADaM datasets from SDTM with the yamaa engine.
+For reporting a blocked derivation without exposing a confidential study,
+see the reviewer-feedback section of `CONTRIBUTING.md` at the repository root.
 
 - create exactly one spec per output dataset (e.g. `adsl.yaml`); keep temporary
   values and ordered calculation steps as derivations in that spec, not as

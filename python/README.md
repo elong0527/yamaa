@@ -62,24 +62,12 @@ writes remain if a later target fails. There is no whole-run file rollback.
 
 ## Implementation limits
 
-The shared engine admits up to 1,024 declared columns, output columns and fields
-in each input's `types`. CSV, Parquet, SAS, Arrow imports and producer contracts use
-the same width ceiling. An `ordinal` adds one field and counts toward this bound.
-Specifications still admit at most 64 keys and 16 inputs.
-
-The public hosts use the longitudinal profile: 10,000,000 source or output
-rows, 640,000,000 source or output cells, 1 GiB scalar text, 512 MiB output
-text and 1 GiB encoded input/output. CSV admission includes its header in the
-field and record quotas. Finite report and producer budgets account for the
-same profile. Execution permits 2,000,000,000 logical work units; producer nodes
-share cumulative allowances, and expensive plans can exhaust work before size.
-
-Validation and normalization share 67,108,864 logical work units; complex or
-inherited specifications can exhaust this separate preparation budget below
-the width ceiling. These are implementation policies, not language constraints
-or process-memory guarantees. The
-[release resource policies](../docs/release.md#resource-limits) describe cumulative
-layered allowances and the separate representation budgets.
+Implementation limits live in one place: the
+[release resource policies](../docs/release.md#resource-limits) state the
+shared width ceilings, the longitudinal row/cell/text profile the public
+hosts use, and the validation, normalization and representation budgets.
+They are implementation policies, not language constraints or
+process-memory guarantees.
 
 ## Define documents
 
