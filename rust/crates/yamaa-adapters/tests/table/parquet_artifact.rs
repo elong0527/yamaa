@@ -140,7 +140,10 @@ fn closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero
         (Type::INT32, Some(LogicalType::Date)),
         (
             Type::INT64,
-            timestamp.get_fields()[0].get_basic_info().logical_type_ref().cloned(),
+            timestamp.get_fields()[0]
+                .get_basic_info()
+                .logical_type_ref()
+                .cloned(),
         ),
     ];
     for (i, (physical, logical)) in expected.into_iter().enumerate() {
