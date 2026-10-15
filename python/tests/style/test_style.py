@@ -845,6 +845,85 @@ def test_repeated_row_derivation_skips_columns_read_by_a_filter(
     assert ("repeated_row_derivation", "rows[0].derivations.STUDYID") in names
 
 
+PREDICATE_CHAIN = """\
+schema_version: "1.0"
+domain: ADXX
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adxx.csv
+  columns: [STUDYID, USUBJID, RESULT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: AGG
+    type: num
+    label: Aggregate Value
+    derivation:
+      aggregate:
+        filter: "DM.X = 1"
+        expr: "ONLY(DM.Y)"
+
+  - name: FLG
+    type: str
+    label: Aggregate Flag
+    derivation: {flag: "AGG > 0"}
+
+  - name: RESULT
+    type: str
+    label: Result
+
+rows:
+  - id: a
+    derivations:
+      RESULT: {flag: "FLG = 'Y'"}
+
+  - id: b
+    derivations:
+      RESULT: {flag: "FLG = 'Y'"}
+"""
+
+
+def test_repeated_row_derivation_skips_predicate_reads_of_blocked_columns(
+    tmp_path: Path,
+) -> None:
+    # FLG reads the dataset-level AGG inside a flag string, so FLG is not
+    # row-local either; the row derivation that reads FLG inside its own
+    # flag string therefore stays in the row templates. Whole-string
+    # comparisons missed both predicate reads and reported RESULT.
+    assert check_file(_spec(tmp_path, PREDICATE_CHAIN), orders=ORDERS) == ()
+
+
+def test_repeated_row_derivation_reports_predicate_reads_of_local_columns(
+    tmp_path: Path,
+) -> None:
+    # The same predicate forms over row-local columns stay reported:
+    # reading bare identifiers out of a string must not suppress a
+    # derivation whose chain is row-local all the way down.
+    local = PREDICATE_CHAIN.replace(
+        "    derivation:\n      aggregate:\n"
+        '        filter: "DM.X = 1"\n'
+        '        expr: "ONLY(DM.Y)"\n',
+        "    derivation: DM.AGG\n",
+    )
+    names = [
+        (item.name, item.spec_path)
+        for item in check_file(_spec(tmp_path, local), orders=ORDERS)
+    ]
+    assert ("repeated_row_derivation", "rows[0].derivations.RESULT") in names
+
+
 REDUNDANT = """\
 schema_version: "1.0"
 domain: ADSL
