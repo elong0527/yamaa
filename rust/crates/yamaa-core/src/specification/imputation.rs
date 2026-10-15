@@ -53,26 +53,6 @@ pub(super) fn prepare(
         .field(payload, "not_before")
         .map(|id| text(d, id))
         .transpose()?;
-    let handler_text = |name: &str| {
-        d.field(payload, name).and_then(|id| match &d.nodes()[id] {
-            N::Text(text) => Some(text.as_str()),
-            _ => None,
-        })
-    };
-    if !Imputation::metadata_fits(
-        source,
-        bound,
-        path,
-        handler_text("missing"),
-        handler_text("invalid"),
-    ) {
-        return Err(PrepareError::limit(
-            "imputation_metadata",
-            16_777_216,
-            None,
-            Some(path),
-        ));
-    }
     let kind = match op {
         "date_impute" => {
             let minimum = match d
@@ -99,9 +79,7 @@ pub(super) fn prepare(
                     DatePolicyError::Diagnostic(diagnostic) => {
                         PrepareError::Invalid(vec![PreflightFinding::Imputation(diagnostic)])
                     }
-                    DatePolicyError::Limit => {
-                        PrepareError::limit("imputation_metadata", 16_777_216, None, Some(path))
-                    }
+
                     DatePolicyError::Shape => PrepareError::Internal,
                 })?
                 .map_err(|findings| {
@@ -158,22 +136,15 @@ pub(super) fn declaration_findings(
         rows: bool,
         bytes: &mut usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
                 "case_depth",
-                64,
+                crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
                 Some(path),
             ));
         }
-        if path.len() > 65_536 {
-            return Err(PrepareError::limit(
-                "path_bytes",
-                65_536,
-                Some(path.len()),
-                Some(path),
-            ));
-        }
+
         for &op in OPERATIONS {
             if let Some(payload) = d.field(value, op) {
                 let path = format!("{path}.{op}");

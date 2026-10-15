@@ -120,7 +120,7 @@ fn operation_document_with_rows(
     let tree = Map(fields);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
-    let document = Document::new(nodes, root, DocumentLimits::default()).unwrap();
+    let document = Document::new(nodes, root).unwrap();
     SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
         .unwrap()
         .unwrap()
@@ -448,7 +448,7 @@ fn parquet_type_field_limit_precedes_allocating_semantic_findings() {
     let mut ordered = Vec::new();
     let root = copy(&nodes, d.root(), &mut ordered);
     let model = SpecificationDocument::admit(
-        Document::new(ordered, root, Default::default()).unwrap(),
+        Document::new(ordered, root).unwrap(),
         &mut ValidationBudget::new(Default::default()),
     )
     .unwrap()
@@ -548,7 +548,7 @@ fn window_settings(
     }
     let mut ordered = Vec::new();
     let root = copy_node(&nodes, input.root(), &mut ordered);
-    let doc = Document::new(ordered, root, Default::default()).unwrap();
+    let doc = Document::new(ordered, root).unwrap();
     SpecificationDocument::admit(doc, &mut ValidationBudget::new(Default::default()))
         .unwrap()
         .unwrap()
@@ -1197,7 +1197,7 @@ fn unqualified_key_source_absence_is_an_admitted_key_expression() {
     let key = keys[0];
     nodes[key] = N::Text("VALUE".into());
     let document = SpecificationDocument::admit(
-        Document::new(nodes, raw.root(), DocumentLimits::default()).unwrap(),
+        Document::new(nodes, raw.root()).unwrap(),
         &mut ValidationBudget::new(Default::default()),
     )
     .unwrap()
@@ -1296,7 +1296,7 @@ fn assertion_text_budget_precedes_deferred_grammar_and_charges_both_predicates()
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
     let document = SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
+        Document::new(nodes, root).unwrap(),
         &mut ValidationBudget::new(Default::default()),
     )
     .unwrap()
@@ -1392,7 +1392,7 @@ fn verification_document(kind: &str, check: Tree<'_>, column: bool) -> Specifica
     let mut nodes = Vec::new();
     let root = Map(tree).append(&mut nodes);
     SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
+        Document::new(nodes, root).unwrap(),
         &mut ValidationBudget::new(Default::default()),
     )
     .unwrap()
@@ -1536,7 +1536,7 @@ fn wide_document(columns: usize, typed_fields: usize) -> SpecificationDocument {
     let tree = Map(fields);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
-    let document = Document::new(nodes, root, DocumentLimits::default()).unwrap();
+    let document = Document::new(nodes, root).unwrap();
     SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
         .unwrap()
         .unwrap()

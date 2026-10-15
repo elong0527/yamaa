@@ -35,7 +35,7 @@ fn document(value: Authored) -> Document {
     }
     let mut nodes = Vec::new();
     let root = push(value, &mut nodes);
-    Document::new(nodes, root, DocumentLimits::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 fn schema() -> SchemaStructure {
     let shared = SchemaModule {
@@ -303,7 +303,7 @@ fn scalar_values_counts_and_both_kind_vocabularies_are_core_owned_and_borrowed()
         N::Float(-0.0),
         N::Text("\0quoted\"λ".into()),
     ] {
-        let input = Document::new(vec![node], 0, DocumentLimits::default()).unwrap();
+        let input = Document::new(vec![node], 0).unwrap();
         let findings = [issue(
             "scalar",
             vec![

@@ -1,9 +1,9 @@
 //! Schema-directed dependencies for R017 reachability, without evaluating expressions.
 
 use super::{
-    validation::matches_member, Document, DocumentNode as N, NormalizationBudget,
-    NormalizationError, NormalizationResource, SchemaAliasKind, SchemaField, SchemaShape,
-    SchemaStructure, TypeExpression, TypeNode, ValidationError,
+    validation::matches_member, Document, DocumentNode as N, NormalizationError,
+    NormalizationResource, SchemaAliasKind, SchemaField, SchemaShape, SchemaStructure,
+    TypeExpression, TypeNode, ValidationError,
 };
 use crate::{aggregate_parser, numeric_parser, predicate_parser};
 
@@ -51,18 +51,17 @@ impl From<ValidationError> for InheritanceReferenceError {
 type Error = InheritanceReferenceError;
 type Scope<'a> = Option<(&'a str, &'a str)>;
 
-struct Run<'a, 'b> {
+struct Run<'a> {
     schema: &'a SchemaStructure,
     input: &'a Document,
-    budget: &'b mut NormalizationBudget,
     active: Vec<(usize, usize)>,
     references: Vec<InheritanceReference>,
     local_variables: Vec<String>,
 }
 
-impl Run<'_, '_> {
+impl Run<'_> {
     fn step(&mut self, depth: usize) -> Result<(), Error> {
-        let limit = self.budget.limits.depth.min(128);
+        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
         if depth > limit {
             return Err(NormalizationError::Limit {
                 resource: NormalizationResource::Depth,
@@ -70,7 +69,6 @@ impl Run<'_, '_> {
             }
             .into());
         }
-        self.budget.work(1)?;
         Ok(())
     }
 
@@ -79,27 +77,15 @@ impl Run<'_, '_> {
             kind,
             InheritanceReferenceKind::Variable | InheritanceReferenceKind::PredicateVariable
         ) {
-            self.budget.work(
-                self.local_variables
-                    .len()
-                    .saturating_mul(name.len().saturating_add(1)),
-            )?;
             if self.local_variables.iter().any(|local| local == name) {
                 return Ok(());
             }
         }
-        self.budget.work(
-            self.references
-                .len()
-                .saturating_add(1)
-                .saturating_mul(name.len().saturating_add(1)),
-        )?;
         if !self
             .references
             .iter()
             .any(|r| r.kind == kind && r.name == name)
         {
-            self.budget.reserve(name.len(), 1)?;
             self.references.push(InheritanceReference {
                 kind,
                 name: name.into(),
@@ -109,15 +95,8 @@ impl Run<'_, '_> {
     }
 
     fn binding_name(&mut self, binding: usize) -> Result<(), Error> {
-        self.budget.work(
-            self.input.nodes()[binding]
-                .length()
-                .unwrap_or(0)
-                .saturating_mul(5),
-        )?;
         if let Some(name) = self.input.field(binding, "name") {
             if let N::Text(name) = &self.input.nodes()[name] {
-                self.budget.reserve(name.len(), 1)?;
                 self.local_variables.push(name.clone());
             }
         }
@@ -125,12 +104,6 @@ impl Run<'_, '_> {
     }
 
     fn aggregate_bindings(&mut self, aggregate: usize) -> Result<(), Error> {
-        self.budget.work(
-            self.input.nodes()[aggregate]
-                .length()
-                .unwrap_or(0)
-                .saturating_mul(7),
-        )?;
         if let Some(derive) = self.input.field(aggregate, "derive") {
             if let N::Sequence(bindings) = &self.input.nodes()[derive] {
                 for &binding in bindings {
@@ -170,7 +143,6 @@ impl Run<'_, '_> {
             value,
             false,
             &self.active,
-            &mut self.budget.validation,
         )?)
     }
 
@@ -190,8 +162,6 @@ impl Run<'_, '_> {
             let N::Text(name) = &self.input.nodes()[key] else {
                 continue;
             };
-            self.budget
-                .work(fields.len().saturating_mul(name.len().saturating_add(1)))?;
             if let Some(field) = fields.iter().find(|field| field.name == *name) {
                 let locals = self.local_variables.len();
                 // Reducers see every binding, regardless of YAML field order.
@@ -294,11 +264,9 @@ impl Run<'_, '_> {
                     return self.fields(&class.fields, kind, value, depth + 1);
                 }
                 if let Some((index, alias)) = self.schema.alias_named(kind) {
-                    self.budget.work(self.active.len().saturating_add(1))?;
                     if self.active.contains(&(value, index)) {
                         return Ok(());
                     }
-                    self.budget.reserve(0, 2)?;
                     self.active.push((value, index));
                     let result = match alias.kind {
                         SchemaAliasKind::Descriptor(id) => self.members(
@@ -336,8 +304,6 @@ impl Run<'_, '_> {
             return Ok(());
         };
         let entries = &self.schema.registries()[id].entries;
-        self.budget
-            .work(entries.len().saturating_mul(name.len().saturating_add(1)))?;
         if let Some(entry) = entries.iter().find(|e| e.name == *name) {
             match &entry.shape {
                 SchemaShape::Class(fields) => self.fields(fields, name, payload, depth + 1)?,
@@ -353,27 +319,9 @@ impl Run<'_, '_> {
     }
 
     fn language(&mut self, kind: &str, text: &str) -> Result<(), Error> {
-        // Reserve bounded syntax scratch before parsing, even for invalid syntax.
-        // Regex compilation inside predicates retains its own per-parse finite policy.
-        let mut limits = numeric_parser::ParseLimits::default();
-        if text.len() > limits.bytes {
-            return Err(NormalizationError::Limit {
-                resource: NormalizationResource::TextBytes,
-                limit: limits.bytes,
-            }
-            .into());
-        }
-        limits.tokens = limits.tokens.min(text.len().saturating_add(1));
-        limits.nodes = limits.nodes.min(text.len().saturating_add(1));
-        self.budget
-            .work(text.len().saturating_add(1).saturating_mul(16))?;
-        self.budget.reserve(
-            text.len(),
-            limits.tokens.saturating_add(limits.nodes.saturating_mul(8)),
-        )?;
         use InheritanceReferenceKind::Variable;
         match kind {
-            "numeric_expression" => match numeric_parser::parse_numeric(text, limits) {
+            "numeric_expression" => match numeric_parser::parse_numeric(text) {
                 Ok(parsed) => {
                     for name in parsed.identifiers() {
                         self.add(Variable, name)?;
@@ -382,20 +330,19 @@ impl Run<'_, '_> {
                 Err(numeric_parser::ParseError::Grammar { .. }) => {}
                 Err(error) => return Err(Error::Numeric(error)),
             },
-            "aggregate_expression" => match aggregate_parser::parse_aggregate(text, limits) {
+            "aggregate_expression" => match aggregate_parser::parse_aggregate(text) {
                 Ok(parsed) => {
                     for name in parsed.identifiers() {
                         self.add(Variable, name)?;
                     }
                     for name in parsed.star_datasets() {
-                        self.budget.reserve(name.len().saturating_add(2), 0)?;
                         self.add(Variable, &format!("{name}.*"))?;
                     }
                 }
                 Err(aggregate_parser::ParseError::Grammar { .. }) => {}
                 Err(error) => return Err(Error::Aggregate(error)),
             },
-            "predicate" => match predicate_parser::parse_predicate(text, limits) {
+            "predicate" => match predicate_parser::parse_predicate(text) {
                 Ok(parsed) => {
                     for name in parsed.identifiers() {
                         self.add(InheritanceReferenceKind::PredicateVariable, name)?;
@@ -458,7 +405,6 @@ impl SchemaStructure {
         input: &Document,
         value: usize,
         scope: Scope<'_>,
-        budget: &mut NormalizationBudget,
     ) -> Result<Vec<InheritanceReference>, InheritanceReferenceError> {
         if value >= input.nodes().len() {
             return Err(ValidationError::InvalidDescriptor.into());
@@ -466,7 +412,6 @@ impl SchemaStructure {
         let mut run = Run {
             schema: self,
             input,
-            budget,
             active: Vec::new(),
             references: Vec::new(),
             local_variables: Vec::new(),

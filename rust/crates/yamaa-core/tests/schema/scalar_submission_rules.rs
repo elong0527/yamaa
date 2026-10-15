@@ -32,7 +32,7 @@ impl Arena {
         self.map(&fields)
     }
     fn finish(self, root: usize) -> Document {
-        Document::new(self.0, root, DocumentLimits::default()).unwrap()
+        Document::new(self.0, root).unwrap()
     }
 }
 

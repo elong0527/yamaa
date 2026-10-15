@@ -1,8 +1,8 @@
 //! Finish composed column fields only after every contribution has been applied.
 
 use super::{
-    ComposedLayers, Document, DocumentNode as N, NormalizationBudget, NormalizationError,
-    NormalizationResource, SchemaStructure, ValidationError,
+    ComposedLayers, Document, DocumentNode as N, NormalizationError, NormalizationResource,
+    SchemaStructure, ValidationError,
 };
 use std::collections::BTreeMap;
 
@@ -31,53 +31,41 @@ fn copy(
     input: &Document,
     node: usize,
     replacements: Option<&BTreeMap<usize, Document>>,
-    budget: &mut NormalizationBudget,
     output: &mut Vec<N>,
     depth: usize,
 ) -> Result<usize, NormalizationError> {
-    let limit = budget.limits.depth.min(128);
+    let limit = crate::limits::Limits::SEMANTIC_DEPTH;
     if depth > limit {
         return Err(NormalizationError::Limit {
             resource: NormalizationResource::Depth,
             limit,
         });
     }
-    budget.work(1)?;
     if let Some(replacements) = replacements {
-        budget.work(replacements.len().saturating_add(1).ilog2() as usize + 1)?;
         if let Some(replacement) = replacements.get(&node) {
-            return copy(replacement, replacement.root(), None, budget, output, depth);
+            return copy(replacement, replacement.root(), None, output, depth);
         }
     }
     let value = match &input.nodes()[node] {
-        N::Text(text) | N::Integer(text) => {
-            budget.work(text.len())?;
-            budget.reserve(text.len(), 0)?;
-            input.nodes()[node].clone()
-        }
+        N::Text(text) | N::Integer(text) => input.nodes()[node].clone(),
         N::Sequence(items) => {
-            budget.reserve(0, items.len())?;
             let mut values = Vec::with_capacity(items.len());
             for &item in items {
-                values.push(copy(input, item, replacements, budget, output, depth + 1)?);
+                values.push(copy(input, item, replacements, output, depth + 1)?);
             }
             N::Sequence(values)
         }
         N::Mapping(items) => {
-            budget.reserve(0, items.len().saturating_mul(2))?;
             let mut values = Vec::with_capacity(items.len());
             for &(key, value) in items {
                 values.push((
-                    copy(input, key, replacements, budget, output, depth + 1)?,
-                    copy(input, value, replacements, budget, output, depth + 1)?,
+                    copy(input, key, replacements, output, depth + 1)?,
+                    copy(input, value, replacements, output, depth + 1)?,
                 ));
             }
             N::Mapping(values)
         }
-        node => {
-            budget.reserve(0, 0)?;
-            node.clone()
-        }
+        node => node.clone(),
     };
     let id = output.len();
     output.push(value);
@@ -92,9 +80,8 @@ impl SchemaStructure {
     pub fn compose_layers(
         &self,
         layers: &[Document],
-        budget: &mut NormalizationBudget,
     ) -> Result<ComposedLayers, LayerCompositionError> {
-        let mut result = self.compose_layer_fragments(layers, budget)?;
+        let mut result = self.compose_layer_fragments(layers)?;
         // Canonical occurrence order also makes diagnostic node references stable:
         // each mapping key precedes its value, independently of merge history.
         let mut nodes = Vec::new();
@@ -102,19 +89,11 @@ impl SchemaStructure {
             &result.document,
             result.document.root(),
             None,
-            budget,
             &mut nodes,
             1,
         )?;
-        result.document = Document::new(nodes, root, budget.limits.storage)
-            .map_err(NormalizationError::Document)?;
+        result.document = Document::new(nodes, root).map_err(NormalizationError::Document)?;
         let document = &result.document;
-        budget.work(
-            document.nodes()[document.root()]
-                .length()
-                .unwrap_or(0)
-                .saturating_mul(8),
-        )?;
         let mut replacements = BTreeMap::new();
         if let Some(columns) = document.field(document.root(), "columns") {
             let N::Sequence(columns) = &document.nodes()[columns] else {
@@ -129,11 +108,6 @@ impl SchemaStructure {
                     return Err(ValidationError::InvalidDescriptor.into());
                 };
                 for field in fields {
-                    budget.work(
-                        members
-                            .len()
-                            .saturating_mul(field.name.len().saturating_add(1)),
-                    )?;
                     if let Some(value) = document.field(column, &field.name) {
                         if matches!(document.nodes()[value], N::Null) {
                             continue;
@@ -144,7 +118,6 @@ impl SchemaStructure {
                             document,
                             value,
                             false,
-                            budget,
                         ) {
                             Ok(normalized) => normalized,
                             Err(error) => {
@@ -161,7 +134,6 @@ impl SchemaStructure {
                                 })
                             }
                         };
-                        budget.work(replacements.len().saturating_add(1))?;
                         replacements.insert(value, normalized.document);
                     }
                 }
@@ -179,12 +151,10 @@ impl SchemaStructure {
                 document,
                 document.root(),
                 Some(&replacements),
-                budget,
                 &mut nodes,
                 1,
             )?;
-            result.document = Document::new(nodes, root, budget.limits.storage)
-                .map_err(NormalizationError::Document)?;
+            result.document = Document::new(nodes, root).map_err(NormalizationError::Document)?;
         }
         Ok(result)
     }

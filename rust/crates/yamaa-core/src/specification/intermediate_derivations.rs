@@ -67,10 +67,10 @@ fn prepare_kind(
     depth: usize,
     project: Option<&functions::Prepared>,
 ) -> Result<Kind, PrepareError> {
-    if depth > 64 {
+    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PrepareError::limit(
             "intermediate_type_depth",
-            64,
+            crate::limits::Limits::SEMANTIC_DEPTH,
             Some(depth),
             None,
         ));
@@ -88,13 +88,12 @@ fn prepare_kind(
             N::Text(name) => name.clone(),
             _ => text(d, field(d, payload, "variable")?)?.into(),
         }),
-        "compute" => match crate::numeric_parser::parse_numeric(
-            text(d, field(d, payload, "expr")?)?,
-            Default::default(),
-        ) {
-            Ok(plan) => Kind::Numeric(plan),
-            Err(_) => Kind::Literal(None),
-        },
+        "compute" => {
+            match crate::numeric_parser::parse_numeric(text(d, field(d, payload, "expr")?)?) {
+                Ok(plan) => Kind::Numeric(plan),
+                Err(_) => Kind::Literal(None),
+            }
+        }
         "mapping" => Kind::Choice(
             mapping(d, field(d, payload, "dict")?)?
                 .iter()
@@ -162,10 +161,10 @@ fn prepare_driver_kind(
     depth: usize,
     project: Option<&functions::Prepared>,
 ) -> Result<Kind, PrepareError> {
-    if depth > 64 {
+    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PrepareError::limit(
             "intermediate_type_depth",
-            64,
+            crate::limits::Limits::SEMANTIC_DEPTH,
             Some(depth),
             None,
         ));
@@ -276,7 +275,6 @@ pub(super) fn prepare(
     id: usize,
     path: &str,
     dataset: &str,
-    limits: CompilationLimits,
     project: Option<&functions::Prepared>,
     extraction: &str_extract::Prepared,
     templates: &str_template::Prepared,
@@ -289,16 +287,15 @@ pub(super) fn prepare(
         return Ok(Vec::new());
     };
     let items = mapping(d, items)?;
-    if items.len() > limits.columns {
+    if items.len() > crate::limits::Limits::COLUMNS {
         return Err(PrepareError::limit(
             "intermediate_derivations",
-            limits.columns,
+            crate::limits::Limits::COLUMNS,
             Some(items.len()),
             Some(&format!("{path}.derivations")),
         ));
     }
     let mut result = Vec::new();
-    let mut bytes = 0;
     for &(name, handled) in items {
         let name = text(d, name)?;
         let path = format!("{path}.derivations.{name}");
@@ -316,14 +313,6 @@ pub(super) fn prepare(
                 })
             })
             .transpose()?;
-        cases::charge(
-            d,
-            value,
-            &expression_path,
-            &mut bytes,
-            limits.numeric_bytes,
-            0,
-        )?;
         let branch = derivations::prepare_value_with_driver(
             d,
             value,
@@ -335,7 +324,6 @@ pub(super) fn prepare(
             extraction,
             templates,
             Some(dataset),
-            limits,
         )?;
         let mut references = Vec::new();
         derivations::references(d, value, project, &mut references, 0)?;

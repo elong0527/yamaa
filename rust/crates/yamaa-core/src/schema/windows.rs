@@ -2,9 +2,8 @@
 
 use super::{
     scalar_diagnostic_label, validation::matches_member, Document, DocumentNode as N,
-    NormalizationBudget, NormalizationError, NormalizationResource, SchemaAliasKind, SchemaContext,
-    SchemaDiagnostic, SchemaField, SchemaShape, SchemaStructure, TypeExpression, TypeNode,
-    ValidationError,
+    NormalizationError, NormalizationResource, SchemaAliasKind, SchemaContext, SchemaDiagnostic,
+    SchemaField, SchemaShape, SchemaStructure, TypeExpression, TypeNode, ValidationError,
 };
 use crate::diagnostic::ConditionCode;
 use std::{collections::BTreeMap, vec};
@@ -40,10 +39,9 @@ impl<'a> Member<'a> {
     }
 }
 
-struct Run<'a, 'b> {
+struct Run<'a> {
     schema: &'a SchemaStructure,
     input: &'a Document,
-    budget: &'b mut NormalizationBudget,
     strict: bool,
     definitions: Option<usize>,
     replacements: BTreeMap<usize, usize>,
@@ -54,39 +52,31 @@ struct Run<'a, 'b> {
     origins: Vec<usize>,
 }
 
-impl Run<'_, '_> {
+impl Run<'_> {
     fn step(&mut self, depth: usize) -> Result<(), NormalizationError> {
-        let limit = self.budget.limits.depth.min(128);
+        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
         if depth > limit {
             return Err(NormalizationError::Limit {
                 resource: NormalizationResource::Depth,
                 limit,
             });
         }
-        self.budget.work(1)
+        Ok(())
     }
     fn field(&mut self, value: usize, name: &str) -> Result<Option<usize>, NormalizationError> {
         let length = self.input.nodes()[value].length().unwrap_or(0);
-        self.budget
-            .work(length.saturating_mul(name.len().saturating_add(1)))?;
         Ok(self.input.field(value, name))
     }
     fn path(&mut self, parent: &str, suffix: &str) -> Result<String, NormalizationError> {
-        self.budget
-            .validation
-            .text(parent.len().saturating_add(suffix.len()))?;
         Ok(format!("{parent}{suffix}"))
     }
     fn join(&mut self, parent: &str, name: &str) -> Result<String, NormalizationError> {
         let separator = if parent.is_empty() { "" } else { "." };
-        self.budget.validation.text(name.len().saturating_add(1))?;
         self.path(parent, &format!("{separator}{name}"))
     }
     fn label(&mut self, node: usize) -> Result<String, NormalizationError> {
         let value = &self.input.nodes()[node];
-        self.budget.work(value.length().unwrap_or(1))?;
         let label = scalar_diagnostic_label(value).ok_or(ValidationError::InvalidDescriptor)?;
-        self.budget.validation.text(label.len())?;
         Ok(label)
     }
     fn descriptor(
@@ -105,13 +95,11 @@ impl Run<'_, '_> {
         let single = matches!(module.nodes()[type_node], N::Text(_));
         let members = located.descriptor.members();
         for expression in members {
-            self.budget.work(1)?;
             let member = Member {
                 expression,
                 node: expression.root(),
             };
             if !single {
-                self.budget.work(self.active.len())?;
                 if let Some((alias, _)) = self.schema.alias_named(member.text()) {
                     if self.active.contains(&(value, alias)) {
                         continue;
@@ -124,7 +112,6 @@ impl Run<'_, '_> {
                     value,
                     true,
                     &self.active,
-                    &mut self.budget.validation,
                 )? {
                     continue;
                 }
@@ -145,7 +132,6 @@ impl Run<'_, '_> {
             return Ok(());
         }
         for field in fields {
-            self.budget.work(1)?;
             if let Some(child) = self.field(value, &field.name)? {
                 let path = self.join(logical, &field.name)?;
                 self.descriptor(field.descriptor, child, &path, depth + 1)?;
@@ -165,29 +151,21 @@ impl Run<'_, '_> {
         };
         if let Some(definition) = definition {
             // Account for lookup and retained logical metadata before allocation.
-            self.budget
-                .work(self.replacements.len().saturating_add(1))?;
-            self.budget
-                .validation
-                .text(logical.len().saturating_add(name.len()))?;
             self.replacements.insert(value, definition);
             self.references.push(WindowReference {
                 path: logical.into(),
                 definition: name.into(),
             });
         } else if self.strict {
-            self.budget
-                .validation
-                .text(logical.len().saturating_add(name.len()))?;
             let mut path = logical.replace(".derivation.value.", ".derivation.");
             if path.ends_with(".derivation.value") {
                 path.truncate(path.len() - ".value".len());
             }
-            self.diagnostics.push(self.budget.validation.diagnostic(
+            self.diagnostics.push(super::validation::diagnostic(
                 &path,
                 ConditionCode::SchemaUnknownWindow,
                 vec![("window", SchemaContext::Text(name.into()))],
-            )?);
+            ));
         }
         Ok(())
     }
@@ -215,7 +193,6 @@ impl Run<'_, '_> {
                         _ => None,
                     };
                     for (index, &item) in items.iter().enumerate() {
-                        self.budget.work(1)?;
                         let path = if let Some(identity) =
                             identity.filter(|_| matches!(self.input.nodes()[item], N::Mapping(_)))
                         {
@@ -234,7 +211,6 @@ impl Run<'_, '_> {
             TypeNode::Dictionary { value: inner, .. } => {
                 if let N::Mapping(items) = &self.input.nodes()[value] {
                     for &(key, item) in items {
-                        self.budget.work(1)?;
                         let label = self.label(key)?;
                         let path = self.join(logical, &label)?;
                         self.walk(member.child(*inner), item, &path, depth + 1)?;
@@ -246,7 +222,6 @@ impl Run<'_, '_> {
                     return self.fields(&class.fields, value, logical, depth + 1);
                 }
                 if let Some((index, alias)) = self.schema.alias_named(kind) {
-                    self.budget.work(self.active.len())?;
                     if self.active.contains(&(value, index)) {
                         return Ok(());
                     }
@@ -263,12 +238,6 @@ impl Run<'_, '_> {
                                     let (key, payload) = items[0];
                                     if let N::Text(name) = &self.input.nodes()[key] {
                                         let registry = &self.schema.registries()[id];
-                                        self.budget.work(
-                                            registry
-                                                .entries
-                                                .len()
-                                                .saturating_mul(name.len().saturating_add(1)),
-                                        )?;
                                         if let Some(entry) = registry
                                             .entries
                                             .iter()
@@ -309,13 +278,8 @@ impl Run<'_, '_> {
         };
         let expanded = source != value;
         let node = match &self.input.nodes()[source] {
-            N::Text(text) | N::Integer(text) => {
-                self.budget.work(text.len())?;
-                self.budget.reserve(text.len(), 0)?;
-                self.input.nodes()[source].clone()
-            }
+            N::Text(text) | N::Integer(text) => self.input.nodes()[source].clone(),
             N::Sequence(items) => {
-                self.budget.reserve(0, items.len())?;
                 let mut output = Vec::with_capacity(items.len());
                 for &item in items {
                     output.push(self.copy(item, depth + 1, replace && !expanded)?);
@@ -324,7 +288,6 @@ impl Run<'_, '_> {
             }
             N::Mapping(items) => {
                 // Reserving the omitted root definition's edges is conservative.
-                self.budget.reserve(0, items.len().saturating_mul(2))?;
                 let mut output = Vec::with_capacity(items.len());
                 for &(key, item) in items {
                     if self.strict
@@ -340,10 +303,7 @@ impl Run<'_, '_> {
                 }
                 N::Mapping(output)
             }
-            node => {
-                self.budget.reserve(0, 0)?;
-                node.clone()
-            }
+            node => node.clone(),
         };
         let result = self.nodes.len();
         self.nodes.push(node);
@@ -356,17 +316,15 @@ impl SchemaStructure {
     /// Expand normalized composed documents without changing their caller scope.
     /// Non-strict mode preserves unknown references for inherited-declaration pruning.
     /// Strict mode diagnoses surviving unknown names and removes root definitions.
-    /// Definitions are validated even when unused. Failed attempts retain budget charges.
+    /// Definitions are validated even when unused. Every declaration is checked in written order.
     pub fn expand_named_windows(
         &self,
         input: &Document,
         strict: bool,
-        budget: &mut NormalizationBudget,
     ) -> Result<ExpandedWindows, NormalizationError> {
         let mut run = Run {
             schema: self,
             input,
-            budget,
             strict,
             definitions: None,
             replacements: BTreeMap::new(),
@@ -381,21 +339,14 @@ impl SchemaStructure {
         }
         run.definitions = run.field(input.root(), "windows")?;
         if let Some(value) = run.definitions {
-            run.budget.work(self.root_class().fields.len())?;
             let field = self
                 .root_class()
                 .fields
                 .iter()
                 .find(|field| field.name == "windows")
                 .ok_or(ValidationError::InvalidDescriptor)?;
-            let diagnostics = self.validate_descriptor(
-                field.descriptor,
-                input,
-                value,
-                "windows",
-                false,
-                &mut run.budget.validation,
-            )?;
+            let diagnostics =
+                self.validate_descriptor(field.descriptor, input, value, "windows", false)?;
             if !diagnostics.is_empty() {
                 return Err(NormalizationError::Invalid(diagnostics));
             }
@@ -405,8 +356,7 @@ impl SchemaStructure {
             return Err(NormalizationError::Invalid(run.diagnostics));
         }
         let root = run.copy(input.root(), 1, true)?;
-        let document = Document::new(run.nodes, root, run.budget.limits.storage)
-            .map_err(NormalizationError::Document)?;
+        let document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;
         Ok(ExpandedWindows {
             document,
             origins: run.origins,

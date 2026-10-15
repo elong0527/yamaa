@@ -127,22 +127,15 @@ pub(super) fn declaration_admission(
         copies: usize,
         total: &mut usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
                 "case_depth",
-                64,
+                crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
                 Some(path),
             ));
         }
-        if path.len() > 65_536 {
-            return Err(PrepareError::limit(
-                "path_bytes",
-                65_536,
-                Some(path.len()),
-                Some(path),
-            ));
-        }
+
         if let Some(flag) = d.field(value, "flag") {
             let mut size = condition(d, flag)?
                 .len()

@@ -130,10 +130,10 @@ pub(super) fn declaration_findings(
         bytes: &mut usize,
         rows: bool,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
                 "case_depth",
-                64,
+                crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
                 Some(prefix),
             ));
@@ -346,12 +346,6 @@ pub(super) fn prepare(
             }
             Ok(operation)
         }
-        Err(crate::dataset::InvalidTemporal::Limit) => Err(PrepareError::limit(
-            "temporal_diagnostics",
-            16_777_216,
-            None,
-            None,
-        )),
         Err(crate::dataset::InvalidTemporal::Shape) => Err(PrepareError::Internal),
         Err(crate::dataset::InvalidTemporal::Bounds) => Err(PrepareError::Invalid(vec![
             PreflightFinding::TemporalBounds {

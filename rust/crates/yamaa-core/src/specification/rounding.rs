@@ -19,10 +19,10 @@ pub(super) fn declaration_findings(
         depth: usize,
         diagnostic_bytes: &mut usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
                 "case_depth",
-                64,
+                crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
                 Some(prefix),
             ));

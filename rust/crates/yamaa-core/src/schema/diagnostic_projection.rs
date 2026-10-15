@@ -5,56 +5,11 @@ use super::{
 };
 use std::collections::BTreeSet;
 
-/// Conservative escaped JSON admission shared across ordered captured reports.
-pub const MAX_SCHEMA_DIAGNOSTIC_BYTES: usize = 16_777_216;
-
-/// Malformed references and resource refusal are distinct from authored findings.
+/// Malformed references are distinct from authored findings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum SchemaDiagnosticError {
-    #[error("schema diagnostic projection limit")]
-    Limit,
     #[error("schema diagnostic projection invalid context")]
     InvalidContext,
-}
-
-/// One projection attempt owns accounting; failed prefixes are never refunded.
-pub struct SchemaDiagnosticBudget {
-    used: usize,
-    maximum: usize,
-}
-impl SchemaDiagnosticBudget {
-    pub fn new() -> Self {
-        Self::with_limit(MAX_SCHEMA_DIAGNOSTIC_BYTES)
-    }
-    pub fn with_limit(maximum: usize) -> Self {
-        Self { used: 128, maximum }
-    }
-    pub fn bytes_used(&self) -> usize {
-        self.used
-    }
-    /// Charge representation overhead without copying any caller text.
-    pub fn charge(&mut self, bytes: usize) -> Result<(), SchemaDiagnosticError> {
-        self.used = self
-            .used
-            .checked_add(bytes)
-            .filter(|&n| n <= self.maximum)
-            .ok_or(SchemaDiagnosticError::Limit)?;
-        Ok(())
-    }
-    /// Each UTF-8 byte can expand to at most six JSON bytes.
-    pub fn text(&mut self, text: &str) -> Result<(), SchemaDiagnosticError> {
-        self.charge(
-            text.len()
-                .checked_mul(6)
-                .and_then(|n| n.checked_add(2))
-                .ok_or(SchemaDiagnosticError::Limit)?,
-        )
-    }
-}
-impl Default for SchemaDiagnosticBudget {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 /// Borrowed semantic value. Integer spelling retains mathematical identity.
@@ -128,33 +83,6 @@ fn resolve<'a>(
         }
     })
 }
-fn admit_value(
-    value: SchemaDiagnosticValue<'_>,
-    budget: &mut SchemaDiagnosticBudget,
-) -> Result<(), SchemaDiagnosticError> {
-    use SchemaDiagnosticValue as V;
-    match value {
-        V::Text(text) => budget.text(text),
-        V::Count(_) => budget.charge(20),
-        V::Null => budget.charge(4),
-        V::Boolean(_) => budget.charge(5),
-        V::Integer(text) => budget.charge(text.len()),
-        V::Float(_) => budget.charge(32),
-        V::TextList(values) => {
-            budget.charge(
-                values
-                    .len()
-                    .checked_add(2)
-                    .ok_or(SchemaDiagnosticError::Limit)?,
-            )?;
-            for text in values {
-                budget.text(text)?;
-            }
-            Ok(())
-        }
-    }
-}
-
 /// Immutable report witness: all records are admitted before representation copies.
 /// `document` must be the exact arena used by the failed pass, including defaults
 /// from a descriptor's declaring module. Paths cannot establish that authority.
@@ -245,27 +173,16 @@ pub fn admit_schema_diagnostics<'a>(
     document: Option<&'a Document>,
     findings: &'a [SchemaDiagnostic],
     source_context: &'a [(&'a str, &'a str)],
-    budget: &mut SchemaDiagnosticBudget,
 ) -> Result<SchemaDiagnosticReport<'a>, SchemaDiagnosticError> {
     for finding in findings {
-        budget.charge(128)?;
-        budget.text(&finding.path)?;
-        budget.text(finding.definition().condition)?;
-        if let Some(requirement) = finding.definition().requirement {
-            budget.text(requirement)?;
-        }
         let mut names = BTreeSet::new();
         for (name, value) in &finding.context {
-            budget.text(name)?;
-            budget.charge(2)?;
-            admit_value(resolve(schema, document, value)?, budget)?;
+            resolve(schema, document, value)?;
             if !names.insert(*name) {
                 return Err(SchemaDiagnosticError::InvalidContext);
             }
         }
-        for (name, value) in source_context {
-            budget.text(name)?;
-            budget.text(value)?;
+        for (name, _) in source_context {
             if !names.insert(*name) {
                 return Err(SchemaDiagnosticError::InvalidContext);
             }
@@ -274,7 +191,7 @@ pub fn admit_schema_diagnostics<'a>(
     Ok(SchemaDiagnosticReport {
         schema,
         document,
-        findings,
+        findings: &findings[..findings.len().min(crate::limits::Limits::FINDINGS)],
         source_context,
     })
 }

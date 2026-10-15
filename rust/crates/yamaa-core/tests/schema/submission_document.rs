@@ -22,7 +22,6 @@ fn declarations() -> Document {
             N::Mapping(vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)]),
         ],
         10,
-        DocumentLimits::default(),
     )
     .unwrap()
 }
@@ -79,14 +78,13 @@ fn limited_location_scans_preserve_the_exact_input_without_partial_facts() {
 
 #[test]
 fn absent_declarations_and_original_shape_refusals_remain_distinct() {
-    let empty = Document::new(vec![N::Mapping(vec![])], 0, DocumentLimits::default()).unwrap();
+    let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
     let facts = submission_document::locate(&empty, 0, Limits::default()).unwrap();
     assert_eq!(facts.study(), None);
     assert!(facts.sections().is_empty());
     let input = Document::new(
         vec![N::Integer("1".into()), N::Null, N::Mapping(vec![(0, 1)])],
         2,
-        DocumentLimits::default(),
     )
     .unwrap();
     for (root, node) in [(0, 0), (2, 0), (99, 99)] {
@@ -143,7 +141,7 @@ impl Arena {
         ])
     }
     fn finish(self, root: usize) -> Document {
-        Document::new(self.0, root, DocumentLimits::default()).unwrap()
+        Document::new(self.0, root).unwrap()
     }
 }
 fn full() -> Document {
@@ -671,15 +669,7 @@ fn document_transport_depth_and_decoder_depth_refusals_remain_distinct() {
     let root = nodes.len();
     nodes.push(N::Mapping(vec![(key, child)]));
     assert_eq!(
-        Document::new(
-            nodes,
-            root,
-            DocumentLimits {
-                depth: 100,
-                ..DocumentLimits::default()
-            }
-        )
-        .unwrap_err(),
+        Document::new(nodes, root).unwrap_err(),
         yamaa_core::schema::DocumentError::Limit {
             resource: yamaa_core::schema::DocumentResource::Depth,
             limit: 64
@@ -829,7 +819,7 @@ fn default_text_and_empty_root_work_are_admitted_before_ownership() {
     .unwrap();
     assert_eq!(owned.sections()[0].xml_lang.value, "en");
     assert_eq!(owned.sections()[0].xml_lang.origin.node, None);
-    let empty = Document::new(vec![N::Mapping(vec![])], 0, DocumentLimits::default()).unwrap();
+    let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
     assert_eq!(
         submission_document::decode(
             &empty,

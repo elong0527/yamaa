@@ -1,7 +1,7 @@
 //! R013 declarations select one of the three admitted relation contexts.
 use super::*;
 use crate::{
-    aggregate_compiler::{compile_aggregate, AggregateCompileError, CompiledAggregate},
+    aggregate_compiler::{compile_aggregate, CompiledAggregate},
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
         AggregateBinding, AggregatePhase, AggregateRelation, AggregateRowContext, AggregateSource,
@@ -17,7 +17,7 @@ pub(super) struct Declaration {
     expression: String,
     expression_path: String,
     path: String,
-    compiled: Result<CompiledAggregate, AggregateCompileError>,
+    compiled: Result<CompiledAggregate, crate::aggregate_parser::ParseError>,
     groups: Vec<String>,
     keys: Option<Vec<(String, match_values::Declaration)>>,
     empty_key: Option<AggregateEmptyKey>,
@@ -71,22 +71,15 @@ fn window_path(
     path: &str,
     depth: usize,
 ) -> Result<Option<String>, PrepareError> {
-    if depth > 64 {
+    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PrepareError::limit(
             "expression_depth",
-            64,
+            crate::limits::Limits::SEMANTIC_DEPTH,
             Some(depth),
             Some(path),
         ));
     }
-    if path.len() > 65_536 {
-        return Err(PrepareError::limit(
-            "path_bytes",
-            65_536,
-            Some(path.len()),
-            Some(path),
-        ));
-    }
+
     let &[(operation, payload)] = mapping(d, value)? else {
         return Err(PrepareError::Internal);
     };
@@ -148,24 +141,15 @@ pub(super) fn prepare(
     } else {
         format!("{path}.expr")
     };
-    let compiled = compile_aggregate(expr, &expression_path, Default::default());
+    let compiled = compile_aggregate(expr, &expression_path);
     match &compiled {
-        Err(AggregateCompileError::Parse(
-            error @ crate::aggregate_parser::ParseError::Limit { .. },
-        )) => {
+        Err(error @ crate::aggregate_parser::ParseError::Limit { .. }) => {
             return Err(PrepareError::aggregate_parse(
                 error.clone(),
                 Some(&expression_path),
             ));
         }
-        Err(AggregateCompileError::MetadataLimit { limit, required }) => {
-            return Err(PrepareError::limit(
-                "aggregate_metadata",
-                *limit,
-                *required,
-                Some(&expression_path),
-            ));
-        }
+
         _ => (),
     }
     let mut extra = Vec::new();
@@ -178,9 +162,7 @@ pub(super) fn prepare(
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
             .map(|id| {
                 let items = sequence(d, id)?;
-                if items.len() > 4096 {
-                    return Err(PrepareError::limit("aggregate_derive_bindings", 4096, Some(items.len()), None));
-                }
+
                 let mut bindings = Vec::<DeriveDeclaration>::new();
                 let invalid = |path: &str, reason: &str| {
                     PrepareError::Invalid(vec![PreflightFinding::Scalar(diagnostic(
@@ -479,10 +461,7 @@ pub(super) fn bind(
 ) -> Result<Option<Expression>, BindError> {
     let compiled = match &declaration.compiled {
         Ok(compiled) => compiled,
-        Err(AggregateCompileError::Parse(crate::aggregate_parser::ParseError::Grammar {
-            failure,
-            ..
-        })) => {
+        Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
             findings.push(BindFinding::Aggregate {
                 path: declaration.expression_path.clone(),
                 expression: declaration.expression.clone(),
@@ -490,14 +469,7 @@ pub(super) fn bind(
             });
             return Ok(None);
         }
-        Err(AggregateCompileError::Numeric(error)) => {
-            findings.push(BindFinding::Numeric {
-                path: declaration.expression_path.clone(),
-                expression: declaration.expression.clone(),
-                error: error.clone(),
-            });
-            return Ok(None);
-        }
+
         Err(_) => return Err(BindError::Internal),
     };
     let mut relations = compiled
@@ -1494,23 +1466,14 @@ impl Declaration {
     pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
         match &self.compiled {
             Ok(_) => (),
-            Err(AggregateCompileError::Parse(crate::aggregate_parser::ParseError::Grammar {
-                failure,
-                ..
-            })) => {
+            Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
                 findings.push(BindFinding::Aggregate {
                     path: self.expression_path.clone(),
                     expression: self.expression.clone(),
                     error: failure.clone(),
                 });
             }
-            Err(AggregateCompileError::Numeric(error)) => {
-                findings.push(BindFinding::Numeric {
-                    path: self.expression_path.clone(),
-                    expression: self.expression.clone(),
-                    error: error.clone(),
-                });
-            }
+
             Err(_) => return Err(BindError::Internal),
         }
         if let Some((expression, compiled)) = &self.filter {

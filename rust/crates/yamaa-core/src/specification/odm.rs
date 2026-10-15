@@ -252,10 +252,10 @@ pub(super) fn bind(
 }
 
 pub(super) fn contains(d: &Document, node: usize, depth: usize) -> Result<bool, PrepareError> {
-    if depth > 64 {
+    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PrepareError::limit(
             "odm_expression_depth",
-            64,
+            crate::limits::Limits::SEMANTIC_DEPTH,
             Some(depth),
             None,
         ));
@@ -313,22 +313,15 @@ pub(super) fn context_findings(
         bytes: &mut usize,
         sites: &mut Vec<Site<'a>>,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
                 "odm_expression_depth",
-                64,
+                crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
                 Some(path),
             ));
         }
-        if path.len() > 65_536 {
-            return Err(PrepareError::limit(
-                "path_bytes",
-                65_536,
-                Some(path.len()),
-                Some(path),
-            ));
-        }
+
         *bytes = bytes
             .checked_add(path.len())
             .filter(|&n| n <= 16_777_216)
@@ -608,8 +601,13 @@ pub(super) fn inputs(d: &Document) -> Result<BTreeSet<&str>, PrepareError> {
         depth: usize,
         found: &mut BTreeSet<&'a str>,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
-            return Err(PrepareError::limit("odm_expression_depth", 64, None, None));
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+            return Err(PrepareError::limit(
+                "odm_expression_depth",
+                crate::limits::Limits::SEMANTIC_DEPTH,
+                None,
+                None,
+            ));
         }
         match &d.nodes()[node] {
             N::Mapping(fields) => {
@@ -753,8 +751,7 @@ mod tests {
             ]);
             let mut nodes = Vec::new();
             let root = tree.append(&mut nodes);
-            let document =
-                Document::new(nodes, root, crate::schema::DocumentLimits::default()).unwrap();
+            let document = Document::new(nodes, root).unwrap();
             let admitted = SpecificationDocument::admit(
                 document,
                 &mut crate::schema::ValidationBudget::new(Default::default()),

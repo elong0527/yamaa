@@ -618,7 +618,6 @@ impl ColumnAdmission<'_> {
                     ct::BindingFinding::ValuesConflict => {
                         ConditionCode::CodelistBindingValuesConflict
                     }
-                    ct::BindingFinding::Limit(_) => ConditionCode::ApplicationRejected,
                 };
                 findings.push(Finding::cause(
                     code,

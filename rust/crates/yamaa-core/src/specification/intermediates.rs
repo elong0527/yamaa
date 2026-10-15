@@ -255,7 +255,6 @@ impl Declarations {
         driver: usize,
         output: &TableSchema,
         keys: &[usize],
-        limits: CompilationLimits,
         project: Option<&functions::Prepared>,
         extraction: &str_extract::Prepared,
         templates: &str_template::Prepared,
@@ -269,10 +268,10 @@ impl Declarations {
             return Ok(result);
         };
         let items = sequence(d, id)?;
-        if items.len() > limits.columns {
+        if items.len() > crate::limits::Limits::COLUMNS {
             return Err(PrepareError::limit(
                 "intermediates",
-                limits.columns,
+                crate::limits::Limits::COLUMNS,
                 Some(items.len()),
                 None,
             ));
@@ -293,7 +292,7 @@ impl Declarations {
             )
             .map_err(|_| PrepareError::Internal)?,
         );
-        let order = derivation_order(d, items, project, templates, limits)?;
+        let order = derivation_order(d, items, project, templates)?;
         for index in order {
             let id = items[index];
             let path = format!("intermediates[{index}]");
@@ -311,7 +310,7 @@ impl Declarations {
                 });
             let driver_keys = row_driver.then(|| std::sync::Arc::clone(&driver_key_schema));
             let range = intermediate_range::prepare(d, id, &path, name)?;
-            let columns = intermediate_range::prepare_columns(d, id, limits)?;
+            let columns = intermediate_range::prepare_columns(d, id)?;
             let dataset = text(d, field(d, id, "dataset")?)?;
             let source = if dataset == "SELF" && present(d, d.root(), "rows") {
                 self_relations::Relation::SelfRows
@@ -330,10 +329,10 @@ impl Declarations {
                     continue;
                 }
                 if let N::Text(name) = &d.nodes()[key] {
-                    if limits.keys == 0 {
+                    if crate::limits::Limits::KEYS == 0 {
                         return Err(PrepareError::limit(
                             "intermediate_keys",
-                            limits.keys,
+                            crate::limits::Limits::KEYS,
                             None,
                             None,
                         ));
@@ -344,10 +343,10 @@ impl Declarations {
                     )])
                 } else if matches!(d.nodes()[key], N::Sequence(_)) {
                     let fields = sequence(d, key)?;
-                    if fields.len() > limits.keys {
+                    if fields.len() > crate::limits::Limits::KEYS {
                         return Err(PrepareError::limit(
                             "intermediate_keys",
-                            limits.keys,
+                            crate::limits::Limits::KEYS,
                             Some(fields.len()),
                             None,
                         ));
@@ -367,10 +366,10 @@ impl Declarations {
                     )
                 } else {
                     let fields = mapping(d, key)?;
-                    if fields.len() > limits.keys {
+                    if fields.len() > crate::limits::Limits::KEYS {
                         return Err(PrepareError::limit(
                             "intermediate_keys",
-                            limits.keys,
+                            crate::limits::Limits::KEYS,
                             Some(fields.len()),
                             None,
                         ));
@@ -455,10 +454,10 @@ impl Declarations {
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
                 let terms = sequence(d, order_id)?;
-                if terms.len() > limits.source_fields {
+                if terms.len() > crate::limits::Limits::COLUMNS {
                     return Err(PrepareError::limit(
                         "intermediate_order",
-                        limits.source_fields,
+                        crate::limits::Limits::COLUMNS,
                         Some(terms.len()),
                         None,
                     ));
@@ -549,7 +548,7 @@ impl Declarations {
                 .map(String::from)
                 .collect();
             let derivations = intermediate_derivations::prepare(
-                d, id, &path, dataset, limits, project, extraction, templates, &result,
+                d, id, &path, dataset, project, extraction, templates, &result,
             )?;
             std::sync::Arc::get_mut(&mut result.0)
                 .ok_or(PrepareError::Internal)?
@@ -1002,7 +1001,6 @@ fn derivation_order(
     items: &[usize],
     project: Option<&functions::Prepared>,
     templates: &str_template::Prepared,
-    limits: CompilationLimits,
 ) -> Result<Vec<usize>, PrepareError> {
     use crate::dependency_analysis::{self, Error};
     const EDGE_LIMIT: usize = 65_536;
@@ -1073,7 +1071,7 @@ fn derivation_order(
     let analysis = dependency_analysis::analyze(
         &graph,
         dependency_analysis::Limits {
-            nodes: limits.columns,
+            nodes: crate::limits::Limits::COLUMNS,
             edges: EDGE_LIMIT,
         },
     )

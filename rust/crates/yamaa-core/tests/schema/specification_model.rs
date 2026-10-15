@@ -34,7 +34,7 @@ fn document() -> Document {
     fields.push((key, output));
     let root = nodes.len();
     nodes.push(N::Mapping(fields));
-    Document::new(nodes, root, DocumentLimits::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn resource_failures_never_become_authored_diagnostics_or_partial_models() {
             SpecificationDocument::admit(document(), &mut ValidationBudget::new(limits)).is_err()
         );
     }
-    let empty = Document::new(vec![N::Mapping(vec![])], 0, DocumentLimits::default()).unwrap();
+    let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
     let mut budget = ValidationBudget::new(ValidationLimits {
         diagnostics: 0,
         ..ValidationLimits::default()

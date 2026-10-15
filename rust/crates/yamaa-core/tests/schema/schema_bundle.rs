@@ -55,7 +55,7 @@ fn module(
     let root = push(V::Map(entries), &mut nodes);
     SchemaModule {
         name: name.into(),
-        document: Document::new(nodes, root, DocumentLimits::default()).unwrap(),
+        document: Document::new(nodes, root).unwrap(),
     }
 }
 

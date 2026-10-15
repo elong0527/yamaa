@@ -29,9 +29,7 @@ pub fn inputs(
     owner: &str,
     prepared: &PreparedSpecification,
     origins: &[Origin<'_>],
-    limits: Limits,
 ) -> Result<Vec<InputMetadata>, Error> {
-    let mut budget = Budget::new(origins.len(), limits)?;
     if origins.len() != prepared.sources().len() {
         return Err(Error::SourceIdentity);
     }
@@ -41,14 +39,6 @@ pub fn inputs(
             || origin.written.is_empty()
         {
             return Err(Error::SourceIdentity);
-        }
-        for text in [
-            owner,
-            origin.dataset,
-            origin.declaring_source,
-            origin.written,
-        ] {
-            budget.text(text.len())?;
         }
     }
     Ok(origins
@@ -64,59 +54,6 @@ pub fn inputs(
         .collect())
 }
 
-#[derive(Clone, Copy)]
-pub struct Limits {
-    pub sources: usize,
-    pub columns: usize,
-    pub text: usize,
-    pub findings: usize,
-}
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            sources: 1024,
-            columns: 4096,
-            text: 1_048_576,
-            findings: 4096,
-        }
-    }
-}
-
-/// Count complete carriers before a host representation makes owned copies.
-pub struct Budget {
-    limits: Limits,
-    columns: usize,
-    text: usize,
-}
-impl Budget {
-    pub fn new(sources: usize, limits: Limits) -> Result<Self, Error> {
-        if sources == 0 || sources > limits.sources {
-            return Err(Error::Limit);
-        }
-        Ok(Self {
-            limits,
-            columns: 0,
-            text: 0,
-        })
-    }
-    pub fn columns(&mut self, amount: usize) -> Result<(), Error> {
-        self.columns = self
-            .columns
-            .checked_add(amount)
-            .filter(|n| *n <= self.limits.columns)
-            .ok_or(Error::Limit)?;
-        Ok(())
-    }
-    pub fn text(&mut self, amount: usize) -> Result<(), Error> {
-        self.text = self
-            .text
-            .checked_add(amount)
-            .filter(|n| *n <= self.limits.text)
-            .ok_or(Error::Limit)?;
-        Ok(())
-    }
-}
-
 pub struct SourceSchema {
     pub dataset: String,
     pub schema: TableSchema,
@@ -130,6 +67,7 @@ impl SourceSchema {
         {
             return Err(Error::InvalidCarrier);
         }
+        crate::limits::Limits::columns(columns.len()).map_err(Error::Resource)?;
         Ok(Self {
             dataset,
             schema: TableSchema::new(columns).map_err(Error::Schema)?,
@@ -139,8 +77,8 @@ impl SourceSchema {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("source metadata limit")]
-    Limit,
+    #[error("source metadata resource: {0}")]
+    Resource(crate::limits::LimitExceeded),
     #[error("source metadata invalid carrier")]
     InvalidCarrier,
     #[error("source metadata schema: {0:?}")]
@@ -162,15 +100,14 @@ pub(crate) type NormalizedSchemas = Result<Vec<TableSchema>, Vec<Diagnostic>>;
 pub fn check(
     prepared: &PreparedSpecification,
     sources: &[SourceSchema],
-    limits: Limits,
 ) -> Result<Vec<Diagnostic>, Error> {
-    let logical = match normalized_schemas(prepared, sources, limits)? {
+    let logical = match normalized_schemas(prepared, sources)? {
         Ok(schemas) => schemas,
         Err(diagnostics) => return Ok(diagnostics),
     };
     let schemas = logical.iter().collect::<Vec<_>>();
     prepared
-        .metadata_source_findings(&schemas, limits.findings)
+        .metadata_source_findings(&schemas)
         .map_err(Error::Binding)
 }
 
@@ -179,28 +116,21 @@ pub fn check(
 pub fn normalized_schemas(
     prepared: &PreparedSpecification,
     sources: &[SourceSchema],
-    limits: Limits,
 ) -> Result<NormalizedSchemas, Error> {
-    let mut budget = Budget::new(sources.len(), limits)?;
     if prepared.sources().len() != sources.len() {
         return Err(Error::SourceIdentity);
     }
     let mut names = BTreeSet::new();
     for (source, declared) in sources.iter().zip(prepared.sources()) {
+        crate::limits::Limits::columns(source.schema.columns().len()).map_err(Error::Resource)?;
         if source.dataset != declared.name || !names.insert(&source.dataset) {
             return Err(Error::SourceIdentity);
-        }
-        budget.text(source.dataset.len())?;
-        budget.columns(source.schema.columns().len())?;
-        for column in source.schema.columns() {
-            budget.text(column.name.len())?;
         }
     }
     normalize(
         prepared.sources(),
         |index| prepared.source_interpretation(index),
         sources,
-        limits,
     )
 }
 
@@ -208,7 +138,6 @@ fn normalize(
     declarations: &[crate::specification::SourceDeclaration],
     interpretation: impl Fn(usize) -> Option<SourceInterpretation>,
     sources: &[SourceSchema],
-    limits: Limits,
 ) -> Result<Result<Vec<TableSchema>, Vec<Diagnostic>>, Error> {
     let mut logical = Vec::new();
     let mut diagnostics = Vec::new();
@@ -223,7 +152,7 @@ fn normalize(
                     kind: Some(column.kind),
                 })
                 .collect::<Vec<_>>();
-            match crate::odm_source::bind_fields(&fields).map_err(|_| Error::Limit)? {
+            match crate::odm_source::bind_fields(&fields) {
                 Ok(_) => TableSchema::new(
                     crate::odm_source::FIELDS
                         .iter()
@@ -261,8 +190,11 @@ fn normalize(
                 .iter()
                 .map(|column| column.name.clone())
                 .collect();
-            match crate::typed_csv::PreparedTypes::new(&declared.types, limits.columns)
-                .map_err(|_| Error::InvalidCarrier)?
+            match crate::typed_csv::PreparedTypes::new(&declared.types)
+                .map_err(|error| match error {
+                    crate::typed_csv::Error::Limit(error) => Error::Resource(error),
+                    _ => Error::InvalidCarrier,
+                })?
                 .convert(crate::csv_source::CsvSource {
                     names,
                     records: Vec::new(),
@@ -282,15 +214,7 @@ fn normalize(
         } else {
             source.schema.clone()
         };
-        let schema = match crate::source_ordinal::prepare(
-            declared,
-            &schema,
-            0,
-            crate::source_ordinal::Limits {
-                columns: limits.columns,
-                cells: 0,
-            },
-        ) {
+        let schema = match crate::source_ordinal::prepare(declared, &schema, 0) {
             Ok(Some(ordinal)) => ordinal.schema().clone(),
             Ok(None) => schema,
             Err(finding) => {
@@ -309,9 +233,7 @@ fn normalize(
         };
         logical.push(schema);
     }
-    if diagnostics.len() > limits.findings {
-        return Err(Error::Limit);
-    }
+    diagnostics.truncate(crate::limits::Limits::FINDINGS);
     if !diagnostics.is_empty() {
         return Ok(Err(diagnostics));
     }
@@ -330,25 +252,20 @@ pub(crate) type GraphNormalizedSchemas = Result<Vec<Vec<TableSchema>>, Vec<(usiz
 pub fn graph_check(
     graph: &crate::producer_graph::PreparedGraph,
     external: &[GraphSourceSchema],
-    limits: Limits,
 ) -> Result<Vec<(usize, Diagnostic)>, Error> {
-    let schemas = match graph_normalized_schemas(graph, external, limits)? {
+    let schemas = match graph_normalized_schemas(graph, external)? {
         Ok(schemas) => schemas,
         Err(diagnostics) => return Ok(diagnostics),
     };
-    graph
-        .check_source_schemas(&schemas, limits.findings)
-        .map_err(Error::Graph)
+    graph.check_source_schemas(&schemas).map_err(Error::Graph)
 }
 
 /// Producer published fields and external metadata share the original complete
-/// budget/admission pass before any native logical schema copies are made.
+/// admission pass before native logical schemas are copied.
 pub(crate) fn graph_normalized_schemas(
     graph: &crate::producer_graph::PreparedGraph,
     external: &[GraphSourceSchema],
-    limits: Limits,
 ) -> Result<GraphNormalizedSchemas, Error> {
-    let mut budget = Budget::new(external.len(), limits)?;
     let expected = graph
         .nodes()
         .iter()
@@ -359,12 +276,8 @@ pub(crate) fn graph_normalized_schemas(
     }
     // Admit the complete external carrier before native producer-schema clones.
     for source in external {
-        budget.text(source.owner.len())?;
-        budget.text(source.source.dataset.len())?;
-        budget.columns(source.source.schema.columns().len())?;
-        for column in source.source.schema.columns() {
-            budget.text(column.name.len())?;
-        }
+        crate::limits::Limits::columns(source.source.schema.columns().len())
+            .map_err(Error::Resource)?;
     }
     let mut next = 0;
     for node in graph.nodes() {
@@ -375,10 +288,6 @@ pub(crate) fn graph_normalized_schemas(
                 .find(|p| p.dataset() == declaration.name)
             {
                 let fields = producer.contract().fields();
-                budget.columns(fields.len())?;
-                for field in fields {
-                    budget.text(field.name.len())?;
-                }
             } else {
                 let actual = external.get(next).ok_or(Error::SourceIdentity)?;
                 next += 1;
@@ -413,15 +322,7 @@ pub(crate) fn graph_normalized_schemas(
                 // Producer contracts carry their native logical kinds. Apply
                 // the consumer's ordinal to that held published schema without
                 // reading an unpublished artifact or rerunning CSV typing.
-                match crate::source_ordinal::prepare(
-                    declaration,
-                    &schema,
-                    0,
-                    crate::source_ordinal::Limits {
-                        columns: limits.columns,
-                        cells: 0,
-                    },
-                ) {
+                match crate::source_ordinal::prepare(declaration, &schema, 0) {
                     Ok(Some(ordinal)) => complete.push(ordinal.schema().clone()),
                     Ok(None) => complete.push(schema),
                     Err(finding) => diagnostics.push((
@@ -446,7 +347,6 @@ pub(crate) fn graph_normalized_schemas(
                     std::slice::from_ref(declaration),
                     |_| node.source_interpretation(source_index),
                     std::slice::from_ref(&actual.source),
-                    limits,
                 )? {
                     Ok(mut schemas) => complete.push(schemas.remove(0)),
                     Err(findings) => {
@@ -457,26 +357,20 @@ pub(crate) fn graph_normalized_schemas(
         }
         schemas.push(complete);
     }
-    if diagnostics.len() > limits.findings {
-        return Err(Error::Limit);
-    }
+    diagnostics.truncate(crate::limits::Limits::FINDINGS);
     if !diagnostics.is_empty() {
         return Ok(Err(diagnostics));
     }
     Ok(Ok(schemas))
 }
 
-pub(crate) const MAX_CAPTURE_BYTES: usize = 8_388_608;
-
-/// A closed slot and caller ceiling are admitted before a resource port enters.
-pub fn admit_capture(index: usize, slots: usize, maximum: usize) -> Result<(), Error> {
-    if maximum == 0 || maximum > MAX_CAPTURE_BYTES || slots > Limits::default().sources {
-        return Err(Error::Limit);
-    }
+/// A source slot must refer to the held metadata descriptor array.
+pub fn admit_capture(index: usize, slots: usize) -> Result<(), Error> {
     if index >= slots {
-        return Err(Error::SourceIdentity);
+        Err(Error::SourceIdentity)
+    } else {
+        Ok(())
     }
-    Ok(())
 }
 
 pub struct GraphOrigin<'a> {
@@ -487,9 +381,7 @@ pub struct GraphOrigin<'a> {
 pub fn graph_inputs(
     graph: &crate::producer_graph::PreparedGraph,
     origins: &[GraphOrigin<'_>],
-    limits: Limits,
 ) -> Result<Vec<InputMetadata>, Error> {
-    let mut budget = Budget::new(origins.len(), limits)?;
     let mut next = 0;
     for node in graph.nodes() {
         for source in node.sources() {
@@ -508,14 +400,6 @@ pub fn graph_inputs(
                 || supplied.origin.written.is_empty()
             {
                 return Err(Error::SourceIdentity);
-            }
-            for text in [
-                supplied.owner,
-                supplied.origin.dataset,
-                supplied.origin.declaring_source,
-                supplied.origin.written,
-            ] {
-                budget.text(text.len())?;
             }
         }
     }

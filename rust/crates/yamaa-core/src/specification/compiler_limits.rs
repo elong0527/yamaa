@@ -125,53 +125,6 @@ impl PrepareError {
     }
 }
 
-impl PrepareError {
-    pub(super) fn project_limit(
-        error: crate::project_limits::Limit,
-        limits: crate::project_limits::Limits,
-        path: Option<&str>,
-    ) -> Self {
-        use crate::project_limits::Resource;
-        let (resource, limit) = match error.resource {
-            Resource::Nodes => ("nodes", limits.nodes),
-            Resource::TextBytes => ("text_bytes", limits.text_bytes),
-            Resource::Work => ("work", limits.work),
-            Resource::Findings => ("findings", limits.findings),
-        };
-        Self::limit(resource, limit, None, path)
-    }
-    pub(super) fn call_limit(resource: &'static str, path: Option<&str>) -> Self {
-        let limits = crate::project_calls::Limits::default();
-        let (resource, limit) = match resource {
-            "definitions" => ("function_definitions", limits.definitions),
-            "calls" | "bound_calls" => ("function_calls", limits.calls),
-            "arguments" | "bound_arguments" => ("function_arguments", limits.arguments),
-            "parameters" => ("function_parameters", limits.parameters),
-            "text" => ("text_bytes", limits.text_bytes),
-            "work" => ("work", limits.work),
-            _ => return Self::Internal,
-        };
-        Self::limit(resource, limit, None, path)
-    }
-    pub(super) fn call_document_limit(
-        error: crate::project_call_document::Error,
-        path: Option<&str>,
-    ) -> Self {
-        match error {
-            crate::project_call_document::Error::Limit(resource) => {
-                let limits = crate::project_call_document::Limits::default();
-                let (resource, limit) = match resource {
-                    "arguments" => ("function_arguments", limits.arguments),
-                    "text" => ("text_bytes", limits.text_bytes),
-                    _ => return Self::Internal,
-                };
-                Self::limit(resource, limit, None, path)
-            }
-            _ => Self::Internal,
-        }
-    }
-}
-
 pub(super) fn charge(
     resource: &'static str,
     used: &mut usize,

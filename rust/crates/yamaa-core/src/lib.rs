@@ -78,8 +78,6 @@ pub mod project_function_document;
 
 pub mod project_function_result;
 
-pub mod project_limits;
-
 pub mod project_terminology;
 
 pub mod project_terminology_document;
@@ -136,10 +134,6 @@ pub mod table_grouping;
 pub mod producer_build;
 
 pub mod standalone_preparation;
-
-pub mod style_values;
-
-pub mod source_header;
 
 pub mod numeric_lifecycle;
 

@@ -11,29 +11,23 @@ impl PreparedSpecification {
     pub fn metadata_source_findings(
         &self,
         schemas: &[&TableSchema],
-        maximum: usize,
     ) -> Result<Vec<Diagnostic>, BindError> {
         match self.bind_sources(schemas) {
             Ok(plan) => {
                 let findings = plan
-                    .metadata_type_findings(maximum)
+                    .metadata_type_findings()
                     .map_err(|_| BindError::PredicateDiagnosticLimit)?;
                 if !findings.is_empty() {
                     return Ok(findings);
                 }
                 let output = self.output_findings();
-                if output.len() > maximum {
-                    return Err(BindError::PredicateDiagnosticLimit);
-                }
                 Ok(output
                     .into_iter()
+                    .take(crate::limits::Limits::FINDINGS)
                     .map(|finding| finding.diagnostic())
                     .collect())
             }
             Err(BindError::Invalid(findings)) => {
-                if findings.len() > maximum {
-                    return Err(BindError::PredicateDiagnosticLimit);
-                }
                 let mut diagnostics = Vec::new();
                 for finding in findings {
                     let projected = match finding {
@@ -47,9 +41,6 @@ impl PreparedSpecification {
                         }
                         finding => finding.diagnostics(self.source()),
                     }.ok_or(BindError::Internal)?;
-                    if projected.len() > maximum.saturating_sub(diagnostics.len()) {
-                        return Err(BindError::PredicateDiagnosticLimit);
-                    }
                     diagnostics.extend(projected);
                 }
                 let failed = self.intermediates.failed_metadata_names(&diagnostics);
@@ -69,6 +60,7 @@ impl PreparedSpecification {
                         .split_once('.')
                         .is_some_and(|(namespace, _)| failed.contains(namespace))
                 });
+                diagnostics.truncate(crate::limits::Limits::FINDINGS);
                 Ok(diagnostics)
             }
             Err(error) => Err(error),

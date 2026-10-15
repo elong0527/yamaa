@@ -64,7 +64,7 @@ impl Arena {
         self.map(fields)
     }
     fn finish(self, root: usize) -> Document {
-        Document::new(self.0, root, DocumentLimits::default()).unwrap()
+        Document::new(self.0, root).unwrap()
     }
 }
 fn decode(input: &Document) -> Declarations {
@@ -158,14 +158,13 @@ fn locations_admit_whole_columns_fields_work_and_declarations_before_growth() {
 }
 #[test]
 fn locations_absence_and_original_shapes_remain_distinct() {
-    let empty = Document::new(vec![N::Mapping(vec![])], 0, DocumentLimits::default()).unwrap();
+    let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
     let locations = submission::locate(&empty, 0, Limits::default()).unwrap();
     assert!(locations.dataset().is_none());
     assert!(locations.columns().is_empty());
     let input = Document::new(
         vec![N::Integer("7".into()), N::Null, N::Mapping(vec![(0, 1)])],
         2,
-        DocumentLimits::default(),
     )
     .unwrap();
     for (root, node) in [(0, 0), (2, 0), (99, 99)] {
@@ -1021,7 +1020,6 @@ fn root_scalar_column_scalar_and_non_text_root_key_keep_transport_facts() {
             N::Mapping(vec![(0, 1)]),
         ],
         2,
-        DocumentLimits::default(),
     )
     .unwrap();
     let values = findings(&input);
@@ -1030,7 +1028,7 @@ fn root_scalar_column_scalar_and_non_text_root_key_keep_transport_facts() {
     assert_eq!(values[0].key, Some(0));
     assert_eq!(values[0].kind, Kind::NonTextKey);
     assert_eq!(values[0].requirement(), None);
-    let empty = Document::new(vec![N::Mapping(vec![])], 0, DocumentLimits::default()).unwrap();
+    let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
     let owner = decode(&empty);
     assert!(owner.dataset().is_none());
     assert!(owner.columns().is_none());

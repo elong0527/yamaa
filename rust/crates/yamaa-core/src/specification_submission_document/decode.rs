@@ -1,152 +1,9 @@
-//! Complete non-owning admission followed by one owned decode of the same input.
+//! One owned semantic decode of the held input, retaining exact occurrence facts.
 use super::*;
 use crate::diagnostic::ScalarSubmissionRule;
 
 use FieldName as F;
 
-struct Budget(Limits);
-impl Budget {
-    fn charge(&mut self, resource: Resource, n: usize) -> Result<(), Cause> {
-        let available = match resource {
-            Resource::Fields => &mut self.0.fields,
-            Resource::Columns => &mut self.0.columns,
-            Resource::Declarations => &mut self.0.declarations,
-            Resource::Work => &mut self.0.work,
-            Resource::Nodes => &mut self.0.nodes,
-            Resource::ListItems => &mut self.0.list_items,
-            Resource::TextBytes => &mut self.0.text_bytes,
-            Resource::EscapedBytes => &mut self.0.escaped_bytes,
-            Resource::PathSegments => &mut self.0.path_segments,
-            Resource::Findings => &mut self.0.findings,
-            Resource::Depth => unreachable!("depth is a maximum"),
-        };
-        *available = available.checked_sub(n).ok_or(Cause::Limit(resource))?;
-        Ok(())
-    }
-    fn multiply(&mut self, resource: Resource, n: usize, factor: usize) -> Result<(), Cause> {
-        self.charge(
-            resource,
-            n.checked_mul(factor).ok_or(Cause::Limit(resource))?,
-        )
-    }
-    fn depth(&self, depth: usize) -> Result<(), Cause> {
-        if depth > self.0.depth.min(64) {
-            Err(Cause::Limit(Resource::Depth))
-        } else {
-            Ok(())
-        }
-    }
-    fn text(&mut self, value: &str) -> Result<(), Cause> {
-        self.charge(Resource::TextBytes, value.len())?;
-        self.multiply(Resource::EscapedBytes, value.len(), 10)?;
-        self.charge(Resource::EscapedBytes, 2)?;
-        self.multiply(Resource::Work, value.len(), 128)
-    }
-    fn mapping(
-        &mut self,
-        input: &Document,
-        fields: &[(usize, usize)],
-        depth: usize,
-    ) -> Result<(), Cause> {
-        self.depth(depth + usize::from(!fields.is_empty()))?;
-        self.charge(Resource::Fields, fields.len())?;
-        // Includes retained mapping order, comparisons in every closed lookup,
-        // validation passes and the final immutable owned pass.
-        self.charge(Resource::ListItems, fields.len())?;
-        self.multiply(Resource::Work, fields.len(), 256)?;
-        for &(key, _) in fields {
-            self.charge(Resource::Nodes, 1)?;
-            match &input.nodes()[key] {
-                N::Text(v) | N::Integer(v) => self.text(v)?,
-                _ => {}
-            }
-        }
-        Ok(())
-    }
-    fn node(&mut self, depth: usize) -> Result<(), Cause> {
-        self.depth(depth)?;
-        self.charge(Resource::Nodes, 1)?;
-        self.charge(Resource::Work, 64)
-    }
-    fn tree(&mut self, input: &Document, node: usize, depth: usize) -> Result<(), Cause> {
-        self.node(depth)?;
-        match &input.nodes()[node] {
-            N::Text(v) | N::Integer(v) => self.text(v)?,
-            N::Sequence(items) => {
-                self.charge(Resource::ListItems, items.len())?;
-                self.multiply(Resource::Work, items.len(), 64)?;
-                for &item in items {
-                    self.tree(input, item, depth + 1)?;
-                }
-            }
-            N::Mapping(fields) => {
-                self.mapping(input, fields, depth)?;
-                for &(_, child) in fields {
-                    self.tree(input, child, depth + 1)?;
-                }
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-    fn columns(&mut self, input: &Document, node: usize) -> Result<(), Cause> {
-        let N::Sequence(items) = &input.nodes()[node] else {
-            return self.tree(input, node, 2);
-        };
-        self.node(2)?;
-        self.charge(Resource::Columns, items.len())?;
-        self.charge(Resource::ListItems, items.len())?;
-        self.multiply(Resource::Work, items.len(), 64)?;
-        for &column in items {
-            let N::Mapping(fields) = &input.nodes()[column] else {
-                self.tree(input, column, 3)?;
-                continue;
-            };
-            self.node(3)?;
-            self.mapping(input, fields, 3)?;
-            for &(key, value) in fields {
-                if let N::Text(text) = &input.nodes()[key] {
-                    if matches!(text.as_str(), "name" | "type" | "label" | "submission") {
-                        if text == "submission" {
-                            self.charge(Resource::Declarations, 1)?;
-                        }
-                        self.tree(input, value, 4)?;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-    fn rows(&mut self, input: &Document, node: usize) -> Result<(), Cause> {
-        let N::Sequence(items) = &input.nodes()[node] else {
-            // Rows without metadata remain ordinary compiler/schema declarations.
-            return Ok(());
-        };
-        self.node(2)?;
-        self.charge(Resource::ListItems, items.len())?;
-        self.multiply(Resource::Work, items.len(), 64)?;
-        for &row in items {
-            let N::Mapping(fields) = &input.nodes()[row] else {
-                continue;
-            };
-            self.node(3)?;
-            self.mapping(input, fields, 3)?;
-            for &(key, value) in fields {
-                if let N::Text(text) = &input.nodes()[key] {
-                    if text == "id" || text == "submission" {
-                        if text == "submission" {
-                            if let N::Mapping(entries) = &input.nodes()[value] {
-                                self.charge(Resource::Declarations, entries.len())?;
-                            }
-                        }
-                        self.tree(input, value, 4)?;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-}
 const DATASET: &[F] = DATASET_METADATA_FIELDS;
 const COLUMN: &[F] = &[F::Name, F::Type, F::Label, F::Submission];
 const SUBMISSION: &[F] = COLUMN_METADATA_FIELDS;
@@ -181,45 +38,20 @@ impl Path {
 }
 /// This admits declarations only. Unselected specification domains remain under
 /// ordinary schema/compiler admission. No compilation or host work occurs here.
-pub fn decode(input: &Document, root: usize, limits: Limits) -> Result<Declarations, Error<'_>> {
+pub fn decode(input: &Document, root: usize) -> Result<Declarations, Error<'_>> {
     let refuse = |cause| Error { input, cause };
-    let Some(N::Mapping(fields)) = input.nodes().get(root) else {
+    let Some(N::Mapping(_)) = input.nodes().get(root) else {
         return Err(refuse(Cause::Shape { node: root }));
     };
-    let mut budget = Budget(limits);
-    let count = (|| {
-        budget.node(1)?;
-        budget.mapping(input, fields, 1)?;
-        for &(key, node) in fields {
-            if let N::Text(text) = &input.nodes()[key] {
-                match text.as_str() {
-                    "submission" => {
-                        budget.charge(Resource::Declarations, 1)?;
-                        budget.tree(input, node, 2)?;
-                    }
-                    "columns" => budget.columns(input, node)?,
-                    "rows" => budget.rows(input, node)?,
-                    _ => {}
-                }
-            }
+    if let Some(node) = input.field(root, "columns") {
+        if let N::Sequence(columns) = &input.nodes()[node] {
+            crate::limits::Limits::columns(columns.len())
+                .map_err(|error| refuse(Cause::Resource(error)))?;
         }
-        let mut pass = Parser {
-            input,
-            budget: Some(&mut budget),
-            model: false,
-            findings: Vec::new(),
-            count: 0,
-        };
-        pass.run(root)?;
-        Ok(pass.count)
-    })()
-    .map_err(refuse)?;
+    }
     let mut owner = Parser {
         input,
-        budget: None,
-        model: count == 0,
-        findings: Vec::with_capacity(count),
-        count: 0,
+        findings: Vec::new(),
     };
     let declarations = owner.run(root).map_err(refuse)?;
     if owner.findings.is_empty() {
@@ -228,12 +60,9 @@ pub fn decode(input: &Document, root: usize, limits: Limits) -> Result<Declarati
         Err(refuse(Cause::Findings(owner.findings)))
     }
 }
-struct Parser<'a, 'b> {
+struct Parser<'a> {
     input: &'a Document,
-    budget: Option<&'b mut Budget>,
-    model: bool,
     findings: Vec<Finding>,
-    count: usize,
 }
 #[derive(Clone, Copy)]
 enum TextRule {
@@ -242,7 +71,7 @@ enum TextRule {
     Identifier,
     Integer,
 }
-impl<'a> Parser<'a, '_> {
+impl<'a> Parser<'a> {
     fn fault_at(
         &mut self,
         node: usize,
@@ -252,12 +81,7 @@ impl<'a> Parser<'a, '_> {
         kind: Kind,
         scalar_rule: Option<ScalarSubmissionRule>,
     ) -> Result<(), Cause> {
-        if let Some(budget) = &mut self.budget {
-            budget.charge(Resource::Findings, 1)?;
-            budget.charge(Resource::PathSegments, path.len)?;
-            // Both non-owning count and final diagnostic ownership are bounded.
-            budget.multiply(Resource::Work, path.len + 1, 2)?;
-        } else {
+        if self.findings.len() < crate::limits::Limits::FINDINGS {
             self.findings.push(Finding {
                 node,
                 container: field.map(|v| v.0),
@@ -268,10 +92,7 @@ impl<'a> Parser<'a, '_> {
                 scalar_rule,
             });
         }
-        self.count = self
-            .count
-            .checked_add(1)
-            .ok_or(Cause::Limit(Resource::Findings))?;
+
         Ok(())
     }
     fn fault(
@@ -338,9 +159,6 @@ impl<'a> Parser<'a, '_> {
         Ok(true)
     }
     fn fields(&self, node: usize, allowed: &[F]) -> Vec<Origin> {
-        if !self.model {
-            return Vec::new();
-        }
         let N::Mapping(fields) = &self.input.nodes()[node] else {
             unreachable!("accepted mapping")
         };
@@ -405,11 +223,7 @@ impl<'a> Parser<'a, '_> {
             return Ok(None);
         }
         Ok(Some(Field {
-            value: if self.model {
-                value.clone()
-            } else {
-                String::new()
-            },
+            value: { value.clone() },
             origin,
         }))
     }
@@ -636,13 +450,13 @@ impl<'a> Parser<'a, '_> {
                     true,
                 )?;
                 let metadata = self.submission(occurrence, field_path)?;
-                if self.model {
+                {
                     if let Some((name, submission)) = name.zip(metadata) {
                         overrides.push(ValueOverride { name, submission });
                     }
                 }
             }
-            if self.model {
+            {
                 if let Some(id) = id {
                     owned.push(ValueRow {
                         node,
@@ -781,7 +595,7 @@ impl<'a> Parser<'a, '_> {
         let documents = self.documents(self.get(node, F::Documents), path.field(F::Documents))?;
         // Boxes are admitted by the selected-node bound and allocated only in
         // the successful owned pass, never during either finding pass.
-        Ok(if self.model {
+        Ok({
             kind.zip(description).map(|(kind, description)| {
                 Method::Class(Box::new(MethodClass {
                     origin,
@@ -793,8 +607,6 @@ impl<'a> Parser<'a, '_> {
                     documents,
                 }))
             })
-        } else {
-            None
         })
     }
     fn expression(
@@ -849,11 +661,7 @@ impl<'a> Parser<'a, '_> {
         // Borrow the immutable sequence with its document lifetime, independently
         // of this parser's mutable borrow while decoding individual references.
         let nodes = self.sequence(origin, path)?.unwrap_or(&[]);
-        let mut owned = if self.model {
-            Vec::with_capacity(nodes.len())
-        } else {
-            Vec::new()
-        };
+        let mut owned = { Vec::with_capacity(nodes.len()) };
         for (index, &node) in nodes.iter().enumerate() {
             let item = Origin {
                 container: origin.node.unwrap(),
@@ -862,7 +670,7 @@ impl<'a> Parser<'a, '_> {
                 field: F::Documents,
             };
             if let Some(value) = self.reference(item, path.child(Step::Index(index)))? {
-                if self.model {
+                {
                     owned.push(value);
                 }
             }
@@ -888,7 +696,7 @@ impl<'a> Parser<'a, '_> {
         }
         let document = self.text_field(node, F::Document, path, TextRule::Identifier, true)?;
         let pages = self.pages(self.get(node, F::Pages), path.field(F::Pages))?;
-        Ok(if self.model {
+        Ok({
             document.map(|document| {
                 DocumentReference::Class(Box::new(DocumentReferenceClass {
                     origin,
@@ -897,8 +705,6 @@ impl<'a> Parser<'a, '_> {
                     pages,
                 }))
             })
-        } else {
-            None
         })
     }
     fn pages(&mut self, origin: Origin, path: Path) -> Result<Option<Pages>, Cause> {
@@ -957,18 +763,14 @@ impl<'a> Parser<'a, '_> {
                 let N::Sequence(items) = &input.nodes()[node] else {
                     continue;
                 };
-                let mut owned = if self.model {
-                    Vec::with_capacity(items.len())
-                } else {
-                    Vec::new()
-                };
+                let mut owned = { Vec::with_capacity(items.len()) };
                 for (index, &item) in items.iter().enumerate() {
                     if let Some(column) = self.column(
                         item,
                         origin,
                         Path::root().field(F::Columns).child(Step::Index(index)),
                     )? {
-                        if self.model {
+                        {
                             owned.push(column);
                         }
                     }

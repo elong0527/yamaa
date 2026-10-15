@@ -298,14 +298,6 @@ pub(super) fn admit(
     groups: &mut [verifications::Verifications],
     result: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
-    let mut metadata_budget = crate::project_limits::Budget::new(Default::default());
-    for node in d.nodes() {
-        if let N::Text(text) | N::Integer(text) = node {
-            metadata_budget
-                .text(text)
-                .map_err(|error| PrepareError::project_limit(error, Default::default(), None))?;
-        }
-    }
     let root = d.root();
     let output = sequence(d, field(d, field(d, root, "output")?, "columns")?)?
         .iter()
@@ -566,14 +558,6 @@ pub(super) fn admit(
         let path = format!("rows.{row_name}.submission");
         for &(name, entry) in entries {
             let name = text(d, name)?;
-            for _ in 0..4 {
-                metadata_budget
-                    .text(row_name)
-                    .and_then(|_| metadata_budget.text(name))
-                    .map_err(|error| {
-                        PrepareError::project_limit(error, Default::default(), None)
-                    })?;
-            }
             if let Some(&column) = by_name.get(name) {
                 let inherits_origin = present_field(d, entry, "origin").is_none()
                     && present_field(d, column, "submission")
@@ -759,7 +743,6 @@ pub(super) fn admit(
             });
         }
     }
-    let mut inventory_budget = crate::project_limits::Budget::new(Default::default());
     for (column, &node) in columns.iter().enumerate() {
         let name = text(d, field(d, node, "name")?)?;
         let base = present_field(d, node, "submission");
@@ -813,11 +796,6 @@ pub(super) fn admit(
                     overrides: overrides.into_iter().collect(),
                 })
         };
-        for name in inventory {
-            inventory_budget
-                .text(name)
-                .map_err(|error| PrepareError::project_limit(error, Default::default(), None))?;
-        }
         groups[column].append_codelist(Verification {
             path: format!("columns.{name}.submission.inventory_vocabulary"),
             check: Check::Inventory {

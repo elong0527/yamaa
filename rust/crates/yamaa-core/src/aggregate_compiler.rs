@@ -1,7 +1,7 @@
 //! Bounded aggregate expressions reuse the shared numeric evaluator and source spans.
 use crate::{
     aggregate_parser::{parse_aggregate, ParseError, ParsedAggregate, ParsedKind, Reducer},
-    numeric_compiler::{compile_aggregate_subtree, CompileError, CompileLimits, CompiledNumeric},
+    numeric_compiler::{compile_aggregate_subtree, CompiledNumeric},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -33,7 +33,6 @@ pub struct CompiledAggregate {
     identifiers: Vec<String>,
     record_relations: Vec<String>,
     ungrouped: Vec<String>,
-    work: usize,
 }
 impl CompiledAggregate {
     /// Surrounding numeric arithmetic has a closed declared kind. A bare reducer
@@ -66,25 +65,7 @@ impl CompiledAggregate {
     pub fn ungrouped_identifiers(&self) -> impl Iterator<Item = &str> {
         self.ungrouped.iter().map(String::as_str)
     }
-    pub fn node_count(&self) -> usize {
-        self.work
-    }
 }
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum AggregateCompileError {
-    #[error("aggregate compiler parse: {0:?}")]
-    Parse(ParseError),
-    #[error("aggregate compiler numeric: {0:?}")]
-    Numeric(CompileError),
-    #[error("aggregate compiler metadata limit: limit={limit:?}, required={required:?}")]
-    MetadataLimit {
-        limit: usize,
-        required: Option<usize>,
-    },
-}
-/// Capacity policy for retained authored text across independent numeric plans.
-pub const MAX_AGGREGATE_METADATA_BYTES: usize = 16_777_216;
-
 fn ungroup(parsed: &ParsedAggregate, mut id: usize) -> usize {
     while let ParsedKind::Group { operand } = parsed.nodes()[id].kind {
         id = operand;
@@ -98,41 +79,11 @@ fn spelling(parsed: &ParsedAggregate, id: usize) -> &str {
 
 /// Admit every reducer and operand, including syntax behind lazy numeric calls.
 /// Bare reducer results retain their type; only surrounding arithmetic coerces.
-pub fn compile_aggregate(
-    expression: &str,
-    path: &str,
-    limits: CompileLimits,
-) -> Result<CompiledAggregate, AggregateCompileError> {
-    let parsed = parse_aggregate(expression, limits.parse).map_err(AggregateCompileError::Parse)?;
+pub fn compile_aggregate(expression: &str, path: &str) -> Result<CompiledAggregate, ParseError> {
+    let parsed = parse_aggregate(expression)?;
     let root = ungroup(&parsed, parsed.root());
-    let numeric_copies = parsed
-        .nodes()
-        .iter()
-        .filter(|node| match node.kind {
-            ParsedKind::Reduction { operand, .. } => !matches!(
-                parsed.nodes()[ungroup(&parsed, operand)].kind,
-                ParsedKind::Identifier | ParsedKind::Star
-            ),
-            _ => false,
-        })
-        .count()
-        + usize::from(!matches!(
-            parsed.nodes()[root].kind,
-            ParsedKind::Reduction { .. }
-        ));
-    let required = expression
-        .len()
-        .checked_add(path.len())
-        .and_then(|bytes| bytes.checked_mul(numeric_copies.saturating_add(1)));
-    if required.is_none_or(|bytes| bytes > MAX_AGGREGATE_METADATA_BYTES) {
-        return Err(AggregateCompileError::MetadataLimit {
-            limit: MAX_AGGREGATE_METADATA_BYTES,
-            required,
-        });
-    }
     let mut reductions = Vec::new();
     let mut reduction_nodes = Vec::new();
-    let mut resolutions: usize = 0;
     for (id, node) in parsed.nodes().iter().enumerate() {
         let ParsedKind::Reduction {
             reducer, operand, ..
@@ -142,18 +93,13 @@ pub fn compile_aggregate(
         };
         let operand = ungroup(&parsed, operand);
         let operand = match parsed.nodes()[operand].kind {
-            ParsedKind::Identifier => {
-                resolutions = resolutions.saturating_add(1);
-                AggregateOperand::Value(spelling(&parsed, operand).into())
-            }
+            ParsedKind::Identifier => AggregateOperand::Value(spelling(&parsed, operand).into()),
             ParsedKind::Star => {
                 let written = spelling(&parsed, operand);
                 AggregateOperand::Records(written[..written.len() - 2].into())
             }
             _ => {
-                let numeric = compile_aggregate_subtree(&parsed, operand, path, limits.resolutions)
-                    .map_err(AggregateCompileError::Numeric)?;
-                resolutions = resolutions.saturating_add(numeric.resolution_count());
+                let numeric = compile_aggregate_subtree(&parsed, operand, path);
                 AggregateOperand::Numeric(numeric)
             }
         };
@@ -172,20 +118,10 @@ pub fn compile_aggregate(
                 .expect("compiled reduction root"),
         ),
         _ => {
-            let numeric = compile_aggregate_subtree(&parsed, root, path, limits.resolutions)
-                .map_err(AggregateCompileError::Numeric)?;
-            resolutions = resolutions.saturating_add(numeric.resolution_count());
+            let numeric = compile_aggregate_subtree(&parsed, root, path);
             AggregateResult::Numeric(numeric)
         }
     };
-    if resolutions > limits.resolutions {
-        return Err(AggregateCompileError::Numeric(
-            CompileError::ResolutionLimit {
-                limit: limits.resolutions,
-                required: resolutions,
-            },
-        ));
-    }
     Ok(CompiledAggregate {
         expression: expression.into(),
         path: path.into(),
@@ -194,6 +130,5 @@ pub fn compile_aggregate(
         identifiers: parsed.identifiers().map(String::from).collect(),
         record_relations: parsed.star_datasets().map(String::from).collect(),
         ungrouped: parsed.ungrouped_identifiers().map(String::from).collect(),
-        work: parsed.nodes().len(),
     })
 }

@@ -227,16 +227,15 @@ pub(super) fn bind(
 pub(super) fn prepare_columns(
     d: &Document,
     item: usize,
-    limits: CompilationLimits,
 ) -> Result<Option<Vec<String>>, PrepareError> {
     d.field(item, "columns")
         .filter(|&node| !matches!(d.nodes()[node], N::Null))
         .map(|node| {
             let fields = sequence(d, node)?;
-            if fields.len() > limits.source_fields {
+            if fields.len() > crate::limits::Limits::COLUMNS {
                 return Err(PrepareError::limit(
                     "intermediate_columns",
-                    limits.source_fields,
+                    crate::limits::Limits::COLUMNS,
                     Some(fields.len()),
                     None,
                 ));

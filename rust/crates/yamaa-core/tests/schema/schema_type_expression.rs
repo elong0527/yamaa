@@ -3,7 +3,7 @@ use yamaa_core::schema::{TypeError, TypeExpression, TypeLimits, TypeNode, TypeRe
 #[test]
 fn authored_nested_type_arena_retains_occurrences_and_original_spans() {
     let text = " dict[ str, list[dict[str, int]] ] ";
-    let parsed = TypeExpression::parse(text, TypeLimits::default()).unwrap();
+    let parsed = TypeExpression::parse(text).unwrap();
     assert_eq!(parsed.expression(), text);
     assert_eq!(parsed.names().collect::<Vec<_>>(), ["str", "str", "int"]);
     assert_eq!(
@@ -33,12 +33,11 @@ fn builtins_and_unresolved_names_are_syntax_not_bundle_resolution() {
         "missing_type",
         "_X9",
     ] {
-        let parsed = TypeExpression::parse(name, TypeLimits::default()).unwrap();
+        let parsed = TypeExpression::parse(name).unwrap();
         assert_eq!(parsed.names().collect::<Vec<_>>(), [name]);
         assert_eq!(parsed.nodes(), [TypeNode::Name(0..name.len())]);
     }
-    let parsed =
-        TypeExpression::parse("\u{1c}\u{a0}list[\tstr\n]\u{2003}", TypeLimits::default()).unwrap();
+    let parsed = TypeExpression::parse("\u{1c}\u{a0}list[\tstr\n]\u{2003}").unwrap();
     assert_eq!(parsed.names().collect::<Vec<_>>(), ["str"]);
 }
 
@@ -64,15 +63,12 @@ fn malformed_types_and_string_encoded_unions_are_rejected() {
         "dict[str,int]junk",
     ] {
         assert!(
-            matches!(
-                TypeExpression::parse(text, TypeLimits::default()),
-                Err(TypeError::Invalid { .. })
-            ),
+            matches!(TypeExpression::parse(text), Err(TypeError::Invalid { .. })),
             "{text:?}"
         );
     }
     assert_eq!(
-        TypeExpression::parse("\u{a0}é", TypeLimits::default()),
+        TypeExpression::parse("\u{a0}é"),
         Err(TypeError::Invalid { byte: 2 })
     );
 }
@@ -118,22 +114,16 @@ fn independent_byte_node_and_depth_limits_refuse_then_fresh_parse_succeeds() {
         ),
     ] {
         assert_eq!(
-            TypeExpression::parse(text, limits),
+            TypeExpression::parse(text),
             Err(TypeError::Limit { resource, limit })
         );
-        assert!(TypeExpression::parse(text, TypeLimits::default()).is_ok());
+        assert!(TypeExpression::parse(text).is_ok());
     }
     let admitted = format!("{}str{}", "list[".repeat(63), "]".repeat(63));
-    assert!(TypeExpression::parse(&admitted, TypeLimits::default()).is_ok());
+    assert!(TypeExpression::parse(&admitted).is_ok());
     let too_deep = format!("list[{admitted}]");
     assert_eq!(
-        TypeExpression::parse(
-            &too_deep,
-            TypeLimits {
-                depth: usize::MAX,
-                ..TypeLimits::default()
-            }
-        ),
+        TypeExpression::parse(&too_deep),
         Err(TypeError::Limit {
             resource: TypeResource::Depth,
             limit: 64

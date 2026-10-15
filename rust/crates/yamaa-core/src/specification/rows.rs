@@ -110,7 +110,6 @@ fn declaration(
     column: usize,
     prefix: String,
     _grouped: bool,
-    limits: CompilationLimits,
     project: Option<&functions::Prepared>,
     extraction: &str_extract::Prepared,
     string_templates: &str_template::Prepared,
@@ -152,7 +151,6 @@ fn declaration(
             extraction,
             string_templates,
             None,
-            limits,
         )?),
     };
     Ok(RowDeclaration {
@@ -179,8 +177,13 @@ fn default_reads(
     };
     let operation = text(d, operation)?;
     fn contains_window(d: &Document, value: usize, depth: usize) -> Result<bool, PrepareError> {
-        if depth > 64 {
-            return Err(PrepareError::limit("expression_depth", 64, None, None));
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+            return Err(PrepareError::limit(
+                "expression_depth",
+                crate::limits::Limits::SEMANTIC_DEPTH,
+                None,
+                None,
+            ));
         }
         if [
             "row_number",
@@ -302,8 +305,7 @@ fn default_reads(
             } else {
                 field(d, payload, "condition")?
             };
-            match crate::predicate_parser::parse_predicate(text(d, condition)?, Default::default())
-            {
+            match crate::predicate_parser::parse_predicate(text(d, condition)?) {
                 Ok(parsed) => {
                     for name in parsed.identifiers() {
                         reference(name);
@@ -315,7 +317,7 @@ fn default_reads(
         }
         "compute" => {
             let expression = text(d, field(d, payload, "expr")?)?;
-            match crate::numeric_parser::parse_numeric(expression, Default::default()) {
+            match crate::numeric_parser::parse_numeric(expression) {
                 Ok(parsed) => {
                     for name in parsed.identifiers() {
                         reference(name);
@@ -674,7 +676,6 @@ impl Rows {
         d: &Document,
         output: &TableSchema,
         driver: &str,
-        limits: CompilationLimits,
         project: Option<&functions::Prepared>,
         _column_terminology: bool,
         extraction: &str_extract::Prepared,
@@ -851,7 +852,6 @@ impl Rows {
                     column,
                     format!("columns.{}.derivation", metadata.name),
                     false,
-                    limits,
                     project,
                     extraction,
                     string_templates,
@@ -885,10 +885,10 @@ impl Rows {
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 .map(|id| {
                     let values = sequence(d, id)?;
-                    if values.len() > limits.keys {
+                    if values.len() > crate::limits::Limits::KEYS {
                         return Err(PrepareError::limit(
                             "group_keys",
-                            limits.keys,
+                            crate::limits::Limits::KEYS,
                             Some(values.len()),
                             Some(&format!("{path}.group_by")),
                         ));
@@ -900,10 +900,10 @@ impl Rows {
                 })
                 .transpose()?;
             let entries = mapping(d, field(d, row, "derivations")?)?;
-            if entries.len() > limits.columns {
+            if entries.len() > crate::limits::Limits::COLUMNS {
                 return Err(PrepareError::limit(
                     "row_columns",
-                    limits.columns,
+                    crate::limits::Limits::COLUMNS,
                     Some(entries.len()),
                     Some(&format!("{path}.derivations")),
                 ));
@@ -948,7 +948,6 @@ impl Rows {
                     column,
                     prefix,
                     groups.is_some(),
-                    limits,
                     project,
                     extraction,
                     string_templates,
@@ -1015,7 +1014,6 @@ impl Rows {
                     column,
                     format!("{prefix}.derivation"),
                     false,
-                    limits,
                     project,
                     extraction,
                     string_templates,

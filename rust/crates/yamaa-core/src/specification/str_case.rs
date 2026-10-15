@@ -1,6 +1,6 @@
 //! Original string-case declarations bind named operands without coercion.
 use super::*;
-use crate::text_case::{Case, StringCase, MAX_DECLARATION_BYTES};
+use crate::text_case::{Case, StringCase};
 
 pub(super) fn prepare(
     d: &Document,
@@ -18,18 +18,6 @@ pub(super) fn prepare(
     }
     let source = text(d, field(d, payload, "source")?)?;
     let missing = d.field(payload, "missing");
-    let missing_text = missing.and_then(|id| match &d.nodes()[id] {
-        N::Text(text) => Some(text.as_str()),
-        _ => None,
-    });
-    if !StringCase::metadata_fits(source, path, missing_text) {
-        return Err(PrepareError::limit(
-            "str_case_metadata",
-            MAX_DECLARATION_BYTES,
-            None,
-            Some(path),
-        ));
-    }
     let mode = match text(d, field(d, payload, "to")?)? {
         "upper" => Case::Upper,
         "lower" => Case::Lower,
@@ -64,54 +52,17 @@ pub(super) fn declaration_findings(
         findings: &mut Vec<PreflightFinding>,
         depth: usize,
         rows: bool,
-        bytes: &mut usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
                 "case_depth",
-                64,
+                crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
                 Some(path),
             ));
         }
-        if path.len() > 65_536 {
-            return Err(PrepareError::limit(
-                "path_bytes",
-                65_536,
-                Some(path.len()),
-                Some(path),
-            ));
-        }
+
         if let Some(payload) = d.field(value, "str_case") {
-            *bytes = bytes
-                .checked_add(path.len())
-                .and_then(|n| n.checked_add(512))
-                .filter(|n| *n <= MAX_DECLARATION_BYTES)
-                .ok_or_else(|| {
-                    PrepareError::limit(
-                        "str_case_metadata",
-                        MAX_DECLARATION_BYTES,
-                        None,
-                        Some(path),
-                    )
-                })?;
-            for &(key, value) in mapping(d, payload)? {
-                for id in [key, value] {
-                    if let N::Text(text) | N::Integer(text) = &d.nodes()[id] {
-                        *bytes = bytes
-                            .checked_add(text.len())
-                            .filter(|n| *n <= MAX_DECLARATION_BYTES)
-                            .ok_or_else(|| {
-                                PrepareError::limit(
-                                    "str_case_metadata",
-                                    MAX_DECLARATION_BYTES,
-                                    None,
-                                    Some(path),
-                                )
-                            })?;
-                    }
-                }
-            }
             let operation = prepare(
                 d,
                 payload,
@@ -158,14 +109,12 @@ pub(super) fn declaration_findings(
                     findings,
                     depth + 1,
                     rows,
-                    bytes,
                 )?;
             }
         }
         Ok(())
     }
     let has_rows = present(d, d.root(), "rows");
-    let mut bytes = 0;
     for (index, &column) in columns.iter().enumerate() {
         if let Some(value) = d
             .field(column, "derivation")
@@ -179,7 +128,6 @@ pub(super) fn declaration_findings(
                 findings,
                 0,
                 has_rows,
-                &mut bytes,
             )?;
         }
     }
@@ -199,7 +147,6 @@ pub(super) fn declaration_findings(
                             findings,
                             0,
                             true,
-                            &mut bytes,
                         )?;
                     }
                 }
@@ -207,7 +154,7 @@ pub(super) fn declaration_findings(
         }
     }
     match_values::visit_keys(d, &mut |value, path| {
-        visit(d, value, path, output, findings, 0, has_rows, &mut bytes)
+        visit(d, value, path, output, findings, 0, has_rows)
     })?;
     Ok(())
 }

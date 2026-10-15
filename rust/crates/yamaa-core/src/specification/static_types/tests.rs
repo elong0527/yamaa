@@ -86,7 +86,7 @@ fn document(value: Tree<'_>, verification: Option<Tree<'_>>) -> SpecificationDoc
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);
     SpecificationDocument::admit(
-        Document::new(nodes, root, DocumentLimits::default()).unwrap(),
+        Document::new(nodes, root).unwrap(),
         &mut ValidationBudget::new(Default::default()),
     )
     .unwrap()
@@ -156,23 +156,16 @@ fn compute_and_reduction_reject_known_text_without_evaluation() {
 
 #[test]
 fn numeric_and_aggregate_result_kinds_are_native_metadata() {
-    let numeric = crate::numeric_compiler::compile_numeric(
-        "A + POWER(B, 2) / -3",
-        "result",
-        Default::default(),
-    )
-    .unwrap();
+    let numeric =
+        crate::numeric_compiler::compile_numeric("A + POWER(B, 2) / -3", "result").unwrap();
     assert_eq!(numeric.result_type(), ColumnType::Float);
     let aggregate = crate::aggregate_compiler::compile_aggregate(
         "SUM(EX.DOSE) / NULLIF(EX.PLANDOSE, 0)",
         "result",
-        Default::default(),
     )
     .unwrap();
     assert_eq!(aggregate.numeric_result_type(), Some(ColumnType::Float));
-    let bare =
-        crate::aggregate_compiler::compile_aggregate("MIN(EX.TERM)", "result", Default::default())
-            .unwrap();
+    let bare = crate::aggregate_compiler::compile_aggregate("MIN(EX.TERM)", "result").unwrap();
     assert_eq!(bare.numeric_result_type(), None);
 }
 
@@ -282,8 +275,7 @@ fn repeated_type_findings_refuse_whole_projection_before_output() {
             .collect();
     }
     let expression = terms.pop().unwrap();
-    let plan = crate::numeric_compiler::compile_numeric(&expression, "result", Default::default())
-        .unwrap();
+    let plan = crate::numeric_compiler::compile_numeric(&expression, "result").unwrap();
     assert!(matches!(
         numeric_kinds(&plan, |_| Some(crate::value::ValueType::Str)),
         Err(BindError::PredicateDiagnosticLimit)
@@ -322,7 +314,7 @@ fn phase_document(
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);
     SpecificationDocument::admit(
-        Document::new(nodes, root, DocumentLimits::default()).unwrap(),
+        Document::new(nodes, root).unwrap(),
         &mut ValidationBudget::new(Default::default()),
     )
     .unwrap()

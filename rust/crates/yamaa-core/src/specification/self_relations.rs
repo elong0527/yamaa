@@ -118,10 +118,10 @@ pub(super) fn template_references(
     names: &mut Vec<String>,
     depth: usize,
 ) -> Result<(), PrepareError> {
-    if depth > 64 {
+    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PrepareError::limit(
             "expression_depth",
-            64,
+            crate::limits::Limits::SEMANTIC_DEPTH,
             Some(depth),
             None,
         ));
@@ -231,7 +231,7 @@ impl<'a> FirstTemplate<'a> {
         prefix: &str,
         depth: usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
                 "self_read_metadata",
                 64,
@@ -256,10 +256,9 @@ impl<'a> FirstTemplate<'a> {
         if operation == "case" {
             for (index, &branch) in sequence(d, payload)?.iter().enumerate() {
                 if let Some(condition) = d.field(branch, "when") {
-                    if let Ok(parsed) = crate::predicate_parser::parse_predicate(
-                        text(d, condition)?,
-                        Default::default(),
-                    ) {
+                    if let Ok(parsed) =
+                        crate::predicate_parser::parse_predicate(text(d, condition)?)
+                    {
                         for name in parsed.identifiers() {
                             self.register(name.into(), &format!("{path}[{index}].when"))?;
                         }

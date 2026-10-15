@@ -38,7 +38,7 @@ fn document(value: V) -> Document {
     }
     let mut nodes = Vec::new();
     let root = push(value, &mut nodes);
-    Document::new(nodes, root, DocumentLimits::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 
 fn admit(value: V, class_field: bool) -> yamaa_core::schema::DescriptorReport {

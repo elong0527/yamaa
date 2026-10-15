@@ -3,9 +3,8 @@
 //! Physical decoding and occurrence locations remain codec authority. This service
 //! neither captures sources nor grants data, function, path or publication authority.
 use crate::schema::{
-    Document, ExpandedWindows, NormalizationBudget, NormalizationError, NormalizedDocument,
-    SchemaDiagnostic, SchemaOrigin, SchemaStructure, SpecificationDocument, ValidationError,
-    WindowReference,
+    Document, ExpandedWindows, NormalizationError, NormalizedDocument, SchemaDiagnostic,
+    SchemaOrigin, SchemaStructure, SpecificationDocument, ValidationError, WindowReference,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -70,9 +69,8 @@ impl PreparedStandalone {
 fn expand(
     schema: &SchemaStructure,
     normalized: NormalizedDocument,
-    budget: &mut NormalizationBudget,
 ) -> Result<(ExpandedWindows, Vec<SchemaOrigin>), Error> {
-    let expanded = match schema.expand_named_windows(&normalized.document, true, budget) {
+    let expanded = match schema.expand_named_windows(&normalized.document, true) {
         Ok(expanded) => expanded,
         Err(error) => return Err(normalization_failure(error, normalized.document)),
     };
@@ -87,22 +85,17 @@ fn expand(
 
 /// Parent presence (including null) precedes normalization. Normalization, strict
 /// window expansion and model admission share the caller's existing cumulative
-/// budget; failed attempts retain their charges. No counters or limits are reset.
-pub fn prepare(
-    schema: &SchemaStructure,
-    raw: Document,
-    budget: &mut NormalizationBudget,
-) -> Result<PreparedStandalone, Error> {
+/// provenance. No study data is read during preparation.
+pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStandalone, Error> {
     if raw.field(raw.root(), "parents").is_some() {
         return Err(Error::InheritanceRequired);
     }
-    budget.admit_input(&raw);
-    let normalized = match schema.normalize_document(&raw, budget) {
+    let normalized = match schema.normalize_document(&raw) {
         Ok(normalized) => normalized,
         Err(error) => return Err(normalization_failure(error, raw)),
     };
-    let (expanded, origins) = expand(schema, normalized, budget)?;
-    let model = SpecificationDocument::admit(expanded.document, budget.validation_scope())
+    let (expanded, origins) = expand(schema, normalized)?;
+    let model = SpecificationDocument::admit(expanded.document)
         .map_err(Error::Validation)?
         .map_err(Error::Model)?;
     Ok(PreparedStandalone {
@@ -116,10 +109,7 @@ pub fn prepare(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::{
-        BundleLimits, DocumentLimits, DocumentNode as N, NormalizationLimits, SchemaContext,
-        SchemaModule,
-    };
+    use crate::schema::{DocumentNode as N, SchemaContext, SchemaModule};
     use std::vec;
 
     #[test]
@@ -150,7 +140,7 @@ mod tests {
             }
             let mut nodes = Vec::new();
             let root = push(tree, &mut nodes);
-            Document::new(nodes, root, DocumentLimits::default()).unwrap()
+            Document::new(nodes, root).unwrap()
         }
         fn field(name: &'static str, kind: &'static str) -> Tree {
             Map(vec![(name, Map(vec![("type", Text(kind))]))])
@@ -191,7 +181,6 @@ mod tests {
             }],
             0,
             "root",
-            BundleLimits::default(),
         )
         .unwrap();
         // Unknown window is found by the lifecycle's column expression traversal.
@@ -213,12 +202,11 @@ mod tests {
             N::Sequence(vec![13]),
             N::Mapping(vec![(0, 1), (2, 14)]),
         ];
-        let raw = Document::new(nodes, 15, DocumentLimits::default()).unwrap();
-        let mut budget = NormalizationBudget::new(NormalizationLimits::default());
-        let normalized = schema.normalize_document(&raw, &mut budget).unwrap();
+        let raw = Document::new(nodes, 15).unwrap();
+        let normalized = schema.normalize_document(&raw).unwrap();
         let pointer = normalized.document.nodes().as_ptr();
         let expected = normalized.document.clone();
-        let Err(Error::Normalize(failure)) = expand(&schema, normalized, &mut budget) else {
+        let Err(Error::Normalize(failure)) = expand(&schema, normalized) else {
             panic!("expected strict window failure");
         };
         let held = failure.input.unwrap();

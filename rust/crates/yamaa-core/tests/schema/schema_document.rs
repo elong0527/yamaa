@@ -11,7 +11,7 @@ fn decoded_tree_preserves_order_width_and_unicode_scalar_lengths() {
         N::Text("e\u{301}😀".into()),
         N::Mapping(vec![(0, 1), (2, 3)]),
     ];
-    let document = Document::new(nodes.clone(), 4, DocumentLimits::default()).unwrap();
+    let document = Document::new(nodes.clone(), 4).unwrap();
     assert_eq!(document.nodes(), nodes);
     assert_eq!(document.nodes()[3].length(), Some(3));
     assert_eq!(document.nodes()[1].kind(), DocumentKind::Integer);
@@ -67,14 +67,11 @@ fn malformed_arenas_do_not_enter_schema_interpretation() {
             DocumentError::NonScalarKey,
         ),
     ] {
-        assert_eq!(
-            Document::new(nodes, root, DocumentLimits::default()),
-            Err(error)
-        );
+        assert_eq!(Document::new(nodes, root), Err(error));
     }
     for text in ["", "-", "+1", "00", "-0", "01", "1.0", " 1", "1a", "١"] {
         assert_eq!(
-            Document::new(vec![N::Integer(text.into())], 0, DocumentLimits::default()),
+            Document::new(vec![N::Integer(text.into())], 0),
             Err(DocumentError::InvalidInteger),
             "{text:?}"
         );
@@ -108,8 +105,7 @@ fn scalar_mapping_key_equality_is_exact_without_lossy_integer_promotion() {
                     N::Null,
                     N::Mapping(vec![(0, 1), (2, 3)])
                 ],
-                4,
-                DocumentLimits::default()
+                4
             ),
             Err(DocumentError::DuplicateKey)
         );
@@ -131,8 +127,7 @@ fn scalar_mapping_key_equality_is_exact_without_lossy_integer_promotion() {
                 N::Null,
                 N::Mapping(vec![(0, 1), (2, 3)])
             ],
-            4,
-            DocumentLimits::default()
+            4
         )
         .is_ok());
     }
@@ -176,24 +171,17 @@ fn storage_limits_are_independent_and_do_not_leak_between_documents() {
     ] {
         let nodes = vec![N::Text("😀".into()), N::Sequence(vec![0])];
         assert_eq!(
-            Document::new(nodes.clone(), 1, limits),
+            Document::new(nodes.clone(), 1),
             Err(DocumentError::Limit { resource, limit })
         );
-        assert!(Document::new(nodes, 1, DocumentLimits::default()).is_ok());
+        assert!(Document::new(nodes, 1).is_ok());
     }
     let mut nodes = vec![N::Null];
     for i in 0..64 {
         nodes.push(N::Sequence(vec![i]));
     }
     assert_eq!(
-        Document::new(
-            nodes,
-            64,
-            DocumentLimits {
-                depth: usize::MAX,
-                ..DocumentLimits::default()
-            }
-        ),
+        Document::new(nodes, 64),
         Err(DocumentError::Limit {
             resource: DocumentResource::Depth,
             limit: 64

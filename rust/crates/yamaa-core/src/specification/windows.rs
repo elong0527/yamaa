@@ -91,7 +91,6 @@ impl Declaration {
         payload: usize,
         op: &str,
         path: &str,
-        limits: CompilationLimits,
         extra: &mut Vec<UnsupportedFeature>,
     ) -> Result<Self, PrepareError> {
         let name = |field_name| text(d, field(d, payload, field_name)?).map(String::from);
@@ -149,10 +148,10 @@ impl Declaration {
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
                 let items = sequence(d, group)?;
-                if items.len() > limits.keys {
+                if items.len() > crate::limits::Limits::KEYS {
                     return Err(PrepareError::limit(
                         "window_groups",
-                        limits.keys,
+                        crate::limits::Limits::KEYS,
                         Some(items.len()),
                         Some(&format!("{path}.window.group_by")),
                     ));
@@ -167,10 +166,10 @@ impl Declaration {
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
                 let items = sequence(d, terms)?;
-                if items.len() > limits.source_fields {
+                if items.len() > crate::limits::Limits::COLUMNS {
                     return Err(PrepareError::limit(
                         "window_order",
-                        limits.source_fields,
+                        crate::limits::Limits::COLUMNS,
                         Some(items.len()),
                         Some(&format!("{path}.window.order_by")),
                     ));

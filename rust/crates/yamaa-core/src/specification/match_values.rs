@@ -448,10 +448,7 @@ fn reject_deferred_owners(branch: &cases::Branch, extra: &mut Vec<UnsupportedFea
 }
 
 /// Reject aggregate key counts before the compiler owns paths or expressions.
-pub(super) fn declaration_admission(
-    d: &Document,
-    limits: CompilationLimits,
-) -> Result<(), PrepareError> {
+pub(super) fn declaration_admission(d: &Document) -> Result<(), PrepareError> {
     let Some(items) = d
         .field(d.root(), "intermediates")
         .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -459,10 +456,10 @@ pub(super) fn declaration_admission(
         return Ok(());
     };
     let items = sequence(d, items)?;
-    if items.len() > limits.columns {
+    if items.len() > crate::limits::Limits::COLUMNS {
         return Err(PrepareError::limit(
             "intermediates",
-            limits.columns,
+            crate::limits::Limits::COLUMNS,
             Some(items.len()),
             None,
         ));
@@ -470,10 +467,10 @@ pub(super) fn declaration_admission(
     for &item in items {
         if let Some(key) = d.field(item, "key") {
             if let N::Mapping(fields) = &d.nodes()[key] {
-                if fields.len() > limits.keys {
+                if fields.len() > crate::limits::Limits::KEYS {
                     return Err(PrepareError::limit(
                         "intermediate_keys",
-                        limits.keys,
+                        crate::limits::Limits::KEYS,
                         Some(fields.len()),
                         None,
                     ));
@@ -514,22 +511,15 @@ pub(super) fn visit_keys(
         depth: usize,
         visit: &mut impl FnMut(usize, &str) -> Result<(), PrepareError>,
     ) -> Result<(), PrepareError> {
-        if depth > 64 {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
                 "expression_depth",
-                64,
+                crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
                 Some(path),
             ));
         }
-        if path.len() > 65_536 {
-            return Err(PrepareError::limit(
-                "path_bytes",
-                65_536,
-                Some(path.len()),
-                Some(path),
-            ));
-        }
+
         if let Some(payload) = d.field(value, "aggregate") {
             key(d, payload, &format!("{path}.aggregate"), visit)?;
         }
