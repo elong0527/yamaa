@@ -981,9 +981,6 @@ def main(argv=None):
     judge.add_argument("--fixtures", type=Path, required=True)
     judge.add_argument("--observed", type=Path, required=True)
     judge.add_argument("--output", type=Path, required=True)
-    # Accepted for compatibility with the existing native workflow, which
-    # still passes the retired ratchet path; the gate reads no prior file.
-    judge.add_argument("--ratchet", type=Path)
     args = parser.parse_args(argv)
     if args.command == "plan":
         emit_plan(args.fixtures, args.output)

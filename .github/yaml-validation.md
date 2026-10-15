@@ -49,7 +49,6 @@ uv run --project python --no-sync python .github/scripts/yaml-validation/check_d
 uv run --project python --no-sync python .github/scripts/yaml-validation/test_rule_rewrite.py
 uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_rewrite.py
 uv run --project python --no-sync python .github/scripts/yaml-validation/generate_rule_reference.py --check
-uv run --project python --no-sync python .github/scripts/yaml-validation/check_requirement_registry.py
 ```
 
 The script infers the repository root from its location when `--root` is omitted.

@@ -70,8 +70,7 @@ def strip_code(text):
 def requirement_registry_errors(root):
     """Duplicate/dangling-ID scan over every rule page, code stripped.
 
-    This is the former ``check_requirement_registry.py`` check, merged here:
-    every requirement ID is defined exactly once as a bold dotted marker,
+    Every requirement ID is defined exactly once as a bold dotted marker,
     and every prose citation in ``rules/`` resolves to a definition. The
     contract scan in :func:`check` covers the normative contracts; this scan
     additionally covers the index, generated references and any other rule

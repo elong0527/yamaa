@@ -3,14 +3,13 @@
 
 Every active requirement ID is defined exactly once as a bold dotted marker
 ``**REQ-0001.**``. Citations in rules/ must resolve to current definitions.
-``check_requirement_registry`` remains as the entry point these tests drive.
 """
 
 import tempfile
 import unittest
 from pathlib import Path
 
-import check_requirement_registry
+from check_rule_rewrite import requirement_registry_errors
 
 
 class RequirementRegistryTests(unittest.TestCase):
@@ -28,7 +27,7 @@ class RequirementRegistryTests(unittest.TestCase):
         return path
 
     def errors(self):
-        return check_requirement_registry.check(self.root)
+        return requirement_registry_errors(self.root)
 
     def test_valid_registry_passes(self):
         self.write(

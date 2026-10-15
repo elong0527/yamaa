@@ -64,11 +64,11 @@ jobs:
           python .github/scripts/yaml-validation/check_rule_metadata.py
           python .github/scripts/yaml-validation/check_documentation.py
           python .github/scripts/yaml-validation/test_rule_rewrite.py
+          python .github/scripts/yaml-validation/check_rule_rewrite.py
           python .github/scripts/yaml-validation/generate_rule_reference.py --check
           python .github/scripts/yaml-validation/test_rationale_phrases.py
           python .github/scripts/yaml-validation/check_rationale_phrases.py
           python .github/scripts/yaml-validation/test_requirement_registry.py
-          python .github/scripts/yaml-validation/check_requirement_registry.py
           python rust/tools/check_shared_release_versions.py
 
   rust:
