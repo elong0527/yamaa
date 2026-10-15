@@ -696,6 +696,14 @@ mod file {
                 ("inputs", 16, 17, "input"),
                 ("source_fields", 1024, 1025, "input.SRC.types"),
                 ("projected_columns", 1024, 1025, "output.columns"),
+                (
+                    "source_operands",
+                    64,
+                    65,
+                    "columns.ID.derivation.first_available.sources",
+                ),
+                ("group_keys", 64, 65, "rows[0].group_by"),
+                ("row_columns", 1024, 1025, "rows[0].derivations"),
             ] {
                 let study = Study::new();
                 let mut body = String::from(VALID);
@@ -731,9 +739,29 @@ mod file {
                             &format!("columns: [{}]", vec!["ID"; actual].join(", ")),
                         );
                     }
+                    "source_operands" => {
+                        body = body.replace(
+                            "{source: SRC.ID}",
+                            &format!(
+                                "{{first_available: {{sources: [{}]}}}}",
+                                vec!["SRC.ID"; actual].join(", ")
+                            ),
+                        );
+                    }
+                    "group_keys" => body.push_str(&format!(
+                        "rows:\n  - {{id: r, dataset: SRC, group_by: [{}], derivations: {{ID: SRC.ID}}}}\n",
+                        vec!["ID"; actual].join(", ")
+                    )),
+                    "row_columns" => body.push_str(&format!(
+                        "rows:\n  - {{id: r, dataset: SRC, derivations: {{{}}}}}\n",
+                        (0..actual)
+                            .map(|i| format!("C{i}: SRC.ID"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )),
                     _ => unreachable!(),
                 }
-                fs::write(study.0.join("spec.yaml"), body).unwrap();
+                fs::write(study.0.join("spec.yaml"), &body).unwrap();
                 fs::write(
                     study.0.join("environment.yaml"),
                     "schema_version: '1.0'\nlanguage: python\n",
@@ -765,6 +793,35 @@ mod file {
                             })
                         );
                     }
+                }
+                if resource == "source_operands" {
+                    let admitted = body.replace(
+                        &vec!["SRC.ID"; actual].join(", "),
+                        &vec!["SRC.ID"; limit].join(", "),
+                    );
+                    fs::write(study.0.join("spec.yaml"), admitted).unwrap();
+                    fs::write(study.0.join("input.csv"), "ID\n1\n").unwrap();
+                    for environment in [None, Some(environment.as_str())] {
+                        assert!(file_application::check(
+                            Request {
+                                specification: &spec,
+                                environment,
+                            },
+                            identity(&spec)
+                        )
+                        .is_empty());
+                    }
+                    let mut domain = file_application::domain(
+                        Request {
+                            specification: &spec,
+                            environment: None,
+                        },
+                        identity(&spec),
+                    )
+                    .unwrap();
+                    assert!(domain.issues().is_empty());
+                    assert!(domain.save().unwrap());
+                    assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
                 }
             }
         }
