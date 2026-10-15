@@ -1118,6 +1118,22 @@
           },
           "issues": [],
           "csv": "STUDYID,USUBJID,LBSEQ,EPFLAG\nS1,U1,259,Y\n"
+        },
+        {
+          "name": "ungrouped_filter_promotes_lookup_match_default",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"source.csv\",\n      \"types\": {\n        \"X\": \"float\"\n      }\n    },\n    \"RIGHT\": \"right.csv\"\n  },\n  \"base\": \"SRC\",\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"XVAL\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\"\n    },\n    {\n      \"name\": \"XVAL\",\n      \"type\": \"float\"\n    },\n    {\n      \"name\": \"MATCH\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.K\"\n      }\n    }\n  ],\n  \"rows\": [\n    {\n      \"id\": \"row\",\n      \"dataset\": \"SRC\",\n      \"filter\": \"LOOK.FLAG = 'Y'\",\n      \"derivations\": {\n        \"K\": {\n          \"source\": \"SRC.K\"\n        },\n        \"XVAL\": {\n          \"source\": \"SRC.X\"\n        }\n      }\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"LOOK\",\n      \"dataset\": \"RIGHT\",\n      \"key\": {\n        \"K\": \"MATCH\"\n      },\n      \"no_match\": null\n    }\n  ]\n}\n",
+          "inputs": {
+            "source.csv": "K,X\nr1,1.0\nr2,5.0\nr3,10.0\n",
+            "right.csv": "K,FLAG\nr1,Y\nr3,N\n"
+          },
+          "issues": [],
+          "csv": "K,XVAL\nr1,1\n",
+          "output_rows": [
+            [
+              "r1",
+              1.0
+            ]
+          ]
         }
       ]
     },
