@@ -3,7 +3,7 @@ use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::ConditionCode,
-    schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{PrepareError, PreparedSpecification},
 };
 
@@ -80,11 +80,8 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
     ]);
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);
-    let document = Document::new(nodes, root, Default::default()).unwrap();
-    let model =
-        SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
-            .unwrap()
-            .unwrap();
+    let document = Document::new(nodes, root).unwrap();
+    let model = SpecificationDocument::admit(document).unwrap().unwrap();
     let compiled = PreparedSpecification::prepare(&model).unwrap();
     let findings = compiled.output_findings();
     let expected = [
@@ -184,11 +181,8 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
         ]);
         let mut nodes = Vec::new();
         let root = Map(fields).append(&mut nodes);
-        let document = Document::new(nodes, root, Default::default()).unwrap();
-        let model =
-            SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
-                .unwrap()
-                .unwrap();
+        let document = Document::new(nodes, root).unwrap();
+        let model = SpecificationDocument::admit(document).unwrap().unwrap();
         let compiled = PreparedSpecification::prepare(&model).unwrap();
         assert_eq!(compiled.output_decimals(), Some(precision));
         let findings = compiled.output_findings();
@@ -249,12 +243,9 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
         ]);
         let mut nodes = Vec::new();
         let root = Map(fields).append(&mut nodes);
-        let model = SpecificationDocument::admit(
-            Document::new(nodes, root, Default::default()).unwrap(),
-            &mut ValidationBudget::new(Default::default()),
-        )
-        .unwrap()
-        .unwrap();
+        let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+            .unwrap()
+            .unwrap();
         let compiled = PreparedSpecification::prepare(&model).unwrap();
         let findings = compiled.output_findings();
         assert_eq!(findings.len(), 1);
@@ -286,12 +277,9 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
     fields.push(("filter", Text("ID = 1")));
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);
-    let model = SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap();
+    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
     let prepared = PreparedSpecification::prepare(&model).unwrap();
     let source = yamaa_core::table::TableSchema::new(vec![yamaa_core::table::Column {
         name: "ID".into(),
@@ -326,22 +314,10 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
         .into()
     );
     reached.insert(diagnostic.code);
-    let collision = yamaa_core::source_ordinal::Ordinal::admit(
-        &source,
-        0,
-        "ID",
-        yamaa_core::source_ordinal::Limits {
-            columns: 0,
-            cells: 0,
-        },
-    )
-    .err()
-    .unwrap();
-    let diagnostic = collision
-        .finding("SRC", "ID")
-        .unwrap()
-        .diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
+    let collision = yamaa_core::source_ordinal::Ordinal::admit(&source, 0, "ID")
+        .err()
         .unwrap();
+    let diagnostic = collision.finding("SRC", "ID").unwrap().diagnostic();
     assert_eq!(
         (
             diagnostic.definition().phase,
@@ -366,11 +342,8 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
 fn check(fields: Vec<(&str, Tree<'_>)>, expected: Vec<Expected<'_>>) -> BTreeSet<ConditionCode> {
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);
-    let document = Document::new(nodes, root, Default::default()).unwrap();
-    let model =
-        SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
-            .unwrap()
-            .unwrap();
+    let document = Document::new(nodes, root).unwrap();
+    let model = SpecificationDocument::admit(document).unwrap().unwrap();
     let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&model) else {
         panic!("preflight error from compiler");
     };
@@ -886,11 +859,8 @@ pub(super) fn temporal_reached() -> BTreeSet<ConditionCode> {
     fields.push(("base", Text("SRC")));
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);
-    let document = Document::new(nodes, root, Default::default()).unwrap();
-    let model =
-        SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
-            .unwrap()
-            .unwrap();
+    let document = Document::new(nodes, root).unwrap();
+    let model = SpecificationDocument::admit(document).unwrap().unwrap();
     let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&model) else {
         panic!("temporal preflight rejection")
     };

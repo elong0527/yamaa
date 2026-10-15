@@ -58,7 +58,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             ],
         ),
     ] {
-        let Err(N::Grammar { failure, .. }) = parse_numeric(expression, Default::default()) else {
+        let Err(N::Grammar { failure, .. }) = parse_numeric(expression) else {
             panic!("numeric grammar failure")
         };
         reached.insert(check(
@@ -95,8 +95,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             vec![("outer", text("SUM")), ("inner", text("SUM"))],
         ),
     ] {
-        let Err(A::Grammar { failure, .. }) = parse_aggregate(expression, Default::default())
-        else {
+        let Err(A::Grammar { failure, .. }) = parse_aggregate(expression) else {
             panic!("aggregate grammar failure")
         };
         reached.insert(check(

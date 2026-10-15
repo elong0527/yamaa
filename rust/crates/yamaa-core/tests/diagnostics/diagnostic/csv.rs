@@ -1,9 +1,6 @@
 use serde_json::Value as C;
 use std::collections::BTreeSet;
-use yamaa_core::{
-    csv_source::{parse, Limits},
-    diagnostic::{ConditionCode, MAX_PROJECTION_BYTES},
-};
+use yamaa_core::{csv_source::parse, diagnostic::ConditionCode};
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     for (input, condition, requirement, record, field) in [
@@ -78,12 +75,8 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             C::Number(("2").parse().expect("canonical integer")),
         ),
     ] {
-        let error = parse(input, Limits::default()).unwrap_err();
-        let finding = error
-            .finding("SRC", "source.csv")
-            .unwrap()
-            .diagnostic_with_limit(MAX_PROJECTION_BYTES)
-            .unwrap();
+        let error = parse(input).unwrap_err();
+        let finding = error.finding("SRC", "source.csv").unwrap().diagnostic();
         let definition = finding.definition();
         assert_eq!(
             (
@@ -104,14 +97,11 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(finding.operand_route, None);
         reached.insert(finding.code);
     }
-    let error = parse(
-        b"ID\n1",
-        Limits {
-            bytes: 1,
-            ..Limits::default()
-        },
-    )
-    .unwrap_err();
+    let header = (0..=yamaa_core::limits::Limits::COLUMNS)
+        .map(|index| format!("C{index}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let error = parse(header.as_bytes()).unwrap_err();
     assert!(error.finding("SRC", "source.csv").is_none());
     assert!(error.requirement().is_none());
     reached
@@ -147,15 +137,11 @@ pub(super) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
             vec![("type", "int"), ("value", "bad")],
         ),
     ] {
-        let types = PreparedTypes::new(&declarations, 16).unwrap();
+        let types = PreparedTypes::new(&declarations).unwrap();
         let error = types
-            .convert(csv_source::parse(content, Default::default()).unwrap())
+            .convert(csv_source::parse(content).unwrap())
             .unwrap_err();
-        let diagnostic = error
-            .finding("SRC")
-            .unwrap()
-            .diagnostic_with_limit(MAX_PROJECTION_BYTES)
-            .unwrap();
+        let diagnostic = error.finding("SRC").unwrap().diagnostic();
         let definition = diagnostic.definition();
         assert_eq!(
             (

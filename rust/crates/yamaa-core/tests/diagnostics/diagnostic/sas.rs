@@ -16,8 +16,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             path,
             cause,
         }
-        .diagnostic_with_limit(yamaa_core::diagnostic::MAX_PROJECTION_BYTES)
-        .unwrap();
+        .diagnostic();
         let definition = diagnostic.definition();
         assert_eq!(
             (

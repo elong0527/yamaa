@@ -287,7 +287,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
 fn derive_reached() -> BTreeSet<ConditionCode> {
     use specification_support::Tree as T;
     use yamaa_core::{
-        schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
+        schema::{Document, DocumentNode as N, SpecificationDocument},
         specification::{PreflightFinding, PrepareError, PreparedSpecification},
     };
     let binding = |value| {
@@ -403,12 +403,9 @@ fn derive_reached() -> BTreeSet<ConditionCode> {
     fields.push((key, value));
     let root = nodes.len();
     nodes.push(N::Mapping(fields));
-    let document = SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap();
+    let document = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
     let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&document) else {
         panic!("derive read without keep was admitted");
     };
@@ -437,7 +434,7 @@ fn derive_reached() -> BTreeSet<ConditionCode> {
 }
 
 #[test]
-fn invalid_causes_and_complete_context_budgets_refuse_before_projection() {
+fn invalid_causes_refuse_and_large_group_values_stay_complete() {
     for types in [
         &[ValueType::Int, ValueType::Float][..],
         &[ValueType::Str, ValueType::Str][..],
@@ -471,18 +468,34 @@ fn invalid_causes_and_complete_context_budgets_refuse_before_projection() {
     let huge = "x".repeat(1_000_000);
     let group = vec![("D.ID".into(), Value::Str(huge.clone()))];
     let address = huge.as_ptr();
+    let diagnostic = Finding::MultipleRecords {
+        path: "aggregate",
+        expression: "ONLY(D.V)",
+        phase: AggregatePhase::RowConstruction,
+        count: 2,
+        row: Some("total"),
+        group: &group,
+    }
+    .diagnostic()
+    .unwrap();
+    assert_eq!(diagnostic.spec_paths, ["aggregate"]);
+    assert_eq!(diagnostic.code, ConditionCode::AggregateRowMultipleRecords);
     assert_eq!(
-        Finding::MultipleRecords {
-            path: "aggregate",
-            expression: "ONLY(D.V)",
-            phase: AggregatePhase::RowConstruction,
-            count: 2,
-            row: Some("total"),
-            group: &group
-        }
-        .diagnostic_with_limit(4096),
-        Err(ProjectionError::Limit)
+        diagnostic.context,
+        [
+            ("expr".into(), text("ONLY(D.V)")),
+            ("reducer".into(), text("ONLY")),
+            ("record_count".into(), V::from(2)),
+            ("row".into(), text("total")),
+            (
+                "group".into(),
+                V::Object([("D.ID".into(), text(&huge))].into_iter().collect())
+            ),
+        ]
+        .into()
     );
+    assert_eq!(diagnostic.source_span, None);
+    assert_eq!(diagnostic.operand_route, None);
     assert_eq!(huge.as_ptr(), address);
     assert_eq!(group[0].1, Value::Str(huge));
 }

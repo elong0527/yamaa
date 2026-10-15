@@ -1,8 +1,8 @@
 use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::diagnostic::{
-    lock_diagnostics, lock_diagnostics_with_limit, ConditionCode, LockDiagnosticError as E,
-    LockFinding, LockOrigins, LockReason as R,
+    lock_diagnostics, ConditionCode, LockDiagnosticError as E, LockFinding, LockOrigins,
+    LockReason as R,
 };
 fn text(value: &str) -> V {
     V::String(value.into())
@@ -148,8 +148,8 @@ fn spelling_missing_and_empty_facts_are_preserved_without_version_comparison() {
     assert_eq!(records[0].context["lock"], text("../declared/uv.lock"));
 }
 #[test]
-fn shape_and_quota_refuse_whole_reports_with_the_original_admission_precedence() {
-    assert_eq!(lock_diagnostics_with_limit(None, &[], 0).unwrap(), vec![]);
+fn contradictory_shapes_refuse_the_complete_report() {
+    assert_eq!(lock_diagnostics(None, &[]).unwrap(), vec![]);
     let first = || finding(R::VersionMismatch, &["1.0"], Some("2.0"));
     assert_eq!(lock_diagnostics(None, &[first()]), Err(E::InvalidContext));
     for bad in [
@@ -160,75 +160,79 @@ fn shape_and_quota_refuse_whole_reports_with_the_original_admission_precedence()
         finding(R::PackageNotInstalled, &["1"], Some("2")),
         finding(R::InvalidInstalledVersion, &[], Some("2")),
         finding(R::VersionMismatch, &["1"], None),
+        LockFinding {
+            package: "bad\0package".into(),
+            ..first()
+        },
+        LockFinding {
+            package: String::new(),
+            ..first()
+        },
     ] {
         assert_eq!(
             lock_diagnostics(Some(origins()), &[first(), bad]),
             Err(E::InvalidContext)
         );
     }
-    let bad = || LockFinding {
-        package: "bad\0package".into(),
-        ..first()
-    };
+}
+
+#[test]
+fn long_lock_facts_and_all_ordered_versions_remain_complete() {
+    let source = "\0".repeat(65_537);
+    let package = "p".repeat(2049);
+    let actual = "é".repeat(1025);
+    let records = [LockFinding {
+        package: package.clone(),
+        reason: R::VersionMismatch,
+        expected: vec!["1".into()],
+        actual: Some(actual.clone()),
+    }];
+    let report = lock_diagnostics(
+        Some(LockOrigins {
+            source: &source,
+            ..origins()
+        }),
+        &records,
+    )
+    .unwrap();
     assert_eq!(
-        lock_diagnostics_with_limit(Some(origins()), &[bad()], 0),
-        Err(E::InvalidContext)
+        report,
+        [yamaa_core::diagnostic::Diagnostic {
+            code: ConditionCode::ProjectLockMismatch,
+            spec_paths: vec!["lock".into()],
+            context: [
+                ("source".into(), text(&source)),
+                ("entry".into(), text(&source)),
+                ("lock_source".into(), text("held/uv.lock")),
+                ("lock".into(), text("../uv.lock")),
+                ("package".into(), text(&package)),
+                ("reason".into(), text("version_mismatch")),
+                ("expected".into(), V::Array(vec![text("1")])),
+                ("actual".into(), text(&actual)),
+            ]
+            .into(),
+            source_span: None,
+            operand_route: None,
+        }]
     );
-    assert_eq!(
-        lock_diagnostics_with_limit(Some(origins()), &[first(), bad()], 0),
-        Err(E::Limit)
-    );
-    assert_eq!(
-        lock_diagnostics_with_limit(Some(origins()), &[first()], 3_000)
-            .unwrap()
-            .len(),
-        1
-    );
-    assert_eq!(
-        lock_diagnostics_with_limit(Some(origins()), &[first(), first()], 3_000),
-        Err(E::Limit)
-    );
-    let too_wide = "é".repeat(1_025);
-    assert_eq!(
-        lock_diagnostics(
-            Some(origins()),
-            &[finding(R::InvalidInstalledVersion, &["1"], Some(&too_wide))]
-        ),
-        Err(E::Limit)
-    );
-    let many = (0..2_050)
+    let many = (0..2050)
         .map(|_| finding(R::VersionNotLocked, &[], None))
         .collect::<Vec<_>>();
-    assert_eq!(lock_diagnostics(None, &many), Err(E::Limit));
-    let versions = LockFinding {
+    let projected = lock_diagnostics(Some(origins()), &many).unwrap();
+    assert_eq!(projected.len(), 2050);
+    assert!(projected
+        .iter()
+        .all(|diagnostic| diagnostic.context["reason"] == text("version_not_locked")));
+    let versions = [LockFinding {
         package: "program".into(),
         reason: R::AmbiguousLockVersion,
         expected: vec!["1".into(); 65_537],
         actual: None,
-    };
+    }];
+    let projected = lock_diagnostics(Some(origins()), &versions).unwrap();
     assert_eq!(
-        lock_diagnostics(Some(origins()), &[versions]),
-        Err(E::Limit)
+        projected[0].context["expected"],
+        V::Array(vec![text("1"); 65_537])
     );
-    let long_origin = "\0".repeat(65_537);
-    assert_eq!(
-        lock_diagnostics(
-            Some(LockOrigins {
-                source: &long_origin,
-                ..origins()
-            }),
-            &[first()]
-        ),
-        Err(E::Limit)
-    );
-    assert_eq!(
-        lock_diagnostics_with_limit(Some(origins()), &[first()], 0),
-        Err(E::Limit)
-    );
-    assert_eq!(
-        lock_diagnostics_with_limit(Some(origins()), &[first()], usize::MAX)
-            .unwrap()
-            .len(),
-        1
-    );
+    assert_eq!(projected[0].context["actual"], V::Null);
 }

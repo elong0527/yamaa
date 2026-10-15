@@ -1,7 +1,7 @@
 use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::{ConditionCode, Context, MAX_PROJECTION_BYTES},
+    diagnostic::{ConditionCode, Context},
     parquet_source::{self as p, Converted, Field, Logical, Physical, Representation},
     value::ColumnType,
 };
@@ -69,10 +69,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
     ];
     let mut reached = BTreeSet::new();
     for (error, condition, requirement, extra) in errors {
-        let finding = error
-            .finding("SRC", "data.parquet")
-            .diagnostic_with_limit(MAX_PROJECTION_BYTES)
-            .unwrap();
+        let finding = error.finding("SRC", "data.parquet").diagnostic();
         let def = finding.definition();
         assert_eq!(
             (def.phase, def.condition, def.requirement),

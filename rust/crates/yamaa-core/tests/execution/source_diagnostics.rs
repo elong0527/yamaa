@@ -2,19 +2,15 @@
 use serde_json::Value as V;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use yamaa_core::{
-    dataset,
+    application_observer::{Noop, Scope},
+    function_invocation::NoFunctions,
     specification_run::{
         self as run, CapturedAttempt, PortError, RunError, SourceDecoder, SourcePort,
     },
 };
 use yamaa_core::{
-    diagnostic::{
-        admit_source_diagnostics, ConditionCode as C, Diagnostic, ProjectionError,
-        MAX_PROJECTION_BYTES,
-    },
-    schema::{
-        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    },
+    diagnostic::{source_diagnostics, ConditionCode as C, Diagnostic},
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{PreparedSpecification, SourceDeclaration},
     table::{CellError, TableAccess, TableSchema, ValueRef},
     typed_csv::Error as TypingError,
@@ -83,29 +79,9 @@ fn prepared(names: &[&str]) -> PreparedSpecification {
     ]);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
-    let document = Document::new(nodes, root, DocumentLimits::default()).unwrap();
-    let model =
-        SpecificationDocument::admit(document, &mut ValidationBudget::new(Default::default()))
-            .unwrap()
-            .unwrap();
+    let document = Document::new(nodes, root).unwrap();
+    let model = SpecificationDocument::admit(document).unwrap().unwrap();
     PreparedSpecification::prepare(&model).unwrap()
-}
-fn limits() -> run::Limits {
-    run::Limits {
-        source_bytes: 1024,
-        source_cells: 10,
-        execution: dataset::Limits {
-            source_rows: 10,
-            output_rows: 10,
-            output_cells: 100,
-            key_cells: 100,
-            work_cells: 1000,
-            scalar_text_bytes: 1000,
-            output_text_bytes: 1000,
-            identity_cells: 100,
-            identity_text_bytes: 1000,
-        },
-    }
 }
 type Trace = Rc<RefCell<Vec<String>>>;
 struct Opaque {
@@ -134,15 +110,6 @@ struct Port {
     fail_at: Option<&'static str>,
 }
 impl SourcePort for Port {
-    fn capture_observed(
-        &mut self,
-        source: &SourceDeclaration,
-        byte_limit: usize,
-        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error> {
-        *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-        <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-    }
     fn resource_failure(
         &self,
         _error: &Self::Error,
@@ -159,7 +126,12 @@ impl SourcePort for Port {
     fn capture_reads(&self) -> usize {
         self.reads
     }
-    fn capture(&mut self, source: &SourceDeclaration, _: usize) -> Result<Arc<[u8]>, Opaque> {
+    fn capture(
+        &mut self,
+        source: &SourceDeclaration,
+        origin: &mut Option<run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, Opaque> {
+        *origin = Some(run::SourceOrigin::Resource);
         self.trace
             .borrow_mut()
             .push(format!("capture:{}", source.name));
@@ -182,14 +154,6 @@ struct Decoder {
     next: usize,
 }
 impl SourceDecoder for Decoder {
-    fn decode_with_interpretation(
-        &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        _interpretation: yamaa_core::specification::SourceInterpretation,
-    ) -> Result<Self::Table, Self::Error> {
-        self.decode(source, bytes)
-    }
     type Error = Opaque;
     type Table = NoTable;
     fn continue_after(&self, error: &Opaque) -> bool {
@@ -198,7 +162,13 @@ impl SourceDecoder for Decoder {
             .push(format!("classify:{}", error.name));
         error.cause.is_some()
     }
-    fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<NoTable, Opaque> {
+    fn decode(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        _interpretation: yamaa_core::specification::SourceInterpretation,
+        _contract: Option<&yamaa_core::producer_contract::Contract>,
+    ) -> Result<NoTable, Opaque> {
         self.trace
             .borrow_mut()
             .push(format!("decode:{}", source.name));
@@ -284,7 +254,14 @@ fn failed_run_keeps_complete_order_all_original_allocations_and_effects_through_
     let prepared = prepared(&["SRC", "SECOND", "THIRD"]);
     let (mut port, mut decoder, marker, pointer) = fixtures(false);
     let mut attempt = CapturedAttempt::new(prepared.source());
-    run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+    run::execute_into(
+        &prepared,
+        &mut port,
+        &mut decoder,
+        &mut NoFunctions::new(),
+        &mut attempt,
+        Scope::new(&Noop),
+    );
     let Err(PortError::Run(RunError::Sources(errors))) = &attempt.result else {
         panic!("expected held decoder failures")
     };
@@ -334,10 +311,7 @@ fn failed_run_keeps_complete_order_all_original_allocations_and_effects_through_
                 .unwrap()
         })
         .collect();
-    let actual: Vec<_> = admit_source_diagnostics(&findings, MAX_PROJECTION_BYTES)
-        .unwrap()
-        .iter()
-        .collect();
+    let actual: Vec<_> = source_diagnostics(&findings).collect();
     assert_eq!(
         actual,
         vec![
@@ -368,18 +342,7 @@ fn failed_run_keeps_complete_order_all_original_allocations_and_effects_through_
             ),
         ]
     );
-    assert!(admit_source_diagnostics(&findings[..2], 8192).is_ok());
-    assert!(matches!(
-        admit_source_diagnostics(&findings, 8192),
-        Err(ProjectionError::Limit)
-    ));
-    assert_eq!(
-        admit_source_diagnostics(&findings, MAX_PROJECTION_BYTES)
-            .unwrap()
-            .iter()
-            .collect::<Vec<_>>(),
-        actual
-    );
+    assert_eq!(source_diagnostics(&findings).collect::<Vec<_>>(), actual);
     assert_eq!(value.as_ptr(), pointer);
     assert_eq!(*port.trace.borrow(), trace);
     assert_eq!(port.reads, 3);
@@ -390,7 +353,14 @@ fn original_opaque_decoder_payload_aborts_after_completed_prefix_before_later_ca
     let prepared = prepared(&["SRC", "SECOND", "THIRD", "NEVER"]);
     let (mut port, mut decoder, marker, _) = fixtures(true);
     let mut attempt = CapturedAttempt::new(prepared.source());
-    run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+    run::execute_into(
+        &prepared,
+        &mut port,
+        &mut decoder,
+        &mut NoFunctions::new(),
+        &mut attempt,
+        Scope::new(&Noop),
+    );
     let Err(PortError::Run(RunError::Sources(errors))) = &attempt.result else {
         panic!("expected opaque decoder error")
     };
@@ -431,7 +401,14 @@ fn original_opaque_capture_payload_retains_identity_without_decode_or_projection
     let (mut port, mut decoder, marker, _) = fixtures(false);
     port.fail_at = Some("SECOND");
     let mut attempt = CapturedAttempt::new(prepared.source());
-    run::execute_with_port_into(&prepared, &mut port, &mut decoder, limits(), &mut attempt);
+    run::execute_into(
+        &prepared,
+        &mut port,
+        &mut decoder,
+        &mut NoFunctions::new(),
+        &mut attempt,
+        Scope::new(&Noop),
+    );
     let Err(PortError::Capture(error)) = &attempt.result else {
         panic!("expected original capture error")
     };

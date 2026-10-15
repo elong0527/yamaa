@@ -2,7 +2,7 @@ use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
     dataset::AggregatePhase,
-    diagnostic::{ConditionCode, OdmDeclared, OdmFinding as F, ProjectionError},
+    diagnostic::{ConditionCode, OdmDeclared, OdmFinding as F},
     value::{ColumnType, Value},
 };
 fn text(value: &str) -> V {
@@ -17,7 +17,7 @@ fn check(
     context: Vec<(&str, V)>,
     reached: &mut BTreeSet<ConditionCode>,
 ) {
-    let diagnostic = finding.diagnostic().unwrap();
+    let diagnostic = finding.diagnostic();
     assert_eq!(
         (
             diagnostic.definition().phase,
@@ -222,31 +222,61 @@ pub fn reached() -> BTreeSet<ConditionCode> {
 }
 
 #[test]
-fn whole_odm_projection_accounts_for_nested_values_and_escaped_metadata() {
+fn complete_odm_projection_preserves_nested_values_and_escaped_metadata() {
     let large = "\"".repeat(400);
-    let names = [large];
+    let names = [large.clone()];
     let finding = F::AmbiguousField {
         dataset: "D",
         field: "ItemOID",
         stored: &names,
     };
-    assert_eq!(
-        finding.diagnostic_with_limit(1024),
-        Err(ProjectionError::Limit)
+    let mut reached = BTreeSet::new();
+    check(
+        finding,
+        "validation",
+        "odm_schema_field_ambiguous",
+        "REQ-1275",
+        "input.D.path",
+        vec![
+            ("dataset", text("D")),
+            ("field", text("ItemOID")),
+            ("stored", V::Array(vec![text(&large)])),
+        ],
+        &mut reached,
     );
-    assert!(finding.diagnostic_with_limit(4096).is_ok());
-    let differ = [("FormOID".into(), vec![Value::Str("\\".repeat(400))])];
+    let value = "\\".repeat(400);
+    let differ = [("FormOID".into(), vec![Value::Str(value.clone())])];
+    let diagnostic = F::NotUnique {
+        path: "odm",
+        item: "D.Item",
+        row: None,
+        phase: AggregatePhase::Derivation,
+        scope: &[],
+        differ: &differ,
+        records: 2,
+    }
+    .diagnostic();
+    assert_eq!(diagnostic.code, ConditionCode::OdmNotUnique);
+    assert_eq!(diagnostic.spec_paths, ["odm"]);
     assert_eq!(
-        F::NotUnique {
-            path: "odm",
-            item: "D.Item",
-            row: None,
-            phase: AggregatePhase::Derivation,
-            scope: &[],
-            differ: &differ,
-            records: 2
-        }
-        .diagnostic_with_limit(1024),
-        Err(ProjectionError::Limit)
+        diagnostic.context,
+        [
+            ("item".into(), text("D.Item")),
+            ("row".into(), V::Null),
+            ("scope".into(), V::Object(Default::default())),
+            ("records".into(), V::from(2)),
+            (
+                "differ".into(),
+                V::Object(
+                    [("FormOID".into(), V::Array(vec![text(&value)]))]
+                        .into_iter()
+                        .collect()
+                )
+            ),
+            ("repeated".into(), V::Bool(false)),
+        ]
+        .into()
     );
+    assert_eq!(diagnostic.source_span, None);
+    assert_eq!(diagnostic.operand_route, None);
 }

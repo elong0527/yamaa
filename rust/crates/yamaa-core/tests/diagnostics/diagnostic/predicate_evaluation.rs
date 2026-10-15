@@ -3,9 +3,9 @@ use std::{collections::BTreeSet, convert::Infallible};
 use yamaa_core::{
     diagnostic::{ConditionCode, PredicateDiagnosticError as P},
     predicate::{
-        Comparison, Condition, ErrorKind, EvaluationError, LimitError, Limits, Node, Plan,
-        Resolver, Resource, Route, Scalar,
+        Comparison, Condition, ErrorKind, EvaluationError, Node, Plan, Resolver, Route, Scalar,
     },
+    regex,
     value::{Selection, Value},
 };
 fn text(s: &str) -> V {
@@ -13,15 +13,12 @@ fn text(s: &str) -> V {
 }
 #[test]
 fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts() {
-    use yamaa_core::{
-        diagnostic::PredicateGrammarDiagnosticError as G,
-        predicate_parser::{parse_predicate, GrammarFailure, ParseError},
-    };
+    use yamaa_core::predicate_parser::{parse_predicate, GrammarFailure, ParseError};
     for (expression, requirement, character, detail) in [
         ("STR_CONTAINS(ID, '(')", "REQ-1244", 17, "pattern_byte"),
         ("ID = DATE '2026-02-30'", "REQ-0188", 10, "temporal_error"),
     ] {
-        let error = parse_predicate(expression, Default::default()).unwrap_err();
+        let error = parse_predicate(expression).unwrap_err();
         let ParseError::Grammar {
             failure,
             position,
@@ -34,13 +31,11 @@ fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts()
         let detail_before = failure.syntax_diagnostic();
         assert!(detail_before.context.contains_key(detail));
         let message_address = message.as_ptr();
-        let finding = failure
-            .original_diagnostic(
-                "columns.VALUE.derivation.row_number.window.filter",
-                expression,
-                position.character,
-            )
-            .unwrap();
+        let finding = failure.original_diagnostic(
+            "columns.VALUE.derivation.row_number.window.filter",
+            expression,
+            position.character,
+        );
         assert_eq!(finding.definition().requirement, Some(requirement));
         assert_eq!(
             finding.context,
@@ -52,10 +47,6 @@ fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts()
         );
         assert_eq!(finding.source_span, None);
         assert_eq!(finding.operand_route, None);
-        assert_eq!(
-            failure.original_diagnostic_with_limit("rows[0].filter", expression, usize::MAX, 1),
-            Err(G::OutputLimit)
-        );
         assert_eq!(failure.syntax_diagnostic(), detail_before);
         assert_eq!(message.as_ptr(), message_address);
     }
@@ -65,30 +56,34 @@ fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts()
         failure: GrammarFailure::InvalidEscape,
         position,
         ..
-    } = parse_predicate("ID LIKE '%' ESCAPE 'xx'", Default::default()).unwrap_err()
+    } = parse_predicate("ID LIKE '%' ESCAPE 'xx'").unwrap_err()
     else {
         panic!("invalid ESCAPE width")
     };
-    let finding = GrammarFailure::InvalidEscape
-        .original_diagnostic(
-            "rows[0].filter",
-            "ID LIKE '%' ESCAPE 'xx'",
-            position.character,
-        )
-        .unwrap();
+    let finding = GrammarFailure::InvalidEscape.original_diagnostic(
+        "rows[0].filter",
+        "ID LIKE '%' ESCAPE 'xx'",
+        position.character,
+    );
     assert_eq!(finding.definition().requirement, Some("REQ-0191"));
     assert_eq!(
         finding.context["position"],
         V::Number(("19").parse().expect("canonical integer"))
     );
     let huge = "\0".repeat(1_400_000);
+    let projected =
+        GrammarFailure::InvalidExpression.original_diagnostic("rows[0].filter", &huge, usize::MAX);
+    assert_eq!(projected.spec_paths, ["rows[0].filter"]);
     assert_eq!(
-        GrammarFailure::InvalidExpression.original_diagnostic("rows[0].filter", &huge, usize::MAX),
-        Err(G::OutputLimit)
+        projected.context,
+        [
+            ("predicate".into(), text(&huge)),
+            ("position".into(), V::from(usize::MAX)),
+        ]
+        .into()
     );
-    let full = GrammarFailure::InvalidExpression
-        .original_diagnostic("rows[0].filter", "A >", usize::MAX)
-        .unwrap();
+    let full =
+        GrammarFailure::InvalidExpression.original_diagnostic("rows[0].filter", "A >", usize::MAX);
     assert_eq!(full.context["position"], V::from(usize::MAX));
 }
 struct Absent;
@@ -105,7 +100,6 @@ fn plan(nodes: Vec<Node>) -> Plan {
         root,
         "rows[2].filter".into(),
         "é\0🙂 authored predicate".into(),
-        Limits::default(),
     )
     .unwrap()
 }
@@ -258,8 +252,8 @@ fn upper_resolution_outranks_lower_type_error_and_projection_never_retries() {
     };
     assert_eq!(port.trace, ["v", "low", "v", "high"]);
     assert_eq!(error.route, [Route::Upper]);
-    for maximum in [0, 16_777_216] {
-        let Err(P::Resolution(payload)) = error.diagnostic_with_limit(maximum) else {
+    for _ in 0..2 {
+        let Err(P::Resolution(payload)) = error.diagnostic() else {
             panic!("borrowed original")
         };
         assert_eq!(&*payload.original as *const u8, pointer);
@@ -276,7 +270,7 @@ fn upper_resolution_outranks_lower_type_error_and_projection_never_retries() {
     assert_eq!(&*payload.original as *const u8, pointer);
 }
 #[test]
-fn complete_borrowed_quota_and_full_width_routes_have_no_partial_finding() {
+fn complete_long_context_and_full_width_routes_preserve_original_regex_failure() {
     let mut error: EvaluationError<Infallible> = EvaluationError {
         spec_path: "rows[0].filter".into(),
         expression: "unchanged".into(),
@@ -308,28 +302,38 @@ fn complete_borrowed_quota_and_full_width_routes_have_no_partial_finding() {
             "Pattern".into()
         ])
     );
-    assert!(matches!(
-        error.diagnostic_with_limit(1),
-        Err(P::OutputLimit)
-    ));
     error.route = vec![Route::Left; 65_536];
-    assert!(matches!(error.diagnostic(), Err(P::OutputLimit)));
+    let projected = error.diagnostic().unwrap();
+    assert_eq!(projected.operand_route, Some(vec!["Left".into(); 65_536]));
+    assert_eq!(
+        projected.context,
+        [("reason".into(), text("LIKE pattern has a dangling escape"))].into()
+    );
     error.route = vec![];
+    let identifier = "\0".repeat(1_400_000);
     error.kind = ErrorKind::Condition(Condition::UnknownField {
-        identifier: "\0".repeat(1_400_000),
+        identifier: identifier.clone(),
     });
-    assert!(matches!(error.diagnostic(), Err(P::OutputLimit)));
-    error.kind = ErrorKind::Limit(LimitError {
-        resource: Resource::RegexWork,
-        limit: 7,
+    let projected = error.diagnostic().unwrap();
+    assert_eq!(
+        projected.context,
+        [("identifier".into(), text(&identifier))].into()
+    );
+    assert_eq!(projected.operand_route, Some(vec![]));
+    error.kind = ErrorKind::Regex(regex::MatchError {
+        resource: regex::Resource::Work,
+        limit: 1_000_000,
     });
-    let ErrorKind::Limit(ref native) = error.kind else {
+    let ErrorKind::Regex(ref native) = error.kind else {
         unreachable!()
     };
-    let Err(P::Resource(held)) = error.diagnostic_with_limit(0) else {
-        panic!("original limit")
+    let Err(P::Regex(held)) = error.diagnostic() else {
+        panic!("original regex failure")
     };
     assert!(std::ptr::eq(held, native));
-    assert_eq!((held.resource, held.limit), (Resource::RegexWork, 7));
+    assert_eq!(
+        (held.resource, held.limit),
+        (regex::Resource::Work, 1_000_000)
+    );
     assert_eq!(error.expression, "unchanged");
 }

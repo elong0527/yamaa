@@ -3,8 +3,7 @@ use serde_json::Value as V;
 use yamaa_core::{
     csv_source::{self, Field as CsvField},
     diagnostic::{
-        admit_source_diagnostics, ConditionCode as C, Diagnostic, ParquetFinding, ProjectionError,
-        SourceFinding, MAX_PROJECTION_BYTES,
+        source_diagnostics, ConditionCode as C, Diagnostic, ParquetFinding, SourceFinding,
     },
     parquet_source::{self as parquet, Converted, Field, Logical, Physical, Representation},
     typed_csv::PreparedTypes,
@@ -93,16 +92,13 @@ fn every_csv_cause_retains_the_complete_independent_context() {
     ];
     let errors: Vec<_> = cases
         .iter()
-        .map(|(bytes, ..)| csv_source::parse(bytes, Default::default()).unwrap_err())
+        .map(|(bytes, ..)| csv_source::parse(bytes).unwrap_err())
         .collect();
     let borrowed: Vec<_> = errors
         .iter()
         .map(|error| error.finding("SRC", "source.csv").unwrap())
         .collect();
-    let actual: Vec<_> = admit_source_diagnostics(&borrowed, MAX_PROJECTION_BYTES)
-        .unwrap()
-        .iter()
-        .collect();
+    let actual: Vec<_> = source_diagnostics(&borrowed).collect();
     let wanted: Vec<_> = cases
         .into_iter()
         .map(|(_, code, record, field)| {
@@ -135,23 +131,20 @@ fn source_types_keep_declaration_then_stored_row_field_precedence_and_all_value_
         ("Z".into(), ColumnType::Float),
         ("A".into(), ColumnType::Int),
     ];
-    let absent = PreparedTypes::new(&declarations, 16)
+    let absent = PreparedTypes::new(&declarations)
         .unwrap()
-        .convert(csv_source::parse(b"X\nnot-an-int", Default::default()).unwrap())
+        .convert(csv_source::parse(b"X\nnot-an-int").unwrap())
         .unwrap_err();
     let declarations = vec![("B".into(), ColumnType::Int), ("A".into(), ColumnType::Int)];
-    let first = PreparedTypes::new(&declarations, 16)
+    let first = PreparedTypes::new(&declarations)
         .unwrap()
-        .convert(csv_source::parse(b"A,B\n1,bad\nworse,2", Default::default()).unwrap())
+        .convert(csv_source::parse(b"A,B\n1,bad\nworse,2").unwrap())
         .unwrap_err();
     let findings = [
         absent.finding("SRC").unwrap(),
         first.finding("SRC").unwrap(),
     ];
-    let actual: Vec<_> = admit_source_diagnostics(&findings, MAX_PROJECTION_BYTES)
-        .unwrap()
-        .iter()
-        .collect();
+    let actual: Vec<_> = source_diagnostics(&findings).collect();
     assert_eq!(
         actual,
         vec![
@@ -192,11 +185,7 @@ fn source_types_keep_declaration_then_stored_row_field_precedence_and_all_value_
         target: ColumnType::Int,
         value: long.clone(),
     };
-    let actual = error
-        .finding("SRC")
-        .unwrap()
-        .diagnostic_with_limit(MAX_PROJECTION_BYTES)
-        .unwrap();
+    let actual = error.finding("SRC").unwrap().diagnostic();
     assert_eq!(actual.context["value"], text(&long));
 }
 
@@ -262,12 +251,7 @@ fn physical_schema_and_raw_temporal_findings_keep_all_original_facts() {
             ],
         ),
     ];
-    for (actual, (code, requirement, extra)) in
-        admit_source_diagnostics(&borrowed, MAX_PROJECTION_BYTES)
-            .unwrap()
-            .iter()
-            .zip(wanted)
-    {
+    for (actual, (code, requirement, extra)) in source_diagnostics(&borrowed).zip(wanted) {
         let fields = vec![("dataset", text("SRC")), ("path", text("data.parquet"))]
             .into_iter()
             .chain(extra)
@@ -290,43 +274,23 @@ fn physical_schema_and_raw_temporal_findings_keep_all_original_facts() {
     assert_eq!(inspected, 1);
 }
 
-fn minimum(findings: &[SourceFinding<'_>]) -> usize {
-    let mut lower = 0;
-    let mut upper = MAX_PROJECTION_BYTES;
-    while lower < upper {
-        let middle = lower + (upper - lower) / 2;
-        if admit_source_diagnostics(findings, middle).is_ok() {
-            upper = middle;
-        } else {
-            lower = middle + 1;
-        }
-    }
-    lower
-}
 #[test]
-fn whole_ordered_report_is_admitted_before_any_owned_materialization() {
-    let error = csv_source::parse(b"ID,ID\nx,y", Default::default()).unwrap_err();
+fn whole_ordered_report_preserves_borrowed_facts_and_full_late_values() {
+    let error = csv_source::parse(b"ID,ID\nx,y").unwrap_err();
     let long = "\0\"\\β".repeat(2000);
-    let late = SourceFinding::FieldParse {
-        dataset: "LAST",
-        field: "F",
-        target: ColumnType::Int,
-        value: &long,
-    };
-    let findings = [error.finding("FIRST", "first.csv").unwrap(), late];
-    let limit = minimum(&findings);
-    assert!(admit_source_diagnostics(&findings[..1], limit - 1).is_ok());
-    assert!(admit_source_diagnostics(&findings[1..], limit - 1).is_ok());
-    assert!(matches!(
-        admit_source_diagnostics(&findings, limit - 1),
-        Err(ProjectionError::Limit)
-    ));
-    let report = admit_source_diagnostics(&findings, limit).unwrap();
-    assert!(std::ptr::eq(report.findings().as_ptr(), findings.as_ptr()));
+    let findings = [
+        error.finding("FIRST", "first.csv").unwrap(),
+        SourceFinding::FieldParse {
+            dataset: "LAST",
+            field: "F",
+            target: ColumnType::Int,
+            value: &long,
+        },
+    ];
     let [SourceFinding::Csv {
         field: borrowed_field,
         ..
-    }, SourceFinding::FieldParse { value, .. }] = report.findings()
+    }, SourceFinding::FieldParse { value, .. }] = &findings
     else {
         panic!()
     };
@@ -339,15 +303,25 @@ fn whole_ordered_report_is_admitted_before_any_owned_materialization() {
     };
     assert!(std::ptr::eq(*borrowed_field, original_field));
     assert!(std::ptr::eq(value.as_ptr(), long.as_ptr()));
-    let actual: Vec<_> = report.iter().collect();
+    let projected = source_diagnostics(&findings);
+    assert_eq!(projected.len(), 2);
+    let actual = projected.collect::<Vec<_>>();
     assert_eq!(actual[0].context["field"], text("ID"));
-    assert_eq!(actual[1].context["value"], text(&long));
-    assert_eq!(report.iter().collect::<Vec<_>>(), actual);
-    assert!(matches!(
-        admit_source_diagnostics(&findings, 0),
-        Err(ProjectionError::Limit)
-    ));
-    assert_eq!(admit_source_diagnostics(&[], 0).unwrap().iter().len(), 0);
+    assert_eq!(
+        actual[1],
+        expected(
+            C::SourceTypeFieldParse,
+            "input.LAST.types.F",
+            vec![
+                ("dataset", text("LAST")),
+                ("field", text("F")),
+                ("type", text("int")),
+                ("value", text(&long)),
+            ]
+        )
+    );
+    assert_eq!(source_diagnostics(&findings).collect::<Vec<_>>(), actual);
+    assert_eq!(source_diagnostics(&[]).len(), 0);
 }
 
 #[test]
@@ -360,7 +334,7 @@ fn diagnostic_positions_stay_mathematical_and_boundary_errors_have_no_condition(
         dataset: "SRC",
         path: "source.csv",
     };
-    let actual = finding.diagnostic_with_limit(MAX_PROJECTION_BYTES).unwrap();
+    let actual = finding.diagnostic();
     assert_eq!(actual.context["record"], V::from(usize::MAX));
     assert_eq!(actual.context["field"], V::from(usize::MAX));
     let actual = SourceFinding::Parquet {
@@ -372,8 +346,7 @@ fn diagnostic_positions_stay_mathematical_and_boundary_errors_have_no_condition(
         dataset: "SRC",
         path: "data.parquet",
     }
-    .diagnostic_with_limit(MAX_PROJECTION_BYTES)
-    .unwrap();
+    .diagnostic();
     assert_eq!(actual.context["row"], V::from(usize::MAX));
     assert_eq!(actual.context["value"], V::from(i64::MIN));
     assert!(csv_source::Error::Limit {

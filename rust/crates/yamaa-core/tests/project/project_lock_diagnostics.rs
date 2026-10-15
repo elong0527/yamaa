@@ -1,10 +1,7 @@
 //! Lock reporting only borrows a completed native activation rejection.
 use std::{cell::RefCell, rc::Rc};
 use yamaa_core::{
-    diagnostic::{
-        lock_diagnostics, lock_diagnostics_with_limit, LockDiagnosticError, LockFinding,
-        LockOrigins, LockReason,
-    },
+    diagnostic::{lock_diagnostics, LockDiagnosticError, LockFinding, LockOrigins, LockReason},
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     project_environment::{LockKind, LockReference},
     project_function::{Case, Definition, Function, Language, Parameter},
@@ -135,10 +132,6 @@ fn non_clone_non_debug_non_send_lock_error_retains_identity_without_provider_ret
     let first = lock_diagnostics(Some(origins), &original.findings).unwrap();
     assert_eq!(first.len(), 2);
     assert_eq!(first[0].definition().requirement, Some("REQ-0697"));
-    assert_eq!(
-        lock_diagnostics_with_limit(Some(origins), &original.findings, 0),
-        Err(LockDiagnosticError::Limit)
-    );
     assert_eq!(
         lock_diagnostics(None, &original.findings),
         Err(LockDiagnosticError::InvalidContext)

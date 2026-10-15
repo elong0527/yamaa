@@ -157,7 +157,7 @@ fn temporal_spelling_and_nonnumeric_reduction_types_remain_complete() {
 }
 
 #[test]
-fn invalid_causes_and_whole_context_quota_refuse_without_changing_borrowed_facts() {
+fn large_context_and_invalid_causes_preserve_borrowed_facts() {
     let huge = "x".repeat(3_000_000);
     let address = huge.as_ptr();
     let cause = F::MultipleMatches {
@@ -166,10 +166,20 @@ fn invalid_causes_and_whole_context_quota_refuse_without_changing_borrowed_facts
         intermediate: &huge,
         count: 2,
     };
+    let diagnostic = cause.diagnostic().unwrap();
+    assert_eq!(diagnostic.code, ConditionCode::DatasetMultipleMatches);
+    assert_eq!(diagnostic.spec_paths, ["source"]);
     assert_eq!(
-        cause.diagnostic_with_limit(1024),
-        Err(ProjectionError::Limit)
+        diagnostic.context,
+        [
+            ("dataset".into(), text("DM")),
+            ("intermediate".into(), text(&huge)),
+            ("match_count".into(), V::from(2)),
+        ]
+        .into()
     );
+    assert_eq!(diagnostic.source_span, None);
+    assert_eq!(diagnostic.operand_route, None);
     assert_eq!(huge.as_ptr(), address);
     assert_eq!(huge.len(), 3_000_000);
     for count in [0, 1] {
@@ -179,7 +189,7 @@ fn invalid_causes_and_whole_context_quota_refuse_without_changing_borrowed_facts
                 identifier: "A",
                 count
             }
-            .diagnostic_with_limit(2048),
+            .diagnostic(),
             Err(ProjectionError::InvalidContext)
         );
         assert_eq!(
@@ -189,7 +199,7 @@ fn invalid_causes_and_whole_context_quota_refuse_without_changing_borrowed_facts
                 intermediate: "I",
                 count
             }
-            .diagnostic_with_limit(2048),
+            .diagnostic(),
             Err(ProjectionError::InvalidContext)
         );
     }
@@ -201,7 +211,7 @@ fn invalid_causes_and_whole_context_quota_refuse_without_changing_borrowed_facts
             date: &wrong,
             count: 2
         }
-        .diagnostic_with_limit(2048),
+        .diagnostic(),
         Err(ProjectionError::InvalidContext)
     );
     assert_eq!(
@@ -212,7 +222,7 @@ fn invalid_causes_and_whole_context_quota_refuse_without_changing_borrowed_facts
             source: "A",
             actual: ValueType::Int
         }
-        .diagnostic_with_limit(2048),
+        .diagnostic(),
         Err(ProjectionError::InvalidContext)
     );
 }

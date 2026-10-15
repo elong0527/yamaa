@@ -2,6 +2,54 @@ use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
 use yamaa_core::diagnostic::{ConditionCode, InheritanceFinding as F};
 
+#[test]
+fn contradictory_cycle_carriers_refuse_without_relabeling_the_cause() {
+    for path in [
+        vec![],
+        vec!["entry".into()],
+        vec!["entry".into(), "other".into()],
+    ] {
+        assert_eq!(
+            F::Cycle {
+                path: &path,
+                returns_to_entry: true
+            }
+            .diagnostic(),
+            Err(yamaa_core::diagnostic::ProjectionError::InvalidContext)
+        );
+    }
+    let path = vec!["entry".into(), "parent".into(), "entry".into()];
+    let diagnostic = F::Cycle {
+        path: &path,
+        returns_to_entry: true,
+    }
+    .diagnostic()
+    .unwrap();
+    assert_eq!(diagnostic.code, ConditionCode::InheritanceCycle);
+    assert_eq!(diagnostic.spec_paths, ["parents"]);
+    assert_eq!(
+        diagnostic.context,
+        [
+            (
+                "reason".into(),
+                JsonValue::String("parent_chain_returns_to_entry".into())
+            ),
+            ("source".into(), JsonValue::String("parent".into())),
+            (
+                "cycle".into(),
+                JsonValue::Array(
+                    ["entry", "parent", "entry"]
+                        .map(|name| JsonValue::String(name.into()))
+                        .into()
+                )
+            ),
+        ]
+        .into()
+    );
+    assert_eq!(diagnostic.source_span, None);
+    assert_eq!(diagnostic.operand_route, None);
+}
+
 pub fn reached() -> BTreeSet<ConditionCode> {
     let cycle = vec!["entry".into(), "base".into(), "entry".into()];
     let mut reached = BTreeSet::new();
@@ -103,14 +151,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         }
         reached.insert(finding.code);
     }
-    let dependencies = yamaa_core::diagnostic::inheritance_dependency_diagnostics(
-        &[yamaa_core::schema::InheritanceDependencyIssue::Unknown {
+    let dependencies = yamaa_core::diagnostic::inheritance_dependency_diagnostics(&[
+        yamaa_core::schema::InheritanceDependencyIssue::Unknown {
             column: "VALUE".into(),
             dependency: "MISSING".into(),
-        }],
-        4096,
-    )
-    .unwrap();
+        },
+    ]);
     assert_eq!(dependencies.len(), 1);
     let dependency = &dependencies[0];
     assert_eq!(

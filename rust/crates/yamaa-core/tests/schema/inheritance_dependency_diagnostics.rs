@@ -1,7 +1,6 @@
 use serde_json::Value as JsonValue;
 use yamaa_core::{
-    diagnostic::{inheritance_dependency_diagnostics, ProjectionError},
-    schema::InheritanceDependencyIssue as Issue,
+    diagnostic::inheritance_dependency_diagnostics, schema::InheritanceDependencyIssue as Issue,
 };
 
 #[test]
@@ -20,7 +19,7 @@ fn complete_ordered_facts_keep_dependency_cycles_distinct_from_traversal_loops()
             ],
         },
     ];
-    let findings = inheritance_dependency_diagnostics(&issues, 4096).unwrap();
+    let findings = inheritance_dependency_diagnostics(&issues);
     assert_eq!(findings.len(), 2);
     assert_eq!(findings[0].spec_paths, ["columns.VALUE\0é.derivation"]);
     assert_eq!(
@@ -51,39 +50,37 @@ fn complete_ordered_facts_keep_dependency_cycles_distinct_from_traversal_loops()
 }
 
 #[test]
-fn whole_report_admission_has_an_inclusive_boundary_and_no_fitting_prefix() {
-    let first = Issue::Unknown {
-        column: "VALUE".into(),
-        dependency: "FIRST".into(),
-    };
-    let later = Issue::Unknown {
-        column: "LATER".into(),
-        dependency: "\"\\\0🙂".repeat(1000),
-    };
-    let issues = [first.clone(), later];
-    let expected = inheritance_dependency_diagnostics(&issues, 1_000_000).unwrap();
-    let (mut low, mut high) = (0, 1_000_000);
-    while low < high {
-        let middle = low + (high - low) / 2;
-        if inheritance_dependency_diagnostics(&issues, middle).is_ok() {
-            high = middle;
-        } else {
-            low = middle + 1;
-        }
-    }
-    assert!(low > 1);
+fn later_long_dependency_facts_remain_complete_in_order() {
+    let later = "\"\\\0🙂".repeat(1000);
+    let issues = [
+        Issue::Unknown {
+            column: "VALUE".into(),
+            dependency: "FIRST".into(),
+        },
+        Issue::Unknown {
+            column: "LATER".into(),
+            dependency: later.clone(),
+        },
+    ];
+    let projected = inheritance_dependency_diagnostics(&issues);
+    assert_eq!(projected.len(), 2);
+    assert_eq!(projected[0].spec_paths, ["columns.VALUE.derivation"]);
     assert_eq!(
-        inheritance_dependency_diagnostics(&issues, low),
-        Ok(expected)
+        projected[0].context,
+        [
+            ("column".into(), JsonValue::String("VALUE".into())),
+            ("dependency".into(), JsonValue::String("FIRST".into())),
+        ]
+        .into()
     );
+    assert_eq!(projected[1].spec_paths, ["columns.LATER.derivation"]);
     assert_eq!(
-        inheritance_dependency_diagnostics(&issues, low - 1),
-        Err(ProjectionError::Limit)
-    );
-    assert!(inheritance_dependency_diagnostics(&[first], 4096).is_ok());
-    assert_eq!(
-        inheritance_dependency_diagnostics(&issues, 4096),
-        Err(ProjectionError::Limit)
+        projected[1].context,
+        [
+            ("column".into(), JsonValue::String("LATER".into())),
+            ("dependency".into(), JsonValue::String(later)),
+        ]
+        .into()
     );
     assert_eq!(
         issues[0],
@@ -95,18 +92,17 @@ fn whole_report_admission_has_an_inclusive_boundary_and_no_fitting_prefix() {
 }
 
 #[test]
-fn sequence_members_consume_capacity_even_with_empty_text() {
+fn all_empty_sequence_members_remain_in_the_retained_order() {
     let issues = [Issue::Cycle {
         columns: vec![String::new(); 1000],
         cycle: vec![String::new(); 2],
         paths: vec![String::new()],
     }];
+    let projected = inheritance_dependency_diagnostics(&issues);
+    assert_eq!(projected.len(), 1);
+    assert_eq!(projected[0].spec_paths, [""]);
     assert_eq!(
-        inheritance_dependency_diagnostics(&issues, 4096),
-        Err(ProjectionError::Limit)
-    );
-    assert_eq!(
-        inheritance_dependency_diagnostics(&issues, 32_768).unwrap()[0].context["cycle"],
+        projected[0].context["cycle"],
         JsonValue::Array(vec![JsonValue::String(String::new()); 1000])
     );
 }
