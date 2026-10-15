@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use yamaa_adapters::{
     project_lock::{Finding, Reason},
-    project_lock_diagnostics::{issues, issues_with_limit, Error},
+    project_lock_diagnostics::{issues, Error},
     project_source::{self, CapturePort, CapturedEnvironment, Kind, Reply, Request},
     specification_source::{CapturedSchema, Source},
 };
@@ -41,7 +41,6 @@ fn environment(locked: bool) -> (CapturedEnvironment, Capture) {
         ],
         0,
         "environment_class",
-        Default::default(),
     )
     .unwrap();
     let mut capture = Capture { calls: 0 };
@@ -53,14 +52,9 @@ fn environment(locked: bool) -> (CapturedEnvironment, Capture) {
             b"schema_version: '1.0'\n".to_vec()
         },
     };
-    let prepared = project_source::prepare(
-        Arc::clone(&schema),
-        source,
-        Language::Python,
-        &mut capture,
-        Default::default(),
-    )
-    .unwrap();
+    let prepared =
+        project_source::prepare(Arc::clone(&schema), source, Language::Python, &mut capture)
+            .unwrap();
     let (_, provenance) = prepared.into_owned().into_parts();
     (provenance, capture)
 }
@@ -182,42 +176,38 @@ fn absent_lock_and_contradictory_facts_refuse_the_complete_projection() {
 }
 
 #[test]
-fn cumulative_escaped_text_and_utf8_limits_are_atomic() {
+fn complete_escaped_host_versions_and_all_given_findings_remain_exact() {
     let (environment, _) = environment(true);
     let first = finding(Reason::VersionMismatch, &["1.0"], Some("2.0"));
-    assert_eq!(
-        issues_with_limit(&environment, &[first], 3_000)
-            .unwrap()
-            .len(),
-        1
-    );
+    assert_eq!(issues(&environment, &[first]).unwrap().len(), 1);
     let first = finding(Reason::VersionMismatch, &["1.0"], Some("2.0"));
     let second = finding(Reason::VersionMismatch, &["1.0"], Some("2.0"));
-    assert_eq!(
-        issues_with_limit(&environment, &[first, second], 3_000),
-        Err(Error::Limit)
-    );
-    let too_wide = "é".repeat(1_025);
-    assert_eq!(
-        issues(
-            &environment,
-            &[finding(
-                Reason::InvalidInstalledVersion,
-                &["1.0"],
-                Some(&too_wide)
-            )]
-        ),
-        Err(Error::Limit)
-    );
+    let result = issues(&environment, &[first, second]).unwrap();
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0], result[1]);
+    let wide = "é\0🙂".repeat(1_025);
+    let result = issues(
+        &environment,
+        &[finding(
+            Reason::InvalidInstalledVersion,
+            &["1.0"],
+            Some(&wide),
+        )],
+    )
+    .unwrap();
+    let context: serde_json::Value = serde_json::from_str(&result[0].context).unwrap();
+    assert_eq!(context["actual"], wide);
     let facts = (0..2_050)
         .map(|_| finding(Reason::VersionNotLocked, &[], None))
         .collect::<Vec<_>>();
-    assert_eq!(issues(&environment, &facts), Err(Error::Limit));
+    let result = issues(&environment, &facts).unwrap();
+    assert_eq!(result.len(), 2_050);
+    assert_eq!(result[0], result[2_049]);
 }
 
 #[test]
-fn empty_unlocked_projection_preserves_zero_quota_success_without_capture() {
+fn empty_unlocked_projection_preserves_success_without_capture() {
     let (environment, capture) = environment(false);
-    assert_eq!(issues_with_limit(&environment, &[], 0).unwrap(), vec![]);
+    assert_eq!(issues(&environment, &[]).unwrap(), vec![]);
     assert_eq!(capture.calls, 0);
 }

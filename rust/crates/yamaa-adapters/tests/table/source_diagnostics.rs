@@ -1,15 +1,13 @@
 //! Borrowed codec projections compare independently captured complete diagnostics.
 use serde_json::{json, Value};
 use yamaa_adapters::{
-    arrow_table::TableLimits,
     csv_source::{self, TextTableError},
-    parquet_source::{self as parquet, CompressionLimits, FramingLimits, MetadataLimits},
-    source_diagnostics, specification_diagnostics as projection,
+    parquet_source as parquet, source_diagnostics, specification_diagnostics as projection,
     specification_run::Error,
     typed_csv,
 };
 use yamaa_core::{
-    diagnostic::{ParquetFinding, ProjectionError, SourceFinding, MAX_PROJECTION_BYTES},
+    diagnostic::{ParquetFinding, SourceFinding},
     specification::{SourceDeclaration, SourceProfile},
     value::ColumnType,
 };
@@ -25,45 +23,7 @@ fn source(name: &str, path: &str) -> SourceDeclaration {
         ordinal: None,
     }
 }
-fn table_limits() -> TableLimits {
-    TableLimits {
-        max_rows: 1000,
-        max_columns: 64,
-        max_batches: 1,
-        max_cells: 10000,
-    }
-}
-fn limits() -> parquet::Limits {
-    parquet::Limits {
-        framing: FramingLimits {
-            source_bytes: 1_048_576,
-            metadata_bytes: 131_072,
-            metadata_nodes: 8192,
-            header_bytes: 8192,
-            header_nodes: 8192,
-            row_groups: 32,
-            columns: 64,
-            rows: 1000,
-            cells: 10000,
-            pages: 1000,
-            page_bytes: 1_048_576,
-            decoded_bytes: 4_194_304,
-        },
-        compression: CompressionLimits {
-            page_bytes: 1_048_576,
-            window_log: 24,
-        },
-        metadata: MetadataLimits {
-            bytes: 131_072,
-            tables: 8192,
-            depth: 64,
-        },
-        expanded_bytes: 4_194_304,
-        retained_bytes: 4_194_304,
-        array_elements: 10000,
-        batches: 1,
-    }
-}
+
 fn bytes(hex: &str) -> Vec<u8> {
     hex.as_bytes()
         .chunks_exact(2)
@@ -73,9 +33,7 @@ fn bytes(hex: &str) -> Vec<u8> {
 fn assert_complete(error: &Error, source: &SourceDeclaration, expected: &Value) {
     let wanted = expected.as_array().unwrap();
     assert_eq!(
-        projection::findings_with_limit(error, Some(source), MAX_PROJECTION_BYTES)
-            .unwrap()
-            .unwrap(),
+        projection::findings(error, Some(source)).unwrap().unwrap(),
         *wanted
     );
     let failure: Value = serde_json::from_str(&projection::failure(error, Some(source))).unwrap();
@@ -86,7 +44,7 @@ fn assert_complete(error: &Error, source: &SourceDeclaration, expected: &Value) 
 }
 
 #[test]
-fn all_independent_csv_profile_reports_survive_bounded_original_projection() {
+fn all_independent_csv_profile_reports_preserve_original_projection() {
     let declaration = source("SRC", "source.csv");
     let mut count = 0;
     for row in
@@ -101,7 +59,7 @@ fn all_independent_csv_profile_reports_survive_bounded_original_projection() {
             bytes(row["source_bytes"]["hex"].as_str().unwrap())
         };
         let error = Error::Source(TextTableError::Csv(
-            csv_source::parse(&source_bytes, Default::default()).unwrap_err(),
+            csv_source::parse(&source_bytes).unwrap_err(),
         ));
         assert_complete(&error, &declaration, &expected["diagnostics"]);
         count += 1;
@@ -136,10 +94,7 @@ fn all_independent_typing_reports_keep_original_first_bad_field_and_value() {
         } else {
             bytes(row["source_bytes"]["hex"].as_str().unwrap())
         };
-        let error = Error::TypedSource(
-            typed_csv::parse(&source_bytes, &types, Default::default(), table_limits())
-                .unwrap_err(),
-        );
+        let error = Error::TypedSource(typed_csv::parse(&source_bytes, &types).unwrap_err());
         assert_complete(&error, &declaration, &expected["diagnostics"]);
         count += 1;
     }
@@ -192,8 +147,7 @@ fn independently_authored_parquet_schemas_keep_exact_spelling_and_raw_value() {
             )
             .unwrap()
         };
-        let error =
-            Error::ParquetSource(parquet::parse(&bytes, limits(), table_limits()).unwrap_err());
+        let error = Error::ParquetSource(parquet::parse(&bytes).unwrap_err());
         let mut context = json!({"dataset":"SRC","path":"held.parquet"});
         context
             .as_object_mut()
@@ -208,26 +162,13 @@ fn independently_authored_parquet_schemas_keep_exact_spelling_and_raw_value() {
     }
 }
 
-fn minimum(error: &Error) -> usize {
-    let mut lower = 0;
-    let mut upper = MAX_PROJECTION_BYTES;
-    while lower < upper {
-        let middle = lower + (upper - lower) / 2;
-        if source_diagnostics::findings_with_limit(error, None, middle).is_ok() {
-            upper = middle;
-        } else {
-            lower = middle + 1;
-        }
-    }
-    lower
-}
 #[test]
-fn nested_ordered_report_refuses_late_quota_before_copying_retained_codec_facts() {
+fn nested_ordered_report_keeps_complete_borrowed_codec_facts() {
     let error = Error::Sources(vec![
         (
             source("FIRST", "first.csv"),
             Error::Source(TextTableError::Csv(
-                csv_source::parse(b"ID,ID\nx,y", Default::default()).unwrap_err(),
+                csv_source::parse(b"ID,ID\nx,y").unwrap_err(),
             )),
         ),
         (
@@ -280,26 +221,17 @@ fn nested_ordered_report_refuses_late_quota_before_copying_retained_codec_facts(
         ),
         pointers
     );
-    let limit = minimum(&error);
     assert!(
-        source_diagnostics::findings_with_limit(&errors[0].1, Some(&errors[0].0), limit - 1)
+        source_diagnostics::findings(&errors[0].1, Some(&errors[0].0))
             .unwrap()
             .is_some()
     );
     assert!(
-        source_diagnostics::findings_with_limit(&nested[0].1, Some(&nested[0].0), limit - 1)
+        source_diagnostics::findings(&nested[0].1, Some(&nested[0].0))
             .unwrap()
             .is_some()
     );
-    assert_eq!(
-        source_diagnostics::findings_with_limit(&error, None, limit - 1),
-        Err(source_diagnostics::SourceProjectionError::Context(
-            ProjectionError::Limit
-        ))
-    );
-    let actual = source_diagnostics::findings_with_limit(&error, None, limit)
-        .unwrap()
-        .unwrap();
+    let actual = source_diagnostics::findings(&error, None).unwrap().unwrap();
     assert_eq!(
         actual
             .iter()
@@ -307,12 +239,9 @@ fn nested_ordered_report_refuses_late_quota_before_copying_retained_codec_facts(
             .collect::<Vec<_>>(),
         ["input.FIRST.path", "input.LAST.path"]
     );
-    let portable = projection::findings_with_limit(&error, None, limit)
-        .unwrap()
-        .unwrap();
+    let portable = projection::findings(&error, None).unwrap().unwrap();
     assert_eq!(portable[1]["context"]["stored_type"], *stored_type);
     assert_eq!(portable[1]["context"]["field"], *field);
-    assert!(serde_json::to_string(&portable).unwrap().len() <= limit);
     assert_eq!(
         (
             field.as_ptr(),
@@ -322,21 +251,17 @@ fn nested_ordered_report_refuses_late_quota_before_copying_retained_codec_facts(
         pointers
     );
     assert_eq!(
-        source_diagnostics::findings_with_limit(&error, None, limit)
-            .unwrap()
-            .unwrap(),
+        source_diagnostics::findings(&error, None).unwrap().unwrap(),
         actual
     );
 }
 
 #[test]
-fn missing_identity_is_explicit_and_resource_barriers_precede_shape_and_quota() {
+fn missing_identity_is_explicit_and_resource_barriers_preserve_original_error_precedence() {
     let semantic = Error::ParquetSource(parquet::Error::Malformed);
     assert_eq!(
-        source_diagnostics::findings_with_limit(&semantic, None, 0),
-        Err(source_diagnostics::SourceProjectionError::Context(
-            ProjectionError::InvalidContext
-        ))
+        source_diagnostics::findings(&semantic, None),
+        Err(source_diagnostics::SourceProjectionError::InvalidContext)
     );
     let failure: Value = serde_json::from_str(&projection::failure(&semantic, None)).unwrap();
     assert_eq!(
@@ -346,19 +271,23 @@ fn missing_identity_is_explicit_and_resource_barriers_precede_shape_and_quota() 
     let declaration = source("SRC", "source.csv");
     for error in [
         Error::Source(TextTableError::Csv(csv_source::Error::Limit {
-            resource: "bytes",
-            limit: 0,
+            resource: "source_bytes",
+            limit: yamaa_core::limits::Limits::SOURCE_BYTES,
         })),
         Error::TypedSource(typed_csv::Error::Typing(
             yamaa_core::typed_csv::Error::InvalidDeclarations,
         )),
-        Error::ParquetSource(parquet::Error::Limit),
+        Error::ParquetSource(parquet::Error::ResourceLimit {
+            resource: "source_bytes",
+            limit: yamaa_core::limits::Limits::SOURCE_BYTES,
+            actual: Some(yamaa_core::limits::Limits::SOURCE_BYTES + 1),
+        }),
+        Error::ParquetSource(parquet::Error::Representation {
+            representation: "Utf8 offset width",
+        }),
         Error::ParquetSource(parquet::Error::Unavailable { codec: i64::MAX }),
     ] {
-        assert_eq!(
-            source_diagnostics::findings_with_limit(&error, None, 0),
-            Ok(None)
-        );
+        assert_eq!(source_diagnostics::findings(&error, None), Ok(None));
         let collected = Error::Sources(vec![
             (
                 declaration.clone(),
@@ -369,10 +298,7 @@ fn missing_identity_is_explicit_and_resource_barriers_precede_shape_and_quota() 
             ),
             (declaration.clone(), error),
         ]);
-        assert_eq!(
-            source_diagnostics::findings_with_limit(&collected, None, 0),
-            Ok(None)
-        );
+        assert_eq!(source_diagnostics::findings(&collected, None), Ok(None));
         let failure: Value = serde_json::from_str(&projection::failure(&collected, None)).unwrap();
         assert_eq!(
             failure["outcome"],
@@ -380,13 +306,14 @@ fn missing_identity_is_explicit_and_resource_barriers_precede_shape_and_quota() 
         );
     }
     assert_eq!(
-        source_diagnostics::findings_with_limit(&Error::Sources(vec![]), None, 0),
+        source_diagnostics::findings(&Error::Sources(vec![]), None),
         Ok(Some(vec![]))
     );
 }
 
 #[test]
-fn default_projection_refuses_full_oversized_value_without_truncation_or_partial_report() {
+fn complete_projection_preserves_full_oversized_value_and_both_findings() {
+    let original = "9".repeat(1_400_000);
     let error = Error::Sources(vec![
         (
             source("FIRST", "first.csv"),
@@ -398,43 +325,32 @@ fn default_projection_refuses_full_oversized_value_without_truncation_or_partial
                 yamaa_core::typed_csv::Error::FieldParse {
                     field: "F".into(),
                     target: ColumnType::Int,
-                    value: "9".repeat(MAX_PROJECTION_BYTES / 6),
+                    value: original.clone(),
                 },
             )),
         ),
     ]);
-    assert_eq!(
-        source_diagnostics::findings_with_limit(&error, None, MAX_PROJECTION_BYTES),
-        Err(source_diagnostics::SourceProjectionError::Context(
-            ProjectionError::Limit
-        ))
-    );
+    let diagnostics = source_diagnostics::findings(&error, None).unwrap().unwrap();
+    assert_eq!(diagnostics.len(), 2);
+    let portable = projection::findings(&error, None).unwrap().unwrap();
+    assert_eq!(portable.len(), 2);
+    assert_eq!(portable[1]["context"]["value"], original);
     let failure: Value = serde_json::from_str(&projection::failure(&error, None)).unwrap();
     assert_eq!(
         failure,
-        json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"ingest","code":"diagnostic_context_limit"}})
-    );
-    // The specification-level projection with an explicit unbounded limit
-    // still collects both findings; only the bounded source projection
-    // above refuses the oversized context.
-    assert_eq!(
-        projection::findings_with_limit(&error, None, usize::MAX)
-            .unwrap()
-            .unwrap()
-            .len(),
-        2
+        json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":portable}})
     );
     let Error::Sources(errors) = &error else {
-        panic!()
+        panic!("retained collection")
     };
     let Error::TypedSource(typed_csv::Error::Typing(yamaa_core::typed_csv::Error::FieldParse {
         value,
         ..
     })) = &errors[1].1
     else {
-        panic!()
+        panic!("retained value")
     };
-    assert_eq!(value.len(), MAX_PROJECTION_BYTES / 6);
+    assert_eq!(value, &original);
 }
 
 fn nested(mut error: Error, depth: usize) -> Error {
@@ -476,40 +392,31 @@ fn wide(width: usize) -> Vec<(SourceDeclaration, Error)> {
 }
 
 #[test]
-fn wide_nested_semantic_report_under_tiny_context_quota_uses_fixed_borrowed_frames() {
-    // This input already owns its breadth. Traversal uses a fixed stack array of
-    // 128 borrowed iterators and never allocates a pending sibling list. The zero
-    // context quota also refuses borrowed finding staging before Vec allocation.
+fn wide_nested_semantic_report_preserves_every_supplied_finding() {
     let error = nested(Error::Sources(wide(50_000)), 2);
-    assert_eq!(
-        source_diagnostics::findings_with_limit(&error, None, 0),
-        Err(source_diagnostics::SourceProjectionError::Context(
-            ProjectionError::Limit
-        ))
-    );
+    let actual = source_diagnostics::findings(&error, None).unwrap().unwrap();
+    assert_eq!(actual.len(), 50_000);
+    for finding in &actual {
+        assert_eq!(finding.spec_paths, ["input.WIDE.path"]);
+    }
     let Error::Sources(outer) = &error else {
-        panic!()
+        panic!("retained outer")
     };
     assert_eq!(outer[0].0.name, "DEEP");
     assert_eq!(
-        source_diagnostics::findings_with_limit(&error, None, 0),
-        Err(source_diagnostics::SourceProjectionError::Context(
-            ProjectionError::Limit
-        ))
+        source_diagnostics::findings(&error, None).unwrap().unwrap(),
+        actual
     );
 }
 
 #[test]
-fn late_opaque_after_wide_nested_report_precedes_tiny_context_quota_and_keeps_allocation() {
+fn late_opaque_after_wide_nested_report_keeps_original_allocation_and_precedence() {
     let mut children = wide(50_000);
     let original = opaque();
     let pointer = opaque_text(&original).as_ptr();
     children.push((source("OPAQUE", "opaque.parquet"), original));
     let error = nested(Error::Sources(children), 2);
-    assert_eq!(
-        source_diagnostics::findings_with_limit(&error, None, 0),
-        Ok(None)
-    );
+    assert_eq!(source_diagnostics::findings(&error, None), Ok(None));
     let Error::Sources(outer) = &error else {
         panic!()
     };
@@ -525,10 +432,7 @@ fn late_opaque_after_wide_nested_report_precedes_tiny_context_quota_and_keeps_al
         opaque_text(&children[50_000].1),
         "original opaque codec allocation"
     );
-    assert_eq!(
-        source_diagnostics::findings_with_limit(&error, None, 0),
-        Ok(None)
-    );
+    assert_eq!(source_diagnostics::findings(&error, None), Ok(None));
     assert_eq!(opaque_text(&children[50_000].1).as_ptr(), pointer);
 }
 
@@ -540,24 +444,15 @@ fn reached_opaque_barrier_stops_before_later_deep_and_oversized_semantic_facts()
         yamaa_core::typed_csv::Error::FieldParse {
             field: "F".into(),
             target: ColumnType::Int,
-            value: "9".repeat(MAX_PROJECTION_BYTES / 6),
+            value: "9".repeat(1_400_000),
         },
     ));
     let error = Error::Sources(vec![
         (source("FIRST", "first.parquet"), original),
-        (
-            source("LATER", "later.csv"),
-            nested(late, source_diagnostics::MAX_SOURCE_REPORT_FRAMES + 1),
-        ),
+        (source("LATER", "later.csv"), nested(late, 129)),
     ]);
-    assert_eq!(
-        source_diagnostics::findings_with_limit(&error, None, 0),
-        Ok(None)
-    );
-    assert_eq!(
-        source_diagnostics::findings_with_limit(&error, None, MAX_PROJECTION_BYTES),
-        Ok(None)
-    );
+    assert_eq!(source_diagnostics::findings(&error, None), Ok(None));
+    assert_eq!(source_diagnostics::findings(&error, None), Ok(None));
     let failure: Value = serde_json::from_str(&projection::failure(&error, None)).unwrap();
     assert_eq!(
         failure["outcome"],
@@ -570,53 +465,43 @@ fn reached_opaque_barrier_stops_before_later_deep_and_oversized_semantic_facts()
 }
 
 #[test]
-fn structural_frame_refusal_precedes_only_unreached_late_barriers_and_preserves_facts() {
+fn deep_borrowed_reports_keep_full_facts_and_later_opaque_errors_preserve_precedence() {
     let leaf = Error::ParquetSource(parquet::Error::Unsupported {
         field: "F".into(),
         stored_type: "held physical type".into(),
     });
     let Error::ParquetSource(parquet::Error::Unsupported { stored_type, .. }) = &leaf else {
-        panic!()
+        panic!("retained metadata")
     };
     let pointer = stored_type.as_ptr();
-    let admitted = nested(leaf, source_diagnostics::MAX_SOURCE_REPORT_FRAMES);
-    let diagnostics =
-        source_diagnostics::findings_with_limit(&admitted, None, MAX_PROJECTION_BYTES)
-            .unwrap()
-            .unwrap();
+    let admitted = nested(leaf, 129);
+    let diagnostics = source_diagnostics::findings(&admitted, None)
+        .unwrap()
+        .unwrap();
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].spec_paths, ["input.DEEP.path"]);
-    // The outer collection requires one more active frame, and must refuse before
-    // storing it or inspecting either the deep leaf or the later opaque sibling.
-    let refused = Error::Sources(vec![
+    let held = Error::Sources(vec![
         (source("DEEP", "deep.parquet"), admitted),
         (source("LATE", "late.parquet"), opaque()),
     ]);
-    assert_eq!(
-        source_diagnostics::findings_with_limit(&refused, None, 0),
-        Err(source_diagnostics::SourceProjectionError::TraversalLimit)
-    );
-    assert_eq!(
-        source_diagnostics::findings_with_limit(&refused, None, MAX_PROJECTION_BYTES),
-        Err(source_diagnostics::SourceProjectionError::TraversalLimit)
-    );
-    let failure: Value = serde_json::from_str(&projection::failure(&refused, None)).unwrap();
+    assert_eq!(source_diagnostics::findings(&held, None), Ok(None));
+    let failure: Value = serde_json::from_str(&projection::failure(&held, None)).unwrap();
     assert_eq!(
         failure,
-        json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"ingest","code":"diagnostic_traversal_limit"}})
+        json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"ingest","code":"source_collection_boundary"}})
     );
-    let Error::Sources(children) = &refused else {
-        panic!()
+    let Error::Sources(children) = &held else {
+        panic!("retained collection")
     };
-    let mut held = &children[0].1;
-    for _ in 0..source_diagnostics::MAX_SOURCE_REPORT_FRAMES {
-        let Error::Sources(child) = held else {
-            panic!()
+    let mut leaf = &children[0].1;
+    for _ in 0..129 {
+        let Error::Sources(child) = leaf else {
+            panic!("retained nested metadata")
         };
-        held = &child[0].1;
+        leaf = &child[0].1;
     }
-    let Error::ParquetSource(parquet::Error::Unsupported { stored_type, .. }) = held else {
-        panic!()
+    let Error::ParquetSource(parquet::Error::Unsupported { stored_type, .. }) = leaf else {
+        panic!("retained metadata")
     };
     assert_eq!(stored_type.as_ptr(), pointer);
     assert_eq!(stored_type, "held physical type");

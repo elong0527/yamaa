@@ -1,9 +1,9 @@
 use serde_json::Value;
 use std::{rc::Rc, sync::Arc};
 use yamaa_adapters::{
-    project_environment_diagnostics::{admission, admission_with_limit, Error as ProjectionError},
-    project_source::{self, CaptureFailure, CapturePort, Failure, Kind, Limits, Reply, Request},
-    specification_source::{CapturedSchema, Limits as SchemaLimits, Source},
+    project_environment_diagnostics::{admission, Error as ProjectionError},
+    project_source::{self, CaptureFailure, CapturePort, Failure, Kind, Reply, Request},
+    specification_source::{CapturedSchema, Source},
 };
 use yamaa_core::{project_environment::LockKind, project_function::Language};
 fn source(identity: &str, bytes: &str) -> Source {
@@ -26,7 +26,6 @@ fn schema() -> Arc<CapturedSchema> {
         ],
         0,
         "environment_class",
-        SchemaLimits::default(),
     )
     .unwrap()
 }
@@ -65,14 +64,9 @@ fn rejected(same_identity: bool) -> (Box<project_source::RejectedEnvironment<Rc<
         shape: false,
     };
     let root=source("study/environment.yaml","schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {first: function.yaml}\ncodelists: [bad.yaml, ct.yaml, {codelists: [{id: OTHER, name: Other, items: [{value: true}]}]}]\n");
-    let Failure::Rejected(rejected) = project_source::prepare(
-        schema(),
-        root,
-        Language::Python,
-        &mut port,
-        Limits::default(),
-    )
-    .unwrap_err() else {
+    let Failure::Rejected(rejected) =
+        project_source::prepare(schema(), root, Language::Python, &mut port).unwrap_err()
+    else {
         panic!("retained rejection")
     };
     assert_eq!(port.reads, 4);
@@ -129,12 +123,9 @@ fn captured_external_document_ownership_does_not_depend_on_identity_text_equalit
     assert_eq!(context(function)["environment_path"], "functions.first");
 }
 #[test]
-fn origin_and_payload_limits_refuse_whole_projection_while_retaining_original_rejection() {
+fn invalid_origins_refuse_while_retaining_original_rejection() {
     let (mut rejected, payload) = rejected(false);
-    assert_eq!(
-        admission_with_limit(&rejected, 1),
-        Err(ProjectionError::Limit)
-    );
+    assert_eq!(admission(&rejected).unwrap().len(), 5);
     rejected.origins.functions.clear();
     assert_eq!(admission(&rejected), Err(ProjectionError::InvalidOrigin));
     let CaptureFailure::Port(original) = &rejected.sources[0].error else {
@@ -144,7 +135,8 @@ fn origin_and_payload_limits_refuse_whole_projection_while_retaining_original_re
 }
 
 #[test]
-fn scalar_decode_diagnostics_obey_the_environment_quota_before_prefix_copies() {
+fn scalar_decode_diagnostics_keep_every_case_and_the_complete_function_name() {
+    use yamaa_adapters::project_environment_diagnostics::scalar_root;
     let name = "f".repeat(100);
     let cases = (0..40)
         .map(|n| {
@@ -160,25 +152,25 @@ fn scalar_decode_diagnostics_obey_the_environment_quota_before_prefix_copies() {
         wide: false,
         shape: false,
     };
-    let limits = Limits {
-        semantic: yamaa_core::project_limits::Limits {
-            text_bytes: 512,
-            ..Default::default()
-        },
-        ..Default::default()
+    let Err(Failure::RootScalar { root, findings }) = project_source::prepare(
+        schema(),
+        source("study/environment.yaml", &body),
+        Language::Python,
+        &mut port,
+    ) else {
+        panic!("retained scalar findings")
     };
-    assert!(matches!(
-        project_source::prepare(
-            schema(),
-            source("study/environment.yaml", &body),
-            Language::Python,
-            &mut port,
-            limits
-        ),
-        Err(Failure::Root(
-            yamaa_adapters::specification_source::Error::Limit("environment_diagnostic_text")
-        ))
-    ));
+    assert_eq!(findings.len(), 40);
+    let issues = scalar_root(&root, &findings).unwrap();
+    assert_eq!(issues.len(), 40);
+    for (index, issue) in issues.iter().enumerate() {
+        assert_eq!(
+            issue.spec_paths,
+            [format!("functions.{name}.tests[{index}].result")]
+        );
+        assert_eq!(context(issue)["value"].to_string(), "9223372036854775808");
+        assert_eq!(context(issue)["reason"], "integer_out_of_range");
+    }
     assert_eq!(port.reads, 0);
 }
 
@@ -198,7 +190,6 @@ fn root_scalar_issues_keep_arbitrary_integers_and_invalid_temporal_text_without_
         source("held/environment.yaml", body),
         Language::Python,
         &mut port,
-        Limits::default(),
     )
     .unwrap_err() else {
         panic!("complete root scalars")
@@ -250,7 +241,6 @@ fn failed_external_scalar_issues_keep_each_document_origin_and_original_other_fa
         source("study/environment.yaml", body),
         Language::Python,
         &mut port,
-        Limits::default(),
     )
     .unwrap_err() else {
         panic!("independent source scalars")
@@ -297,7 +287,6 @@ fn root_schema_issues_keep_actual_closed_fields_and_source_without_dependency_re
         source("held/environment.yaml", body),
         Language::Python,
         &mut port,
-        Limits::default(),
     )
     .unwrap_err() else {
         panic!("retained root schema findings")
@@ -335,7 +324,6 @@ fn failed_external_schema_issues_use_held_arenas_and_keep_original_other_failure
         source("study/environment.yaml", body),
         Language::Python,
         &mut port,
-        Limits::default(),
     )
     .unwrap_err() else {
         panic!("independent captured schema failures")
@@ -399,7 +387,6 @@ fn invalid_inline_scalars_do_not_mask_independent_root_header_findings() {
             source("held/environment.yaml", &body),
             Language::Python,
             &mut port,
-            Limits::default(),
         )
         .unwrap_err() else {
             panic!("held root scalars")
@@ -442,7 +429,7 @@ fn invalid_inline_scalars_do_not_mask_independent_root_header_findings() {
 }
 
 #[test]
-fn configured_large_capture_counts_report_projection_limits_without_corrupt_origins() {
+fn large_capture_counts_preserve_complete_reports_and_original_origins() {
     use yamaa_adapters::project_environment_diagnostics::{scalar_sources, schema_sources};
     for written in ["bad.yaml", "ct.yaml"] {
         let payload = Rc::new(());
@@ -462,26 +449,57 @@ fn configured_large_capture_counts_report_projection_limits_without_corrupt_orig
             source("study/environment.yaml", &body),
             Language::Python,
             &mut port,
-            Limits {
-                sources: 132,
-                ..Default::default()
-            },
         )
         .unwrap_err() else {
-            panic!("retained valid capture record")
+            panic!("retained valid capture records")
         };
         assert_eq!(port.reads, 130);
         if written == "bad.yaml" {
             assert_eq!(rejected.sources.len(), 129);
-            assert_eq!(scalar_sources(&rejected), Err(ProjectionError::Limit));
-            assert_eq!(schema_sources(&rejected), Err(ProjectionError::Limit));
+            assert!(scalar_sources(&rejected).unwrap().is_empty());
+            assert!(schema_sources(&rejected).unwrap().is_empty());
             let CaptureFailure::Port(original) = &rejected.sources[0].error else {
                 panic!("original payload")
             };
             assert!(Rc::ptr_eq(original, &payload));
         } else {
             assert_eq!(rejected.captures.len(), 129);
-            assert_eq!(admission(&rejected), Err(ProjectionError::Limit));
+            let issues = admission(&rejected).unwrap();
+            let mut wanted = vec![];
+            for index in 0..129 {
+                if index > 0 {
+                    wanted.push((
+                        index,
+                        "duplicate_define_identifier",
+                        Some("id"),
+                        "codelists[0].id",
+                    ));
+                    wanted.push((
+                        index,
+                        "duplicate_define_identifier",
+                        Some("name"),
+                        "codelists[0].name",
+                    ));
+                }
+                wanted.push((
+                    index,
+                    "codelist_shape_invalid",
+                    None,
+                    "codelists[0].items[0].value",
+                ));
+            }
+            assert_eq!(issues.len(), 129 + 2 * 128);
+            for (issue, (index, condition, field, path)) in issues.iter().zip(wanted) {
+                let context = context(issue);
+                assert_eq!(issue.condition, condition);
+                assert_eq!(issue.spec_paths, [path]);
+                assert_eq!(context["field"].as_str(), field);
+                assert_eq!(context["environment_path"], format!("codelists[{index}]"));
+                assert_eq!(context["source"], "held/ct.yaml");
+                if field.is_none() {
+                    assert_eq!(context["value"], true);
+                }
+            }
         }
         assert_eq!(port.reads, 130);
     }

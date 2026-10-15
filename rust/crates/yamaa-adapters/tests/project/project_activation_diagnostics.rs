@@ -1,7 +1,7 @@
 use crate::support::project_call_compiler as support;
 use std::rc::Rc;
 use yamaa_adapters::project_activation_diagnostics::{
-    binding_issues, test_issues, test_issues_with_limit, DefinitionSource, Error, HostDetails,
+    binding_issues, test_issues, DefinitionSource, Error, HostDetails,
 };
 use yamaa_core::{
     function_invocation::{Argument, FailureKind, HostError, InvocationFailure},
@@ -146,7 +146,6 @@ fn actual_binding_and_invocation_errors_remain_original_non_send_payloads() {
     let host = Some(HostDetails::Exception {
         class: "ValueError",
         message: "é\0🙂",
-        truncated: false,
     });
     let issues = binding_issues(&sources(&functions), &failures, &[host, host]).unwrap();
     assert_eq!(issues.len(), 2);
@@ -225,7 +224,7 @@ fn contradictory_indices_identity_result_and_duplicate_observations_return_no_is
     ));
 }
 #[test]
-fn complete_projection_counts_host_details_and_escaped_paths_are_bounded() {
+fn complete_projection_keeps_long_escaped_paths_and_host_details() {
     let functions = [support::function("first"), support::function("second")];
     let selected = sources(&functions);
     let failures: Vec<TestFailure<()>> = vec![TestFailure::Result {
@@ -234,49 +233,52 @@ fn complete_projection_counts_host_details_and_escaped_paths_are_bounded() {
         actual: Value::Int(8),
         expected: Value::Int(7),
     }];
-    assert!(matches!(
-        test_issues_with_limit(&selected, &failures, &[None], 1),
-        Err(Error::Limit)
-    ));
+    assert_eq!(test_issues(&selected, &failures, &[None]).unwrap().len(), 1);
     let escaped = "\0".repeat(1_400_000);
     let huge = [DefinitionSource {
         function: &functions[0],
         path: &escaped,
     }];
-    assert!(matches!(
-        test_issues(&huge, &failures, &[None]),
-        Err(Error::Limit)
-    ));
-    let too_many: Vec<TestFailure<()>> = (0..65_537)
-        .map(|_| TestFailure::Result {
+    let issues = test_issues(&huge, &failures, &[None]).unwrap();
+    assert_eq!(issues.len(), 1);
+    assert_eq!(issues[0].spec_paths, [format!("{escaped}.tests[0]")]);
+    let duplicate = vec![
+        TestFailure::<()>::Result {
             function: 0,
             case: 0,
             actual: Value::Int(8),
             expected: Value::Int(7),
-        })
-        .collect();
+        },
+        TestFailure::Result {
+            function: 0,
+            case: 0,
+            actual: Value::Int(8),
+            expected: Value::Int(7),
+        },
+    ];
     assert!(matches!(
-        test_issues(&selected, &too_many, &vec![None; 65_537]),
-        Err(Error::Limit)
+        test_issues(&selected, &duplicate, &[None, None]),
+        Err(Error::InvalidContext)
     ));
-    let text = "x".repeat(8193);
-    let host = Some(HostDetails::Exception {
-        class: "ValueError",
-        message: &text,
-        truncated: false,
-    });
-    assert!(matches!(
-        binding_issues(
-            &selected,
-            &[BindingFailure {
-                function: 0,
-                error: ()
-            }],
-            &[host]
-        ),
-        Err(Error::Limit)
-    ));
+    let text = "é\0🙂".repeat(8193);
+    let issues = binding_issues(
+        &selected,
+        &[BindingFailure {
+            function: 0,
+            error: (),
+        }],
+        &[Some(HostDetails::Exception {
+            class: "ValueError",
+            message: &text,
+        })],
+    )
+    .unwrap();
+    let context: serde_json::Value = serde_json::from_str(&issues[0].context).unwrap();
+    assert_eq!(context["host_error"], "ValueError");
+    assert_eq!(context["host_message"], text);
+    assert!(context.get("host_details_truncated").is_none());
 }
+
 #[test]
 fn authored_float_bits_and_complete_scalar_values_remain_exact() {
     let float = |value| Value::Float(FiniteFloat::new(value).unwrap());

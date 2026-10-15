@@ -95,7 +95,7 @@ fn every_runtime_failure_keeps_versionless_identity_and_authored_provenance() {
     }
 }
 #[test]
-fn opaque_payload_is_borrowed_unchanged_and_explicit_ordinary_facts_are_bounded() {
+fn opaque_payload_is_borrowed_unchanged_and_complete_ordinary_facts_remain_exact() {
     let payload: Rc<str> = Rc::from("original interrupt or boundary");
     for kind in [
         FailureKind::CallFailed(payload.clone()),
@@ -116,29 +116,28 @@ fn opaque_payload_is_borrowed_unchanged_and_explicit_ordinary_facts_are_bounded(
             Some(HostDetails::Exception {
                 class: "ValueError",
                 message: "é\0🙂",
-                truncated: true,
             }),
         )
         .unwrap();
         let context: serde_json::Value = serde_json::from_str(&issue.context).unwrap();
         assert_eq!(context["host_error"], "ValueError");
         assert_eq!(context["host_message"], "é\0🙂");
-        assert_eq!(context["host_details_truncated"], true);
+        assert!(context.get("host_details_truncated").is_none());
         assert!(Rc::strong_count(&payload) >= 2);
         let oversized = "x".repeat(8193);
-        assert!(matches!(
-            invocation(
-                "columns.BMI.derivation.function",
-                &failure,
-                None,
-                &[],
-                Some(HostDetails::Rejected {
-                    reason: &oversized,
-                    returned: None
-                })
-            ),
-            Err(Error::Limit)
-        ));
+        let issue = invocation(
+            "columns.BMI.derivation.function",
+            &failure,
+            None,
+            &[],
+            Some(HostDetails::Rejected {
+                reason: &oversized,
+                returned: None,
+            }),
+        )
+        .unwrap();
+        let context: serde_json::Value = serde_json::from_str(&issue.context).unwrap();
+        assert_eq!(context["reason"], oversized);
     }
     let failure = make_failure(FailureKind::InvalidHostResult(payload));
     let issue = invocation(
@@ -159,7 +158,7 @@ fn opaque_payload_is_borrowed_unchanged_and_explicit_ordinary_facts_are_bounded(
     );
 }
 #[test]
-fn malformed_identity_keys_and_escaped_amplification_return_no_partial_issue() {
+fn malformed_identity_keys_refuse_and_escaped_arguments_remain_complete() {
     let failure = make_failure(FailureKind::BooleanResult);
     let row = RowIdentity {
         position: 0,
@@ -195,11 +194,10 @@ fn malformed_identity_keys_and_escaped_amplification_return_no_partial_issue() {
         Err(Error::InvalidContext)
     ));
     let oversized = "\0".repeat(1_400_000);
-    let failure = make_failure(FailureKind::UnknownArguments(vec![oversized]));
-    assert!(matches!(
-        invocation("columns.BMI.derivation.function", &failure, None, &[], None),
-        Err(Error::Limit)
-    ));
+    let failure = make_failure(FailureKind::UnknownArguments(vec![oversized.clone()]));
+    let issue = invocation("columns.BMI.derivation.function", &failure, None, &[], None).unwrap();
+    let context: serde_json::Value = serde_json::from_str(&issue.context).unwrap();
+    assert_eq!(context["unknown"], serde_json::json!([oversized]));
 }
 
 #[test]
@@ -290,7 +288,6 @@ fn actual_engine_failures_project_without_a_second_callback_or_payload_consumpti
                 Some(HostDetails::Exception {
                     class: "OriginalCondition",
                     message: "ordinary classified failure",
-                    truncated: false,
                 }),
             )
             .unwrap()

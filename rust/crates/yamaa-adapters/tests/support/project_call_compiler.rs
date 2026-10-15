@@ -1,8 +1,6 @@
 use yamaa_core::{
     project_function::{Case, Definition, Function, Language, Parameter},
-    schema::{
-        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    },
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     value::{ColumnType, Value, ValueType},
 };
 pub enum Tree {
@@ -151,8 +149,6 @@ pub fn specification_with_verifications(
     }
     let mut nodes = vec![];
     let root = Tree::map(fields).append(&mut nodes);
-    let d = Document::new(nodes, root, DocumentLimits::default()).unwrap();
-    SpecificationDocument::admit(d, &mut ValidationBudget::new(Default::default()))
-        .unwrap()
-        .unwrap()
+    let d = Document::new(nodes, root).unwrap();
+    SpecificationDocument::admit(d).unwrap().unwrap()
 }

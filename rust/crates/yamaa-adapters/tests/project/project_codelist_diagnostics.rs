@@ -1,9 +1,7 @@
 use crate::support::project_codelist_compiler as support;
 use std::{cell::Cell, convert::Infallible};
 use support::{environment, schema, spec};
-use yamaa_adapters::project_codelist_diagnostics::{
-    codelist_issues, codelist_issues_with_limit, Error,
-};
+use yamaa_adapters::project_codelist_diagnostics::{codelist_issues, Error};
 use yamaa_core::dataset::{CheckRecord, CodelistObservation, ExecutionError, RowIdentity};
 use yamaa_core::table::{CellError, TableAccess, TableSchema, ValueRef};
 use yamaa_core::{specification::PreparedSpecification, value::Value};
@@ -64,18 +62,15 @@ fn complete_retained_values_and_full_width_keys_are_projected_without_output_or_
         reads: Cell::new(0),
     };
     let plan = compiled.bind(&source.schema).unwrap();
-    let limits = yamaa_core::dataset::Limits {
-        source_rows: 10,
-        output_rows: 10,
-        output_cells: 100,
-        key_cells: 100,
-        work_cells: 1000,
-        scalar_text_bytes: 1000,
-        output_text_bytes: 1000,
-        identity_cells: 100,
-        identity_text_bytes: 1000,
-    };
-    let ExecutionError::VerificationFailures(records) = *plan.execute(&source, limits).unwrap_err()
+    let ExecutionError::VerificationFailures(records) = *plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err()
     else {
         panic!("actual fixed-list failure")
     };
@@ -133,19 +128,29 @@ fn contradictory_observation_geometry_never_returns_partial_or_invented_issues()
     assert!(codelist_issues(&compiled, &[passing]).unwrap().is_empty());
 }
 #[test]
-fn escaped_context_and_record_counts_obey_whole_projection_quotas() {
+fn complete_escaped_values_and_large_retained_observations_are_projected() {
     let compiled = compiled();
-    let records = vec![record(Value::Str("\0".repeat(1_500_000)))];
-    assert_eq!(codelist_issues(&compiled, &records), Err(Error::Limit));
-    let small = record(Value::Str("bad".into()));
-    assert_eq!(
-        codelist_issues_with_limit(&compiled, std::slice::from_ref(&small), 1),
-        Err(Error::Limit)
-    );
-    let mut too_many = small;
-    too_many.failed_count = 65_537;
-    too_many.evaluated_count = 65_537;
-    too_many.output_rows = 65_537;
-    too_many.codelist.as_mut().unwrap().values = vec![Value::Int(1); 65_537];
-    assert_eq!(codelist_issues(&compiled, &[too_many]), Err(Error::Limit));
+    let text = "\0".repeat(1_500_000);
+    let records = vec![record(Value::Str(text.clone()))];
+    let issues = codelist_issues(&compiled, &records).unwrap();
+    let context: serde_json::Value = serde_json::from_str(&issues[0].context).unwrap();
+    assert_eq!(context["values"], serde_json::json!([text]));
+    let mut many = record(Value::Str("bad".into()));
+    many.failed_count = 65_537;
+    many.evaluated_count = 65_537;
+    many.output_rows = 65_537;
+    many.codelist.as_mut().unwrap().values = vec![Value::Int(1); 65_537];
+    many.offending_rows = (0..65_537)
+        .map(|position| RowIdentity {
+            position,
+            values: vec![Value::Int(i64::MAX)],
+        })
+        .collect();
+    let issues = codelist_issues(&compiled, &[many]).unwrap();
+    assert_eq!(issues.len(), 1);
+    let context: serde_json::Value = serde_json::from_str(&issues[0].context).unwrap();
+    assert_eq!(context["failure_count"], 65_537);
+    assert_eq!(context["values"].as_array().unwrap().len(), 65_537);
+    assert_eq!(context["keys"].as_array().unwrap().len(), 65_537);
+    assert_eq!(context["keys"][65_536]["ID"].as_i64(), Some(i64::MAX));
 }

@@ -7,11 +7,7 @@ use yamaa_adapters::{
     project_source::{self, CaptureFailure, CapturePort, Failure, Kind, Origin, Reply, Request},
     specification_source::{CapturedSchema, Source},
 };
-use yamaa_core::{
-    project_environment::LockKind,
-    project_function::Language,
-    project_limits::{AdmissionError, Limit, Resource},
-};
+use yamaa_core::{project_environment::LockKind, project_function::Language};
 // Deliberately neither Clone, Debug nor Send; the exact held error remains owned.
 struct Opaque {
     allocation: Rc<Cell<usize>>,
@@ -43,7 +39,6 @@ fn schema() -> Arc<CapturedSchema> {
         ],
         0,
         "environment_class",
-        Default::default(),
     )
     .unwrap()
 }
@@ -113,7 +108,6 @@ fn rejected(
         source("held/environment.yaml", body),
         Language::Python,
         &mut port,
-        Default::default(),
     ) {
         Err(Failure::Rejected(rejected)) => rejected,
         _ => panic!("complete retained rejection"),
@@ -210,25 +204,22 @@ fn complete_external_scalar_reports_preserve_unbounded_integers_and_non_debug_or
     opaque(&rejected, &allocation, pointer);
 }
 #[test]
-fn whole_static_report_refusal_is_late_and_each_individual_finding_remains_admissible() {
+fn complete_static_report_matches_all_independent_single_finding_projections() {
     let (mut rejected, port, allocation, pointer) = rejected(false, false);
-    let Some(AdmissionError::Findings(findings)) = rejected.admission.as_mut() else {
-        panic!("static report")
-    };
-    let all = std::mem::take(findings);
+    let all = rejected.admission.take().unwrap();
+    let mut independent = vec![];
     for finding in &all {
-        rejected.admission = Some(AdmissionError::Findings(vec![finding.clone()]));
-        assert!(diagnostic::admission_with_limit(&rejected, 3_000).is_ok());
+        rejected.admission = Some(vec![finding.clone()]);
+        independent.extend(diagnostic::admission(&rejected).unwrap());
     }
-    rejected.admission = Some(AdmissionError::Findings(all));
-    assert_eq!(
-        diagnostic::admission_with_limit(&rejected, 3_000),
-        Err(ProjectionError::Limit)
-    );
-    assert_eq!(diagnostic::admission(&rejected).unwrap().len(), 5);
+    rejected.admission = Some(all);
+    let complete = diagnostic::admission(&rejected).unwrap();
+    assert_eq!(complete.len(), 5);
+    assert_eq!(complete, independent);
     assert_eq!(port.trace.len(), 4);
     opaque(&rejected, &allocation, pointer);
 }
+
 #[test]
 fn wrong_origin_shape_duplicate_origins_and_equal_text_wrong_schema_refuse_without_replacement_errors(
 ) {
@@ -255,16 +246,12 @@ fn wrong_origin_shape_duplicate_origins_and_equal_text_wrong_schema_refuse_witho
     opaque(&rejected, &allocation, pointer);
 }
 #[test]
-fn original_semantic_resource_error_precedes_bad_origins_and_projection_quota() {
+fn invalid_origins_refuse_without_replacing_original_capture_errors() {
     let (mut rejected, port, allocation, pointer) = rejected(false, false);
-    let limit = Limit {
-        resource: Resource::TextBytes,
-    };
-    rejected.admission = Some(AdmissionError::Limit(limit));
     rejected.origins.functions.clear();
     assert_eq!(
-        diagnostic::admission_with_limit(&rejected, 0),
-        Err(ProjectionError::AdmissionLimit(limit))
+        diagnostic::admission(&rejected),
+        Err(ProjectionError::InvalidOrigin)
     );
     assert_eq!(port.trace.len(), 4);
     opaque(&rejected, &allocation, pointer);
@@ -289,7 +276,6 @@ fn original_root_temporal_and_wide_scalar_report_keeps_independent_headers_witho
         source("held/environment.yaml", body),
         Language::Python,
         &mut port,
-        Default::default(),
     ) {
         Err(Failure::RootScalar { root, findings }) => (root, findings),
         _ => panic!("retained original root scalars"),
@@ -359,12 +345,11 @@ fn actual_captured_two_hundred_inline_functions_keep_the_full_six_hundred_record
         source("held/environment.yaml", &body),
         Language::Python,
         &mut port,
-        Default::default(),
     ) {
         Err(Failure::Rejected(rejected)) => rejected,
         _ => panic!("actual captured static rejection"),
     };
-    let Some(AdmissionError::Findings(findings)) = &rejected.admission else {
+    let Some(findings) = &rejected.admission else {
         panic!("complete independent findings")
     };
     assert_eq!(findings.len(), 600);
