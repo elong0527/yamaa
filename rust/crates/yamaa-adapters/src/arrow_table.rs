@@ -1,8 +1,7 @@
 //! Ordered owned Arrow snapshots behind the storage-independent core port.
 //!
-//! This is an internal in-process API, not an untrusted IPC decoder. Limits bound
-//! admitted shapes and scan work, not already allocated buffers or allocation
-//! failure inside Arrow. Host transports must impose their own byte/work policy.
+//! The fixed table geometry is admitted before logical cell validation.
+//! Byte capture and file encoding remain the physical source/output boundaries.
 
 use crate::arrow_temporal::{date_days, date_from_days, datetime_from_seconds, datetime_seconds};
 use arrow_array::{
@@ -18,15 +17,6 @@ use yamaa_core::{
     temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
     value::{ColumnType, FiniteFloat},
 };
-
-/// Trusted caller policy, independent of language semantics. No implicit default.
-#[derive(Clone, Copy, Debug)]
-pub struct TableLimits {
-    pub max_rows: usize,
-    pub max_columns: usize,
-    pub max_batches: usize,
-    pub max_cells: usize,
-}
 
 #[derive(Debug)]
 pub enum TableError {
@@ -164,19 +154,11 @@ pub fn datetime_array(values: &[Option<DateTime>]) -> Result<StructArray, ArrowE
     )
 }
 
-/// Check a shape budget, retaining arithmetic overflow as an unknown requirement.
-fn limit(
-    resource: &'static str,
-    required: Option<usize>,
-    maximum: usize,
-) -> Result<usize, TableError> {
-    match required {
-        Some(value) if value <= maximum => Ok(value),
-        _ => Err(TableError::Limit {
-            resource,
-            limit: maximum,
-            required,
-        }),
+fn boundary_error(error: yamaa_core::limits::LimitExceeded) -> TableError {
+    TableError::Limit {
+        resource: error.resource,
+        limit: error.limit,
+        required: error.actual,
     }
 }
 
@@ -184,13 +166,9 @@ impl ArrowTable {
     /// Validate the whole snapshot before it can reach any evaluator. Schemas
     /// must equal the canonical physical schema including order/nullability and
     /// metadata. Floats normalize nonfinite values to actual Arrow nulls. All
-    /// budget checks precede schema and cell validation; no aggregate runs here.
-    pub fn try_new(
-        schema: TableSchema,
-        batches: Vec<RecordBatch>,
-        limits: TableLimits,
-    ) -> Result<Self, TableError> {
-        Self::try_new_inner(schema, batches, limits, None)
+    /// geometry checks precede schema and cell validation; no aggregate runs here.
+    pub fn try_new(schema: TableSchema, batches: Vec<RecordBatch>) -> Result<Self, TableError> {
+        Self::try_new_inner(schema, batches, None)
     }
 
     /// The C Data adapter also admits large/view strings without copying their
@@ -198,27 +176,31 @@ impl ArrowTable {
     pub(crate) fn try_new_with_schema(
         schema: TableSchema,
         batches: Vec<RecordBatch>,
-        limits: TableLimits,
         expected: SchemaRef,
     ) -> Result<Self, TableError> {
-        Self::try_new_inner(schema, batches, limits, Some(expected))
+        Self::try_new_inner(schema, batches, Some(expected))
     }
 
     fn try_new_inner(
         schema: TableSchema,
         batches: Vec<RecordBatch>,
-        limits: TableLimits,
         expected: Option<SchemaRef>,
     ) -> Result<Self, TableError> {
-        let columns = limit("columns", Some(schema.columns().len()), limits.max_columns)?;
-        limit("batches", Some(batches.len()), limits.max_batches)?;
+        let columns = schema.columns().len();
+        yamaa_core::limits::Limits::columns(columns).map_err(boundary_error)?;
         let mut rows = 0_usize;
         let mut ends = Vec::with_capacity(batches.len());
         for batch in &batches {
-            rows = limit("rows", rows.checked_add(batch.num_rows()), limits.max_rows)?;
+            rows = rows
+                .checked_add(batch.num_rows())
+                .ok_or(TableError::Limit {
+                    resource: "table_rows",
+                    limit: yamaa_core::limits::Limits::TABLE_ROWS,
+                    required: None,
+                })?;
             ends.push(rows);
         }
-        limit("cells", rows.checked_mul(columns), limits.max_cells)?;
+        yamaa_core::limits::Limits::table(rows, columns).map_err(boundary_error)?;
         let expected = expected.unwrap_or_else(|| physical_schema(&schema));
         let mut normalized = Vec::with_capacity(batches.len());
         for (batch_index, batch) in batches.into_iter().enumerate() {

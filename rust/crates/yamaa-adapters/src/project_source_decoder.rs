@@ -36,16 +36,10 @@ impl<E> TableAccess for Snapshot<E> {
         })
     }
 }
-pub struct Decoder<E> {
-    error: PhantomData<fn() -> E>,
-    usage: crate::source_decode_usage::Usage,
-}
+pub struct Decoder<E>(PhantomData<fn() -> E>);
 impl<E> Default for Decoder<E> {
     fn default() -> Self {
-        Self {
-            error: PhantomData,
-            usage: Default::default(),
-        }
+        Self(PhantomData)
     }
 }
 impl<E> SourceDecoder for Decoder<E> {
@@ -54,157 +48,19 @@ impl<E> SourceDecoder for Decoder<E> {
     fn continue_after(&self, error: &Error) -> bool {
         crate::specification_run::SourceDecoder.continue_after(error)
     }
-    fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<Snapshot<E>, Error> {
-        self.usage = Default::default();
-        crate::specification_run::SourceDecoder
-            .decode(source, bytes)
-            .map(|snapshot| Snapshot {
-                table: snapshot.0,
-                error: PhantomData,
-            })
-    }
-    fn decode_with_interpretation(
+    fn decode(
         &mut self,
         source: &SourceDeclaration,
         bytes: &[u8],
         interpretation: yamaa_core::specification::SourceInterpretation,
+        contract: Option<&yamaa_core::producer_contract::Contract>,
     ) -> Result<Snapshot<E>, Error> {
-        self.usage = Default::default();
-        crate::specification_run::decode_interpreted(source, bytes, None, interpretation).map(
+        crate::specification_run::decode_source(source, bytes, interpretation, contract).map(
             |table| Snapshot {
                 table,
                 error: PhantomData,
             },
         )
-    }
-}
-
-impl<E> yamaa_core::producer_build::DecodePort for Decoder<E> {
-    fn usage(&self) -> Option<yamaa_core::producer_build::DecodeUsage> {
-        self.usage
-            .complete
-            .then_some(yamaa_core::producer_build::DecodeUsage {
-                storage_bytes: self.usage.storage_bytes,
-                work_bytes: self.usage.work_bytes,
-            })
-    }
-    fn decode_bounded_interpreted(
-        &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        contract: Option<&yamaa_core::producer_contract::Contract>,
-        limits: yamaa_core::producer_build::DecodeLimits,
-        interpretation: yamaa_core::specification::SourceInterpretation,
-    ) -> Result<Snapshot<E>, yamaa_core::producer_build::DecodeError<Error>> {
-        if interpretation == yamaa_core::specification::SourceInterpretation::Ordinary {
-            return self.decode_bounded(source, bytes, contract, limits);
-        }
-        self.usage = Default::default();
-        crate::specification_run::decode_interpreted_with_usage(
-            source,
-            bytes,
-            limits,
-            interpretation,
-            &mut self.usage,
-        )
-        .map(|table| Snapshot {
-            table,
-            error: PhantomData,
-        })
-        .map_err(yamaa_core::producer_build::DecodeError::Codec)
-    }
-    fn decode_bounded(
-        &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        contract: Option<&yamaa_core::producer_contract::Contract>,
-        limits: yamaa_core::producer_build::DecodeLimits,
-    ) -> Result<Snapshot<E>, yamaa_core::producer_build::DecodeError<Error>> {
-        use yamaa_core::producer_build::DecodeError;
-        self.usage = Default::default();
-        self.usage.complete();
-        let table = if let Some(contract) =
-            contract.filter(|_| source.profile == yamaa_core::specification::SourceProfile::Csv)
-        {
-            // Admit stored header order before declared typing can replace a
-            // producer mismatch with an unrelated missing-field diagnostic.
-            let types = yamaa_core::typed_csv::PreparedTypes::new(
-                &source.types,
-                yamaa_core::specification::DEFAULT_MAX_COLUMNS,
-            )
-            .map_err(|e| {
-                DecodeError::Codec(Error::TypedSource(crate::typed_csv::Error::Typing(e)))
-            })?;
-            let parsed = crate::source_decode_usage::parse_csv(
-                bytes,
-                crate::specification_run::bounded_csv_limits(limits),
-                limits,
-                &mut self.usage,
-            )
-            .map_err(DecodeError::Codec)?;
-            let contract_limits = yamaa_core::producer_contract::Limits::default();
-            if parsed.names.len() > contract_limits.fields {
-                return Err(DecodeError::Limit("producer_source_fields"));
-            }
-            let header = parsed.names.iter().map(String::as_str).collect::<Vec<_>>();
-            if let Some(diagnostic) = yamaa_core::source_header::validate_header(
-                contract,
-                &source.name,
-                &header,
-                contract_limits,
-            )
-            .map_err(DecodeError::Contract)?
-            {
-                return Err(DecodeError::Metadata(diagnostic));
-            }
-            crate::source_decode_usage::csv_conversion(
-                &parsed,
-                limits.storage_bytes,
-                &mut self.usage,
-            )
-            .map_err(|error| {
-                DecodeError::Codec(Error::Source(crate::csv_source::TextTableError::Table(
-                    error,
-                )))
-            })?;
-            let table = crate::typed_csv::convert(
-                parsed,
-                types,
-                crate::arrow_table::TableLimits {
-                    max_rows: limits.rows.min(yamaa_core::capacity::SOURCE_ROWS),
-                    max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
-                    max_batches: 1,
-                    max_cells: limits.cells.min(yamaa_core::capacity::SOURCE_CELLS),
-                },
-            )
-            .map_err(|e| DecodeError::Codec(crate::specification_run::typed_source_error(e)))?;
-            crate::source_ordinal::append_with_usage(
-                source,
-                table,
-                crate::arrow_table::TableLimits {
-                    max_rows: limits.rows.min(yamaa_core::capacity::SOURCE_ROWS),
-                    max_columns: yamaa_core::specification::DEFAULT_MAX_COLUMNS,
-                    max_batches: 1,
-                    max_cells: limits.cells.min(yamaa_core::capacity::SOURCE_CELLS),
-                },
-                limits.storage_bytes,
-                &mut self.usage,
-            )
-            .map_err(DecodeError::Codec)?
-        } else {
-            crate::specification_run::decode_interpreted_with_usage(
-                source,
-                bytes,
-                limits,
-                yamaa_core::specification::SourceInterpretation::Ordinary,
-                &mut self.usage,
-            )
-            .map_err(DecodeError::Codec)?
-        };
-        Ok(Snapshot {
-            table,
-            error: PhantomData,
-        })
     }
 }
 
