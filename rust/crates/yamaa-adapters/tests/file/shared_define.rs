@@ -208,6 +208,83 @@ fn dm_both_goldens_without_input_execution_and_save_uses_held_bytes() {
     );
     assert!(!run.save().unwrap());
 }
+
+#[test]
+fn xml_text_findings_keep_field_owners_inheritance_and_render_order_in_both_hosts() {
+    let truth: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../tests/host-fixtures/cases.json")).unwrap();
+    for case in truth["families"]["public-define"]["xml_text_cases"]
+        .as_array()
+        .unwrap()
+    {
+        for host in [Language::Python, Language::R] {
+            let temp = Temp::fixture("sdtm-dm-metadata", false);
+            for (filename, changes) in [
+                ("spec.yaml", "specification_mutations"),
+                ("environment.yaml", "environment_mutations"),
+            ] {
+                let path = temp.0.join(filename);
+                let mut text = fs::read_to_string(&path).unwrap();
+                for change in case[changes].as_array().unwrap() {
+                    let before = change[0].as_str().unwrap();
+                    assert!(text.contains(before));
+                    text = text.replacen(before, change[1].as_str().unwrap(), 1);
+                }
+                if filename == "environment.yaml" {
+                    text = text.replace("dataset_json: true", "dataset_json: false");
+                }
+                fs::write(path, text).unwrap();
+            }
+            if case["inherit_specification"].as_bool().unwrap() {
+                fs::rename(temp.0.join("spec.yaml"), temp.0.join("base.yaml")).unwrap();
+                fs::write(
+                    temp.0.join("spec.yaml"),
+                    "schema_version: '1.0'\nparents: base.yaml\n",
+                )
+                .unwrap();
+            }
+            let mut run = Define::prepare(
+                temp.0.join("environment.yaml").to_str().unwrap(),
+                "sdtm",
+                Some("2026-09-11T00:00:00"),
+                "0.3.0",
+                host,
+            );
+            let actual: Vec<_> = run.issues().iter().map(|issue| serde_json::json!({
+                "phase": issue.phase, "condition": issue.condition, "requirement": issue.requirement,
+                "spec_paths": issue.spec_paths,
+                "context": serde_json::from_str::<serde_json::Value>(&issue.context).unwrap()
+            })).collect();
+            assert_eq!(
+                serde_json::json!(actual),
+                case["issues"],
+                "{}",
+                case["name"]
+            );
+            assert!(!temp.0.join("define.xml").exists());
+            assert!(!temp.0.join("dm.json").exists());
+            if actual.is_empty() {
+                let [(name, content, state)] = run.artifacts().collect::<Vec<_>>()[..] else {
+                    panic!("one held XML artifact")
+                };
+                assert_eq!((name, state), ("define.xml", PublicationState::Ready));
+                for fragment in case["xml_fragments"].as_array().unwrap() {
+                    assert!(std::str::from_utf8(content)
+                        .unwrap()
+                        .contains(fragment.as_str().unwrap()));
+                }
+                let content = content.to_vec();
+                assert!(run.save().unwrap());
+                assert_eq!(fs::read(temp.0.join("define.xml")).unwrap(), content);
+            } else {
+                assert!(run.save().is_err());
+                assert_eq!(run.artifacts().len(), 0);
+            }
+            assert!(!temp.0.join("input").exists());
+            assert!(!temp.0.join("dm.csv").exists());
+        }
+    }
+}
 #[test]
 fn ae_and_vs_metadata_only_fixed_time_projection_has_independent_structure() {
     for (name, id, count, has_acrf, codelist) in [
