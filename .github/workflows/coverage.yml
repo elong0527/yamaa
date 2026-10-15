@@ -1,0 +1,92 @@
+name: Coverage
+
+# Measures Rust and Python coverage on main and uploads both reports to
+# Codecov, which backs the coverage badge in README.md. Pull requests are
+# covered by the CI workflow; this one runs on main pushes (and on demand)
+# so the badge always reflects the default branch.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  rust:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      # Lets the Codecov action upload without a stored token (OIDC).
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          r: runtime
+      - name: Add the LLVM coverage component to the workspace toolchain
+        run: rustup component add llvm-tools-preview
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-llvm-cov
+      - name: Measure workspace coverage
+        run: |
+          export PYO3_PYTHON="$(uv run --project python --no-sync python -c 'import sys; print(sys.executable)')"
+          cargo llvm-cov --locked --manifest-path rust/Cargo.toml --workspace \
+            --lcov --output-path coverage-rust.lcov
+      - uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        with:
+          files: coverage-rust.lcov
+          flags: rust
+          name: rust
+          use_oidc: true
+          disable_search: true
+          fail_ci_if_error: true
+  python:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      # Lets the Codecov action upload without a stored token (OIDC).
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install the coverage plugin into the development environment
+        # CI-only helper, installed the same way tools/commands/setup.py
+        # installs the repository tools, so the locked environment in
+        # python/uv.lock stays untouched.
+        run: |
+          interpreter="$(uv run --project python --no-sync python -c 'import sys; print(sys.executable)')"
+          uv pip install --python "$interpreter" 'pytest-cov>=6,<8'
+      - name: Measure package and tool coverage
+        # Mirrors the pytest half of `make test-python`. The staged
+        # standalone host suites run as separate processes and are not
+        # measured. codecov.yml maps the installed package's paths back
+        # to python/src/yamaa/.
+        run: >-
+          uv run --project python --no-sync python -m pytest
+          python/tests tools/tests
+          --cov=yamaa --cov=tools
+          --cov-report=xml:coverage-python.xml
+      - uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        with:
+          files: coverage-python.xml
+          flags: python
+          name: python
+          use_oidc: true
+          disable_search: true
+          fail_ci_if_error: true
