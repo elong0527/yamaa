@@ -73,22 +73,9 @@ struct Refusal {
     required: Option<usize>,
 }
 fn resource_name(resource: yamaa_engine::dataset::Resource) -> &'static str {
-    use yamaa_engine::dataset::Resource;
-    match resource {
-        Resource::WorkCells => "work_cells",
-        Resource::ScalarTextBytes => "scalar_text_bytes",
-        Resource::OutputTextBytes => "output_text_bytes",
-        Resource::IdentityCells => "identity_cells",
-        Resource::IdentityTextBytes => "identity_text_bytes",
-        Resource::PredicateWork => "predicate_work",
-        Resource::PredicateResolutions => "predicate_resolutions",
-        Resource::PredicateTextBytes => "predicate_text_bytes",
-        Resource::PredicateLikeWork => "predicate_like_work",
-        Resource::PredicateRegexSubjectBytes => "predicate_regex_subject_bytes",
-        Resource::PredicateRegexWork => "predicate_regex_work",
-        Resource::PredicateRegexStateCells => "predicate_regex_state_cells",
-    }
+    crate::resource_diagnostics::resource_name(resource)
 }
+
 struct State {
     nodes: Vec<Node>,
     identity_bytes: usize,

@@ -1907,7 +1907,7 @@ fn actual_graph_has_one_work_ceiling_and_input_slot_reservations_at_exact_bounda
                     .result
                     .as_ref()
                     .map_err(|e| &**e),
-                Err(ExecutionError::Capacity)
+                Err(ExecutionError::Limit { .. })
             ));
             assert_eq!(ports.decoder.cells.get(), 0);
             assert!(!trace.iter().any(|e| e == "invoke:beta:1"
@@ -2252,7 +2252,7 @@ fn owned_column_weighted_output_cells_keep_the_completed_producer_at_the_exact_b
                     .result
                     .as_ref()
                     .map_err(|error| &**error),
-                Err(ExecutionError::Capacity)
+                Err(ExecutionError::Limit { .. })
             ));
             assert!(root.output.as_ref().unwrap().is_none());
             assert!(!trace

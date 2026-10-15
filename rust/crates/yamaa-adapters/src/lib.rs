@@ -36,6 +36,7 @@ mod source_profile_inspection;
 pub mod specification_run;
 pub mod specification_run_view;
 
+pub mod resource_diagnostics;
 pub mod source_diagnostics;
 mod source_ordinal;
 pub mod specification_diagnostics;

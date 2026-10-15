@@ -23,7 +23,19 @@ pub(crate) fn append(
             cells: limits.max_cells,
         },
     )
-    .map_err(Error::Ordinal)?
+    .map_err(|error| match error {
+        source_ingestion::Error::ResourceLimit {
+            resource,
+            limit,
+            actual,
+        } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+            resource,
+            limit,
+            actual,
+            vec![format!("input.{}", source.name)],
+        )),
+        error => Error::Ordinal(error),
+    })?
     else {
         return Ok(table);
     };

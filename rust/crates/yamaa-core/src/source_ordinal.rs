@@ -17,6 +17,11 @@ pub enum Error {
     InvalidName,
     InvalidTable,
     Limit,
+    ResourceLimit {
+        resource: &'static str,
+        limit: usize,
+        actual: Option<usize>,
+    },
 }
 impl Error {
     pub fn finding<'a>(self, dataset: &'a str, field: &'a str) -> Option<SourceFinding<'a>> {
@@ -56,13 +61,31 @@ impl Ordinal {
         if schema.columns().iter().any(|field| field.name == name) {
             return Err(Error::Collision);
         }
-        let columns = schema.columns().len().checked_add(1).ok_or(Error::Limit)?;
-        if columns > limits.columns
-            || rows
-                .checked_mul(columns)
-                .is_none_or(|cells| cells > limits.cells)
-            || i64::try_from(rows).is_err()
-        {
+        let columns = schema
+            .columns()
+            .len()
+            .checked_add(1)
+            .ok_or(Error::ResourceLimit {
+                resource: "columns",
+                limit: limits.columns,
+                actual: None,
+            })?;
+        if columns > limits.columns {
+            return Err(Error::ResourceLimit {
+                resource: "columns",
+                limit: limits.columns,
+                actual: Some(columns),
+            });
+        }
+        let cells = rows.checked_mul(columns);
+        if cells.is_none_or(|cells| cells > limits.cells) {
+            return Err(Error::ResourceLimit {
+                resource: "cells",
+                limit: limits.cells,
+                actual: cells,
+            });
+        }
+        if i64::try_from(rows).is_err() {
             return Err(Error::Limit);
         }
         let mut columns = schema.columns().to_vec();

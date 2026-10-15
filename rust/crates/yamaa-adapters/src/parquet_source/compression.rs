@@ -8,6 +8,11 @@ use std::io::Read;
 pub(super) enum Error {
     Malformed,
     Limit,
+    ResourceLimit {
+        resource: &'static str,
+        limit: usize,
+        actual: Option<usize>,
+    },
     Unavailable(i64),
 }
 #[derive(Clone, Copy, Debug)]
@@ -107,7 +112,11 @@ fn brotli_window(input: &[u8], maximum: u32) -> Result<(), Error> {
         }
     };
     if log > maximum {
-        Err(Error::Limit)
+        Err(Error::ResourceLimit {
+            resource: "compression_window_log",
+            limit: maximum as usize,
+            actual: Some(log as usize),
+        })
     } else {
         Ok(())
     }
@@ -136,7 +145,11 @@ fn zstd(input: &[u8], expected: usize, maximum_window: u32) -> Result<Vec<u8>, E
                 if zstd::zstd_safe::get_error_name(code)
                     == "Frame requires too much memory for decoding"
                 {
-                    Error::Limit
+                    Error::ResourceLimit {
+                        resource: "compression_window_log",
+                        limit: maximum_window as usize,
+                        actual: None,
+                    }
                 } else {
                     Error::Malformed
                 }
@@ -169,10 +182,16 @@ fn verify(page: &Page<'_>, limits: Limits) -> Result<(), Error> {
 
 /// Retain the bounded expansion for subsequent encoded-value admission.
 pub(super) fn decode(page: &Page<'_>, limits: Limits) -> Result<Vec<u8>, Error> {
-    if page.decoded_bytes > limits.page_bytes
-        || page.body.len() > limits.page_bytes
-        || !(10..=24).contains(&limits.window_log)
-    {
+    for actual in [page.decoded_bytes, page.body.len()] {
+        if actual > limits.page_bytes {
+            return Err(Error::ResourceLimit {
+                resource: "page_bytes",
+                limit: limits.page_bytes,
+                actual: Some(actual),
+            });
+        }
+    }
+    if !(10..=24).contains(&limits.window_log) {
         return Err(Error::Limit);
     }
     let prefix = page.uncompressed_prefix;
@@ -270,7 +289,11 @@ mod tests {
     fn window_policy_is_checked_before_history_allocation() {
         assert_eq!(
             verify(&page(&[0x11, 30], 4, 1), limits()),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit {
+                resource: "compression_window_log",
+                limit: 24,
+                actual: Some(30),
+            })
         );
         assert_eq!(
             verify(&page(&[0x91, 30], 4, 1), limits()),
@@ -278,7 +301,14 @@ mod tests {
         );
         // Zstandard frame with 2^25-byte history and an empty final raw block.
         let data = [0x28, 0xb5, 0x2f, 0xfd, 0, 0x78, 1, 0, 0];
-        assert_eq!(verify(&page(&data, 6, 0), limits()), Err(Error::Limit));
+        assert_eq!(
+            verify(&page(&data, 6, 0), limits()),
+            Err(Error::ResourceLimit {
+                resource: "compression_window_log",
+                limit: 24,
+                actual: None,
+            })
+        );
         assert_eq!(verify(&page(&[0], 6, 0), limits()), Err(Error::Malformed));
         assert_eq!(
             verify(&page(&[], 3, 0), limits()),
@@ -343,7 +373,11 @@ mod tests {
                     ..limits()
                 }
             ),
-            Err(Error::Limit)
+            Err(Error::ResourceLimit {
+                resource: "page_bytes",
+                limit: 3,
+                actual: Some(4),
+            })
         );
         let mut data = page(plain, 2, 4);
         data.compressed = false;
