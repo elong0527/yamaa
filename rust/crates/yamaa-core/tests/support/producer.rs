@@ -105,14 +105,17 @@ pub fn candidate(document: &SpecificationDocument) -> Candidate<'_> {
         schema_path: "nested/producer.yaml",
         schema_origin: WrittenPath {
             declaring_source: "/parent.yaml",
+            base_source: "/parent.yaml",
             written: "../nested/producer.yaml",
         },
         input_origin: WrittenPath {
             declaring_source: "/consumer.yaml",
+            base_source: "/consumer.yaml",
             written: "./produced.csv",
         },
         output_origin: WrittenPath {
             declaring_source: "/producer.yaml",
+            base_source: "/producer.yaml",
             written: "produced.csv",
         },
         schema_identity: "/producer.yaml",

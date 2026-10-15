@@ -15,8 +15,8 @@ open gates live in GitHub issues and pull requests, not here.
   CRAN and r-universe are later work.
 
 `.github/workflows/native.yml` builds, installs and tests every supported
-combination nightly on main and on manual dispatch. A release is cut from a
-commit whose complete native run passed.
+combination every two hours on main and on manual dispatch. A release is cut
+from a commit whose complete native run passed.
 
 Python, R and Cargo versions move together;
 `tools.packaging.check_shared_release_versions` checks that they agree. The
@@ -26,7 +26,7 @@ previous Python release is the `yamaa-py-0.3.0` tag.
 
 After the final commit is on main and its complete native qualification has
 passed, push the coordinated tag `yamaa-v0.4.0` at that exact commit.
-`.github/workflows/release.yml` accepts a completed nightly main run, a main
+`.github/workflows/release.yml` accepts a completed scheduled main run, a main
 dispatch, or a same-repository `qualification/issue-*` push for the peeled tag
 commit. It requires all installed lanes, shared Rust/math, complete cohort
 comparisons and strict R package checks to have passed. Branch dispatches cannot
@@ -70,8 +70,9 @@ owns decoding behavior.
 - Preserve full signed-i64 values and separate missingness, lossless R
   `yamaa_int64_vector`/`yamaa_utf8_vector`, preserve-or-error conversions and
   JSON-text diagnostic context.
-- Resolve resources from their original declaring file, with absolute and
-  parent-relative local paths and no project-root fallback. Preserve snapshots,
+- Resolve resources from their original declaring file by default; explicit
+  input/output `relative_to: entry` selects each specification entry. Admit
+  absolute and parent-relative local paths without project-root fallback. Preserve snapshots,
   original failures, callback counts and producer-first publication order.
 - Keep normative diagnostics registry-owned, including the reviewed
   `unsupported_operation` and `engine_rejected` null-requirement exceptions.

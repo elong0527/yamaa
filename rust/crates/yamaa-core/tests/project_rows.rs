@@ -771,16 +771,17 @@ mod project {
             assert!(Environment::admit(Language::R, submission).is_ok());
         }
         #[test]
-        fn present_functions_even_empty_require_language_and_lock() {
+        fn present_functions_even_empty_require_language_but_no_lock() {
             let mut d = draft();
             d.functions = Some(vec![]);
             assert_eq!(
                 validate(Language::Python, &d),
-                vec![Finding::MissingLanguage, Finding::MissingLock]
+                vec![Finding::MissingLanguage]
             );
-            d.functions = None;
             d.language = Some(Language::Python);
             assert!(validate(Language::Python, &d).is_empty());
+            d.functions = Some(vec![definition()]);
+            assert!(Environment::admit(Language::Python, d).is_ok());
         }
         #[test]
         fn declared_language_and_captured_lock_kind_are_independent_findings() {
@@ -815,7 +816,6 @@ mod project {
                 validate(Language::Python, &d),
                 vec![
                     Finding::MissingLanguage,
-                    Finding::MissingLock,
                     Finding::DuplicateFunction { function: 1 },
                     Finding::MissingStudy
                 ]
@@ -905,7 +905,6 @@ mod project {
                 rejected.error,
                 vec![
                     Finding::MissingLanguage,
-                    Finding::MissingLock,
                     Finding::DuplicateFunction { function: 1 },
                     Finding::MissingStudy
                 ]
@@ -959,18 +958,37 @@ mod project {
                 &project_environment::validate(Language::Python, &draft),
             )
             .unwrap();
-            assert_eq!(projected[3].context["value"], JsonValue::Bool(true));
-            assert_eq!(projected[1].context.len(), 2);
+            let mismatch = projected
+                .iter()
+                .find(|diagnostic| diagnostic.spec_paths == ["language"])
+                .unwrap();
+            assert_eq!(mismatch.context.len(), 2);
             assert_eq!(
-                projected[1].context["runner"],
+                mismatch.context["runner"],
                 JsonValue::String("python".into())
             );
+            let value = projected
+                .iter()
+                .find(|diagnostic| {
+                    diagnostic.definition().condition == "codelist_shape_invalid"
+                        && diagnostic.spec_paths == ["codelists[0].codelists[0].items[0].value"]
+                })
+                .unwrap();
+            assert_eq!(value.context["value"], JsonValue::Bool(true));
+            let partial_fields = projected
+                .iter()
+                .filter(|diagnostic| {
+                    diagnostic.definition().condition == "codelist_partial_item_field"
+                        && diagnostic.spec_paths == ["codelists[0].codelists[0]"]
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(partial_fields.len(), 2);
             assert_eq!(
-                projected[7].context["field"],
+                partial_fields[0].context["field"],
                 JsonValue::String("decode".into())
             );
             assert_eq!(
-                projected[8].context["field"],
+                partial_fields[1].context["field"],
                 JsonValue::String("rank".into())
             );
         }
@@ -1215,12 +1233,11 @@ mod project {
             d.submissions = vec![Submission::Adam];
             let rejection = Environment::admit_retained(Language::Python, d).unwrap_err();
             let projected = diagnostics(&rejection.draft, &rejection.error).unwrap();
-            assert_eq!(projected.len(), 3);
-            for (finding, (path, reason)) in projected.iter().zip([
-                ("language", "missing_language"),
-                ("lock", "missing_lock"),
-                ("study", "missing_study"),
-            ]) {
+            assert_eq!(projected.len(), 2);
+            for (finding, (path, reason)) in projected
+                .iter()
+                .zip([("language", "missing_language"), ("study", "missing_study")])
+            {
                 assert_eq!(finding.spec_paths, [path]);
                 assert_eq!(finding.context["reason"], JsonValue::String(reason.into()));
                 assert_eq!(finding.context.len(), 1);
@@ -1480,8 +1497,8 @@ mod project {
             }
         }
         #[test]
-        fn independent_complete_eighteen_record_environment_report_preserves_every_field_and_order()
-        {
+        fn independent_complete_seventeen_record_environment_report_preserves_every_field_and_order(
+        ) {
             assert_eq!(support::reached().len(), 9);
             let draft = support::draft();
             let doc = root_document(&[], &[false]);
@@ -1503,22 +1520,13 @@ mod project {
             .unwrap()
             .diagnostics()
             .unwrap();
-            let mut want = vec![
-                expected(
-                    C::ProjectEnvironmentInvalid,
-                    "lock",
-                    &[("reason", text("missing_lock"))],
-                    "held/environment.yaml",
-                    "lock",
-                ),
-                expected(
-                    C::RunnerLanguageMismatch,
-                    "language",
-                    &[("declared", text("r")), ("runner", text("python"))],
-                    "held/environment.yaml",
-                    "language",
-                ),
-            ];
+            let mut want = vec![expected(
+                C::RunnerLanguageMismatch,
+                "language",
+                &[("declared", text("r")), ("runner", text("python"))],
+                "held/environment.yaml",
+                "language",
+            )];
             for list in 0..2 {
                 let base = format!("codelists[0].codelists[{list}]");
                 if list == 1 {
@@ -1592,7 +1600,7 @@ mod project {
                 ));
             }
             assert_eq!(result, want);
-            assert_eq!(result.len(), 18);
+            assert_eq!(result.len(), 17);
         }
         #[test]
         fn every_function_route_has_complete_independent_inline_and_external_context() {
@@ -1863,7 +1871,7 @@ mod project {
             let captured = document(vec![N::Mapping(vec![])]);
             let names = ["id".into()];
             let wrong_names = ["other".into()];
-            let findings = [Finding::MissingLock];
+            let findings = [Finding::MissingLanguage];
             let capture = Capture {
                 origin: Origin::Function("id"),
                 document: &captured,
@@ -1958,13 +1966,6 @@ mod project {
                         C::ProjectEnvironmentInvalid,
                         "language",
                         &[("reason", text("missing_language"))],
-                        "held/environment.yaml",
-                        "$"
-                    ),
-                    expected(
-                        C::ProjectEnvironmentInvalid,
-                        "lock",
-                        &[("reason", text("missing_lock"))],
                         "held/environment.yaml",
                         "$"
                     ),

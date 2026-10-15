@@ -231,6 +231,39 @@ mod file {
         }
 
         #[test]
+        fn project_functions_build_without_any_adjacent_packaging_lock() {
+            let study = Study::new();
+            study.write(
+        "env/environment.yaml",
+        "schema_version: '1.0'\nlanguage: python\nfunctions: {id: id.yaml}\ncodelists: [ct.yaml]\n",
+    );
+            fs::remove_file(study.0.join("uv.lock")).unwrap();
+            study.write("entry/input.csv", "ID\n1\n");
+            let mut project = study.prepare(&study.text(""), &[]).unwrap();
+            assert!(project.run().environment().lock().is_none());
+            assert!(project.run().captured_environment().lock().is_none());
+            let mut activation = Activation {
+                reject: true,
+                ..Default::default()
+            };
+            let attempt = project.build(&mut activation);
+            assert!(attempt.boundary.is_ok());
+            assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
+            assert_eq!(activation.trace, ["bind", "call", "call", "call"]);
+            assert_eq!(
+                attempt
+                    .dataset
+                    .result
+                    .unwrap()
+                    .result
+                    .unwrap()
+                    .dataset
+                    .rows(),
+                &[vec![Value::Int(1), Value::Int(1)]]
+            );
+        }
+
+        #[test]
         fn native_project_retains_metadata_and_reuses_exact_snapshots_with_fresh_activation() {
             let study = Study::new();
             let mut project = study.prepare(&study.text(""), &[]).unwrap();
@@ -1583,15 +1616,158 @@ mod file {
                 &study.path("environment.yaml"),
                 Language::Python,
             );
-            assert_eq!(
-                environment,
-                yamaa_adapters::file_application::rejected("environment", "environment_boundary")
-            );
+            assert_eq!(environment.len(), 1);
+            assert_eq!(environment[0].condition, "invalid_yaml");
+            let context: serde_json::Value = serde_json::from_str(&environment[0].context).unwrap();
+            assert_eq!(context["path"], study.path("environment.yaml"));
+            assert_eq!(context["environment_path"], "$");
+            assert!(context["line"].as_u64().is_some());
+            assert!(context["column"].as_u64().is_some());
+            assert!(context["reason"].as_str().is_some());
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(
                 producer_check::rejected(&owner, Language::Python).unwrap(),
                 expected
             );
+        }
+
+        #[test]
+        fn metadata_failures_name_each_written_dependency_and_cause_before_study_reads() {
+            let study = Study::new();
+            study.write(
+        "environment.yaml",
+        "schema_version: '1.0'\nlanguage: python\nlock: missing.lock\nfunctions: {id: absent-function.yaml}\ncodelists: [absent-codelists.yaml]\n",
+    );
+            let entry = study.path("root.yaml");
+            let environment = study.path("environment.yaml");
+            let file_workflow::SelectionError::Preparation(error) =
+                file_workflow::select(&entry, &environment, Language::Python)
+                    .err()
+                    .unwrap()
+            else {
+                panic!("retained environment rejection")
+            };
+            let expected = [
+                ("lock", "missing.lock"),
+                ("functions.id", "absent-function.yaml"),
+                ("codelists[0]", "absent-codelists.yaml"),
+            ];
+            let rows = producer_check::rejected(&error, Language::Python).unwrap();
+            assert_eq!(rows.len(), expected.len());
+            for (row, (declaration, path)) in rows.iter().zip(expected) {
+                assert_eq!(row.condition, "project_environment_invalid");
+                assert_eq!(row.spec_paths, [declaration]);
+                let context: serde_json::Value = serde_json::from_str(&row.context).unwrap();
+                assert_eq!(context["path"], path);
+                assert_eq!(context["cause"], "missing");
+                assert_eq!(context["environment_path"], declaration);
+            }
+            assert_eq!(
+                rows,
+                yamaa_adapters::project_application::check(&entry, &environment, Language::Python),
+            );
+            let Error::Environment(owner) = &error else {
+                unreachable!()
+            };
+            assert_eq!(owner.capture_reads(), 1);
+            assert!(!study.0.join("root.yaml").exists());
+
+            study.write("missing.lock", "invalid packaging lock");
+            study.write("absent-function.yaml", "[");
+            study.write("absent-codelists.yaml", "[");
+            let rows =
+                yamaa_adapters::project_application::check(&entry, &environment, Language::Python);
+            assert_eq!(rows.len(), 3);
+            let context: serde_json::Value = serde_json::from_str(&rows[0].context).unwrap();
+            assert_eq!(context["cause"], "invalid_packaging_lock");
+            for (row, path) in rows[1..]
+                .iter()
+                .zip(["absent-function.yaml", "absent-codelists.yaml"])
+            {
+                assert_eq!(row.condition, "invalid_yaml");
+                let context: serde_json::Value = serde_json::from_str(&row.context).unwrap();
+                assert_eq!(context["path"], path);
+                assert!(context["reason"].as_str().is_some());
+                assert!(context["line"].as_u64().is_some());
+            }
+        }
+
+        #[test]
+        fn oversized_dependency_refuses_partial_metadata_diagnostics_with_the_fixed_bound() {
+            use yamaa_adapters::{
+                file_resources::Error as ResourceError,
+                project_source::{CaptureFailure, Failure},
+            };
+            use yamaa_core::limits::Limits;
+            let study = Study::new();
+            study.write(
+                "environment.yaml",
+                "schema_version: '1.0'\ncodelists: [missing.yaml, ct.yaml]\n",
+            );
+            study.write("ct.yaml", &"#".repeat(Limits::SPEC_BYTES + 1));
+            let error = study.rejected();
+            let Error::Environment(owner) = &error else {
+                panic!("metadata failure precedes entry reads")
+            };
+            let yamaa_adapters::file_project::Error::Environment(Failure::Rejected(rejected)) =
+                owner.error()
+            else {
+                panic!("original source failures remain owned: {:?}", owner.error())
+            };
+            assert_eq!(rejected.sources.len(), 2);
+            assert!(matches!(
+                rejected.sources[0].error,
+                CaptureFailure::Port(ResourceError::Missing)
+            ));
+            let CaptureFailure::Port(ResourceError::Limit(bound)) = rejected.sources[1].error
+            else {
+                panic!("native fixed metadata boundary")
+            };
+            assert_eq!(
+                bound,
+                Limits::spec_bytes(Limits::SPEC_BYTES + 1).unwrap_err()
+            );
+            let producer_check::Error::ResourceLimit(refusal) =
+                producer_check::rejected(&error, Language::Python).unwrap_err()
+            else {
+                panic!("whole projection retains the typed refusal")
+            };
+            assert_eq!(refusal.resource, "spec_bytes");
+            assert_eq!(refusal.limit, Limits::SPEC_BYTES);
+            assert_eq!(refusal.actual, Some(Limits::SPEC_BYTES + 1));
+            assert_eq!(refusal.spec_paths, ["codelists[1]"]);
+            let public = yamaa_adapters::project_application::check(
+                &study.path("root.yaml"),
+                &study.path("environment.yaml"),
+                Language::Python,
+            );
+            assert_eq!(public, refusal.issues("environment", "resource_limit"));
+            let reads = owner.capture_reads();
+            assert!(!study.0.join("root.yaml").exists());
+            fs::remove_dir_all(&study.0).unwrap();
+            assert!(matches!(
+                producer_check::rejected(&error, Language::Python),
+                Err(producer_check::Error::ResourceLimit(again)) if again == refusal
+            ));
+            assert_eq!(owner.capture_reads(), reads);
+        }
+
+        #[test]
+        fn supplied_environment_directory_names_its_path_and_file_kind_before_entry_reads() {
+            let study = Study::new();
+            fs::create_dir(study.0.join("directory.yaml")).unwrap();
+            let path = study.path("directory.yaml");
+            let rows = yamaa_adapters::project_application::check(
+                &study.path("absent-spec.yaml"),
+                &path,
+                Language::Python,
+            );
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].condition, "project_environment_invalid");
+            assert_eq!(rows[0].spec_paths, ["environment"]);
+            let context: serde_json::Value = serde_json::from_str(&rows[0].context).unwrap();
+            assert_eq!(context["path"], path);
+            assert_eq!(context["cause"], "not_regular_file");
         }
 
         #[test]
@@ -1790,10 +1966,11 @@ mod file {
                 environment.captured_sources().next().unwrap().1,
                 raw.as_bytes()
             );
-            assert!(matches!(
-                producer_check::rejected(&error, Language::Python),
-                Err(producer_check::Error::Original(_))
-            ));
+            let rows = producer_check::rejected(&error, Language::Python).unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].condition, "invalid_yaml");
+            let context: serde_json::Value = serde_json::from_str(&rows[0].context).unwrap();
+            assert_eq!(context["path"], "environment.yaml");
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(
                 environment.captured_sources().next().unwrap().1,
@@ -1966,9 +2143,12 @@ mod file {
                     .1,
                 malformed.as_bytes()
             );
-            assert!(
-                matches!(producer_check::rejected(&failure, Language::Python), Err(producer_check::Error::Original(original)) if std::ptr::eq(original, &failure))
-            );
+            let failures = producer_check::rejected(&failure, Language::Python).unwrap();
+            assert_eq!(failures.len(), 1);
+            assert_eq!(failures[0].condition, "invalid_yaml");
+            let context: serde_json::Value = serde_json::from_str(&failures[0].context).unwrap();
+            assert_eq!(context["path"], "broken.yaml");
+            assert_eq!(context["environment_path"], "functions.id");
             fs::remove_dir_all(&study.0).unwrap();
             let Error::Graph(graph) = &error else {
                 panic!("original contract");

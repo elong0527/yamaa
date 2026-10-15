@@ -18,6 +18,7 @@
   ],
   "dataset_class": [
     "path",
+    "relative_to",
     "types",
     "encoding",
     "schema",
@@ -26,6 +27,7 @@
   ],
   "output_class": [
     "path",
+    "relative_to",
     "decimals",
     "columns",
     "warning_log",

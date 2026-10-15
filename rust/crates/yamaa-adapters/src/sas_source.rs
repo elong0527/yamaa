@@ -796,45 +796,91 @@ mod tests {
     }
 
     #[test]
-    fn repeated_sas_text_pointers_cannot_retain_more_than_the_source_extent() {
-        // The independent haven MIX page has thirteen subheader pointers, four
-        // forty-byte observations, and one 100-byte COLUMN_TEXT subheader at
-        // offset 3200. Extra pointers alias that same stored blob; moving the
-        // observation bytes past the enlarged pointer list keeps their truth.
+    fn repeated_and_overlapping_text_ranges_keep_physical_blob_indices_and_cells() {
+        // Repack the independently authored haven fixture. The first text blob
+        // has its original bytes followed by padding; a second valid text
+        // subheader overlaps that padding. Thousands of pointers alias those
+        // two ranges, and the column names deliberately reference the last
+        // physical blob slot instead of slot zero.
+        const EXTRA: usize = 4096;
+        const ORIGINAL: usize = 13;
+        const PAGE: usize = 131072;
+        const OUTER: usize = 32780;
+        const INNER: usize = 16396;
+        const OVERLAP: usize = 128;
         let fixture = include_bytes!("../tests/fixtures/sas/datetime.sas7bdat");
-        assert_eq!(fixture.len(), 5120);
         let original = &fixture[1024..];
+        let mut page = vec![0; PAGE];
+        page[..24].copy_from_slice(&original[..24]);
+        page[18..20].copy_from_slice(&((17 + EXTRA) as u16).to_le_bytes());
+        page[20..22].copy_from_slice(&((ORIGINAL + EXTRA) as u16).to_le_bytes());
+        let row_start = (24 + (ORIGINAL + EXTRA) * 12).div_ceil(8) * 8;
+        page[row_start..row_start + 160].copy_from_slice(&original[184..344]);
+        let mut position = row_start + 160;
+        let mut text_start = 0;
+        for index in 0..ORIGINAL {
+            position = position.div_ceil(8) * 8;
+            let pointer = 24 + index * 12;
+            let offset =
+                u32::from_le_bytes(original[pointer..pointer + 4].try_into().unwrap()) as usize;
+            let length =
+                u32::from_le_bytes(original[pointer + 4..pointer + 8].try_into().unwrap()) as usize;
+            let blob = &original[offset..offset + length];
+            page[position..position + length].copy_from_slice(blob);
+            let retained = if index == 3 {
+                text_start = position;
+                page[position + 4..position + 6]
+                    .copy_from_slice(&((OUTER - 12) as u16).to_le_bytes());
+                page[position + OVERLAP..position + OVERLAP + length].copy_from_slice(blob);
+                page[position + OVERLAP + 4..position + OVERLAP + 6]
+                    .copy_from_slice(&((INNER - 12) as u16).to_le_bytes());
+                OUTER
+            } else {
+                length
+            };
+            if index == 4 {
+                for column in 0..5 {
+                    let reference = position + 12 + column * 8;
+                    page[reference..reference + 2].copy_from_slice(&(EXTRA as u16).to_le_bytes());
+                }
+            }
+            page[pointer..pointer + 4].copy_from_slice(&(position as u32).to_le_bytes());
+            page[pointer + 4..pointer + 8].copy_from_slice(&(retained as u32).to_le_bytes());
+            page[pointer + 8..pointer + 12].copy_from_slice(&original[pointer + 8..pointer + 12]);
+            position += retained;
+        }
+        assert!(position < PAGE);
+        for index in 0..EXTRA {
+            let pointer = 24 + (ORIGINAL + index) * 12;
+            let (offset, length) = if index % 2 == 0 {
+                (text_start, OUTER)
+            } else {
+                (text_start + OVERLAP, INNER)
+            };
+            page[pointer..pointer + 4].copy_from_slice(&(offset as u32).to_le_bytes());
+            page[pointer + 4..pointer + 8].copy_from_slice(&(length as u32).to_le_bytes());
+            page[pointer + 8..pointer + 12].copy_from_slice(&original[68..72]);
+        }
+        let mut bytes = fixture[..1024].to_vec();
+        bytes[200..204].copy_from_slice(&(PAGE as u32).to_le_bytes());
+        bytes.extend_from_slice(&page);
         let mut source = source();
         source.profile = SourceProfile::Sas7bdat;
         source.path = "datetime.sas7bdat".into();
-        for extra in [52, 53, 128] {
-            let mut page = original.to_vec();
-            page[18..20].copy_from_slice(&((17 + extra) as u16).to_le_bytes());
-            page[20..22].copy_from_slice(&((13 + extra) as u16).to_le_bytes());
-            let row_start = (24usize + (13 + extra) * 12).div_ceil(8) * 8;
-            page[row_start..row_start + 160].copy_from_slice(&original[184..344]);
-            for index in 13..13 + extra {
-                let pointer = 24 + index * 12;
-                page[pointer..pointer + 12].copy_from_slice(&original[60..72]);
-            }
-            let mut bytes = fixture[..1024].to_vec();
-            bytes.extend(page);
-            // Each retained blob omits its four-byte signature: 53 * 96 fits
-            // the 5120-byte source; the next repeated blob would exceed it.
-            if extra == 52 {
-                let table = parse(&bytes, &source).unwrap();
-                assert_eq!(table.row_count(), 4);
-                assert_eq!(table.schema().columns().len(), 5);
+        let table = parse(&bytes, &source).unwrap();
+        let expected = [
+            [1_738_507_332.0, 20_121.0, 20_121.0, 20_121.0, 52_932.0],
+            [1_704_190_463.0, 19_724.0, 19_724.0, 19_724.0, 36_863.0],
+            [1_736_921_722.0, 20_254.0, 20_254.0, 20_254.0, 22_522.0],
+            [-356_840_880.0, -4_124.0, -4_124.0, -4_124.0, 77_520.0],
+        ];
+        assert_eq!(table.row_count(), expected.len());
+        assert_eq!(table.schema().columns().len(), 5);
+        for (row, values) in expected.into_iter().enumerate() {
+            for (column, value) in values.into_iter().enumerate() {
                 assert_eq!(
-                    table.cell(3, 1).unwrap(),
-                    ValueRef::Float(yamaa_core::value::FiniteFloat::new(-4124.0).unwrap()),
-                );
-            } else {
-                let result = parse(&bytes, &source);
-                assert!(
-                    matches!(&result, Err(Error::Invalid("malformed"))),
-                    "{extra} aliases: expected malformed input, got error {:?}",
-                    result.as_ref().err()
+                    table.cell(row, column).unwrap(),
+                    ValueRef::Float(yamaa_core::value::FiniteFloat::new(value).unwrap()),
                 );
             }
         }

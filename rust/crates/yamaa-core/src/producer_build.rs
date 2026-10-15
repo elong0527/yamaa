@@ -182,7 +182,7 @@ impl PreparedBuild {
             scope.phase(crate::application_observer::Phase::Activation);
             let result = project_activation::activate_references_observed(
                 environment.language().expect("admitted called language"),
-                environment.lock().expect("admitted called lock"),
+                environment.lock(),
                 &selected,
                 &mut scope.activation(ports.activation),
                 &mut attempt.activation,

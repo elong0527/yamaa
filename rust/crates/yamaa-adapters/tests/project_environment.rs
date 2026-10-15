@@ -291,12 +291,6 @@ mod project {
             let wide: Value = serde_json::from_str("123456789012345678901234567890").unwrap();
             let want = [
                 expected(
-                    "project_environment_invalid",
-                    "REQ-0695",
-                    "lock",
-                    json!({"reason":"missing_lock","source":"held/environment.yaml","entry":"held/environment.yaml","environment_path":"$"}),
-                ),
-                expected(
                     "runner_language_mismatch",
                     "REQ-0696",
                     "language",
