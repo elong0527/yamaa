@@ -233,53 +233,18 @@ pub(crate) fn prepare_document_from(
     })
 }
 
+/// Return only unclassified native failures; observed facts retain their source owner.
 pub fn opaque_resource_failure(attempt: &CapturedAttempt<ResourceError>) -> Option<&ResourceError> {
     use crate::specification_run::PortError;
     match &attempt.result {
         Err(PortError::Capture(error))
-            if !matches!(
-                error,
-                ResourceError::Missing | ResourceError::NotRegularFile | ResourceError::Symlink
-            ) =>
+            if crate::file_resources::resource_failure(error).is_none() =>
         {
             Some(error)
         }
         Err(PortError::Inspect(errors)) => errors
             .iter()
-            .find(|error| {
-                error.failure.is_none()
-                    || matches!(
-                        error.error,
-                        ResourceError::Changed | ResourceError::WrittenForm(_)
-                    )
-            })
-            .map(|error| &error.error),
-        _ => None,
-    }
-}
-
-/// Public domain reports project these observed causes into owned issue rows.
-/// Private file-build transports retain the original native error contract.
-pub fn public_opaque_resource_failure(
-    attempt: &CapturedAttempt<ResourceError>,
-) -> Option<&ResourceError> {
-    use crate::specification_run::PortError;
-    match &attempt.result {
-        Err(PortError::Capture(error))
-            if !matches!(
-                error,
-                ResourceError::Missing
-                    | ResourceError::NotRegularFile
-                    | ResourceError::Symlink
-                    | ResourceError::WrittenForm(_)
-                    | ResourceError::Changed
-            ) =>
-        {
-            Some(error)
-        }
-        Err(PortError::Inspect(errors)) => errors
-            .iter()
-            .find(|error| error.failure.is_none())
+            .find(|error| crate::file_resources::resource_failure(&error.error).is_none())
             .map(|error| &error.error),
         _ => None,
     }
