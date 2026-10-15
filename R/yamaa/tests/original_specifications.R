@@ -2634,9 +2634,10 @@ local({
     stopifnot(nrow(frame)==length(expected))
     for (index in seq_along(expected)) {
       row <- expected[[index]]
+      requirement <- if(is.null(row$requirement)) NA_character_ else row$requirement
       stopifnot(identical(frame$phase[[index]],row$phase),
         identical(frame$condition[[index]],row$condition),
-        identical(frame$requirement[[index]],row$requirement),
+        identical(frame$requirement[[index]],requirement),
         identical(frame$spec_paths[[index]],fixture_strings(row$spec_paths)),
         context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),row$context))
     }
