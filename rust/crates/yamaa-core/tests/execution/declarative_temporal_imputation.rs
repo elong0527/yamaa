@@ -1,5 +1,6 @@
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
+use yamaa_core::{dataset::ExecutionError, numeric_lifecycle::HandlerKind};
 use yamaa_core::{
     dataset::{
         date_policy, Assignment, DatasetPlan, DayDeclaration as D, Expression, Imputation,
@@ -8,10 +9,6 @@ use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
     temporal::DatePrecision as P,
     value::{ColumnType as T, Value},
-};
-use yamaa_core::{
-    dataset::{ExecutionError, Resource},
-    numeric_lifecycle::HandlerKind,
 };
 #[derive(Debug, PartialEq)]
 struct Failure(Box<u8>, Rc<()>);
@@ -116,8 +113,12 @@ fn complete_sources_and_recovered_values_never_read_the_bound() {
         let mut table = make_table(source);
         table.bad_column = 2;
         *table.fail.borrow_mut() = Some(Failure(Box::new(7), Rc::new(())));
-        let result = make_plan(&table, Some(Value::Missing), Some(Value::Missing))
-            .execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        let result = make_plan(&table, Some(Value::Missing), Some(Value::Missing)).execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert!(result.result.is_ok());
         assert_eq!(*table.reads.borrow(), [0, 1]);
         assert!(table.fail.borrow().is_some());
@@ -144,8 +145,12 @@ fn opaque_bound_failure_preserves_nonclone_payload_identity_and_is_never_retried
     let failure = Failure(Box::new(9), marker.clone());
     let address = &*failure.0 as *const u8;
     *table.fail.borrow_mut() = Some(failure);
-    let result = make_plan(&table, Some(Value::Missing), Some(Value::Missing))
-        .execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = make_plan(&table, Some(Value::Missing), Some(Value::Missing)).execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::Cell {
         path,
         error: CellError::Access(Failure(payload, retained_marker)),
@@ -201,7 +206,12 @@ fn runtime_impute_failure_retains_current_key_and_is_not_answered_by_invalid_han
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = plan.execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::SemanticDiagnostic {
         diagnostic,
         identity,
@@ -218,7 +228,15 @@ fn runtime_impute_failure_retains_current_key_and_is_not_answered_by_invalid_han
     table.bad_column = 2;
     *table.fail.borrow_mut() = Some(Failure(Box::new(6), Rc::new(())));
     assert!(matches!(
-        *plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),
+        *plan
+            .execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Cell {
             error: CellError::Access(_),
             ..
@@ -226,48 +244,7 @@ fn runtime_impute_failure_retains_current_key_and_is_not_answered_by_invalid_han
     ));
     assert_eq!(*table.reads.borrow(), [0, 1, 2]);
 }
-#[test]
-fn cumulative_work_quota_precedes_parsing_and_current_key_copy_is_separately_admitted() {
-    let table = make_table(Value::Str("2024-02".into()));
-    let plan = make_plan(&table, None, None);
-    let mut bounded = limits();
-    bounded.work_cells = 0;
-    assert!(matches!(
-        *plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::WorkCells,
-            ..
-        }
-    ));
-    assert!(table.reads.borrow().is_empty());
-    let source = make_table(Value::Str("2024-02".into()));
-    let operation = make_plan(&source, Some(Value::Missing), Some(Value::Missing));
-    let mut bounded = limits();
-    bounded.scalar_text_bytes = 7;
-    assert!(matches!(
-        *operation
-            .execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            ..
-        }
-    ));
-    assert_eq!(*source.reads.borrow(), [0, 1]);
-    let table = make_table(Value::Str("invalid".into()));
-    let plan = make_plan(&table, None, None);
-    let mut bounded = limits();
-    bounded.identity_cells = 0;
-    assert!(matches!(
-        *plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::IdentityCells,
-            ..
-        }
-    ));
-    assert_eq!(*table.reads.borrow(), [0, 1]);
-}
+
 #[test]
 fn recovered_datetime_literal_is_converted_once_and_its_handler_is_counted() {
     let table = make_table(Value::Missing);
@@ -313,7 +290,12 @@ fn recovered_datetime_literal_is_converted_once_and_its_handler_is_counted() {
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = plan.execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         [vec![

@@ -87,8 +87,7 @@ fn fixture(text: &str, failure: Option<(usize, usize)>) -> (Table, Table, Datase
     };
     let filter = RelationPredicate::new(
         BoundPredicate::new(
-            predicate_compiler::compile(text, "intermediates[0].filter")
-                .unwrap(),
+            predicate_compiler::compile(text, "intermediates[0].filter").unwrap(),
             vec![
                 Binding {
                     name: "D.TIME".into(),
@@ -187,7 +186,12 @@ fn fixture(text: &str, failure: Option<(usize, usize)>) -> (Table, Table, Datase
 #[test]
 fn equality_matches_are_filtered_per_row_and_all_fields_share_one_choice() {
     let (current, donor, plan) = fixture("D.TIME < SRC.CUT", None);
-    let result = plan.execute(&current, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan.execute(
+        &current,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         result.result.unwrap().dataset.rows(),
         [
@@ -279,7 +283,12 @@ fn equality_matches_are_filtered_per_row_and_all_fields_share_one_choice() {
 #[test]
 fn false_boolean_children_keep_written_current_failure_order() {
     let (current, donor, plan) = fixture("D.TIME < 0 AND SRC.CUT > 0", Some((0, 1)));
-    let result = plan.execute(&current, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan.execute(
+        &current,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(
         matches!(*result.result.unwrap_err(), yamaa_core::dataset::ExecutionError::Cell {ref path,source_row:0,error:CellError::Access("held primary failure")} if path=="intermediates[0].filter")
     );
@@ -293,7 +302,12 @@ fn unmatched_rows_do_not_resolve_any_predicate_operand() {
     for (index, row) in current.rows.iter_mut().enumerate() {
         row[0] = Value::Int(3 + index as i64);
     }
-    let result = plan.execute(&current, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan.execute(
+        &current,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         result.result.unwrap().dataset.rows(),
         [
@@ -343,7 +357,12 @@ fn unmatched_rows_do_not_resolve_any_predicate_operand() {
 #[test]
 fn a_current_access_failure_retains_its_owner_and_exact_successful_handler_prefix() {
     let (current, donor, plan) = fixture("D.TIME < SRC.CUT", Some((1, 1)));
-    let result = plan.execute(&current, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan.execute(
+        &current,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(
         matches!(*result.result.unwrap_err(),yamaa_core::dataset::ExecutionError::Cell {ref path,source_row:1,error:CellError::Access("held primary failure")} if path=="intermediates[0].filter")
     );
@@ -414,7 +433,12 @@ fn completed_output_current_fields_keep_normal_missing_and_choice_semantics() {
     let seq = assignments.pop().unwrap();
     assignments.insert(1, seq);
     let plan = rebuilt(&current, &donor, &old, items, assignments);
-    let result = plan.execute(&current, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan.execute(
+        &current,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         result.result.unwrap().dataset.rows(),
         [
@@ -497,7 +521,12 @@ fn current_kept_selections_share_the_attempt_cache_without_recovery_observations
         assign(3, Expression::Source(2)),
     ];
     let plan = rebuilt(&current, &donor, &old, vec![first, second], assignments);
-    let result = plan.execute(&current, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan.execute(
+        &current,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         result.result.unwrap().dataset.rows(),
         [

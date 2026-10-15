@@ -1,6 +1,7 @@
 //! Range narrowing preserves borrowed endpoint reads, native failures and observations.
 use crate::support::table_schema as schema;
 use std::cell::RefCell;
+use yamaa_core::{dataset::ExecutionError, numeric_lifecycle::HandlerKind};
 use yamaa_core::{
     dataset::{
         Assignment, CurrentField, CurrentRead, DatasetPlan, Expression, Intermediate,
@@ -9,10 +10,6 @@ use yamaa_core::{
     },
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType as T, Value, ValueType},
-};
-use yamaa_core::{
-    dataset::{ExecutionError},
-    numeric_lifecycle::HandlerKind,
 };
 #[derive(Debug)]
 struct Opaque(&'static str);
@@ -126,7 +123,6 @@ fn fixture(
                     identifier: "HIGH".into(),
                     kind: Some(ValueType::Int),
                 }),
-                4096,
             )
             .unwrap(),
         ),
@@ -170,7 +166,12 @@ fn fixture(
 #[test]
 fn missing_current_skips_all_donor_reads_and_records_the_absence_site() {
     let (primary, donor, plan) = fixture(Value::Missing, Value::Int(0), Some((0, 1)));
-    let result = plan.execute(&primary, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan.execute(
+        &primary,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         result.result.unwrap().dataset.rows(),
         [vec![Value::Int(1), Value::Missing]]
@@ -190,7 +191,12 @@ fn missing_current_skips_all_donor_reads_and_records_the_absence_site() {
 #[test]
 fn missing_lower_skips_upper_and_unmatched_records_never_read_endpoints() {
     let (primary, donor, plan) = fixture(Value::Int(3), Value::Missing, Some((0, 2)));
-    let result = plan.execute(&primary, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan.execute(
+        &primary,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         result.result.unwrap().dataset.rows(),
         [vec![Value::Int(1), Value::Missing]]
@@ -211,7 +217,12 @@ fn missing_lower_skips_upper_and_unmatched_records_never_read_endpoints() {
 fn upper_access_precedes_lower_exclusion_and_preserves_the_original_error_owner() {
     let (primary, donor, plan) = fixture(Value::Int(3), Value::Int(4), Some((0, 2)));
     let address = donor.held.borrow().as_ref().unwrap().as_ref() as *const Opaque;
-    let result = plan.execute(&primary, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan.execute(
+        &primary,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::SecondaryCell {
         path,
         source,
@@ -236,7 +247,12 @@ fn current_access_failure_precedes_matching_and_retains_native_owner() {
     primary.failure = Some((0, 1));
     *primary.held.borrow_mut() = Some(Box::new(Opaque("current value failure")));
     let address = primary.held.borrow().as_ref().unwrap().as_ref() as *const Opaque;
-    let result = plan.execute(&primary, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan.execute(
+        &primary,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::Cell {
         path,
         source_row,

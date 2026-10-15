@@ -1,5 +1,5 @@
 use std::{cell::RefCell, convert::Infallible};
-use yamaa_core::{dataset::numeric_lifecycle::HandlerKind};
+use yamaa_core::numeric_lifecycle::HandlerKind;
 use yamaa_core::{
     dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
@@ -96,7 +96,12 @@ fn missing_concat_short_circuits_source_reads_and_retains_nested_handler_observa
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = plan.execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         [vec![Value::Str("a".into()), Value::Str("fallback".into())]]
@@ -167,7 +172,15 @@ fn equal_extremes_retain_the_first_dates_collected_precision() {
             vec![],
         )
         .unwrap();
-        let result = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap();
+        let result = plan
+            .execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+            .result
+            .unwrap();
         let Value::Date(date) = result.dataset.rows()[0][1] else {
             panic!("date result")
         };
@@ -254,7 +267,15 @@ fn equal_numeric_extremes_keep_first_present_signed_zero_and_collect_every_opera
                 vec![],
             )
             .unwrap();
-            let result = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap();
+            let result = plan
+                .execute(
+                    &table,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None,
+                )
+                .result
+                .unwrap();
             let Value::Float(value) = result.dataset.rows()[0][1] else {
                 panic!("float output")
             };

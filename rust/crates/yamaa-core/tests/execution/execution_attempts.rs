@@ -13,7 +13,7 @@ use yamaa_core::{
 use yamaa_core::{
     dataset::{ExecutionError, Resource},
     function_invocation::NoFunctions,
-    Limits,
+    limits::Limits,
 };
 
 #[derive(Debug)]

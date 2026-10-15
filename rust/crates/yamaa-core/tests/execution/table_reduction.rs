@@ -11,30 +11,24 @@ use yamaa_core::{
 #[test]
 fn count_selection_preserves_access_and_absence_semantics() {
     let mut table = Table::new(vec![Value::Missing, Value::Str("".into()), Value::Missing]);
-    assert_eq!(
-        count_selected(&table, None, &[0, 1, 2], 3),
-        Ok(Number::Int(3))
-    );
+    assert_eq!(count_selected(&table, None, &[0, 1, 2]), Ok(Number::Int(3)));
     assert!(table.reads.borrow().is_empty());
     assert_eq!(
-        count_selected(&table, Some(0), &[0, 1, 2], 3),
+        count_selected(&table, Some(0), &[0, 1, 2]),
         Ok(Number::Int(1))
     );
     assert_eq!(*table.reads.borrow(), [0, 1, 2]);
     table.reads.borrow_mut().clear();
-    assert_eq!(
-        count_selected(&table, Some(0), &[0, 2], 3),
-        Ok(Number::Int(0))
-    );
+    assert_eq!(count_selected(&table, Some(0), &[0, 2]), Ok(Number::Int(0)));
     assert_eq!(*table.reads.borrow(), [0, 2]);
     table.reads.borrow_mut().clear();
     for column in [None, Some(0)] {
-        assert_eq!(count_selected(&table, column, &[], 0), Ok(Number::Missing));
+        assert_eq!(count_selected(&table, column, &[]), Ok(Number::Missing));
     }
     assert!(table.reads.borrow().is_empty());
     table.fail_at = Some(2);
     assert_eq!(
-        count_selected(&table, Some(0), &[0, 1, 2], 3),
+        count_selected(&table, Some(0), &[0, 1, 2]),
         Err(TableReductionError::Cell {
             position: 2,
             error: CellError::Access(PortError("read failed"))
@@ -45,39 +39,29 @@ fn count_selection_preserves_access_and_absence_semantics() {
 
 /// Both count forms validate complete selections before touching any source value.
 #[test]
-fn count_coordinates_and_limits_precede_reads() {
+fn count_coordinates_precede_reads() {
     let table = Table::new(vec![Value::Missing]);
     for column in [None, Some(0)] {
         assert_eq!(
-            count_selected(&table, column, &[0], 0),
-            Err(TableReductionError::RowLimit {
-                limit: 0,
-                required: 1
-            })
-        );
-        assert_eq!(
-            count_selected(&table, column, &[1], 1),
+            count_selected(&table, column, &[1]),
             Err(TableReductionError::InvalidRow {
                 position: 0,
                 row: 1
             })
         );
         assert_eq!(
-            count_selected(&table, column, &[0, 0], 2),
+            count_selected(&table, column, &[0, 0]),
             Err(TableReductionError::UnorderedSelection { position: 1 })
         );
     }
     assert_eq!(
-        count_selected(&table, Some(1), &[], 0),
+        count_selected(&table, Some(1), &[]),
         Err(TableReductionError::InvalidColumn { column: 1 })
     );
     assert!(table.reads.borrow().is_empty());
     let mut fieldless = Table::new(vec![Value::Missing]);
     fieldless.schema = TableSchema::new(vec![]).unwrap();
-    assert_eq!(
-        count_selected(&fieldless, None, &[0], 1),
-        Ok(Number::Int(1))
-    );
+    assert_eq!(count_selected(&fieldless, None, &[0]), Ok(Number::Int(1)));
     assert!(fieldless.reads.borrow().is_empty());
 }
 
@@ -135,7 +119,7 @@ fn read_all_arguments_before_folding_and_preserve_opaque_error() {
         let mut table = Table::new(vec![first, Value::Int(1), Value::Missing, Value::Int(0)]);
         table.fail_at = Some(2);
         assert_eq!(
-            reduce_column(&table, 0, &[0, 1, 2, 3], 4, NumericReducer::Sum),
+            reduce_column(&table, 0, &[0, 1, 2, 3], NumericReducer::Sum, "SUM(A)"),
             Err(TableReductionError::Cell {
                 position: 2,
                 error: CellError::Access(PortError("read failed"))
@@ -155,7 +139,7 @@ fn arithmetic_failure_precedes_later_type_failure_after_all_reads() {
         Value::Int(1),
         Value::Str("bad".into()),
     ]);
-    let result = reduce_column(&table, 0, &[0, 1, 2], 3, NumericReducer::Sum);
+    let result = reduce_column(&table, 0, &[0, 1, 2], NumericReducer::Sum, "SUM(A)");
     let Err(TableReductionError::Reduction(ReductionError::Arithmetic { argument, error })) =
         result
     else {
@@ -172,25 +156,17 @@ fn arithmetic_failure_precedes_later_type_failure_after_all_reads() {
 }
 
 #[test]
-/// Bad selections and resource budgets fail before any storage observation.
-fn preflight_limits_and_coordinates_do_not_read_cells() {
+/// Bad selection coordinates fail before any storage observation.
+fn preflight_coordinates_do_not_read_cells() {
     let table = Table::new(vec![Value::Int(1), Value::Int(2)]);
-    let reduce = |column, rows: &[usize], limit| {
-        reduce_column(&table, column, rows, limit, NumericReducer::Sum)
-    };
+    let reduce =
+        |column, rows: &[usize]| reduce_column(&table, column, rows, NumericReducer::Sum, "SUM(A)");
     assert_eq!(
-        reduce(0, &[0, 1], 1),
-        Err(TableReductionError::RowLimit {
-            limit: 1,
-            required: 2
-        })
-    );
-    assert_eq!(
-        reduce(1, &[], 0),
+        reduce(1, &[]),
         Err(TableReductionError::InvalidColumn { column: 1 })
     );
     assert_eq!(
-        reduce(0, &[0, 2], 2),
+        reduce(0, &[0, 2]),
         Err(TableReductionError::InvalidRow {
             position: 1,
             row: 2
@@ -198,7 +174,7 @@ fn preflight_limits_and_coordinates_do_not_read_cells() {
     );
     for rows in [[1, 0], [0, 0]] {
         assert_eq!(
-            reduce(0, &rows, 2),
+            reduce(0, &rows),
             Err(TableReductionError::UnorderedSelection { position: 1 })
         );
     }
@@ -216,7 +192,7 @@ fn empty_and_filtered_relations_preserve_schema_missing_and_order() {
     assert_eq!(empty.schema().columns()[0].name, "A");
     assert_eq!(empty.schema().columns()[0].kind, ColumnType::Int);
     assert_eq!(
-        reduce_column(&empty, 0, &[], 0, NumericReducer::Mean),
+        reduce_column(&empty, 0, &[], NumericReducer::Mean, "MEAN(A)"),
         Ok(Number::Missing)
     );
     assert_eq!(
@@ -230,7 +206,7 @@ fn empty_and_filtered_relations_preserve_schema_missing_and_order() {
         Value::Int(4),
     ]);
     assert_eq!(
-        reduce_column(&table, 0, &[0, 2, 3], 3, NumericReducer::Mean),
+        reduce_column(&table, 0, &[0, 2, 3], NumericReducer::Mean, "MEAN(A)"),
         Ok(Number::float(3.0))
     );
     assert_eq!(*table.reads.borrow(), [0, 2, 3]);

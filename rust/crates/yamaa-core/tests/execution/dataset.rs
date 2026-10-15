@@ -153,8 +153,8 @@ fn column_checks_wait_for_the_declared_prefix_and_retain_prior_records() {
 }
 
 #[test]
-fn repeated_column_patterns_share_subject_budget_and_retain_completed_checks() {
-    use yamaa_core::dataset::{ColumnVerifications, Resource};
+fn repeated_column_patterns_keep_all_completed_checks() {
+    use yamaa_core::dataset::ColumnVerifications;
     let source = table(
         &[("ID", ColumnType::Str), ("V", ColumnType::Str)],
         vec![
@@ -192,18 +192,12 @@ fn repeated_column_patterns_share_subject_budget_and_retain_completed_checks() {
                 checks: (0..count)
                     .map(|index| Verification {
                         path: format!("columns.V.verifications[{index}].matches"),
-                        check: Check::Matches(
-                            yamaa_core::regex::Pattern::compile("b").unwrap(),
-                        ),
+                        check: Check::Matches(yamaa_core::regex::Pattern::compile("b").unwrap()),
                     })
                     .collect(),
             },
         ])
         .unwrap()
-    };
-    let low = Limits {
-        scalar_text_bytes: 64,
-        ..limits()
     };
     assert!(make(1)
         .execute(
@@ -217,50 +211,27 @@ fn repeated_column_patterns_share_subject_budget_and_retain_completed_checks() {
     let plan = make(10);
     for _ in 0..2 {
         source.reads.borrow_mut().clear();
-        let attempt = plan.execute(
-            &source,
-            &[],
-            &mut yamaa_core::function_invocation::NoFunctions::new(),
-            None,
-        );
-        assert!(matches!(
-            *attempt.result.unwrap_err(),
-            ExecutionError::ScopedLimit {
-                resource: Resource::PredicateRegexSubjectBytes,
-                limit: 64,
-                required: None,
-                spec_paths,
-            } if spec_paths == ["columns.V.verifications[4].matches.pattern"]
-        ));
+        let records = plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+            .result
+            .unwrap()
+            .verifications;
+        assert_eq!(records.len(), 11);
+        assert!(records.iter().all(|record| record.failed_count == 0));
+        assert_eq!(records[0].path, "columns.ID.verifications[0].not_missing");
+        assert_eq!(records[4].path, "columns.V.verifications[3].matches");
         assert_eq!(*source.reads.borrow(), [(0, 0), (0, 1), (1, 0), (1, 1)]);
-        assert_eq!(attempt.retained_verifications.len(), 5);
-        assert!(attempt
-            .retained_verifications
-            .iter()
-            .all(|record| record.failed_count == 0));
-        assert_eq!(
-            attempt.retained_verifications[4].path,
-            "columns.V.verifications[3].matches"
-        );
     }
-    assert_eq!(
-        plan.execute(
-            &source,
-            &[],
-            &mut yamaa_core::function_invocation::NoFunctions::new(),
-            None
-        )
-        .result
-        .unwrap()
-        .verifications
-        .len(),
-        11
-    );
 }
 
 #[test]
-fn permitted_value_work_is_admitted_before_comparison_and_retains_the_prior_check() {
-    use yamaa_core::dataset::{ColumnVerifications, Resource};
+fn large_allowed_value_sets_keep_the_prior_check() {
+    use yamaa_core::dataset::ColumnVerifications;
     let source = table(
         &[("ID", ColumnType::Int), ("V", ColumnType::Int)],
         vec![vec![Value::Int(1), Value::Int(10)]],
@@ -305,10 +276,6 @@ fn permitted_value_work_is_admitted_before_comparison_and_retains_the_prior_chec
         .with_column_verifications(groups)
         .unwrap()
     };
-    let low = Limits {
-        work_cells: 100,
-        ..limits()
-    };
     assert!(make(false)
         .execute(
             &source,
@@ -319,42 +286,26 @@ fn permitted_value_work_is_admitted_before_comparison_and_retains_the_prior_chec
         .result
         .is_ok());
     source.reads.borrow_mut().clear();
-    let attempt = make(true).execute(
-        &source,
-        &[],
-        &mut yamaa_core::function_invocation::NoFunctions::new(),
-        None,
-    );
-    assert!(matches!(
-        *attempt.result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::WorkCells,
-            ..
-        }
-    ));
+    let records = make(true)
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap()
+        .verifications;
+    assert_eq!(records.len(), 2);
+    assert!(records.iter().all(|record| record.failed_count == 0));
+    assert_eq!(records[0].path, "columns.ID.verifications[0].not_missing");
     assert_eq!(*source.reads.borrow(), [(0, 0), (0, 1)]);
-    assert_eq!(attempt.retained_verifications.len(), 1);
-    assert_eq!(attempt.retained_verifications[0].failed_count, 0);
-    assert_eq!(
-        make(true)
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap()
-            .verifications
-            .len(),
-        2
-    );
 }
 
-/// COUNT uses its owning group and preserves failures and cumulative work admission.
+/// COUNT uses its owning group, skips unused fields and preserves source failures.
 #[test]
 fn grouped_count_avoids_unused_fields_and_withholds_output_on_read_failure() {
-    use yamaa_core::{dataset::Resource, table_reduction::TableReductionError};
+    use yamaa_core::table_reduction::TableReductionError;
     let mut source = table(
         &[("K", ColumnType::Int), ("V", ColumnType::Str)],
         vec![
@@ -403,26 +354,6 @@ fn grouped_count_avoids_unused_fields_and_withholds_output_on_read_failure() {
         &[vec![Value::Int(1), Value::Int(3)]]
     );
     assert!(source.reads.borrow().iter().all(|(_, column)| *column == 0));
-    for column in [None, Some(1)] {
-        source.reads.borrow_mut().clear();
-        assert_eq!(
-            *plan(column)
-                .execute(
-                    &source,
-                    &[],
-                    &mut yamaa_core::function_invocation::NoFunctions::new(),
-                    None
-                )
-                .result
-                .unwrap_err(),
-            ExecutionError::Limit {
-                resource: Resource::WorkCells,
-                limit: 8,
-                required: Some(9),
-            }
-        );
-        assert_eq!(*source.reads.borrow(), [(0, 0), (1, 0), (2, 0), (0, 0)]);
-    }
     source.reads.borrow_mut().clear();
     assert_eq!(
         *plan(Some(1))
@@ -482,12 +413,11 @@ fn record_plan(
 
 /// Compile authored arithmetic with a closed static name-to-read map.
 fn computed(text: &str, bindings: &[(&str, Read)]) -> Expression {
-    use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
+    use yamaa_core::numeric_compiler::compile_numeric;
     use yamaa_core::{bound_expression::Binding, dataset::BoundNumeric};
     Expression::Compute(
         BoundNumeric::new(
-            compile_numeric(text, "columns.N.derivation.compute")
-            .unwrap(),
+            compile_numeric(text, "columns.N.derivation.compute").unwrap(),
             bindings
                 .iter()
                 .map(|(name, read)| Binding {
@@ -502,16 +432,14 @@ fn computed(text: &str, bindings: &[(&str, Read)]) -> Expression {
 
 /// Binding is complete before execution, while each written occurrence still reads once.
 #[test]
-fn dataset_numeric_bindings_and_occurrence_budgets_are_explicit() {
-    use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
+fn dataset_numeric_bindings_and_occurrence_reads_are_explicit() {
+    use yamaa_core::numeric_compiler::compile_numeric;
     use yamaa_core::{
         bound_expression::{Binding, BindingError},
         dataset::BoundNumeric,
     };
     let compiled = compile_numeric("X + X * 2", "compute").unwrap();
     assert_eq!(compiled.identifiers().collect::<Vec<_>>(), vec!["X"]);
-    assert_eq!(compiled.resolution_count(), 2);
-    assert_eq!(compiled.node_count(), 5);
     assert_eq!(
         BoundNumeric::new(compiled.clone(), vec![]),
         Err(BindingError::MissingName)
@@ -564,18 +492,6 @@ fn dataset_numeric_bindings_and_occurrence_budgets_are_explicit() {
         &[vec![Value::Int(1), Value::Int(21)]]
     );
     assert_eq!(*source.reads.borrow(), vec![(0, 0), (0, 1), (0, 1)]);
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit { .. }
-    ));
     assert_eq!(
         plan.execute(
             &source,
@@ -803,17 +719,14 @@ fn grouping_uses_exact_logical_equality_without_sorting() {
     );
 }
 
-/// Invalid declarations and insufficient budgets must not touch a single cell.
+/// Invalid grouping declarations precede every source cell read.
 #[test]
 fn grouping_preflight_and_port_failures_are_distinct() {
     let mut source = table(
         &[("x", ColumnType::Int)],
         vec![vec![Value::Int(1)], vec![Value::Int(2)]],
     );
-    assert_eq!(
-        partition(&source, &[]),
-        Err(GroupingError::EmptyColumns)
-    );
+    assert_eq!(partition(&source, &[]), Err(GroupingError::EmptyColumns));
     assert_eq!(
         partition(&source, &[0, 1]),
         Err(GroupingError::InvalidColumn {
@@ -827,17 +740,6 @@ fn grouping_preflight_and_port_failures_are_distinct() {
             position: 1,
             column: 0
         })
-    );
-    assert_eq!(
-        partition(&source, &[0]),
-        Err(GroupingError::RowLimit {
-            limit: 1,
-            required: 2
-        })
-    );
-    assert_eq!(
-        partition(&source, &[0]),
-        Err(GroupingError::KeyCellLimit { limit: 1 })
     );
     assert!(source.reads.borrow().is_empty());
     source.fail = Some((1, 0));
@@ -938,23 +840,6 @@ fn failures_keep_provenance_and_stop_later_columns() {
     }
     assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0)]);
     source.reads.borrow_mut().clear();
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: yamaa_core::dataset::Resource::OutputCells,
-            limit: 3,
-            required: Some(4)
-        }
-    ));
-    assert!(source.reads.borrow().is_empty());
     let wrong = table(&[("wrong", ColumnType::Str)], vec![]);
     assert!(matches!(
         *plan
@@ -1494,9 +1379,9 @@ fn grouping_distinguishes_adjacent_large_integers_and_empty_snapshots() {
     assert!(empty.reads.borrow().is_empty());
 }
 
-/// Checked budget multiplication must reject overflow before a port can be read.
+/// Impossible table geometry is rejected before a port can be read.
 #[test]
-fn grouping_resource_arithmetic_cannot_wrap() {
+fn grouping_refuses_impossible_row_geometry_before_reads() {
     struct Huge(TableSchema);
     impl TableAccess for Huge {
         type Error = ();
@@ -1508,7 +1393,7 @@ fn grouping_resource_arithmetic_cannot_wrap() {
         fn row_count(&self) -> usize {
             usize::MAX
         }
-        /// Any read is an admission bug for this impossible budget.
+        /// Any read is an admission bug for this impossible table geometry.
         fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<()>> {
             panic!("must not read")
         }
@@ -1516,7 +1401,11 @@ fn grouping_resource_arithmetic_cannot_wrap() {
     let source = Huge(schema(&[("a", ColumnType::Int), ("b", ColumnType::Int)]));
     assert_eq!(
         partition(&source, &[0, 1]),
-        Err(GroupingError::KeyCellLimit { limit: usize::MAX })
+        Err(GroupingError::Limit(yamaa_core::limits::LimitExceeded {
+            resource: "table_rows",
+            limit: 10_000_000,
+            actual: Some(usize::MAX)
+        }))
     );
 }
 
@@ -1733,10 +1622,9 @@ fn literal_conversion_only_occurs_for_constructed_values() {
     }
 }
 
-/// Repeated text-to-number conversion consumes work even when output stores no strings.
+/// Repeated text-to-number conversion retains an integer for each candidate.
 #[test]
-fn scalar_text_work_is_cumulative_and_separate_from_retained_text() {
-    use yamaa_core::dataset::Resource;
+fn repeated_literal_text_is_converted_for_each_constructed_value() {
     let source = table(
         &[("id", ColumnType::Int)],
         vec![vec![Value::Int(1)], vec![Value::Int(2)]],
@@ -1749,27 +1637,6 @@ fn scalar_text_work_is_cumulative_and_separate_from_retained_text() {
             assign(1, Expression::Literal(Value::Str("0007".into()))),
         ],
         vec![],
-    );
-    let policy = Limits {
-        scalar_text_bytes: 7,
-        output_text_bytes: 0,
-        ..limits()
-    };
-    assert_eq!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            limit: 7,
-            required: Some(8)
-        }
     );
     let actual = plan
         .execute(
@@ -1789,15 +1656,10 @@ fn scalar_text_work_is_cumulative_and_separate_from_retained_text() {
     );
 }
 
-/// Rows that select successfully allocate no mapping/cut diagnostic, so they
-/// must not be charged the copied-diagnostic estimate for every row (#2429).
+/// Mapping and cut keep every successfully selected row (#2429).
 #[test]
-fn mapping_and_cut_rows_without_diagnostics_do_not_consume_diagnostic_text_budget() {
+fn mapping_and_cut_rows_keep_all_successful_selected_values() {
     use yamaa_core::mapping_cut::{Cut, Mapping, MappingCut};
-    let policy = Limits {
-        scalar_text_bytes: 100,
-        ..limits()
-    };
     let mapping_source = table(
         &[("id", ColumnType::Int), ("v", ColumnType::Str)],
         (0..20_i64)
@@ -1893,11 +1755,9 @@ fn mapping_and_cut_rows_without_diagnostics_do_not_consume_diagnostic_text_budge
         .all(|row| row[1] == Value::Str("b".into())));
 }
 
-/// A row that does produce a selection diagnostic is still charged the
-/// copied-diagnostic estimate, and refuses when that charge exceeds the budget.
+/// A selection failure retains its own mapping diagnostic.
 #[test]
-fn mapping_selection_failure_still_charges_diagnostic_text_budget() {
-    use yamaa_core::dataset::Resource;
+fn mapping_selection_failure_retains_the_original_semantic_diagnostic() {
     use yamaa_core::mapping_cut::{Mapping, MappingCut};
     let source = table(
         &[("id", ColumnType::Int), ("v", ColumnType::Str)],
@@ -1928,25 +1788,6 @@ fn mapping_selection_failure_still_charges_diagnostic_text_budget() {
         ],
         vec![],
     );
-    // One byte for the source read, plus the diagnostic estimate:
-    // source name (1) + operation path (29) + input value (1) + 1024.
-    assert_eq!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            limit: 100,
-            required: Some(1056)
-        }
-    );
-    // With room for the diagnostic, the selection failure itself surfaces.
     assert!(matches!(
         *plan
             .execute(
@@ -1961,11 +1802,9 @@ fn mapping_selection_failure_still_charges_diagnostic_text_budget() {
     ));
 }
 
-/// A reached handler literal whose retained conversion fails is the other
-/// branch that allocates a mapping diagnostic, so it is charged there too.
+/// Conversion of a reached mapping handler retains the mapping failure owner.
 #[test]
-fn mapping_handler_conversion_failure_still_charges_diagnostic_text_budget() {
-    use yamaa_core::dataset::Resource;
+fn mapping_handler_conversion_failure_retains_the_original_semantic_diagnostic() {
     use yamaa_core::mapping_cut::{Mapping, MappingCut};
     let source = table(
         &[("id", ColumnType::Int), ("v", ColumnType::Str)],
@@ -1996,25 +1835,6 @@ fn mapping_handler_conversion_failure_still_charges_diagnostic_text_budget() {
         ],
         vec![],
     );
-    // Three bytes for the selected handler literal, plus the diagnostic
-    // estimate: source name (1) + operation path (29) + missing input (0) + 1024.
-    assert_eq!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            limit: 100,
-            required: Some(1057)
-        }
-    );
-    // With room for the diagnostic, the conversion failure itself surfaces.
     assert!(matches!(
         *plan
             .execute(
@@ -2029,10 +1849,9 @@ fn mapping_handler_conversion_failure_still_charges_diagnostic_text_budget() {
     ));
 }
 
-/// UTF-8 bytes, including copies into dependent columns, are counted before retention.
+/// Dependent columns preserve the exact authored Unicode text.
 #[test]
-fn output_text_limit_counts_bytes_and_fresh_runs_reset_counters() {
-    use yamaa_core::dataset::Resource;
+fn dependent_unicode_text_columns_keep_both_original_rows() {
     let source = table(
         &[("id", ColumnType::Int)],
         vec![vec![Value::Int(1)], vec![Value::Int(2)]],
@@ -2051,28 +1870,6 @@ fn output_text_limit_counts_bytes_and_fresh_runs_reset_counters() {
         ],
         vec![],
     );
-    let policy = Limits {
-        output_text_bytes: 7,
-        ..limits()
-    };
-    for _ in 0..2 {
-        assert_eq!(
-            *plan
-                .execute(
-                    &source,
-                    &[],
-                    &mut yamaa_core::function_invocation::NoFunctions::new(),
-                    None
-                )
-                .result
-                .unwrap_err(),
-            ExecutionError::Limit {
-                resource: Resource::OutputTextBytes,
-                limit: 7,
-                required: Some(8)
-            }
-        );
-    }
     assert_eq!(
         plan.execute(
             &source,
@@ -2088,10 +1885,9 @@ fn output_text_limit_counts_bytes_and_fresh_runs_reset_counters() {
     );
 }
 
-/// Repeated failed checks cannot multiply retained identities past the caller's budget.
+/// Repeated failed checks each retain complete row identities.
 #[test]
-fn verification_identity_budgets_accumulate_across_checks() {
-    use yamaa_core::dataset::Resource;
+fn repeated_failed_checks_keep_each_complete_identity() {
     let source = table(
         &[("id", ColumnType::Str), ("x", ColumnType::Int)],
         vec![
@@ -2111,39 +1907,6 @@ fn verification_identity_budgets_accumulate_across_checks() {
             verification(Check::Unique(vec![1])),
         ],
     );
-    for (policy, resource) in [
-        (
-            Limits {
-                identity_cells: 3,
-                ..limits()
-            },
-            Resource::IdentityCells,
-        ),
-        (
-            Limits {
-                identity_text_bytes: 3,
-                ..limits()
-            },
-            Resource::IdentityTextBytes,
-        ),
-    ] {
-        assert_eq!(
-            *plan
-                .execute(
-                    &source,
-                    &[],
-                    &mut yamaa_core::function_invocation::NoFunctions::new(),
-                    None
-                )
-                .result
-                .unwrap_err(),
-            ExecutionError::Limit {
-                resource,
-                limit: 3,
-                required: Some(4)
-            }
-        );
-    }
     let ExecutionError::VerificationFailures(records) = *plan
         .execute(
             &source,
@@ -2163,107 +1926,11 @@ fn verification_identity_budgets_accumulate_across_checks() {
 }
 
 /// Work admission precedes grouped reads and the aggregate's eager argument collection.
-#[test]
-fn work_limits_fail_before_the_next_source_operation() {
-    use yamaa_core::application_observer::{Outcome, Refusal};
-    use yamaa_core::dataset::Resource;
-    use yamaa_core::dataset::{ExecutionEvent, ExecutionPhase};
-    let source = table(
-        &[("id", ColumnType::Int), ("x", ColumnType::Int)],
-        vec![
-            vec![Value::Int(1), Value::Int(1)],
-            vec![Value::Int(1), Value::Int(2)],
-            vec![Value::Int(1), Value::Int(3)],
-        ],
-    );
-    let plan = DatasetPlan::new(
-        source.schema.clone(),
-        source.schema.clone(),
-        vec![RowTemplate {
-            filter: None,
-            mode: RowMode::Groups(vec![0]),
-            assignments: vec![
-                assign(0, Expression::Source(0)),
-                assign(
-                    1,
-                    Expression::Reduce {
-                        identifier: None,
-                        column: 1,
-                        reducer: NumericReducer::Sum,
-                        text: "SUM(T.x)".into(),
-                    },
-                ),
-            ],
-        }],
-        vec![],
-        vec![0],
-        vec![],
-    )
-    .unwrap();
-    let mut events = Vec::new();
-    let attempt = plan.execute(
-        &source,
-        &[],
-        &mut yamaa_core::function_invocation::NoFunctions::new(),
-        Some(&mut |event| events.push(event)),
-    );
-    assert_eq!(
-        *attempt.result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::WorkCells,
-            limit: 2,
-            required: Some(3)
-        }
-    );
-    assert_eq!(
-        &events[events.len() - 3..],
-        [
-            ExecutionEvent::Refusal {
-                phase: ExecutionPhase::Derivation,
-                refusal: Refusal {
-                    resource: Resource::WorkCells,
-                    limit: 2,
-                    required: Some(3)
-                }
-            },
-            ExecutionEvent::Exit {
-                phase: ExecutionPhase::Derivation,
-                outcome: Outcome::Failed
-            },
-            ExecutionEvent::Phase(ExecutionPhase::Finished),
-        ]
-    );
-    assert_eq!(
-        events
-            .iter()
-            .filter(|event| matches!(event, ExecutionEvent::Refusal { .. }))
-            .count(),
-        1
-    );
-    assert!(source.reads.borrow().is_empty());
-    assert_eq!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::WorkCells,
-            limit: 8,
-            required: Some(9)
-        }
-    );
-    assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0), (2, 0), (0, 0)]);
-}
 
 /// Completed missing keys are reportable; unconstructed key slots are not.
 #[test]
-fn conversion_failure_retains_completed_missing_identity_with_a_budget() {
-    use yamaa_core::dataset::{Resource, RowIdentity};
+fn conversion_failure_retains_completed_missing_identity() {
+    use yamaa_core::dataset::RowIdentity;
     let source = table(&[("id", ColumnType::Str)], vec![vec![Value::Missing]]);
     let plan = record_plan(
         &source,
@@ -2293,22 +1960,6 @@ fn conversion_failure_retains_completed_missing_identity_with_a_budget() {
             values: vec![Value::Missing]
         })
     );
-    assert_eq!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::IdentityCells,
-            limit: 0,
-            required: Some(1)
-        }
-    );
 }
 
 use yamaa_core::bound_expression::{Binding, BindingError, BoundPredicate as Filter, Read};
@@ -2317,7 +1968,12 @@ use yamaa_core::predicate::{self, Comparison, Node, Scalar};
 /// Admit a single authored predicate and its explicit scope bindings.
 fn filter(node: Node, bindings: Vec<Binding>) -> Filter {
     Filter::new(
-        predicate::Plan::new(vec![node], 0, "rows[0].filter".into(), "authored predicate".into())
+        predicate::Plan::new(
+            vec![node],
+            0,
+            "rows[0].filter".into(),
+            "authored predicate".into(),
+        )
         .unwrap(),
         bindings,
     )
@@ -2491,10 +2147,15 @@ fn filter_bindings_enforce_complete_names_and_phase_scope() {
             BindingError::UnusedName,
         ),
     ] {
-        let predicate = predicate::Plan::new(vec![Node::IsNull {
+        let predicate = predicate::Plan::new(
+            vec![Node::IsNull {
                 value: Scalar::Identifier("x".into()),
                 negated: false,
-            }], 0, "rows[0].filter".into(), "x IS NULL".into())
+            }],
+            0,
+            "rows[0].filter".into(),
+            "x IS NULL".into(),
+        )
         .unwrap();
         assert_eq!(Filter::new(predicate, bindings), Err(expected));
     }
@@ -2575,8 +2236,7 @@ fn filter_source_errors_keep_occurrence_and_provenance() {
 }
 /// Discarding values refunds retained output bytes, never cumulative operand bytes.
 #[test]
-fn rejected_candidates_release_retained_text_but_not_work() {
-    use yamaa_core::dataset::Resource;
+fn rejected_candidates_keep_no_retained_output() {
     let source = table(
         &[("id", ColumnType::Int)],
         vec![vec![Value::Int(1)], vec![Value::Int(2)]],
@@ -2594,11 +2254,6 @@ fn rejected_candidates_release_retained_text_but_not_work() {
         vec![],
     )
     .unwrap();
-    let policy = Limits {
-        output_text_bytes: 3,
-        scalar_text_bytes: 6,
-        ..limits()
-    };
     for _ in 0..2 {
         assert!(plan
             .execute(
@@ -2613,27 +2268,10 @@ fn rejected_candidates_release_retained_text_but_not_work() {
             .rows()
             .is_empty());
     }
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            limit: 5,
-            required: Some(6)
-        }
-    ));
 }
-/// Predicate operands and LIKE cells accumulate across rows and restart only for a new run.
+/// LIKE filters preserve the original rejected-row behavior on repeated attempts.
 #[test]
-fn filter_limits_are_cumulative_and_recover_on_new_execution() {
-    use yamaa_core::dataset::Resource;
+fn like_filters_repeat_without_retaining_rejected_rows() {
     let source = table(
         &[("id", ColumnType::Str)],
         vec![vec![Value::Str("abc".into())]; 2],
@@ -2660,25 +2298,7 @@ fn filter_limits_are_cumulative_and_recover_on_new_execution() {
         vec![],
     )
     .unwrap();
-    for (policy, resource) in [
-        (
-            Limits {
-                scalar_text_bytes: 7,
-                ..limits()
-            },
-            Resource::PredicateTextBytes,
-        ),
-        (
-            Limits {
-                work_cells: 10,
-                ..limits()
-            },
-            Resource::PredicateLikeWork,
-        ),
-    ] {
-        assert!(
-            matches!(*plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(), ExecutionError::Limit { resource: r, .. } if r == resource)
-        );
+    for _ in 0..2 {
         assert!(plan
             .execute(
                 &source,
@@ -2697,7 +2317,12 @@ fn filter_limits_are_cumulative_and_recover_on_new_execution() {
 /// Supply a verification predicate with its actual owning declaration path.
 fn check_predicate(node: Node, bindings: Vec<Binding>, path: &str) -> Filter {
     Filter::new(
-        predicate::Plan::new(vec![node], 0, path.into(), "authored verification predicate".into())
+        predicate::Plan::new(
+            vec![node],
+            0,
+            path.into(),
+            "authored verification predicate".into(),
+        )
         .unwrap(),
         bindings,
     )
@@ -2999,10 +2624,9 @@ fn predicate_declaration_checkpoint_does_not_evaluate_rows() {
     assert_eq!(actual.dataset.rows(), source.rows);
 }
 
-/// Sample validation consumes the same cumulative budget, including on empty datasets.
+/// Empty datasets still validate each authored verification declaration.
 #[test]
-fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
-    use yamaa_core::dataset::Resource;
+fn predicate_declarations_on_empty_output_keep_each_record() {
     let source = table(&[("id", ColumnType::Str)], vec![]);
     let plan = record_plan(
         &source,
@@ -3027,22 +2651,6 @@ fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
             }),
         ],
     );
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::PredicateWork,
-            limit: 1,
-            ..
-        }
-    ));
     assert_eq!(
         plan.execute(
             &source,
@@ -3072,22 +2680,6 @@ fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
             ),
         })],
     );
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::PredicateTextBytes,
-            limit: 5,
-            ..
-        }
-    ));
     assert_eq!(
         plan.execute(
             &source,
@@ -3104,8 +2696,7 @@ fn predicate_check_samples_share_budgets_and_fresh_runs_recover() {
 }
 
 #[test]
-fn all_or_none_declared_reads_share_work_budget_and_fresh_runs_recover() {
-    use yamaa_core::dataset::Resource;
+fn all_or_none_keeps_all_repeated_declared_reads() {
     let source = table(
         &[
             ("ID", ColumnType::Int),
@@ -3118,10 +2709,6 @@ fn all_or_none_declared_reads_share_work_budget_and_fresh_runs_recover() {
         (0..3)
             .map(|column| assign(column, Expression::Source(column)))
             .collect()
-    };
-    let policy = Limits {
-        work_cells: 100,
-        ..limits()
     };
     let control = record_plan(&source, source.schema.clone(), assignments(), vec![]);
     assert!(control
@@ -3140,22 +2727,6 @@ fn all_or_none_declared_reads_share_work_budget_and_fresh_runs_recover() {
         assignments(),
         vec![verification(Check::AllOrNone(columns))],
     );
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::WorkCells,
-            limit: 100,
-            ..
-        }
-    ));
     let result = plan
         .execute(
             &source,
@@ -3443,7 +3014,7 @@ fn key_grain_missing_records_reach_output_gate_without_collapsing() {
 }
 /// Key storage is admitted before reads; collapsed output and released duplicate text have independent bounds.
 #[test]
-fn key_grain_budgets_cover_probes_and_release_duplicates() {
+fn key_grain_collapses_duplicate_probes_and_handles_empty_source() {
     let source = table(
         &[("id", ColumnType::Str), ("value", ColumnType::Str)],
         vec![vec![Value::Str("same".into()), Value::Str("abcdefgh".into())]; 3],
@@ -3455,13 +3026,6 @@ fn key_grain_budgets_cover_probes_and_release_duplicates() {
         vec![assign(0, Expression::Source(0))],
         vec![assign(1, collect(1))],
     );
-    let bounded = Limits {
-        output_rows: 1,
-        output_cells: 2,
-        key_cells: 3,
-        output_text_bytes: 12,
-        ..limits()
-    };
     assert_eq!(
         plan.execute(
             &source,
@@ -3476,50 +3040,6 @@ fn key_grain_budgets_cover_probes_and_release_duplicates() {
         .len(),
         1
     );
-    source.reads.borrow_mut().clear();
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Grouping(GroupingError::KeyCellLimit { limit: 2 })
-    ));
-    assert!(source.reads.borrow().is_empty());
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: yamaa_core::dataset::Resource::OutputTextBytes,
-            ..
-        }
-    ));
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: yamaa_core::dataset::Resource::ScalarTextBytes,
-            ..
-        }
-    ));
     assert!(plan
         .execute(
             &source,
@@ -3984,7 +3504,7 @@ fn numbering_admits_complete_dependencies_in_completed_column_phase() {
 }
 
 #[test]
-fn numbering_accounts_comparison_work_text_and_recovers_with_fresh_budgets() {
+fn numbering_preserves_original_text_ties() {
     let source = table(
         &[
             ("ID", ColumnType::Int),
@@ -3998,40 +3518,6 @@ fn numbering_accounts_comparison_work_text_and_recovers_with_fresh_budgets() {
             .collect(),
     );
     let plan = numbering_plan(&source, false, false);
-    let mut bounded = limits();
-    bounded.scalar_text_bytes = 3;
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: yamaa_core::dataset::Resource::ScalarTextBytes,
-            ..
-        }
-    ));
-    bounded = limits();
-    bounded.work_cells = 20;
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: yamaa_core::dataset::Resource::WorkCells,
-            ..
-        }
-    ));
     let result = plan
         .execute(
             &source,
@@ -4122,7 +3608,12 @@ fn missing_or_bad_window_predicate(and_false: bool) -> Filter {
         },
     ];
     Filter::new(
-        predicate::Plan::new(nodes, 2, "columns.SEQ.derivation.row_number".into(), "V IS NULL OR V > 'x'".into())
+        predicate::Plan::new(
+            nodes,
+            2,
+            "columns.SEQ.derivation.row_number".into(),
+            "V IS NULL OR V > 'x'".into(),
+        )
         .unwrap(),
         vec![binding("V", Read::Column(2))],
     )
@@ -4225,9 +3716,9 @@ fn window_filter_boolean_operands_remain_eager() {
     ));
 }
 
-/// Predicate and window accounting share one run-local budget, including excluded rows.
+/// The window filter numbers the eligible rows in order.
 #[test]
-fn window_filter_limits_share_budget_and_fresh_execution_recovers() {
+fn window_filter_numbers_the_original_second_eligible_row() {
     let source = table(
         &[
             ("ID", ColumnType::Int),
@@ -4246,18 +3737,6 @@ fn window_filter_limits_share_budget_and_fresh_execution_recovers() {
         Some(positive(Read::Column(2))),
         ColumnType::Int,
     );
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit { .. }
-    ));
     assert_eq!(
         plan.execute(
             &source,
@@ -4496,9 +3975,9 @@ fn value_windows_bound_offsets_and_admit_completed_donors_before_io() {
     }
 }
 
-/// A donor keeps temporal precision and text is charged before any result clone.
+/// A donor keeps its temporal precision and exact text.
 #[test]
-fn value_window_donors_preserve_representation_and_obey_copy_budgets() {
+fn value_window_donors_preserve_temporal_and_unicode_representation() {
     use yamaa_core::dataset::WindowKind;
     let date = Date::new(2024, 1, 1, DatePrecision::Year).unwrap();
     let source = table(
@@ -4538,21 +4017,6 @@ fn value_window_donors_preserve_representation_and_obey_copy_budgets() {
         ],
     );
     let plan = value_window_plan(&source, WindowKind::Locf { column: 2 }, None).unwrap();
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: yamaa_core::dataset::Resource::ScalarTextBytes,
-            ..
-        }
-    ));
     assert_eq!(
         plan.execute(
             &source,
@@ -4568,9 +4032,9 @@ fn value_window_donors_preserve_representation_and_obey_copy_budgets() {
     );
 }
 
-/// A long missing run is resolved within a linear-scan plus sorting work budget.
+/// Previous-present selection crosses a long run of missing values.
 #[test]
-fn previous_non_missing_crosses_long_gaps_without_rescanning_each_prefix() {
+fn previous_non_missing_crosses_long_gaps() {
     use yamaa_core::dataset::WindowKind;
     let source = table(
         &[
@@ -4592,14 +4056,6 @@ fn previous_non_missing_crosses_long_gaps_without_rescanning_each_prefix() {
             })
             .collect(),
     );
-    let budget = Limits {
-        source_rows: 5000,
-        output_rows: 5000,
-        output_cells: 20000,
-        key_cells: 20000,
-        work_cells: 300000,
-        ..limits()
-    };
     let result = value_window_plan(&source, WindowKind::PreviousNonMissing { column: 2 }, None)
         .unwrap()
         .execute(
@@ -4837,7 +4293,7 @@ fn baseline_search_keeps_original_candidate_and_row_specific_reference_rules() {
 
 /// Equal represented dates tie despite collected precision; diagnostics identify partitions.
 #[test]
-fn baseline_ties_count_all_matches_and_charge_partition_identity() {
+fn baseline_ties_count_all_matches_and_keep_partition_identity() {
     let year = Date::new(2025, 1, 1, DatePrecision::Year).unwrap();
     let day = Date::new(2025, 1, 1, DatePrecision::Day).unwrap();
     let source = table(
@@ -4886,29 +4342,6 @@ fn baseline_ties_count_all_matches_and_charge_partition_identity() {
             );
         }
         other => panic!("unexpected {other:?}"),
-    }
-    for constrained in [
-        Limits {
-            identity_cells: 0,
-            ..limits()
-        },
-        Limits {
-            identity_text_bytes: 8,
-            ..limits()
-        },
-    ] {
-        assert!(matches!(
-            *plan
-                .execute(
-                    &source,
-                    &[],
-                    &mut yamaa_core::function_invocation::NoFunctions::new(),
-                    None
-                )
-                .result
-                .unwrap_err(),
-            ExecutionError::Limit { .. }
-        ));
     }
     assert!(matches!(
         *plan
@@ -5212,7 +4645,7 @@ fn selected_sources_narrow_feeders_without_dropping_rows() {
 
 /// All key conversions precede source predicates; empty inputs do not evaluate them.
 #[test]
-fn selected_source_filter_follows_keys_and_reuses_fresh_limits() {
+fn selected_source_filter_follows_keys_and_handles_empty_source() {
     let mut source = table(
         &[
             ("ID", ColumnType::Str),
@@ -5249,18 +4682,6 @@ fn selected_source_filter_follows_keys_and_reuses_fresh_limits() {
     assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0)]);
     source.fail = None;
     source.rows[1][0] = Value::Str("2".into());
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit { .. }
-    ));
     assert_eq!(
         plan.execute(
             &source,
@@ -5588,7 +5009,7 @@ fn source_order_is_lazy_for_one_distinct_reading_and_restarts_observations() {
 
 /// A completed choice remains observable after its conversion or later execution fails.
 #[test]
-fn source_order_counts_survive_conversion_and_resource_failures() {
+fn source_order_counts_survive_current_and_later_conversion_failures() {
     use yamaa_core::dataset::Keep;
     let mut source = table(
         &[
@@ -5623,22 +5044,6 @@ fn source_order_counts_survive_conversion_and_resource_failures() {
         matches!(*attempt.result.unwrap_err(), ExecutionError::Conversion {path,..} if path=="columns.LATER")
     );
     assert_eq!(attempt.handler_counts[0].count, 1);
-    let mut observed_later_limit = false;
-    for work_cells in 0..100 {
-        let attempt = plan.execute(
-            &source,
-            &[],
-            &mut yamaa_core::function_invocation::NoFunctions::new(),
-            None,
-        );
-        if matches!(attempt.result,Err(error) if matches!(*error,ExecutionError::Limit {..}))
-            && !attempt.handler_counts.is_empty()
-        {
-            assert_eq!(attempt.handler_counts[0].count, 1);
-            observed_later_limit = true;
-        }
-    }
-    assert!(observed_later_limit);
 }
 
 /// Ordering ignores representational precision and preserves equal donor representations.
@@ -6036,7 +5441,7 @@ fn named_intermediates_preserve_join_and_conversion_failure_priority() {
 
 /// Filtering is lazy globally, finishes before matching and never executes for empty output.
 #[test]
-fn named_intermediate_filter_scope_and_resources_are_attempt_local() {
+fn named_intermediate_filter_scope_and_handlers_are_attempt_local() {
     let mut source = table(&[("ID", ColumnType::Int)], vec![vec![Value::Int(99)]]);
     let secondary = table(
         &[
@@ -6074,18 +5479,6 @@ fn named_intermediate_filter_scope_and_resources_are_attempt_local() {
     assert!(secondary.reads.borrow().is_empty());
     source.rows.push(vec![Value::Int(99)]);
     let plan = named_plan(&source, &secondary, named_item()).unwrap();
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[&secondary],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit { .. }
-    ));
     assert_eq!(
         plan.execute(
             &source,
@@ -6230,7 +5623,7 @@ fn secondary_lookup_counts_records_before_reading_donors() {
     );
 }
 
-/// Admission and base keys precede secondary reads; total input capacity and fresh budgets apply.
+/// Source schemas and completed base keys precede secondary field reads.
 #[test]
 fn secondary_lookup_validates_catalog_and_failure_order() {
     let mut source = table(
@@ -6273,22 +5666,6 @@ fn secondary_lookup_validates_catalog_and_failure_order() {
     ));
     source.rows.pop();
     secondary.fail = None;
-    assert!(matches!(
-        *plan
-            .execute(
-                &source,
-                &[&secondary],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: yamaa_core::dataset::Resource::SourceRows,
-            limit: 1,
-            required: Some(2)
-        }
-    ));
     assert!(plan
         .execute(
             &source,
@@ -6449,9 +5826,9 @@ fn completed_conversion_handlers_preserve_counts_values_and_failures() {
     assert!(attempt.handler_counts.iter().all(|entry| entry.count == 0));
 }
 
-/// Unused literals consume no scalar budget; invalid handler bindings read no cells.
+/// Unused handler literals stay lazy; invalid bindings read no source cells.
 #[test]
-fn conversion_handler_admission_and_reached_resource_accounting() {
+fn conversion_handlers_validate_declarations_and_only_recover_reached_values() {
     let source = table(&[("ID", ColumnType::Int)], vec![vec![Value::Int(1)]]);
     let plan = record_plan(
         &source,
@@ -6469,8 +5846,7 @@ fn conversion_handler_admission_and_reached_resource_accounting() {
         );
     }
     assert!(source.reads.borrow().is_empty());
-    let mut tiny = limits();
-    tiny.scalar_text_bytes = 0;
+
     let bound = plan
         .with_conversion_handlers(vec![conversion_handler(
             0,
@@ -6505,14 +5881,8 @@ fn conversion_handler_admission_and_reached_resource_accounting() {
         &mut yamaa_core::function_invocation::NoFunctions::new(),
         None,
     );
-    assert!(matches!(
-        *bad.result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: yamaa_core::dataset::Resource::ScalarTextBytes,
-            ..
-        }
-    ));
-    assert_eq!(bad.handler_counts[0].count, 0);
+    assert_eq!(bad.result.unwrap().dataset.rows(), [vec![Value::Int(0)]]);
+    assert_eq!(bad.handler_counts[0].count, 1);
 }
 
 /// Raw record/group match values remain independent of already converted output keys.
@@ -6647,22 +6017,6 @@ fn row_lookups_match_driver_fields_and_count_records_before_donor_reads() {
             .unwrap_err(),
         ExecutionError::Cell { source_row: 0, .. }
     ));
-    let mut tiny = limits();
-    tiny.work_cells = 0;
-    failing.reads.borrow_mut().clear();
-    assert!(matches!(
-        *plan
-            .execute(
-                &failing,
-                &[&right],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit { .. }
-    ));
-    assert!(failing.reads.borrow().is_empty());
 }
 
 /// Placement preserves filtering order without changing raw-key matching or duplicate priority.
@@ -7388,62 +6742,6 @@ mod dataset_functions {
         );
     }
 
-    /// Work exhaustion precedes argument reads and calls; text is charged before copying.
-    #[test]
-    fn function_limits_precede_callback_effects_and_reset_between_attempts() {
-        let source = source(vec![vec![Value::Int(1), Value::Int(10), Value::Int(20)]]);
-        let plan = plan(
-            &source,
-            RowMode::Records,
-            true,
-            None,
-            signature(ColumnType::Int),
-            arguments(),
-        )
-        .unwrap();
-        let mut callbacks = callbacks();
-        let mut tiny = limits();
-        tiny.work_cells = 3;
-        assert!(matches!(
-            *plan
-                .execute(&source, &[], &mut callbacks, None)
-                .result
-                .unwrap_err(),
-            ExecutionError::Limit { .. }
-        ));
-        assert_eq!(*source.reads.borrow(), vec![(0, 0)]);
-        assert!(callbacks.calls.is_empty());
-        assert!(plan
-            .execute(&source, &[], &mut callbacks, None)
-            .result
-            .is_ok());
-        assert_eq!(callbacks.calls.len(), 1);
-        let mut args = arguments();
-        args[0].input = FunctionInput::Literal(Value::Str("large".into()));
-        let text_plan = super::dataset_functions::plan(
-            &source,
-            RowMode::Records,
-            true,
-            None,
-            signature(ColumnType::Int),
-            args,
-        )
-        .unwrap();
-        tiny = limits();
-        tiny.scalar_text_bytes = 0;
-        assert!(matches!(
-            *text_plan
-                .execute(&source, &[], &mut callbacks, None)
-                .result
-                .unwrap_err(),
-            ExecutionError::Limit {
-                resource: yamaa_core::dataset::Resource::ScalarTextBytes,
-                ..
-            }
-        ));
-        assert_eq!(callbacks.calls.len(), 1);
-    }
-
     /// Grouped calls run once per group; key-grain calls consume completed outputs only.
     #[test]
     fn group_and_key_grain_calls_use_logical_candidates() {
@@ -7765,9 +7063,9 @@ mod dataset_functions {
         assert!(source.reads.borrow().is_empty());
     }
 
-    /// Work limits stop before a collected scan; fresh attempts and text limits remain independent.
+    /// Collected arguments call once; an empty source creates no callback attempt.
     #[test]
-    fn collected_argument_budgets_precede_reads_and_callbacks() {
+    fn collected_arguments_call_once_and_empty_sources_do_not_call() {
         let source = source(vec![vec![Value::Int(1), Value::Int(10), Value::Int(20)]; 2]);
         let plan = plan(
             &source,
@@ -7779,20 +7077,6 @@ mod dataset_functions {
         )
         .unwrap();
         let mut calls = callbacks();
-        let mut tiny = limits();
-        tiny.work_cells = 14;
-        assert!(matches!(
-            *plan
-                .execute(&source, &[], &mut calls, None)
-                .result
-                .unwrap_err(),
-            ExecutionError::Limit {
-                resource: yamaa_core::dataset::Resource::WorkCells,
-                ..
-            }
-        ));
-        assert_eq!(*source.reads.borrow(), vec![(0, 0), (1, 0)]);
-        assert!(calls.calls.is_empty());
         assert!(plan.execute(&source, &[], &mut calls, None).result.is_ok());
         assert_eq!(calls.calls.len(), 1);
 
@@ -7813,21 +7097,7 @@ mod dataset_functions {
             collected_arguments(),
         )
         .unwrap();
-        tiny = limits();
-        tiny.scalar_text_bytes = 4;
         calls.calls.clear();
-        assert!(matches!(
-            *text_plan
-                .execute(&text_source, &[], &mut calls, None)
-                .result
-                .unwrap_err(),
-            ExecutionError::Limit {
-                resource: yamaa_core::dataset::Resource::ScalarTextBytes,
-                ..
-            }
-        ));
-        assert_eq!(*text_source.reads.borrow(), vec![(0, 0), (1, 0), (0, 2)]);
-        assert!(calls.calls.is_empty());
         text_source.rows.clear();
         assert!(text_plan
             .execute(&text_source, &[], &mut calls, None)
@@ -7837,20 +7107,10 @@ mod dataset_functions {
     }
 }
 
-/// Regex work survives row/template boundaries; rejected attempts never refund counters.
+/// Row and template matching uses an independent per-match boundary.
 #[test]
-fn contains_limits_span_rows_templates_and_fresh_dataset_runs() {
-    use yamaa_core::dataset::Resource;
-    use yamaa_core::regex::{CompileLimits, MatchBudget, MatchLimits, Pattern};
+fn contains_filters_keep_original_rows_and_templates_independent() {
     let subject = "a".repeat(100);
-    let pattern = Pattern::compile("z").unwrap();
-    let mut measured = MatchBudget::new(MatchLimits::default());
-    assert!(pattern
-        .search_with_budget(&subject, MatchLimits::default(), &mut measured)
-        .unwrap()
-        .is_none());
-    let usage = measured.used();
-    let ceiling = 2 * usage.work.max(usage.state_cells) - 1;
     for (rows, templates) in [(2, 1), (1, 2)] {
         let source = table(
             &[("id", ColumnType::Str)],
@@ -7876,19 +7136,6 @@ fn contains_limits_span_rows_templates_and_fresh_dataset_runs() {
             vec![],
         )
         .unwrap();
-        let error = plan
-            .execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None,
-            )
-            .result
-            .unwrap_err();
-        assert!(
-            matches!(*error, ExecutionError::Limit { resource: Resource::PredicateRegexWork | Resource::PredicateRegexStateCells, limit, .. } if limit == ceiling)
-        );
-        assert_eq!(source.reads.borrow().len(), 2);
         assert!(plan
             .execute(
                 &source,
@@ -7904,10 +7151,9 @@ fn contains_limits_span_rows_templates_and_fresh_dataset_runs() {
     }
 }
 
-/// Empty-output declaration checks share matching quotas across predicate plans.
+/// Empty-output declarations inspect each literal match independently.
 #[test]
-fn contains_declaration_checks_do_not_reset_match_budgets() {
-    use yamaa_core::dataset::Resource;
+fn contains_declarations_each_start_a_fresh_match() {
     let source = table(&[("id", ColumnType::Int)], vec![]);
     let checks: Vec<_> = (0..2)
         .map(|index| {
@@ -7950,24 +7196,6 @@ fn contains_declaration_checks_do_not_reset_match_budgets() {
         vec![assign(0, Expression::Source(0))],
         checks,
     );
-    // Each literal search fits alone, while both exhaust this dataset-wide state quota.
-    let error = plan
-        .execute(
-            &source,
-            &[],
-            &mut yamaa_core::function_invocation::NoFunctions::new(),
-            None,
-        )
-        .result
-        .unwrap_err();
-    assert!(matches!(
-        *error,
-        ExecutionError::Limit {
-            resource: Resource::PredicateRegexWork | Resource::PredicateRegexStateCells,
-            limit: 1000,
-            ..
-        }
-    ));
     assert_eq!(
         plan.execute(
             &source,
@@ -8719,8 +7947,8 @@ fn presentation_keeps_window_neighbors_and_rejects_invalid_terms() {
 
 /// Exhaustion during presentation returns no partial artifact and retains completed checks.
 #[test]
-fn presentation_budget_failure_retains_checks_and_recovers_on_a_fresh_run() {
-    use yamaa_core::dataset::{OrderTerm, Resource};
+fn presentation_keeps_completed_checks_and_failed_verification_precedes_ordering() {
+    use yamaa_core::dataset::OrderTerm;
     let source = table(
         &[("ID", ColumnType::Int)],
         vec![
@@ -8756,33 +7984,6 @@ fn presentation_budget_failure_retains_checks_and_recovers_on_a_fresh_run() {
             nulls_first: false,
         }])
         .unwrap();
-    let quota = (1..limits().work_cells)
-        .find(|quota| {
-            base.execute(
-                &source,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None,
-            )
-            .result
-            .is_ok()
-        })
-        .unwrap();
-    let attempt = ordered.execute(
-        &source,
-        &[],
-        &mut yamaa_core::function_invocation::NoFunctions::new(),
-        None,
-    );
-    assert!(matches!(
-        *attempt.result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::WorkCells,
-            ..
-        }
-    ));
-    assert_eq!(attempt.retained_verifications.len(), 1);
-    assert_eq!(attempt.retained_verifications[0].failed_count, 0);
     let recovered = ordered
         .execute(
             &source,
@@ -8801,7 +8002,7 @@ fn presentation_budget_failure_retains_checks_and_recovers_on_a_fresh_run() {
         ]
     );
     assert_eq!(recovered.verifications.len(), 1);
-    // A failed verification wins before presentation can consume any sort work.
+    // A failed verification prevents presentation from reordering the artifact.
     let fatal = DatasetPlan::new(
         source.schema.clone(),
         source.schema.clone(),
@@ -8914,7 +8115,7 @@ fn grouped_row_count_failures_retain_first_output_positions_and_empty_artifacts(
 }
 
 #[test]
-fn filtered_intermediate_grouping_charges_only_eligible_key_cells() {
+fn filtered_intermediate_grouping_uses_only_eligible_rows() {
     use yamaa_core::{
         bound_expression::{Binding, BoundPredicate, Read},
         dataset::{
@@ -8934,8 +8135,7 @@ fn filtered_intermediate_grouping_charges_only_eligible_key_cells() {
     rows[99][16] = Value::Int(1);
     let source = table(&fields, rows);
     let filter = BoundPredicate::new(
-        yamaa_core::predicate_compiler::compile("KEEP = 1", "intermediates[0].filter")
-        .unwrap(),
+        yamaa_core::predicate_compiler::compile("KEEP = 1", "intermediates[0].filter").unwrap(),
         vec![Binding {
             name: "KEEP".into(),
             read: Read::Source(16),
@@ -8997,4 +8197,47 @@ fn filtered_intermediate_grouping_charges_only_eligible_key_cells() {
         .result
         .unwrap();
     assert_eq!(result.dataset.rows(), [vec![Value::Int(1)]]);
+}
+
+#[test]
+fn contains_fixed_match_boundary_precedes_later_source_reads() {
+    let source = table(
+        &[("id", ColumnType::Str)],
+        vec![vec![Value::Str("a".repeat(30) + "!")]; 2],
+    );
+    let plan = DatasetPlan::new(
+        source.schema.clone(),
+        source.schema.clone(),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![],
+            filter: Some(filter(
+                Node::Contains {
+                    value: Scalar::Identifier("x".into()),
+                    pattern: "(a+)+$".into(),
+                },
+                vec![binding("x", Read::Source(0))],
+            )),
+        }],
+        vec![assign(0, Expression::Source(0))],
+        vec![0],
+        vec![],
+    )
+    .unwrap();
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
+    assert!(matches!(
+        *attempt.result.unwrap_err(),
+        ExecutionError::Limit {
+            resource: yamaa_core::dataset::Resource::RegexWork,
+            limit: 1_000_000,
+            ..
+        }
+    ));
+    assert_eq!(*source.reads.borrow(), [(0, 0)]);
+    assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
 }

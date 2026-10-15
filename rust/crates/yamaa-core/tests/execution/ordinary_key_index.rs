@@ -1,9 +1,8 @@
 //! Independent donor order, missingness and native-effect controls for large keys.
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
-use yamaa_core::dataset::{ExecutionError, Resource};
+use yamaa_core::dataset::ExecutionError;
 use yamaa_core::numeric_lifecycle::HandlerKind;
-use yamaa_core::table_grouping::GroupingError;
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
@@ -129,11 +128,14 @@ fn fixture(keep: Keep, mode: Mode, selection: bool) -> (Table, Table, DatasetPla
         });
     }
     let correlated = matches!(mode, Mode::Correlated);
-    let predicate = predicate_compiler::compile(if correlated {
+    let predicate = predicate_compiler::compile(
+        if correlated {
             "DONOR.ACTIVE = BASE.ACTIVE"
         } else {
             "DONOR.ACTIVE = 1"
-        }, "intermediates[0].filter")
+        },
+        "intermediates[0].filter",
+    )
     .unwrap();
     let mut bindings = vec![Binding {
         name: "DONOR.ACTIVE".into(),
@@ -237,7 +239,12 @@ fn indexed_truth_keeps_filter_order_missingness_and_stable_first_last() {
             let (primary, donors, plan, trace) = fixture(keep, Mode::Ordinary, true);
             // Every first donor is filtered out before its key can be inspected.
             *donors.failure.borrow_mut() = Some((0, 0, Original(Box::new(17), Rc::new(()))));
-            let attempted = plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+            let attempted = plan.execute(
+                &primary,
+                &[&donors],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            );
             assert_eq!(attempted.result.unwrap().dataset.rows(), expected(keep));
             let events = trace.borrow();
             let first_current = events
@@ -275,11 +282,16 @@ fn expression_composite_and_correlated_selectors_keep_the_existing_scan() {
         for _ in 0..2 {
             let (primary, donors, plan, trace) = fixture(Keep::First, mode, true);
             assert_eq!(
-                plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
-                    .result
-                    .unwrap()
-                    .dataset
-                    .rows(),
+                plan.execute(
+                    &primary,
+                    &[&donors],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None
+                )
+                .result
+                .unwrap()
+                .dataset
+                .rows(),
                 expected(Keep::First)
             );
             let key_reads = trace
@@ -307,7 +319,12 @@ fn first_donor_failure_retains_original_identity_and_the_exact_scan_prefix() {
         let pointer = payload.0.as_ref() as *const u8;
         let marker = Rc::clone(&payload.1);
         *donors.failure.borrow_mut() = Some((130, 0, payload));
-        let attempted = plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        let attempted = plan.execute(
+            &primary,
+            &[&donors],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         let ExecutionError::SecondaryCell {
             source: 0,
             source_row: 130,
@@ -327,7 +344,12 @@ fn first_donor_failure_retains_original_identity_and_the_exact_scan_prefix() {
 fn multiple_match_refusal_reads_no_order_or_payload_and_builds_no_result() {
     for _ in 0..2 {
         let (primary, donors, plan, trace) = fixture(Keep::First, Mode::Ordinary, false);
-        let attempted = plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        let attempted = plan.execute(
+            &primary,
+            &[&donors],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert!(matches!(
             *attempted.result.unwrap_err(),
             ExecutionError::MultipleMatches { match_count: 3, .. }
@@ -352,7 +374,12 @@ fn missing_donor_keys_and_selected_missing_payload_keep_distinct_handler_outcome
             for row in [9, 11] {
                 donors.rows[row][3] = Value::Missing;
             }
-            let attempted = plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+            let attempted = plan.execute(
+                &primary,
+                &[&donors],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            );
             let mut truth = expected(keep);
             truth[1][1] = Value::Missing;
             truth[2][1] = Value::Missing;
@@ -391,7 +418,12 @@ fn entire_source_filter_finishes_before_current_key_and_donor_key_effects() {
         let marker = Rc::clone(&original.1);
         *donors.failure.borrow_mut() = Some((130, 2, original));
         *primary.failure.borrow_mut() = Some((0, 1, Original(Box::new(43), Rc::new(()))));
-        let attempted = plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        let attempted = plan.execute(
+            &primary,
+            &[&donors],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         let ExecutionError::Predicate {
             source_row: 130,
             error,
@@ -427,7 +459,12 @@ fn failing_current_key_reads_no_donor_key_order_or_payload() {
         let marker = Rc::clone(&original.1);
         *primary.failure.borrow_mut() = Some((1, 1, original));
         *donors.failure.borrow_mut() = Some((130, 0, Original(Box::new(53), Rc::new(()))));
-        let attempted = plan.execute(&primary, &[&donors], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        let attempted = plan.execute(
+            &primary,
+            &[&donors],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         let ExecutionError::Cell {
             source_row: 1,
             error: CellError::Access(original),
@@ -447,4 +484,3 @@ fn failing_current_key_reads_no_donor_key_order_or_payload() {
     }
     assert_eq!(traces[0], traces[1]);
 }
-

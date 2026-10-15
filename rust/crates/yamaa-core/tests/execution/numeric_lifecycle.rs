@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, convert::Infallible};
 use yamaa_core::conversion::ConversionError;
 use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver};
 use yamaa_core::numeric::ArithmeticErrorKind;
-use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
+use yamaa_core::numeric_compiler::compile_numeric;
 use yamaa_core::numeric_lifecycle::{
     HandlerCounter, HandlerKind, LiteralHandler, NumericDerivation, NumericLifecycleError,
 };
@@ -339,8 +339,7 @@ fn opaque_resolver_failure_bypasses_handler_and_keeps_exact_provenance() {
 fn dependent_reads_converted_handler_value() {
     let first = derivation("RAW", ColumnType::Int, Some(Value::Str("7".into())));
     let next = NumericDerivation::new(
-        compile_numeric("A + 1", "columns.B.derivation.value.compute")
-        .unwrap(),
+        compile_numeric("A + 1", "columns.B.derivation.value.compute").unwrap(),
         ColumnType::Int,
         "columns.B",
         None,

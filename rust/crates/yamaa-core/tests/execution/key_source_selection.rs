@@ -2,6 +2,11 @@
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
 use yamaa_core::{
+    dataset::ExecutionError,
+    function_invocation::{Argument, FunctionPort, HostError},
+    function_signature::{FunctionIdentity, InvocationPlan},
+};
+use yamaa_core::{
     dataset::{
         Assignment, BoundFunction, DatasetPlan, Expression, FirstAvailable, Intermediate,
         IntermediateKey, IntermediateSource, MatchRead, MatchValue, RowMode, RowTemplate,
@@ -9,11 +14,6 @@ use yamaa_core::{
     },
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType as T, Value},
-};
-use yamaa_core::{
-    dataset::{ExecutionError, Resource},
-    function_invocation::{Argument, FunctionPort, HostError},
-    function_signature::{FunctionIdentity, InvocationPlan},
 };
 #[derive(Debug)]
 struct Failure(Box<u8>, Rc<()>);
@@ -186,7 +186,12 @@ fn two_key_reads_share_the_choice_but_columns_and_fresh_attempts_select_again() 
     for _ in 0..2 {
         trace.borrow_mut().clear();
         let result = p
-            .execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
+            .execute(
+                &src,
+                &[&donor],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
             .result
             .unwrap();
         assert_eq!(
@@ -255,7 +260,12 @@ fn selected_key_cell_failure_moves_once_and_prevents_the_next_key_or_column() {
         source_row,
         ..
     } = *p
-        .execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
+        .execute(
+            &src,
+            &[&donor],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
         .result
         .unwrap_err()
     else {
@@ -330,20 +340,4 @@ fn all_key_conversions_precede_callbacks_and_work_refusals_keep_the_existing_lim
         .iter()
         .any(|&(name, row, _)| name == "SRC" && row == 2));
     trace.borrow_mut().clear();
-    let limited = Limits {
-        work_cells: 0,
-        ..limits()
-    };
-    assert!(matches!(
-        *p.execute(&src, &[&donor], &mut calls, None)
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::WorkCells,
-            limit: 0,
-            ..
-        }
-    ));
-    assert!(trace.borrow().is_empty());
-    assert_eq!(calls.count, 0);
 }

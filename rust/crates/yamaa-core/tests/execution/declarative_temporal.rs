@@ -1,6 +1,6 @@
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
-use yamaa_core::dataset::{ExecutionError};
+use yamaa_core::dataset::ExecutionError;
 use yamaa_core::{
     dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate, Temporal, TemporalKind},
     table::{CellError, TableAccess, TableSchema, ValueRef},
@@ -106,7 +106,12 @@ fn temporal_operands_stop_on_first_failure_and_missing_does_not_skip_later_autho
             failure: RefCell::new(Some(original)),
             reads: RefCell::default(),
         };
-        let attempted = plan(&table).execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        let attempted = plan(&table).execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         let ExecutionError::Cell {
             error: CellError::Access(error),
             ..
@@ -153,7 +158,12 @@ fn temporal_type_failure_precedes_later_operand_and_cannot_use_conversion_handle
             },
         }])
         .unwrap();
-    let attempted = admitted.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempted = admitted.execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::ScalarDiagnostic(finding) = *attempted.result.err().unwrap() else {
         panic!("typed temporal diagnostic required")
     };

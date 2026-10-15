@@ -5,7 +5,6 @@ use yamaa_core::dataset::{
     Assignment, DatasetPlan, ExecutionError, Expression, RowIdentity, RowMode, RowTemplate,
 };
 use yamaa_core::{
-    diagnostic::ProjectionError,
     reduction::NumericReducer,
     table::{CellError, TableAccess, TableSchema, ValueRef},
     temporal::{Date, DatePrecision},
@@ -70,10 +69,9 @@ fn borrowed_failure_projection_retains_every_identity_key_partition_and_host_pay
         .iter()
         .zip(["REQ-0075", "REQ-0124", "REQ-0127", "REQ-0322", "REQ-0510"])
     {
-        let finding = error.diagnostic().unwrap();
+        let finding = error.diagnostic().unwrap().unwrap();
         assert_eq!(finding.definition().requirement, Some(requirement));
-        assert_eq!(error.diagnostic(), Some(finding));
-        assert_eq!(error.diagnostic_with_limit(32), Err(ProjectionError::Limit));
+        assert_eq!(error.diagnostic(), Ok(Some(finding)));
         match error {
             ExecutionError::MultipleValues {
                 identity: Some(value),
@@ -109,11 +107,7 @@ fn borrowed_failure_projection_retains_every_identity_key_partition_and_host_pay
         source_row: 9,
         error: CellError::Access(payload),
     };
-    assert!(error.diagnostic().is_none());
-    assert_eq!(
-        error.diagnostic_with_limit(4096),
-        Err(ProjectionError::InvalidContext)
-    );
+    assert!(error.diagnostic().unwrap().is_none());
     let ExecutionError::Cell {
         error: CellError::Access(Payload(value)),
         ..
@@ -188,19 +182,34 @@ fn projection_never_replays_reads_and_later_source_failure_keeps_its_precedence(
         vec![],
     )
     .unwrap();
-    let error = plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err();
+    let error = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err();
     let reads = source.reads.borrow().clone();
-    let finding = error.diagnostic().unwrap();
+    let finding = error.diagnostic().unwrap().unwrap();
     assert_eq!(finding.definition().requirement, Some("REQ-0075"));
     assert_eq!(finding.context["value_count"], V::from(3));
-    assert_eq!(error.diagnostic_with_limit(32), Err(ProjectionError::Limit));
     assert_eq!(*source.reads.borrow(), reads);
     assert!(
         matches!(&*error,ExecutionError::MultipleValues {identity:Some(value),..} if value.values == [Value::Int(1)])
     );
     source.fail = Some((2, 1));
-    let error = plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err();
-    assert!(error.diagnostic().is_none());
+    let error = plan
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap_err();
+    assert!(error.diagnostic().unwrap().is_none());
     assert!(matches!(
         &*error,
         ExecutionError::Cell {
@@ -210,6 +219,8 @@ fn projection_never_replays_reads_and_later_source_failure_keeps_its_precedence(
         }
     ));
     // A type-level use also confirms projection imposes no table/error bound.
-    let _: Option<yamaa_core::diagnostic::Diagnostic> =
-        ExecutionError::<Infallible>::SchemaMismatch.diagnostic();
+    let _: Result<
+        Option<yamaa_core::diagnostic::Diagnostic>,
+        yamaa_core::diagnostic::ProjectionError,
+    > = ExecutionError::<Infallible>::SchemaMismatch.diagnostic();
 }

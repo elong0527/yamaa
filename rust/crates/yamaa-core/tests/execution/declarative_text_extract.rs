@@ -303,81 +303,24 @@ fn unhandled_mapping_failure_preserves_keys_and_context_admission() {
         [("variable".into(), JsonValue::String("SRC.TEXT".into()))].into()
     );
     assert_eq!(identity.unwrap().values, [Value::Str("row1".into())]);
-    let mut quota = limits();
-    quota.identity_cells = 0;
-    assert!(matches!(
-        *plan("(a)", "1", None)
-            .execute(
-                &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::IdentityCells,
-            ..
-        }
-    ));
-    let mut quota = limits();
-    quota.scalar_text_bytes = 20;
-    assert!(matches!(
-        *plan("(a)", "1", None)
-            .execute(
-                &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            ..
-        }
-    ));
 }
 #[test]
-fn cumulative_regex_work_and_text_refusal_do_not_recover_or_retry() {
-    let table = make_table(Value::Str("aaaa".into()));
-    let mut quota = limits();
-    quota.work_cells = 0;
-    assert!(matches!(
-        *plan("(a)", "1", None)
-            .execute(
-                &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::WorkCells,
-            ..
-        }
-    ));
-    assert!(table.reads.borrow().is_empty());
-    let mut quota = limits();
-    quota.work_cells = 10;
-    let attempt = plan("(x)", "1", Some(Value::Missing)).execute(
+fn fixed_regex_refusal_is_not_recovered_and_small_matches_start_fresh() {
+    let table = make_table(Value::Str("a".repeat(30) + "!"));
+    let attempt = plan("(a+)+$", "1", Some(Value::Missing)).execute(
         &table,
         &[],
         &mut yamaa_core::function_invocation::NoFunctions::new(),
         None,
     );
-    let error = attempt.result.unwrap_err();
-    assert!(
-        matches!(
-            *error,
-            ExecutionError::Limit {
-                resource: Resource::PredicateRegexWork | Resource::PredicateRegexStateCells,
-                ..
-            }
-        ),
-        "{error:?}"
-    );
+    assert!(matches!(
+        *attempt.result.unwrap_err(),
+        ExecutionError::Limit {
+            resource: Resource::RegexWork,
+            limit: 1_000_000,
+            ..
+        }
+    ));
     assert!(attempt.handler_counts.iter().all(|count| count.count == 0));
     assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1)]);
     let table = Table {
@@ -389,36 +332,25 @@ fn cumulative_regex_work_and_text_refusal_do_not_recover_or_retry() {
         fail: RefCell::default(),
         reads: RefCell::default(),
     };
-    let mut quota = limits();
-    quota.work_cells = 12;
-    let attempt = plan("(a)", "1", None).execute(
-        &table,
-        &[],
-        &mut yamaa_core::function_invocation::NoFunctions::new(),
-        None,
-    );
-    let error = attempt.result.unwrap_err();
-    assert!(
-        matches!(
-            *error,
-            ExecutionError::Limit {
-                resource: Resource::PredicateRegexWork | Resource::PredicateRegexStateCells,
-                ..
-            }
-        ),
-        "{error:?}"
-    );
-    assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1), (1, 0), (1, 1)]);
-    assert!(
-        plan("(a)", "1", None)
-            .execute(
-                &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .is_ok(),
-        "a fresh run has fresh counters"
-    );
+    for _ in 0..2 {
+        assert_eq!(
+            plan("(a)", "1", None)
+                .execute(
+                    &table,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None
+                )
+                .result
+                .unwrap()
+                .dataset
+                .rows(),
+            [
+                vec![Value::Str("row1".into()), Value::Str("a".into())],
+                vec![Value::Str("row2".into()), Value::Str("a".into())],
+            ]
+        );
+        assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1), (1, 0), (1, 1)]);
+        table.reads.borrow_mut().clear();
+    }
 }

@@ -150,7 +150,12 @@ fn record_scope_reads_original_occurrence_then_item_then_predicate_then_value() 
         ),
     )
     .unwrap();
-    let attempt = plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(attempt.handler_counts.is_empty());
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
@@ -184,7 +189,12 @@ fn a_matching_predicate_failure_moves_the_original_payload_without_a_value_retry
         ),
     )
     .unwrap()
-    .execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    .execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     match *attempt.result.unwrap_err() {
         ExecutionError::Predicate {
             source_row: 1,
@@ -221,7 +231,12 @@ fn repeated_records_do_not_read_value_and_report_complete_identity_scope() {
     source.fail = Some((2, 10));
     let attempt = plan(&source, read(OdmScope::Records, None))
         .unwrap()
-        .execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
     match *attempt.result.unwrap_err() {
         ExecutionError::SemanticDiagnostic {
             diagnostic,
@@ -276,7 +291,12 @@ fn later_identifying_cell_failure_outranks_a_would_be_ambiguity_with_no_fallback
     source.fail = Some((2, 1));
     let attempt = plan(&source, read(OdmScope::Records, None))
         .unwrap()
-        .execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
     match *attempt.result.unwrap_err() {
         ExecutionError::Cell {
             path,
@@ -441,7 +461,13 @@ fn deferred_record_scope_keeps_each_original_occurrence_after_row_numbers() {
     ]);
     let result = deferred_plan(&source, 0, RowMode::Records, deferred_read(0, None))
         .unwrap()
-        .execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
         .unwrap();
     assert_eq!(
         result.dataset.rows(),
@@ -471,7 +497,12 @@ fn deferred_secondary_driver_borrows_original_table_without_reading_primary() {
     primary.fail = Some((0, 0));
     let attempt = deferred_plan(&source, 1, RowMode::Records, deferred_read(1, None))
         .unwrap()
-        .execute(&primary, &[&source], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        .execute(
+            &primary,
+            &[&source],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         &[vec![
@@ -495,7 +526,12 @@ fn deferred_value_access_keeps_the_original_error_and_authored_leaf_path() {
     source.fail = Some((1, 10));
     let attempt = deferred_plan(&source, 0, RowMode::Records, deferred_read(0, None))
         .unwrap()
-        .execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        .execute(
+            &source,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
     match *attempt.result.unwrap_err() {
         ExecutionError::Cell {
             path,

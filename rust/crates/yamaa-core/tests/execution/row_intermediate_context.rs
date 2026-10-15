@@ -1,7 +1,7 @@
 //! Complete record attempts have stable choices and separate diagnostic positions.
 use crate::support::table_schema as schema;
 use std::{cell::RefCell, rc::Rc};
-use yamaa_core::dataset::{ExecutionError, Resource};
+use yamaa_core::dataset::ExecutionError;
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
@@ -9,9 +9,7 @@ use yamaa_core::{
         RowMode, RowTemplate, SecondarySource, SourceSchemas,
     },
     predicate::{Comparison, Node, Scalar},
-    schema::{
-        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    },
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     specification::{PreparedSpecification, SourceDeclaration},
     table::{CellError, TableAccess, TableSchema, ValueRef},
     value::{ColumnType as T, Value},
@@ -74,11 +72,16 @@ fn tables() -> (Table, Table, Trace) {
 }
 fn filter(value: &str) -> BoundPredicate {
     BoundPredicate::new(
-        yamaa_core::predicate::Plan::new(vec![Node::Compare {
+        yamaa_core::predicate::Plan::new(
+            vec![Node::Compare {
                 operator: Comparison::Equal,
                 left: Scalar::Identifier("SRC.KEEP".into()),
                 right: Scalar::Literal(Value::Str(value.into())),
-            }], 0, "rows.filter".into(), format!("SRC.KEEP = '{value}'"))
+            }],
+            0,
+            "rows.filter".into(),
+            format!("SRC.KEEP = '{value}'"),
+        )
         .unwrap(),
         vec![Binding {
             name: "SRC.KEEP".into(),
@@ -185,8 +188,12 @@ fn plan(src: &Table, donor: &Table, same_record: bool, target: T, absence: bool)
 #[test]
 fn discarded_attempts_never_reuse_choices_and_retained_columns_reuse_their_token() {
     let (src, donor, trace) = tables();
-    let attempt =
-        plan(&src, &donor, false, T::Str, true).execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = plan(&src, &donor, false, T::Str, true).execute(
+        &src,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let t = |s: &str| Value::Str(s.into());
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
@@ -230,8 +237,12 @@ fn discarded_attempts_never_reuse_choices_and_retained_columns_reuse_their_token
 #[test]
 fn the_same_physical_record_under_two_templates_has_distinct_completed_match_values() {
     let (src, donor, trace) = tables();
-    let attempt =
-        plan(&src, &donor, true, T::Str, true).execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = plan(&src, &donor, true, T::Str, true).execute(
+        &src,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let rows = attempt.result.unwrap().dataset.rows().to_vec();
     assert_eq!(rows.len(), 6);
     for row in &rows[..3] {
@@ -257,8 +268,12 @@ fn opaque_selected_cell_identity_survives_and_prevents_filter_and_later_reads() 
     let address = &*payload as *const u8;
     let marker = Rc::new(());
     *donor.fail.borrow_mut() = Some((0, 1, Failure(payload, marker.clone())));
-    let attempt =
-        plan(&src, &donor, false, T::Str, true).execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = plan(&src, &donor, false, T::Str, true).execute(
+        &src,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::SecondaryCell {
         path,
         source,
@@ -289,7 +304,12 @@ fn opaque_selected_cell_identity_survives_and_prevents_filter_and_later_reads() 
 #[test]
 fn failure_position_is_retained_row_position_not_private_attempt_token() {
     let (src, donor, _) = tables();
-    let attempt = plan(&src, &donor, false, T::Str, false).execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = plan(&src, &donor, false, T::Str, false).execute(
+        &src,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::UnmatchedKey {
         matched_key,
         identity: Some(identity),
@@ -308,64 +328,28 @@ fn failure_position_is_retained_row_position_not_private_attempt_token() {
     );
     assert_eq!(matched_key, [("K".into(), Value::Str("z".into()))]);
 }
+
 #[test]
-fn cumulative_work_equality_refusal_and_fresh_attempt_are_effect_safe() {
-    let (src, donor, trace) = tables();
-    let plan = plan(&src, &donor, false, T::Str, true);
-    let minimum = (0..limits().work_cells)
-        .find(|&work| {
-            let mut l = limits();
-            l.work_cells = work;
-            plan.execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
-                .result
-                .is_ok()
-        })
-        .unwrap();
-    let mut l = limits();
-    l.work_cells = minimum;
-    let full = plan.execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
-    assert!(full.result.is_ok());
-    l.work_cells = minimum - 1;
-    let refused = plan.execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
-    assert!(
-        matches!(*refused.result.unwrap_err(),ExecutionError::Limit{resource:Resource::WorkCells,limit,required:Some(required)} if limit==minimum-1 && required==minimum)
-    );
-    trace.borrow_mut().clear();
-    l.work_cells = 0;
-    let zero = plan.execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
-    assert!(zero.result.is_err());
-    assert!(trace.borrow().is_empty());
-    assert!(zero.handler_counts.is_empty());
-    assert!(plan
-        .execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
-        .result
-        .is_ok());
-}
-#[test]
-fn retained_output_text_exact_byte_boundary_and_zero_rows_have_no_selection_effects() {
+fn empty_retained_output_has_no_selection_effects() {
     let (mut src, donor, trace) = tables();
     let plan = plan(&src, &donor, false, T::Str, true);
-    let mut l = limits();
-    l.output_text_bytes = 14;
     assert!(plan
-        .execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
+        .execute(
+            &src,
+            &[&donor],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None
+        )
         .result
         .is_ok());
-    l.output_text_bytes = 13;
-    assert!(matches!(
-        *plan
-            .execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None)
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::OutputTextBytes,
-            limit: 13,
-            required: Some(14)
-        }
-    ));
     src.rows.clear();
     trace.borrow_mut().clear();
-    let empty = plan.execute(&src, &[&donor], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let empty = plan.execute(
+        &src,
+        &[&donor],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(empty.result.unwrap().dataset.rows().is_empty());
     assert!(trace.borrow().is_empty());
     assert!(empty.handler_counts.is_empty());
@@ -478,12 +462,9 @@ fn port_document(
     ]);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, DocumentLimits::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 
 #[test]
@@ -499,15 +480,6 @@ fn all_inputs_inspect_then_capture_decode_in_authored_order_and_move_opaque_fail
         fail: Option<Failure>,
     }
     impl SourcePort for Port {
-        fn capture_observed(
-            &mut self,
-            source: &SourceDeclaration,
-            byte_limit: usize,
-            origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-        ) -> Result<Arc<[u8]>, Self::Error> {
-            *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-            <Self as yamaa_core::specification_run::SourcePort>::capture(self, source, byte_limit)
-        }
         fn resource_failure(
             &self,
             _error: &Self::Error,
@@ -527,12 +499,12 @@ fn all_inputs_inspect_then_capture_decode_in_authored_order_and_move_opaque_fail
         fn capture(
             &mut self,
             source: &SourceDeclaration,
-            limit: usize,
+            origin: &mut Option<run::SourceOrigin>,
         ) -> Result<Arc<[u8]>, Failure> {
+            *origin = Some(run::SourceOrigin::Resource);
             self.trace
                 .borrow_mut()
                 .push(format!("capture:{}", source.name));
-            assert!(limit >= 1);
             if source.name == "SRC" {
                 if let Some(error) = self.fail.take() {
                     return Err(error);
@@ -550,17 +522,15 @@ fn all_inputs_inspect_then_capture_decode_in_authored_order_and_move_opaque_fail
         fn continue_after(&self, _error: &Self::Error) -> bool {
             false
         }
-        fn decode_with_interpretation(
+        type Error = Failure;
+        type Table = Table;
+        fn decode(
             &mut self,
             source: &SourceDeclaration,
             bytes: &[u8],
             _interpretation: yamaa_core::specification::SourceInterpretation,
-        ) -> Result<Self::Table, Self::Error> {
-            self.decode(source, bytes)
-        }
-        type Error = Failure;
-        type Table = Table;
-        fn decode(&mut self, source: &SourceDeclaration, bytes: &[u8]) -> Result<Table, Failure> {
+            _contract: Option<&yamaa_core::producer_contract::Contract>,
+        ) -> Result<Table, Failure> {
             self.trace
                 .borrow_mut()
                 .push(format!("decode:{}", source.name));
@@ -601,16 +571,13 @@ fn all_inputs_inspect_then_capture_decode_in_authored_order_and_move_opaque_fail
             fail: failure,
         };
         let mut attempt = run::CapturedAttempt::new(prepared.source());
-        run::execute_with_port_into(
+        run::execute_into(
             &prepared,
             &mut port,
             &mut decoder,
-            run::Limits {
-                source_bytes: 100,
-                source_cells: 100,
-                execution: limits(),
-            },
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
             &mut attempt,
+            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
         );
         let error = if capture_failure {
             let PortError::Capture(error) = attempt.result.unwrap_err() else {

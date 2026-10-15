@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use yamaa_core::dataset::{ExecutionError};
+use yamaa_core::dataset::ExecutionError;
 use yamaa_core::{
     conversion::LiteralHandler,
     dataset::{
@@ -97,7 +97,12 @@ fn plan(source: &Table, target: ColumnType) -> DatasetPlan {
 #[test]
 fn opaque_source_failure_precedes_scalar_type_validation_without_a_retry() {
     let source = table(Value::Str("F".into()), true);
-    let result = plan(&source, ColumnType::Float).execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan(&source, ColumnType::Float).execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(matches!(
         *result.result.unwrap_err(),
         ExecutionError::Cell {
@@ -119,7 +124,12 @@ fn opaque_source_failure_precedes_scalar_type_validation_without_a_retry() {
 #[test]
 fn missing_precedes_runtime_type_validation_and_rounding_failure_cannot_use_conversion_handler() {
     let source = table(Value::Missing, false);
-    let result = plan(&source, ColumnType::Float).execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan(&source, ColumnType::Float).execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         result.result.unwrap().dataset.rows(),
         [vec![Value::Int(1), Value::Missing]]
@@ -134,7 +144,12 @@ fn missing_precedes_runtime_type_validation_and_rounding_failure_cannot_use_conv
             },
         }])
         .unwrap();
-    let result = plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::ScalarDiagnostic(diagnostic) = *result.result.unwrap_err() else {
         panic!("expected source-type cause")
     };
@@ -152,7 +167,15 @@ fn output_conversion_occurs_once_after_rounding_and_retains_its_handler_accounti
     let source = table(Value::float(2.45), false);
     let plan = plan(&source, ColumnType::Int);
     assert!(matches!(
-        *plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),
+        *plan
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None
+            )
+            .result
+            .unwrap_err(),
         ExecutionError::Conversion { .. }
     ));
     let plan = plan
@@ -164,7 +187,12 @@ fn output_conversion_occurs_once_after_rounding_and_retains_its_handler_accounti
             },
         }])
         .unwrap();
-    let result = plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let result = plan.execute(
+        &source,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         result.result.unwrap().dataset.rows(),
         [vec![Value::Int(1), Value::Int(7)]]

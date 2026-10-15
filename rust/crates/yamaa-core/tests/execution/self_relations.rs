@@ -161,7 +161,12 @@ fn completed_grouped_and_stored_driver_templates_add_no_study_reads() {
         vec![],
     )
     .unwrap();
-    let attempt = plan.execute(&primary, &[&other], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = plan.execute(
+        &primary,
+        &[&other],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let result = attempt.result.unwrap();
     assert_eq!(
         result.dataset.rows(),

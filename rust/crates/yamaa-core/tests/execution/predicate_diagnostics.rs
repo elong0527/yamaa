@@ -7,7 +7,7 @@ use yamaa_core::dataset::{
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
     diagnostic::PredicateDiagnosticError,
-    predicate::{Comparison, ErrorKind, Limits as PredicateLimits, Node, Plan, Scalar},
+    predicate::{Comparison, ErrorKind, Node, Plan, Scalar},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
@@ -58,7 +58,6 @@ fn plan(schema: &TableSchema, right: Value) -> DatasetPlan {
             0,
             "rows[0].filter".into(),
             "A = original\0🙂".into(),
-            PredicateLimits::default(),
         )
         .unwrap(),
         vec![Binding {
@@ -92,7 +91,15 @@ fn opaque_cell_identity_survives_repeated_projection_without_retry_or_later_read
     let table = source(Some(payload));
     let plan = plan(&table.schema, Value::Int(7));
     assert!(table.reads.borrow().is_empty());
-    let Err(failure) = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result else {
+    let Err(failure) = plan
+        .execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+    else {
         panic!("source failure must abort")
     };
     let ExecutionError::Predicate { source_row, error } = &*failure else {
@@ -101,11 +108,11 @@ fn opaque_cell_identity_survives_repeated_projection_without_retry_or_later_read
     assert_eq!(*source_row, 0);
     assert_eq!(error.spec_path, "rows[0].filter");
     assert_eq!(error.expression, "A = original\0🙂");
-    for maximum in [0, usize::MAX, 1] {
+    for _ in 0..3 {
         let Err(PredicateDiagnosticError::Resolution(CellError::Access(payload))) =
-            error.diagnostic_with_limit(maximum)
+            error.diagnostic()
         else {
-            panic!("original resolver failure has precedence over projection quota")
+            panic!("original resolver failure is retained during repeated projection")
         };
         assert_eq!(&*payload.0 as *const u8, address);
     }
@@ -124,7 +131,15 @@ fn opaque_cell_identity_survives_repeated_projection_without_retry_or_later_read
 fn semantic_filter_failure_precedes_assignments_and_the_next_source_record() {
     let table = source(None);
     let plan = plan(&table.schema, Value::Str("incompatible".into()));
-    let Err(failure) = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result else {
+    let Err(failure) = plan
+        .execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+    else {
         panic!("incompatible comparison must abort")
     };
     let ExecutionError::Predicate { source_row, error } = &*failure else {
@@ -148,10 +163,6 @@ fn semantic_filter_failure_precedes_assignments_and_the_next_source_record() {
     );
     assert_eq!(diagnostic.source_span, None);
     assert_eq!(diagnostic.operand_route, Some(vec![]));
-    assert!(matches!(
-        error.diagnostic_with_limit(1),
-        Err(PredicateDiagnosticError::OutputLimit)
-    ));
     assert_eq!(
         error
             .diagnostic()

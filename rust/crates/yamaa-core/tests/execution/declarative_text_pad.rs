@@ -1,5 +1,6 @@
 use crate::support::text_schema as schema;
 use std::{cell::RefCell, rc::Rc};
+use yamaa_core::{dataset::ExecutionError, numeric_lifecycle::HandlerKind};
 use yamaa_core::{
     dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
     table::{CellError, TableAccess, TableSchema, ValueRef},
@@ -8,10 +9,6 @@ use yamaa_core::{
     text_pad::StringPad,
     text_template::StringTemplate,
     value::Value,
-};
-use yamaa_core::{
-    dataset::{ExecutionError, Resource},
-    numeric_lifecycle::HandlerKind,
 };
 #[derive(Debug)]
 struct Failure(Box<u8>, Rc<()>);
@@ -121,7 +118,12 @@ fn nested_extraction_keeps_all_declared_handler_sites_in_order_under_padding() {
             )
             .unwrap(),
         });
-        let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        let attempt = plan.execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert_eq!(
             attempt.result.unwrap().dataset.rows(),
             [vec![Value::Str("row1".into()), Value::Str(expected.into())]]
@@ -170,7 +172,12 @@ fn nested_template_retains_zero_and_reached_missing_handler_sites_under_padding(
             )
             .unwrap(),
         });
-        let attempt = plan.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        let attempt = plan.execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert_eq!(
             attempt.result.unwrap().dataset.rows(),
             [vec![Value::Str("row1".into()), Value::Str(expected.into())]]
@@ -195,7 +202,12 @@ fn one_named_read_unicode_character_width_no_truncation_and_no_handlers() {
         ("", "3", "   "),
     ] {
         let table = make_table(Value::Str(text.into()));
-        let attempt = plan(width).execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+        let attempt = plan(width).execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        );
         assert_eq!(
             attempt.result.unwrap().dataset.rows(),
             [vec![Value::Str("row1".into()), Value::Str(expected.into())]]
@@ -208,21 +220,27 @@ fn one_named_read_unicode_character_width_no_truncation_and_no_handlers() {
 fn missing_skips_unrepresentable_positive_width_but_present_refuses_whole_output() {
     let width = "9".repeat(81);
     let table = make_table(Value::Missing);
-    let attempt = plan(&width).execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = plan(&width).execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         [vec![Value::Str("row1".into()), Value::Missing]]
     );
     assert!(attempt.handler_counts.is_empty());
     let table = make_table(Value::Str("".into()));
-    let attempt = plan(&width).execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = plan(&width).execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert!(matches!(
         *attempt.result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            required: None,
-            ..
-        }
+        ExecutionError::Allocation
     ));
     assert!(attempt.handler_counts.is_empty());
     assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1)]);
@@ -234,7 +252,12 @@ fn original_nonclone_error_is_consumed_once_and_preserves_allocation_and_rc_iden
     let address = &*payload as *const u8;
     let marker = Rc::new(());
     *table.fail.borrow_mut() = Some(Failure(payload, marker.clone()));
-    let attempt = plan("4").execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = plan("4").execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     let ExecutionError::Cell {
         path,
         source_row,
@@ -273,7 +296,12 @@ fn recursive_padding_and_case_count_only_the_reached_authored_missing_handler() 
     let declaration =
         DatasetPlan::new(schema(), schema(), templates, vec![], vec![0], vec![]).unwrap();
     let table = make_table(Value::Missing);
-    let attempt = declaration.execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None);
+    let attempt = declaration.execute(
+        &table,
+        &[],
+        &mut yamaa_core::function_invocation::NoFunctions::new(),
+        None,
+    );
     assert_eq!(
         attempt.result.unwrap().dataset.rows(),
         [vec![
@@ -290,18 +318,7 @@ fn recursive_padding_and_case_count_only_the_reached_authored_missing_handler() 
     assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1)]);
 }
 #[test]
-fn work_and_cumulative_text_refuse_before_later_reads_and_retry_uses_fresh_budget() {
-    let table = make_table(Value::Str("\u{e9}\u{1f980}".into()));
-    let mut quota = limits();
-    quota.work_cells = 0;
-    assert!(matches!(
-        *plan("4").execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::WorkCells,
-            ..
-        }
-    ));
-    assert!(table.reads.borrow().is_empty());
+fn padding_keeps_all_original_rows_and_operand_order() {
     let table = Table {
         schema: schema(),
         rows: vec![
@@ -311,18 +328,15 @@ fn work_and_cumulative_text_refuse_before_later_reads_and_retry_uses_fresh_budge
         fail: RefCell::default(),
         reads: RefCell::default(),
     };
-    let mut quota = limits();
-    quota.scalar_text_bytes = 12;
-    assert!(matches!(
-        *plan("4").execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            ..
-        }
-    ));
-    assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1), (1, 0)]);
-    table.reads.borrow_mut().clear();
-    let result = plan("4").execute(&table, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap();
+    let result = plan("4")
+        .execute(
+            &table,
+            &[],
+            &mut yamaa_core::function_invocation::NoFunctions::new(),
+            None,
+        )
+        .result
+        .unwrap();
     assert_eq!(
         result.dataset.rows(),
         [

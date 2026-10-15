@@ -71,8 +71,7 @@ fn aggregate(
 ) -> Expression {
     Expression::Aggregate(Box::new(
         BoundAggregate::new(
-            compile_aggregate(text, "columns.RESULT.derivation.aggregate.expr")
-            .unwrap(),
+            compile_aggregate(text, "columns.RESULT.derivation.aggregate.expr").unwrap(),
             relation,
             bindings
                 .iter()
@@ -100,8 +99,7 @@ fn qualified_predicates_visit_only_matching_donor_records() {
     ]);
     donor.fail = Some((1, 1));
     let predicate = BoundPredicate::new(
-        yamaa_core::predicate_compiler::compile("S.V > 0", "aggregate.filter")
-            .unwrap(),
+        yamaa_core::predicate_compiler::compile("S.V > 0", "aggregate.filter").unwrap(),
         vec![Binding {
             name: "S.V".into(),
             read: Read::Source(1),

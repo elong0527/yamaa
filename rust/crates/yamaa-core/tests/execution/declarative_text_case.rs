@@ -1,16 +1,13 @@
 use crate::support::text_schema as schema;
 use serde_json::Value as JsonValue;
 use std::{cell::RefCell, rc::Rc};
+use yamaa_core::{dataset::ExecutionError, numeric_lifecycle::HandlerKind};
 use yamaa_core::{
     dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
     diagnostic::ConditionCode,
     table::{CellError, TableAccess, TableSchema, ValueRef},
     text_case::{Case, StringCase},
     value::Value,
-};
-use yamaa_core::{
-    dataset::{ExecutionError, Resource},
-    numeric_lifecycle::HandlerKind,
 };
 #[derive(Debug)]
 struct Failure(Box<u8>, Rc<()>);
@@ -273,127 +270,4 @@ fn original_nonclone_error_allocation_and_rc_identity_return_without_retry_or_ha
     assert_eq!(source_row, 0);
     assert_eq!(attempt.handler_counts[0].count, 0);
     assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1)]);
-}
-#[test]
-fn cumulative_work_text_output_and_identity_limits_refuse_before_next_effect() {
-    let table = make_table(Value::Str("abc".into()));
-    let mut quota = limits();
-    quota.work_cells = 0;
-    assert!(matches!(
-        *plan(Case::Upper, None)
-            .execute(
-                &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::WorkCells,
-            ..
-        }
-    ));
-    assert!(table.reads.borrow().is_empty());
-    let mut quota = limits();
-    quota.scalar_text_bytes = 7;
-    assert!(matches!(
-        *plan(Case::Upper, None)
-            .execute(
-                &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            ..
-        }
-    ));
-    assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1)]);
-    let table = Table {
-        schema: schema(),
-        rows: vec![
-            vec![Value::Str("row1".into()), Value::Str("a".into())],
-            vec![Value::Str("row2".into()), Value::Str("b".into())],
-        ],
-        fail: RefCell::default(),
-        reads: RefCell::default(),
-    };
-    let mut quota = limits();
-    quota.scalar_text_bytes = 11;
-    assert!(matches!(
-        *plan(Case::Upper, None)
-            .execute(
-                &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            ..
-        }
-    ));
-    assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1), (1, 0), (1, 1)]);
-    let table = make_table(Value::Missing);
-    let mut quota = limits();
-    quota.identity_cells = 0;
-    assert!(matches!(
-        *plan(Case::Upper, None)
-            .execute(
-                &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::IdentityCells,
-            ..
-        }
-    ));
-    let table = make_table(Value::Missing);
-    let mut quota = limits();
-    quota.scalar_text_bytes = 4;
-    let attempt = plan(Case::Upper, Some(Value::Str("MiXeD".into()))).execute(
-        &table,
-        &[],
-        &mut yamaa_core::function_invocation::NoFunctions::new(),
-        None,
-    );
-    assert!(matches!(
-        *attempt.result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::ScalarTextBytes,
-            ..
-        }
-    ));
-    assert_eq!(
-        attempt.handler_counts[0].count, 0,
-        "recovery copies are admitted before counting"
-    );
-    let table = make_table(Value::Str("abc".into()));
-    let mut quota = limits();
-    quota.output_text_bytes = 4;
-    assert!(matches!(
-        *plan(Case::Upper, None)
-            .execute(
-                &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None
-            )
-            .result
-            .unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::OutputTextBytes,
-            ..
-        }
-    ));
 }
