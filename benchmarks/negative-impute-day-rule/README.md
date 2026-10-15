@@ -1,8 +1,5 @@
 # Reject Unknown Day
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-impute-day-rule.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** build the analysis start date (`ASTDT`) for each
 collected adverse event (AE), completing a start recorded without
 a day.
@@ -20,8 +17,6 @@ sometimes a year with no month.
 The day value `mid` is neither a day number nor one of the two
 positions every month has, `first` and `last`, so the run is
 rejected before any data is read and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

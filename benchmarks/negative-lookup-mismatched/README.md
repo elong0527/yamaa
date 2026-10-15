@@ -1,8 +1,5 @@
 # Reject Mismatched Lists
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-lookup-mismatched.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** attach the reference-range upper limit (`LBSTNRHI`) to
 each collected result, carrying its test code and sex.
 
@@ -20,8 +17,6 @@ column matches the same-named current-row value. The collected results
 carry no unit, so the `UNIT` column would match against nothing. The
 unknown current-row value is rejected before any data is read; no artifact
 is accepted.
-
-**Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 

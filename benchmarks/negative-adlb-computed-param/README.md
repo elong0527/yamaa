@@ -1,8 +1,5 @@
 # Reject Self-Referential Parameter
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-adlb-computed-param.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive `ADT`, the analysis date, and `AVAL`, the analysis
 value, for each subject, collection date, and parameter: the alanine
 aminotransferase (`ALT`) and aspartate aminotransferase (`AST`)
@@ -33,8 +30,6 @@ definition, so no value can be assembled. The run is rejected
 before any data is read, and no artifact is accepted. The expected
 file shows what the completed records would contain, but no row
 is produced.
-
-**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

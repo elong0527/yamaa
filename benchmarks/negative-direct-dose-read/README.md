@@ -1,8 +1,5 @@
 # Reject Uncomputed Dose
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-direct-dose-read.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** double the administered exposure dose in `DOSEDBL` for
 each subject.
 
@@ -20,8 +17,6 @@ and `EXDOSE`.
   the output row already carries, and a value taken from another
   source is bound to one of those first, so the run is rejected
   before any data is read and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADEX
 
 ## How to fix
 

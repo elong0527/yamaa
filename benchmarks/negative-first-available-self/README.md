@@ -1,8 +1,5 @@
 # Reject Self Fallback
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-first-available-self.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** fill `SEVAL`, the severity recorded at the visit, from
 the collected severity when present, otherwise from `SEVAL`
 itself, defaulting to `0` when neither gives a value.
@@ -18,8 +15,6 @@ when no severity was recorded.
   Because `SEVAL` reads its own value, there is no earlier value to
   carry and the definition loops back on itself, so the run is
   rejected before any data is read and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADVS
 
 ## How to fix
 

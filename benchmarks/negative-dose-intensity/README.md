@@ -1,8 +1,5 @@
 # Reject Per-Record RDI
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-dose-intensity.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** derive cumulative dose (`DOSECUM`) and relative dose
 intensity (`RDI`) by subject and treatment.
 
@@ -23,8 +20,6 @@ planned dose (`EXPLDOS`) on each administration record.
   leaves open which record supplies the denominator, and that
   choice would decide the answer. The run is rejected before any
   data is read, and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADEX
 
 ## How to fix
 

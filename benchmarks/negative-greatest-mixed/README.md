@@ -1,8 +1,5 @@
 # Reject Mixed Scales
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-greatest-mixed.html)
-[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
-
 **Goal:** carry `DTHDT` and `LSTVSDY` through and take the later of the two
 in `LSTALVDT` as the date the subject was last known alive.
 
@@ -21,8 +18,6 @@ recorded death date and one with no recorded last-visit day.
 
 **Note:** a calendar date and a day number share no common order, so the
 run is rejected before any data is read and no artifact is accepted.
-
-**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
