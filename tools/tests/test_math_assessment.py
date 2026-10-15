@@ -9,14 +9,11 @@ class MathAssessmentTests(unittest.TestCase):
     """Exercise mismatches, missingness and invalid probe records independently."""
 
     def test_exact_sample_still_does_not_qualify_function(self):
-        """A matching limited sample cannot enable an unsupported function."""
+        """A matching limited sample cannot establish complete accuracy."""
         report = assessment.assess(
             ["exact\tLN\t3ff0000000000000\t0000000000000000\t0000000000000000"]
         )
         self.assertEqual(report["qualification"], "not-qualified")
-        self.assertEqual(
-            report["default_functions_remain_unsupported"], ["EXP", "LN", "POWER"]
-        )
         self.assertEqual(report["counts"]["LN"]["exact"], 1)
 
     def test_one_ulp_is_retained_as_a_blocker(self):

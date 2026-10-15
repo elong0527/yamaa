@@ -17,35 +17,12 @@ use serde_json::Value as JsonValue;
 use std::fmt::Write;
 use std::vec;
 
-// This preserves the pre-existing adapter projection ceiling, independently of
-// project_source's configurable capture admission. Inline functions and findings
-// are not capture descriptors; their report capacity is not reduced to 128.
-const MAX_CAPTURES: usize = 128;
-const MAX_FINDINGS: usize = 65_536;
-
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    /// The historical raw semantic text policy, independently of issue encoding.
-    pub semantic_text_bytes: usize,
-    /// Conservative admission for five-field issue rows with JSON-text context.
-    pub issue_bytes: usize,
-}
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            semantic_text_bytes: 16_777_216,
-            issue_bytes: 16_777_216,
-        }
-    }
-}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     #[error("project environment diagnostics projection core: {0:?}")]
     Core(CoreError),
     #[error("project environment diagnostics projection invalid origin")]
     InvalidOrigin,
-    #[error("project environment diagnostics projection issue limit")]
-    IssueLimit,
 }
 impl From<CoreError> for Error {
     fn from(error: CoreError) -> Self {
@@ -69,8 +46,8 @@ pub struct Capture<'a> {
     pub identity: &'a str,
 }
 /// Origin slices and captures are borrowed from the same retained attempt as
-/// `draft` and `root`. Admission retains at most 128 borrowed descriptors in a
-/// fixed array, so an arbitrary input iterator is never replayed.
+/// `draft` and `root`. Admission retains borrowed descriptors in a collection,
+/// so an arbitrary input iterator is never replayed.
 pub struct Admission<'a, I> {
     pub root: Root<'a>,
     pub draft: &'a Draft,
@@ -89,7 +66,7 @@ pub struct AdmissionReport<'a> {
     draft: &'a Draft,
     function_origins: &'a [String],
     codelist_origins: &'a [usize],
-    captures: [Option<Capture<'a>>; MAX_CAPTURES],
+    captures: Vec<Capture<'a>>,
     findings: &'a [Finding],
 }
 pub struct RootScalarReport<'a> {
@@ -99,7 +76,7 @@ pub struct RootScalarReport<'a> {
 }
 pub struct ScalarSourcesReport<'a> {
     root: Root<'a>,
-    sources: [Option<ScalarSource<'a>>; MAX_CAPTURES],
+    sources: Vec<ScalarSource<'a>>,
 }
 
 #[derive(Clone, Copy)]
@@ -134,19 +111,6 @@ impl<'a> Path<'a> {
     fn index(&mut self, index: usize) -> Result<(), CoreError> {
         self.push(Piece::Index(index))
     }
-    fn bytes(&self) -> Result<usize, Error> {
-        self.pieces[..self.len]
-            .iter()
-            .flatten()
-            .try_fold(0usize, |total, piece| {
-                total
-                    .checked_add(match piece {
-                        Piece::Text(text) => text.len(),
-                        Piece::Index(n) => digits(*n) + 2,
-                    })
-                    .ok_or(Error::IssueLimit)
-            })
-    }
     fn render(&self) -> String {
         let mut text = String::new();
         for piece in self.pieces[..self.len].iter().flatten() {
@@ -167,14 +131,6 @@ impl<'a> Path<'a> {
         }
         path
     }
-}
-fn digits(mut n: usize) -> usize {
-    let mut count = 1;
-    while n >= 10 {
-        n /= 10;
-        count += 1;
-    }
-    count
 }
 // Provenance declarations have at most two pieces. Keeping their own fixed
 // representation avoids a large context union or any pre-admission allocation.
@@ -317,76 +273,6 @@ impl<'a> Project<'a> for Borrowed {
         d.field(key, FieldValue::Integer(text))
     }
 }
-struct SemanticBudget(usize);
-impl SemanticBudget {
-    fn charge(&mut self, bytes: usize) -> Result<(), Error> {
-        self.0 = self
-            .0
-            .checked_sub(bytes)
-            .ok_or(Error::Core(CoreError::Limit))?;
-        Ok(())
-    }
-    fn record(&mut self, record: &Record<'_>) -> Result<(), Error> {
-        self.charge(128)?;
-        self.charge(
-            record
-                .path
-                .bytes()
-                .map_err(|_| Error::Core(CoreError::Limit))?,
-        )?;
-        for field in record.fields[..record.len].iter().flatten() {
-            self.charge(field.name.len())?;
-            self.charge(match field.value {
-                FieldValue::Text(text) | FieldValue::Integer(text) => text.len(),
-                FieldValue::Scalar(Value::Str(text)) => text.len(),
-                FieldValue::Scalar(_) => 32,
-                FieldValue::Path(_) => return Err(Error::Core(CoreError::UnavailableShape)),
-            })?;
-        }
-        Ok(())
-    }
-}
-struct IssueBudget(usize);
-impl IssueBudget {
-    fn charge(&mut self, bytes: usize) -> Result<(), Error> {
-        self.0 = self.0.checked_sub(bytes).ok_or(Error::IssueLimit)?;
-        Ok(())
-    }
-    fn bytes(&mut self, bytes: usize, expansion: usize) -> Result<(), Error> {
-        self.charge(bytes.checked_mul(expansion).ok_or(Error::IssueLimit)?)
-    }
-    fn text(&mut self, text: &str, expansion: usize) -> Result<(), Error> {
-        self.bytes(text.len(), expansion)
-    }
-    fn path(&mut self, path: &Path<'_>, expansion: usize) -> Result<(), Error> {
-        self.bytes(path.bytes()?, expansion)
-    }
-    fn record(&mut self, record: &Record<'_>) -> Result<(), Error> {
-        self.charge(512)?;
-        self.path(&record.path, 6)?;
-        for field in record.fields[..record.len].iter().flatten() {
-            self.text(field.name, 12)?;
-            match field.value {
-                FieldValue::Text(text) => self.text(text, 12)?,
-                FieldValue::Scalar(Value::Str(text)) => self.text(text, 12)?,
-                FieldValue::Integer(text) => self.text(text, 2)?,
-                FieldValue::Scalar(_) => self.charge(64)?,
-                FieldValue::Path(_) => return Err(Error::Core(CoreError::UnavailableShape)),
-            }
-        }
-        Ok(())
-    }
-    fn provenance(
-        &mut self,
-        source: &str,
-        entry: &str,
-        declaration: &Path<'_>,
-    ) -> Result<(), Error> {
-        self.text(source, 12)?;
-        self.text(entry, 12)?;
-        self.path(declaration, 12)
-    }
-}
 fn root_mapping(root: Root<'_>) -> Result<(), Error> {
     if !matches!(
         root.document.nodes().get(root.document.root()),
@@ -462,9 +348,6 @@ fn validate_admission<'a, I: Iterator<Item = Capture<'a>> + Clone>(
             .any(|(name, function)| name != &function.name)
     {
         return Err(Error::InvalidOrigin);
-    }
-    if input.captures.clone().take(MAX_CAPTURES + 1).count() > MAX_CAPTURES {
-        return Err(Error::IssueLimit);
     }
     for (index, capture) in input.captures.clone().enumerate() {
         if input
@@ -542,15 +425,10 @@ fn validate_admission<'a, I: Iterator<Item = Capture<'a>> + Clone>(
 fn admission_record<'a, I: Iterator<Item = Capture<'a>> + Clone>(
     input: &Admission<'a, I>,
     finding: &'a Finding,
-    issue: Option<&mut IssueBudget>,
-    semantic: Option<&mut SemanticBudget>,
 ) -> Result<Record<'a>, Error> {
     let mut record = finding_diagnostic(input.draft, finding, &mut Borrowed)?;
-    if let Some(semantic) = semantic {
-        semantic.record(&record)?;
-    }
     let raw_path = record.path;
-    let (source, declaration, extra) = match finding {
+    let (source, declaration) = match finding {
         Finding::Function { function, finding } => {
             let name = input
                 .function_origins
@@ -577,7 +455,6 @@ fn admission_record<'a, I: Iterator<Item = Capture<'a>> + Clone>(
             (
                 external.map_or(input.root.identity, |capture| capture.identity),
                 declaration(origin)?,
-                Some(name.as_str()),
             )
         }
         Finding::Codelist(finding) => {
@@ -610,75 +487,30 @@ fn admission_record<'a, I: Iterator<Item = Capture<'a>> + Clone>(
             (
                 external.map_or(input.root.identity, |capture| capture.identity),
                 declaration(origin)?,
-                None,
             )
         }
-        _ => (input.root.identity, raw_path, None),
+        _ => (input.root.identity, raw_path),
     };
-    if let Some(issue) = issue {
-        // Preserve the historical distinct issue policy's raw and rebased paths.
-        let selected_path = record.path;
-        record.path = raw_path;
-        issue.record(&record)?;
-        record.path = selected_path;
-        match finding {
-            Finding::Function { .. } => {
-                if let Some(name) = extra {
-                    issue.text(name, 18)?;
-                }
-                issue.charge(128)?;
-                issue.path(&record.path, 6)?;
-            }
-            Finding::Codelist(_) => {
-                issue.charge(128)?;
-                let mut suffix = raw_path.tail(2);
-                let Some(Piece::Text(first)) = suffix.pieces[0] else {
-                    return Err(Error::Core(CoreError::UnavailableShape));
-                };
-                suffix.pieces[0] = Some(Piece::Text(
-                    first
-                        .strip_prefix('.')
-                        .ok_or(Error::Core(CoreError::UnavailableShape))?,
-                ));
-                issue.path(&suffix, 6)?;
-            }
-            _ => issue.path(&raw_path, 18)?,
-        }
-        issue.provenance(source, input.root.identity, &declaration)?;
-    }
     record.provenance(source, input.root.identity, declaration)?;
     Ok(record)
 }
-fn retained<T: Copy>(input: impl Iterator<Item = T>) -> Result<[Option<T>; MAX_CAPTURES], Error> {
-    let mut items = [None; MAX_CAPTURES];
-    for (index, item) in input.enumerate() {
-        *items.get_mut(index).ok_or(Error::IssueLimit)? = Some(item);
-    }
-    Ok(items)
-}
 /// Consume the supplied capture iterator once, then admit the complete ordered
-/// static report using immutable, bounded borrowed descriptors.
+/// static report using immutable borrowed descriptors.
 pub fn admit_admission<'a, I: Iterator<Item = Capture<'a>>>(
     input: Admission<'a, I>,
     findings: &'a [Finding],
-    limits: Limits,
 ) -> Result<AdmissionReport<'a>, Error> {
-    let captures = retained(input.captures)?;
+    let captures: Vec<_> = input.captures.collect();
     let input = Admission {
         root: input.root,
         draft: input.draft,
         function_origins: input.function_origins,
         codelist_origins: input.codelist_origins,
-        captures: captures.iter().flatten().copied(),
+        captures: captures.iter().copied(),
     };
     validate_admission(&input)?;
-    if findings.len() > MAX_FINDINGS {
-        return Err(Error::Core(CoreError::Limit));
-    }
-    let mut semantic = SemanticBudget(limits.semantic_text_bytes);
-    let mut issue = IssueBudget(limits.issue_bytes);
     for finding in findings {
-        admission_record(&input, finding, Some(&mut issue), Some(&mut semantic))?;
+        admission_record(&input, finding)?;
     }
     Ok(AdmissionReport {
         root: input.root,
@@ -696,11 +528,11 @@ impl AdmissionReport<'_> {
             draft: self.draft,
             function_origins: self.function_origins,
             codelist_origins: self.codelist_origins,
-            captures: self.captures.iter().flatten().copied(),
+            captures: self.captures.iter().copied(),
         };
         self.findings
             .iter()
-            .map(|finding| admission_record(&input, finding, None, None).map(Record::materialize))
+            .map(|finding| admission_record(&input, finding).map(Record::materialize))
             .collect()
     }
 }
@@ -714,17 +546,12 @@ fn headers(document: &Document, host: Option<Language>) -> Result<[Option<Findin
 fn root_record<'a>(root: Root<'a>, finding: &'a ScalarFinding) -> Result<Record<'a>, Error> {
     scalar_diagnostic(root.document, finding, &mut Borrowed).map_err(Error::Core)
 }
-fn scalar_admit<'a>(
+fn validate_scalar<'a>(
     mut record: Record<'a>,
     source: &'a str,
     root: Root<'a>,
     declaration: Path<'a>,
-    semantic: &mut SemanticBudget,
-    issue: &mut IssueBudget,
 ) -> Result<(), Error> {
-    semantic.record(&record)?;
-    issue.record(&record)?;
-    issue.provenance(source, root.identity, &declaration)?;
     record.provenance(source, root.identity, declaration)?;
     Ok(())
 }
@@ -732,11 +559,7 @@ pub fn admit_root_scalars<'a>(
     root: Root<'a>,
     findings: &'a [ScalarFinding],
     host: Option<Language>,
-    limits: Limits,
 ) -> Result<RootScalarReport<'a>, Error> {
-    if findings.len() > MAX_FINDINGS {
-        return Err(Error::Core(CoreError::Limit));
-    }
     let header = headers(root.document, host)?;
     let draft = Draft {
         language: None,
@@ -746,30 +569,22 @@ pub fn admit_root_scalars<'a>(
         has_study: false,
         submissions: Vec::new(),
     };
-    let mut semantic = SemanticBudget(limits.semantic_text_bytes);
-    let mut issue = IssueBudget(limits.issue_bytes);
     let mut declaration = Path::new();
     declaration.text("$")?;
     for finding in header.iter().flatten() {
-        scalar_admit(
+        validate_scalar(
             finding_diagnostic(&draft, finding, &mut Borrowed)?,
             root.identity,
             root,
             declaration,
-            &mut semantic,
-            &mut issue,
         )?;
     }
-    // Root header and scalar decoding retain their separate semantic text limits.
-    let mut semantic = SemanticBudget(limits.semantic_text_bytes);
     for finding in findings {
-        scalar_admit(
+        validate_scalar(
             root_record(root, finding)?,
             root.identity,
             root,
             declaration,
-            &mut semantic,
-            &mut issue,
         )?;
     }
     Ok(RootScalarReport {
@@ -810,15 +625,12 @@ impl RootScalarReport<'_> {
 pub fn admit_scalar_sources<'a, I: Iterator<Item = ScalarSource<'a>>>(
     root: Root<'a>,
     sources: I,
-    limits: Limits,
 ) -> Result<ScalarSourcesReport<'a>, Error> {
     root_mapping(root)?;
-    let sources = retained(sources)?;
-    let mut issue = IssueBudget(limits.issue_bytes);
-    for (index, source) in sources.iter().flatten().enumerate() {
+    let sources: Vec<_> = sources.collect();
+    for (index, source) in sources.iter().enumerate() {
         if sources[..index]
             .iter()
-            .flatten()
             .any(|earlier| earlier.capture.origin == source.capture.origin)
             || !matches!(
                 root.document
@@ -829,23 +641,13 @@ pub fn admit_scalar_sources<'a, I: Iterator<Item = ScalarSource<'a>>>(
         {
             return Err(Error::InvalidOrigin);
         }
-        if source.findings.len() > MAX_FINDINGS {
-            return Err(Error::Core(CoreError::Limit));
-        }
-        issue.charge(128)?;
-        if let Origin::Function(name) = source.capture.origin {
-            issue.text(name, 12)?;
-        }
         let declaration = declaration(source.capture.origin)?;
-        let mut semantic = SemanticBudget(limits.semantic_text_bytes);
         for finding in source.findings {
-            scalar_admit(
+            validate_scalar(
                 scalar_diagnostic(source.capture.document, finding, &mut Borrowed)?,
                 source.capture.identity,
                 root,
                 declaration,
-                &mut semantic,
-                &mut issue,
             )?;
         }
     }
@@ -854,7 +656,7 @@ pub fn admit_scalar_sources<'a, I: Iterator<Item = ScalarSource<'a>>>(
 impl ScalarSourcesReport<'_> {
     pub fn diagnostics(&self) -> Result<Vec<Diagnostic>, Error> {
         let mut diagnostics = Vec::new();
-        for source in self.sources.iter().flatten() {
+        for source in self.sources.iter() {
             let declaration = declaration(source.capture.origin)?;
             for finding in source.findings {
                 let mut record =

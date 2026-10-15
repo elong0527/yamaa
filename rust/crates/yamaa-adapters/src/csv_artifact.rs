@@ -1,8 +1,9 @@
-//! Bounded R020 CSV rendering over an already admitted typed table and projection.
+//! R020 CSV rendering over an already admitted typed table and projection.
 //! Filesystem publication and output declaration diagnostics belong to the runner.
 use yamaa_core::{
     conversion::float_text,
     csv_precision::fixed_point,
+    limits::Limits,
     table::{CellError, TableAccess, ValueRef},
     value::ColumnType,
 };
@@ -11,6 +12,7 @@ use yamaa_core::{
 pub enum Error<E> {
     Projection,
     Limit {
+        resource: &'static str,
         limit: usize,
         actual: Option<usize>,
         decimal_formatting: bool,
@@ -20,16 +22,16 @@ pub enum Error<E> {
 }
 struct Writer {
     bytes: Vec<u8>,
-    maximum: usize,
 }
 impl Writer {
     fn write<E>(&mut self, text: &str) -> Result<(), Error<E>> {
         self.bytes
             .len()
             .checked_add(text.len())
-            .filter(|&n| n <= self.maximum)
+            .filter(|&n| n <= Limits::OUTPUT_BYTES)
             .ok_or(Error::Limit {
-                limit: self.maximum,
+                resource: "output_bytes",
+                limit: Limits::OUTPUT_BYTES,
                 actual: self.bytes.len().checked_add(text.len()),
                 decimal_formatting: false,
             })?;
@@ -59,22 +61,12 @@ impl Writer {
 }
 /// Missing and collected empty text remain distinct. Every record ends in LF;
 /// no BOM, exponent spelling, whitespace normalization, or host CSV library.
+/// Precision affects floats only. Its physical file width is checked before
+/// formatting or asking the table for the next projected cell.
 pub fn render<T: TableAccess>(
     table: &T,
     projection: &[usize],
-    maximum: usize,
-) -> Result<Vec<u8>, Error<T::Error>> {
-    render_with_decimals(table, projection, None, maximum)
-}
-
-/// Specification validation admits the REQ-0744 precision range. Rendering
-/// separately charges the trusted output byte budget before cell authority.
-/// Precision affects floats only.
-pub fn render_with_decimals<T: TableAccess>(
-    table: &T,
-    projection: &[usize],
     decimals: Option<&str>,
-    maximum: usize,
 ) -> Result<Vec<u8>, Error<T::Error>> {
     if projection.is_empty()
         || projection
@@ -84,10 +76,13 @@ pub fn render_with_decimals<T: TableAccess>(
     {
         return Err(Error::Projection);
     }
-    let mut writer = Writer {
-        bytes: Vec::new(),
-        maximum,
-    };
+    Limits::table(table.row_count(), projection.len()).map_err(|error| Error::Limit {
+        resource: error.resource,
+        limit: error.limit,
+        actual: error.actual,
+        decimal_formatting: false,
+    })?;
+    let mut writer = Writer { bytes: Vec::new() };
     for (index, &column) in projection.iter().enumerate() {
         if index > 0 {
             writer.write(",")?;
@@ -106,14 +101,16 @@ pub fn render_with_decimals<T: TableAccess>(
                     .ok()
                     .filter(|&n| {
                         if n == 0 {
-                            writer.bytes.len() < maximum
+                            writer.bytes.len() < Limits::OUTPUT_BYTES
                         } else {
-                            n.checked_add(2)
-                                .is_some_and(|width| width <= maximum - writer.bytes.len())
+                            n.checked_add(2).is_some_and(|width| {
+                                width <= Limits::OUTPUT_BYTES - writer.bytes.len()
+                            })
                         }
                     })
                     .ok_or(Error::Limit {
-                        limit: maximum,
+                        resource: "output_bytes",
+                        limit: Limits::OUTPUT_BYTES,
                         actual: None,
                         decimal_formatting: true,
                     })
@@ -130,10 +127,11 @@ pub fn render_with_decimals<T: TableAccess>(
             if let Some(digits) = decimals {
                 let minimum = if digits == 0 { 1 } else { digits + 2 };
                 if table.schema().columns()[column].kind == ColumnType::Float
-                    && minimum > maximum - writer.bytes.len()
+                    && minimum > Limits::OUTPUT_BYTES - writer.bytes.len()
                 {
                     return Err(Error::Limit {
-                        limit: maximum,
+                        resource: "output_bytes",
+                        limit: Limits::OUTPUT_BYTES,
                         actual: None,
                         decimal_formatting: true,
                     });
@@ -145,12 +143,15 @@ pub fn render_with_decimals<T: TableAccess>(
                 ValueRef::Int(value) => writer.field(&value.to_string())?,
                 ValueRef::Float(value) => {
                     let text = match decimals {
-                        Some(digits) => fixed_point(value, digits, maximum - writer.bytes.len())
-                            .map_err(|_| Error::Limit {
-                                limit: maximum,
-                                actual: None,
-                                decimal_formatting: true,
-                            })?,
+                        Some(digits) => {
+                            fixed_point(value, digits, Limits::OUTPUT_BYTES - writer.bytes.len())
+                                .map_err(|_| Error::Limit {
+                                    resource: "output_bytes",
+                                    limit: Limits::OUTPUT_BYTES,
+                                    actual: None,
+                                    decimal_formatting: true,
+                                })?
+                        }
                         None => float_text(value),
                     };
                     writer.field(&text)?;

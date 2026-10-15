@@ -36,61 +36,8 @@ pub struct EnvironmentSources {
     pub study: Option<usize>,
     pub submissions: Vec<(Submission, usize)>,
 }
-#[derive(Clone, Copy, Debug)]
-pub struct DiagnosticLimits {
-    pub findings: usize,
-    pub text_bytes: usize,
-}
-impl Default for DiagnosticLimits {
-    fn default() -> Self {
-        Self {
-            findings: 65_536,
-            text_bytes: 16_777_216,
-        }
-    }
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DiagnosticResource {
-    Findings,
-    TextBytes,
-}
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum Error {
-    #[error("project environment document findings: {0:?}")]
-    Findings(Vec<Finding>),
-    #[error("project environment document limit: {0:?}")]
-    Limit(DiagnosticResource),
-}
-struct Budget(DiagnosticLimits);
-impl Budget {
-    fn reserve(&mut self, findings: &[Finding], prefix: &str) -> Result<(), Error> {
-        let bytes = findings.iter().try_fold(0usize, |total, finding| {
-            prefix
-                .len()
-                .checked_add(usize::from(!prefix.is_empty() && !finding.path.is_empty()))
-                .and_then(|n| n.checked_add(finding.path.len()))
-                .and_then(|n| n.checked_add(total))
-                .ok_or(Error::Limit(DiagnosticResource::TextBytes))
-        })?;
-        let count = self
-            .0
-            .findings
-            .checked_sub(findings.len())
-            .ok_or(Error::Limit(DiagnosticResource::Findings))?;
-        let text = self
-            .0
-            .text_bytes
-            .checked_sub(bytes)
-            .ok_or(Error::Limit(DiagnosticResource::TextBytes))?;
-        self.0.findings = count;
-        self.0.text_bytes = text;
-        Ok(())
-    }
-}
-fn prefix(findings: Vec<Finding>, path: &str, budget: &mut Budget) -> Result<Vec<Finding>, Error> {
-    // Reserve every resulting field path before copying the first source prefix.
-    budget.reserve(&findings, path)?;
-    Ok(findings
+fn prefix(findings: Vec<Finding>, path: &str) -> Vec<Finding> {
+    findings
         .into_iter()
         .map(|mut finding| {
             finding.path = if finding.path.is_empty() {
@@ -100,17 +47,9 @@ fn prefix(findings: Vec<Finding>, path: &str, budget: &mut Budget) -> Result<Vec
             };
             finding
         })
-        .collect())
+        .collect()
 }
-pub fn decode(document: &Document, root: usize) -> Result<EnvironmentSources, Error> {
-    decode_with_limits(document, root, DiagnosticLimits::default())
-}
-pub fn decode_with_limits(
-    document: &Document,
-    root: usize,
-    limits: DiagnosticLimits,
-) -> Result<EnvironmentSources, Error> {
-    let mut budget = Budget(limits);
+pub fn decode(document: &Document, root: usize) -> Result<EnvironmentSources, Vec<Finding>> {
     let mut reader = Reader::new(document);
     if !matches!(document.nodes().get(root), Some(N::Mapping(_))) {
         reader.fault("", root, Kind::NormalizedShape);
@@ -140,7 +79,7 @@ pub fn decode_with_limits(
                             match project_function_document::decode(document, value, &name) {
                                 Ok(definition) => Some(Declaration::Inline(Box::new(definition))),
                                 Err(findings) => {
-                                    leaves.extend(prefix(findings, &path, &mut budget)?);
+                                    leaves.extend(prefix(findings, &path));
                                     None
                                 }
                             }
@@ -178,7 +117,7 @@ pub fn decode_with_limits(
                 Some(N::Mapping(_)) => match project_terminology_document::decode(document, node) {
                     Ok(source) => Some(Declaration::Inline(Box::new(source))),
                     Err(findings) => {
-                        leaves.extend(prefix(findings, &path, &mut budget)?);
+                        leaves.extend(prefix(findings, &path));
                         None
                     }
                 },
@@ -202,7 +141,6 @@ pub fn decode_with_limits(
     .filter_map(|(key, kind)| document.field(root, key).map(|node| (kind, node)))
     .collect();
     let mut findings = reader.finish();
-    budget.reserve(&findings, "")?;
     findings.extend(leaves);
     if findings.is_empty() {
         Ok(EnvironmentSources {
@@ -214,6 +152,6 @@ pub fn decode_with_limits(
             submissions,
         })
     } else {
-        Err(Error::Findings(findings))
+        Err(findings)
     }
 }

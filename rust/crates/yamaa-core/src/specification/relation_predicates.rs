@@ -10,6 +10,7 @@ pub(super) fn bind(
     plan: &crate::predicate::Plan,
     donor_name: &str,
     donor: &TableSchema,
+    donor_kind: &impl Fn(usize) -> Option<ColumnType>,
     self_rows: bool,
     admits: &impl Fn(usize) -> bool,
     intermediate: &str,
@@ -103,7 +104,7 @@ pub(super) fn bind(
     let type_findings = static_types::predicate_kinds(plan, |name| {
         let binding = bindings.iter().find(|binding| binding.name == name)?;
         let (schema, column) = match binding.read {
-            Read::Source(column) => (donor, column),
+            Read::Source(column) => return donor_kind(column).map(Into::into),
             Read::Column(slot) => {
                 let CurrentRead::Record { source, column } = current.get(slot)?.read else {
                     return None;
@@ -123,7 +124,7 @@ pub(super) fn bind(
             .columns()
             .get(column)
             .map(|column| column.kind.into())
-    })?;
+    });
     if static_filter_types {
         findings.extend(type_findings.iter().cloned().map(BindFinding::Predicate));
     }

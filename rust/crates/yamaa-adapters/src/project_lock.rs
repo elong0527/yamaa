@@ -1,16 +1,13 @@
 //! Bounded packaging-lock syntax at the host adapter boundary, never core planning.
 //! R hosts can inspect renv JSON without adding an R JSON runtime dependency.
-use crate::yaml_decode::{decode_yaml, DecodeFailure, DecodeLimits};
+use crate::yaml_decode::{decode_yaml, DecodeFailure};
 use serde_json::Value;
 use std::collections::BTreeMap;
-const MAX_BYTES: usize = 16_777_216;
-const MAX_RECORDS: usize = 65_536;
-const MAX_TEXT: usize = 2_048;
 
 pub use yamaa_core::diagnostic::{LockFinding as Finding, LockReason as Reason};
 #[derive(Debug)]
 pub enum Error {
-    Limit(&'static str),
+    Limit(yamaa_core::limits::LimitExceeded),
     Json(serde_json::Error),
     Document(DecodeFailure),
     Shape(&'static str),
@@ -27,19 +24,14 @@ fn text(value: Option<&Value>, field: &'static str) -> Result<String, Error> {
     if text.is_empty() || text.contains('\0') {
         return Err(Error::Shape(field));
     }
-    if text.len() > MAX_TEXT {
-        return Err(Error::Limit("text"));
-    }
     Ok(text.clone())
 }
 pub fn decode_renv(bytes: &[u8]) -> Result<RenvLock, Error> {
-    if bytes.len() > MAX_BYTES {
-        return Err(Error::Limit("bytes"));
-    }
+    yamaa_core::limits::Limits::spec_bytes(bytes.len()).map_err(Error::Limit)?;
     let root: Value = serde_json::from_slice(bytes).map_err(Error::Json)?;
     // JSON syntax is established first; the shared decoder then enforces
     // duplicate-key/node/text/depth bounds throughout this JSON subset of YAML.
-    decode_yaml(bytes, DecodeLimits::default()).map_err(Error::Document)?;
+    decode_yaml(bytes).map_err(Error::Document)?;
     let runtime = root
         .get("R")
         .and_then(|value| value.as_object())
@@ -49,16 +41,10 @@ pub fn decode_renv(bytes: &[u8]) -> Result<RenvLock, Error> {
         .get("Packages")
         .and_then(|value| value.as_object())
         .ok_or(Error::Shape("Packages"))?;
-    if packages.len() > MAX_RECORDS {
-        return Err(Error::Limit("packages"));
-    }
     let mut result = BTreeMap::new();
     for (name, record) in packages {
         if name.is_empty() || name.contains('\0') {
             return Err(Error::Shape("package name"));
-        }
-        if name.len() > MAX_TEXT {
-            return Err(Error::Limit("text"));
         }
         let record = record.as_object().ok_or(Error::Shape("package record"))?;
         if let Some(package) = record.get("Package") {
@@ -78,9 +64,7 @@ pub fn decode_renv(bytes: &[u8]) -> Result<RenvLock, Error> {
 /// target-marker selection remain activation-time packaging responsibilities.
 pub fn kind(bytes: &[u8]) -> Result<yamaa_core::project_environment::LockKind, Error> {
     use yamaa_core::project_environment::LockKind;
-    if bytes.len() > MAX_BYTES {
-        return Err(Error::Limit("bytes"));
-    }
+    yamaa_core::limits::Limits::spec_bytes(bytes.len()).map_err(Error::Limit)?;
     if bytes.iter().find(|byte| !byte.is_ascii_whitespace()) == Some(&b'{') {
         decode_renv(bytes)?;
         return Ok(LockKind::Renv);
@@ -96,9 +80,6 @@ pub fn kind(bytes: &[u8]) -> Result<yamaa_core::project_environment::LockKind, E
         .get("package")
         .and_then(toml::Value::as_array)
         .ok_or(Error::Shape("uv package array"))?;
-    if packages.len() > MAX_RECORDS {
-        return Err(Error::Limit("packages"));
-    }
     for package in packages {
         let package = package
             .as_table()
@@ -113,7 +94,7 @@ pub fn kind(bytes: &[u8]) -> Result<yamaa_core::project_environment::LockKind, E
                 .get(key)
                 .and_then(toml::Value::as_str)
                 .ok_or(Error::Shape("uv package identity"))?;
-            if value.is_empty() || value.contains('\0') || value.len() > MAX_TEXT {
+            if value.is_empty() || value.contains('\0') {
                 return Err(Error::Shape("uv package identity"));
             }
         }

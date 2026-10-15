@@ -306,7 +306,7 @@ pub(super) fn validate_named_read(
     available: &[bool],
     depth: usize,
 ) -> Result<(), PlanError> {
-    if depth > 64 {
+    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return Err(PlanError::InvalidIntermediate);
     }
     let item = items.get(index).ok_or(PlanError::InvalidIntermediate)?;

@@ -1,5 +1,5 @@
 //! Borrowed facts from retained project invocation and activation failures.
-//! Admit the whole report before allocating paths or copying authored text.
+//! Validate retained facts before materializing complete diagnostic contexts.
 use crate::{
     dataset::RowIdentity,
     diagnostic::ConditionCode,
@@ -15,18 +15,12 @@ use std::{
     vec,
 };
 
-pub const MAX_DIAGNOSTIC_BYTES: usize = 16_777_216;
-pub const MAX_HOST_DETAIL_BYTES: usize = 8_192;
-const MAX_FUNCTIONS: usize = 1_024;
-const MAX_CASES: usize = 65_536;
-
 /// Host classification supplies ordinary facts; core never reads opaque errors.
 #[derive(Clone, Copy, Debug)]
 pub enum HostDetails<'a> {
     Exception {
         class: &'a str,
         message: &'a str,
-        truncated: bool,
     },
     Rejected {
         reason: &'a str,
@@ -37,7 +31,6 @@ pub enum HostDetails<'a> {
 pub enum Error<'a, E> {
     Opaque(&'a E),
     InvalidContext,
-    Limit,
 }
 
 /// A context tree borrows scalar values and text, including nested failures.
@@ -69,39 +62,6 @@ pub struct DefinitionSource<'a> {
     pub function: &'a Function,
     pub path: &'a str,
 }
-struct Budget(usize);
-impl Budget {
-    fn text<'a, E>(&mut self, text: &str) -> Result<(), Error<'a, E>> {
-        // Context is JSON text inside the envelope: bound both escaping layers.
-        let charge = text
-            .len()
-            .checked_mul(12)
-            .and_then(|n| n.checked_add(128))
-            .ok_or(Error::Limit)?;
-        self.0 = self.0.checked_sub(charge).ok_or(Error::Limit)?;
-        Ok(())
-    }
-    fn value<'a, E>(&mut self, value: &Value) -> Result<(), Error<'a, E>> {
-        self.text(match value {
-            Value::Str(text) => text,
-            _ => "01234567890123456789012345678901",
-        })
-    }
-    fn host<'a, E>(&mut self, host: Option<HostDetails<'_>>) -> Result<(), Error<'a, E>> {
-        let Some(host) = host else { return Ok(()) };
-        let fields = match host {
-            HostDetails::Exception { class, message, .. } => [Some(class), Some(message)],
-            HostDetails::Rejected { reason, returned } => [Some(reason), returned],
-        };
-        for text in fields.into_iter().flatten() {
-            if text.len() > MAX_HOST_DETAIL_BYTES {
-                return Err(Error::Limit);
-            }
-            self.text(text)?;
-        }
-        Ok(())
-    }
-}
 fn kind(value: ValueType) -> &'static str {
     match value {
         ValueType::Str => "str",
@@ -123,16 +83,9 @@ fn column(value: ColumnType) -> &'static str {
 }
 fn host_context<'a>(context: &mut Context<'a>, host: HostDetails<'a>) {
     match host {
-        HostDetails::Exception {
-            class,
-            message,
-            truncated,
-        } => {
+        HostDetails::Exception { class, message } => {
             context.insert("host_error", Fact::Text(class));
             context.insert("host_message", Fact::Text(message));
-            if truncated {
-                context.insert("host_details_truncated", Fact::Boolean(true));
-            }
         }
         HostDetails::Rejected { reason, returned } => {
             context.insert("reason", Fact::Text(reason));
@@ -155,25 +108,6 @@ fn invocation_admission<'a, E>(
         _ => Ok(()),
     }
 }
-fn invocation_budget<'a, E>(
-    kind: &FailureKind<E>,
-    budget: &mut Budget,
-) -> Result<(), Error<'a, E>> {
-    match kind {
-        FailureKind::UnknownArguments(names) => {
-            if names.len() > MAX_CASES {
-                return Err(Error::Limit);
-            }
-            for name in names {
-                budget.text(name)?;
-            }
-        }
-        FailureKind::MissingRequired { parameter }
-        | FailureKind::ArgumentType { parameter, .. } => budget.text(parameter)?,
-        _ => (),
-    }
-    Ok(())
-}
 pub fn invocation<'a, 'e: 'a, E>(
     path: &str,
     failure: &'e InvocationFailure<E, ProjectFunctionIdentity>,
@@ -187,28 +121,17 @@ pub fn invocation<'a, 'e: 'a, E>(
     if path.is_empty() || failure.identity.name.is_empty() || failure.identity.call.is_empty() {
         return Err(Error::InvalidContext);
     }
-    if key_names.len() > MAX_CASES {
-        return Err(Error::Limit);
-    }
-    let mut budget = Budget(MAX_DIAGNOSTIC_BYTES);
-    for text in [path, &failure.identity.name, &failure.identity.call] {
-        budget.text(text)?;
-    }
     if let Some(row) = row {
         if row.len() != key_names.len() {
             return Err(Error::InvalidContext);
         }
         let mut seen = BTreeSet::new();
-        for (name, value) in key_names.iter().zip(row) {
+        for name in key_names {
             if name.is_empty() || !seen.insert(*name) {
                 return Err(Error::InvalidContext);
             }
-            budget.text(name)?;
-            budget.value(value)?;
         }
     }
-    invocation_budget(&failure.kind, &mut budget)?;
-    budget.host(host)?;
     let mut context: Context<'a> = [
         ("function", Fact::Text(&failure.identity.name)),
         ("call", Fact::Text(&failure.identity.call)),
@@ -267,19 +190,10 @@ pub fn invocation<'a, 'e: 'a, E>(
     })
 }
 
-fn selection<'a, E>(
-    definitions: &[DefinitionSource<'_>],
-    budget: &mut Budget,
-) -> Result<(), Error<'a, E>> {
-    if definitions.len() > MAX_FUNCTIONS {
-        return Err(Error::Limit);
-    }
+fn selection<'a, E>(definitions: &[DefinitionSource<'_>]) -> Result<(), Error<'a, E>> {
     let mut names = BTreeSet::new();
     for source in definitions {
         let definition = source.function.definition();
-        for text in [source.path, &definition.name, &definition.function] {
-            budget.text(text)?;
-        }
         if source.path.is_empty() || !names.insert(definition.name.as_str()) {
             return Err(Error::InvalidContext);
         }
@@ -290,38 +204,25 @@ pub fn binding_diagnostics<'a, 'e, E>(
     definitions: &[DefinitionSource<'a>],
     failures: &'e [BindingFailure<E>],
     details: &[Option<HostDetails<'a>>],
-    maximum: usize,
 ) -> Result<Vec<Diagnostic<'a>>, Error<'e, E>> {
-    if failures.len() > MAX_FUNCTIONS {
-        return Err(Error::Limit);
-    }
     if details.len() != failures.len() {
         return Err(Error::InvalidContext);
     }
     if failures.is_empty() {
         return Ok(Vec::new());
     }
-    let mut budget = Budget(maximum);
-    selection(definitions, &mut budget)?;
+    selection(definitions)?;
     let mut seen = BTreeSet::new();
     for (failure, host) in failures.iter().zip(details) {
-        let source = definitions
-            .get(failure.function)
-            .ok_or(Error::InvalidContext)?;
+        if definitions.get(failure.function).is_none() {
+            return Err(Error::InvalidContext);
+        }
         if !seen.insert(failure.function) {
             return Err(Error::InvalidContext);
         }
         if host.is_none() {
             return Err(Error::Opaque(&failure.error));
         }
-        for text in [
-            source.path,
-            &source.function.definition().name,
-            &source.function.definition().function,
-        ] {
-            budget.text(text)?;
-        }
-        budget.host(*host)?;
     }
     Ok(failures
         .iter()
@@ -353,19 +254,14 @@ pub fn test_diagnostics<'a, 'e: 'a, E>(
     definitions: &[DefinitionSource<'a>],
     failures: &'e [TestFailure<E>],
     details: &[Option<HostDetails<'a>>],
-    maximum: usize,
 ) -> Result<Vec<Diagnostic<'a>>, Error<'e, E>> {
-    if failures.len() > MAX_CASES {
-        return Err(Error::Limit);
-    }
     if details.len() != failures.len() {
         return Err(Error::InvalidContext);
     }
     if failures.is_empty() {
         return Ok(Vec::new());
     }
-    let mut budget = Budget(maximum);
-    selection(definitions, &mut budget)?;
+    selection(definitions)?;
     let mut seen = BTreeSet::new();
     for (failure, host) in failures.iter().zip(details) {
         let (function, case) = failure.position();
@@ -375,41 +271,18 @@ pub fn test_diagnostics<'a, 'e: 'a, E>(
         if !seen.insert((function, case)) {
             return Err(Error::InvalidContext);
         }
-        for text in [
-            source.path,
-            &definition.name,
-            &definition.function,
-            &test.id,
-        ] {
-            budget.text(text)?;
-        }
-        if test.args.len() > MAX_CASES {
-            return Err(Error::Limit);
-        }
-        for (name, value) in &test.args {
-            budget.text(name)?;
-            budget.value(value)?;
-        }
-        budget.value(&test.result)?;
-        budget.host(*host)?;
         match failure {
             TestFailure::Invocation { error, .. } => {
-                for text in [&error.identity.name, &error.identity.call] {
-                    budget.text(text)?;
-                }
                 if error.identity.name != definition.name
                     || error.identity.call != definition.function
                 {
                     return Err(Error::InvalidContext);
                 }
                 invocation_admission(&error.kind, *host)?;
-                invocation_budget(&error.kind, &mut budget)?;
             }
             TestFailure::Result {
                 actual, expected, ..
             } => {
-                budget.value(actual)?;
-                budget.value(expected)?;
                 if host.is_some()
                     || !exact(expected, &test.result)
                     || results_match(actual, expected, definition.comparison_decimals)
