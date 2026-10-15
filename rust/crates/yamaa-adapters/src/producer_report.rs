@@ -665,7 +665,7 @@ fn failed_observations<'a, E>(
             )?;
         }
         Err(yamaa_core::specification_output::CompleteError::Report(error)) => {
-            value["error"] = json!({"stage":"report","code":match error { Error::OutputLimit => "output_limit", _ => "projection_refused" }});
+            value["error"] = json!({"stage":"report","code":match error { Error::ResourceLimit(_) => "output_limit", _ => "projection_refused" }});
         }
         Err(_) => portable = false,
         Ok(Some(output)) if output.artifact().is_none() => {

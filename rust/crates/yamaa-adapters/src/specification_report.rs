@@ -23,7 +23,6 @@ pub struct Identity<'a> {
 pub enum Error {
     UnsupportedOutcome,
     InvalidObservation,
-    OutputLimit,
     ResourceLimit(crate::resource_diagnostics::Refusal),
 }
 impl From<crate::source_diagnostics::SourceProjectionError> for Error {
@@ -571,7 +570,12 @@ pub(crate) fn prepare_result(
         .map_err(|error| match error {
             E::Report(e) | E::Encode(e) => e,
             E::Projection => Error::InvalidObservation,
-            E::OutputLimit => Error::OutputLimit,
+            E::Limit(error) => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                error.resource,
+                error.limit,
+                error.actual,
+                vec!["output.path".into()],
+            )),
             E::Publish(never) => match never {},
         })
         .or_else(|error| {
@@ -664,9 +668,9 @@ fn rejected_output(
     stage: &str,
 ) -> Result<yamaa_core::specification_output::PreparedOutput<StoredReport>, Error> {
     let reason = match (stage, error) {
-        ("log", Error::OutputLimit | Error::ResourceLimit(_)) => "log_output_limit",
+        ("log", Error::ResourceLimit(_)) => "log_output_limit",
         ("log", _) => "log_output_projection",
-        (_, Error::OutputLimit | Error::ResourceLimit(_)) => "output_limit",
+        (_, Error::ResourceLimit(_)) => "output_limit",
         _ => "output_projection",
     };
     let diagnostic = specification_diagnostics::portable_diagnostic(match error {

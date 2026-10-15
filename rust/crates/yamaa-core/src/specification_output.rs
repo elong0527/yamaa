@@ -45,7 +45,7 @@ pub enum CompleteError<R, C, P> {
     #[error("specification output projection")]
     Projection,
     #[error("specification output output limit")]
-    OutputLimit,
+    Limit(crate::limits::LimitExceeded),
     #[error("specification output publish: {0:?}")]
     Publish(P),
 }
@@ -152,7 +152,7 @@ pub fn complete<R: OutputReport, C: ArtifactEncoder, P: ArtifactPort>(
         CompleteError::Report(e) => CompleteError::Report(e),
         CompleteError::Encode(e) => CompleteError::Encode(e),
         CompleteError::Projection => CompleteError::Projection,
-        CompleteError::OutputLimit => CompleteError::OutputLimit,
+        CompleteError::Limit(error) => CompleteError::Limit(error),
         CompleteError::Publish(never) => match never {},
     })?;
     if let Some(artifact) = &result.artifact {
@@ -201,9 +201,7 @@ pub fn prepare<R: OutputReport, C: ArtifactEncoder>(
     let bytes = codec
         .encode(&execution.dataset, &projection)
         .map_err(CompleteError::Encode)?;
-    if crate::limits::Limits::output_bytes(bytes.len()).is_err() {
-        return Err(CompleteError::OutputLimit);
-    }
+    crate::limits::Limits::output_bytes(bytes.len()).map_err(CompleteError::Limit)?;
     let completed = report
         .success(execution, &projection, &bytes)
         .map_err(CompleteError::Report)?;
