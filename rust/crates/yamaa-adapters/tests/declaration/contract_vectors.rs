@@ -671,12 +671,12 @@ fn regex_scalar_membership_and_greedy_lazy_counts_keep_independent_set_truth() {
 }
 
 #[test]
-fn unchanged_independent_rational_rounding_corpus_matches_both_native_policies() {
+fn unchanged_independent_rational_rounding_corpus_matches_current_compiler() {
     use std::convert::Infallible;
     use yamaa_core::{
         evaluation::NumericResolver,
         numeric::Number,
-        numeric_compiler::{compile_numeric_with_policy, CompileLimits, MathPolicy},
+        numeric_compiler::{compile_numeric, CompileLimits},
         value::{Selection, Value},
     };
     struct Inputs(f64, i64);
@@ -690,15 +690,12 @@ fn unchanged_independent_rational_rounding_corpus_matches_both_native_policies()
             }))
         }
     }
-    let plans = [MathPolicy::ReferenceSubset, MathPolicy::PortableLibmV1].map(|policy| {
-        compile_numeric_with_policy(
-            "ROUND_HALF_AWAY_FROM_ZERO(A, D)",
-            "rounding",
-            CompileLimits::default(),
-            policy,
-        )
-        .unwrap()
-    });
+    let plan = compile_numeric(
+        "ROUND_HALF_AWAY_FROM_ZERO(A, D)",
+        "rounding",
+        CompileLimits::default(),
+    )
+    .unwrap();
     // Original cb34f38a3:rust/tools/assess_rounding.py, using
     // Fraction(abs(value)) and the exact REQ-0418 half-minus-2^-26 threshold.
     // All 2,936 unchanged boundary/range/seed-1585 inputs and expected bits
@@ -713,20 +710,12 @@ fn unchanged_independent_rational_rounding_corpus_matches_both_native_policies()
         assert!(seen.insert(fields[0]));
         let value = f64::from_bits(u64::from_str_radix(fields[1], 16).unwrap());
         let digits = fields[2].parse().unwrap();
-        for plan in &plans {
-            let actual = match plan.evaluate(&mut Inputs(value, digits)).unwrap() {
-                Number::Missing => "missing".into(),
-                Number::Float(value) => format!("{:016x}", value.get().to_bits()),
-                Number::Int(_) => panic!("rounding must retain float output"),
-            };
-            assert_eq!(
-                actual,
-                fields[3],
-                "{} under {:?}",
-                fields[0],
-                plan.math_policy()
-            );
-        }
+        let actual = match plan.evaluate(&mut Inputs(value, digits)).unwrap() {
+            Number::Missing => "missing".into(),
+            Number::Float(value) => format!("{:016x}", value.get().to_bits()),
+            Number::Int(_) => panic!("rounding must retain float output"),
+        };
+        assert_eq!(actual, fields[3], "{}", fields[0]);
     }
     assert_eq!(seen.len(), 2936);
 }

@@ -247,23 +247,13 @@ pub(super) fn prepare_value_with_driver(
                 }
             }
             let expression = text(d, field(d, payload, "expr")?)?;
-            match compile_numeric_with_policy(
-                expression,
-                &result_path,
-                Default::default(),
-                crate::numeric_compiler::MathPolicy::PortableLibmV1,
-            ) {
+            match compile_numeric(expression, &result_path, Default::default()) {
                 Ok(compiled) => Operation::Compute(compiled),
                 Err(error @ CompileError::Parse(ParseError::Grammar { .. })) => {
                     Operation::InvalidNumeric {
                         expression: expression.into(),
                         error,
                     }
-                }
-                Err(CompileError::Unsupported { .. }) => {
-                    // PortableLibmV1 admits every closed R003 function variant.
-                    // A contrary compiler outcome is an implementation defect.
-                    return Err(PrepareError::Internal);
                 }
                 Err(error) => {
                     return Err(PrepareError::Numeric {

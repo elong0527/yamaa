@@ -156,11 +156,10 @@ fn compute_and_reduction_reject_known_text_without_evaluation() {
 
 #[test]
 fn numeric_and_aggregate_result_kinds_are_native_metadata() {
-    let numeric = crate::numeric_compiler::compile_numeric_with_policy(
+    let numeric = crate::numeric_compiler::compile_numeric(
         "A + POWER(B, 2) / -3",
         "result",
         Default::default(),
-        crate::numeric_compiler::MathPolicy::PortableLibmV1,
     )
     .unwrap();
     assert_eq!(numeric.result_type(), ColumnType::Float);

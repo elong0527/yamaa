@@ -1,12 +1,10 @@
 use std::convert::Infallible;
 use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver, Operand};
 use yamaa_core::numeric::{power, ArithmeticErrorKind, Number};
-use yamaa_core::numeric_compiler::{
-    compile_numeric, compile_numeric_with_policy, CompileError, CompileLimits, MathPolicy,
-};
+use yamaa_core::numeric_compiler::{compile_numeric, CompileError, CompileLimits};
 use yamaa_core::value::{Selection, Value};
 
-/// Record each resolution to verify policy preflight and failure ordering.
+/// Record each resolution to verify compiler preflight and failure ordering.
 #[derive(Default)]
 struct Resolver(Vec<String>);
 impl NumericResolver for Resolver {
@@ -22,49 +20,30 @@ impl NumericResolver for Resolver {
     }
 }
 
-/// Existing callers reject the new functions; opt-in cannot bypass other preflight gates.
+/// The canonical compiler admits portable math before any resolver effects.
 #[test]
-fn numerical_policy_is_explicit_and_preserves_limits() {
+fn current_numeric_vocabulary_compiles_directly() {
     for text in ["EXP(A)", "LN(A)", "POWER(A, A)"] {
-        assert!(matches!(
-            compile_numeric(text, "spec", CompileLimits::default()),
-            Err(CompileError::Unsupported { .. })
-        ));
-        let plan = compile_numeric_with_policy(
-            text,
-            "spec",
-            CompileLimits::default(),
-            MathPolicy::PortableLibmV1,
-        )
-        .unwrap();
-        assert_eq!(plan.math_policy(), MathPolicy::PortableLibmV1);
+        let plan = compile_numeric(text, "spec", CompileLimits::default()).unwrap();
         let mut resolver = Resolver::default();
         assert!(matches!(plan.evaluate(&mut resolver), Ok(Number::Float(_))));
         assert_eq!(resolver.0.len(), plan.resolution_count());
         assert!(matches!(
-            compile_numeric_with_policy(
+            compile_numeric(
                 text,
                 "spec",
                 CompileLimits {
                     resolutions: 0,
                     ..CompileLimits::default()
-                },
-                MathPolicy::PortableLibmV1
+                }
             ),
             Err(CompileError::ResolutionLimit { .. })
         ));
     }
-    assert_eq!(
-        compile_numeric("SQRT(4)", "spec", CompileLimits::default())
-            .unwrap()
-            .math_policy(),
-        MathPolicy::ReferenceSubset
-    );
-    assert!(compile_numeric_with_policy(
+    assert!(compile_numeric(
         "EXP(A) + ROUND_HALF_AWAY_FROM_ZERO(A, 2)",
         "spec",
-        CompileLimits::default(),
-        MathPolicy::PortableLibmV1,
+        CompileLimits::default()
     )
     .is_ok());
 }
@@ -89,13 +68,7 @@ fn math_failure_spans_and_order_are_preserved() {
         ),
         ("LN(0) + UNKNOWN", "LN(0)", vec![Operand::Left], vec![]),
     ] {
-        let plan = compile_numeric_with_policy(
-            text,
-            "spec",
-            CompileLimits::default(),
-            MathPolicy::PortableLibmV1,
-        )
-        .unwrap();
+        let plan = compile_numeric(text, "spec", CompileLimits::default()).unwrap();
         let mut resolver = Resolver::default();
         let error = plan.evaluate(&mut resolver).unwrap_err();
         assert_eq!(&text[error.source_span.start..error.source_span.end], span);
@@ -120,13 +93,7 @@ fn invalid_power_retains_exact_promoted_diagnostic_arguments() {
             }
         );
     }
-    let plan = compile_numeric_with_policy(
-        "POWER(-0.0, -1)",
-        "spec",
-        CompileLimits::default(),
-        MathPolicy::PortableLibmV1,
-    )
-    .unwrap();
+    let plan = compile_numeric("POWER(-0.0, -1)", "spec", CompileLimits::default()).unwrap();
     let error = plan.evaluate(&mut Resolver::default()).unwrap_err();
     assert_eq!(
         error.evaluation.kind,
@@ -154,13 +121,7 @@ fn portable_math_retains_opaque_resolver_failures() {
         }
     }
     for text in ["EXP(BROKEN)", "LN(BROKEN)", "POWER(NULL, BROKEN)"] {
-        let plan = compile_numeric_with_policy(
-            text,
-            "spec",
-            CompileLimits::default(),
-            MathPolicy::PortableLibmV1,
-        )
-        .unwrap();
+        let plan = compile_numeric(text, "spec", CompileLimits::default()).unwrap();
         let error = plan.evaluate(&mut FailedResolver).unwrap_err();
         assert_eq!(
             &text[error.source_span.start..error.source_span.end],

@@ -7,7 +7,7 @@ use crate::{
 };
 use crate::{
     column_dependencies,
-    numeric_compiler::{compile_numeric_with_policy, CompileError, CompiledNumeric},
+    numeric_compiler::{compile_numeric, CompileError, CompiledNumeric},
     numeric_parser::ParseError,
     reference_binding::{self, Catalog},
     schema::{Document, DocumentNode as N, SpecificationDocument},

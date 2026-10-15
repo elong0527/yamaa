@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver};
 use yamaa_core::numeric::{ArithmeticErrorKind, Number};
-use yamaa_core::numeric_compiler::{compile_numeric_with_policy, CompileLimits, MathPolicy};
+use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
 use yamaa_core::value::{Selection, Value};
 
 // Exact PortableLibmV1 inputs and results, including binary64 range boundaries,
@@ -50,11 +50,10 @@ fn portable_math_matches_exact_bits_and_domain_failures() {
             "POWER" => "POWER(A, B)",
             _ => panic!("unexpected function {function}"),
         };
-        let plan = compile_numeric_with_policy(
+        let plan = compile_numeric(
             expression,
             "columns.VALUE.derivation.compute",
             CompileLimits::default(),
-            MathPolicy::PortableLibmV1,
         )
         .unwrap();
         let mut resolver = Inputs {
