@@ -1,4 +1,4 @@
-"""Select native CI coverage and compare only the selected installed evidence."""
+"""Describe the full native matrix and compare its installed-host evidence."""
 
 import itertools
 import os

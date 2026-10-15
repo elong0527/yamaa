@@ -3,11 +3,13 @@
 This fixture writer does not import or invoke ReadStat or the yamaa reader.
 The accompanying literal expected tables are the independent test oracle.
 """
+
 from fractions import Fraction
-from pathlib import Path
 import struct
 
-ROOT = Path(__file__).parent
+from tools.paths import ROOT
+
+FIXTURES = ROOT / "rust/crates/yamaa-adapters/tests/fixtures/sas"
 
 
 def record(value):
@@ -77,26 +79,65 @@ def xport(version, rows, columns):
 
 
 if __name__ == "__main__":
-    columns = [("ID", False, 8), ("TEXT", True, 16), ("NUM", False, 8),
-               ("DAY", False, 8), ("STAMP", False, 8)]
-    rows = [[2, b" caf\xe9", Fraction(3, 2), 0, 0],
-            [1, b"", "Z", 3653, -1], [3, b".", -2, -1, 1]]
+    columns = [
+        ("ID", False, 8),
+        ("TEXT", True, 16),
+        ("NUM", False, 8),
+        ("DAY", False, 8),
+        ("STAMP", False, 8),
+    ]
+    rows = [
+        [2, b" caf\xe9", Fraction(3, 2), 0, 0],
+        [1, b"", "Z", 3653, -1],
+        [3, b".", -2, -1, 1],
+    ]
     for version in [5, 8]:
-        actual = columns if version == 5 else [("ID", False, 8), ("LONG_TEXT_NAME", True, 16), *columns[2:]]
+        actual = (
+            columns
+            if version == 5
+            else [("ID", False, 8), ("LONG_TEXT_NAME", True, 16), *columns[2:]]
+        )
         payload = xport(version, rows, actual)
-        (ROOT / f"v{version}.xpt").write_bytes(payload)
-        (ROOT / f"multi-v{version}.xpt").write_bytes(payload + payload[240:])
-    (ROOT / "precision.xpt").write_bytes(xport(5, [[2**53 + 1]], [("NUM", False, 8)]))
-    (ROOT / "decimal.xpt").write_bytes(xport(5, [[Fraction(0.1)]], [("NUM", False, 8)]))
-    (ROOT / "member-text.xpt").write_bytes(xport(5, [[header("MEMBER"), 1]], [("TEXT", True, 80), ("NUM", False, 8)]))
-    (ROOT / "fractional.xpt").write_bytes(xport(5, [[Fraction(3, 2)]], [("NUM", False, 8)]))
-    (ROOT / "missing.xpt").write_bytes(xport(5, [[value] for value in [".", "_", *"ABCDEFGHIJKLMNOPQRSTUVWXYZ"]], [("NUM", False, 8)]))
-    utf8_rows = [[2, " caf\xe9".encode(), Fraction(3, 2), 0, 0],
-                 [1, b"", "Z", 3653, -1], [3, b".", -2, -1, 1]]
-    (ROOT / "utf8.xpt").write_bytes(xport(5, utf8_rows, columns))
-    (ROOT / "integer-bounds.xpt").write_bytes(xport(5, [[value] for value in [-2**63, 0, 2**53, 2**63 - 1024]], [("NUM", False, 8)]))
-    (ROOT / "integer-overflow.xpt").write_bytes(xport(5, [[2**63]], [("NUM", False, 8)]))
-    if (ROOT / "rle.sas7bdat").exists():
-        sas = (ROOT / "rle.sas7bdat").read_bytes()
+        (FIXTURES / f"v{version}.xpt").write_bytes(payload)
+        (FIXTURES / f"multi-v{version}.xpt").write_bytes(payload + payload[240:])
+    (FIXTURES / "precision.xpt").write_bytes(
+        xport(5, [[2**53 + 1]], [("NUM", False, 8)])
+    )
+    (FIXTURES / "decimal.xpt").write_bytes(
+        xport(5, [[Fraction(0.1)]], [("NUM", False, 8)])
+    )
+    (FIXTURES / "member-text.xpt").write_bytes(
+        xport(5, [[header("MEMBER"), 1]], [("TEXT", True, 80), ("NUM", False, 8)])
+    )
+    (FIXTURES / "fractional.xpt").write_bytes(
+        xport(5, [[Fraction(3, 2)]], [("NUM", False, 8)])
+    )
+    (FIXTURES / "missing.xpt").write_bytes(
+        xport(
+            5,
+            [[value] for value in [".", "_", *"ABCDEFGHIJKLMNOPQRSTUVWXYZ"]],
+            [("NUM", False, 8)],
+        )
+    )
+    utf8_rows = [
+        [2, " caf\xe9".encode(), Fraction(3, 2), 0, 0],
+        [1, b"", "Z", 3653, -1],
+        [3, b".", -2, -1, 1],
+    ]
+    (FIXTURES / "utf8.xpt").write_bytes(xport(5, utf8_rows, columns))
+    (FIXTURES / "integer-bounds.xpt").write_bytes(
+        xport(
+            5,
+            [[value] for value in [-(2**63), 0, 2**53, 2**63 - 1024]],
+            [("NUM", False, 8)],
+        )
+    )
+    (FIXTURES / "integer-overflow.xpt").write_bytes(
+        xport(5, [[2**63]], [("NUM", False, 8)])
+    )
+    if (FIXTURES / "rle.sas7bdat").exists():
+        sas = (FIXTURES / "rle.sas7bdat").read_bytes()
         assert b"SASYZCRL" in sas
-        (ROOT / "unsupported-compression.sas7bdat").write_bytes(sas.replace(b"SASYZCRL", b"UNKNOWN!", 1))
+        (FIXTURES / "unsupported-compression.sas7bdat").write_bytes(
+            sas.replace(b"SASYZCRL", b"UNKNOWN!", 1)
+        )

@@ -25,7 +25,7 @@ def main():
                 "Rscript",
                 "--vanilla",
                 "-e",
-                'packages <- trimws(strsplit(read.dcf("R/yamaa/DESCRIPTION")[1,"Suggests"], ",", fixed=TRUE)[[1]]); stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly=TRUE)))',
+                'suggests <- strsplit(read.dcf("R/yamaa/DESCRIPTION")[1,"Suggests"], ",", fixed=TRUE)[[1]]; packages <- trimws(sub("[[:space:]]*[(][^)]*[)]", "", suggests)); stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly=TRUE)))',
             ],
             cwd=ROOT,
             env=environment,

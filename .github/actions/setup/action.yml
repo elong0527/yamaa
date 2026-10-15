@@ -37,7 +37,10 @@ runs:
         repository <- Sys.getenv("RSPM")
         if (!nzchar(repository)) repository <- "https://cloud.r-project.org"
         options(repos = c(CRAN = repository))
-        install.packages(c("arrow", "nanoarrow", "jsonlite"))
+        suggests <- strsplit(read.dcf("R/yamaa/DESCRIPTION")[1, "Suggests"], ",", fixed = TRUE)[[1]]
+        packages <- trimws(sub("[[:space:]]*[(][^)]*[)]", "", suggests))
+        install.packages(packages)
+        stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE)))
         RS
     - name: Build the development package and install repository tools
       shell: bash
