@@ -8,6 +8,7 @@ import stat
 import subprocess
 import tarfile
 import tempfile
+import tomllib
 import unittest
 import zipfile
 from pathlib import Path
@@ -18,7 +19,13 @@ from tools.ci import select_release_artifacts as release
 from tools.paths import ROOT
 
 MATRIX = release.native
-VERSION, TAG = "0.4.0", "yamaa-v0.4.0"
+VERSION = tomllib.loads((ROOT / "python/pyproject.toml").read_text(encoding="utf-8"))[
+    "project"
+]["version"]
+TAG = f"yamaa-v{VERSION}"
+OTHER_VERSION = (
+    VERSION.rsplit(".", 1)[0] + "." + str(int(VERSION.rsplit(".", 1)[1]) + 1)
+)
 REVISION = "a" * 40
 REPOSITORY = {
     "id": 1299533902,
@@ -338,7 +345,7 @@ class DownloadedPackages(unittest.TestCase):
     def test_filename_version_host_abi_and_extra_package_ambiguity_fail(self):
         wheel = next((self.directory / "native-python-ubuntu-24.04-3.14").glob("*.whl"))
         for bad in [
-            wheel.name.replace("0.4.0", "0.3.0"),
+            wheel.name.replace(VERSION, OTHER_VERSION, 1),
             wheel.name.replace("abi3", "cp312"),
             wheel.name.replace("manylinux_2_39_x86_64", "win_amd64"),
         ]:
@@ -357,6 +364,8 @@ class DownloadedPackages(unittest.TestCase):
     def test_metadata_version_duplicates_missing_licenses_and_r_description_fail(self):
         wheel = next(self.directory.rglob("*.whl"))
         original = wheel.read_bytes()
+        version_header = f"Version: {VERSION}".encode("ascii")
+        wrong_version_header = f"Version: {OTHER_VERSION}".encode("ascii")
         for defect in (
             "version",
             "duplicate-version",
@@ -376,11 +385,11 @@ class DownloadedPackages(unittest.TestCase):
                     if entry.filename.endswith("/METADATA"):
                         if defect == "version":
                             payload = payload.replace(
-                                b"Version: 0.4.0", b"Version: 0.3.0"
+                                version_header, wrong_version_header
                             )
                         elif defect == "duplicate-version":
                             payload = payload.replace(
-                                b"Version: 0.4.0", b"Version: 0.4.0\nVersion: 0.4.0"
+                                version_header, version_header + b"\n" + version_header
                             )
                     if defect == "changed-license" and entry.filename.endswith(
                         "LICENSE-YAML.txt"
@@ -397,7 +406,9 @@ class DownloadedPackages(unittest.TestCase):
                 for entry in source
                 if entry.isfile()
             }
-        members["yamaa/DESCRIPTION"] = b"Package: yamaa\nVersion: 0.3.0\n"
+        members["yamaa/DESCRIPTION"] = (
+            f"Package: yamaa\nVersion: {OTHER_VERSION}\n".encode("ascii")
+        )
         tar(r_source, members)
         with self.assertRaisesRegex(ValueError, "R DESCRIPTION"):
             self.select()
@@ -412,7 +423,12 @@ class DownloadedPackages(unittest.TestCase):
 class PublicationBoundary(unittest.TestCase):
     def test_coordinated_version_and_committed_notes_are_required(self):
         self.assertEqual(release.release_version(ROOT, TAG), VERSION)
-        for tag in ("v0.4.0", "yamaa-v0.3.0", "yamaa-v0.4.0-rc1", "yamaa-v00.4.0"):
+        for tag in (
+            f"v{VERSION}",
+            f"yamaa-v{OTHER_VERSION}",
+            f"{TAG}-rc1",
+            f"yamaa-v0{VERSION}",
+        ):
             with self.subTest(tag=tag), self.assertRaises(ValueError):
                 release.release_version(ROOT, tag)
         with (
@@ -514,7 +530,7 @@ class PublicationBoundary(unittest.TestCase):
                 return True
 
             self.assertTrue(publish())
-            self.assertIn("release create yamaa-v0.4.0", marker.read_text())
+            self.assertIn(f"release create {TAG}", marker.read_text())
             marker.unlink()
             git("update-ref", "-d", "refs/release-publication/checked-tag")
             (checkout / "file").write_text("moved tag")
