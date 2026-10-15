@@ -31,6 +31,11 @@ REVIEW_RANGE = re.compile(
 )
 FINAL_MARKER = "final_review_risk_coverage:"
 FINAL_REVIEW = re.compile(r"<!-- final_review_risk_coverage:(.*?) -->", re.DOTALL)
+SUMMARY = "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->"
+WALKTHROUGH = "<!-- walkthrough_start -->"
+IN_PROGRESS = re.compile(
+    r"<!-- This is an auto-generated comment: review(?: |_)in(?: |_)progress by coderabbit\.ai -->"
+)
 TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\Z")
 
 
@@ -312,23 +317,27 @@ def check_binding(api, pull):
         and same_repository(api, head.get("repo")),
         "review completion is associated with a different PR or base",
     )
-    events = api.pages(f"issues/{pull.number}/timeline")
-    require(isinstance(events, list), "invalid review batch timeline")
+    check_history(api, pull.number, pull.head)
+
+
+def check_history(api, number, head):
+    events = api.pages(f"issues/{number}/timeline")
+    require(isinstance(events, list), "invalid PR review timeline")
     committed = False
     for event in events:
         require(
             isinstance(event, dict)
             and isinstance(event.get("event"), str)
             and event["event"],
-            "invalid review batch timeline event",
+            "invalid PR review timeline event",
         )
         kind = event["event"]
         require(
             not kind.startswith(("base_ref_", "automatic_base_change_")),
-            "review batch base history changed; a fresh review PR and head are required",
+            "PR base history changed; a fresh review PR and head are required",
         )
-        committed |= kind == "committed" and event.get("sha") == pull.head
-    require(committed, "review batch timeline does not identify its head commit")
+        committed |= kind == "committed" and event.get("sha") == head
+    require(committed, "PR timeline does not identify its head commit")
 
 
 def timestamp(value):
@@ -342,29 +351,32 @@ def timestamp(value):
         raise CoverageError("invalid review evidence timestamp") from error
 
 
-def attest_completed_range(api, pull, status, authentic):
-    """Bind a completed status to this PR's exact reviewed base and head.
+def attest_review(api, number, head, status, authentic, *, base=None):
+    """Bind a completed status to this PR's own reviewed head.
 
     Commit statuses alone do not name a PR or base. Use the authentic app's
-    latest walkthrough and final reviewed footer as bounded-review evidence.
-    A status predating that walkthrough cannot complete its newer review.
+    latest walkthrough and final reviewed footer. Ordinary reviews may be
+    incremental; bounded batches additionally require their exact base.
+    A status predating the walkthrough cannot complete its newer review.
     """
     completed_at = timestamp(status.get("created_at"))
     candidates, identifiers = [], set()
-    for comment in api.pages(f"issues/{pull.number}/comments"):
+    for comment in api.pages(f"issues/{number}/comments"):
         require(isinstance(comment, dict), "invalid review walkthrough comment")
         if not authentic(comment.get("user")):
             continue
         body = comment.get("body")
         require(isinstance(body, str), "invalid authentic review comment body")
-        if FINAL_MARKER not in body and REVIEW_RANGE.search(body) is None:
+        # App-authored discussion replies can quote ranges and footers. Only
+        # the provider's own summary/walkthrough comment is review evidence.
+        if not body.startswith(SUMMARY):
             continue
         identity = comment.get("id")
         require(
             positive_integer(identity)
             and identity not in identifiers
             and comment.get("issue_url")
-            == f"https://api.github.com/repos/{api.repository}/issues/{pull.number}",
+            == f"https://api.github.com/repos/{api.repository}/issues/{number}",
             "invalid or repeated review walkthrough identity",
         )
         identifiers.add(identity)
@@ -376,20 +388,25 @@ def attest_completed_range(api, pull, status, authentic):
         candidates.append((updated, identity, body))
     require(
         candidates,
-        "bounded review requires an authentic completed base/head walkthrough",
+        "PR requires its own authentic completed review walkthrough",
     )
     updated, _, body = max(candidates)
+    require(IN_PROGRESS.search(body) is None, "PR review is still in progress")
+    require(WALKTHROUGH in body, "missing provider review walkthrough")
     require(
         updated <= completed_at, "completion predates the latest review walkthrough"
     )
+    ranges = REVIEW_RANGE.findall(body)
     require(
-        REVIEW_RANGE.findall(body) == [(pull.base, pull.head)],
+        len(ranges) == 1
+        and ranges[0][1] == head
+        and (base is None or ranges[0][0] == base),
         "completed review walkthrough names a different base or head",
     )
     markers = list(FINAL_REVIEW.finditer(body))
     require(
         body.count(FINAL_MARKER) == 1 and len(markers) == 1,
-        "bounded review needs one explicit final reviewed footer",
+        "PR review needs one explicit final reviewed footer",
     )
     try:
         footer = json.loads(markers[0][1])
@@ -397,8 +414,8 @@ def attest_completed_range(api, pull, status, authentic):
         raise CoverageError("invalid final reviewed footer JSON") from error
     require(
         isinstance(footer, dict)
-        and footer.get("sourceCommitId") == pull.head
-        and footer.get("coveredCommitId") == pull.head
+        and footer.get("sourceCommitId") == head
+        and footer.get("coveredCommitId") == head
         and footer.get("kind") == "reviewed",
         "final review footer does not cover the exact current head",
     )

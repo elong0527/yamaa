@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import DEFAULT, Mock, patch
 
 from tools.ci import review_gate as gate
 
@@ -22,7 +22,12 @@ def pull(head=HEAD, *, branch="main", state="open", repository_id=REPOSITORY_ID)
     return {
         "number": NUMBER,
         "state": state,
-        "base": {"ref": branch, "repo": {"full_name": REPOSITORY, "id": repository_id}},
+        "changed_files": 1,
+        "base": {
+            "sha": OTHER,
+            "ref": branch,
+            "repo": {"full_name": REPOSITORY, "id": repository_id},
+        },
         "head": {
             "sha": head,
             "ref": "never executed",
@@ -48,6 +53,7 @@ def status(
         "context": "CodeRabbit",
         "creator": {"login": "coderabbitai[bot]", "id": 136622811, "type": "Bot"},
         "url": f"https://api.github.com/repos/{REPOSITORY}/statuses/{head}",
+        "created_at": "2026-10-15T14:16:05Z",
     }
     result.update(overrides)
     return result
@@ -55,6 +61,27 @@ def status(
 
 def thread(identity="T1", resolved=True):
     return {"id": identity, "isResolved": resolved}
+
+
+def walkthrough(number=NUMBER, head=HEAD, base=OTHER):
+    return {
+        "id": number + 1000,
+        "user": dict(gate.REVIEW_CREATOR),
+        "issue_url": f"https://api.github.com/repos/{REPOSITORY}/issues/{number}",
+        "created_at": "2026-10-15T14:00:26Z",
+        "updated_at": "2026-10-15T14:16:02Z",
+        "body": (
+            "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n"
+            "<!-- walkthrough_start -->\n"
+            "Reviewing files that changed from the base of the PR and between "
+            f"{base} and {head}.\n"
+            "<!-- final_review_risk_coverage:"
+            + json.dumps(
+                {"sourceCommitId": head, "coveredCommitId": head, "kind": "reviewed"}
+            )
+            + " -->"
+        ),
+    }
 
 
 class Evidence:
@@ -66,7 +93,16 @@ class Evidence:
         self.thread_snapshots = threads if threads is not None else [[]]
         self.pull_snapshots = pulls if pulls is not None else [pull()]
         self.history, self.published = [], []
-        self.pages = Mock(return_value=[])
+        head = self.pull_snapshots[0]["head"]["sha"]
+        self.page_values = {
+            f"issues/{NUMBER}/comments": [walkthrough(head=head)],
+            f"issues/{NUMBER}/timeline": [{"event": "committed", "sha": head}],
+        }
+        self.pages = Mock(side_effect=self.fixture_pages, return_value=[])
+
+    def fixture_pages(self, endpoint):
+        self.history.append(("pages", endpoint))
+        return copy.deepcopy(self.page_values.get(endpoint, DEFAULT))
 
     @staticmethod
     def next(snapshots):
@@ -103,7 +139,13 @@ class MultipleEvidence(Evidence):
         first["base"]["sha"] = OTHER
         second["number"] = NUMBER + 1
         self.pulls = {NUMBER: first, NUMBER + 1: second}
-        self.pages = Mock(return_value=list(self.pulls.values()))
+        self.pages.return_value = list(self.pulls.values())
+        self.page_values[f"issues/{NUMBER + 1}/comments"] = [
+            walkthrough(NUMBER + 1, OTHER)
+        ]
+        self.page_values[f"issues/{NUMBER + 1}/timeline"] = [
+            {"event": "committed", "sha": OTHER}
+        ]
 
     def pull(self, number):
         self.history.append(("pull", number))
@@ -157,10 +199,10 @@ class ExactCoverage(unittest.TestCase):
         verdict = gate.verify(api, NUMBER, expected_head=HEAD)
         self.assertEqual((verdict.head, verdict.state), (HEAD, "success"))
         self.assertEqual(api.published, [])
-        self.assertEqual(
-            [row[0] for row in api.history],
-            ["pull", "statuses", "threads", "statuses", "pull"],
-        )
+        self.assertEqual(api.history[0], ("pull", NUMBER))
+        self.assertEqual(api.history[-1], ("pull", NUMBER))
+        self.assertIn(("pages", f"issues/{NUMBER}/comments"), api.history)
+        self.assertIn(("pages", f"issues/{NUMBER}/timeline"), api.history)
 
     def test_old_review_cannot_replace_pending_or_missing_final_head_status(self):
         for rows in [[], [status(state="pending", description="Review in progress")]]:
@@ -371,6 +413,188 @@ class CompletePagination(unittest.TestCase):
         page = [status(index) for index in range(1, 101)]
         with self.assertRaisesRegex(gate.GateError, "did not advance"):
             client([page, copy.deepcopy(page)]).pages("commits/current/statuses")
+
+
+class OrdinaryReviewScope(unittest.TestCase):
+    def test_shared_head_completion_cannot_review_a_different_small_or_large_pr(self):
+        for count in [2, 301, 525]:
+            api = Evidence()
+            api.pull_snapshots[0]["changed_files"] = count
+            # This head's real completion belongs to a separate synthetic PR.
+            api.page_values[f"issues/{NUMBER}/comments"] = []
+            api.pages.return_value = [
+                {**pull(branch="synthetic-base"), "number": 99, "changed_files": 175}
+            ]
+            with self.subTest(count=count):
+                if count <= 300:
+                    with self.assertRaisesRegex(gate.GateError, "own authentic"):
+                        gate.verify(api, NUMBER, publish=True)
+                else:
+                    self.assertEqual(
+                        gate.verify(api, NUMBER, publish=True).state, "failure"
+                    )
+                self.assertNotIn("success", [v.state for v in api.published])
+
+    def test_large_direct_completion_cannot_bypass_batches_even_with_own_receipt(self):
+        for count, expected in [(300, "success"), (301, "failure")]:
+            api = Evidence()
+            api.pull_snapshots[0]["changed_files"] = count
+            with self.subTest(count=count):
+                self.assertEqual(gate.verify(api, NUMBER).state, expected)
+
+    def test_own_walkthrough_identity_head_footer_and_chronology_are_required(self):
+        for mutation in [
+            "wrong-issue",
+            "forged-user",
+            "old-head",
+            "no-footer",
+            "skipped-footer",
+            "authentic-reply",
+            "quoted-summary",
+            "no-walkthrough",
+            "newer-than-status",
+            "in-progress",
+        ]:
+            api = Evidence()
+            comment = api.page_values[f"issues/{NUMBER}/comments"][0]
+            if mutation == "wrong-issue":
+                comment["issue_url"] = comment["issue_url"].replace(str(NUMBER), "99")
+            elif mutation == "forged-user":
+                comment["user"]["id"] = 7
+            elif mutation == "old-head":
+                comment["body"] = comment["body"].replace(HEAD, OTHER)
+            elif mutation == "no-footer":
+                comment["body"] = comment["body"].split(
+                    "<!-- final_review_risk_coverage:"
+                )[0]
+            elif mutation == "skipped-footer":
+                comment["body"] = comment["body"].replace('"reviewed"', '"skipped"')
+            elif mutation == "authentic-reply":
+                comment["body"] = comment["body"].replace("summarize by", "reply by")
+            elif mutation == "quoted-summary":
+                comment["body"] = "A quoted review:\n" + comment["body"]
+            elif mutation == "no-walkthrough":
+                comment["body"] = comment["body"].replace(
+                    "<!-- walkthrough_start -->", ""
+                )
+            elif mutation == "newer-than-status":
+                comment["updated_at"] = "2026-10-15T14:16:06Z"
+            else:
+                comment["body"] += (
+                    "\n<!-- This is an auto-generated comment: review in progress by coderabbit.ai -->"
+                )
+            with self.subTest(mutation=mutation), self.assertRaises(gate.GateError):
+                gate.verify(api, NUMBER, publish=True)
+            self.assertNotIn("success", [v.state for v in api.published])
+
+    def test_newer_incomplete_summary_cannot_fall_back_to_an_older_completed_receipt(
+        self,
+    ):
+        api = Evidence()
+        newer = walkthrough()
+        newer.update(
+            id=newer["id"] + 1,
+            updated_at="2026-10-15T14:16:04Z",
+            body=(
+                "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n"
+                "<!-- This is an auto-generated comment: review in progress by coderabbit.ai -->"
+            ),
+        )
+        api.page_values[f"issues/{NUMBER}/comments"].append(newer)
+        with self.assertRaisesRegex(gate.GateError, "in progress"):
+            gate.verify(api, NUMBER)
+
+    def test_incremental_review_supports_forks_and_ordinary_multi_commit_heads(self):
+        api = Evidence()
+        comment = api.page_values[f"issues/{NUMBER}/comments"][0]
+        # The incremental start is neither main's current base nor a forced
+        # synthetic parent. Ordinary PRs need no immutable chunk topology.
+        comment["body"] = comment["body"].replace(OTHER, "c" * 40)
+        api.page_values[f"issues/{NUMBER}/timeline"].insert(
+            0, {"event": "committed", "sha": "c" * 40}
+        )
+        self.assertNotEqual(
+            api.pull_snapshots[0]["head"]["repo"],
+            api.pull_snapshots[0]["base"]["repo"],
+        )
+        self.assertEqual(gate.verify(api, NUMBER, expected_head=HEAD).state, "success")
+        self.assertFalse(
+            any("/pulls" in call.args[0] for call in api.pages.call_args_list)
+        )
+
+    def test_normal_main_fastforward_before_verification_preserves_completed_head(self):
+        api = Evidence()
+        api.pull_snapshots[0]["base"]["sha"] = "c" * 40
+        self.assertEqual(gate.verify(api, NUMBER).state, "success")
+
+    def test_any_recorded_base_change_rejects_an_own_completed_receipt(self):
+        for kind in [
+            "base_ref_changed",
+            "base_ref_force_pushed",
+            "automatic_base_change_succeeded",
+            "automatic_base_change_failed",
+        ]:
+            api = Evidence()
+            api.page_values[f"issues/{NUMBER}/timeline"].extend(
+                [
+                    {"event": kind},
+                    {"event": "base_ref_changed"},
+                ]
+            )
+            with (
+                self.subTest(kind=kind),
+                self.assertRaisesRegex(gate.GateError, "base history changed"),
+            ):
+                gate.verify(api, NUMBER, publish=True)
+            self.assertNotIn("success", [v.state for v in api.published])
+
+    def test_retarget_away_and_back_during_attestation_invalidates_success(self):
+        api = Evidence()
+        reads = 0
+
+        def pages(endpoint):
+            nonlocal reads
+            if endpoint == f"issues/{NUMBER}/timeline":
+                reads += 1
+                if reads == 2:
+                    return [
+                        {"event": "committed", "sha": HEAD},
+                        {"event": "base_ref_changed"},
+                        {"event": "base_ref_changed"},
+                    ]
+            return api.fixture_pages(endpoint)
+
+        api.pages.side_effect = pages
+        with self.assertRaisesRegex(gate.GateError, "base history changed"):
+            gate.verify(api, NUMBER, publish=True)
+        self.assertNotIn("success", [v.state for v in api.published])
+
+    def test_same_head_base_or_diff_changes_during_verification_fail_closed(self):
+        for field in ["base", "changed_files"]:
+            changed = pull()
+            if field == "base":
+                changed["base"]["sha"] = "c" * 40
+            else:
+                changed[field] = 525
+            api = Evidence(pulls=[pull(), changed, changed])
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(gate.GateError, "scope changed"),
+            ):
+                gate.verify(api, NUMBER, publish=True)
+            self.assertNotIn("success", [v.state for v in api.published])
+
+    def test_review_restarting_during_own_attestation_invalidates_completion(self):
+        api = Evidence(
+            statuses=[
+                [status()],
+                [status()],
+                [status()],
+                [status(8, state="pending")],
+            ]
+        )
+        self.assertEqual(gate.verify(api, NUMBER, publish=True).state, "pending")
+        self.assertNotIn("success", [v.state for v in api.published])
 
 
 class TrustedRouting(unittest.TestCase):

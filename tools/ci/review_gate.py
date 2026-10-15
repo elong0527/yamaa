@@ -261,7 +261,7 @@ def current_pull(api, number):
         return None
     head = (pull.get("head") or {}).get("sha")
     require(isinstance(head, str) and SHA.fullmatch(head), "invalid pull request head")
-    return head
+    return pull
 
 
 def latest_review_record(api, head):
@@ -368,7 +368,9 @@ def bounded_review(api, number, head, skipped, original):
                     "pending",
                     "Review changed before base/head attestation; retry required",
                 )
-            coverage.attest_completed_range(api, chunk, record, authentic)
+            coverage.attest_review(
+                api, chunk.number, chunk.head, record, authentic, base=chunk.base
+            )
         if latest_review(api, head) != skipped or any(
             latest_review(api, chunk.head) != review for chunk, review in reviews
         ):
@@ -387,9 +389,10 @@ def bounded_review(api, number, head, skipped, original):
 
 
 def verify(api, number, *, expected_head=None, publish=False):
-    head = current_pull(api, number)
-    if head is None:
+    pull = current_pull(api, number)
+    if pull is None:
         return None
+    head = pull["head"]["sha"]
     require(
         expected_head is None or expected_head == head, "requested PR head is stale"
     )
@@ -403,10 +406,20 @@ def verify(api, number, *, expected_head=None, publish=False):
         verdict, review = completed_review(api, number, head)
         if coverage.large_skip(review):
             verdict = bounded_review(api, number, head, review, verdict)
+        elif verdict.state == "success":
+            verdict = ordinary_review(api, number, pull, review)
+        current = current_pull(api, number)
         require(
-            current_pull(api, number) == head,
+            current is not None and current["head"]["sha"] == head,
             "PR head changed during review verification",
         )
+        if verdict.state == "success":
+            require(
+                (current.get("base") or {}).get("sha")
+                == (pull.get("base") or {}).get("sha")
+                and current.get("changed_files") == pull.get("changed_files"),
+                "PR base or changed-file scope changed during review verification",
+            )
         if publish:
             api.publish(verdict)
         return verdict
@@ -416,12 +429,44 @@ def verify(api, number, *, expected_head=None, publish=False):
             if current is not None:
                 api.publish(
                     Verdict(
-                        current,
+                        current["head"]["sha"],
                         "failure",
                         "Review verification failed; a fresh check is required",
                     )
                 )
         raise
+
+
+def ordinary_review(api, number, pull, review):
+    head = pull["head"]["sha"]
+    count = pull.get("changed_files")
+    require(type(count) is int and count >= 0, "invalid changed-file count")
+    require(
+        coverage.object_id((pull.get("base") or {}).get("sha")),
+        "invalid pull request base",
+    )
+    if count > coverage.MAX_PATHS:
+        return Verdict(
+            head, "failure", "Large PRs require completed bounded review coverage"
+        )
+    record = latest_review_record(api, head)
+    if review_identity(record) != review:
+        return Verdict(
+            head, "pending", "Review changed before PR attestation; retry required"
+        )
+    try:
+        coverage.check_history(api, number, head)
+        coverage.attest_review(api, number, head, record, authentic)
+        coverage.check_history(api, number, head)
+    except coverage.CoverageError as error:
+        raise GateError(str(error)) from error
+    if latest_review(api, head) != review:
+        return Verdict(
+            head, "pending", "Review changed during PR attestation; retry required"
+        )
+    return Verdict(
+        head, "success", "This PR's review completed; all review threads resolved"
+    )
 
 
 def linked_targets(api, numbers):

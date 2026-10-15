@@ -107,9 +107,24 @@ GitHub CLI, supplying the exact final commit:
 python -m tools.ci.review_gate --repository elong0527/yamaa --pr <number> --head <full-commit>
 ```
 
+Use that command when GitHub CLI API access is available. If environment policy
+blocks it, approved authenticated GitHub connector reads must prove every same
+predicate from fresh API evidence: the exact head and base, this PR's authentic
+completed status and walkthrough/footer chronology, unchanged base history,
+and all resolved threads. Re-read the PR head and status immediately before
+merging. Large PRs require the complete bounded proof below through those
+reads as well. An unavailable CLI does not waive review requirements.
+
 This requires CodeRabbit's authentic `Review completed` status on that commit
-and resolved review threads. A skipped successful status alone or a review of
-an earlier commit does not pass. Triage findings outside inline threads as well.
+and resolved review threads. The PR must have its own authentic summary and
+walkthrough, with a final reviewed footer naming that exact head; completion
+must follow the walkthrough's last update. Incremental review ranges are
+supported. A status shared with another PR, a skipped status alone, or an
+earlier-head review does not pass. Any recorded base retarget or force-push
+requires a fresh PR and head, even if the base was later changed back to main.
+PRs above 300 changed files require bounded coverage below, including when a
+shared head already has a successful status. Triage findings outside inline
+threads as well.
 The trusted-main `review.yml` workflow publishes the `review-completion` status
 for current open PRs targeting main. It refreshes after PR/status/discussion
 events and on a five-minute schedule for review and thread changes. It never

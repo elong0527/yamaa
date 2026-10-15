@@ -172,6 +172,8 @@ class Payloads:
                         "created_at": "2026-10-15T14:00:26Z",
                         "updated_at": "2026-10-15T14:16:02Z",
                         "body": (
+                            "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n"
+                            "<!-- walkthrough_start -->\n"
                             "Reviewing files that changed from the base of the PR and between "
                             f"{base} and {head}.\n"
                             '<!-- final_review_risk_coverage:{"sourceCommitId":"'
@@ -183,6 +185,16 @@ class Payloads:
                     }
                 ]
             ]
+        self.timeline_versions[NUMBER] = [[{"event": "committed", "sha": HEAD}]]
+        comment = copy.deepcopy(self.comment_versions[BATCHES[0]][0][0])
+        comment.update(
+            id=NUMBER + 1000,
+            issue_url=f"https://api.github.com/repos/{REPOSITORY}/issues/{NUMBER}",
+            body=comment["body"]
+            .replace(CHUNK_BASES[0], MAIN)
+            .replace(CHUNK_HEADS[0], HEAD),
+        )
+        self.comment_versions[NUMBER] = [[comment]]
 
     @staticmethod
     def next(versions):
@@ -520,6 +532,7 @@ class CompletedBoundedReviews(unittest.TestCase):
     def test_an_ordinary_completed_target_needs_no_batch_metadata_or_review_nodes(self):
         api = Payloads()
         api.status_versions[HEAD] = [[review(HEAD)]]
+        api.pull_versions[NUMBER][0]["changed_files"] = 300
         api.pull_versions[NUMBER][0]["body"] = "malformed yamaa-review-batches"
         self.assertEqual(gate.verify(api, NUMBER).state, "success")
         self.assertFalse(any(row[0] == "request" for row in api.history))
@@ -704,8 +717,13 @@ class ReviewScope(unittest.TestCase):
                 source.comment_versions[chunk.number][0],
             ]
         )
-        coverage.attest_completed_range(
-            api, chunk, source.status_versions[chunk.head][0][0], gate.authentic
+        coverage.attest_review(
+            api,
+            chunk.number,
+            chunk.head,
+            source.status_versions[chunk.head][0][0],
+            gate.authentic,
+            base=chunk.base,
         )
         self.assertTrue(
             api.request.call_args_list[-1]
@@ -749,7 +767,9 @@ class ReviewScope(unittest.TestCase):
                     f"https://api.github.com/repos/{REPOSITORY}/issues/999"
                 )
             elif mutation == "no-footer":
-                comment["body"] = comment["body"].split("\n")[0]
+                comment["body"] = comment["body"].split(
+                    "<!-- final_review_risk_coverage:"
+                )[0]
             else:
                 comment["body"] = comment["body"].replace('"reviewed"', '"skipped"')
             with self.subTest(mutation=mutation), self.assertRaises(gate.GateError):
@@ -815,7 +835,7 @@ class ReviewScope(unittest.TestCase):
                     '"kind":"reviewed"', '"kind":'
                 )
             elif mutation == "duplicate-footer":
-                comment["body"] += "\n" + comment["body"].split("\n")[1]
+                comment["body"] += "\n" + comment["body"].split("\n")[-1]
             else:
                 api.comment_versions[BATCHES[0]][0].append(copy.deepcopy(comment))
             with self.subTest(mutation=mutation), self.assertRaises(gate.GateError):
