@@ -27,11 +27,11 @@ fn object(fields: Vec<(&str, String)>) -> String {
 }
 /// One saved file, checked before every physical buffer extension. JSON strings
 /// stream through serde so escaping cannot allocate an oversized intermediate.
-struct Writer {
+struct Writer<'a> {
     output: Vec<u8>,
-    path: String,
+    path: &'a str,
 }
-impl Write for Writer {
+impl Write for Writer<'_> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         let required = self.output.len().checked_add(bytes.len());
         let actual = required.ok_or_else(|| {
@@ -49,11 +49,11 @@ impl Write for Writer {
         Ok(())
     }
 }
-impl Writer {
+impl Writer<'_> {
     fn failure(&self, cause: impl std::fmt::Display) -> Finding {
         Finding::cause(
             ConditionCode::ApplicationRejected,
-            &self.path,
+            self.path,
             &cause.to_string(),
         )
     }
@@ -171,7 +171,7 @@ pub fn render<T: TableAccess>(
     fields.push(("columns", list(&columns)));
     let mut writer = Writer {
         output: Vec::new(),
-        path,
+        path: &path,
     };
     writer.text("{\n")?;
     for (key, value) in fields {
@@ -455,7 +455,7 @@ mod tests {
         for (value, expected) in values {
             let mut writer = Writer {
                 output: Vec::new(),
-                path: "dataset_json".into(),
+                path: "dataset_json",
             };
             writer.cell(ValueRef::from(&value)).unwrap();
             assert_eq!(writer.output, expected.as_bytes());
