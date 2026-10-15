@@ -66,9 +66,13 @@ impl Error {
             )
             .into_robj(),
             Self::LockSyntax(error) => match error {
-                project_lock::Error::Limit(resource) => {
-                    list!(kind = "lock_limit", resource = *resource).into_robj()
-                }
+                project_lock::Error::Limit(error) => list!(
+                    kind = "lock_limit",
+                    resource = error.resource,
+                    limit = error.limit as f64,
+                    actual = error.actual.map(|value| value as f64)
+                )
+                .into_robj(),
                 project_lock::Error::Shape(field) => {
                     list!(kind = "lock_shape", field = *field).into_robj()
                 }
@@ -135,10 +139,7 @@ fn reply(function: &Function, arguments: Pairlist) -> std::result::Result<Robj, 
     }
 }
 fn text(value: &Robj) -> std::result::Result<String, Error> {
-    let raw = value
-        .as_raw()
-        .filter(|raw| raw.len() <= 2048)
-        .ok_or(Error::Protocol)?;
+    let raw = value.as_raw().ok_or(Error::Protocol)?;
     std::str::from_utf8(raw.as_slice())
         .map(str::to_owned)
         .map_err(|_| Error::Protocol)
@@ -159,11 +160,7 @@ impl ActivationPort for Port<'_> {
         lock: &LockReference,
         functions: &[ProjectFunctionIdentity],
     ) -> std::result::Result<(), Error> {
-        if language != Language::R
-            || lock.kind != LockKind::Renv
-            || self.lock.len() > yamaa_adapters::host_limits::REPLY_BYTES
-            || functions.len() > yamaa_adapters::host_limits::FUNCTIONS
-        {
+        if language != Language::R || lock.kind != LockKind::Renv {
             return Err(Error::Protocol);
         }
         let locked = project_lock::decode_renv(self.lock).map_err(Error::LockSyntax)?;
@@ -179,10 +176,7 @@ impl ActivationPort for Port<'_> {
                 .map(|function| Raw::from_bytes(function.call.as_bytes())),
         );
         let result = reply(&self.verify, pairlist!(versions = versions, calls = calls))?;
-        let rows = result
-            .as_list()
-            .filter(|rows| rows.len() <= 1025)
-            .ok_or(Error::Protocol)?;
+        let rows = result.as_list().ok_or(Error::Protocol)?;
         let mut findings = Vec::with_capacity(rows.len());
         for (_, row) in rows.iter() {
             let row = row
@@ -245,8 +239,7 @@ impl ActivationPort for Port<'_> {
                 ValueRef::Date(value) => Value::Date(value),
                 ValueRef::DateTime(value) => Value::DateTime(value),
             };
-            let value =
-                scalar_bytes::encode(value).map_err(|_| HostError::Raised(Error::Protocol))?;
+            let value = scalar_bytes::encode(value);
             encoded.push((
                 argument.name,
                 Robj::from(list!(

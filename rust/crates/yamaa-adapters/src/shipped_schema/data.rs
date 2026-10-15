@@ -79,6 +79,10 @@ output_class:
         type: path
         required: true
         description: See REQ-1047.
+    - relative_to:
+        type: path_base
+        default: declaring
+        description: See REQ-0780.
     - decimals:
         type: int
         required: false
@@ -239,6 +243,10 @@ dataset_class:
         type: project_path
         required: true
         description: See REQ-1060.
+    - relative_to:
+        type: path_base
+        default: declaring
+        description: See REQ-0780.
     - types:
         type: "dict[identifier, column_type]"
         required: false
@@ -1218,6 +1226,11 @@ project_path:
     min_length: 1
     description: See REQ-1151.
 
+path_base:
+    type: str
+    values: [declaring, entry]
+    description: See REQ-0780.
+
 identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
@@ -1718,6 +1731,11 @@ project_path:
     type: str
     min_length: 1
     description: See REQ-1151.
+
+path_base:
+    type: str
+    values: [declaring, entry]
+    description: See REQ-0780.
 
 identifier:
     type: str

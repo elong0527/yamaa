@@ -14,9 +14,6 @@ pub fn invocation<'a, E>(
 ) -> Result<Issue, Error<'a, E>> {
     let diagnostic =
         yamaa_core::project_diagnostics::invocation(path, failure, row, key_names, host)?;
-    let mut issues = finish(
-        vec![diagnostic],
-        crate::specification_check::MAX_ISSUE_BYTES,
-    )?;
+    let mut issues = finish(vec![diagnostic])?;
     Ok(issues.remove(0))
 }

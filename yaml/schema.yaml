@@ -75,6 +75,10 @@ output_class:
         type: path
         required: true
         description: See REQ-1047.
+    - relative_to:
+        type: path_base
+        default: declaring
+        description: See REQ-0780.
     - decimals:
         type: int
         required: false
@@ -235,6 +239,10 @@ dataset_class:
         type: project_path
         required: true
         description: See REQ-1060.
+    - relative_to:
+        type: path_base
+        default: declaring
+        description: See REQ-0780.
     - types:
         type: "dict[identifier, column_type]"
         required: false

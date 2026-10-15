@@ -19,6 +19,11 @@ project_path:
     min_length: 1
     description: See REQ-1151.
 
+path_base:
+    type: str
+    values: [declaring, entry]
+    description: See REQ-0780.
+
 identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'

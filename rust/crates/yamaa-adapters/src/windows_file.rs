@@ -348,7 +348,7 @@ fn effective_user_sid() -> io::Result<String> {
     if ok != 0 || error.raw_os_error() != Some(ERROR_INSUFFICIENT_BUFFER as i32) {
         return Err(error);
     }
-    if bytes < size_of::<TOKEN_USER>() as u32 || bytes > 65_536 {
+    if bytes < size_of::<TOKEN_USER>() as u32 {
         return Err(io::Error::other("invalid token user buffer size"));
     }
     let mut buffer = vec![0usize; (bytes as usize).div_ceil(size_of::<usize>())];
@@ -546,27 +546,45 @@ impl Drop for DirectoryLock {
 
 /// Canonical spelling of one physical entry, never a source of path authority.
 pub fn file_name(file: &File) -> io::Result<String> {
+    use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, ERROR_MORE_DATA};
     use windows_sys::Win32::Storage::FileSystem::{FileNameInfo, FILE_NAME_INFO};
-    const MAX_BYTES: usize = 65_536;
     let offset = std::mem::offset_of!(FILE_NAME_INFO, FileName);
-    let mut buffer = vec![0usize; (MAX_BYTES + offset).div_ceil(size_of::<usize>())];
-    let info = buffer.as_mut_ptr().cast::<FILE_NAME_INFO>();
-    // SAFETY: aligned initialized storage covers the fixed header and bounded UTF-16 tail;
-    // the live File owns its handle and the information class matches FILE_NAME_INFO.
-    let ok = unsafe {
-        GetFileInformationByHandleEx(
-            file.as_raw_handle(),
-            FileNameInfo,
-            info.cast(),
-            (MAX_BYTES + offset) as u32,
-        )
+    let mut capacity = 512u32;
+    let mut buffer = Vec::<usize>::new();
+    let capacity = loop {
+        buffer.resize((capacity as usize).div_ceil(size_of::<usize>()), 0);
+        // SAFETY: aligned initialized storage covers capacity bytes; the live File
+        // owns its handle and the information class matches FILE_NAME_INFO.
+        let ok = unsafe {
+            GetFileInformationByHandleEx(
+                file.as_raw_handle(),
+                FileNameInfo,
+                buffer.as_mut_ptr().cast(),
+                capacity,
+            )
+        };
+        if ok != 0 {
+            break capacity as usize;
+        }
+        let error = io::Error::last_os_error();
+        if !matches!(
+            error.raw_os_error(),
+            Some(code) if code == ERROR_MORE_DATA as i32 || code == ERROR_INSUFFICIENT_BUFFER as i32
+        ) {
+            return Err(error);
+        }
+        let next = capacity.saturating_mul(2);
+        if next == capacity {
+            return Err(io::Error::other(
+                "file name information exceeds Windows buffer size",
+            ));
+        }
+        capacity = next;
     };
-    if ok == 0 {
-        return Err(io::Error::last_os_error());
-    }
+    let info = buffer.as_ptr().cast::<FILE_NAME_INFO>();
     // SAFETY: success initialized the header; the returned tail length is checked before read.
     let bytes = unsafe { (*info).FileNameLength as usize };
-    if bytes > MAX_BYTES || bytes % 2 != 0 {
+    if bytes > capacity - offset || bytes % 2 != 0 {
         return Err(io::Error::other("invalid returned file name length"));
     }
     // SAFETY: the checked tail lies entirely within the owned aligned output allocation.

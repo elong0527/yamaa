@@ -24,6 +24,34 @@ CASES = tuple(TRUTH["original_case_names"])
 
 
 class PublicEnvironment(unittest.TestCase):
+    def test_missing_metadata_names_each_declared_input_before_entry_and_activation(
+        self,
+    ):
+        os.chdir(self.directory)
+        Path("environment.yaml").write_text(
+            "schema_version: '1.0'\nlanguage: python\nlock: missing.lock\n"
+            "functions: {id: missing-function.yaml}\ncodelists: [missing-codelists.yaml]\n"
+        )
+        with patch.object(
+            host, "resolve_callable", side_effect=AssertionError("unexpected binding")
+        ):
+            checked = yamaa.check("absent-spec.yaml", environment="environment.yaml")
+            failed = yamaa.domain("absent-spec.yaml", environment="environment.yaml")
+        self.assertEqual(checked.issues.to_dicts(), failed.issues.to_dicts())
+        for row, declaration, path in zip(
+            checked.issues.to_dicts(),
+            ("lock", "functions.id", "codelists[0]"),
+            ("missing.lock", "missing-function.yaml", "missing-codelists.yaml"),
+            strict=True,
+        ):
+            self.assertEqual(row["condition"], "project_environment_invalid")
+            self.assertEqual(row["spec_paths"], [declaration])
+            context = json.loads(row["context"])
+            self.assertEqual(context["path"], path)
+            self.assertEqual(context["cause"], "missing")
+            self.assertEqual(context["environment_path"], declaration)
+        self.assertIsNone(failed.output)
+
     def test_supplied_missing_environment_precedes_bad_or_absent_entry_without_activation(
         self,
     ):
@@ -663,7 +691,10 @@ class PublicEnvironment(unittest.TestCase):
                     self.assertIsNotNone(result.output)
                     before = self.report(result)
                     self.assertEqual(before["outcome"], "success")
-                    self.assertEqual(before["activation"]["lock"], "verified")
+                    self.assertEqual(
+                        before["activation"]["lock"],
+                        "not_requested" if name == "adam-adsl-bmi" else "verified",
+                    )
                     self.assertTrue(before["activation"]["tests"])
                     self.assertTrue(
                         all(
@@ -682,6 +713,32 @@ class PublicEnvironment(unittest.TestCase):
                         after["artifacts"][0]["content"].encode(), expected.read_bytes()
                     )
                     (case / expected.name).unlink()
+
+    def test_functions_without_packaging_lock_keep_conformance_and_saved_bytes(self):
+        case = self.study("adam-adsl-bmi")
+        environment = case / "python/environment.yaml"
+        environment.write_text(
+            "\n".join(
+                line
+                for line in environment.read_text().splitlines()
+                if not line.startswith("lock:")
+            )
+            + "\n"
+        )
+        (case / "python/uv.lock").unlink(missing_ok=True)
+        with patch.object(
+            host, "verify_versions", side_effect=AssertionError("unexpected lock audit")
+        ):
+            self.assertTrue(
+                yamaa.check("spec.yaml", environment=environment).issues.is_empty()
+            )
+            result = yamaa.domain("spec.yaml", environment=environment)
+        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(self.report(result)["activation"]["lock"], "not_requested")
+        self.assertTrue(self.report(result)["activation"]["tests"])
+        expected = next((case / "expected").glob("*.csv"))
+        self.assertTrue(result.save())
+        self.assertEqual((case / expected.name).read_bytes(), expected.read_bytes())
 
     def test_negative_static_issue_is_exact_and_never_imports_code_or_reads_data(self):
         case = self.study("negative-function-contract")
@@ -760,19 +817,29 @@ class PublicEnvironment(unittest.TestCase):
         tests = source["functions"]["project_value"]["tests"]
         tests[0]["result"] = 9.5
         tests[1]["result"] = 9.0
-        env.write_text(yaml.safe_dump(source, sort_keys=False))
-        for _ in range(2):
-            result = yamaa.domain("spec.yaml", environment="python/environment.yaml")
-            report = self.report(result)
-            self.assertEqual(report["source_reads"], [])
-            self.assertEqual(
-                [case["outcome"] for case in report["activation"]["tests"]],
-                ["result_mismatch", "result_mismatch", "passed"],
-            )
-            self.assertEqual(
-                result.issues["condition"].to_list(),
-                ["function_conformance_failed"] * 2,
-            )
+        for declared_lock in (True, False):
+            with self.subTest(declared_lock=declared_lock):
+                if not declared_lock:
+                    source.pop("lock")
+                env.write_text(yaml.safe_dump(source, sort_keys=False))
+                for _ in range(2):
+                    result = yamaa.domain(
+                        "spec.yaml", environment="python/environment.yaml"
+                    )
+                    report = self.report(result)
+                    self.assertEqual(report["source_reads"], [])
+                    self.assertEqual(
+                        report["activation"]["lock"],
+                        "verified" if declared_lock else "not_requested",
+                    )
+                    self.assertEqual(
+                        [case["outcome"] for case in report["activation"]["tests"]],
+                        ["result_mismatch", "result_mismatch", "passed"],
+                    )
+                    self.assertEqual(
+                        result.issues["condition"].to_list(),
+                        ["function_conformance_failed"] * 2,
+                    )
 
     def test_environment_codelists_bind_and_verify_with_independent_static_findings(
         self,

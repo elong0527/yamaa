@@ -8,15 +8,14 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-const MAX_PATH_BYTES: usize = 65_536;
-const MAX_OUTPUT_BYTES: usize = yamaa_core::capacity::SOURCE_BYTES;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
 pub enum Error {
     InvalidTarget,
     PathMismatch,
-    Limit,
+    Limit(yamaa_core::limits::LimitExceeded),
+    StagingCollision,
     Changed,
     Io(std::io::Error),
     Cleanup {
@@ -30,7 +29,8 @@ impl Error {
         match self {
             Self::InvalidTarget => "invalid explicit publication target",
             Self::PathMismatch => "publication path does not match explicit target",
-            Self::Limit => "publication byte or path limit",
+            Self::Limit(_) => "publication output byte limit",
+            Self::StagingCollision => "publication temporary names already exist",
             Self::Changed => "publication target changed",
             Self::Io(_) => "artifact publication failed",
             Self::Cleanup {
@@ -80,9 +80,6 @@ impl AnchoredTarget {
         }
     }
     pub(crate) fn publisher(&self, declared: &str) -> Result<Publisher, Error> {
-        if declared.len() > MAX_PATH_BYTES || self.target.len() > MAX_PATH_BYTES {
-            return Err(Error::Limit);
-        }
         if declared.is_empty() || declared.contains('\0') || self.remainder.is_empty() {
             return Err(Error::InvalidTarget);
         }
@@ -177,9 +174,6 @@ impl Publisher {
     }
     /// The caller names the absolute target; declarations grant no write authority.
     pub fn new(declared: &str, target: &str) -> Result<Self, Error> {
-        if declared.len() > MAX_PATH_BYTES || target.len() > MAX_PATH_BYTES {
-            return Err(Error::Limit);
-        }
         if declared.is_empty() || declared.contains('\0') || target.contains('\0') {
             return Err(Error::InvalidTarget);
         }
@@ -235,21 +229,10 @@ impl Publisher {
         content: &[u8],
         checkpoint: impl FnOnce(&str) -> Result<(), Error>,
     ) -> Result<(), Error> {
-        self.publish_with_limit(declared, content, MAX_OUTPUT_BYTES, checkpoint)
-    }
-    fn publish_with_limit(
-        &mut self,
-        declared: &str,
-        content: &[u8],
-        maximum: usize,
-        checkpoint: impl FnOnce(&str) -> Result<(), Error>,
-    ) -> Result<(), Error> {
         if declared != self.declared {
             return Err(Error::PathMismatch);
         }
-        if content.len() > maximum.min(MAX_OUTPUT_BYTES) {
-            return Err(Error::Limit);
-        }
+        yamaa_core::limits::Limits::output_bytes(content.len()).map_err(Error::Limit)?;
         let _lock = DirectoryLock::acquire(&self.parent)?;
         self.check_target()?;
         let (mut temporary, descriptor) = self.temporary()?;
@@ -366,7 +349,7 @@ impl Publisher {
             temporary.candidate = Some(identity(&status));
             return Ok((temporary, file));
         }
-        Err(Error::Limit)
+        Err(Error::StagingCollision)
     }
 }
 #[cfg(target_os = "macos")]
@@ -489,27 +472,18 @@ fn identity(status: &fs::Stat) -> (i128, i128, FileType) {
 mod tests {
     use super::*;
     #[test]
-    fn selected_byte_limit_refuses_one_over_before_target_changes_and_admits_exact_bytes() {
+    fn long_authored_declarations_publish_complete_bytes_without_a_path_copy_quota() {
         let path = std::env::temp_dir().join(format!(
-            "yamaa-publication-selected-capacity-{}",
+            "yamaa-publication-long-declaration-{}",
             std::process::id()
         ));
         std::fs::create_dir(&path).unwrap();
         let target = path.join("result.csv");
         std::fs::write(&target, b"old").unwrap();
-        let mut publisher = Publisher::new("result.csv", target.to_str().unwrap()).unwrap();
-        assert!(matches!(
-            publisher.publish_with_limit("result.csv", b"123456789", 8, |_| {
-                panic!("capacity refusal must precede publication checkpoints")
-            }),
-            Err(Error::Limit)
-        ));
-        assert_eq!(std::fs::read(&target).unwrap(), b"old");
-        assert_eq!(std::fs::read_dir(&path).unwrap().count(), 1);
-        publisher
-            .publish_with_limit("result.csv", b"12345678", 8, |_| Ok(()))
-            .unwrap();
-        assert_eq!(std::fs::read(&target).unwrap(), b"12345678");
+        let declared = "a".repeat(65_537);
+        let mut publisher = Publisher::new(&declared, target.to_str().unwrap()).unwrap();
+        publisher.publish(&declared, b"complete").unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"complete");
         assert_eq!(std::fs::read_dir(&path).unwrap().count(), 1);
         std::fs::remove_dir_all(path).unwrap();
     }
@@ -524,7 +498,7 @@ mod tests {
         let publisher = Publisher::new("result.csv", target.to_str().unwrap()).unwrap();
         assert!(matches!(
             publisher.temporary_with_numbers(|| 0),
-            Err(Error::Limit)
+            Err(Error::StagingCollision)
         ));
         assert!(!target.exists());
         let mut number = 0;

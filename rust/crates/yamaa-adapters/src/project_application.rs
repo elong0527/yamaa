@@ -3,7 +3,7 @@
 use crate::{
     file_application::{self, Failure},
     file_project::{self, FileProject},
-    project_source::{CaptureFailure, Failure as EnvironmentFailure},
+    project_source::Failure as EnvironmentFailure,
     specification_source::Error as SourceError,
 };
 use yamaa_core::{project_function::Language, specification::PrepareError};
@@ -35,7 +35,7 @@ pub fn prepare(
 }
 pub(crate) fn environment_path(environment: &str) -> Result<String, crate::file_resources::Error> {
     use crate::file_resources::Error;
-    if environment.is_empty() || environment.len() > 65536 || environment.contains('\0') {
+    if environment.is_empty() || environment.contains('\0') {
         return Err(Error::InvalidPath);
     }
     let environment = std::path::absolute(environment).map_err(|_| Error::InvalidPath)?;
@@ -74,6 +74,9 @@ pub fn failure(error: &Error, host: Language) -> Failure {
                 error, None,
             )),
             crate::file_preparation::Error::Compile(_) => refused("prepare"),
+            crate::file_preparation::Error::Inventory(_) => {
+                file_application::rejected("prepare", "inventory")
+            }
         },
         Error::Project(file_project::Error::Compile(run)) => match &run.rejection.error {
             PrepareError::Invalid(_) => {
@@ -113,30 +116,15 @@ fn environment_failure(
             for projection in [
                 diagnostics::scalar_sources(rejected),
                 diagnostics::schema_sources(rejected),
+                diagnostics::capture_sources(rejected),
             ] {
                 match projection {
                     Ok(rows) => issues.extend(rows),
+                    Err(diagnostics::Error::ResourceLimit(refusal)) => {
+                        return refusal.issues("environment", "resource_limit");
+                    }
                     Err(_) => return refused("environment"),
                 }
-            }
-            for source in &rejected.sources {
-                match &source.error {
-                    CaptureFailure::Port(error) | CaptureFailure::Interrupted(error) => {
-                        issues.extend(file_application::resource_failure("environment", error))
-                    }
-                    CaptureFailure::Structural(SourceError::Findings(_))
-                    | CaptureFailure::Scalar { .. } => (),
-                    _ => issues.extend(file_application::rejected(
-                        "environment",
-                        "metadata_boundary",
-                    )),
-                }
-            }
-            if !crate::issue_rows::within_limit(
-                &issues,
-                crate::specification_check::MAX_ISSUE_BYTES,
-            ) {
-                return refused("environment");
             }
             Ok(issues)
         }
@@ -147,13 +135,22 @@ fn environment_failure(
             return file_application::rejected("environment", "environment_boundary")
         }
     };
-    projected.unwrap_or_else(|_| refused("environment"))
+    projected.unwrap_or_else(|error| match error {
+        diagnostics::Error::ResourceLimit(refusal) => {
+            refusal.issues("environment", "resource_limit")
+        }
+        _ => refused("environment"),
+    })
 }
 pub fn check(specification: &str, environment: &str, host: Language) -> Failure {
-    match crate::file_workflow::prepare(specification, environment, host) {
-        Ok(graph) => crate::producer_check::prepared(&graph).unwrap_or_else(|_| refused("check")),
-        Err(error) => workflow_issues(&error, host),
-    }
+    crate::issue_rows::collect(
+        match crate::file_workflow::prepare(specification, environment, host) {
+            Ok(graph) => {
+                crate::producer_check::prepared(&graph).unwrap_or_else(|_| refused("check"))
+            }
+            Err(error) => workflow_issues(&error, host),
+        },
+    )
 }
 fn workflow_issues(error: &crate::file_workflow::Error, host: Language) -> Failure {
     crate::producer_check::rejected(error, host).unwrap_or_else(|error| match error {
@@ -169,6 +166,9 @@ fn workflow_issues(error: &crate::file_workflow::Error, host: Language) -> Failu
         }
         crate::producer_check::Error::Original(error) => workflow_failure(error),
         crate::producer_check::Error::Projection(_) => refused("check"),
+        crate::producer_check::Error::ResourceLimit(refusal) => {
+            refusal.issues("environment", "resource_limit")
+        }
     })
 }
 
@@ -189,6 +189,9 @@ pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Lan
                     .map(file_application::preparation_failure)
                     .unwrap_or_else(|_| refused("prepare"))
             }
+            crate::file_preparation::Error::Inventory(_) => {
+                file_application::rejected("prepare", "inventory")
+            }
             crate::file_preparation::Error::Compile(error) => {
                 file_application::preparation_failure(crate::specification_diagnostics::failure(
                     error, None,
@@ -201,30 +204,12 @@ pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Lan
             PrepareError::Invalid(_) => {
                 crate::project_check::rejected(error.run()).unwrap_or_else(|_| refused("check"))
             }
-            PrepareError::Unsupported(features) => {
-                let mut budget = crate::report_projection::Budget::new(
-                    crate::specification_check::MAX_ISSUE_BYTES,
-                );
-                let admitted = (|| {
-                    budget.entries(features.len())?;
-                    for feature in features {
-                        for _ in 0..4 {
-                            budget.text(&feature.operation)?;
-                            budget.text(&feature.path)?;
-                        }
-                    }
-                    Ok::<_, crate::specification_report::Error>(())
-                })();
-                if admitted.is_err() {
-                    return refused("check");
-                }
-                features
-                    .iter()
-                    .flat_map(|feature| {
-                        file_application::unsupported(&feature.operation, Some(&feature.path))
-                    })
-                    .collect()
-            }
+            PrepareError::Unsupported(features) => features
+                .iter()
+                .flat_map(|feature| {
+                    file_application::unsupported(&feature.operation, Some(&feature.path))
+                })
+                .collect(),
             error @ (PrepareError::Limit(_) | PrepareError::Numeric { .. }) => {
                 crate::specification_diagnostics::compiler_failure(error)
             }
@@ -264,6 +249,7 @@ fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
                 error, None,
             )),
             G::Document(D::Compile(_)) => refused("prepare"),
+            G::Document(D::Inventory(_)) => file_application::rejected("prepare", "inventory"),
             G::Graph(crate::producer_graph::Error::Graph(
                 yamaa_core::producer_graph::Error::Compilation {
                     error: error @ (PrepareError::Limit(_) | PrepareError::Numeric { .. }),
@@ -321,12 +307,32 @@ fn preparation_boundary(
 mod resource_tests {
     use super::*;
     #[test]
-    fn layered_validation_work_refusal_keeps_its_preparation_outcome_on_both_routes() {
-        use yamaa_core::schema::{ConstraintError, ValidationError};
+    fn inventory_rejection_retains_the_preparation_stage_and_inventory_cause() {
+        let inventory = || {
+            crate::file_preparation::Error::Inventory(
+                yamaa_core::submission_inventory::MetadataError::Shape,
+            )
+        };
+        let original = file_application::preparation_failure(inventory().into_message());
+        let project = failure(
+            &Error::Project(file_project::Error::Document(inventory())),
+            Language::Python,
+        );
+        assert_eq!(project, original);
+        assert_eq!(project.len(), 1);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&project[0].context).unwrap(),
+            serde_json::json!({"stage":"prepare", "code":"inventory"})
+        );
+    }
+
+    #[test]
+    fn layered_validation_depth_refusal_keeps_its_preparation_outcome_on_both_routes() {
+        use yamaa_core::schema::ValidationError;
         let error = crate::specification_source::InheritanceError::<crate::file_resources::Error>::Preparation {
             schema: crate::shipped_schema::capture().unwrap(),
             error: Box::new(yamaa_core::inheritance_preparation::Error::Validation(
-                ValidationError::Constraint(ConstraintError::Work { limit: 7 }),
+                ValidationError::Depth { limit: 128 },
             )),
             captured_parents: Vec::new(),
         };
@@ -348,7 +354,7 @@ mod resource_tests {
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
             serde_json::json!({
-                "code":"resource_limit", "stage":"prepare", "phase":"validation", "resource":"work", "limit":7, "incomplete_checks_from":"specification",
+                "code":"resource_limit", "stage":"prepare", "phase":"validation", "resource":"semantic_depth", "limit":128,
             })
         );
     }

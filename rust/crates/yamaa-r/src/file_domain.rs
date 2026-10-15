@@ -176,12 +176,6 @@ impl RuntimePort for Runtime<'_> {
     ) -> std::result::Result<State, String> {
         let mut build = graph.into_build();
         let fields = self.fields();
-        if fields
-            .iter()
-            .any(|text| text.len() > yamaa_adapters::host_limits::IDENTITY_BYTES)
-        {
-            return Err("producer identity byte limit".into());
-        }
         let producer = crate::file_producer::platform::build_selected_with_observer(
             &mut build,
             fields.map(str::to_owned).to_vec(),

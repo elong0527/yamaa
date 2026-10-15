@@ -70,8 +70,9 @@ owns decoding behavior.
 - Preserve full signed-i64 values and separate missingness, lossless R
   `yamaa_int64_vector`/`yamaa_utf8_vector`, preserve-or-error conversions and
   JSON-text diagnostic context.
-- Resolve resources from their original declaring file, with absolute and
-  parent-relative local paths and no project-root fallback. Preserve snapshots,
+- Resolve resources from their original declaring file by default; explicit
+  input/output `relative_to: entry` selects each specification entry. Admit
+  absolute and parent-relative local paths without project-root fallback. Preserve snapshots,
   original failures, callback counts and producer-first publication order.
 - Keep normative diagnostics registry-owned, including the reviewed
   `unsupported_operation` and `engine_rejected` null-requirement exceptions.
@@ -93,107 +94,57 @@ Host behavior and source installation commands live in the
 
 ## Resource refusals
 
-Capacity refusals retain `engine_rejected`, a null requirement and the authored
-paths. Compiler refusals identify `code: compiler_limit`, `stage: prepare`, the
-resource, its integer limit and actual usage when counted. Numeric policy
-refusals use `code: numeric_policy`; preparation and YAML resource refusals use
-`code: resource_limit` and retain their phase. Check and Build return the same
-preparation facts, with or without a project environment.
+In the shared engine, a fixed resource boundary produces `engine_rejected` with
+a null requirement and its authored specification paths. The context retains the lifecycle stage, the
+boundary's code, its resource name and integer limit, and the observed `actual`
+size when available. Compiler boundaries use `compiler_limit`; physical capture,
+preparation and execution boundaries retain their corresponding resource code
+and phase. Static Check and Build share the same preparation facts.
 
-Typed resource refusals also identify `incomplete_checks_from`, the earliest
-lifecycle scope without complete check results: `specification` for capture and
-preparation, `source_binding` for input admission and binding, `data` for
-execution and verification, or `output` for serialization and publication.
-Build/report boundaries use `build` when no narrower scope is available; other
-boundaries retain their stage name. Earlier completed checks remain valid. A
-refusal does not enumerate which individual requirements ran, execute later
-checks, or make static Check read study data. Reduce the exhausted resource and
-rerun to obtain remaining findings.
+A refusal stops that operation before its later effects. Earlier completed
+findings and original source provenance remain available. Static Check retains
+its metadata-only authority. Reduce the refused size and rerun the operation.
 
 ## Resource limits
 
-Public Python and R calls use `ExecutionBudget::longitudinal()`: 10,000,000
-source/output rows, 640,000,000 cells, 1 GiB scalar text, 512 MiB output text,
-and 1 GiB encoded input/output. Dataset execution has an independent
-2,000,000,000 logical-work allowance. CSV defaults admit the same source
-profile, including up to 1,024 header fields and the header record. The
-producer frontier shares these allowances. Smaller caller-selected budgets and
-the `ExecutionBudget::bounded()` profile remain enforced. Lower decoder, CSV,
-IPC, report and publication ceilings must not refuse an otherwise admitted
-input below this profile.
+The shared Rust engine behind Python and R `domain`, `check` and `define` calls
+uses one fixed policy in `yamaa_core::limits::Limits`.
+Admission checks the physical file, table geometry, declaration shape or actual
+regex match at its owning boundary. There are no caller-selected profiles or
+cumulative byte, copy, traversal or work pools.
 
-Integer literals must fit signed i64 and otherwise report `integer_overflow`
-(REQ-0014). CSV `output.decimals` accepts 0 through 18. Resource bounds remain
-separate from schema validity and mathematical function behavior.
+The standalone Python `read_odm` and `write_odm_parquet` helpers retain their
+own archive-member, expanded-byte and XML-depth options and report parser
+refusals through `ODMError`.
 
-Specifications admit 1,024 declared columns, output columns, typed input
-fields, CSV/Parquet/Arrow source fields and producer contract fields; 1,025 is
-refused at its corresponding boundary. Producer declarations also allow 1,024,
-because each selected contract field requires one declaration. Keys remain
-limited to 64, input datasets to 16 and source operands to 64. An `ordinal`
-field counts toward the source width.
+| Boundary | Fixed maximum |
+| --- | ---: |
+| Each specification, schema, environment, function, codelist or packaging-lock file | 8 MiB |
+| Each encoded study source file | 10 GiB |
+| Each saved output file | 10 GiB |
+| Rows in a decoded or materialized table | 10,000,000 |
+| Cells in a decoded or materialized table | 640,000,000 |
+| Columns in a source, output or intermediate table | 1,024 |
+| Keys in one key or grouping declaration | 64 |
+| Inputs to one specification | 16 |
+| Operands in one source selection | 64 |
+| Parent occurrences in one inheritance traversal, including aliases | 8,192 |
+| Steps in one regex match | 1,000,000 |
+| Findings in the final public issue collection | 10,000 |
+| YAML nesting depth | 64 |
+| Semantic expression and context nesting depth | 128 |
 
-Validation and normalization start with 67,108,864 logical work units; the
-separate schema-bundle work ceiling remains 4,194,304. Specification
-preparation adds one unit per original decoded node and text byte to that flat
-allowance. Inheritance uses four times the flat allowance for the same total
-input size: one share each for layer admission, composition/dependencies, final
-normalization and model admission. Thus `W_flat(N, B) = 67,108,864 + N + B` and
-`W_layered(N, B) = 4 * W_flat(N, B)`, with `N` and `B` summed over unique
-captured layers, including the entry. Input nodes and text bytes keep their
-separate 131,072 and 8,388,608 limits, so layered work stops at at most
-302,514,176 units. All stages and failed attempts share cumulative charges;
-branches and repeated parents cannot reset them. Custom Rust work allowances
-keep a finite size credit of at most their original work allowance.
+A MiB is 1,048,576 bytes; a GiB is 1,073,741,824 bytes. File readers check the
+encoded size before retaining bytes and check growth during reading. Writers
+check the saved file size before extending it. Table admission checks rows,
+columns and their product before constructing or growing the corresponding
+geometry. The regex step counter is fresh for each match.
 
-Flat preparation permits `65,536 + 2 * N` attempted diagnostics and
-`8,388,608 + 128 * N + B` bytes of diagnostic text. These counters include
-failed union alternatives that are discarded after another alternative
-succeeds; emitted findings and their ordering remain unchanged. Layered
-preparation uses four times those same allowances, capped at 1,310,720 attempts
-and 134,217,728 text bytes. Cumulative normalized arena construction has eight
-shares for descriptor output/import, composition and the subsequent planning
-arenas: 1,048,576 nodes, 67,108,864 text bytes and 2,097,152 edges. Each
-individual decoded, normalized and composed document keeps its 131,072-node,
-8,388,608-text-byte and 262,144-edge bounds. Traversal refuses more than 8,192
-parent occurrences, including repeated occurrences of the same parent. Its
-copied path bytes keep their 1,048,576-byte cumulative ceiling. Schema regex
-matching keeps the individual-match limits while its cumulative subject-byte,
-work and state-cell allowances receive the same four shares plus four more for
-dependency reachability/ordering, and a size credit capped at each original
-allowance. Their maximums are 16,777,216 subject bytes, 16,000,000 work units and
-16,000,000 state cells; runtime expression matching keeps its separate policies.
-These size allowances belong to top-level host preparation; explicit Rust
-component budgets created with `NormalizationBudget::new` keep their exact
-caller-selected ceilings and cumulative accounting.
-
-Representation allowances derive from the admitted geometry. Let `C` be
-640,000,000 cells, `R` be 10,000,000 rows, `S` be 1 GiB source/scalar text,
-`T` be 512 MiB output text, and `H` be 64 MiB metadata slack:
-
-- Source storage/decode allowance: `32*C + 24*R + 3*S + H`, covering
-  physical/canonical slots, row owners and text conversion/ownership.
-  SAS, CSV and Parquet use this central allowance and enforce smaller selected
-  quotas. Compressed SAS/Parquet text can exceed encoded input size; its actual
-  modeled decoded storage/work must still fit this finite allowance.
-- Internal public Arrow/Option/IPC transport: `64*C + T + H`. Authored artifacts
-  keep their separate 1 GiB encoded-output limit.
-- Descriptor capture/reread allowance: `4*S`; copied original-source evidence:
-  `S + H`. Each capture still enforces the caller's encoded-byte maximum.
-- Parquet source groups admit the longitudinal 65,536-batch allowance. Compact
-  metadata/header bytes, nodes and schema tables remain bounded by the encoded
-  source allowance; pages admit up to `C`. These allow the writer's 1,024-row
-  groups to round-trip without a lower group/footer ceiling.
-- Report traversal cells: `P = C + 3*C`, covering source/derived/artifact visits
-  and the three public typed-copy passes.
-- Complete report encoded bytes: `E = 256*P + 12*(S + T + S) + 16*(R + R) + H`.
-  Fixed cell slots cover typed maps/scalar spellings, and text factors cover
-  JSON escaping and artifact records.
-- Report retained charges: `6*E`; report work: `8*E + 16*P`. Entries, buffer
-  writes and logical cell visits keep their actual independent charges.
-
-These are logical admission policies; they do not reserve memory or guarantee
-that the host has enough process memory.
+Semantic admission and retained observations stay complete. The final public
+issue collection keeps its first 10,000 findings in their existing order. Source
+identity, path authority, encoding, scalar types, handle ownership and interrupt
+propagation retain their own integrity checks. These fixed limits are independent
+of available process memory.
 
 ## Specification and environment migration from 0.2.0
 
