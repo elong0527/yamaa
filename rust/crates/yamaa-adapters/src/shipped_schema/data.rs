@@ -433,9 +433,10 @@ filtered_source_class:
         type: variable
         required: true
         description: See REQ-1053.
-    - filter:
-        type: predicate
-        required: true
+    - fields_from: match_filter_fields
+    - fields_from: match_selection_fields
+    - absent:
+        type: literal_value
         description: See REQ-1053.
 
 keep_policy:
@@ -687,7 +688,7 @@ expressions:
     cut: # See REQ-1118.
 
         - source:
-            type: variable
+            type: filtered_source
             required: true
             description: See REQ-1118.
         - breaks:
