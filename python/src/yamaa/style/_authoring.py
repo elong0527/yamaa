@@ -178,6 +178,24 @@ def _intermediate_entries(value: Mapping) -> list[Mapping]:
     return [entry for entry in intermediates if isinstance(entry, Mapping)]
 
 
+def _indexed_entries(value: Mapping, field: str) -> list[tuple[int, Mapping]]:
+    """(raw index, entry) for the mapping entries of a list field.
+
+    A non-mapping entry (a stray scalar in a list the validator will
+    reject) must not shift the positions of the entries after it: the
+    document node lookups index the sequence as written, so a filtered
+    index would name the wrong entry's line and spec path.
+    """
+    entries = value.get(field)
+    if not isinstance(entries, list):
+        return []
+    return [
+        (index, entry)
+        for index, entry in enumerate(entries)
+        if isinstance(entry, Mapping)
+    ]
+
+
 def _sequence_node(document: Document, field: str) -> yaml.SequenceNode | None:
     node = member(document.root, field)
     return node if isinstance(node, yaml.SequenceNode) else None
@@ -242,7 +260,7 @@ def _row_derivation_key(
             return (
                 key.start_mark.line,
                 key.start_mark.column,
-                f"rows[0].derivations.{column}",
+                f"rows[{row_index}].derivations.{column}",
             )
     return None
 
@@ -279,21 +297,21 @@ def missing_labels(document: Document, value: Mapping) -> Iterator[Departure]:
     output_columns = value["output"].get("columns")
     if not isinstance(output_columns, list):
         return
-    entries = _column_entries(value)
-    by_name: dict[str, int] = {}
-    for index, entry in enumerate(entries):
+    indexed = _indexed_entries(value, "columns")
+    by_name: dict[str, tuple[int, Mapping]] = {}
+    for index, entry in indexed:
         name = entry.get("name")
         if isinstance(name, str) and name not in by_name:
-            by_name[name] = index
+            by_name[name] = (index, entry)
     for name in output_columns:
         if not isinstance(name, str) or name not in by_name:
             # Undeclared output columns fail validation; style stays silent.
             continue
-        entry = entries[by_name[name]]
+        raw_index, entry = by_name[name]
         label = entry.get("label")
         if isinstance(label, str) and label:
             continue
-        position = _column_name_key(document, by_name[name])
+        position = _column_name_key(document, raw_index)
         if position is None:
             continue
         line, column, spec_path = position
@@ -343,6 +361,7 @@ def repeated_row_derivations(document: Document, value: Mapping) -> Iterator[Dep
             return
     first = rows[0].get("derivations")
     assert isinstance(first, Mapping)
+    first_raw_index = _indexed_entries(value, "rows")[0][0]
     for column in first:
         if not isinstance(column, str):
             continue
@@ -372,7 +391,7 @@ def repeated_row_derivations(document: Document, value: Mapping) -> Iterator[Dep
             for text in _walk_strings(derivation)
         ):
             continue
-        position = _row_derivation_key(document, 0, column)
+        position = _row_derivation_key(document, first_raw_index, column)
         if position is None:
             continue
         line, column_pos, spec_path = position
@@ -420,11 +439,10 @@ def redundant_intermediates(document: Document, value: Mapping) -> Iterator[Depa
     keys = value.get("keys")
     if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
         return
-    intermediates = _intermediate_entries(value)
     raw_intermediates = value.get("intermediates")
     if not isinstance(raw_intermediates, list):
         return
-    for index, entry in enumerate(intermediates):
+    for index, entry in _indexed_entries(value, "intermediates"):
         identifier = entry.get("id")
         dataset = entry.get("dataset")
         if not isinstance(identifier, str) or not isinstance(dataset, str):
