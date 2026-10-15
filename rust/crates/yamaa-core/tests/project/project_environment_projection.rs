@@ -10,12 +10,12 @@ use yamaa_core::{
     },
     project_function::{Case, Definition, Finding as F, Language, Parameter},
     project_function_document::{Finding as SF, Kind},
-    schema::{Document, DocumentLimits, DocumentNode as N},
+    schema::{Document, DocumentNode as N},
     value::{ColumnType, Value, ValueType},
 };
 fn document(nodes: Vec<N>) -> Document {
     let root = nodes.len() - 1;
-    Document::new(nodes, root, DocumentLimits::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 fn root_document(functions: &[(&str, bool)], codelists: &[bool]) -> Document {
     let mut nodes = Vec::new();
