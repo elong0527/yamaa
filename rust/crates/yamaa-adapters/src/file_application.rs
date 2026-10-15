@@ -756,7 +756,7 @@ mod tests {
                 .document()
                 .written_output_field_origin(field)
                 .ok_or(crate::file_resources::Error::InvalidPath)?;
-            resources.publication_target_from(origin.declaring_source, origin.written)
+            resources.publication_target_from(origin.base_source, origin.written)
         })
         .unwrap();
         assert!(result.output().is_some());
@@ -1209,7 +1209,7 @@ mod tests {
                     .document()
                     .written_output_field_origin(field)
                     .ok_or(crate::file_resources::Error::InvalidPath)?;
-                resources.publication_target_from(origin.declaring_source, origin.written)
+                resources.publication_target_from(origin.base_source, origin.written)
             });
             let mut domain = domain.unwrap();
             assert!(domain.output().is_some());

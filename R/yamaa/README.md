@@ -26,8 +26,14 @@ build raises `yamaa_domain_error` on Save. Owned result attributes are read only
 issue context is JSON text. Capacity refusals retain the shared condition and
 authored paths; [release guidance](../../docs/release.md#resource-refusals)
 describes their context. `yamaa_check` reads no study data or project code.
-Resource paths resolve from their original declaring YAML layer under the
-[local-path policy](../../rules/storage/resources.md).
+Resource paths resolve from their original declaring YAML layer by default.
+Set `relative_to: entry` on an input dataset or `output` declaration to select
+the study entry's directory under the
+[local-path policy](../../rules/storage/resources.md). Input settings cover
+both data paths and producer `schema` links; output settings cover the primary
+artifact and both logs. A producer uses its own linked entry file, which may
+inherit shared code. `result$save()` publishes the held bytes to those selected
+destinations.
 
 Inputs can use CSV, Parquet, SAS datasets (`.sas7bdat`), or SAS Transport v5/v8
 (`.xpt`). SAS inputs explicitly declare `encoding`, for example
