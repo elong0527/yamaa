@@ -1,14 +1,11 @@
 use std::sync::Arc;
 use yamaa_adapters::{
-    project_source::{
-        self, CaptureFailure, CapturePort, Failure, Kind, Limits, Origin, Reply, Request,
-    },
-    specification_source::{CapturedSchema, Error, Limits as SchemaLimits, Source},
+    project_source::{self, CaptureFailure, CapturePort, Failure, Kind, Origin, Reply, Request},
+    specification_source::{CapturedSchema, Error, Source},
 };
 use yamaa_core::{
     project_environment::{Finding, LockKind},
     project_function::Language,
-    project_limits::AdmissionError,
     value::Value,
 };
 fn source(identity: &str, bytes: &str) -> Source {
@@ -31,14 +28,13 @@ fn schema() -> Arc<CapturedSchema> {
         ],
         0,
         "environment_class",
-        SchemaLimits::default(),
     )
     .unwrap()
 }
 #[derive(Debug, PartialEq)]
 struct Payload(Box<str>);
 struct Port {
-    trace: Vec<(Kind, String, String, usize)>,
+    trace: Vec<(Kind, String, String)>,
     fail: bool,
     wide: bool,
     lock_kind: LockKind,
@@ -67,7 +63,6 @@ impl CapturePort for Port {
             request.kind,
             request.declaring_source.into(),
             request.written.into(),
-            request.remaining_bytes,
         ));
         if self.interrupt_at.as_deref() == Some(request.written) {
             let payload = Payload("host interrupt".into());
@@ -103,14 +98,7 @@ fn root() -> Source {
 #[test]
 fn owned_environment_parts_preserve_original_allocations_and_capture_evidence() {
     let mut port = Port::new();
-    let prepared = project_source::prepare(
-        schema(),
-        root(),
-        Language::Python,
-        &mut port,
-        Limits::default(),
-    )
-    .unwrap();
+    let prepared = project_source::prepare(schema(), root(), Language::Python, &mut port).unwrap();
     let root_bytes = prepared.root.source().bytes.as_ptr();
     let lock_bytes = prepared.lock.as_ref().unwrap().source.bytes.as_ptr();
     let cases = prepared.environment.draft().functions.as_ref().unwrap()[0]
@@ -146,14 +134,9 @@ fn held_dependency_capture_is_ordered_typed_and_repeated_without_study_or_code_p
     let schema = schema();
     let mut port = Port::new();
     for _ in 0..2 {
-        let prepared = project_source::prepare(
-            Arc::clone(&schema),
-            root(),
-            Language::Python,
-            &mut port,
-            Limits::default(),
-        )
-        .unwrap();
+        let prepared =
+            project_source::prepare(Arc::clone(&schema), root(), Language::Python, &mut port)
+                .unwrap();
         assert!(Arc::ptr_eq(prepared.root.schema(), &schema));
         assert_eq!(prepared.root.source().bytes, root().bytes);
         assert_eq!(
@@ -232,16 +215,13 @@ fn held_dependency_capture_is_ordered_typed_and_repeated_without_study_or_code_p
     assert_eq!(
         port.trace
             .iter()
-            .map(|(kind, declaring, written, _)| {
+            .map(|(kind, declaring, written)| {
                 assert_eq!(declaring, "study/environment.yaml");
                 (*kind, written.as_str())
             })
             .collect::<Vec<_>>(),
         one.into_iter().chain(one).collect::<Vec<_>>()
     );
-    for round in port.trace.chunks_exact(3) {
-        assert!(round[0].3 > round[1].3 && round[1].3 > round[2].3);
-    }
 }
 #[test]
 fn invalid_root_and_inline_scalars_fail_before_every_dependency_capture() {
@@ -251,23 +231,13 @@ fn invalid_root_and_inline_scalars_fail_before_every_dependency_capture() {
         "schema_version: '1.0'\nruntime: {language: python}\nlock: project.lock\n",
     );
     assert!(matches!(
-        project_source::prepare(
-            schema(),
-            invalid,
-            Language::Python,
-            &mut port,
-            Limits::default()
-        ),
+        project_source::prepare(schema(), invalid, Language::Python, &mut port),
         Err(Failure::Root(Error::Findings(_)))
     ));
     let invalid=source("environment.yaml","schema_version: '1.0'\nlock: project.lock\nfunctions: {wide: {function: project.constant, description: Constant, params: [], returns: int, tests: [{id: wide, covers: [normal], args: {}, result: 9223372036854775808}]}}\n");
-    let Err(Failure::RootScalar { root, findings }) = project_source::prepare(
-        schema(),
-        invalid,
-        Language::Python,
-        &mut port,
-        Limits::default(),
-    ) else {
+    let Err(Failure::RootScalar { root, findings }) =
+        project_source::prepare(schema(), invalid, Language::Python, &mut port)
+    else {
         panic!("owned scalar failure")
     };
     assert_eq!(root.source().identity, "environment.yaml");
@@ -279,13 +249,9 @@ fn every_capture_failure_retains_original_opaque_payload_and_declaration_context
     let mut port = Port::new();
     port.fail = true;
     let root=source("study/environment.yaml","schema_version: '1.0'\nlanguage: python\nlock: project.lock\nfunctions: {a: a.yaml, b: b.yaml}\ncodelists: [one.yaml, two.yaml]\n");
-    let Err(Failure::Rejected(rejected)) = project_source::prepare(
-        schema(),
-        root,
-        Language::Python,
-        &mut port,
-        Limits::default(),
-    ) else {
+    let Err(Failure::Rejected(rejected)) =
+        project_source::prepare(schema(), root, Language::Python, &mut port)
+    else {
         panic!("all source failures")
     };
     assert_eq!(port.trace.len(), 5);
@@ -312,45 +278,14 @@ fn every_capture_failure_retains_original_opaque_payload_and_declaration_context
     assert_eq!(rejected.draft.functions.as_deref(), Some([].as_slice()));
     assert!(rejected.draft.codelists.is_empty());
 }
-#[test]
-fn source_quotas_precede_ports_and_byte_exhaustion_precedes_decoding() {
-    let mut port = Port::new();
-    let limits = Limits {
-        sources: 1,
-        ..Limits::default()
-    };
-    assert!(matches!(
-        project_source::prepare(schema(), root(), Language::Python, &mut port, limits),
-        Err(Failure::Root(Error::Limit("sources")))
-    ));
-    assert!(port.trace.is_empty());
-    let mut port = Port::new();
-    let limits = Limits {
-        bytes: root().bytes.len(),
-        ..Limits::default()
-    };
-    let Err(Failure::Rejected(rejected)) =
-        project_source::prepare(schema(), root(), Language::Python, &mut port, limits)
-    else {
-        panic!("total held byte quota")
-    };
-    assert!(port.trace.iter().all(|request| request.3 == 0));
-    assert!(rejected
-        .sources
-        .iter()
-        .all(|f| matches!(f.error, CaptureFailure::Limit("bytes"))));
-}
+
 #[test]
 fn dependency_scalar_failure_keeps_the_original_owned_document_and_other_sources() {
     let mut port = Port::new();
     port.wide = true;
-    let Err(Failure::Rejected(rejected)) = project_source::prepare(
-        schema(),
-        root(),
-        Language::Python,
-        &mut port,
-        Limits::default(),
-    ) else {
+    let Err(Failure::Rejected(rejected)) =
+        project_source::prepare(schema(), root(), Language::Python, &mut port)
+    else {
         panic!("scalar failure")
     };
     assert_eq!(port.trace.len(), 3);
@@ -368,22 +303,18 @@ fn dependency_scalar_failure_keeps_the_original_owned_document_and_other_sources
 fn lock_kind_is_captured_syntax_metadata_and_mismatch_does_not_import_project_code() {
     let mut port = Port::new();
     port.lock_kind = LockKind::Renv;
-    let Err(Failure::Rejected(rejected)) = project_source::prepare(
-        schema(),
-        root(),
-        Language::Python,
-        &mut port,
-        Limits::default(),
-    ) else {
+    let Err(Failure::Rejected(rejected)) =
+        project_source::prepare(schema(), root(), Language::Python, &mut port)
+    else {
         panic!("lock kind mismatch")
     };
     assert_eq!(port.trace.len(), 3);
     assert_eq!(
         rejected.admission,
-        Some(AdmissionError::Findings(vec![Finding::LockKindMismatch {
+        Some(vec![Finding::LockKindMismatch {
             language: Language::Python,
             actual: LockKind::Renv
-        }]))
+        }])
     );
     assert!(rejected.sources.is_empty());
     assert_eq!(rejected.host, Language::Python);
@@ -428,13 +359,7 @@ fn interrupts_at_every_dependency_boundary_preserve_original_payload_and_abort_l
             origin: actual_origin,
             written: actual_written,
             error,
-        }) = project_source::prepare(
-            schema(),
-            root(),
-            Language::Python,
-            &mut port,
-            Limits::default(),
-        )
+        }) = project_source::prepare(schema(), root(), Language::Python, &mut port)
         else {
             panic!("interrupt must bypass collected static findings");
         };
@@ -443,22 +368,5 @@ fn interrupts_at_every_dependency_boundary_preserve_original_payload_and_abort_l
         assert_eq!(error.0.as_ptr() as usize, port.interrupt_address);
         assert_eq!(error.0.as_ref(), "host interrupt");
         assert_eq!(port.trace.len(), observed);
-    }
-}
-
-#[test]
-fn root_identity_and_normalized_node_refusals_keep_compatibility_categories_before_capture() {
-    for resource in ["identity_bytes", "nodes"] {
-        let mut port = Port::new();
-        let root = root();
-        let mut limits = Limits::default();
-        if resource == "identity_bytes" {
-            limits.identity_bytes = root.identity.len() - 1;
-        } else {
-            limits.nodes = 0;
-        }
-        let result = project_source::prepare(schema(), root, Language::Python, &mut port, limits);
-        assert!(matches!(result, Err(Failure::Root(Error::Limit(code))) if code == resource));
-        assert!(port.trace.is_empty());
     }
 }

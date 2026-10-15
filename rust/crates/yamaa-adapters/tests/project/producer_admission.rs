@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use yamaa_adapters::{
-    producer_admission::{prepare, Error, Limits, SuppliedProducer},
+    producer_admission::{prepare, Error, SuppliedProducer},
     shipped_schema,
     specification_source::{InheritancePort, PreparedDocument, Source},
 };
@@ -36,7 +36,6 @@ fn original_documents_and_distinct_metadata_remain_held_without_study_authority(
         Arc::clone(&consumer),
         vec![supplied(Arc::clone(&producer))],
         None,
-        Limits::default(),
     )
     .unwrap();
     drop(consumer);
@@ -90,7 +89,7 @@ impl InheritancePort for Parent {
             display_path: "parent.yaml".into(),
         })
     }
-    fn capture(&mut self, source: &FileIdentity, _: usize) -> Result<Vec<u8>, SourceError<()>> {
+    fn capture(&mut self, source: &FileIdentity) -> Result<Vec<u8>, SourceError<()>> {
         self.calls.push(format!("capture:{}", source.identity));
         Ok(self.text.clone())
     }
@@ -99,7 +98,6 @@ impl InheritancePort for Parent {
         layer: &FileIdentity,
         _: &FileIdentity,
         written: &str,
-        _: usize,
     ) -> Result<String, ()> {
         self.calls
             .push(format!("rebase:{}:{written}", layer.identity));
@@ -142,13 +140,7 @@ fn inherited_schema_artifact_and_output_paths_keep_independent_authored_layers()
         "schema_version: '1.0'\noutput: {path: '../stored.csv', columns: [ID, VALUE]}\n";
     let (producer, producer_port) = inherited("/producer.yaml", &producer_entry, producer_parent);
     let before = (consumer_port.calls.clone(), producer_port.calls.clone());
-    let admitted = prepare(
-        Arc::clone(&consumer),
-        vec![supplied(producer)],
-        None,
-        Limits::default(),
-    )
-    .unwrap();
+    let admitted = prepare(Arc::clone(&consumer), vec![supplied(producer)], None).unwrap();
     let declaration = &admitted.metadata().producers()[0];
     assert_eq!(
         declaration.schema_path(),
@@ -181,57 +173,20 @@ fn inherited_schema_artifact_and_output_paths_keep_independent_authored_layers()
     assert_eq!(before, (consumer_port.calls, producer_port.calls));
 }
 #[test]
-fn missing_contradictory_and_aggregate_quota_failures_precede_capability() {
+fn missing_and_contradictory_metadata_fail_before_capability() {
     let consumer = standalone("/consumer.yaml", CONSUMER);
     let producer = standalone("/producer.yaml", PRODUCER);
     assert!(matches!(
-        prepare(Arc::clone(&consumer), vec![], None, Limits::default()),
+        prepare(Arc::clone(&consumer), vec![], None),
         Err(Error::Admission(CoreError::Invalid(_)))
     ));
     let mut wrong = supplied(Arc::clone(&producer));
     wrong.schema_identity = "/wrong.yaml".into();
     assert!(matches!(
-        prepare(Arc::clone(&consumer), vec![wrong], None, Limits::default()),
+        prepare(Arc::clone(&consumer), vec![wrong], None),
         Err(Error::Admission(CoreError::Invalid(_)))
     ));
-    let total = CONSUMER.len() + PRODUCER.len();
-    assert!(prepare(
-        Arc::clone(&consumer),
-        vec![supplied(Arc::clone(&producer))],
-        None,
-        Limits {
-            captured_bytes: total,
-            ..Default::default()
-        }
-    )
-    .is_ok());
-    assert!(matches!(
-        prepare(
-            Arc::clone(&consumer),
-            vec![supplied(Arc::clone(&producer))],
-            None,
-            Limits {
-                captured_bytes: total - 1,
-                ..Default::default()
-            }
-        ),
-        Err(Error::Limit("producer_captured_bytes"))
-    ));
-    assert!(matches!(
-        prepare(
-            consumer,
-            vec![supplied(producer)],
-            None,
-            Limits {
-                metadata: yamaa_core::producer_admission::Limits {
-                    candidates: 0,
-                    ..Default::default()
-                },
-                ..Default::default()
-            }
-        ),
-        Err(Error::Limit("producer_candidates"))
-    ));
+    assert!(prepare(consumer, vec![supplied(producer)], None).is_ok());
 }
 #[test]
 fn ordinary_preparation_remains_unsupported_and_inline_types_are_portable() {
@@ -245,7 +200,6 @@ fn ordinary_preparation_remains_unsupported_and_inline_types_are_portable() {
         redundant,
         vec![supplied(standalone("/producer.yaml", PRODUCER))],
         None,
-        Limits::default(),
     );
     let Err(Error::Admission(CoreError::Invalid(findings))) = error else {
         panic!("redundant authority")
@@ -258,7 +212,7 @@ fn ordinary_preparation_remains_unsupported_and_inline_types_are_portable() {
     ));
 }
 #[test]
-fn producer_must_use_the_same_captured_root_closure_and_schema_comparison_is_bounded() {
+fn producer_must_use_the_same_captured_root_closure() {
     use yamaa_adapters::specification_source::CapturedSchema;
     let consumer = standalone("/consumer.yaml", CONSUMER);
     let shipped = shipped_schema::capture().unwrap();
@@ -266,7 +220,7 @@ fn producer_must_use_the_same_captured_root_closure_and_schema_comparison_is_bou
     sources[0]
         .bytes
         .extend_from_slice(b"\n# independent changed closure\n");
-    let different = CapturedSchema::admit(sources, 0, Default::default()).unwrap();
+    let different = CapturedSchema::admit(sources, 0).unwrap();
     let producer = Arc::new(
         different
             .prepare_standalone(Source {
@@ -275,41 +229,13 @@ fn producer_must_use_the_same_captured_root_closure_and_schema_comparison_is_bou
             })
             .unwrap(),
     );
-    let Err(Error::Admission(CoreError::Invalid(findings))) = prepare(
-        Arc::clone(&consumer),
-        vec![supplied(producer)],
-        None,
-        Limits::default(),
-    ) else {
+    let Err(Error::Admission(CoreError::Invalid(findings))) =
+        prepare(Arc::clone(&consumer), vec![supplied(producer)], None)
+    else {
         panic!("captured root mismatch")
     };
     assert_eq!(findings[0].definition().requirement, Some("REQ-0534"));
     assert_eq!(findings[0].spec_paths, ["input.SRC.schema"]);
-    let producer = standalone("/producer.yaml", PRODUCER);
-    assert!(matches!(
-        prepare(
-            Arc::clone(&consumer),
-            vec![supplied(Arc::clone(&producer))],
-            None,
-            Limits {
-                schema_bytes: 0,
-                ..Default::default()
-            }
-        ),
-        Err(Error::Limit("producer_schema_bytes"))
-    ));
-    assert!(matches!(
-        prepare(
-            consumer,
-            vec![supplied(producer)],
-            None,
-            Limits {
-                schema_modules: 0,
-                ..Default::default()
-            }
-        ),
-        Err(Error::Limit("producer_schema_modules"))
-    ));
 }
 #[test]
 fn shared_producer_identities_require_the_same_original_byte_snapshot() {
@@ -323,12 +249,9 @@ fn shared_producer_identities_require_the_same_original_byte_snapshot() {
     );
     let mut other = supplied(changed);
     other.dataset = "OTHER".into();
-    let Err(Error::Admission(CoreError::Invalid(findings))) = prepare(
-        consumer,
-        vec![supplied(original), other],
-        None,
-        Limits::default(),
-    ) else {
+    let Err(Error::Admission(CoreError::Invalid(findings))) =
+        prepare(consumer, vec![supplied(original), other], None)
+    else {
         panic!("contradictory source snapshot")
     };
     assert_eq!(findings[0].definition().requirement, Some("REQ-0534"));
@@ -359,7 +282,7 @@ fn undeclared_and_schema_less_supplied_metadata_retain_the_portable_cause() {
         let mut supplied = supplied(Arc::clone(&producer));
         supplied.dataset = dataset.into();
         let Err(Error::Admission(CoreError::Invalid(findings))) =
-            prepare(consumer, vec![supplied], None, Limits::default())
+            prepare(consumer, vec![supplied], None)
         else {
             panic!("undeclared metadata diagnostic")
         };

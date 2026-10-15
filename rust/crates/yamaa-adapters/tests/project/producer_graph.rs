@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use yamaa_adapters::{
     producer_admission::SuppliedProducer,
-    producer_graph::{prepare, Error, Limits, SuppliedNode},
+    producer_graph::{prepare, Error, SuppliedNode},
     shipped_schema,
     specification_source::{InheritancePort, PreparedDocument, Source},
 };
@@ -92,7 +92,6 @@ fn recursive_original_documents_are_owned_once_and_all_alias_origins_remain_held
             node(&right, vec![link("LEAF", &leaf, "/leaf.csv")]),
         ],
         environment(),
-        Limits::default(),
     )
     .unwrap();
     drop((root, left, right, leaf));
@@ -174,7 +173,7 @@ fn incomplete_duplicate_replaced_and_unreachable_supplied_nodes_are_denied() {
         ),
     ] {
         assert!(
-            matches!(prepare("/root.yaml", nodes, environment(), Limits::default()), Err(Error::Boundary { reason: actual, .. }) if actual == reason)
+            matches!(prepare("/root.yaml", nodes, environment()), Err(Error::Boundary { reason: actual, .. }) if actual == reason)
         );
     }
     assert!(matches!(
@@ -185,8 +184,7 @@ fn incomplete_duplicate_replaced_and_unreachable_supplied_nodes_are_denied() {
                 node(&p, vec![]),
                 node(&extra, vec![])
             ],
-            environment(),
-            Limits::default()
+            environment()
         ),
         Err(Error::Graph(CoreError::Boundary {
             reason: "unreachable_node",
@@ -209,17 +207,11 @@ impl InheritancePort for Parent {
             display_path: "parent.yaml".into(),
         })
     }
-    fn capture(&mut self, _: &Identity, _: usize) -> Result<Vec<u8>, SourceError<()>> {
+    fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<()>> {
         self.calls += 1;
         Ok(self.bytes.clone())
     }
-    fn rebase(
-        &mut self,
-        _: &Identity,
-        _: &Identity,
-        written: &str,
-        _: usize,
-    ) -> Result<String, ()> {
+    fn rebase(&mut self, _: &Identity, _: &Identity, written: &str) -> Result<String, ()> {
         self.calls += 1;
         Ok(written.into())
     }
@@ -280,8 +272,7 @@ fn snapshots_shared_only_across_distinct_branches_must_hold_identical_bytes() {
                 node(&a, vec![]),
                 node(&b, vec![])
             ],
-            environment(),
-            Limits::default()
+            environment()
         ),
         Err(Error::Boundary {
             reason: "contradictory_snapshot",
@@ -309,7 +300,6 @@ fn equal_shared_parent_snapshots_and_written_inherited_origins_remain_retained()
         "/root.yaml",
         vec![node(&root, vec![link("P", &p, "/p.csv")]), node(&p, vec![])],
         environment(),
-        Limits::default(),
     )
     .unwrap();
     assert_eq!(
@@ -336,9 +326,8 @@ fn equal_shared_parent_snapshots_and_written_inherited_origins_remain_retained()
 }
 
 #[test]
-fn changed_schema_bytes_are_rejected_and_aggregate_raw_quotas_precede_capability() {
+fn changed_schema_bytes_are_rejected_before_capability() {
     let p_text = text("{RAW: never-read.csv}", "RAW", "p.csv");
-    let p = document("/p.yaml", &p_text);
     let root = document(
         "/root.yaml",
         &text("{P: {path: p.csv, schema: p.yaml}}", "P", "root.csv"),
@@ -347,9 +336,7 @@ fn changed_schema_bytes_are_rejected_and_aggregate_raw_quotas_precede_capability
     sources[0]
         .bytes
         .extend_from_slice(b"\n# changed schema closure\n");
-    let schema =
-        yamaa_adapters::specification_source::CapturedSchema::admit(sources, 0, Default::default())
-            .unwrap();
+    let schema = yamaa_adapters::specification_source::CapturedSchema::admit(sources, 0).unwrap();
     let changed = Arc::new(
         schema
             .prepare_standalone(Source {
@@ -365,48 +352,13 @@ fn changed_schema_bytes_are_rejected_and_aggregate_raw_quotas_precede_capability
                 node(&root, vec![link("P", &changed, "/p.csv")]),
                 node(&changed, vec![])
             ],
-            environment(),
-            Limits::default()
+            environment()
         ),
         Err(Error::Boundary {
             reason: "schema_mismatch",
             ..
         })
     ));
-    for (limits, resource) in [
-        (
-            Limits {
-                captured_bytes: 0,
-                ..Default::default()
-            },
-            "producer_graph_captured_bytes",
-        ),
-        (
-            Limits {
-                schema_bytes: 0,
-                ..Default::default()
-            },
-            "producer_graph_schema_bytes",
-        ),
-        (
-            Limits {
-                schema_modules: 0,
-                ..Default::default()
-            },
-            "producer_graph_schema_modules",
-        ),
-        (
-            Limits {
-                snapshots: 0,
-                ..Default::default()
-            },
-            "producer_graph_snapshots",
-        ),
-    ] {
-        assert!(
-            matches!(prepare("/root.yaml", vec![node(&root, vec![link("P", &p, "/p.csv")]), node(&p, vec![])], environment(), limits), Err(Error::Limit(actual)) if actual == resource)
-        );
-    }
 }
 
 #[test]
@@ -427,7 +379,6 @@ fn original_inline_type_conflict_is_not_erased_by_complete_graph_admission() {
         "/root.yaml",
         vec![node(&root, vec![link("P", &p, "/p.csv")]), node(&p, vec![])],
         environment(),
-        Limits::default(),
     )
     else {
         panic!("original conflicting authority")
