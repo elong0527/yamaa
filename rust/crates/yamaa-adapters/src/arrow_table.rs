@@ -90,7 +90,8 @@ pub struct ArrowTable {
 
 /// Internal physical schema v1: nullable primitives, or a nullable temporal struct
 /// with non-null `value` and `precision`. Date codes: year=0/month=1/day=2;
-/// datetime codes: day=0/second=1. Civil timestamp unit is seconds, with no zone.
+/// datetime codes: day=0/second=1/hour=2/minute=3. Civil timestamp unit is seconds,
+/// with no zone.
 pub fn physical_schema(schema: &TableSchema) -> SchemaRef {
     Arc::new(Schema::new(
         schema
@@ -170,6 +171,8 @@ pub fn datetime_array(values: &[Option<DateTime>]) -> Result<StructArray, ArrowE
                 value.map_or(0, |date| match date.collected_precision() {
                     DateTimePrecision::Day => 0,
                     DateTimePrecision::Second => 1,
+                    DateTimePrecision::Hour => 2,
+                    DateTimePrecision::Minute => 3,
                 })
             })
             .collect::<Vec<_>>(),
@@ -384,6 +387,8 @@ fn temporal_cell(
         let precision = match precision.value(row) {
             0 => DateTimePrecision::Day,
             1 => DateTimePrecision::Second,
+            2 => DateTimePrecision::Hour,
+            3 => DateTimePrecision::Minute,
             _ => return Err(TableError::TemporalPrecision { batch, column, row }),
         };
         datetime_from_seconds(values.value(row), precision)

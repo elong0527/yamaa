@@ -566,14 +566,20 @@ class DerivationShapeTests(unittest.TestCase):
 
         self.assertEqual(
             rule("datetime"),
-            "Collected datetime precision of PC.PCDTC: S when a time of day was "
-            "collected, D when only the date was.",
+            "Collected datetime precision of PC.PCDTC: S through the second, "
+            "M through the minute, H through the hour, D for a date alone.",
         )
         self.assertEqual(
             rule("date"),
             "Collected date precision of PC.PCDTC: D for a complete date, M for "
             "year and month, Y for a year alone.",
         )
+
+    def test_datetime_impute_supplies_only_missing_time_parts(self):
+        rule = mapping_doc.describe_derivation(
+            {"datetime_impute": {"source": "AEENDTC", "time": "last"}}
+        )
+        self.assertIn("each time part the source lacks its latest value", rule)
 
     def test_cut_names_the_closed_side_of_each_interval(self):
         rule = method_column("adam-adsl-demographics")["AGEGR1"]

@@ -9,9 +9,12 @@ pub enum DatePrecision {
     Day,
 }
 
+/// The last field a datetime's collected source carried: day, hour, minute or second.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DateTimePrecision {
     Day,
+    Hour,
+    Minute,
     Second,
 }
 
