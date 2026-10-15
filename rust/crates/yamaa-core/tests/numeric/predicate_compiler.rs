@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, convert::Infallible};
 use yamaa_core::{
     predicate::{self, Resolver, Truth},
-    predicate_compiler::{compile, Error, Limits},
+    predicate_compiler::{compile, Error},
     predicate_parser::{GrammarFailure, ParseError},
     value::{Selection, Value},
 };
@@ -58,7 +58,7 @@ fn original_predicate_forms_execute_with_independent_truth() {
         ),
         ("'it''s' = 'it''s'", Truth::True),
     ] {
-        let plan = compile(expression, "intermediates[0].filter", Limits::default()).unwrap();
+        let plan = compile(expression, "intermediates[0].filter").unwrap();
         let mut port = Port {
             values: [
                 ("AE.AEOUT".into(), Value::Str("FATAL".into())),
@@ -81,7 +81,7 @@ fn compilation_preserves_eager_order_and_repeated_occurrences() {
         ("X = 1 AND X = 1", Truth::True, vec!["X", "X"]),
         ("X BETWEEN 0 AND 2", Truth::True, vec!["X", "X"]),
     ] {
-        let plan = compile(text, "site", Limits::default()).unwrap();
+        let plan = compile(text, "site").unwrap();
         let mut port = Port {
             values: [("X".into(), Value::Int(1))].into(),
             ..Default::default()
@@ -93,7 +93,7 @@ fn compilation_preserves_eager_order_and_repeated_occurrences() {
         assert_eq!(port.reads, reads, "reusing a plan must repeat resolution");
     }
     for text in ["FALSE AND ABSENT = 1", "TRUE OR ABSENT = 1"] {
-        let plan = compile(text, "site", Limits::default()).unwrap();
+        let plan = compile(text, "site").unwrap();
         let mut port = Port::default();
         let error = plan.evaluate(&mut port).unwrap_err();
         assert_eq!(port.reads, ["ABSENT"]);
@@ -107,9 +107,9 @@ fn compilation_preserves_eager_order_and_repeated_occurrences() {
 }
 
 #[test]
-fn whole_expression_grammar_and_carrier_limits_precede_execution() {
+fn whole_expression_grammar_and_integer_carrier_precede_execution() {
     assert!(matches!(
-        compile("FALSE AND X =", "site", Limits::default()),
+        compile("FALSE AND X =", "site"),
         Err(Error::Parse(ParseError::Grammar { .. }))
     ));
     for text in [
@@ -118,7 +118,7 @@ fn whole_expression_grammar_and_carrier_limits_precede_execution() {
     ] {
         let Err(Error::Parse(ParseError::Grammar {
             failure, position, ..
-        })) = compile(text, "site", Limits::default())
+        })) = compile(text, "site")
         else {
             panic!("expected literal rejection")
         };
@@ -128,43 +128,9 @@ fn whole_expression_grammar_and_carrier_limits_precede_execution() {
             text.find("9223372036854775808")
                 .unwrap_or_else(|| text.find("-9223372036854775809").unwrap())
         );
-        let finding = failure
-            .original_diagnostic("site", text, position.character)
-            .unwrap();
+        let finding = failure.original_diagnostic("site", text, position.character);
         assert_eq!(finding.definition().condition, "integer_overflow");
         assert_eq!(finding.definition().phase, "parse");
         assert_eq!(finding.definition().requirement, Some("REQ-0014"));
     }
-    let limits = Limits {
-        plan: predicate::Limits {
-            resolutions: 1,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    assert!(matches!(
-        compile("FALSE AND X = X", "site", limits),
-        Err(Error::Plan(predicate::PlanError::Limit(
-            predicate::LimitError {
-                resource: predicate::Resource::Resolutions,
-                ..
-            }
-        )))
-    ));
-    let limits = Limits {
-        plan: predicate::Limits {
-            text_bytes: 3,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    assert!(matches!(
-        compile("TRUE", "site", limits),
-        Err(Error::Plan(predicate::PlanError::Limit(
-            predicate::LimitError {
-                resource: predicate::Resource::TextBytes,
-                ..
-            }
-        )))
-    ));
 }

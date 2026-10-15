@@ -2,8 +2,8 @@ use std::convert::Infallible;
 use yamaa_core::{
     bound_expression::{Binding, BindingError, BoundNumeric, BoundPredicate, Read, ScopeError},
     evaluation::NumericResolver,
-    numeric_compiler::{compile_numeric, CompileLimits},
-    predicate::{Limits, Node, Plan, Scalar},
+    numeric_compiler::compile_numeric,
+    predicate::{Node, Plan, Scalar},
     value::{Selection, Value},
 };
 
@@ -16,7 +16,7 @@ fn binding(name: &str, read: Read) -> Binding {
 
 fn numeric(text: &str, bindings: Vec<Binding>) -> Result<BoundNumeric, BindingError> {
     BoundNumeric::new(
-        compile_numeric(text, "columns.RESULT.compute", CompileLimits::default()).unwrap(),
+        compile_numeric(text, "columns.RESULT.compute").unwrap(),
         bindings,
     )
 }
@@ -35,7 +35,6 @@ fn predicate(path: &str, bindings: Vec<Binding>) -> Result<BoundPredicate, Bindi
             2,
             path.into(),
             "FALSE AND A IS NULL".into(),
-            Limits::default(),
         )
         .unwrap(),
         bindings,
@@ -188,7 +187,7 @@ fn contextual_case_names_do_not_expand_generic_filter_authority() {
             original.bindings().to_vec(),
             vec!["A".into(), "A".into()]
         ),
-        Err(BindingError::MetadataLimit)
+        Err(BindingError::DuplicateName)
     );
     let kept = BoundPredicate::new_contextual(
         original.plan().clone(),
@@ -216,7 +215,7 @@ fn contextual_case_names_do_not_expand_generic_filter_authority() {
             vec![binding("A", Read::Source(0)); 65_537],
             vec![]
         ),
-        Err(BindingError::MetadataLimit)
+        Err(BindingError::DuplicateName)
     );
 }
 

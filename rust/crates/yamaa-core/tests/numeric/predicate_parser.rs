@@ -1,9 +1,8 @@
 use yamaa_core::predicate::Comparison;
 use yamaa_core::predicate_parser::{
-    parse_predicate, GrammarFailure, ParseError, ParseLimits, ParseResource, ParsedKind,
-    TemporalKind,
+    parse_predicate, GrammarFailure, ParseError, ParseResource, ParsedKind, TemporalKind,
 };
-use yamaa_core::{regex, temporal::TemporalError};
+use yamaa_core::temporal::TemporalError;
 
 #[test]
 fn integer_carrier_admission_preserves_exact_boundaries_and_whole_grammar_order() {
@@ -15,7 +14,7 @@ fn integer_carrier_admission_preserves_exact_boundaries_and_whole_grammar_order(
         "X = 9223372036854775808.0",
         "X = 1e309",
     ] {
-        parse_predicate(expression, Default::default()).unwrap();
+        parse_predicate(expression).unwrap();
     }
     for expression in [
         "X = 9223372036854775808",
@@ -26,7 +25,7 @@ fn integer_carrier_admission_preserves_exact_boundaries_and_whole_grammar_order(
     ] {
         let Err(ParseError::Grammar {
             failure, position, ..
-        }) = parse_predicate(expression, Default::default())
+        }) = parse_predicate(expression)
         else {
             panic!("overflowing literal admitted: {expression}")
         };
@@ -42,9 +41,7 @@ fn integer_carrier_admission_preserves_exact_boundaries_and_whole_grammar_order(
             position.character,
             expression[..position.byte].chars().count()
         );
-        let finding = failure
-            .original_diagnostic("filter", expression, position.character)
-            .unwrap();
+        let finding = failure.original_diagnostic("filter", expression, position.character);
         assert_eq!(finding.definition().phase, "parse");
         assert_eq!(finding.definition().condition, "integer_overflow");
         assert_eq!(finding.definition().requirement, Some("REQ-0014"));
@@ -57,27 +54,11 @@ fn integer_carrier_admission_preserves_exact_boundaries_and_whole_grammar_order(
             finding.context["position"],
             serde_json::Value::from(position.character)
         );
-        assert!(failure
-            .original_diagnostic_with_limit("filter", expression, position.character, 0)
-            .is_err());
     }
     assert!(matches!(
-        parse_predicate("X = 9223372036854775808 AND", Default::default()),
+        parse_predicate("X = 9223372036854775808 AND"),
         Err(ParseError::Grammar {
             failure: GrammarFailure::InvalidExpression,
-            ..
-        })
-    ));
-    assert!(matches!(
-        parse_predicate(
-            "X = 9223372036854775808",
-            ParseLimits {
-                bytes: 4,
-                ..Default::default()
-            }
-        ),
-        Err(ParseError::Limit {
-            resource: ParseResource::Bytes,
             ..
         })
     ));
@@ -86,11 +67,7 @@ fn integer_carrier_admission_preserves_exact_boundaries_and_whole_grammar_order(
 /// Syntax association is independent of evaluator truth and preserves written names.
 #[test]
 fn precedence_spelling_and_names() {
-    let p = parse_predicate(
-        "NOT A = +0001 OR B < -2.50e+3 AND (A IS NULL)",
-        ParseLimits::default(),
-    )
-    .unwrap();
+    let p = parse_predicate("NOT A = +0001 OR B < -2.50e+3 AND (A IS NULL)").unwrap();
     assert_eq!(p.identifiers().collect::<Vec<_>>(), ["A", "B"]);
     let nodes = p.nodes();
     let ParsedKind::Or(left, right) = nodes[p.root()].kind else {
@@ -111,7 +88,7 @@ fn precedence_spelling_and_names() {
         })
         .collect();
     assert_eq!(numbers, [("+0001", false), ("-2.50e+3", true)]);
-    let p = parse_predicate("FALSE OR TRUE OR FALSE", ParseLimits::default()).unwrap();
+    let p = parse_predicate("FALSE OR TRUE OR FALSE").unwrap();
     let ParsedKind::Or(left, _) = p.nodes()[p.root()].kind else {
         panic!()
     };
@@ -129,7 +106,7 @@ fn closed_vocabulary() {
         (">", Comparison::Greater),
         (">=", Comparison::GreaterEqual),
     ] {
-        let p = parse_predicate(&format!("A {op} NULL"), ParseLimits::default()).unwrap();
+        let p = parse_predicate(&format!("A {op} NULL")).unwrap();
         assert!(
             matches!(p.nodes()[p.root()].kind,ParsedKind::Compare{operator,..} if operator==expected)
         );
@@ -144,7 +121,7 @@ fn closed_vocabulary() {
         "D.TRUE = 1",
         "STR_CONTAINS(NULL, '^$')",
     ] {
-        parse_predicate(text, ParseLimits::default()).unwrap();
+        parse_predicate(text).unwrap();
     }
     for text in [
         "",
@@ -178,10 +155,7 @@ fn closed_vocabulary() {
         "A = TRUE",
     ] {
         assert!(
-            matches!(
-                parse_predicate(text, ParseLimits::default()),
-                Err(ParseError::Grammar { .. })
-            ),
+            matches!(parse_predicate(text), Err(ParseError::Grammar { .. })),
             "{text}"
         );
     }
@@ -189,7 +163,7 @@ fn closed_vocabulary() {
         "AND", "BETWEEN", "DATE", "DATETIME", "ESCAPE", "FALSE", "IN", "IS", "LIKE", "NOT", "NULL",
         "OR", "TRUE",
     ] {
-        parse_predicate(&format!("D.{keyword} = 1"), ParseLimits::default()).unwrap();
+        parse_predicate(&format!("D.{keyword} = 1")).unwrap();
     }
 }
 
@@ -197,7 +171,7 @@ fn closed_vocabulary() {
 #[test]
 fn text_temporal_and_unbounded_number_syntax() {
     let text = "'it''s\\\0\u{1f600}' = 'x'";
-    let p = parse_predicate(text, ParseLimits::default()).unwrap();
+    let p = parse_predicate(text).unwrap();
     assert_eq!(
         p.nodes()[0].kind,
         ParsedKind::String("it's\\\0\u{1f600}".into())
@@ -208,10 +182,10 @@ fn text_temporal_and_unbounded_number_syntax() {
         "A = DATETIME '2024-02-29T12:34:56'",
         "A = 1e9999",
     ] {
-        parse_predicate(text, ParseLimits::default()).unwrap();
+        parse_predicate(text).unwrap();
     }
     assert!(matches!(
-        parse_predicate("A = DATE '2025-02-30'", ParseLimits::default()),
+        parse_predicate("A = DATE '2025-02-30'"),
         Err(ParseError::Grammar {
             failure: GrammarFailure::InvalidTemporal {
                 kind: TemporalKind::Date,
@@ -227,7 +201,7 @@ fn text_temporal_and_unbounded_number_syntax() {
         "A = DATE '0000-01-01'",
     ] {
         assert!(matches!(
-            parse_predicate(text, ParseLimits::default()),
+            parse_predicate(text),
             Err(ParseError::Grammar {
                 failure: GrammarFailure::InvalidTemporal { .. },
                 ..
@@ -250,7 +224,7 @@ fn portable_regex_literals_are_checked_before_closing_token() {
         r"(?<name>a)\k<name>",
     ] {
         let text = format!("str_contains(A, '{pattern}')");
-        let p = parse_predicate(&text, ParseLimits::default()).unwrap();
+        let p = parse_predicate(&text).unwrap();
         assert!(matches!(
             p.nodes()[p.root()].kind,
             ParsedKind::Contains { .. }
@@ -261,7 +235,7 @@ fn portable_regex_literals_are_checked_before_closing_token() {
         let Err(ParseError::Grammar {
             failure: GrammarFailure::InvalidRegex { .. },
             ..
-        }) = parse_predicate(&expression, ParseLimits::default())
+        }) = parse_predicate(&expression)
         else {
             panic!("REQ-0826 syntax must be a registered finding: {pattern}")
         };
@@ -269,7 +243,7 @@ fn portable_regex_literals_are_checked_before_closing_token() {
     let text = "str_contains('\u{1f600}', '('";
     let Err(ParseError::Grammar {
         position, failure, ..
-    }) = parse_predicate(text, ParseLimits::default())
+    }) = parse_predicate(text)
     else {
         panic!()
     };
@@ -282,20 +256,13 @@ fn portable_regex_literals_are_checked_before_closing_token() {
     assert_eq!(failure.requirement(), "REQ-1244");
     // Whole-input tokenization still precedes invalid regex admission.
     assert!(matches!(
-        parse_predicate("str_contains(A, '(') @", ParseLimits::default()),
+        parse_predicate("str_contains(A, '(') @"),
         Err(ParseError::Grammar {
             failure: GrammarFailure::InvalidExpression,
             ..
         })
     ));
-    assert!(matches!(
-        parse_predicate("str_contains(A, 'a{1000001}')", ParseLimits::default()),
-        Err(ParseError::RegexLimit {
-            resource: regex::Resource::Repetition,
-            limit: 1_000_000,
-            ..
-        })
-    ));
+    parse_predicate("str_contains(A, 'a{1000001}')").unwrap();
 }
 
 /// Static ESCAPE defects have their owning requirement and original literal site.
@@ -306,9 +273,7 @@ fn escape_admission_and_unicode_positions() {
         "A LIKE 'a' ESCAPE ''",
         "A LIKE 'a' ESCAPE 'ab'",
     ] {
-        let Err(ParseError::Grammar { failure, .. }) =
-            parse_predicate(text, ParseLimits::default())
-        else {
+        let Err(ParseError::Grammar { failure, .. }) = parse_predicate(text) else {
             panic!("{text}")
         };
         assert_eq!(failure, GrammarFailure::InvalidEscape);
@@ -320,100 +285,48 @@ fn escape_admission_and_unicode_positions() {
         "A LIKE B ESCAPE '!'",
         "A LIKE 'a\u{1f600}%' ESCAPE '\u{1f600}'",
     ] {
-        parse_predicate(text, ParseLimits::default()).unwrap();
+        parse_predicate(text).unwrap();
     }
-    let Err(ParseError::Grammar { position, .. }) =
-        parse_predicate("'\u{1f600}' = @", ParseLimits::default())
-    else {
+    let Err(ParseError::Grammar { position, .. }) = parse_predicate("'\u{1f600}' = @") else {
         panic!()
     };
     assert_eq!((position.byte, position.character), (9, 6));
 }
 
-/// Finite policies cannot be defeated by flat chains, repeated NOT or nested groups.
+/// The sole parser bound protects semantic recursion, independently on each call.
 #[test]
-fn resource_limits_and_fresh_retry() {
-    let defaults = ParseLimits::default();
-    let cases = [
-        (
-            "TRUE".into(),
-            ParseLimits {
-                bytes: 3,
-                ..defaults
-            },
-            ParseResource::Bytes,
-        ),
-        (
-            "A = 1".into(),
-            ParseLimits {
-                tokens: 2,
-                ..defaults
-            },
-            ParseResource::Tokens,
-        ),
-        (
-            "A = 1".into(),
-            ParseLimits {
-                nodes: 2,
-                ..defaults
-            },
-            ParseResource::Nodes,
-        ),
-        (
-            "TRUE AND ".repeat(70) + "TRUE",
-            ParseLimits {
-                depth: usize::MAX,
-                ..defaults
-            },
-            ParseResource::Depth,
-        ),
-        (
-            "NOT ".repeat(70) + "TRUE",
-            ParseLimits {
-                depth: usize::MAX,
-                ..defaults
-            },
-            ParseResource::Depth,
-        ),
-        (
-            format!("{}TRUE{}", "(".repeat(70), ")".repeat(70)),
-            ParseLimits {
-                depth: usize::MAX,
-                ..defaults
-            },
-            ParseResource::Depth,
-        ),
-    ];
-    for (text, limits, resource) in cases {
-        assert!(
-            matches!(parse_predicate(&text,limits),Err(ParseError::Limit{resource:r,..}) if r==resource)
-        );
-        parse_predicate("TRUE", defaults).unwrap();
+fn fixed_depth_and_fresh_retry() {
+    for text in [
+        "TRUE AND ".repeat(140) + "TRUE",
+        "NOT ".repeat(140) + "TRUE",
+        format!("{}TRUE{}", "(".repeat(140), ")".repeat(140)),
+    ] {
+        assert!(matches!(
+            parse_predicate(&text),
+            Err(ParseError::Limit {
+                resource: ParseResource::Depth,
+                limit: 128,
+                ..
+            })
+        ));
+        parse_predicate("TRUE").unwrap();
     }
-    let p = parse_predicate(&format!("A IN ({})", vec!["1"; 1000].join(",")), defaults).unwrap();
+    let p = parse_predicate(&format!("A IN ({})", vec!["1"; 1000].join(","))).unwrap();
     assert_eq!(p.nodes().len(), 1002);
 }
 
-/// One request cannot multiply capture-path analysis by repeating admitted patterns.
+/// Repeated admitted regex literals do not share an invented request quota.
 #[test]
-fn repeated_regex_compilation_shares_request_budget() {
+fn repeated_regex_compilation_retains_each_admitted_pattern() {
     let pattern = format!("(a){}(?<=\\1)", "(a|aa)".repeat(8));
     let call = format!("str_contains(A, '{pattern}')");
-    parse_predicate(&call, ParseLimits::default()).unwrap();
+    parse_predicate(&call).unwrap();
     let mut expression = call.clone();
     for _ in 0..9 {
         expression = format!("({expression} OR {expression})");
     }
-    assert!(expression.len() < ParseLimits::default().bytes);
-    assert!(matches!(
-        parse_predicate(&expression, ParseLimits::default()),
-        Err(ParseError::RegexLimit {
-            resource: regex::Resource::WidthWork,
-            limit: 1_000_000,
-            ..
-        })
-    ));
-    parse_predicate(&call, ParseLimits::default()).unwrap();
+    parse_predicate(&expression).unwrap();
+    parse_predicate(&call).unwrap();
 }
 
 /// Reasons belong to Rust productions, so host planning never reparses a failed input.
@@ -462,9 +375,7 @@ fn grammar_messages_preserve_production_reason() {
             "invalid regex in str_contains pattern: unclosed character class",
         ),
     ] {
-        let Err(ParseError::Grammar { message, .. }) =
-            parse_predicate(text, ParseLimits::default())
-        else {
+        let Err(ParseError::Grammar { message, .. }) = parse_predicate(text) else {
             panic!("expected a grammar failure for {text}")
         };
         assert_eq!(message, expected, "{text}");

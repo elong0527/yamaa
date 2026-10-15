@@ -131,13 +131,7 @@ impl PreparedGraph {
                 .compiled
                 .metadata_source_findings(&schemas)
                 .map_err(|error| MetadataBindingError::Binding { node: index, error })?;
-            let remaining = crate::limits::Limits::FINDINGS.saturating_sub(diagnostics.len());
-            diagnostics.extend(
-                findings
-                    .into_iter()
-                    .take(remaining)
-                    .map(|finding| (index, finding)),
-            );
+            diagnostics.extend(findings.into_iter().map(|finding| (index, finding)));
         }
         Ok(diagnostics)
     }

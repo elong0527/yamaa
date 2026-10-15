@@ -133,7 +133,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             })) => ("ingest", "table_limit"),
             Error::Source(_) => ("ingest", "internal"),
             Error::TypedSource(_) => ("ingest", "source_boundary"),
-            Error::ParquetSource(crate::parquet_source::Error::Limit) => {
+            Error::ParquetSource(crate::parquet_source::Error::ResourceLimit { .. }) => {
                 ("ingest", "parquet_limit")
             }
             Error::ParquetSource(crate::parquet_source::Error::Unavailable { .. }) => {
