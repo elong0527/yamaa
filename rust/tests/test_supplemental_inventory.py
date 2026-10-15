@@ -110,6 +110,48 @@ class RepositoryCatalog(unittest.TestCase):
             "eval(\"__import__('yamaa.io')\")",
             "exec('import yamaa.io')",
             "eval(code)",
+            # A guard delegation does not exempt the wrapper itself:
+            # direct calls to a delegating function are classified, and
+            # a parameter with a default or a reassignment in the body
+            # (or a lambda parameter) is not an exemption at all.
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "def load(name):\n"
+                "    return original(name)\n"
+                "load('yamaa.io')"
+            ),
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "def reject(name='yamaa.io'):\n"
+                "    return original(name)\n"
+            ),
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "def reject(name):\n"
+                "    name = 'yamaa.io'\n"
+                "    return original(name)\n"
+            ),
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "load = lambda name: original(name)\n"
+                "load('yamaa.io')"
+            ),
+            # Eval/exec bodies share the outer alias tables, and aliases
+            # defined inside an evaluated body are visible outside it.
+            "from importlib import import_module as load\neval(\"load('yamaa.io')\")",
+            (
+                "import builtins\n"
+                "original = builtins.__import__\n"
+                "exec(\"original('yamaa.io')\")"
+            ),
+            "exec(\"from importlib import import_module as load\")\nload('yamaa.io')",
+            # An import function bound to the name eval is an import
+            # call first: its argument is a module target, not code.
+            "from importlib import import_module as eval\neval('yamaa.io')",
         ):
             with (
                 self.subTest(source=source),

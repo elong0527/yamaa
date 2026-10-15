@@ -107,11 +107,53 @@ def require_native_consumer(source, name):
         return None
 
     tree = ast.parse(source, filename=name)
+
+    def is_eval_call(node):
+        if not isinstance(node, ast.Call):
+            return False
+        function = node.func
+        return (isinstance(function, ast.Name) and function.id in ("eval", "exec")) or (
+            isinstance(function, ast.Attribute)
+            and function.attr in ("eval", "exec")
+            and isinstance(function.value, ast.Name)
+            and function.value.id == "builtins"
+        )
+
+    def parse_evaluated(code):
+        try:
+            return ast.parse(code)
+        except SyntaxError:
+            try:
+                return ast.parse(code, mode="eval")
+            except SyntaxError:
+                return None
+
+    # Constant eval/exec bodies run in the caller's namespace, so their
+    # code shares the outer alias tables in both directions: collect every
+    # such subtree up front and analyse all of them together instead of
+    # recursing into each body with fresh state.
+    trees = [tree]
+    seen_codes = set()
+    index = 0
+    while index < len(trees):
+        for node in ast.walk(trees[index]):
+            if not is_eval_call(node) or not node.args:
+                continue
+            code = constant_string(node.args[0])
+            if code is None or code in seen_codes:
+                continue
+            seen_codes.add(code)
+            subtree = parse_evaluated(code)
+            if subtree is not None:
+                trees.append(subtree)
+        index += 1
+
     import_names = ("import_module", "__import__")
     # Local name -> canonical dynamic-import function it is bound to.
     imports = {
         alias.asname or alias.name: alias.name
-        for node in ast.walk(tree)
+        for current in trees
+        for node in ast.walk(current)
         if isinstance(node, ast.ImportFrom) and node.module in ("importlib", "builtins")
         for alias in node.names
         if alias.name in import_names
@@ -153,7 +195,8 @@ def require_native_consumer(source, name):
     # to from their own runtime import guard (see is_guard_delegation).
     guard_aliases = {
         target.id
-        for node in ast.walk(tree)
+        for current in trees
+        for node in ast.walk(current)
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None
         for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
         if isinstance(target, ast.Name)
@@ -163,7 +206,10 @@ def require_native_consumer(source, name):
         )
     }
     parents = {
-        child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)
+        child: node
+        for current in trees
+        for node in ast.walk(current)
+        for child in ast.iter_child_nodes(node)
     }
 
     def is_guard_delegation(node):
@@ -187,21 +233,50 @@ def require_native_consumer(source, name):
             enclosing, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
         ):
             enclosing = parents.get(enclosing)
-        if enclosing is None:
+        if not isinstance(enclosing, (ast.FunctionDef, ast.AsyncFunctionDef)):
             return False
-        parameters = {
-            arg.arg
-            for arg in (
-                enclosing.args.posonlyargs
-                + enclosing.args.args
-                + enclosing.args.kwonlyargs
-            )
+        arguments = enclosing.args
+        positional = arguments.posonlyargs + arguments.args
+        defaulted = {
+            arg.arg for arg in positional[len(positional) - len(arguments.defaults) :]
         }
-        return target_node.id in parameters
+        defaulted |= {
+            arg.arg
+            for arg, default in zip(
+                arguments.kwonlyargs, arguments.kw_defaults, strict=True
+            )
+            if default is not None
+        }
+        parameters = {arg.arg for arg in positional + arguments.kwonlyargs}
+        reassigned = any(
+            isinstance(item, ast.Name)
+            and item.id == target_node.id
+            and isinstance(item.ctx, (ast.Store, ast.Del))
+            for item in ast.walk(enclosing)
+        )
+        return (
+            target_node.id in parameters
+            and target_node.id not in defaulted
+            and not reassigned
+        )
+
+    # A function that delegates to the saved ``__import__`` is itself an
+    # import function: direct calls to it must have their target
+    # classified like ``__import__`` instead of slipping past the guard
+    # through the delegation exemption. Installing such a function as a
+    # guard (an assignment, not a call) stays allowed.
+    for current in trees:
+        for function in ast.walk(current):
+            if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
+                isinstance(call, ast.Call) and is_guard_delegation(call)
+                for call in ast.walk(function)
+            ):
+                imports.setdefault(function.name, "__import__")
 
     assignments = [
         node
-        for node in ast.walk(tree)
+        for current in trees
+        for node in ast.walk(current)
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None
     ]
     changed = True
@@ -264,49 +339,33 @@ def require_native_consumer(source, name):
         return [resolved]
 
     def check_eval_call(node):
-        """Check code evaluated from a constant string; fail closed otherwise."""
+        """Validate an eval/exec call; fail closed on unresolvable code.
+
+        Constant bodies were already collected into ``trees`` and are
+        checked against the shared alias tables by the main walk, so only
+        the failure cases remain here.
+        """
         code_node = node.args[0] if node.args else None
         code = constant_string(code_node) if code_node is not None else None
-        if code is None:
+        if code is None or parse_evaluated(code) is None:
             raise ValueError(
                 f"retained suite has an unresolved eval/exec call: {name}:{node.lineno}"
             )
-        try:
-            ast.parse(code)
-        except SyntaxError:
-            try:
-                ast.parse(code, mode="eval")
-            except SyntaxError:
-                raise ValueError(
-                    "retained suite has an unresolved eval/exec call: "
-                    f"{name}:{node.lineno}"
-                ) from None
-            # A bare expression parses as a statement once parenthesised,
-            # so the recursive check can walk its calls the same way.
-            code = f"({code})"
-        require_native_consumer(code, name)
 
-    for node in ast.walk(tree):
-        modules = []
-        if isinstance(node, ast.Import):
-            modules = [alias.name for alias in node.names]
-        elif isinstance(node, ast.ImportFrom):
-            modules = [node.module or ""]
-            if node.module == "yamaa":
-                modules.extend("yamaa." + alias.name for alias in node.names)
-        elif isinstance(node, ast.Call):
-            function = node.func
-            is_eval = (
-                isinstance(function, ast.Name) and function.id in ("eval", "exec")
-            ) or (
-                isinstance(function, ast.Attribute)
-                and function.attr in ("eval", "exec")
-                and isinstance(function.value, ast.Name)
-                and function.value.id == "builtins"
-            )
-            if is_eval:
-                check_eval_call(node)
-            else:
+    for current in trees:
+        for node in ast.walk(current):
+            modules = []
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                modules = [node.module or ""]
+                if node.module == "yamaa":
+                    modules.extend("yamaa." + alias.name for alias in node.names)
+            elif isinstance(node, ast.Call):
+                function = node.func
+                # A name bound to a dynamic-import function (for example
+                # ``import_module`` aliased to ``eval``) is an import call
+                # first: its argument is a module target, not code.
                 kind = import_function_kind(function)
                 if kind == "unknown":
                     raise ValueError(
@@ -315,16 +374,18 @@ def require_native_consumer(source, name):
                     )
                 if kind is not None and not is_guard_delegation(node):
                     modules = dynamic_import_modules(node, kind)
-        for module in modules:
-            if reference(module) or module in (
-                "yamaa.yamaa_domain",
-                "yamaa.DomainRun",
-                "yamaa.DomainRunError",
-                "yamaa.generate_study_document",
-            ):
-                raise ValueError(
-                    f"retained suite imports reference semantics: {name}:{node.lineno}: {module}"
-                )
+                elif kind is None and is_eval_call(node):
+                    check_eval_call(node)
+            for module in modules:
+                if reference(module) or module in (
+                    "yamaa.yamaa_domain",
+                    "yamaa.DomainRun",
+                    "yamaa.DomainRunError",
+                    "yamaa.generate_study_document",
+                ):
+                    raise ValueError(
+                        f"retained suite imports reference semantics: {name}:{node.lineno}: {module}"
+                    )
 
 
 def load_catalog(root, catalog_path):
