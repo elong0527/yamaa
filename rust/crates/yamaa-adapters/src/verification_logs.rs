@@ -8,8 +8,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use yamaa_core::{
     dataset::VerificationSeverity,
     table::TableAccess,
-    value::{FiniteFloat, Value as Scalar},
-    verification_logs::{self as core, Failure, Json, Record},
+    verification_logs::{self as core, Failure, Record},
 };
 
 #[derive(Debug)]
@@ -59,27 +58,6 @@ fn count(record: &Value, field: &str) -> Result<usize, Error> {
         .and_then(|n| usize::try_from(n).ok())
         .ok_or(Error::InvalidObservation)
 }
-fn owned_json(value: &Value) -> Result<Json, Error> {
-    Ok(match value {
-        Value::Null => Json::Scalar(Scalar::Missing),
-        Value::Bool(value) => Json::Scalar(Scalar::Bool(*value)),
-        Value::String(value) => Json::Scalar(Scalar::Str(value.clone())),
-        Value::Number(number) if number.is_f64() => Json::Scalar(Scalar::Float(
-            FiniteFloat::new(number.as_f64().ok_or(Error::InvalidObservation)?)
-                .ok_or(Error::InvalidObservation)?,
-        )),
-        Value::Number(number) => Json::Integer(number.to_string()),
-        Value::Array(values) => {
-            Json::Sequence(values.iter().map(owned_json).collect::<Result<_, _>>()?)
-        }
-        Value::Object(values) => Json::Object(
-            values
-                .iter()
-                .map(|(name, value)| Ok((name.clone(), owned_json(value)?)))
-                .collect::<Result<_, Error>>()?,
-        ),
-    })
-}
 fn records(report: &Value, limits: PreparationLimits) -> Result<Vec<Record>, Error> {
     let values = report["verifications"]
         .as_array()
@@ -107,12 +85,12 @@ fn records(report: &Value, limits: PreparationLimits) -> Result<Vec<Record>, Err
                         .filter(|(name, _)| {
                             !matches!(name.as_str(), "failure_count" | "keys" | "verification_id")
                         })
-                        .map(|(name, value)| Ok((name.clone(), owned_json(value)?)))
-                        .collect::<Result<BTreeMap<_, _>, Error>>()?;
+                        .map(|(name, value)| (name.clone(), value.clone()))
+                        .collect::<BTreeMap<_, _>>();
                     Some(Failure {
                         condition: text(failure, "condition")?,
                         count: count(&failure["log_context"], "failure_count")?,
-                        keys: keys.iter().map(owned_json).collect::<Result<_, _>>()?,
+                        keys: keys.clone(),
                         details,
                     })
                 }
@@ -407,7 +385,6 @@ pub(crate) fn prepare_into(
 
 /// Compare the at-most-three declaration locations without requiring parent or
 /// target existence. Operational path refusal remains at the publication gate.
-#[cfg(any(unix, windows))]
 pub(crate) fn location_findings(
     resources: &crate::file_resources::Resources,
     run: &dyn RunView,

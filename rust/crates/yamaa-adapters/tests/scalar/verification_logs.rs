@@ -1,4 +1,3 @@
-#![cfg(any(unix, windows))]
 use std::{
     fs,
     path::PathBuf,

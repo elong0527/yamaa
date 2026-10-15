@@ -1,4 +1,3 @@
-#![cfg(any(unix, windows))]
 use std::{
     fs,
     path::PathBuf,
@@ -11,7 +10,7 @@ use yamaa_adapters::{
     producer_graph::Limits,
     shipped_schema,
 };
-use yamaa_core::{project_function::Language, specification::PrepareError};
+use yamaa_core::project_function::Language;
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 #[test]
@@ -239,10 +238,6 @@ fn complete_original_diamond_checks_each_canonical_node_once_without_data() {
     let graph = study.prepare(Default::default()).unwrap();
     assert_eq!(graph.capture_reads(), 5); // one environment + four canonical nodes
     assert_eq!(graph.graph().metadata().order(), [3, 1, 2, 0]);
-    assert!(matches!(
-        graph.graph().metadata().execution_refusal(),
-        PrepareError::Unsupported(_)
-    ));
     let expected = ["root.yaml", "left.yaml", "leaf.yaml"].map(|name| yamaa_adapters::issue_rows::Issue {
         phase: "validation".into(), condition: "invalid_regex".into(), requirement: Some("REQ-0827".into()),
         spec_paths: vec!["columns.VALUE.verifications[0].matches.pattern".into()],
@@ -1003,10 +998,6 @@ fn selected_inherited_producer_seeds_original_closure_with_shared_aliases_and_di
         &nodes[2].producers[0].document
     ));
     assert_eq!(graph.graph().metadata().order(), [3, 1, 2, 0]);
-    assert!(matches!(
-        graph.graph().metadata().execution_refusal(),
-        PrepareError::Unsupported(_)
-    ));
     let rows = producer_check::prepared(&graph).unwrap();
     assert_eq!(rows.len(), 1);
     let context: serde_json::Value = serde_json::from_str(&rows[0].context).unwrap();
@@ -1549,9 +1540,9 @@ fn absent_environment_selects_producer_without_capturing_or_inventing_metadata()
 
 #[test]
 fn plain_workflow_profile_inspection_keeps_physical_kind_before_study_capture() {
-    use yamaa_core::diagnostic::{ConditionCode as C, ContextValue};
+    use serde_json::Value as JsonValue;
+    use yamaa_core::diagnostic::ConditionCode as C;
     use yamaa_core::specification::PrepareError;
-    use yamaa_core::value::Value;
 
     let study = Study::new();
     study.write("environment.yaml", "[");
@@ -1606,12 +1597,9 @@ fn plain_workflow_profile_inspection_keeps_physical_kind_before_study_capture() 
         if matches!(kind, 0 | 3) {
             assert_eq!(
                 issue.context["path"],
-                ContextValue::Scalar(Value::Str("input/unknown".into()))
+                JsonValue::String("input/unknown".into())
             );
-            assert_eq!(
-                issue.context["dataset"],
-                ContextValue::Scalar(Value::Str("SRC".into()))
-            );
+            assert_eq!(issue.context["dataset"], JsonValue::String("SRC".into()));
         }
         let sources = owner.retained_sources(16, 16_777_216).unwrap();
         assert_eq!(sources.len(), 2);

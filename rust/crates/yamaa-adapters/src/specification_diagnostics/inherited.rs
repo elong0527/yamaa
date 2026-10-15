@@ -58,7 +58,7 @@ fn traversal_finding<E>(error: &graph::Error<E>) -> Result<Option<Value>, captur
         return Ok(None);
     };
     Ok(Some(
-        json!({"status":"invalid", "diagnostics":[super::portable_diagnostic(finding).ok_or(captured_schema::Error::InvalidContext)?]}),
+        json!({"status":"invalid", "diagnostics":[super::portable_diagnostic(finding)]}),
     ))
 }
 // The engine classifies the typed error. This boundary only serializes its
@@ -67,10 +67,9 @@ fn traversal_outcome<E>(schema: &SchemaStructure, error: graph::Error<E>) -> Res
     use yamaa_core::inheritance_outcome::{self, Outcome};
     let error = match inheritance_outcome::traversal_outcome(error, 16_777_216) {
         Ok(Outcome::Diagnostic(finding)) => {
-            return Ok(match super::portable_diagnostic(finding) {
-                Some(finding) => json!({"status":"invalid", "diagnostics":[finding]}),
-                None => rejected("diagnostic_context"),
-            });
+            return Ok(
+                json!({"status":"invalid", "diagnostics":[super::portable_diagnostic(finding)]}),
+            );
         }
         Ok(Outcome::Original(error)) => error,
         Err(_) => return Ok(rejected("diagnostic_context_limit")),
@@ -123,7 +122,7 @@ fn dictionary_failure_ref<'a, T>(
         } => {
             if let Some(failure) = failure {
                 let finding = failure.field_diagnostic(reference.path(), reference.written());
-                json!({"status":"invalid","diagnostics":[super::portable_diagnostic(finding).expect("portable resource facts")]})
+                json!({"status":"invalid","diagnostics":[super::portable_diagnostic(finding)]})
             } else {
                 match error {
                     graph::SourceError::Raised(error) => return Err(error),

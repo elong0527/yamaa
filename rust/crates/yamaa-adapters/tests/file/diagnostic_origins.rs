@@ -1,5 +1,4 @@
 //! Native index paths resolve only through the exact held composed member IDs.
-#![cfg(any(unix, windows))]
 use std::{
     fs,
     path::PathBuf,

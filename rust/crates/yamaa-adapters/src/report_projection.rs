@@ -203,7 +203,7 @@ impl Budget {
         self.entries(value.context.len())?;
         for (key, value) in &value.context {
             self.text(key)?;
-            self.context(value, 0)?;
+            self.json(value)?;
         }
         if let Some(route) = &value.operand_route {
             self.entries(route.len())?;
@@ -212,41 +212,6 @@ impl Budget {
             }
         }
         Ok(())
-    }
-    fn context(
-        &mut self,
-        value: &yamaa_core::diagnostic::ContextValue,
-        depth: usize,
-    ) -> Result<(), Error> {
-        use yamaa_core::diagnostic::ContextValue;
-        if depth > 64 {
-            return Err(Error::ResourceLimit(Refusal::new(
-                "report_depth",
-                64,
-                Some(depth),
-                Vec::new(),
-            )));
-        }
-        self.entries(1)?;
-        match value {
-            ContextValue::Scalar(value) => self.scalar(value),
-            ContextValue::Integer(value) => self.text(value),
-            ContextValue::Sequence(values) => {
-                self.entries(values.len())?;
-                for value in values {
-                    self.context(value, depth + 1)?;
-                }
-                Ok(())
-            }
-            ContextValue::Object(values) => {
-                self.entries(values.len())?;
-                for (key, value) in values {
-                    self.text(key)?;
-                    self.context(value, depth + 1)?;
-                }
-                Ok(())
-            }
-        }
     }
     /// Immutable JSON is charged completely before a caller clones it. Depth
     /// and actual traversal work are bounded independently of retained bytes.

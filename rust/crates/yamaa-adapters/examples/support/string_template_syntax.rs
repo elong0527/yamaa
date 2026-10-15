@@ -1,10 +1,7 @@
 //! Private typed string-template observations for independently authored fixtures.
+use serde_json::Value as JsonValue;
 use serde_json::{json, Value};
-use yamaa_core::{
-    diagnostic::ContextValue,
-    text_template::{AdmissionError, Part, StringTemplate},
-    value::Value as Scalar,
-};
+use yamaa_core::text_template::{AdmissionError, Part, StringTemplate};
 
 pub fn observe(text: &str) -> Value {
     let outcome = match StringTemplate::new(text.into(), "fixture.template".into(), None) {
@@ -14,7 +11,7 @@ pub fn observe(text: &str) -> Value {
                 let definition = finding.definition();
                 let mut context = serde_json::Map::new();
                 for (name, value) in &finding.context {
-                    if let ContextValue::Scalar(Scalar::Str(text)) = value {
+                    if let JsonValue::String(text) = value {
                         context.insert(name.clone(), json!(text));
                     } else {
                         unreachable!("template syntax context contains only strings");
