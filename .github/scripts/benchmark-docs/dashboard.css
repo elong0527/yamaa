@@ -1,10 +1,13 @@
 /* Benchmark dashboard styles.
  *
- * The palette is the one docs/stylesheets/extra.css gives the Material pages,
+ * Palette note (the single home for this rule; it is not in AGENTS.md):
+ * the palette is the one docs/stylesheets/extra.css gives the Material pages,
  * sampled from the hex logo, and the font stacks are the ones Material falls
  * back to with `font: false`. Both halves of the site therefore render in the
  * same colors and the same typeface, and a page still opens from disk with
- * no network request. Change a value here and change it there.
+ * no network request. The tokens below that mirror extra.css are --brand
+ * (#2d5f8a, --yamaa-blue) and --brand-deep (#1f3a5c, --yamaa-navy).
+ * Change a value here and change it there.
  */
 :root {
   color-scheme: light;
@@ -12,7 +15,7 @@
   --muted: #5a6a7d;
   --brand: #2d5f8a;
   /* Nothing here paints navy now that the bar is white, but the token stays:
-     it is --yamaa-navy-deep from extra.css, which dark mode there still uses. */
+     it is --yamaa-navy from extra.css. */
   --brand-deep: #1f3a5c;
   --line: #d5dfea;
   --surface: #fff;

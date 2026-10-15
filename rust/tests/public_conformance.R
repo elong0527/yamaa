@@ -29,10 +29,17 @@ write_json <- function(path, value) {
 }
 copy_tree <- function(source, target) {
   dir.create(target, recursive=TRUE, showWarnings=FALSE)
+  if (!dir.exists(target)) stop("could not create staged R input directory: ", target)
   for (entry in list.files(source, all.files=TRUE, no..=TRUE)) {
     from <- file.path(source, entry)
     to <- file.path(target, entry)
-    if (dir.exists(from)) copy_tree(from, to)
+    # The staged trees preserve symbolic links (including broken ones), so
+    # recreate links as links instead of following them to their targets.
+    link <- Sys.readlink(from)
+    if (nzchar(link)) {
+      if (!file.symlink(link, to)) stop("could not copy staged R input link: ", from)
+    }
+    else if (dir.exists(from)) copy_tree(from, to)
     else if (!file.copy(from, to)) stop("could not copy staged R input: ", from)
   }
   invisible(TRUE)

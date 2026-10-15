@@ -285,6 +285,18 @@ def test_blank_lines(tmp_path: Path, text: str, message: str) -> None:
     assert remaining == []
 
 
+def test_missing_line_break_is_reported_at_the_last_line(tmp_path: Path) -> None:
+    # REQ-1280: a finding carries the line and column where the departure
+    # starts; a missing final line break starts at the end of the last line.
+    text = CANONICAL.rstrip("\n")
+    path = tmp_path / "spec.yaml"
+    path.write_text(text, encoding="utf-8")
+    findings = check_file(path, orders=ORDERS)
+    assert [(item.name, item.line, item.column) for item in findings] == [
+        ("blank_lines", len(text.splitlines()), len(text.splitlines()[-1]) + 1)
+    ]
+
+
 def test_blank_lines_inside_a_block_scalar_are_value_text(tmp_path: Path) -> None:
     text = CANONICAL.replace(
         "    derivation: DM.STUDYID\n",
@@ -396,6 +408,28 @@ def test_a_long_comment_is_reported_and_left_to_its_author(tmp_path: Path) -> No
     assert remaining == ["line_width"]
 
 
+def test_line_width_boundary_is_seventy_nine(tmp_path: Path) -> None:
+    # REQ-1285: a line holds at most 79 characters, and a longer line is
+    # reported at its eightieth character.
+    at_limit = CANONICAL.replace(
+        "    label: Study Identifier\n", "    label: " + "x" * 68 + "\n"
+    )
+    assert _names(_spec(tmp_path, at_limit)) == []
+    over_limit = CANONICAL.replace(
+        "    label: Study Identifier\n", "    label: " + "x" * 69 + "\n"
+    )
+    path = _spec(tmp_path, over_limit, "over.yaml")
+    findings = check_file(path, orders=ORDERS)
+    label_line = next(
+        number
+        for number, line in enumerate(over_limit.splitlines(), start=1)
+        if "label:" in line
+    )
+    assert [(item.name, item.line, item.column) for item in findings] == [
+        ("line_width", label_line, 80)
+    ]
+
+
 def test_a_long_block_scalar_at_the_end_is_left_to_its_author(
     tmp_path: Path,
 ) -> None:
@@ -432,6 +466,39 @@ def test_literal_and_source_spellings(tmp_path: Path) -> None:
     assert remaining == ["source_form", "literal_form", "source_form"]
 
 
+def test_literal_block_form_reports_any_value_shape(tmp_path: Path) -> None:
+    # REQ-1250 names the block form itself: a literal holding a collection,
+    # or a scalar written on the line below `literal:`, parses to the same
+    # value as the canonical {literal: X} and is reported the same way.
+    for block in (
+        "    derivation:\n      literal: [1, 2]\n",
+        "    derivation:\n      literal: {a: 1}\n",
+        "    derivation:\n      literal:\n        DM\n",
+    ):
+        path = _spec(
+            tmp_path,
+            CANONICAL.replace("    derivation: DM.USUBJID\n", block),
+        )
+        assert [
+            (item.name, item.spec_path) for item in check_file(path, orders=ORDERS)
+        ] == [("literal_form", "columns[1].derivation")]
+
+
+def test_literal_flow_form_on_following_line_is_not_reported(
+    tmp_path: Path,
+) -> None:
+    # A flow-form mapping remains the canonical spelling even when it is
+    # written on the line below `derivation:`; only block form is reported.
+    path = _spec(
+        tmp_path,
+        CANONICAL.replace(
+            "    derivation: DM.USUBJID\n",
+            "    derivation:\n      {literal: [1, 2]}\n",
+        ),
+    )
+    assert _names(path) == []
+
+
 def test_sources_outside_the_shorthand_positions_keep_the_mapping(
     tmp_path: Path,
 ) -> None:
@@ -446,6 +513,25 @@ def test_sources_outside_the_shorthand_positions_keep_the_mapping(
         ),
     )
     assert _names(path) == []
+
+
+def test_literal_and_source_forms_need_a_single_key_mapping(
+    tmp_path: Path,
+) -> None:
+    # REQ-1250 and REQ-1255 name the single-key mappings {literal: X} and
+    # {source: X}: a block mapping with another key beside literal/source
+    # is a different value and stays silent, and an empty mapping is
+    # neither form (and must not crash the check).
+    for derivation in (
+        "    derivation:\n      literal: DM\n      note: x\n",
+        "    derivation:\n      source: DM.USUBJID\n      note: x\n",
+        "    derivation: {}\n",
+    ):
+        path = _spec(
+            tmp_path,
+            CANONICAL.replace("    derivation: DM.USUBJID\n", derivation),
+        )
+        assert _names(path) == []
 
 
 def test_a_suppression_with_a_reason_covers_its_entry(tmp_path: Path) -> None:
@@ -643,6 +729,21 @@ def test_repeated_row_derivations_move_to_column_level(
     ]
 
 
+def test_repeated_row_derivation_positions_ignore_stray_row_entries(
+    tmp_path: Path,
+) -> None:
+    # A stray non-mapping row entry shifts the raw sequence index of every
+    # template after it; positions must name the entry as written, not its
+    # index among the mapping entries alone.
+    stray = REPEATED.replace("rows:\n  - id: a\n", "rows:\n  - stray\n\n  - id: a\n")
+    findings = check_file(_spec(tmp_path, stray), orders=ORDERS)
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("repeated_row_derivation", "rows[1].derivations.STUDYID"),
+        ("repeated_row_derivation", "rows[1].derivations.USUBJID"),
+        ("repeated_row_derivation", "rows[1].derivations.DOMAIN"),
+    ]
+
+
 def test_repeated_row_derivation_needs_every_template(tmp_path: Path) -> None:
     partial = REPEATED.replace(
         "  - id: b\n    derivations:\n      STUDYID: DM.STUDYID\n",
@@ -797,6 +898,21 @@ def test_redundant_intermediate_reads_the_dataset_directly(
     assert [item.name for item in remaining] == ["redundant_intermediate"]
 
 
+def test_redundant_intermediate_positions_ignore_stray_entries(
+    tmp_path: Path,
+) -> None:
+    # A stray non-mapping intermediate must not shift the raw index (and
+    # the `no_match` entry) read for the intermediates after it.
+    stray = REDUNDANT.replace(
+        "intermediates:\n  - id: ADSL1\n",
+        "intermediates:\n  - stray\n\n  - id: ADSL1\n",
+    )
+    findings = check_file(_spec(tmp_path, stray), orders=ORDERS)
+    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
+        ("redundant_intermediate", "intermediates[1]", "REQ-1289"),
+    ]
+
+
 def test_redundant_intermediate_keeps_narrowing_lookups(
     tmp_path: Path,
 ) -> None:
@@ -894,6 +1010,28 @@ def test_missing_output_column_labels(tmp_path: Path) -> None:
     changed, remaining = fix_file(path, orders=ORDERS)
     assert changed is False
     assert [item.name for item in remaining] == ["missing_label"]
+
+
+def test_missing_label_positions_ignore_stray_column_entries(
+    tmp_path: Path,
+) -> None:
+    # A stray non-mapping column entry shifts the raw index of the columns
+    # after it; the finding must point at the unlabeled column's own name
+    # line, not at the column that filtered indexing lands on.
+    stray = MISSING_LABEL.replace(
+        "columns:\n  - name: STUDYID\n", "columns:\n  - stray\n\n  - name: STUDYID\n"
+    )
+    path = _spec(tmp_path, stray)
+    findings = check_file(path, orders=ORDERS)
+    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
+        ("missing_label", "columns[2]", "REQ-1290"),
+    ]
+    age_line = next(
+        number
+        for number, line in enumerate(stray.splitlines(), start=1)
+        if line.strip() == "- name: AGE"
+    )
+    assert findings[0].line == age_line
 
 
 def test_missing_label_skips_internal_and_inherited_columns(

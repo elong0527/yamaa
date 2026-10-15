@@ -11,6 +11,15 @@ library(yamaa)
 host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
   system.file("host-fixtures",package="yamaa",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+source(file.path(host_fixture_root,"context.R"),local=TRUE)
+local({
+  decode <- function(text) jsonlite::fromJSON(text,simplifyVector=FALSE)
+  actual <- decode('{"keys":[{"B":2,"A":1},null],"dataset":"SRC"}')
+  stopifnot(context_equal(actual,decode('{"dataset":"SRC","keys":[{"A":1,"B":2},null]}')),
+    !context_equal(actual,decode('{"dataset":"SRC","keys":[null,{"A":1,"B":2}]}')),
+    !context_equal(actual,decode('{"dataset":"SRC","keys":[{"A":"1","B":2},null]}')),
+    !context_equal(actual,decode('{"dataset":"SRC","keys":[{"A":1,"B":2}]}')))
+})
 host_truth <- read_host_fixture(host_fixture_root,"original-specifications")
 root <- system.file("specification-original", package="yamaa", mustWork=TRUE)
 source(file.path(root,"issue-frame-truth.R"),local=TRUE)
@@ -2335,7 +2344,7 @@ local({
             identical(frame$condition[[index]],expected$condition),
             identical(frame$requirement[[index]],expected$requirement),
             identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
-            identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+            context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
       }
       stopifnot(is.null(result$output),
@@ -2369,7 +2378,7 @@ local({
             identical(frame$condition[[index]],expected$condition),
             identical(frame$requirement[[index]],expected$requirement),
             identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
-            identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+            context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
       }
       if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
@@ -2405,7 +2414,7 @@ local({
               identical(frame$condition[[index]],expected$condition),
               identical(frame$requirement[[index]],expected$requirement),
               identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
-              identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+              context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
           }
         }
         stopifnot(!file.exists(file.path(directory,"out.csv")))
@@ -2449,7 +2458,7 @@ local({
             identical(frame$condition[[index]],expected$condition),
             identical(frame$requirement[[index]],expected$requirement),
             identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
-            identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+            context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
       }
       if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
@@ -2474,7 +2483,7 @@ local({
         identical(actual$condition[[i]],finding$condition),
         identical(actual$requirement[[i]],finding$requirement),
         identical(actual$spec_paths[[i]],fixture_strings(finding$spec_paths)),
-        identical(context[sort(names(context))],finding$context[sort(names(finding$context))]))
+        context_equal(context,finding$context))
     }
   }
   for (truth in host_truth[["diagnostic_sites"]]) {
@@ -2522,7 +2531,7 @@ local({
             identical(frame$condition[[index]],expected$condition),
             identical(frame$requirement[[index]],expected$requirement),
             identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
-            identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+            context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
       }
       report <- jsonlite::fromJSON(rawToChar(get(".domain_observations",asNamespace("yamaa"))(result)),simplifyVector=FALSE)
@@ -2565,7 +2574,7 @@ local({
             identical(frame$condition[[index]],expected$condition),
             identical(frame$requirement[[index]],expected$requirement),
             identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
-            identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
+            context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
       }
       if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
@@ -2590,7 +2599,7 @@ local({
         identical(actual$condition[[i]],finding$condition),
         identical(actual$requirement[[i]],finding$requirement),
         identical(actual$spec_paths[[i]],fixture_strings(finding$spec_paths)),
-        identical(context[sort(names(context))],finding$context[sort(names(finding$context))]))
+        context_equal(context,finding$context))
     }
   }
   stopifnot(length(host_truth[["row_join_keys"]])==11L)
@@ -2625,11 +2634,12 @@ local({
     stopifnot(nrow(frame)==length(expected))
     for (index in seq_along(expected)) {
       row <- expected[[index]]
+      requirement <- if(is.null(row$requirement)) NA_character_ else row$requirement
       stopifnot(identical(frame$phase[[index]],row$phase),
         identical(frame$condition[[index]],row$condition),
-        identical(frame$requirement[[index]],row$requirement),
+        identical(frame$requirement[[index]],requirement),
         identical(frame$spec_paths[[index]],fixture_strings(row$spec_paths)),
-        identical(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),row$context))
+        context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),row$context))
     }
   }
   for (truth in host_truth[["key_expressions"]]) {

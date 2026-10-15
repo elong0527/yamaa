@@ -220,4 +220,12 @@ impl PreparedSpecification {
         diagnostics.extend(self.output_findings().iter().map(OutputFinding::diagnostic));
         diagnostics
     }
+
+    /// Captured declaration types can refuse a donor filter even when source
+    /// schemas are unavailable. Other declaration checkpoints remain separate.
+    pub fn intermediate_filter_type_diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.check_expressions
+            .iter()
+            .filter(|finding| self.intermediates.owns_filter_type_finding(finding))
+    }
 }

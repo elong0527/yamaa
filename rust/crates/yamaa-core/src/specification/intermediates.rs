@@ -30,6 +30,26 @@ struct Declaration {
 #[derive(Debug, Default)]
 pub(super) struct Declarations(alloc::sync::Arc<Vec<Declaration>>, Option<String>);
 impl Declarations {
+    pub(super) fn owns_filter_type_finding(&self, finding: &crate::diagnostic::Diagnostic) -> bool {
+        use crate::diagnostic::ConditionCode as C;
+        if !matches!(
+            finding.code,
+            C::PredicateInputType
+                | C::PredicateIncompatiblePair
+                | C::PredicateExpectedText
+                | C::PredicateContainsExpectedText
+        ) {
+            return false;
+        }
+        let [path] = finding.spec_paths.as_slice() else {
+            return false;
+        };
+        let Some(path) = path.strip_suffix(".filter") else {
+            return false;
+        };
+        self.0.iter().any(|declaration| declaration.path == path)
+    }
+
     pub(super) fn failed_metadata_names<'a>(
         &'a self,
         findings: &[crate::diagnostic::Diagnostic],
