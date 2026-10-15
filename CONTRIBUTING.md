@@ -118,8 +118,11 @@ reads as well. An unavailable CLI does not waive review requirements.
 This requires CodeRabbit's authentic `Review completed` status on that commit
 and resolved review threads. The PR must have its own authentic summary and
 walkthrough, with a final reviewed footer naming that exact head; completion
-must follow the walkthrough's last update. Incremental review ranges are
-supported. A status shared with another PR, a skipped status alone, or an
+must follow the walkthrough's last update. The reviewed range must end at that
+head. If the summary omits the range, an authentic formal review on this PR,
+submitted for this commit before completion, can supply it. A conflicting or
+ambiguous summary range cannot use that fallback. Incremental review ranges
+are supported. A status shared with another PR, a skipped status alone, or an
 earlier-head review does not pass. Any recorded base retarget or force-push
 requires a fresh PR and head, even if the base was later changed back to main.
 PRs above 300 changed files require bounded coverage below, including when a
@@ -157,9 +160,11 @@ The gate permits this path only after the authentic target status explicitly
 says the diff exceeded the 300-file limit. Missing or pending target reviews
 cannot use it. Every batch still needs its own authentic `Review completed`
 status and resolved threads; target threads must also be resolved. The gate
-also binds each completion to the authentic walkthrough's exact base/head
-range and final reviewed footer; the completion must follow the walkthrough's
-last update. Missing evidence, another PR sharing the head, or any recorded
+also binds each completion to this PR's exact base/head review range and final
+reviewed summary footer. The range can come from the summary or the authentic
+formal review for that commit. Completion must follow both the summary's last
+update and the formal review's submission when that receipt is used. Missing
+evidence, another PR sharing the head, or any recorded
 base retarget/force-push history requires a fresh review PR and head. This
 prevents a completion for an earlier base from covering a different diff.
 The gate checks complete Git trees and paginated PR files through the authenticated API,

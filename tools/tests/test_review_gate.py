@@ -84,6 +84,28 @@ def walkthrough(number=NUMBER, head=HEAD, base=OTHER):
     }
 
 
+def formal_review(number=NUMBER, head=HEAD, base=OTHER):
+    identity = number + 2000
+    return {
+        "id": identity,
+        "user": dict(gate.REVIEW_CREATOR),
+        "state": "COMMENTED",
+        "pull_request_url": f"https://api.github.com/repos/{REPOSITORY}/pulls/{number}",
+        "html_url": f"https://github.com/{REPOSITORY}/pull/{number}#pullrequestreview-{identity}",
+        "commit_id": head,
+        "submitted_at": "2026-10-15T14:16:03Z",
+        # Real zero-actionable reviews can start with a nitpick section;
+        # the typed PR review receipt identifies them, not an actionable count.
+        "body": (
+            "\n\n<details>\n<summary>Nitpick comments: 1</summary>\n</details>\n"
+            "<details>\n<summary>📥 Commits</summary>\n\n"
+            "Reviewing files that changed from the base of the PR and between "
+            f"{base} and {head}.\n\n</details>\n\n"
+            "<!-- This is an auto-generated comment by CodeRabbit for review status -->"
+        ),
+    }
+
+
 class Evidence:
     repository = REPOSITORY
     repository_id = REPOSITORY_ID
@@ -595,6 +617,185 @@ class OrdinaryReviewScope(unittest.TestCase):
         )
         self.assertEqual(gate.verify(api, NUMBER, publish=True).state, "pending")
         self.assertNotIn("success", [v.state for v in api.published])
+
+
+class FormalReviewRange(unittest.TestCase):
+    @staticmethod
+    def evidence():
+        api = Evidence()
+        comment = api.page_values[f"issues/{NUMBER}/comments"][0]
+        comment["body"] = comment["body"].replace(
+            f"Reviewing files that changed from the base of the PR and between {OTHER} and {HEAD}.\n",
+            "",
+        )
+        api.page_values[f"pulls/{NUMBER}/reviews"] = [formal_review()]
+        return api
+
+    def test_summary_without_range_can_use_its_own_typed_formal_review(self):
+        api = self.evidence()
+        self.assertEqual(gate.verify(api, NUMBER, publish=True).state, "success")
+        self.assertIn(("pages", f"pulls/{NUMBER}/reviews"), api.history)
+        self.assertEqual([v.state for v in api.published], ["pending", "success"])
+
+    def test_valid_summary_range_never_requires_a_formal_review(self):
+        api = Evidence()
+        self.assertEqual(gate.verify(api, NUMBER).state, "success")
+        self.assertNotIn(("pages", f"pulls/{NUMBER}/reviews"), api.history)
+
+    def test_formal_review_must_bind_this_pr_head_actor_timestamp_and_publication(self):
+        for mutation in [
+            "missing",
+            "wrong-pr",
+            "wrong-link",
+            "wrong-head",
+            "forged-user",
+            "future",
+            "invalid-time",
+            "pending",
+            "chat",
+            "quoted-range",
+            "ambiguous",
+            "malformed-extra-range",
+            "wrong-range-head",
+            "duplicate",
+        ]:
+            api = self.evidence()
+            key = f"pulls/{NUMBER}/reviews"
+            review = api.page_values[key][0]
+            if mutation == "missing":
+                api.page_values[key] = []
+            elif mutation == "wrong-pr":
+                review["pull_request_url"] = review["pull_request_url"].replace(
+                    str(NUMBER), "99"
+                )
+            elif mutation == "wrong-link":
+                review["html_url"] = review["html_url"].replace(f"/{NUMBER}#", "/99#")
+            elif mutation == "wrong-head":
+                review["commit_id"] = OTHER
+            elif mutation == "forged-user":
+                review["user"]["id"] = 7
+            elif mutation == "future":
+                review["submitted_at"] = "2026-10-15T14:16:06Z"
+            elif mutation == "invalid-time":
+                review["submitted_at"] = "unknown"
+            elif mutation == "pending":
+                review["state"] = "PENDING"
+            elif mutation == "chat":
+                review["body"] = review["body"].split(
+                    "<!-- This is an auto-generated comment"
+                )[0]
+            elif mutation == "quoted-range":
+                review["body"] = review["body"].replace(
+                    "\nReviewing files", "\n> Reviewing files"
+                )
+            elif mutation == "ambiguous":
+                review["body"] += (
+                    "\nReviewing files that changed from the base of the PR and between "
+                    f"{HEAD} and {OTHER}."
+                )
+            elif mutation == "malformed-extra-range":
+                review["body"] += (
+                    "\nReviewing files that changed from the base of the PR and between malformed."
+                )
+            elif mutation == "wrong-range-head":
+                review["body"] = review["body"].replace(
+                    f"{OTHER} and {HEAD}.", f"{OTHER} and {OTHER}."
+                )
+            else:
+                api.page_values[key].append(copy.deepcopy(review))
+            with self.subTest(mutation=mutation), self.assertRaises(gate.GateError):
+                gate.verify(api, NUMBER, publish=True)
+            self.assertNotIn("success", [v.state for v in api.published])
+
+    def test_conflicting_summary_ranges_never_fall_back_to_a_valid_formal_review(self):
+        for claim in [
+            f"{OTHER} and {OTHER}.",
+            f"{OTHER} and {HEAD}.\nReviewing files that changed from the base of the PR and between {OTHER} and {HEAD}.",
+            "malformed.",
+        ]:
+            api = self.evidence()
+            api.page_values[f"issues/{NUMBER}/comments"][0]["body"] += (
+                "\nReviewing files that changed from the base of the PR and between "
+                + claim
+            )
+            with self.subTest(claim=claim), self.assertRaises(gate.GateError):
+                gate.verify(api, NUMBER)
+            self.assertNotIn(("pages", f"pulls/{NUMBER}/reviews"), api.history)
+
+    def test_formal_review_never_overrides_updated_pending_or_wrong_footer_summary(
+        self,
+    ):
+        for mutation in ["late-summary", "in-progress", "old-footer"]:
+            api = self.evidence()
+            comment = api.page_values[f"issues/{NUMBER}/comments"][0]
+            if mutation == "late-summary":
+                comment["updated_at"] = "2026-10-15T14:16:06Z"
+            elif mutation == "in-progress":
+                comment["body"] += (
+                    "\n<!-- This is an auto-generated comment: review in progress by coderabbit.ai -->"
+                )
+            else:
+                comment["body"] = comment["body"].replace(HEAD, OTHER)
+            with self.subTest(mutation=mutation), self.assertRaises(gate.GateError):
+                gate.verify(api, NUMBER)
+            self.assertNotIn(("pages", f"pulls/{NUMBER}/reviews"), api.history)
+
+    def test_latest_formal_review_cannot_fall_back_to_an_older_matching_range(self):
+        api = self.evidence()
+        newer = formal_review()
+        newer.update(
+            id=newer["id"] + 1,
+            html_url=newer["html_url"].replace("2042", "2043"),
+            submitted_at="2026-10-15T14:16:04Z",
+            body=newer["body"].replace(f"{OTHER} and {HEAD}.", f"{OTHER} and {OTHER}."),
+        )
+        api.page_values[f"pulls/{NUMBER}/reviews"].append(newer)
+        with self.assertRaisesRegex(gate.GateError, "different base or head"):
+            gate.verify(api, NUMBER)
+
+    def test_quoted_formal_range_or_whole_commits_section_is_not_published_evidence(
+        self,
+    ):
+        for target in ["range", "section"]:
+            for opening, closing in [
+                ("```text", "```"),
+                ("~~~text", "~~~"),
+                ("<!--", "-->"),
+                ("````text\n```", "```\n````"),
+                ("```text <!--\n-->", "```"),
+                ("```text", ""),
+                ("<!--", ""),
+            ]:
+                api = self.evidence()
+                review = api.page_values[f"pulls/{NUMBER}/reviews"][0]
+                body = review["body"]
+                if target == "range":
+                    quoted = next(
+                        line
+                        for line in body.splitlines()
+                        if line.startswith("Reviewing files")
+                    )
+                else:
+                    start = body.index("<details>\n<summary>📥 Commits</summary>")
+                    end = body.index("</details>", start) + len("</details>")
+                    quoted = body[start:end]
+                review["body"] = body.replace(quoted, f"{opening}\n{quoted}\n{closing}")
+                with (
+                    self.subTest(target=target, opening=opening),
+                    self.assertRaisesRegex(
+                        gate.GateError, "missing, quoted or ambiguous"
+                    ),
+                ):
+                    gate.verify(api, NUMBER, publish=True)
+                self.assertNotIn("success", [v.state for v in api.published])
+
+    def test_closed_code_and_comment_examples_before_the_provider_section_are_allowed(
+        self,
+    ):
+        api = self.evidence()
+        review = api.page_values[f"pulls/{NUMBER}/reviews"][0]
+        review["body"] = "```text\n<!--\n```\n<!--\n~~~~\n-->\n" + review["body"]
+        self.assertEqual(gate.verify(api, NUMBER).state, "success")
 
 
 class TrustedRouting(unittest.TestCase):

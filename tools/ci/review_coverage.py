@@ -25,14 +25,26 @@ MODES = {
     "120000": "blob",
     "160000": "commit",
 }
+RANGE_PREFIX = "Reviewing files that changed from the base of the PR and between "
 REVIEW_RANGE = re.compile(
-    r"Reviewing files that changed from the base of the PR and between "
-    r"([0-9a-f]{40}) and ([0-9a-f]{40})\."
+    re.escape(RANGE_PREFIX) + r"([0-9a-f]{40}) and ([0-9a-f]{40})\."
 )
 FINAL_MARKER = "final_review_risk_coverage:"
 FINAL_REVIEW = re.compile(r"<!-- final_review_risk_coverage:(.*?) -->", re.DOTALL)
 SUMMARY = "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->"
 WALKTHROUGH = "<!-- walkthrough_start -->"
+FORMAL_REVIEW = (
+    "<!-- This is an auto-generated comment by CodeRabbit for review status -->"
+)
+COMMITS_HEADER = "<summary>📥 Commits</summary>"
+COMMITS_SECTION = re.compile(
+    r"(?m)^<details>\r?\n"
+    + re.escape(COMMITS_HEADER)
+    + r"\r?\n\r?\n"
+    + REVIEW_RANGE.pattern
+    + r"\r?\n\r?\n</details>(?=\r?\n|\Z)"
+)
+FENCE = re.compile(r" {0,3}(`{3,}|~{3,})(.*)\Z")
 IN_PROGRESS = re.compile(
     r"<!-- This is an auto-generated comment: review(?: |_)in(?: |_)progress by coderabbit\.ai -->"
 )
@@ -351,6 +363,84 @@ def timestamp(value):
         raise CoverageError("invalid review evidence timestamp") from error
 
 
+def published_prefix(prefix):
+    """Exclude quoted provider sections, tracking only fences and comments."""
+    fence, comment = None, False
+    for line in prefix.splitlines():
+        if fence is not None:
+            closing = re.fullmatch(r" {0,3}([`~]+)[ \t]*", line)
+            if (
+                closing
+                and set(closing[1]) == {fence[0]}
+                and len(closing[1]) >= fence[1]
+            ):
+                fence = None
+            continue
+        if not comment:
+            opening = FENCE.fullmatch(line)
+            if opening:
+                fence = opening[1][0], len(opening[1])
+                continue
+        if comment:
+            end = line.find("-->")
+            if end < 0:
+                continue
+            line, comment = line[end + 3 :], False
+        while "<!--" in line:
+            start = line.index("<!--")
+            end = line.find("-->", start + 4)
+            if end < 0:
+                line, comment = line[:start], True
+                break
+            line = line[:start] + line[end + 3 :]
+    return fence is None and not comment
+
+
+def formal_review_ranges(api, number, head, completed_at, authentic):
+    """Read the app's typed PR-review receipt when its summary omits the range."""
+    candidates, identifiers = [], set()
+    for review in api.pages(f"pulls/{number}/reviews"):
+        require(isinstance(review, dict), "invalid formal PR review")
+        if not authentic(review.get("user")):
+            continue
+        if review.get("commit_id") != head:
+            continue
+        identity = review.get("id")
+        require(
+            positive_integer(identity)
+            and identity not in identifiers
+            and review.get("pull_request_url")
+            == f"https://api.github.com/repos/{api.repository}/pulls/{number}"
+            and review.get("html_url")
+            == f"https://github.com/{api.repository}/pull/{number}#pullrequestreview-{identity}"
+            and review.get("state") in {"COMMENTED", "APPROVED", "CHANGES_REQUESTED"},
+            "invalid or conflicting formal review identity, PR or state",
+        )
+        identifiers.add(identity)
+        candidates.append((timestamp(review.get("submitted_at")), identity, review))
+    require(candidates, "PR requires its own authentic exact-head formal review range")
+    submitted, _, review = max(candidates)
+    require(submitted <= completed_at, "completion predates its formal PR review")
+    body = review.get("body")
+    require(
+        isinstance(body, str)
+        and body.count(FORMAL_REVIEW) == 1
+        and FORMAL_REVIEW in body.splitlines(),
+        "formal review is missing its provider review receipt",
+    )
+    ranges = REVIEW_RANGE.findall(body)
+    sections = list(COMMITS_SECTION.finditer(body))
+    require(
+        len(ranges) == 1
+        and body.count(RANGE_PREFIX) == 1
+        and body.count(COMMITS_HEADER) == 1
+        and len(sections) == 1
+        and published_prefix(body[: sections[0].start()]),
+        "formal review range is missing, quoted or ambiguous",
+    )
+    return ranges
+
+
 def attest_review(api, number, head, status, authentic, *, base=None):
     """Bind a completed status to this PR's own reviewed head.
 
@@ -396,13 +486,6 @@ def attest_review(api, number, head, status, authentic, *, base=None):
     require(
         updated <= completed_at, "completion predates the latest review walkthrough"
     )
-    ranges = REVIEW_RANGE.findall(body)
-    require(
-        len(ranges) == 1
-        and ranges[0][1] == head
-        and (base is None or ranges[0][0] == base),
-        "completed review walkthrough names a different base or head",
-    )
     markers = list(FINAL_REVIEW.finditer(body))
     require(
         body.count(FINAL_MARKER) == 1 and len(markers) == 1,
@@ -418,6 +501,19 @@ def attest_review(api, number, head, status, authentic, *, base=None):
         and footer.get("coveredCommitId") == head
         and footer.get("kind") == "reviewed",
         "final review footer does not cover the exact current head",
+    )
+    ranges = REVIEW_RANGE.findall(body)
+    require(
+        body.count(RANGE_PREFIX) == len(ranges),
+        "review walkthrough contains a malformed or conflicting range",
+    )
+    if not ranges:
+        ranges = formal_review_ranges(api, number, head, completed_at, authentic)
+    require(
+        len(ranges) == 1
+        and ranges[0][1] == head
+        and (base is None or ranges[0][0] == base),
+        "completed review walkthrough names a different base or head",
     )
 
 

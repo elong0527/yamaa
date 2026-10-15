@@ -61,6 +61,25 @@ def tree(identity, leaves):
     }
 
 
+def formal_review(number, head, base):
+    identity = number + 2000
+    return {
+        "id": identity,
+        "user": dict(gate.REVIEW_CREATOR),
+        "state": "COMMENTED",
+        "pull_request_url": f"https://api.github.com/repos/{REPOSITORY}/pulls/{number}",
+        "html_url": f"https://github.com/{REPOSITORY}/pull/{number}#pullrequestreview-{identity}",
+        "commit_id": head,
+        "submitted_at": "2026-10-15T14:16:03Z",
+        "body": (
+            "<details>\n<summary>📥 Commits</summary>\n\n"
+            "Reviewing files that changed from the base of the PR and between "
+            f"{base} and {head}.\n\n</details>\n"
+            "<!-- This is an auto-generated comment by CodeRabbit for review status -->"
+        ),
+    }
+
+
 class Payloads:
     """Independent API fixtures: 301 file changes and 302 raw leaf paths.
 
@@ -127,7 +146,7 @@ class Payloads:
             ]
         }
         self.thread_versions = {}
-        self.timeline_versions, self.comment_versions = {}, {}
+        self.timeline_versions, self.comment_versions, self.review_versions = {}, {}, {}
         self.add_commit(ORIGINAL, oid(2000), self.old)
         self.add_commit(
             MAIN,
@@ -162,6 +181,7 @@ class Payloads:
             ]
             self.file_pages[number] = [self.files[index] for index in group]
             self.status_versions[head] = [[review(head)]]
+            self.review_versions[number] = [[formal_review(number, head, base)]]
             self.timeline_versions[number] = [[{"event": "committed", "sha": head}]]
             self.comment_versions[number] = [
                 [
@@ -231,6 +251,8 @@ class Payloads:
         self.history.append(("pages", endpoint))
         if endpoint.startswith("pulls/") and endpoint.endswith("/files"):
             return copy.deepcopy(self.file_pages[int(endpoint.split("/")[1])])
+        if endpoint.startswith("pulls/") and endpoint.endswith("/reviews"):
+            return self.next(self.review_versions[int(endpoint.split("/")[1])])
         if endpoint.startswith("issues/") and endpoint.endswith("/timeline"):
             return self.next(self.timeline_versions[int(endpoint.split("/")[1])])
         if endpoint.startswith("issues/") and endpoint.endswith("/comments"):
@@ -729,6 +751,69 @@ class ReviewScope(unittest.TestCase):
             api.request.call_args_list[-1]
             .args[1]
             .endswith("comments?per_page=100&page=2")
+        )
+
+    def test_missing_summary_range_can_use_the_exact_bounded_formal_range(self):
+        api = Payloads()
+        for number in BATCHES:
+            comment = api.comment_versions[number][0][0]
+            comment["body"] = "\n".join(
+                line
+                for line in comment["body"].splitlines()
+                if not line.startswith("Reviewing files")
+            )
+        self.assertEqual(gate.verify(api, NUMBER, publish=True).state, "success")
+        for number in BATCHES:
+            self.assertIn(("pages", f"pulls/{number}/reviews"), api.history)
+
+    def test_formal_range_cannot_change_the_bounded_base_or_override_summary_claims(
+        self,
+    ):
+        for summary_claim in [False, True]:
+            api = Payloads()
+            number, head = BATCHES[0], CHUNK_HEADS[0]
+            comment = api.comment_versions[number][0][0]
+            if summary_claim:
+                comment["body"] = comment["body"].replace(CHUNK_BASES[0], ORIGINAL)
+            else:
+                comment["body"] = "\n".join(
+                    line
+                    for line in comment["body"].splitlines()
+                    if not line.startswith("Reviewing files")
+                )
+                api.review_versions[number] = [[formal_review(number, head, ORIGINAL)]]
+            with (
+                self.subTest(summary_claim=summary_claim),
+                self.assertRaisesRegex(gate.GateError, "different base or head"),
+            ):
+                gate.verify(api, NUMBER, publish=True)
+            self.assertNotIn("success", [v.state for v in api.published])
+            if summary_claim:
+                self.assertNotIn(("pages", f"pulls/{number}/reviews"), api.history)
+
+    def test_formal_review_pagination_cannot_omit_the_matching_receipt(self):
+        api = object.__new__(gate.GitHub)
+        api.repository, api.repository_id = REPOSITORY, REPOSITORY_ID
+        api.request = Mock(
+            side_effect=[
+                [{"user": {"id": 7}} for _ in range(100)],
+                [formal_review(BATCHES[0], CHUNK_HEADS[0], CHUNK_BASES[0])],
+            ]
+        )
+        self.assertEqual(
+            coverage.formal_review_ranges(
+                api,
+                BATCHES[0],
+                CHUNK_HEADS[0],
+                coverage.timestamp("2026-10-15T14:16:05Z"),
+                gate.authentic,
+            ),
+            [(CHUNK_BASES[0], CHUNK_HEADS[0])],
+        )
+        self.assertTrue(
+            api.request.call_args_list[-1]
+            .args[1]
+            .endswith("reviews?per_page=100&page=2")
         )
 
     def test_a_retarget_during_verification_invalidates_success(self):
