@@ -958,7 +958,7 @@ fn derivation_order(
             };
             let path = format!("{expression_path}.{}", text(d, operation)?);
             let mut references = Vec::new();
-            derivations::references(d, value, project, &mut references, 0)?;
+            derivations::donor_references(d, value, project, &mut references, 0)?;
             self_relations::template_references(d, value, templates, &mut references, 0)?;
             for reference in references {
                 let Some(dependency) = reference
