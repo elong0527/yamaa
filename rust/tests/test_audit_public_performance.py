@@ -1,13 +1,18 @@
 """Adversarial offline replay: original raw evidence, never collector summaries."""
 
+import ast
 import contextlib
 import copy
 import importlib.util
 import json
+import os
+import re
 import shutil
+import string
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -1557,6 +1562,76 @@ class NativeSourceBinding(unittest.TestCase):
         self.assertIn(
             result["artifact_id"], [artifact["id"] for artifact in self.artifacts]
         )
+
+    def test_actual_workflow_installation_references_re_admit_both_hosts(self):
+        workflow = (TOOLS.parents[1] / ".github/workflows/performance.yml").read_text()
+        native = self.inputs()
+        for lane in auditor.tuples(auditor.collector.LINUX_INSTALLED):
+            host = lane["host"]
+            with self.subTest(host=host):
+                job = workflow.split(
+                    f"\n  {'python' if host == 'python' else 'r'}:\n", 1
+                )[1]
+                job = re.split(r"\n  [\w-]+:\n", job, maxsplit=1)[0]
+                block = next(
+                    textwrap.dedent(block)
+                    for block in re.findall(
+                        r"python - <<'PY'\n(.*?)\n          PY", job, re.DOTALL
+                    )
+                    if "native-run.json" in block
+                )
+                export = next(
+                    node
+                    for node in ast.parse(block).body
+                    if isinstance(node, ast.With) and "GITHUB_ENV" in ast.unparse(node)
+                )
+                environment_file = self.root / f"{host}-environment"
+                subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        "import os\nfrom pathlib import Path\n"
+                        + f"run={self.run!r}\nroot=Path({str(self.root)!r})\n"
+                        + ast.unparse(export),
+                    ],
+                    env=dict(os.environ, GITHUB_ENV=str(environment_file)),
+                    check=True,
+                )
+                environment = dict(
+                    line.split("=", 1)
+                    for line in environment_file.read_text().splitlines()
+                )
+                environment["NATIVE_RUN_ID"] = str(self.run["id"])
+                command = next(
+                    line
+                    for line in job.splitlines()
+                    if "performance_installation.py" in line
+                    and f"--host {host} " in line
+                )
+                reference = re.search(
+                    r'--artifact-reference "(.*?)" --form', command
+                ).group(1)
+                filename = "yamaa.whl" if host == "python" else "yamaa.tar.gz"
+                reference = reference.replace("${{ matrix.os }}", lane["os"])
+                reference = re.sub(r'\$\(basename "\$\{\w+\}"\)', filename, reference)
+                reference = string.Template(reference).substitute(environment)
+                directory = self.root / f"workflow-{host}" / "candidate-evidence"
+                directory.mkdir(parents=True)
+                write(directory.parent / "native-run.json", self.run)
+                write(
+                    directory / "collection.json",
+                    {
+                        "provenance": dict(
+                            self.record,
+                            source_revision=environment["CANDIDATE_REVISION"],
+                            artifact_path="/vanished/" + filename,
+                            artifact_reference=reference,
+                        )
+                    },
+                )
+                result = auditor.native_collection(directory, lane, native)
+                self.assertEqual(result["run_attempt"], self.run["run_attempt"])
+                self.assertEqual(result["artifact_reference"], reference)
 
     def test_absent_and_failed_native_metadata_never_admit(self):
         self.payload.pop("native_jobs")
