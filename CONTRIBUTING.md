@@ -177,8 +177,8 @@ new matching batch heads and fresh completed reviews. Batch metadata belongs
 in the PR body, not a committed evidence ledger.
 
 Native qualification is separate: `.github/workflows/native.yml` builds and
-installs the supported Python wheel/source and R source combinations nightly
-and on dispatch, or on a `qualification/issue-*` push. It checks public
+installs the supported Python wheel/source and R source combinations every two
+hours on main, on dispatch, or on a `qualification/issue-*` push. It checks public
 benchmark conformance, installed host suites, packaging, optimized Rust behavior
 and portable math. Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including strict R package

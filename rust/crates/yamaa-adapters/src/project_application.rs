@@ -131,26 +131,19 @@ fn environment_failure(
         EnvironmentFailure::Root(error @ SourceError::Decode { identity, .. }) => {
             diagnostics::root_boundary(error, identity)
         }
-        EnvironmentFailure::Root(SourceError::Limit(error)) => {
-            return environment_projection_failure(diagnostics::Error::Limit(*error))
-        }
-        EnvironmentFailure::Root(_) => {
-            return file_application::rejected("environment", "environment_boundary")
+        EnvironmentFailure::Root(error) => {
+            if let Some(error) = diagnostics::root_limit(error) {
+                return environment_projection_failure(error);
+            }
+            return file_application::rejected("environment", "environment_boundary");
         }
     };
     projected.unwrap_or_else(environment_projection_failure)
 }
 fn environment_projection_failure(error: crate::project_environment_diagnostics::Error) -> Failure {
     match error {
-        crate::project_environment_diagnostics::Error::Limit(error) => {
-            file_application::resource_rejected(
-                "environment",
-                "resource_limit",
-                error.resource,
-                error.limit,
-                error.actual,
-                Vec::new(),
-            )
+        crate::project_environment_diagnostics::Error::ResourceLimit(refusal) => {
+            refusal.issues("environment", "resource_limit")
         }
         _ => refused("environment"),
     }
@@ -179,6 +172,9 @@ fn workflow_issues(error: &crate::file_workflow::Error, host: Language) -> Failu
         }
         crate::producer_check::Error::Original(error) => workflow_failure(error, host),
         crate::producer_check::Error::Projection(_) => refused("check"),
+        crate::producer_check::Error::ResourceLimit(refusal) => {
+            refusal.issues("environment", "resource_limit")
+        }
     })
 }
 

@@ -399,6 +399,58 @@ mod source {
             }
         }
 
+        #[test]
+        fn field_boundaries_cover_leading_empty_fields_and_records_after_crlf() {
+            let maximum = yamaa_core::limits::Limits::COLUMNS;
+            let names = (0..maximum)
+                .map(|index| format!("C{index}"))
+                .collect::<Vec<_>>();
+            let header = names.join(",");
+            for input in [
+                ",".repeat(maximum) + "last",
+                "\"\",".repeat(maximum) + "last",
+                format!("{header}\r\n{}", ",".repeat(maximum)),
+                format!("{header}\r\n{}\r\n", ",".repeat(maximum)),
+            ] {
+                assert_eq!(
+                    parse(input.as_bytes()),
+                    Err(Error::Limit {
+                        resource: "columns",
+                        limit: maximum,
+                        actual: Some(maximum + 1),
+                    })
+                );
+            }
+            let input = format!("{header}\r\n{}\r\n", ",".repeat(maximum - 1));
+            let admitted = parse(input.as_bytes()).unwrap();
+            assert_eq!(admitted.names, names);
+            assert_eq!(admitted.records, [vec![None; maximum]]);
+        }
+
+        #[test]
+        fn discarded_ragged_rows_preserve_complete_syntax_and_header_priority() {
+            for (input, cause, record, field) in [
+                (
+                    "A,B\nx\n1,2\n\"unfinished",
+                    ProfileCause::QuoteUnterminated,
+                    4,
+                    1,
+                ),
+                ("A,\nx\n1,2", ProfileCause::FieldNameEmpty, 1, 2),
+                ("A,B\nx\n1,2", ProfileCause::RecordWidth, 2, 2),
+                ("A,B\nx\n1,2,3", ProfileCause::RecordWidth, 2, 2),
+            ] {
+                assert_eq!(
+                    parse(input.as_bytes()),
+                    Err(Error::Profile {
+                        cause,
+                        record,
+                        field: Field::Index(field),
+                    })
+                );
+            }
+        }
+
         fn cause(condition: &str) -> ProfileCause {
             match condition {
                 "invalid_text" => ProfileCause::InvalidText,

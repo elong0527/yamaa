@@ -1817,6 +1817,25 @@ mod file {
                 assert_eq!(owner.capture_reads(), if structural { 2 } else { 1 });
                 let reads = owner.capture_reads();
                 let held_root = rejected.root.source().bytes.as_ptr();
+                let held_error = owner.error() as *const _;
+                let producer_check::Error::ResourceLimit(refusal) =
+                    producer_check::rejected(error, Language::Python).unwrap_err()
+                else {
+                    panic!("whole projection retains the typed refusal")
+                };
+                assert_eq!(refusal.resource, expected.resource);
+                assert_eq!(refusal.limit, expected.limit);
+                assert_eq!(refusal.actual, expected.actual);
+                assert_eq!(refusal.spec_paths, ["codelists[1]"]);
+                let expected_rows = refusal.issues("environment", "resource_limit");
+                assert_eq!(
+                    yamaa_adapters::project_application::check(
+                        &study.path("root.yaml"),
+                        &study.path("environment.yaml"),
+                        Language::Python,
+                    ),
+                    expected_rows,
+                );
                 let application_error = yamaa_adapters::project_application::prepare(
                     &study.path("root.yaml"),
                     &study.path("environment.yaml"),
@@ -1839,8 +1858,7 @@ mod file {
                 for _ in 0..2 {
                     assert!(matches!(
                         producer_check::rejected(error, Language::Python),
-                        Err(producer_check::Error::Original(original))
-                            if std::ptr::eq(original, error)
+                        Err(producer_check::Error::ResourceLimit(again)) if again == refusal
                     ));
                     let rows = yamaa_adapters::project_application::selection_failure(
                         &selection,
@@ -1850,7 +1868,8 @@ mod file {
                     assert_eq!(rows[0].phase, "engine");
                     assert_eq!(rows[0].condition, "engine_rejected");
                     assert_eq!(rows[0].requirement, None);
-                    assert!(rows[0].spec_paths.is_empty());
+                    assert_eq!(rows[0].spec_paths, ["codelists[1]"]);
+                    assert_eq!(rows, expected_rows);
                     assert_eq!(
                         serde_json::from_str::<yamaa_core::json::Value>(&rows[0].context).unwrap(),
                         yamaa_core::json::json!({
@@ -1867,6 +1886,7 @@ mod file {
                         rows,
                     );
                     assert_eq!(owner.capture_reads(), reads);
+                    assert_eq!(owner.error() as *const _, held_error);
                     assert_eq!(rejected.root.source().bytes.as_ptr(), held_root);
                     assert_eq!(rejected.root.source().bytes, environment.as_bytes());
                     assert_eq!(

@@ -331,7 +331,7 @@ mod project {
                         phase: "engine".into(),
                         condition: "engine_rejected".into(),
                         requirement: None,
-                        spec_paths: vec![],
+                        spec_paths: vec!["codelists[1]".into()],
                         context: json!({
                             "stage": "environment", "code": "resource_limit",
                             "resource": "spec_bytes", "limit": Limits::SPEC_BYTES,

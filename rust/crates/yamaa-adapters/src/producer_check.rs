@@ -8,6 +8,7 @@ use yamaa_core::{diagnostic::Diagnostic, specification::PrepareError};
 pub enum Error<'a> {
     Original(&'a file_workflow::Error),
     Projection(crate::specification_check::Error),
+    ResourceLimit(crate::resource_diagnostics::Refusal),
 }
 
 fn invalid() -> Error<'static> {
@@ -194,26 +195,24 @@ fn environment_issues<'a>(
     use crate::project_environment_diagnostics as D;
     use crate::project_source::Failure as F;
     use crate::specification_source::Error as S;
-    let projection = |error| match error {
-        D::Error::Limit(_) => Error::Original(owner),
-        _ => invalid(),
-    };
+    fn projection(error: D::Error) -> Error<'static> {
+        match error {
+            D::Error::ResourceLimit(refusal) => Error::ResourceLimit(refusal),
+            _ => invalid(),
+        }
+    }
     if let crate::file_project::Error::Resource(resource) = cause {
         use yamaa_core::project_environment_diagnostics::ReadFailure;
-        let failure = match resource {
-            crate::file_resources::Error::Missing => Some(ReadFailure::Missing),
-            crate::file_resources::Error::Unreadable => Some(ReadFailure::Unreadable),
-            crate::file_resources::Error::Limit(_) => return Err(Error::Original(owner)),
-            _ => None,
-        };
         let file_workflow::Error::Environment(environment) = owner else {
             return Err(invalid());
         };
         let path = environment.environment().ok_or_else(invalid)?;
-        return match failure {
-            Some(failure) => Ok(vec![issue(failure.diagnostic(path), None)?]),
-            None => D::root_resource(resource, path).map_err(projection),
+        let failure = match resource {
+            crate::file_resources::Error::Missing => ReadFailure::Missing,
+            crate::file_resources::Error::Unreadable => ReadFailure::Unreadable,
+            _ => return D::root_resource(resource, path).map_err(projection),
         };
+        return Ok(vec![issue(failure.diagnostic(path), None)?]);
     }
     let crate::file_project::Error::Environment(cause) = cause else {
         return Err(Error::Original(owner));
@@ -221,7 +220,7 @@ fn environment_issues<'a>(
     let mut issues = Vec::new();
     match cause {
         F::Root(S::Findings(captured)) => {
-            issues.extend(D::schema_root(captured).map_err(projection)?)
+            issues.extend(D::schema_root(captured).map_err(|_| invalid())?)
         }
         F::Root(error) => {
             let file_workflow::Error::Environment(environment) = owner else {
@@ -231,7 +230,7 @@ fn environment_issues<'a>(
             issues.extend(D::root_boundary(error, written).map_err(projection)?);
         }
         F::RootScalar { root, findings } => {
-            issues.extend(D::scalar_root_with_host(root, findings, host).map_err(projection)?)
+            issues.extend(D::scalar_root_with_host(root, findings, host).map_err(|_| invalid())?)
         }
         F::Rejected(rejected) => {
             for rows in [

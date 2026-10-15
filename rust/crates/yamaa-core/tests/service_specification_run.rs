@@ -304,7 +304,12 @@ mod service {
                         &yamaa_core::application_observer::Noop,
                     ),
                 );
+                assert!(attempt.sources[0].read.captured);
                 assert!(attempt.sources[0].table.is_some());
+                assert_eq!(
+                    attempt.sources[0].snapshot.as_deref(),
+                    Some(b"held snapshot".as_slice())
+                );
                 assert!(matches!(
                     attempt.result,
                     Err(PortError::Run(RunError::Boundary { source: 0, error }))

@@ -1,6 +1,6 @@
 //! Bound page expansion before allocation from an advertised decoded length.
 //! Streaming codecs grow through fixed scratch buffers; raw codecs preflight
-//! borrowed tags, and Zstandard uses its physical block expansion bound.
+//! borrowed tags, and Zstandard grows only after destination-size errors.
 //! This is not a total-RSS guarantee.
 use super::framing::Page;
 use std::io::Read;
@@ -240,24 +240,29 @@ fn brotli_window(input: &[u8]) -> Result<(), Error> {
 }
 
 fn zstd(input: &[u8], expected: usize) -> Result<Vec<u8>, Error> {
-    // Every valid Raw, RLE or Compressed Zstandard block decodes to at most
-    // 128 KiB and has a three-byte stored header. Frame/skippable headers add
-    // no output, so this also holds for concatenated frames. Reject impossible
-    // expansion before allocating, without imposing a history-window policy.
-    if expected > (input.len() / 3).saturating_mul(128 * 1024) {
-        return Err(Error::Malformed);
-    }
+    // The bulk decoder uses the destination as history, so a valid frame's
+    // large window does not cause a separate history allocation. Its typed
+    // destination error follows block expansion, not the advertised frame
+    // content size. Retry geometrically instead of reserving `expected`.
+    let too_small = (zstd::zstd_safe::zstd_sys::ZSTD_ErrorCode::ZSTD_error_dstSize_tooSmall
+        as usize)
+        .wrapping_neg();
+    let mut decoder = zstd::zstd_safe::DCtx::try_create().ok_or(Error::Malformed)?;
     let mut result = Vec::new();
-    result
-        .try_reserve_exact(expected)
-        .map_err(|_| Error::Malformed)?;
-    result.resize(expected, 0);
-    let written =
-        zstd::bulk::decompress_to_buffer(input, &mut result).map_err(|_| Error::Malformed)?;
-    if written != expected {
-        return Err(Error::Malformed);
+    let mut length = expected.min(8192);
+    loop {
+        result
+            .try_reserve_exact(length - result.len())
+            .map_err(|_| Error::Malformed)?;
+        result.resize(length, 0);
+        match decoder.decompress(&mut result[..], input) {
+            Ok(written) if written == expected => return Ok(result),
+            Err(error) if error == too_small && length < expected => {
+                length = length.saturating_mul(2).max(1).min(expected);
+            }
+            _ => return Err(Error::Malformed),
+        }
     }
-    Ok(result)
 }
 
 /// Validate every actual byte of expansion using the same immutable page body.
@@ -396,6 +401,45 @@ mod tests {
             );
         }
         assert_eq!(exact_stream(&[][..], usize::MAX), Err(Error::Malformed));
+    }
+
+    #[test]
+    fn zstd_frame_and_page_claims_do_not_size_the_destination() {
+        // This much stored input passes a format-wide expansion-ratio bound,
+        // but invalid magic still must not allocate the claimed 2 GiB page.
+        let stored = vec![0; 49_152];
+        assert_eq!(
+            decode(&page(&stored, 6, i32::MAX as usize)),
+            Err(Error::Malformed)
+        );
+
+        // A valid empty frame followed by a large skippable frame also has
+        // ample input for that bound, but produces no decoded output.
+        let mut empty_and_skippable = vec![0x28, 0xb5, 0x2f, 0xfd, 0, 0xa8, 1, 0, 0];
+        empty_and_skippable.extend([0x50, 0x2a, 0x4d, 0x18]);
+        empty_and_skippable.extend((stored.len() as u32).to_le_bytes());
+        empty_and_skippable.extend(&stored);
+        assert_eq!(decode(&page(&empty_and_skippable, 6, 0)), Ok(Vec::new()));
+        assert_eq!(
+            decode(&page(&empty_and_skippable, 6, i32::MAX as usize)),
+            Err(Error::Malformed)
+        );
+
+        // A single-segment frame advertises a 2 GiB content size but ends with
+        // an empty raw block. Its own false content size must not size output.
+        let frame_size_lie = [
+            0x28, 0xb5, 0x2f, 0xfd, 0xa0, 0xff, 0xff, 0xff, 0x7f, 1, 0, 0,
+        ];
+        assert_eq!(
+            decode(&page(&frame_size_lie, 6, i32::MAX as usize)),
+            Err(Error::Malformed)
+        );
+
+        // The same large history window remains valid with actual raw output.
+        let raw = [
+            0x28, 0xb5, 0x2f, 0xfd, 0, 0xa8, 33, 0, 0, b'd', b'a', b't', b'a',
+        ];
+        assert_eq!(decode(&page(&raw, 6, 4)).unwrap(), b"data");
     }
 
     #[test]

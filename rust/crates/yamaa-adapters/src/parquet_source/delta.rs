@@ -156,7 +156,7 @@ pub(super) fn admit(
             })?;
             let mut index = 0;
             let mut previous = 0;
-            let mut reconstructed = 0usize;
+            let mut reconstructed = Some(0usize);
             let mut stored = 0usize;
             let (suffix_offset, suffix_count) =
                 scan(&bytes[offset..], 32, expected_values, |value| {
@@ -166,12 +166,10 @@ pub(super) fn admit(
                         return Err(Error::Malformed);
                     }
                     previous = prefix.checked_add(suffix).ok_or(Error::Malformed)?;
-                    // These are the actual bytes the physical decoder will
-                    // retain, before Arrow's signed-32-bit offsets are built.
-                    reconstructed = reconstructed
-                        .checked_add(previous)
-                        .filter(|&total| total <= i32::MAX as usize)
-                        .ok_or(Error::Malformed)?;
+                    // Count the actual bytes before the physical decoder can
+                    // copy them. Keep validating the page if the total exceeds
+                    // Arrow's representation, so malformed data keeps priority.
+                    reconstructed = reconstructed.and_then(|total| total.checked_add(previous));
                     stored = stored.checked_add(suffix).ok_or(Error::Malformed)?;
                     index += 1;
                     Ok(())
@@ -181,6 +179,9 @@ pub(super) fn admit(
                 || stored > bytes.len() - offset - suffix_offset
             {
                 return Err(Error::Malformed);
+            }
+            if reconstructed.is_none_or(|total| total > i32::MAX as usize) {
+                return Err(Error::Representation);
             }
         }
         _ => return Err(Error::Malformed),
@@ -323,16 +324,24 @@ mod tests {
                 if total <= i32::MAX as usize {
                     Ok(())
                 } else {
-                    Err(Error::Malformed)
+                    Err(Error::Representation)
                 }
             );
+            if total > i32::MAX as usize {
+                // A missing stored suffix remains invalid Parquet, even when
+                // the claimed reconstructed values exceed Arrow's offsets.
+                bytes.pop();
+                assert_eq!(admit(&bytes, 7, 32, count), Err(Error::Malformed));
+            }
         }
     }
     #[test]
     fn repeated_prefixes_cannot_expand_past_arrow_string_offsets() {
         // Only 64 KiB of stored suffixes, but prefix reconstruction produces
         // lengths 1, 2, ... count before the physical decoder copies them.
-        for (count, expected) in [(65_535, Ok(())), (65_536, Err(Error::Malformed))] {
+        // Crossing Arrow's offset range is a representation refusal, while the
+        // stored Parquet suffixes remain structurally valid.
+        for (count, expected) in [(65_535, Ok(())), (65_536, Err(Error::Representation))] {
             let mut data = progression(0, 1, count);
             data.extend(progression(1, 0, count));
             data.resize(data.len() + count, b'x');

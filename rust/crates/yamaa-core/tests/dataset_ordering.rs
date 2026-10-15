@@ -552,7 +552,7 @@ mod execution {
                 .is_err());
         }
 
-        /// Presentation retains completed checks; failed verification prevents ordering.
+        /// Presentation preserves completed checks; failed verification prevents ordering.
         #[test]
         fn presentation_keeps_completed_checks_and_failed_verification_precedes_ordering() {
             use yamaa_core::dataset::OrderTerm;

@@ -10,12 +10,12 @@ use yamaa_core::{
     project_environment_diagnostics::{self as core, projection},
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
+    ResourceLimit(crate::resource_diagnostics::Refusal),
     Core(core::Error),
     InvalidOrigin,
     Projection,
-    Limit(yamaa_core::limits::LimitExceeded),
 }
 
 fn root(document: &CapturedDocument) -> projection::Root<'_> {
@@ -162,7 +162,67 @@ fn metadata_path(origin: &Origin) -> String {
         Origin::Codelist(index) => format!("codelists[{index}]"),
     }
 }
-
+fn resource_limit(bound: yamaa_core::limits::LimitExceeded, declaration: &str) -> Error {
+    Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+        bound.resource,
+        bound.limit,
+        bound.actual,
+        vec![declaration.into()],
+    ))
+}
+fn validation_limit(
+    error: &yamaa_core::schema::ValidationError,
+) -> Option<yamaa_core::limits::LimitExceeded> {
+    use yamaa_core::{regex, schema::*};
+    let (resource, limit) = match error {
+        ValidationError::Depth { limit }
+        | ValidationError::Type(TypeError::Limit {
+            resource: TypeResource::Depth,
+            limit,
+        }) => ("semantic_depth", *limit),
+        ValidationError::Constraint(ConstraintError::Regex(error)) => (
+            match error.resource {
+                regex::Resource::Depth => "semantic_depth",
+                regex::Resource::Work => "regex_steps",
+            },
+            error.limit,
+        ),
+        _ => return None,
+    };
+    Some(yamaa_core::limits::LimitExceeded {
+        resource,
+        limit,
+        actual: None,
+    })
+}
+fn source_limit(error: &SourceError) -> Option<yamaa_core::limits::LimitExceeded> {
+    use yamaa_core::schema::*;
+    let (resource, limit) = match error {
+        SourceError::Limit(bound)
+        | SourceError::Decode {
+            error: crate::yaml_decode::DecodeFailure::Limit(bound),
+            ..
+        } => return Some(*bound),
+        SourceError::Validation(error)
+        | SourceError::Normalize(NormalizationError::Validation(error)) => {
+            return validation_limit(error);
+        }
+        SourceError::Normalize(NormalizationError::Limit {
+            resource: NormalizationResource::Depth,
+            limit,
+        }) => ("semantic_depth", *limit),
+        SourceError::Normalize(NormalizationError::Document(DocumentError::Limit {
+            resource: DocumentResource::Depth,
+            limit,
+        })) => ("yaml_depth", *limit),
+        _ => return None,
+    };
+    Some(yamaa_core::limits::LimitExceeded {
+        resource,
+        limit,
+        actual: None,
+    })
+}
 fn read_issue(
     error: &crate::file_resources::Error,
     entry: &str,
@@ -181,7 +241,7 @@ fn read_issue(
         E::Symlink => "symbolic_link",
         E::Changed => "content_changed",
         E::InvalidLock => "invalid_packaging_lock",
-        E::Limit(error) => return Err(Error::Limit(*error)),
+        E::Limit(bound) => return Err(resource_limit(*bound, declaration)),
     };
     let mut diagnostic = Diagnostic {
         code: yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentInvalid,
@@ -214,18 +274,17 @@ fn decode_issues(
     written: &str,
     declaration: &str,
 ) -> Result<Vec<Issue>, Error> {
-    use crate::yaml_decode::DecodeFailure;
-    match error {
-        SourceError::Limit(error)
-        | SourceError::Decode {
-            error: DecodeFailure::Limit(error),
-            ..
-        } => return Err(Error::Limit(*error)),
+    if let Some(bound) = source_limit(error) {
+        return Err(resource_limit(bound, declaration));
+    }
+    if matches!(
+        error,
         SourceError::Decode {
-            error: DecodeFailure::Internal,
+            error: crate::yaml_decode::DecodeFailure::Internal,
             ..
-        } => return Err(Error::Projection),
-        _ => (),
+        }
+    ) {
+        return Err(Error::Projection);
     }
     let message = crate::specification_diagnostics::capture_failure(error);
     let mut rows = crate::file_application::preparation_failure(message);
@@ -249,8 +308,12 @@ pub(crate) fn root_boundary(error: &SourceError, written: &str) -> Result<Vec<Is
     decode_issues(error, written, written, "$")
 }
 
+pub(crate) fn root_limit(error: &SourceError) -> Option<Error> {
+    source_limit(error).map(|bound| resource_limit(bound, "$"))
+}
+
 /// Native metadata failures retain the authored dependency path and declaration.
-/// Refusing one capture's limit preserves every original error and no partial rows.
+/// A fixed resource boundary refuses the whole projection beside its original owner.
 pub(crate) fn capture_sources(
     rejected: &RejectedEnvironment<crate::file_resources::Error>,
 ) -> Result<Vec<Issue>, Error> {
@@ -271,7 +334,7 @@ pub(crate) fn capture_sources(
             CaptureFailure::Structural(error) => {
                 rows.extend(decode_issues(error, entry, &source.written, &declaration)?)
             }
-            CaptureFailure::Limit(error) => return Err(Error::Limit(*error)),
+            CaptureFailure::Limit(bound) => return Err(resource_limit(*bound, &declaration)),
             CaptureFailure::Protocol => return Err(Error::Projection),
             CaptureFailure::Scalar { .. } => unreachable!("handled scalar finding"),
         }
@@ -317,4 +380,73 @@ pub fn admission<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>, Err
     )
     .map_err(projection_error)?;
     issues(report.diagnostics().map_err(projection_error)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{file_resources, project_source, specification_source::Source};
+    use yamaa_core::{limits::Limits, project_function::Language};
+
+    struct Missing;
+    impl project_source::CapturePort for Missing {
+        type Error = file_resources::Error;
+        fn capture(
+            &mut self,
+            _: project_source::Request<'_>,
+        ) -> Result<project_source::Reply, Self::Error> {
+            Err(file_resources::Error::Missing)
+        }
+    }
+
+    #[test]
+    fn retained_structural_and_preparation_limits_refuse_the_complete_metadata_projection() {
+        let project_source::Failure::Rejected(mut rejected) = project_source::prepare(
+            crate::shipped_schema::capture_environment().unwrap(),
+            Source {
+                identity: "held/environment.yaml".into(),
+                bytes: b"schema_version: '1.0'\ncodelists: [missing.yaml, ct.yaml]\n".to_vec(),
+            },
+            Language::Python,
+            &mut Missing,
+        )
+        .unwrap_err() else {
+            panic!("retained native capture errors")
+        };
+        let bound = Limits::spec_bytes(Limits::SPEC_BYTES + 1).unwrap_err();
+        let expected = resource_limit(bound, "codelists[1]");
+        for error in [
+            CaptureFailure::Structural(SourceError::Limit(bound)),
+            CaptureFailure::Structural(SourceError::Decode {
+                identity: "held/ct.yaml".into(),
+                error: crate::yaml_decode::DecodeFailure::Limit(bound),
+            }),
+            CaptureFailure::Limit(bound),
+        ] {
+            rejected.sources[1].error = error;
+            assert_eq!(capture_sources(&rejected), Err(expected.clone()));
+            assert_eq!(capture_sources(&rejected), Err(expected.clone()));
+            assert!(matches!(
+                rejected.sources[0].error,
+                CaptureFailure::Port(file_resources::Error::Missing)
+            ));
+        }
+        rejected.sources[1].error = CaptureFailure::Structural(SourceError::Normalize(
+            yamaa_core::schema::NormalizationError::Limit {
+                resource: yamaa_core::schema::NormalizationResource::Depth,
+                limit: Limits::SEMANTIC_DEPTH,
+            },
+        ));
+        assert_eq!(
+            capture_sources(&rejected),
+            Err(Error::ResourceLimit(
+                crate::resource_diagnostics::Refusal::new(
+                    "semantic_depth",
+                    Limits::SEMANTIC_DEPTH,
+                    None,
+                    vec!["codelists[1]".into()],
+                )
+            ))
+        );
+    }
 }
