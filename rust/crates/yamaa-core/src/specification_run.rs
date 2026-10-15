@@ -437,6 +437,8 @@ fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
             None,
         ) {
             Ok(table) => {
+                observed.table = Some(table);
+                let table = observed.table.as_ref().expect("decoded source");
                 if let Err(error) =
                     crate::limits::Limits::table(table.row_count(), table.schema().columns().len())
                 {
@@ -446,7 +448,6 @@ fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
                     }));
                     return;
                 }
-                observed.table = Some(table);
                 if prepared.source_interpretation(index) == Some(SourceInterpretation::Odm) {
                     let table = attempt.sources[index]
                         .table
