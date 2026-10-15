@@ -7,11 +7,12 @@ license = "MIT AND Unicode-3.0"
 publish.workspace = true
 
 [dependencies]
-thiserror = "=2.0.21"
-serde_json = { version = "=1.0.145", features = ["arbitrary_precision"] }
+thiserror = "2.0.21"
+serde_json = { version = "1.0.145", features = ["arbitrary_precision"] }
 # Canonical numeric formatting and portable mathematics.
-ryu = { version = "=1.0.20", default-features = false }
-# Disable architecture-specific math implementations.
+ryu = { version = "1.0.20", default-features = false }
+# Disable architecture-specific math implementations. Exact: the portable-math
+# golden values and saved bytes depend on this implementation.
 libm = { version = "=0.2.16", default-features = false }
 # Exact decimal rounding intermediates.
-num-bigint = { version = "=0.5.1", default-features = false }
+num-bigint = { version = "0.5.1", default-features = false }

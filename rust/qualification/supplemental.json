@@ -1052,6 +1052,7 @@
     "python/file-resources": "shared_run",
     "python/longitudinal-capacity": "shared_run",
     "python/original-specifications": "shared_run",
+    "python/parquet-readers": "shared_run",
     "python/producer-logs": "shared_run",
     "python/public-contract": "shared_run",
     "python/public-define": "shared_run",

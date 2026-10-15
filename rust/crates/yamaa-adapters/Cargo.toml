@@ -8,13 +8,13 @@ publish.workspace = true
 
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
-toml = { version = "=0.9.8", default-features = false, features = ["parse", "std", "serde"] }
-serde = { version = "=1.0.228", features = ["derive"] }
-serde_json = { version = "=1.0.145", features = ["arbitrary_precision", "raw_value"] }
+toml = { version = ">=0.9.8, <2", default-features = false, features = ["parse", "std", "serde"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.145", features = ["arbitrary_precision", "raw_value"] }
 # Source parsing stays at the adapter boundary; the core accepts owned documents.
 # 0.0.11 fixes comments interrupting multiline plain scalars (YAML case BS4K).
 saphyr-parser = { version = ">=0.0.11", default-features = false }
-num-bigint = { version = "=0.5.1", default-features = false }
+num-bigint = { version = "0.5.1", default-features = false }
 
 arrow-array = { version = "=60.0.0", default-features = false }
 arrow-schema = { version = "=60.0.0", default-features = false }
@@ -24,22 +24,22 @@ flatbuffers = { version = "=25.12.19", default-features = false }
 parquet = { version = "=60.0.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2-rust_backend", "lz4", "zstd"] }
 # Direct page admission bounds decompression before the general source reader.
 # These storage dependencies stay at the adapter boundary.
-bytes = "=1.12.1"
-base64 = "=0.23.1"
-brotli = { version = "=9.0.0", default-features = false, features = ["std"] }
-flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
-lz4_flex = "=0.14.0"
-zstd = { version = "=0.14.0", default-features = false }
-snap = "=1.1.2"
+bytes = "1.12.1"
+base64 = "0.23.1"
+brotli = { version = "9.0.0", default-features = false, features = ["std"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+lz4_flex = "0.14.0"
+zstd = { version = "0.14.0", default-features = false }
+snap = "1.1.2"
 
 # Safe descriptor-relative filesystem IO for the native R resource transport.
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "=1.1.5", features = ["fs", "process"] }
+rustix = { version = "1.1.5", features = ["fs", "process"] }
 
 # User-mode, handle-relative Windows filesystem transport only.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "=0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Threading", "Win32_Security_Authorization", "Win32_Globalization"] }
+windows-sys = { version = "0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Threading", "Win32_Security_Authorization", "Win32_Globalization"] }
 
 [build-dependencies]
 # Builds the reviewed vendored read-only ReadStat subset on every native host.
-cc = "=1.7.0"
+cc = "1.7.0"
