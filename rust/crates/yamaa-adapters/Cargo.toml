@@ -7,6 +7,11 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+default = ["readstat"]
+# SAS binary input only; disabling this feature omits the bundled ReadStat build.
+readstat = ["dep:cc"]
+
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
 toml = { version = ">=0.9.8, <2", default-features = false, features = ["parse", "std", "serde"] }
@@ -45,8 +50,8 @@ windows-sys = { version = "0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_F
 yamaa-core = { path = "../yamaa-core", features = ["test-support"] }
 
 [build-dependencies]
-# Builds the reviewed vendored read-only ReadStat subset on every native host.
-cc = "1.7.0"
+# Builds the reviewed read-only SAS input backend when readstat is enabled.
+cc = { version = "1.7.0", optional = true }
 
 # Integration targets are finite and explicit; support files are never discovered as binaries.
 [[test]]

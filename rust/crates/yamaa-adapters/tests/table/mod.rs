@@ -9,6 +9,7 @@ mod parquet_artifact;
 mod parquet_source;
 mod predicate_diagnostics;
 mod public_table;
+#[cfg(feature = "readstat")]
 mod sas_source;
 mod source_diagnostics;
 mod typed_csv;
