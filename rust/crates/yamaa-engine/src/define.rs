@@ -405,11 +405,11 @@ impl<P: Ports> Application<P> {
                             error
                                 .finding(dataset.id(), written)
                                 .and_then(|finding| {
-                                    finding
-                                        .diagnostic_with_limit(
-                                            yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
-                                        )
-                                        .ok()
+                                    // The deleted Error::diagnostic used the
+                                    // unbounded owned projection; keep that
+                                    // behavior instead of falling back to the
+                                    // generic metadata finding on a limit.
+                                    finding.diagnostic_with_limit(usize::MAX).ok()
                                 })
                                 .map(|diagnostic| Failure::Diagnostic(vec![diagnostic]))
                                 .unwrap_or_else(|| {
@@ -431,11 +431,11 @@ impl<P: Ports> Application<P> {
                             error
                                 .finding(dataset.id())
                                 .and_then(|finding| {
-                                    finding
-                                        .diagnostic_with_limit(
-                                            yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
-                                        )
-                                        .ok()
+                                    // The deleted Error::diagnostic used the
+                                    // unbounded owned projection; keep that
+                                    // behavior instead of falling back to the
+                                    // generic metadata finding on a limit.
+                                    finding.diagnostic_with_limit(usize::MAX).ok()
                                 })
                                 .map(|diagnostic| Failure::Diagnostic(vec![diagnostic]))
                                 .unwrap_or_else(|| {

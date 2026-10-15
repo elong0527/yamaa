@@ -764,13 +764,14 @@ fn decoded_finding(
         }
         _ => return Ok(false),
     }
-    let Some(values) = crate::specification_diagnostics::findings_with_limit(
-        error,
-        Some(source),
-        yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
-    )
-    .ok()
-    .flatten() else {
+    // The deleted unbounded findings() traversal always produced these
+    // findings; the explicit limit keeps that behavior rather than dropping
+    // a refusal whose context exceeds the projection bound.
+    let Some(values) =
+        crate::specification_diagnostics::findings_with_limit(error, Some(source), usize::MAX)
+            .ok()
+            .flatten()
+    else {
         return Ok(false);
     };
     findings.extend(values);

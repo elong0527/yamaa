@@ -43,7 +43,7 @@ Expected report strings use canonical UTF-8 JSON, matching the installed R repor
 ## correlated_aggregates
 # Aggregate relation controls
 
-`correlated_aggregates.tsv` contains independently authored original YAML,
+`correlated_aggregates.json` contains independently authored original YAML,
 source bytes, complete portable observations and exact CSV bytes. Its values
 and diagnostics are declared directly, without copying native execution output.
 The Rust frontend and both installed host suites consume the same truth.
@@ -77,7 +77,7 @@ scope. Existing benchmark expected artifacts are unchanged.
 ## csv_profile_diagnostics
 # CSV profile failure truth
 
-Thirteen independently authored byte containers were run through the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. The specification is the same for every case. `source_hex` retains exact bytes, including invalid UTF-8 and CR. Complete reference reports pin source read observations, ingestion timing, condition/requirement, paths and typed context. Only runtime/backend identity is fixed to the existing native replay convention.
+Thirteen independently authored byte containers were run through the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. The specification is the same for every case. `source_bytes` retains exact bytes as text, including CR; the one invalid-UTF-8 row is stored as a tagged hex object. Complete reference reports pin source read observations, ingestion timing, condition/requirement, paths and typed context. Only runtime/backend identity is fixed to the existing native replay convention.
 
 All ten closed R023 CSV failure causes are exercised. Decode precedes BOM/syntax, complete syntax precedes header/width checks, and quoted-prefix UTF-8 coordinates retain record/field identity. The parser algorithm and existing collected-text fixtures are preserved. Resource limits remain boundary policy failures without fabricated language diagnostics.
 
@@ -195,7 +195,7 @@ unchanged. The same fixture is staged for installed Python and standalone R.
 
 These fourteen literal reports and CSV artifacts follow REQ-1265 through
 REQ-1278.
-Eight separate complete preflight failures in `odm_preflight.tsv` also cover
+Eight separate complete preflight failures in `odm_preflight.json` also cover
 REQ-1295.
 They were authored independently of the new Rust evaluator; no native output
 generated their expectations. Historical benchmark expected files are unchanged.
@@ -263,7 +263,7 @@ column verifications remain unsupported.
 ## original_column_matches
 # Original column matches truth
 
-`original_column_matches.tsv` holds sixteen independently authored complete reports for raw YAML and captured CSV. Every field and six successful exact CSV artifacts were enumerated and compared with actual reference Python execution before the candidate was exercised. Candidate observations never write expected truth. Only backend and runtime/engine versions are normalized.
+`original_column_matches.json` holds sixteen independently authored complete reports for raw YAML and captured CSV. Every field and six successful exact CSV artifacts were enumerated and compared with actual reference Python execution before the candidate was exercised. Candidate observations never write expected truth. Only backend and runtime/engine versions are normalized.
 
 Search is unanchored unless the authored pattern supplies anchors. Missing values pass. Unicode scalar matching, lookahead and backreferences retain the portable contract. Wrong column kinds and invalid syntax are deferred until the owning converted column checkpoint, even for empty input; earlier conversion failures take precedence. A held record survives a later conversion failure. Compound cases pin an earlier invalid pattern and a repeated verification ID before a later pattern that exceeds compilation policy: the earlier REQ-0827/REQ-0398 remains deferred at its owning checkpoint. Later declaration vocabulary is still scanned before study capture, while unreachable payload compilation stops. Invalid pattern findings contain only the original pattern at the pattern path and keep earlier completed records.
 
@@ -274,7 +274,7 @@ Both installed hosts replay all sixteen cases twice with cached source capture, 
 ## original_column_values
 # Original column value reports
 
-`original_column_values.tsv` contains twenty independently authored complete reports for raw YAML and captured CSV bytes. The author enumerated every field and six successful exact CSV artifacts, then compared the truth with actual reference Python execution before running the candidate. Candidate observations never write expected truth. Only backend and runtime/engine versions are normalized for that reference comparison.
+`original_column_values.json` contains twenty independently authored complete reports for raw YAML and captured CSV bytes. The author enumerated every field and six successful exact CSV artifacts, then compared the truth with actual reference Python execution before running the candidate. Candidate observations never write expected truth. Only backend and runtime/engine versions are normalized for that reference comparison.
 
 Allowed-value cases pin one-time declaration conversion, missing values, empty lists, invalid or missing permitted literals, column conversion before declaration validation and retained records through a later conversion error. Range cases pin inclusive finite bounds, mixed integer/float comparison, missing values, empty or reversed bounds and invalid column type on empty output. Length cases pin Unicode scalar counts with an accented character and emoji, missing values, a zero bound and invalid column type even on empty output.
 
@@ -285,7 +285,7 @@ Rust and installed Python/R replay complete fresh/cached reports, exact CSV save
 
 Five independently authored documents were captured from the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. Complete reports pin Boolean recovery, explicit null replacement, an unused invalid replacement, missing input without firing, and failed replacement conversion. Exact CSV and every handler count, including zero, are retained. Runtime/backend identities use the established native replay convention; no existing expectation is regenerated.
 
-Ordinary-column wrappers compile handlers into the existing core `ConversionHandler` and engine recovery service. Handlers add no expression dependencies and are converted only when reached. Row-template wrappers share the same admitted scalar handlers; their independent cases and effective-default counter ordering are documented in `original_row_conversion_handlers.md`. Other handler families remain Unsupported. Rust and both installed hosts drop the prepared specification, retain complete observations and replay explicit saves without recapture; failures cannot publish. R replay remains inside its no-Python PATH block.
+Ordinary-column wrappers compile handlers into the existing core `ConversionHandler` and engine recovery service. Handlers add no expression dependencies and are converted only when reached. Row-template wrappers share the same admitted scalar handlers; their independent cases and effective-default counter ordering are documented in the `original_row_conversion_handlers` section of this README. Other handler families remain Unsupported. Rust and both installed hosts drop the prepared specification, retain complete observations and replay explicit saves without recapture; failures cannot publish. R replay remains inside its no-Python PATH block.
 
 ## original_mapping_cut
 # Original mapping and cut truth
@@ -306,7 +306,7 @@ an explicit follow-on planning boundary; it is not silently expanded by a host.
 ## original_not_missing
 # Original column presence reports
 
-`original_not_missing.tsv` is independently authored complete-report truth for ten raw YAML documents and their captured CSV bytes. The author enumerated every report field and four successful CSV artifacts, then compared them with reference Python executions before running the candidate. Candidate output never writes expected truth. Only backend and engine/runtime versions are normalized for that reference comparison.
+`original_not_missing.json` is independently authored complete-report truth for ten raw YAML documents and their captured CSV bytes. The author enumerated every report field and four successful CSV artifacts, then compared them with reference Python executions before running the candidate. Candidate output never writes expected truth. Only backend and engine/runtime versions are normalized for that reference comparison.
 
 The cases cover present and missing values, empty output, a failed check preceding a later conversion, successful records retained through a later conversion error, a missing key checked before output-key validation, duplicate IDs after a failed prefix, multiple failures in one column, separate column/dataset ID namespaces, and a key declared after an ordinary column although keys complete first. A duplicate declaration replaces the primary diagnostic while preserving its earlier failed record. Every check on one column completes before that column's error gate.
 
@@ -433,7 +433,7 @@ preparation evidence, not public API or `shared_run` inventory qualification.
 ## row_column_checks
 # Row-template column checks
 
-The 48 complete reports in `row_column_checks.tsv` were authored from independently enumerated and reference-qualified presence, allowed-value, range, length and pattern reports. Adding row templates preserves their exact logical output or failure. Two additional cases construct the same two output rows from two explicit templates over one source row; source observations are enumerated separately. Three row-assignment conversion failures explicitly remove unvisited column-check records because construction stops before the first check. All 48 complete reports and successful CSV bytes were compared with actual reference execution while imports of the candidate native module were forbidden, before Rust replay. Candidate observations never write expected truth. JSON uses literal UTF-8, matching the complete byte comparison used by the R binding; converting JSON escapes preserves every expected value.
+The 48 complete reports in `row_column_checks.json` were authored from independently enumerated and reference-qualified presence, allowed-value, range, length and pattern reports. Adding row templates preserves their exact logical output or failure. Two additional cases construct the same two output rows from two explicit templates over one source row; source observations are enumerated separately. Three row-assignment conversion failures explicitly remove unvisited column-check records because construction stops before the first check. All 48 complete reports and successful CSV bytes were compared with actual reference execution while imports of the candidate native module were forbidden, before Rust replay. Candidate observations never write expected truth. JSON uses literal UTF-8, matching the complete byte comparison used by the R binding; converting JSON escapes preserves every expected value.
 
 The checks cover declaration order, keys declared later, separate ID namespaces, multiple failed checks, empty output, invalid declarations, type conversion, Unicode, portable regex patterns, earlier findings before later limits, and retained records before a later global-column conversion error. Multiple-template cases pin total constructed row counts and offending output keys. Existing expected fixtures remain unchanged.
 
@@ -444,7 +444,7 @@ This extends error-severity column checks over the existing bounded row language
 ## row_filters
 # Candidate row filters
 
-The 27 complete reports in `row_filters.tsv` were enumerated independently and compared with actual Python reference execution while native imports were forbidden, before native replay. Twenty-one successful reports retain exact CSV and six grammar, source-reference or phase failures retain complete source observations and failed-save gates. Candidate observations never write expected truth. Existing goldens and the assisted inventory remain unchanged.
+The 27 complete reports in `row_filters.json` were enumerated independently and compared with actual Python reference execution while native imports were forbidden, before native replay. Twenty-one successful reports retain exact CSV and six grammar, source-reference or phase failures retain complete source observations and failed-save gates. Candidate observations never write expected truth. Existing goldens and the assisted inventory remain unchanged.
 
 The compiler admits filters on converted row columns and direct driver fields for ungrouped rows. Group-reference findings precede filter and derivation findings, including a combined failure with both invalid group and filter. Grouped filters read completed candidate columns, including admitted row-local defaults, and reject source-record reads. Grouped filter reads promote admitted defaults into each template's row scope (REQ-1260). Typed phase findings preserve authored paths, identifiers, row IDs and available/required phases, including the reference vocabulary's absent requirement identifier. Executable predicates, conversion order, three-valued truth and filtering remain existing engine services. All row-filter text is charged before compiling any expression.
 
@@ -452,7 +452,7 @@ Truth covers comparisons, boolean composition, missing/unknown values, empty inp
 
 Qualified lookup state, broader row derivations and default dependencies remain unsupported. Ungrouped filter promotion of a column default not already selected by a template remains explicitly unsupported pending reconciliation: REQ-1260 names grouped filters as the promoting context, while the reference also promotes ungrouped filter reads. This slice retains that gap without fabricating a phase failure for those forms. Public frontend and warning-severity gates remain open.
 
-`row_filter_admission.tsv` now retains two independently authored complete
+`row_filter_admission.json` now retains two independently authored complete
 failure reports for integer literals behind constant boolean branches. The
 approved REQ-0014 predicate carrier rule requires `integer_overflow` during
 parsing, with the complete predicate and character position. The findings remain
@@ -465,7 +465,7 @@ executable-plan resource refusals remain implementation policies.
 ## row_reductions
 # Grouped row MEAN and COUNT
 
-The 25 complete reports in `row_reductions.tsv` were independently enumerated before native replay and compared with actual Python reference execution while candidate native imports were forbidden. Twenty-two successes retain exact CSV bytes; three scope failures retain complete source observations, the authored aggregate path, expression and driver-scope reason. Candidate observations never write expected truth. Existing expected fixtures and the assisted inventory remain unchanged.
+The 25 complete reports in `row_reductions.json` were independently enumerated before native replay and compared with actual Python reference execution while candidate native imports were forbidden. Twenty-two successes retain exact CSV bytes; three scope failures retain complete source observations, the authored aggregate path, expression and driver-scope reason. Candidate observations never write expected truth. Existing expected fixtures and the assisted inventory remain unchanged.
 
 Explicit source typing fixes numeric inputs independently of output conversion. MEAN cases cover integer and float inputs, skipped missing values, all-missing and empty groups, signed zero, ordered forward/reverse floating accumulation, integer output conversion and multiple groups. Float bits are enumerated separately from CSV spelling; the CSV profile renders integral floats without `.0`, including `-0`. COUNT cases cover records versus present values, raw text and Unicode, all-missing and empty groups, typed numeric fields and multiple groups. Invalid relation and unqualified-operand cases stop after ingestion, retain the source table and reject saving. Two combined cases attach a presence check to grouped MEAN and an all-missing value COUNT, pinning total constructed-row accounting and zero as a present result before later global columns.
 
@@ -475,6 +475,10 @@ This qualifies only direct grouped driver fields and COUNT of the driver's quali
 
 ## schema_kinds
 # Decoded schema kind witnesses
+
+Historical note: the `schema_layer_admission.tsv` fixture described here was
+removed in #2416 together with the private schema-requirements tooling that
+was its only reader; this section is retained as provenance for that suite.
 
 The new `portable-kinds-existing-wire` row in `schema_layer_admission.tsv`
 contains fourteen independent queries. Each decoded kind (`null`, `boolean`,
@@ -556,7 +560,7 @@ This slice does not qualify environment activation or actual R filesystem ports.
 ## source_typing
 # Original source typing truth
 
-Four independently authored documents were captured from the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. Complete failed reports pin an unknown declared field, unknown-field admission before a bad conversion, stored row/field conversion order despite reversed declarations, and invalid temporal text. Each row retains exact source bytes as hexadecimal, authored paths, requirements, original failed text and source capture observations. No existing expectation is regenerated.
+Four independently authored documents were captured from the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. Complete failed reports pin an unknown declared field, unknown-field admission before a bad conversion, stored row/field conversion order despite reversed declarations, and invalid temporal text. Each row retains exact source bytes in the `source_bytes` text column, authored paths, requirements, original failed text and source capture observations. No existing expectation is regenerated.
 
 Core admits immutable type declarations and converts the admitted CSV into owned normalized values. Missing declarations fail in written order before conversion; conversion follows stored row and field order without result handlers. The adapter checks the existing Arrow resource bounds before calling conversion and constructs the physical Arrow table afterward. Core owns both typed-source diagnostic causes; structural defects and policy limits have no fabricated language finding.
 

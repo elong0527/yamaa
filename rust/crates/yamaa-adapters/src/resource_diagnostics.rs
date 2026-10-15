@@ -203,18 +203,17 @@ pub(crate) fn source_findings(error: &Error, source: &SourceDeclaration) -> Opti
         }
         return Some(findings);
     }
-    crate::specification_diagnostics::findings_with_limit(
-        error,
-        Some(source),
-        yamaa_core::diagnostic::MAX_PROJECTION_BYTES,
-    )
-    .ok()
-    .flatten()
-    .or_else(|| {
-        Some(vec![
-            self::source(error, source)?.value("ingest", "source_limit")?
-        ])
-    })
+    // As in producer_report: the deleted unbounded findings() traversal
+    // always produced these findings, so the explicit limit is unbounded;
+    // the source_limit fallback stays for errors with no findings at all.
+    crate::specification_diagnostics::findings_with_limit(error, Some(source), usize::MAX)
+        .ok()
+        .flatten()
+        .or_else(|| {
+            Some(vec![
+                self::source(error, source)?.value("ingest", "source_limit")?
+            ])
+        })
 }
 pub(crate) fn run_limit<E>(
     error: &yamaa_engine::specification_run::RunError<E>,
