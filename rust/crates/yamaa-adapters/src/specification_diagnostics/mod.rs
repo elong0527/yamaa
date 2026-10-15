@@ -63,8 +63,7 @@ pub(crate) fn portable_definition(
         context.into(),
     )
 }
-/// Complete ingestion reports are admitted in core before copying codec facts.
-/// Other existing preparation/binding projections retain their admission policy.
+/// Project complete retained compiler and codec findings without repeating source reads.
 pub fn findings(
     error: &Error,
     source: Option<&SourceDeclaration>,
@@ -177,7 +176,7 @@ pub(crate) fn preparation_outcome(error: &PrepareError) -> Value {
     } = error
     {
         return json!({"status":"rejected","stage":"prepare","code":"numeric_policy",
-            "resource":"depth","limit":limit,"spec_paths":[path]});
+            "resource":"semantic_depth","limit":limit,"spec_paths":[path]});
     }
     let code = match error {
         PrepareError::Numeric { .. } => "numeric_policy",
@@ -337,7 +336,7 @@ mod resource_refusal_tests {
                     limit: Limits::SEMANTIC_DEPTH,
                 }),
                 "normalization",
-                "depth",
+                "semantic_depth",
                 Limits::SEMANTIC_DEPTH,
             ),
         ] {
@@ -348,6 +347,27 @@ mod resource_refusal_tests {
             assert_eq!(outcome["phase"], phase);
             assert_eq!(outcome["resource"], resource);
             assert_eq!(outcome["limit"], bound);
+            if resource == "spec_bytes" {
+                assert_eq!(outcome["actual"], Limits::SPEC_BYTES + 1);
+            } else {
+                assert!(outcome.get("actual").is_none());
+            }
         }
+    }
+    #[test]
+    fn numeric_preparation_keeps_fixed_semantic_depth_and_authored_path() {
+        let expression = format!("{}1{}", "(".repeat(129), ")".repeat(129));
+        let error = PrepareError::Numeric {
+            path: "columns.VALUE.derivation.compute.expr".into(),
+            error: yamaa_core::numeric_parser::parse_numeric(&expression).unwrap_err(),
+        };
+        assert_eq!(
+            preparation_outcome(&error),
+            json!({
+                "status":"rejected", "stage":"prepare", "code":"numeric_policy",
+                "resource":"semantic_depth", "limit":128,
+                "spec_paths":["columns.VALUE.derivation.compute.expr"]
+            })
+        );
     }
 }
