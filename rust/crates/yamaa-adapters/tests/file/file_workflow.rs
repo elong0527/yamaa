@@ -141,38 +141,38 @@ fn yaml(input: &str, base: &str, output: &str, invalid: bool) -> String {
 }
 
 #[test]
-fn raw_graph_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand() {
+fn raw_schema_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand() {
     use yamaa_adapters::issue_rows::Issue;
 
     let study = Study::new();
-    let mut verifications = String::from("    verifications:\n");
-    for _ in 0..10_001 {
-        verifications.push_str("      - matches: {pattern: '('}\n");
+    let mut source = yaml("{RAW: never-read.csv}", "RAW", "result.csv", false);
+    // Independent unknown root fields are all observed by schema validation.
+    // Payload compilers keep their separate first-invalid-prefix semantics.
+    for index in 0..10_001 {
+        source.push_str(&format!("extra_{index:05}: true\n"));
     }
-    let source = yaml("{RAW: never-read.csv}", "RAW", "result.csv", false).replace(
-        "    derivation: RAW.VALUE\n",
-        &format!("    derivation: RAW.VALUE\n{verifications}"),
-    );
     assert!(source.len() < 8 * 1024 * 1024);
     study.write("root.yaml", &source);
 
-    let graph = study.prepare().unwrap();
+    let owner = study.rejected();
+    let Error::Graph(graph) = &owner else {
+        panic!("schema rejection owner")
+    };
     assert_eq!(graph.capture_reads(), 2); // environment and specification only
-    let raw = producer_check::prepared(&graph).unwrap();
+    let raw = producer_check::rejected(&owner, Language::Python).unwrap();
     assert_eq!(raw.len(), 10_001);
     for (index, issue) in raw.iter().enumerate() {
+        let name = format!("extra_{index:05}");
         assert_eq!(
             issue,
             &Issue {
                 phase: "validation".into(),
-                condition: "invalid_regex".into(),
-                requirement: Some("REQ-0827".into()),
-                spec_paths: vec![format!(
-                    "columns.VALUE.verifications[{index}].matches.pattern"
-                )],
-                context: "{\"pattern\":\"(\"}".into(),
+                condition: "unknown_field".into(),
+                requirement: Some("REQ-0285".into()),
+                spec_paths: vec![name.clone()],
+                context: serde_json::json!({"class":"root_class", "field":name}).to_string(),
             },
-            "verification {index} keeps its complete finding in authored order"
+            "root field {index} keeps its complete finding in authored order"
         );
     }
 
