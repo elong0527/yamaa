@@ -370,7 +370,10 @@ class TrustedRouting(unittest.TestCase):
             ),
             [NUMBER],
         )
-        api.pages.assert_called_once_with(f"commits/{HEAD}/pulls")
+        self.assertEqual(
+            [call.args[0] for call in api.pages.call_args_list],
+            [f"commits/{HEAD}/pulls", "pulls?state=open&base=main"],
+        )
 
     def test_periodic_refresh_handles_review_and_thread_changes_for_all_current_main_prs(
         self,
@@ -459,6 +462,23 @@ class TrustedRouting(unittest.TestCase):
     def test_publication_cannot_be_enabled_from_a_normal_local_command(self):
         with (
             patch.dict(os.environ, {}, clear=True),
+            patch.object(gate, "GitHub") as constructor,
+        ):
+            with self.assertRaises(gate.GateError):
+                gate.main(["--repository", REPOSITORY, "--publish"])
+            constructor.assert_not_called()
+
+    def test_manual_workflow_publication_is_restricted_to_the_default_branch(self):
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_ACTIONS": "true",
+                    "GITHUB_REPOSITORY": REPOSITORY,
+                    "GITHUB_REF": "refs/heads/untrusted-change",
+                },
+                clear=True,
+            ),
             patch.object(gate, "GitHub") as constructor,
         ):
             with self.assertRaises(gate.GateError):

@@ -15,6 +15,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from tools.ci import review_coverage as coverage
+
 CONTEXT = "review-completion"
 REVIEW_CONTEXT = "CodeRabbit"
 # Observed on GitHub's authentic CodeRabbit app status; a matching context name
@@ -303,6 +305,69 @@ def review_verdict(head, review):
     )
 
 
+def completed_review(api, number, head):
+    # A new review starting/finishing during a multi-page read invalidates
+    # that snapshot. Re-read both the status and threads before success.
+    for _ in range(3):
+        review = latest_review(api, head)
+        verdict = review_verdict(head, review)
+        if verdict.state != "success":
+            return verdict, review
+        threads = api.threads(number, head)
+        if review != latest_review(api, head):
+            continue
+        if any(not thread["isResolved"] for thread in threads):
+            verdict = Verdict(
+                head,
+                "failure",
+                "Unresolved review threads require triage and resolution",
+            )
+        return verdict, review
+    return (
+        Verdict(head, "pending", "Review changed during verification; retry required"),
+        None,
+    )
+
+
+def bounded_review(api, number, head, skipped, original):
+    try:
+        proof = coverage.prove(api, number, head)
+        if proof is None:
+            return original
+        reviews = []
+        for chunk in proof.chunks:
+            verdict, review = completed_review(api, chunk.number, chunk.head)
+            if verdict.state != "success":
+                return Verdict(
+                    head,
+                    verdict.state,
+                    f"Review batch #{chunk.number} requires completed review and resolved threads",
+                )
+            reviews.append((chunk, review))
+        if any(not row["isResolved"] for row in api.threads(number, head)):
+            return Verdict(
+                head, "failure", "The target PR has unresolved review threads"
+            )
+        # Git objects are immutable, but PR heads, bases, metadata and review
+        # statuses are not. Re-read every live reference before publication.
+        proof.recheck(api)
+        if latest_review(api, head) != skipped or any(
+            latest_review(api, chunk.head) != review for chunk, review in reviews
+        ):
+            return Verdict(
+                head,
+                "pending",
+                "Review changed during bounded verification; retry required",
+            )
+        return Verdict(
+            head,
+            "success",
+            "Completed bounded reviews cover every exact Git leaf change",
+        )
+    except coverage.CoverageError as error:
+        raise GateError(str(error)) from error
+
+
 def verify(api, number, *, expected_head=None, publish=False):
     head = current_pull(api, number)
     if head is None:
@@ -317,27 +382,9 @@ def verify(api, number, *, expected_head=None, publish=False):
             )
         )
     try:
-        # A new review starting/finishing during a multi-page read invalidates
-        # that snapshot. Re-read both the status and threads before success.
-        for _ in range(3):
-            review = latest_review(api, head)
-            verdict = review_verdict(head, review)
-            if verdict.state != "success":
-                break
-            threads = api.threads(number, head)
-            if review != latest_review(api, head):
-                continue
-            if any(not thread["isResolved"] for thread in threads):
-                verdict = Verdict(
-                    head,
-                    "failure",
-                    "Unresolved review threads require triage and resolution",
-                )
-            break
-        else:
-            verdict = Verdict(
-                head, "pending", "Review changed during verification; retry required"
-            )
+        verdict, review = completed_review(api, number, head)
+        if coverage.large_skip(review):
+            verdict = bounded_review(api, number, head, review, verdict)
         require(
             current_pull(api, number) == head,
             "PR head changed during review verification",
@@ -359,6 +406,22 @@ def verify(api, number, *, expected_head=None, publish=False):
         raise
 
 
+def linked_targets(api, numbers):
+    targets = set()
+    for pull in api.pages("pulls?state=open&base=main"):
+        if not main_pull(api, pull):
+            continue
+        try:
+            batches = coverage.batch_numbers(pull.get("body"))
+        except coverage.CoverageError:
+            # The target's own refresh will fail closed on malformed metadata.
+            continue
+        if numbers.intersection(batches):
+            require(positive_integer(pull.get("number")), "invalid linked PR number")
+            targets.add(pull["number"])
+    return targets
+
+
 def candidates(api, event_name, event):
     repository = event.get("repository") or {}
     require(
@@ -375,13 +438,22 @@ def candidates(api, event_name, event):
             isinstance(head, str) and SHA.fullmatch(head), "invalid status event head"
         )
         pulls = api.pages(f"commits/{head}/pulls")
-        return sorted(
-            {
-                pull["number"]
-                for pull in pulls
-                if main_pull(api, pull) and (pull.get("head") or {}).get("sha") == head
-            }
+        targets, chunks = set(), set()
+        for pull in pulls:
+            require(isinstance(pull, dict), "invalid associated PR response")
+            if (pull.get("head") or {}).get("sha") != head:
+                continue
+            if main_pull(api, pull):
+                targets.add(pull["number"])
+            elif coverage.same_repository(api, (pull.get("base") or {}).get("repo")):
+                chunks.add(pull["number"])
+        require(
+            all(positive_integer(number) for number in targets | chunks),
+            "invalid associated PR number",
         )
+        if chunks:
+            targets.update(linked_targets(api, chunks))
+        return sorted(targets)
     if event_name == "pull_request_target":
         number = event.get("number")
     elif event_name == "issue_comment":
@@ -389,6 +461,8 @@ def candidates(api, event_name, event):
         if not issue.get("pull_request"):
             return []
         number = issue.get("number")
+        require(positive_integer(number), "event has no valid pull request number")
+        return sorted({number} | linked_targets(api, {number}))
     elif event_name in {"schedule", "workflow_dispatch"}:
         pulls = api.pages("pulls?state=open&base=main")
         return sorted({pull["number"] for pull in pulls if main_pull(api, pull)})
@@ -423,6 +497,7 @@ def main(argv=None):
         require(
             os.environ.get("GITHUB_ACTIONS") == "true"
             and args.repository == os.environ.get("GITHUB_REPOSITORY")
+            and os.environ.get("GITHUB_REF") == "refs/heads/main"
             and args.pr is None
             and args.head is None,
             "publication is restricted to the trusted workflow event",

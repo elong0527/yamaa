@@ -108,8 +108,8 @@ python -m tools.ci.review_gate --repository elong0527/yamaa --pr <number> --head
 ```
 
 This requires CodeRabbit's authentic `Review completed` status on that commit
-and resolved review threads. A skipped successful status or a review of an
-earlier commit does not pass. Triage findings outside inline threads as well.
+and resolved review threads. A skipped successful status alone or a review of
+an earlier commit does not pass. Triage findings outside inline threads as well.
 The trusted-main `review.yml` workflow publishes the `review-completion` status
 for current open PRs targeting main. It refreshes after PR/status/discussion
 events and on a five-minute schedule for review and thread changes. It never
@@ -121,6 +121,30 @@ main, require CodeRabbit's own status, and require conversation resolution.
 The fresh manual check remains mandatory, including during bootstrap and when
 scheduled runs are delayed. An administrator must configure these rules
 separately; the workflow's token cannot administer repository rules.
+
+An atomic change above CodeRabbit's 300-file review limit can use bounded
+review-only PRs. Each review PR must have a distinct head commit with the
+**complete target head tree**, a synthetic base in this repository, and at
+most 300 changed raw leaf paths (a rename can consume two paths). Its base
+restores only the original old leaves for that batch, including file modes,
+symlinks and gitlinks. The batch deltas must cover the target's merge-base to
+head delta exactly once; unrelated changes, gaps and overlaps fail. Keep these
+review PRs open and do not merge them. List their actual numbers once in the
+target PR body as JSON, for example:
+
+```html
+<!-- yamaa-review-batches: [123, 124] -->
+```
+
+The gate permits this path only after the authentic target status explicitly
+says the diff exceeded the 300-file limit. Missing or pending target reviews
+cannot use it. Every batch still needs its own authentic `Review completed`
+status and resolved threads; target threads must also be resolved. The gate
+checks complete Git trees and paginated PR files through the authenticated API,
+then rechecks all PR heads, bases, batch metadata and review statuses. It fails
+on truncated trees or incomplete evidence. Moving the target source requires
+new matching batch heads and fresh completed reviews. Batch metadata belongs
+in the PR body, not a committed evidence ledger.
 
 Native qualification is separate: `.github/workflows/native.yml` builds and
 installs the supported Python wheel/source and R source combinations nightly

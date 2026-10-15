@@ -27,6 +27,7 @@ jobs:
   update:
     if: >-
       github.repository == 'elong0527/yamaa' &&
+      github.ref == 'refs/heads/main' &&
       (github.event_name != 'status' ||
        (github.event.context == 'CodeRabbit' && github.actor == 'coderabbitai[bot]'))
     runs-on: ubuntu-24.04
