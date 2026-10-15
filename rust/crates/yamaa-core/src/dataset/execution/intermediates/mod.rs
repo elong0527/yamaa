@@ -240,7 +240,8 @@ fn materialize<E>(
     let nested = &derived.plan;
     let width = nested.source().columns().len();
     let output_width = nested.output().columns().len();
-    Limits::table(table.row_count(), width).map_err(|_| Box::new(ExecutionError::Capacity))?;
+    Limits::table(table.row_count(), width)
+        .map_err(|error| scoped_table_boundary(error, &item.path))?;
     let mut input = Dataset {
         schema: nested.source().clone(),
         rows: Vec::new(),
@@ -887,7 +888,7 @@ fn matched_key<E>(
         .collect())
 }
 
-/// Charge every opaque secondary read and preserve its source coordinates.
+/// Preserve each opaque secondary read and its source coordinates.
 fn cell<'a, E>(
     table: &'a dyn TableAccess<Error = E>,
     item: &Intermediate,

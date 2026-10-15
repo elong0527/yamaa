@@ -56,7 +56,7 @@ impl Intermediate {
 }
 
 fn named_selector(index: usize, items: &[Intermediate], depth: usize) -> bool {
-    if depth > 64 {
+    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
         return true;
     }
     items.get(index).is_some_and(|item| item.source.is_self() || item.current_fields().any(|field| matches!(field.read, CurrentRead::Intermediate { index: child, .. } if named_selector(child, items, depth + 1))))

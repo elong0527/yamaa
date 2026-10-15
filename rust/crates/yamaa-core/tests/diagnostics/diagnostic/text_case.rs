@@ -33,10 +33,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             vec![("variable", "SRC.V")],
         ),
     ] {
-        let Error::Diagnostic(diagnostic) = operation.apply(ValueRef::from(&value)).unwrap_err()
-        else {
-            panic!("semantic cause");
-        };
+        let Error::Diagnostic(diagnostic) = operation.apply(ValueRef::from(&value)).unwrap_err();
         let definition = diagnostic.definition();
         assert_eq!(
             (

@@ -603,7 +603,7 @@ fn deferred_scope_is_rejected_in_row_assignments_before_any_cell() {
 }
 
 #[test]
-fn deferred_metadata_admission_counts_retained_string_capacity() {
+fn deferred_metadata_retains_the_complete_label_without_a_storage_capacity_quota() {
     let source = table(vec![record("IT.ANCHOR", "anchor")]);
     let mut declaration = deferred_read(0, None).read().clone();
     let mut row = String::with_capacity(16 * 1024 * 1024);
@@ -616,10 +616,17 @@ fn deferred_metadata_admission_counts_retained_string_capacity() {
         }]
         .into(),
     );
+    let admitted = BoundOdm::new(declaration).unwrap();
+    let OdmScope::Templates(contexts) = &admitted.read().scope else {
+        panic!("the admitted declaration must retain its authored template scope");
+    };
+    assert_eq!(contexts.len(), 1);
     assert_eq!(
-        BoundOdm::new(declaration).unwrap_err(),
-        PlanError::InvalidSource
+        contexts[0].row,
+        "small label with excessive retained capacity"
     );
+    assert_eq!(contexts[0].driver, 0);
+    assert_eq!(contexts[0].groups, None);
     assert!(source.reads.borrow().is_empty());
 }
 

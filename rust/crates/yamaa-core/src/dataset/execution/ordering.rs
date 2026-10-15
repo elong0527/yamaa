@@ -2,7 +2,7 @@
 use super::*;
 use std::cmp::Ordering;
 
-/// Charge every comparison before borrowing normalized cells; never clone payloads.
+/// Compare borrowed normalized cells without cloning payloads.
 pub(super) fn apply<E>(
     terms: &[OrderTerm],
     dataset: &mut Dataset,

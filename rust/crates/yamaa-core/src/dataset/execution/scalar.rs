@@ -174,8 +174,6 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                 let Value::Str(text) = value else {
                     unreachable!()
                 };
-                // Charge the complete transient result before every allocation.
-
                 rendered
                     .try_reserve(text.len())
                     .map_err(|_| Box::new(ExecutionError::Allocation))?;

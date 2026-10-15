@@ -82,7 +82,7 @@ struct Resolver<'a, 'state, T: TableAccess + ?Sized> {
 impl<T: TableAccess + ?Sized> NumericResolver for Resolver<'_, '_, T> {
     type Error = Box<ExecutionError<T::Error>>;
 
-    /// Charge every occurrence and scalar copy, including repeated identifiers.
+    /// Resolve each occurrence, including repeated identifiers, against admitted bindings.
     fn resolve(&mut self, identifier: &str) -> Result<Selection, Self::Error> {
         let index = self
             .bound

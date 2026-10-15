@@ -408,7 +408,7 @@ impl Evaluation {
                 .schema(plan.output(), table.schema())
                 .map_err(|_| Box::new(ExecutionError::Capacity))?;
             Limits::table(candidates.len(), schema.columns().len())
-                .map_err(|_| Box::new(ExecutionError::Capacity))?;
+                .map_err(|error| scoped_table_boundary(error, &assignment.path))?;
             let mut rows = Vec::new();
             rows.try_reserve_exact(candidates.len())
                 .map_err(|_| Box::new(ExecutionError::Allocation))?;

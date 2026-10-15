@@ -142,7 +142,7 @@ pub struct CheckRecord {
     pub failed_count: usize,
     pub output_rows: usize,
     pub offending_rows: Vec<RowIdentity>,
-    /// Full offending values survive discarded output, under identity quotas.
+    /// Full offending values survive discarded output.
     pub codelist: Option<CodelistObservation>,
     pub inventory: Option<Vec<Value>>,
     pub row_count: Option<RowCountObservation>,
@@ -1902,6 +1902,23 @@ impl DatasetPlan {
         })?;
         Ok(())
     }
+}
+
+fn scoped_table_boundary<E>(
+    error: crate::limits::LimitExceeded,
+    path: &str,
+) -> Box<ExecutionError<E>> {
+    Box::new(ExecutionError::ScopedLimit {
+        resource: match error.resource {
+            "columns" => Resource::SourceColumns,
+            "table_rows" => Resource::SourceRows,
+            "table_cells" => Resource::SourceCells,
+            _ => unreachable!("table boundary resource"),
+        },
+        limit: error.limit,
+        required: error.actual,
+        spec_paths: vec![path.into()],
+    })
 }
 
 /// Retain original output keys without substituting projected or row-number identity.
