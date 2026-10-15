@@ -581,7 +581,10 @@ class TestPredicateLanguage(unittest.TestCase):
     def test_an_ungrouped_row_filter_rejects_a_window_derived_column(self):
         # REQ-0068: the filter evaluates before the window pass, so naming
         # a window-derived column fails -- directly or through a derivation
-        # that reads one -- while a grouped filter may name one.
+        # that reads one -- while a grouped filter may name one. The
+        # driver carries AVISITN raw, typed as in QS: row-context joins
+        # match raw driver keys (f4308beb), so a driver without the key
+        # would be refused on that ground before the phase check.
         def window_derivation():
             return {
                 'locf': {
@@ -595,7 +598,9 @@ class TestPredicateLanguage(unittest.TestCase):
 
         spec = {
             'domain': 'ADQS',
-            'input': {'ADSL': 'adsl.csv', 'QS': {'path': 'qs.csv',
+            'input': {'ADSL': {'path': 'adsl.csv',
+                'types': {'AVISITN': 'int'}},
+                'QS': {'path': 'qs.csv',
                 'types': {'AVISITN': 'int', 'AVAL': 'float'}}},
             'keys': ['USUBJID', 'AVISITN'],
             'output': {
@@ -634,7 +639,7 @@ class TestPredicateLanguage(unittest.TestCase):
                 {
                     'id': 'grouped',
                     'dataset': 'ADSL',
-                    'group_by': ['ADSL.USUBJID'],
+                    'group_by': ['ADSL.USUBJID', 'ADSL.AVISITN'],
                     'filter': 'AVAL > 20',
                     'derivations': {
                         'USUBJID': 'ADSL.USUBJID',
@@ -647,7 +652,7 @@ class TestPredicateLanguage(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             example_dir = Path(temp_dir)
-            (example_dir / 'adsl.csv').write_text('USUBJID\n01\n')
+            (example_dir / 'adsl.csv').write_text('USUBJID,AVISITN\n01,8\n')
             (example_dir / 'qs.csv').write_text(
                 'USUBJID,AVISITN,AVAL\n01,8,25\n'
             )
@@ -665,10 +670,14 @@ class TestPredicateLanguage(unittest.TestCase):
     def test_an_ungrouped_row_filter_rejects_a_window_derived_lookup_match(self):
         # REQ-0068: a qualified read through a lookup consumes its match
         # values, so a match naming a window-derived template column fails
-        # like a direct read.
+        # like a direct read. The driver carries AVISITN raw, typed as in
+        # QS: row-context joins match raw driver keys (f4308beb), so a
+        # driver without the key would be refused on that ground first.
         spec = {
             'domain': 'ADQS',
-            'input': {'ADSL': 'adsl.csv', 'QS': {'path': 'qs.csv',
+            'input': {'ADSL': {'path': 'adsl.csv',
+                'types': {'AVISITN': 'int'}},
+                'QS': {'path': 'qs.csv',
                 'types': {'AVISITN': 'int', 'AVAL': 'float'}}},
             'keys': ['USUBJID', 'AVISITN'],
             'intermediates': [
@@ -713,7 +722,7 @@ class TestPredicateLanguage(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             example_dir = Path(temp_dir)
-            (example_dir / 'adsl.csv').write_text('USUBJID\n01\n')
+            (example_dir / 'adsl.csv').write_text('USUBJID,AVISITN\n01,8\n')
             (example_dir / 'qs.csv').write_text(
                 'USUBJID,AVISITN,AVAL\n01,8,25\n'
             )

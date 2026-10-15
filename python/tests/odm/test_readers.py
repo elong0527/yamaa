@@ -441,7 +441,7 @@ def test_container_inside_item_data_is_rejected_not_leaked(
     # item context, so every item must be rejected. A container written
     # inside the first ItemData was instead adopted as context: its end
     # event is skipped like other ItemData children, so it was never
-    # cleared and every row — including its siblings — was silently
+    # cleared and every row -- including its siblings -- was silently
     # emitted with the fabricated form/group context.
     source = tmp_path / "container-inside-item-data.xml"
     source.write_text(
