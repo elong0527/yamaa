@@ -1,10 +1,9 @@
 //! Independently specified item scopes and original opaque table effects.
-use serde_json::Value as JsonValue;
 use std::{cell::RefCell, rc::Rc};
 use yamaa_core::dataset::*;
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
-    diagnostic::ConditionCode,
+    diagnostic::{ConditionCode, ContextValue},
     odm_source::{FIELDS, HIERARCHY, IDENTIFYING},
     predicate::ErrorKind,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
@@ -244,26 +243,24 @@ fn repeated_records_do_not_read_value_and_report_complete_identity_scope() {
             assert_eq!(diagnostic.spec_paths, ["columns.VAL.derivation.odm"]);
             assert_eq!(
                 diagnostic.context.get("records"),
-                Some(&JsonValue::Number(
-                    ("2").parse().expect("canonical integer")
-                ))
+                Some(&ContextValue::Integer("2".into()))
             );
             assert_eq!(
                 diagnostic.context.get("repeated"),
-                Some(&JsonValue::Bool(true))
+                Some(&ContextValue::Scalar(Value::Bool(true)))
             );
             assert_eq!(
                 diagnostic.context.get("differ"),
-                Some(&JsonValue::Object(Default::default()))
+                Some(&ContextValue::Object(Default::default()))
             );
             assert_eq!(
                 diagnostic.context.get("scope"),
-                Some(&JsonValue::Object(
+                Some(&ContextValue::Object(
                     HIERARCHY
                         .into_iter()
                         .map(|column| (
                             FIELDS[column].into(),
-                            JsonValue::from(source.rows[0][column].clone())
+                            ContextValue::Scalar(source.rows[0][column].clone())
                         ))
                         .collect()
                 ))

@@ -1,5 +1,6 @@
 //! Closed declarations and normalized occurrence facts; no written-file claim.
 use crate::diagnostic::ScalarSubmissionRule;
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 macro_rules! vocabulary {
     ($name:ident { $($variant:ident => $text:literal),+ $(,)? }) => {

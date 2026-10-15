@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 use yamaa_core::dataset::{Check, CountBoundError, RowCountBound, MAX_COUNT_BOUND_BYTES};
 
 fn bound(value: &str) -> RowCountBound {

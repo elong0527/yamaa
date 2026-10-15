@@ -1,11 +1,11 @@
 //! Declarative rounding retains the source field rather than inventing formula text.
 use crate::{
-    diagnostic::{ConditionCode, Diagnostic},
+    diagnostic::{ConditionCode, ContextValue, Diagnostic},
     numeric::{self, Number},
     table::ValueRef,
     value::Value,
 };
-use serde_json::Value as JsonValue;
+use alloc::{format, string::String, vec};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InvalidDigits;
@@ -58,7 +58,7 @@ impl Rounding {
                 ("actual", actual),
             ]
             .into_iter()
-            .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
+            .map(|(key, value)| (key.into(), ContextValue::Scalar(Value::Str(value.into()))))
             .collect(),
             source_span: None,
             operand_route: None,

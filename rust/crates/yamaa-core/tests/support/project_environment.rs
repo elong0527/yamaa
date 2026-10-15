@@ -1,7 +1,6 @@
-use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::ConditionCode,
+    diagnostic::{ConditionCode, ContextValue},
     project_environment::{self, Draft},
     project_environment_diagnostics,
     project_function::Language,
@@ -180,10 +179,13 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         );
         assert_eq!(finding.spec_paths, ["environment"]);
         assert_eq!(finding.context.len(), 2);
-        assert_eq!(finding.context["cause"], JsonValue::String(cause.into()),);
+        assert_eq!(
+            finding.context["cause"],
+            ContextValue::Scalar(Value::Str(cause.into())),
+        );
         assert_eq!(
             finding.context["path"],
-            JsonValue::String("/study/environment.yaml".into()),
+            ContextValue::Scalar(Value::Str("/study/environment.yaml".into())),
         );
         assert_eq!(finding.source_span, None);
         assert_eq!(finding.operand_route, None);

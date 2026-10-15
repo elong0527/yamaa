@@ -1,11 +1,11 @@
 use super::project_support as support;
-use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
 use support::{call, function, specification, specification_with_rows, Tree};
 use yamaa_core::{
-    diagnostic::ConditionCode,
+    diagnostic::{ConditionCode, ContextValue},
     schema::DocumentNode as N,
     specification::{PrepareError, PreparedSpecification},
+    value::Value,
 };
 pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
@@ -50,26 +50,26 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(diagnostic.spec_paths, [path]);
         assert_eq!(
             diagnostic.context["function"],
-            JsonValue::String(name.into())
+            ContextValue::Scalar(Value::Str(name.into()))
         );
         assert_eq!(diagnostic.source_span, None);
         assert_eq!(diagnostic.operand_route, None);
         if name == "id" {
             assert_eq!(
                 diagnostic.context["argument"],
-                JsonValue::String("x".into())
+                ContextValue::Scalar(Value::Str("x".into()))
             );
             assert_eq!(
                 diagnostic.context["cause"],
-                JsonValue::String("type_mismatch".into())
+                ContextValue::Scalar(Value::Str("type_mismatch".into()))
             );
             assert_eq!(
                 diagnostic.context["expected_type"],
-                JsonValue::String("int".into())
+                ContextValue::Scalar(Value::Str("int".into()))
             );
             assert_eq!(
                 diagnostic.context["actual_type"],
-                JsonValue::String("float".into())
+                ContextValue::Scalar(Value::Str("float".into()))
             );
             assert_eq!(diagnostic.context.len(), 5);
         } else {
@@ -138,7 +138,10 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ("available_phase", "column_derivation"),
         ("required_phase", "row_construction"),
     ] {
-        assert_eq!(diagnostic.context[key], JsonValue::String(value.into()));
+        assert_eq!(
+            diagnostic.context[key],
+            ContextValue::Scalar(Value::Str(value.into()))
+        );
     }
     assert_eq!(diagnostic.context.len(), 6);
     reached.insert(diagnostic.code);

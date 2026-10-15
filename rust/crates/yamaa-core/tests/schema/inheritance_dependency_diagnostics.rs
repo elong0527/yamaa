@@ -1,7 +1,7 @@
-use serde_json::Value as JsonValue;
 use yamaa_core::{
-    diagnostic::{inheritance_dependency_diagnostics, ProjectionError},
+    diagnostic::{inheritance_dependency_diagnostics, ContextValue, ProjectionError},
     schema::InheritanceDependencyIssue as Issue,
+    value::Value,
 };
 
 #[test]
@@ -25,7 +25,7 @@ fn complete_ordered_facts_keep_dependency_cycles_distinct_from_traversal_loops()
     assert_eq!(findings[0].spec_paths, ["columns.VALUE\0é.derivation"]);
     assert_eq!(
         findings[0].context["dependency"],
-        JsonValue::String("MISSING🙂".into())
+        ContextValue::Scalar(Value::Str("MISSING🙂".into()))
     );
     assert_eq!(
         findings[1].spec_paths,
@@ -36,10 +36,10 @@ fn complete_ordered_facts_keep_dependency_cycles_distinct_from_traversal_loops()
     );
     assert_eq!(
         findings[1].context["cycle"],
-        JsonValue::Array(
+        ContextValue::Sequence(
             ["DOWNSTREAM", "A", "B"]
                 .into_iter()
-                .map(|name| JsonValue::String(name.into()))
+                .map(|name| ContextValue::Scalar(Value::Str(name.into())))
                 .collect()
         )
     );
@@ -107,6 +107,6 @@ fn sequence_members_consume_capacity_even_with_empty_text() {
     );
     assert_eq!(
         inheritance_dependency_diagnostics(&issues, 32_768).unwrap()[0].context["cycle"],
-        JsonValue::Array(vec![JsonValue::String(String::new()); 1000])
+        ContextValue::Sequence(vec![ContextValue::Scalar(Value::Str(String::new())); 1000])
     );
 }

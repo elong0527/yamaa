@@ -10,6 +10,7 @@ use crate::{
     project_terminology_document,
     schema::Document,
 };
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 /// Retained host identity and exact byte snapshot; identity is never a digest.
 #[derive(Clone, Debug)]
@@ -100,26 +101,19 @@ pub trait DecodePort {
     fn source(document: &Self::Document) -> &Source;
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum CaptureFailure<E, D, X> {
-    #[error("project preparation port: {0:?}")]
     Port(E),
-    #[error("project preparation interrupted: {0:?}")]
     Interrupted(E),
-    #[error("project preparation protocol")]
     Protocol,
-    #[error("project preparation limit: {0:?}")]
     Limit(&'static str),
-    #[error("project preparation structural: {0:?}")]
     Structural(X),
-    #[error("project preparation scalar: document={document:?}, findings={findings:?}")]
     Scalar {
         document: Box<D>,
         findings: Vec<project_function_document::Finding>,
     },
 }
-#[derive(Debug, thiserror::Error)]
-#[error("project preparation: origin={origin:?}, written={written:?}, error={error:?}")]
+#[derive(Debug)]
 pub struct SourceFailure<E, D, X> {
     pub origin: Origin,
     pub written: String,
@@ -160,26 +154,19 @@ pub struct RejectedEnvironment<E, D, X> {
     pub sources: Vec<SourceFailure<E, D, X>>,
     pub admission: Option<AdmissionError<Finding>>,
 }
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Failure<E, D, X> {
-    #[error(
-        "project preparation interrupted: origin={origin:?}, written={written:?}, error={error:?}"
-    )]
     Interrupted {
         origin: Origin,
         written: String,
         error: E,
     },
-    #[error("project preparation root: {0:?}")]
     Root(X),
-    #[error("project preparation root limit: {0:?}")]
     RootLimit(&'static str),
-    #[error("project preparation root scalar: root={root:?}, findings={findings:?}")]
     RootScalar {
         root: Box<D>,
         findings: Vec<project_function_document::Finding>,
     },
-    #[error("project preparation rejected: {0:?}")]
     Rejected(Box<RejectedEnvironment<E, D, X>>),
 }
 

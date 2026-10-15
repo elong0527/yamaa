@@ -1492,8 +1492,7 @@ fn literal_conversion_only_occurs_for_constructed_values() {
                     error,
                     yamaa_core::conversion::ConversionError {
                         target: ColumnType::Float,
-                        value: literal.clone().into(),
-                        source_type: literal.value_type(),
+                        value: yamaa_core::conversion::ConversionValue::Runtime(literal.clone()),
                         reason: yamaa_core::conversion::ConversionReason::IncompatibleOrInvalidText,
                     }
                 );

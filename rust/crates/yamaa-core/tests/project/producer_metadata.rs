@@ -6,7 +6,7 @@ use yamaa_core::{
     specification::PrepareError,
 };
 #[test]
-fn checked_metadata_retains_producer_identity_and_ordinary_domain_refusal() {
+fn checked_metadata_never_grants_the_ordinary_build_or_activation_capability() {
     let source = producer();
     let consumer = consumer(None);
     let checked = producer_admission::prepare(
@@ -18,6 +18,11 @@ fn checked_metadata_retains_producer_identity_and_ordinary_domain_refusal() {
     )
     .unwrap();
     assert_eq!(checked.producers()[0].producer_identity(), "/producer.yaml");
+    let PrepareError::Unsupported(features) = checked.execution_refusal() else {
+        panic!("producer workflow is not qualified")
+    };
+    assert_eq!(features[0].operation, "producer_workflow");
+    assert_eq!(features[0].path, "input.SRC.schema");
     assert!(matches!(
         yamaa_core::domain::check(&consumer),
         Err(PrepareError::Unsupported(_))

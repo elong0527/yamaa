@@ -1,10 +1,9 @@
-use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
     dataset::AggregatePhase,
     diagnostic::{
         AggregateContextCause as Cause, AggregateEmptyKey, AggregateFinding as Finding,
-        ConditionCode, ProjectionError,
+        ConditionCode, ContextValue as V, ProjectionError,
     },
     key_relation::ComparableType,
     value::{ColumnType, Value, ValueType},
@@ -13,7 +12,7 @@ use yamaa_core::{
 use super::project_support as specification_support;
 
 fn text(value: &str) -> V {
-    V::String(value.into())
+    V::Scalar(Value::Str(value.into()))
 }
 
 pub fn reached() -> BTreeSet<ConditionCode> {
@@ -24,7 +23,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     for (key, empty) in [
         (AggregateEmptyKey::Mapping, V::Object(Default::default())),
-        (AggregateEmptyKey::List, V::Array(vec![])),
+        (AggregateEmptyKey::List, V::Sequence(vec![])),
     ] {
         let diagnostic = Finding::MissingKeys {
             path: "aggregate",
@@ -77,10 +76,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         let mut context = [
             ("expr".into(), text("ONLY(D.V)")),
             ("reducer".into(), text("ONLY")),
-            (
-                "record_count".into(),
-                V::Number(("3").parse().expect("canonical integer")),
-            ),
+            ("record_count".into(), V::Integer("3".into())),
         ]
         .into_iter()
         .collect::<yamaa_core::diagnostic::Context>();
@@ -88,7 +84,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             context.insert("row".into(), text(row));
             context.insert(
                 "group".into(),
-                V::Object([("D.ID".into(), V::Null)].into_iter().collect()),
+                V::Object([("D.ID".into(), V::Scalar(Value::Missing))].into()),
             );
         }
         assert_eq!(diagnostic.context, context);
@@ -122,8 +118,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0511",
             vec![
                 ("expr", text("MAX(D.V)")),
-                ("sources", V::Array(vec![text("D.V")])),
-                ("types", V::Array(vec![text("int"), text("str")])),
+                ("sources", V::Sequence(vec![text("D.V")])),
+                ("types", V::Sequence(vec![text("int"), text("str")])),
             ],
         ),
         (
@@ -136,7 +132,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0504",
             vec![
                 ("expr", text("SUM(D.N) + V")),
-                ("relations", V::Array(vec![text("D"), text("<output>")])),
+                ("relations", V::Sequence(vec![text("D"), text("<output>")])),
             ],
         ),
         (
@@ -251,7 +247,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0152",
             vec![
                 ("dataset", text("D")),
-                ("keys", V::Array(vec![text("ID"), text("PARAM")])),
+                ("keys", V::Sequence(vec![text("ID"), text("PARAM")])),
                 (
                     "hint",
                     text("declare an explicit `intermediate:` with `source`/`key` pairs"),
@@ -500,5 +496,8 @@ fn record_counts_keep_the_complete_unsigned_range() {
     }
     .diagnostic()
     .unwrap();
-    assert_eq!(diagnostic.context["record_count"], V::from(usize::MAX));
+    assert_eq!(
+        diagnostic.context["record_count"],
+        V::Integer(usize::MAX.to_string())
+    );
 }

@@ -2,6 +2,7 @@
 //! Codecs retain physical source/location authority; this application owns no IO.
 use crate::schema::{Document, NormalizationBudget, SchemaStructure};
 use crate::{inheritance_capture, project_preparation::Source, standalone_preparation};
+use alloc::string::String;
 
 /// Entry source admission is distinct from parent capture admission. The borrowed
 /// document must be the exact arena held by `Raw`; equal text is not authority.
@@ -103,16 +104,4 @@ where
         });
     };
     Ok(Prepared { source, content })
-}
-
-impl<E: std::fmt::Debug, X: std::fmt::Debug, R: std::fmt::Debug> std::fmt::Display
-    for Error<E, X, R>
-{
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "document preparation: {self:?}")
-    }
-}
-impl<E: std::fmt::Debug, X: std::fmt::Debug, R: std::fmt::Debug> std::error::Error
-    for Error<E, X, R>
-{
 }

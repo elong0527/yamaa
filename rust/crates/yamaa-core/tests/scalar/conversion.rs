@@ -1,4 +1,4 @@
-use yamaa_core::conversion::{convert, float_text};
+use yamaa_core::conversion::{convert, float_text, ConversionValue};
 use yamaa_core::temporal::{Date, DatePrecision, DateTime, DateTimePrecision};
 use yamaa_core::value::{ColumnType, FiniteFloat, Value, ValueType};
 
@@ -10,8 +10,7 @@ fn long_integer_text_preserves_value_or_exact_range_diagnostic() {
     let integer = "9".repeat(5000);
     let error = convert(&Value::Str(integer.clone()), ColumnType::Int).unwrap_err();
     assert_eq!(error.requirement(), "REQ-0021");
-    assert_eq!(error.value.as_number().unwrap().as_str(), integer);
-    assert_eq!(error.source_type(), Some(ValueType::Int));
+    assert_eq!(error.value, ConversionValue::Integer(integer));
 }
 
 /// Decode shared typed inputs, allowing explicit bits for decimal halfway cases.
@@ -67,20 +66,14 @@ fn shared_conversion_vectors() {
                 assert_eq!(error.phase(), "convert");
                 assert_eq!(error.condition(), "conversion_failed");
                 assert_eq!(error.applicable_handler(), "unconvertible");
-                let context = match error.source_type() {
-                    None => {
-                        assert!(error.value.is_null());
-                        "missing".into()
+                let context = match &error.value {
+                    ConversionValue::Runtime(value) => {
+                        assert_eq!(error.source_type(), value.value_type());
+                        encode(value)
                     }
-                    Some(ValueType::Float) => {
-                        format!("float:{:016x}", error.value.as_f64().unwrap().to_bits())
-                    }
-                    Some(ValueType::Int) => format!("int:{}", error.value.as_number().unwrap()),
-                    Some(ValueType::Bool) => format!("bool:{}", error.value.as_bool().unwrap()),
-                    Some(ValueType::Str) => format!("str:{}", error.value.as_str().unwrap()),
-                    Some(ValueType::Date) => format!("date:{}", error.value.as_str().unwrap()),
-                    Some(ValueType::DateTime) => {
-                        format!("datetime:{}", error.value.as_str().unwrap())
+                    ConversionValue::Integer(text) => {
+                        assert_eq!(error.source_type(), Some(ValueType::Int));
+                        format!("int:{text}")
                     }
                 };
                 format!("error:{}:{context}", error.requirement())

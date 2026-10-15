@@ -4,6 +4,7 @@ use crate::schema::{Document, NormalizationBudget, NormalizationLimits, SchemaSt
 use crate::{
     inheritance as graph, inheritance_preparation as lifecycle, project_preparation::Source,
 };
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 /// Fail-fast inheritance authority. Unlike project metadata capture, an ordinary
 /// failure stops the attempt; no independent-error collection or retry occurs.
@@ -89,20 +90,14 @@ impl<R> CapturedParent<R> {
         &self.raw
     }
 }
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum SourceFailure<E, X> {
-    #[error("inheritance capture host: {0:?}")]
     Host(E),
-    #[error("inheritance capture admission: {0:?}")]
     Admission(X),
 }
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error<E, X, R> {
-    #[error("inheritance capture entry: {0:?}")]
     Entry(X),
-    #[error(
-        "inheritance capture preparation: error={error:?}, captured_parents={captured_parents:?}"
-    )]
     Preparation {
         error: Box<lifecycle::Error<SourceFailure<E, X>>>,
         captured_parents: Vec<CapturedParent<R>>,

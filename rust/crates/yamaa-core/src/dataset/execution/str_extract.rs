@@ -10,7 +10,7 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
                 ("no_match", HandlerKind::NoMatch),
             ] {
                 if operation.handler(name).is_some() {
-                    counter.register(&std::format!("{}.{}", operation.path(), name), kind);
+                    counter.register(&alloc::format!("{}.{}", operation.path(), name), kind);
                 }
             }
             register(&source.expression, counter);
@@ -69,7 +69,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             state
                 .handlers
                 .record(
-                    &std::format!("{}.{}", operation.path(), name),
+                    &alloc::format!("{}.{}", operation.path(), name),
                     if name == "missing" {
                         HandlerKind::Missing
                     } else {

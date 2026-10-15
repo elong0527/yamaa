@@ -1,6 +1,10 @@
 //! ISO 8601 fixed-length durations. Decimal components retain exact whole seconds.
 use super::ElapsedUnit;
 use crate::value::Value;
+use alloc::{
+    format,
+    string::{String, ToString},
+};
 use num_bigint::BigUint;
 
 fn decimal(text: &str) -> Option<(BigUint, usize)> {

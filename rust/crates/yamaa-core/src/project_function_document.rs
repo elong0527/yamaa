@@ -5,6 +5,7 @@ use crate::{
     schema::{Document, DocumentNode as N},
     value::{ColumnType, Value, ValueType},
 };
+use alloc::{format, string::String, vec::Vec};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {

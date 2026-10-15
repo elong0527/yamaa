@@ -1,18 +1,17 @@
 //! Independent complete outcomes over actual profile/type/physical-schema failures.
-use serde_json::Value as V;
 use yamaa_core::{
     csv_source::{self, Field as CsvField},
     diagnostic::{
-        admit_source_diagnostics, ConditionCode as C, Diagnostic, ParquetFinding, ProjectionError,
-        SourceFinding, MAX_PROJECTION_BYTES,
+        admit_source_diagnostics, ConditionCode as C, ContextValue as V, Diagnostic,
+        ParquetFinding, ProjectionError, SourceFinding, MAX_PROJECTION_BYTES,
     },
     parquet_source::{self as parquet, Converted, Field, Logical, Physical, Representation},
     typed_csv::PreparedTypes,
-    value::ColumnType,
+    value::{ColumnType, Value},
 };
 
 fn text(value: &str) -> V {
-    V::String(value.into())
+    V::Scalar(Value::Str(value.into()))
 }
 fn expected(code: C, path: &str, fields: Vec<(&str, V)>) -> Diagnostic {
     Diagnostic {
@@ -34,49 +33,49 @@ fn every_csv_cause_retains_the_complete_independent_context() {
             b"".as_slice(),
             C::CsvHeaderAbsent,
             1,
-            V::Number(("1").parse().expect("canonical integer")),
+            V::Integer("1".into()),
         ),
         (
             b"\xef\xbb\xbfID\n".as_slice(),
             C::CsvByteOrderMark,
             1,
-            V::Number(("1").parse().expect("canonical integer")),
+            V::Integer("1".into()),
         ),
         (
             b"ID\nx\r".as_slice(),
             C::CsvCarriageReturn,
             2,
-            V::Number(("1").parse().expect("canonical integer")),
+            V::Integer("1".into()),
         ),
         (
             b"ID\nx\"y".as_slice(),
             C::CsvQuoteInBareField,
             2,
-            V::Number(("1").parse().expect("canonical integer")),
+            V::Integer("1".into()),
         ),
         (
             b"ID\n\"x\" ".as_slice(),
             C::CsvTextAfterQuote,
             2,
-            V::Number(("1").parse().expect("canonical integer")),
+            V::Integer("1".into()),
         ),
         (
             b"ID\n\"x".as_slice(),
             C::CsvQuoteUnterminated,
             2,
-            V::Number(("1").parse().expect("canonical integer")),
+            V::Integer("1".into()),
         ),
         (
             b"ID,V\nx".as_slice(),
             C::CsvRecordWidth,
             2,
-            V::Number(("2").parse().expect("canonical integer")),
+            V::Integer("2".into()),
         ),
         (
             b"ID,\nx,y".as_slice(),
             C::CsvFieldNameEmpty,
             1,
-            V::Number(("2").parse().expect("canonical integer")),
+            V::Integer("2".into()),
         ),
         (
             b"ID,ID\nx,y".as_slice(),
@@ -88,7 +87,7 @@ fn every_csv_cause_retains_the_complete_independent_context() {
             b"\xef\xbb\xbfID\n\"x\ny\",\xff".as_slice(),
             C::CsvInvalidText,
             2,
-            V::Number(("2").parse().expect("canonical integer")),
+            V::Integer("2".into()),
         ),
     ];
     let errors: Vec<_> = cases
@@ -112,7 +111,7 @@ fn every_csv_cause_retains_the_complete_independent_context() {
                 vec![
                     ("dataset", text("SRC")),
                     ("path", text("source.csv")),
-                    ("record", V::from(record)),
+                    ("record", V::Integer(record.to_string())),
                     ("field", field),
                 ],
             )
@@ -234,10 +233,7 @@ fn physical_schema_and_raw_temporal_findings_keep_all_original_facts() {
         (
             C::ParquetFieldNameEmpty,
             "REQ-1039",
-            vec![(
-                "field",
-                V::Number(("1").parse().expect("canonical integer")),
-            )],
+            vec![("field", V::Integer("1".into()))],
         ),
         (
             C::ParquetFieldNameDuplicate,
@@ -257,8 +253,8 @@ fn physical_schema_and_raw_temporal_findings_keep_all_original_facts() {
             "REQ-1041",
             vec![
                 ("field", text("DT")),
-                ("row", V::Number(("2").parse().expect("canonical integer"))),
-                ("value", V::from(i64::MAX)),
+                ("row", V::Integer("2".into())),
+                ("value", V::Scalar(Value::Int(i64::MAX))),
             ],
         ),
     ];
@@ -361,8 +357,8 @@ fn diagnostic_positions_stay_mathematical_and_boundary_errors_have_no_condition(
         path: "source.csv",
     };
     let actual = finding.diagnostic_with_limit(MAX_PROJECTION_BYTES).unwrap();
-    assert_eq!(actual.context["record"], V::from(usize::MAX));
-    assert_eq!(actual.context["field"], V::from(usize::MAX));
+    assert_eq!(actual.context["record"], V::Integer(usize::MAX.to_string()));
+    assert_eq!(actual.context["field"], V::Integer(usize::MAX.to_string()));
     let actual = SourceFinding::Parquet {
         finding: ParquetFinding::Value {
             field: "DT",
@@ -374,8 +370,8 @@ fn diagnostic_positions_stay_mathematical_and_boundary_errors_have_no_condition(
     }
     .diagnostic_with_limit(MAX_PROJECTION_BYTES)
     .unwrap();
-    assert_eq!(actual.context["row"], V::from(usize::MAX));
-    assert_eq!(actual.context["value"], V::from(i64::MIN));
+    assert_eq!(actual.context["row"], V::Integer(usize::MAX.to_string()));
+    assert_eq!(actual.context["value"], V::Scalar(Value::Int(i64::MIN)));
     assert!(csv_source::Error::Limit {
         resource: "bytes",
         limit: 0

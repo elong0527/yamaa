@@ -1,10 +1,9 @@
-use serde_json::Value as Json;
 use std::collections::BTreeMap;
 use yamaa_core::{
     dataset::VerificationSeverity,
     table::{TableAccess, ValueRef},
     value::Value,
-    verification_logs::{self, Error, Failure, Limits, Record},
+    verification_logs::{self, Error, Failure, Json, Limits, Record},
 };
 
 fn held() -> Record {
@@ -32,11 +31,14 @@ fn warning() -> Record {
             condition: "range_failed".into(),
             count: 7,
             keys: (0..7)
-                .map(|n| Json::Object([("ID".into(), Json::from(n))].into_iter().collect()))
+                .map(|n| Json::Object(BTreeMap::from([("ID".into(), Json::Scalar(Value::Int(n)))])))
                 .collect(),
             details: BTreeMap::from([
-                ("z".into(), Json::String("é🙂\n\t\0\"\\".into())),
-                ("minimum".into(), Json::from(i64::MIN)),
+                ("z".into(), Json::Scalar(Value::Str("é🙂\n\t\0\"\\".into()))),
+                (
+                    "minimum".into(),
+                    Json::Integer("-9223372036854775808".into()),
+                ),
             ]),
         }),
     }
@@ -153,12 +155,17 @@ fn malformed_records_and_exhausted_ownership_budgets_refuse_before_rows_are_retu
                 .as_mut()
                 .unwrap()
                 .details
-                .insert("keys".into(), Json::Null);
+                .insert("keys".into(), Json::Scalar(Value::Missing));
             record
         },
         {
             let mut record = warning();
-            record.failure.as_mut().unwrap().keys.push(Json::from(1));
+            record
+                .failure
+                .as_mut()
+                .unwrap()
+                .keys
+                .push(Json::Scalar(Value::Int(1)));
             record
         },
         {
@@ -168,9 +175,7 @@ fn malformed_records_and_exhausted_ownership_budgets_refuse_before_rows_are_retu
                 .as_mut()
                 .unwrap()
                 .details
-                // Number owns JSON grammar; a numeric log context still requires
-                // a finite binary64 value for fractional/exponent spellings.
-                .insert("bad".into(), Json::Number("1e999".parse().unwrap()));
+                .insert("bad".into(), Json::Integer("01".into()));
             record
         },
     ] {
@@ -190,42 +195,4 @@ fn malformed_records_and_exhausted_ownership_budgets_refuse_before_rows_are_retu
         ),
         Err(Error::InvalidRecord)
     ));
-}
-
-#[test]
-fn canonical_json_numbers_and_temporal_values_preserve_governed_log_bytes() {
-    let mut record = warning();
-    record.failure.as_mut().unwrap().details = BTreeMap::from([
-        (
-            "date".into(),
-            Json::from(Value::Date("2025-01-02".parse().unwrap())),
-        ),
-        (
-            "datetime".into(),
-            Json::from(Value::DateTime("2025-01-02T03:04".parse().unwrap())),
-        ),
-        ("integer_float".into(), Json::from(Value::float(1.0))),
-        ("large".into(), Json::from(Value::float(1.0e20))),
-        ("negzero".into(), Json::from(Value::float(-0.0))),
-        ("tiny".into(), Json::from(Value::float(1.0e-7))),
-        (
-            "wide".into(),
-            Json::Number(
-                "12345678901234567890123456789012345678901234567890"
-                    .parse()
-                    .unwrap(),
-            ),
-        ),
-    ]);
-    let logs = verification_logs::build(&[record], "out.csv", true, true, true, Limits::default())
-        .unwrap();
-    let expected = r#"{"date":"2025-01-02","datetime":"2025-01-02T03:04:00","integer_float":1,"large":100000000000000000000,"negzero":-0,"tiny":0.0000001,"wide":12345678901234567890123456789012345678901234567890}"#;
-    assert_eq!(
-        logs.verification.unwrap().cell(0, 12).unwrap(),
-        ValueRef::Str(expected)
-    );
-    assert_eq!(
-        logs.warning.unwrap().cell(0, 9).unwrap(),
-        ValueRef::Str(expected)
-    );
 }

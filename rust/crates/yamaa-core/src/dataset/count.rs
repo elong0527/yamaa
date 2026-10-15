@@ -1,14 +1,13 @@
 //! Exact authored count bounds, independent of machine integer width.
-use std::cmp::Ordering;
+use alloc::string::String;
+use core::cmp::Ordering;
 
 /// Admission policy for each canonical decimal count bound.
 pub const MAX_COUNT_BOUND_BYTES: usize = 65_536;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CountBoundError {
-    #[error("dataset count invalid")]
     Invalid,
-    #[error("dataset count limit")]
     Limit,
 }
 
@@ -33,7 +32,7 @@ impl RowCountBound {
 
     /// Compare the bound to a count without narrowing or allocating a bigint.
     pub fn compare_count(&self, mut count: usize) -> Ordering {
-        let mut digits = [0; std::mem::size_of::<usize>() * 3];
+        let mut digits = [0; core::mem::size_of::<usize>() * 3];
         let mut start = digits.len();
         loop {
             start -= 1;
@@ -80,7 +79,7 @@ pub struct RowCount {
     pub min_fraction: Option<f64>,
     pub max_fraction: Option<f64>,
     /// None denotes the one whole-artifact group, even for an empty output.
-    pub group_by: Option<std::vec::Vec<usize>>,
+    pub group_by: Option<alloc::vec::Vec<usize>>,
     pub filter: Option<crate::bound_expression::BoundPredicate>,
     pub when: Option<crate::bound_expression::BoundPredicate>,
 }

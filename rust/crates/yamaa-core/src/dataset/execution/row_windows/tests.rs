@@ -7,8 +7,8 @@ use crate::{
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
-use std::cell::RefCell;
-use std::vec;
+use alloc::{format, vec, vec::Vec};
+use core::cell::RefCell;
 
 struct Table {
     schema: TableSchema,
@@ -16,7 +16,7 @@ struct Table {
     reads: RefCell<Vec<(usize, usize)>>,
 }
 impl TableAccess for Table {
-    type Error = std::convert::Infallible;
+    type Error = core::convert::Infallible;
     fn schema(&self) -> &TableSchema {
         &self.schema
     }
@@ -177,7 +177,7 @@ fn grouped_postwindow_filters_use_contextual_join_and_named_lookup_reads_lazily(
         AggregateSource, Intermediate, IntermediateKey, IntermediateSource, JoinedRead, MatchKey,
         MatchRead, MatchValue, SourceSchemas,
     };
-    use std::sync::Arc;
+    use alloc::{boxed::Box, sync::Arc};
     for (named, keep) in [(false, true), (true, true), (false, false), (true, false)] {
         let input = schema(&["ID", "MATCH"]);
         let table = Table {

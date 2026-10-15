@@ -1,12 +1,11 @@
 //! Bound complete-date operations retain authored operands and calendar semantics.
 use crate::{
-    diagnostic::{ConditionCode, Diagnostic},
+    diagnostic::{ConditionCode, ContextValue, Diagnostic},
     table::ValueRef,
     temporal::Date,
     value::Value,
 };
-use serde_json::Value as JsonValue;
-use std::vec;
+use alloc::{format, string::String, vec, vec::Vec};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CalendarUnit {
@@ -127,7 +126,7 @@ impl Temporal {
             spec_paths: vec![path.into()],
             context: [("source", source), ("expected", "date"), ("actual", actual)]
                 .into_iter()
-                .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
+                .map(|(key, value)| (key.into(), ContextValue::Scalar(Value::Str(value.into()))))
                 .collect(),
             source_span: None,
             operand_route: None,
@@ -138,10 +137,15 @@ impl Temporal {
             code: ConditionCode::TemporalBounds,
             spec_paths: vec![format!("{path}.bounds")],
             context: vec![
-                ("value".into(), JsonValue::String(value.into())),
+                (
+                    "value".into(),
+                    ContextValue::Scalar(Value::Str(value.into())),
+                ),
                 (
                     "permitted".into(),
-                    JsonValue::Array(vec![JsonValue::String("exclusive".into())]),
+                    ContextValue::Sequence(vec![ContextValue::Scalar(Value::Str(
+                        "exclusive".into(),
+                    ))]),
                 ),
             ]
             .into_iter()

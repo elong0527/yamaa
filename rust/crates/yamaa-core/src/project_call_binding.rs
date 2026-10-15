@@ -8,6 +8,7 @@ use crate::{
     reference_scope::{self, Scope},
     value::{ColumnType, ValueType},
 };
+use alloc::vec::Vec;
 
 #[derive(Clone, Copy, Debug)]
 pub enum SourceMode {
@@ -39,17 +40,12 @@ pub struct Finding {
     pub argument: usize,
     pub kind: Kind,
 }
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error {
-    #[error("project call binding invalid call index")]
     InvalidCallIndex,
-    #[error("project call binding inactive call")]
     InactiveCall,
-    #[error("project call binding reference: {0:?}")]
     Reference(reference_binding::Error),
-    #[error("project call binding findings: {0:?}")]
     Findings(Vec<Finding>),
-    #[error("project call binding invalid admitted call")]
     InvalidAdmittedCall,
 }
 #[derive(Clone, Debug, PartialEq)]

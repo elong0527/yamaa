@@ -12,7 +12,7 @@ use crate::{
     project_function::Language,
     value::Value,
 };
-use std::cell::Cell;
+use core::cell::Cell;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Phase {

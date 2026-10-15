@@ -10,9 +10,12 @@ use crate::{
     project_function_result::results_match,
     value::{ColumnType, Value, ValueType},
 };
-use std::{
+use alloc::{
     collections::{BTreeMap, BTreeSet},
+    format,
+    string::String,
     vec,
+    vec::Vec,
 };
 
 pub const MAX_DIAGNOSTIC_BYTES: usize = 16_777_216;
@@ -346,7 +349,7 @@ pub fn binding_diagnostics<'a, 'e, E>(
 fn exact(left: &Value, right: &Value) -> bool {
     match (left, right) {
         (Value::Float(a), Value::Float(b)) => a.get().to_bits() == b.get().to_bits(),
-        _ => std::mem::discriminant(left) == std::mem::discriminant(right) && left == right,
+        _ => core::mem::discriminant(left) == core::mem::discriminant(right) && left == right,
     }
 }
 pub fn test_diagnostics<'a, 'e: 'a, E>(
@@ -480,10 +483,3 @@ pub fn test_diagnostics<'a, 'e: 'a, E>(
     }
     Ok(diagnostics)
 }
-
-impl<E: std::fmt::Debug> std::fmt::Display for Error<'_, E> {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "diagnostic projection: {self:?}")
-    }
-}
-impl<E: std::fmt::Debug> std::error::Error for Error<'_, E> {}

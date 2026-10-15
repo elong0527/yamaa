@@ -4,6 +4,7 @@ use crate::{
     predicate::{self, Truth},
     table::ValueRef,
 };
+use alloc::format;
 
 pub const MAX_FLAG_METADATA_BYTES: usize = 16_777_216;
 
@@ -18,13 +19,10 @@ pub struct FlagBinding {
     pub name: String,
     pub read: FlagRead,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FlagError {
-    #[error("dataset flags metadata limit")]
     MetadataLimit,
-    #[error("dataset flags binding: {0:?}")]
     Binding(BindingError),
-    #[error("dataset flags missing value required")]
     MissingValueRequired,
 }
 
@@ -61,7 +59,7 @@ impl Flag {
                 })
             })
             .and_then(|n| {
-                std::iter::once(&true_value)
+                core::iter::once(&true_value)
                     .chain(false_value.iter())
                     .chain(missing.iter())
                     .try_fold(n, |n, v| {
@@ -207,11 +205,10 @@ pub(super) fn type_condition_diagnostic(
     cause: &predicate::Condition,
     route: &[predicate::Route],
 ) -> crate::diagnostic::Diagnostic {
-    use crate::diagnostic::{ConditionCode as C, Context, Diagnostic};
+    use crate::diagnostic::{ConditionCode as C, Context, ContextValue as V, Diagnostic};
     use predicate::Condition;
-    use serde_json::Value as V;
     fn text(s: &str) -> V {
-        V::String(s.into())
+        V::Scalar(Value::Str(s.into()))
     }
     fn kind(k: crate::value::ValueType) -> &'static str {
         use crate::value::ValueType::*;

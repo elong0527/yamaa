@@ -1,10 +1,9 @@
 //! Independent relation, complete-context and opaque-read ordering controls.
-use serde_json::Value as V;
 use std::cell::RefCell;
 use yamaa_core::dataset::*;
 use yamaa_core::{
     aggregate_compiler::compile_aggregate,
-    diagnostic::ConditionCode as C,
+    diagnostic::{ConditionCode as C, ContextValue as V},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
@@ -507,16 +506,16 @@ fn only_is_eager_and_retains_complete_group_context_before_outer_coalesce() {
     assert_eq!(
         diagnostic.context,
         [
-            ("expr".into(), V::String("COALESCE(1, ONLY(D.V))".into())),
-            ("reducer".into(), V::String("ONLY".into())),
             (
-                "record_count".into(),
-                V::Number(("2").parse().expect("canonical integer"))
+                "expr".into(),
+                V::Scalar(Value::Str("COALESCE(1, ONLY(D.V))".into()))
             ),
-            ("row".into(), V::String("summary".into())),
+            ("reducer".into(), V::Scalar(Value::Str("ONLY".into()))),
+            ("record_count".into(), V::Integer("2".into())),
+            ("row".into(), V::Scalar(Value::Str("summary".into()))),
             (
                 "group".into(),
-                V::Object([("D.ID".into(), V::from(1))].into_iter().collect())
+                V::Object([("D.ID".into(), V::Scalar(Value::Int(1)))].into())
             )
         ]
         .into()

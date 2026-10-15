@@ -1,12 +1,11 @@
 //! Owned causes reached by the compiler and eager donor uniqueness descriptor.
-use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::{ConditionCode, Diagnostic},
+    diagnostic::{ConditionCode, ContextValue as V, Diagnostic},
     schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
     specification::{BindError, PreflightFinding, PrepareError, PreparedSpecification},
     table::{Column, TableSchema},
-    value::ColumnType,
+    value::{ColumnType, Value},
 };
 enum Tree<'a> {
     Text(&'a str),
@@ -158,7 +157,7 @@ fn read_model(self_target: bool) -> SpecificationDocument {
     .unwrap()
 }
 fn text(text: &str) -> V {
-    V::String(text.into())
+    V::Scalar(Value::Str(text.into()))
 }
 fn check(
     d: Diagnostic,
@@ -267,7 +266,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "dependency_cycle",
             "REQ-1263",
             "intermediates[0].derivations.NEXT.source",
-            vec![("cycle", V::Array(vec![text("P"), text("P")]))],
+            vec![("cycle", V::Sequence(vec![text("P"), text("P")]))],
         ),
         (
             vec![("derivations", Map(vec![("NEXT", source("D.ABSENT"))]))],
@@ -356,7 +355,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "rows[0].dataset",
             vec![
                 ("intermediate", text("P")),
-                ("fields", V::Array(vec![text("key")])),
+                ("fields", V::Sequence(vec![text("key")])),
             ],
         ),
         (
@@ -379,7 +378,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "rows[0].dataset",
             vec![
                 ("intermediate", text("P")),
-                ("columns", V::Array(vec![text("NEXT")])),
+                ("columns", V::Sequence(vec![text("NEXT")])),
             ],
         ),
     ];
@@ -431,11 +430,8 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         vec![
             ("intermediate", text("P")),
             ("dataset", text("D")),
-            ("columns", V::Array(vec![text("ID")])),
-            (
-                "duplicate_count",
-                V::Number(("1").parse().expect("canonical integer")),
-            ),
+            ("columns", V::Sequence(vec![text("ID")])),
+            ("duplicate_count", V::Integer("1".into())),
         ],
     ));
     reached

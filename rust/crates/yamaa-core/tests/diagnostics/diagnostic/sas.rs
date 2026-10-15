@@ -1,11 +1,13 @@
 //! Native codecs supply classified SAS facts at this core-owned projection boundary.
 //! Core diagnostics remain independent of the adapter's C parser and filesystem.
-use serde_json::Value as V;
 use std::collections::BTreeSet;
-use yamaa_core::diagnostic::{ConditionCode, SourceFinding};
+use yamaa_core::{
+    diagnostic::{ConditionCode, ContextValue as V, SourceFinding},
+    value::Value,
+};
 
 fn text(value: &str) -> V {
-    V::String(value.into())
+    V::Scalar(Value::Str(value.into()))
 }
 
 pub(super) fn reached() -> BTreeSet<ConditionCode> {

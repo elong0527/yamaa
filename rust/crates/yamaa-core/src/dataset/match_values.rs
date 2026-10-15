@@ -4,6 +4,7 @@ use crate::{
     key_relation::ComparableType,
     value::{ColumnType, ValueType},
 };
+use alloc::boxed::Box;
 
 /// The current candidate owns these reads, independently of the donor record.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -108,7 +109,7 @@ impl ContextualMatch {
 #[derive(Clone, Debug, PartialEq)]
 pub enum MatchValue {
     Contextual(ContextualMatch),
-    Expression(std::boxed::Box<MatchExpression>),
+    Expression(alloc::boxed::Box<MatchExpression>),
     Variable(MatchRead),
     Source(MatchRead),
     Literal(Value),
@@ -139,10 +140,10 @@ impl MatchValue {
     pub fn reads_mut(&mut self) -> Box<dyn Iterator<Item = &mut MatchRead> + '_> {
         match self {
             Self::Variable(read) | Self::Source(read) | Self::StrPad { read, .. } => {
-                Box::new(std::iter::once(read))
+                Box::new(core::iter::once(read))
             }
             Self::Expression(expression) => Box::new(expression.reads.iter_mut()),
-            _ => Box::new(std::iter::empty()),
+            _ => Box::new(core::iter::empty()),
         }
     }
     pub fn contextual(&self) -> Option<ContextualMatch> {

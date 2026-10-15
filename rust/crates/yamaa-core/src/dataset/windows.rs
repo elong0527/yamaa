@@ -92,7 +92,7 @@ impl Window {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContextWindow {
     pub window: Window,
-    pub sources: Vec<(std::string::String, usize)>,
+    pub sources: Vec<(alloc::string::String, usize)>,
 }
 impl ContextWindow {
     pub fn schema(
@@ -131,7 +131,7 @@ impl ContextWindow {
         }
         let schema = self.schema(output, source)?;
         let mut slots = available.to_vec();
-        slots.extend(std::iter::repeat_n(true, self.sources.len()));
+        slots.extend(core::iter::repeat_n(true, self.sources.len()));
         self.window.validate(&slots, &schema)
     }
 }

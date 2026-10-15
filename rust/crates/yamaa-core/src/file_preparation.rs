@@ -6,7 +6,7 @@ use crate::{
     inheritance_capture::CapturePort,
     project_preparation::Source,
 };
-use std::collections::BTreeMap;
+use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 
 pub trait NativePort {
     type Error;
@@ -75,7 +75,7 @@ pub trait PreparedView {
     fn parents(&self) -> &[Self::Parent];
     fn parent_source(parent: &Self::Parent) -> &Source;
     fn resources(&self) -> impl Iterator<Item = &Source> {
-        std::iter::empty()
+        core::iter::empty()
     }
     /// Project only an original declaring occurrence retained by this document.
     /// Resolved identities are never substituted for its authored field or path.
@@ -102,18 +102,14 @@ pub trait DocumentPort<E> {
         capture: &mut P,
     ) -> Result<Self::Prepared, Self::Error>;
 }
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error<E, X> {
-    #[error("file preparation resource: {0:?}")]
     Resource(E),
-    #[error("file preparation preparation: {0:?}")]
     Preparation(X),
-    #[error("file preparation resource finding: error={error:?}, diagnostic={diagnostic:?}")]
     ResourceFinding {
         error: E,
         diagnostic: Box<Diagnostic>,
     },
-    #[error("file preparation preparation finding: error={error:?}, diagnostic={diagnostic:?}")]
     PreparationFinding {
         error: X,
         diagnostic: Box<Diagnostic>,

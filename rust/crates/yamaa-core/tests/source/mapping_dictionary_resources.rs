@@ -270,7 +270,7 @@ fn dictionary_admission_retains_use_site_and_original_input_arena_for_schema_fin
         &mut SchemaDiagnosticBudget::new(),
     )
     .unwrap();
-    assert!(std::ptr::eq(report.document().unwrap(), &invalid));
+    assert!(core::ptr::eq(report.document().unwrap(), &invalid));
     assert_eq!(
         report
             .iter()

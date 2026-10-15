@@ -2,7 +2,7 @@
 use crate::schema::{
     Document, DocumentNode as N, NormalizationBudget, NormalizationError, SchemaStructure,
 };
-use std::vec;
+use alloc::{string::String, vec, vec::Vec};
 
 /// The canonical identity is compared directly. Display spelling retains read-error context.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -12,11 +12,9 @@ pub struct Source {
 }
 
 /// Missing/unreadable/non-file sources have a portable meaning; other host errors stay opaque.
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum SourceError<E> {
-    #[error("inheritance unavailable")]
     Unavailable,
-    #[error("inheritance raised: {0:?}")]
     Raised(E),
 }
 
@@ -457,13 +455,6 @@ pub fn traverse<P: SourcePort>(
     }
     Ok(completed)
 }
-
-impl<E: std::fmt::Debug> std::fmt::Display for Error<E> {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "inheritance: {self:?}")
-    }
-}
-impl<E: std::fmt::Debug> std::error::Error for Error<E> {}
 
 #[cfg(test)]
 mod tests {

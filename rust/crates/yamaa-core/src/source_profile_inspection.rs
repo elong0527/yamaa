@@ -5,6 +5,7 @@ use crate::{
     resource::ResourceFailure,
     specification::{PreflightFinding, PrepareError},
 };
+use alloc::string::String;
 
 pub fn refine(
     error: PrepareError,

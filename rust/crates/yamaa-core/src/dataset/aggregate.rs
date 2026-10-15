@@ -70,15 +70,11 @@ pub struct AggregateBinding {
     pub column: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AggregateBindingError {
-    #[error("dataset aggregate empty path")]
     EmptyPath,
-    #[error("dataset aggregate duplicate name")]
     DuplicateName,
-    #[error("dataset aggregate missing name")]
     MissingName,
-    #[error("dataset aggregate unused name")]
     UnusedName,
 }
 

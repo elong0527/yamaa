@@ -4,7 +4,7 @@ use crate::{
     project_function::{self, Definition, Language},
     project_terminology::{self, Source},
 };
-use std::collections::BTreeSet;
+use alloc::{boxed::Box, collections::BTreeSet, string::String, vec::Vec};
 
 /// Format is obtained from captured lock syntax, never inferred from a basename.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

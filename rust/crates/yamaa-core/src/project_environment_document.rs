@@ -8,6 +8,7 @@ use crate::{
     project_terminology_document,
     schema::{Document, DocumentNode as N},
 };
+use alloc::{boxed::Box, format, string::String, vec::Vec};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Declaration<T> {
@@ -54,11 +55,9 @@ pub enum DiagnosticResource {
     Findings,
     TextBytes,
 }
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
-    #[error("project environment document findings: {0:?}")]
     Findings(Vec<Finding>),
-    #[error("project environment document limit: {0:?}")]
     Limit(DiagnosticResource),
 }
 struct Budget(DiagnosticLimits);

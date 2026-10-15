@@ -2,8 +2,8 @@
 //! Source bytes, schema admission and storage budgets belong to captured inputs.
 use crate::project_limits::{AdmissionError, Budget, Limit, Limits};
 use crate::value::{compare_present, ColumnType, Value};
-use std::cmp::Ordering;
-use std::collections::BTreeSet;
+use alloc::{collections::BTreeSet, string::String, vec::Vec};
+use core::cmp::Ordering;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DataType {
@@ -201,7 +201,7 @@ impl Catalogue {
         allowed_values: Option<&[Value]>,
     ) -> Vec<BindingFinding> {
         let Some(list) = self.get(id) else {
-            return std::vec![BindingFinding::UnknownCodelist];
+            return alloc::vec![BindingFinding::UnknownCodelist];
         };
         let mut findings = Vec::new();
         if list.data_type.column_type() != column {
@@ -212,7 +212,7 @@ impl Catalogue {
         }
         if let (Some(items), Some(allowed)) = (self.enforced_items(id), allowed_values) {
             if let Err(limit) = Budget::new(Limits::default()).binding(items, allowed) {
-                return std::vec![BindingFinding::Limit(limit)];
+                return alloc::vec![BindingFinding::Limit(limit)];
             }
             let items: BTreeSet<_> = items
                 .iter()

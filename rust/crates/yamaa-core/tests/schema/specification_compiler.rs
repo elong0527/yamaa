@@ -128,8 +128,10 @@ fn operation_document_with_rows(
 
 #[test]
 fn aggregate_derive_windows_fail_preflight_at_the_nested_operation_path() {
-    use serde_json::Value as JsonValue;
-    use yamaa_core::{diagnostic::ConditionCode, specification::PreflightFinding};
+    use yamaa_core::{
+        diagnostic::{ConditionCode, ContextValue},
+        specification::PreflightFinding,
+    };
     use Tree::*;
     for operation in [
         "row_number",
@@ -228,7 +230,9 @@ fn aggregate_derive_windows_fail_preflight_at_the_nested_operation_path() {
                 );
                 assert_eq!(
                     diagnostic.context["reason"],
-                    JsonValue::String("a derive binding cannot use a window operation".into())
+                    ContextValue::Scalar(Value::Str(
+                        "a derive binding cannot use a window operation".into()
+                    ))
                 );
             }
         }
@@ -382,7 +386,12 @@ fn compiler_retains_admission_binding_and_resource_boundaries() {
         diagnostic.context,
         [("dataset", "SRC"), ("path", "input.bad")]
             .into_iter()
-            .map(|(key, value)| (key.into(), serde_json::Value::String(value.into())))
+            .map(|(key, value)| (
+                key.into(),
+                yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                    value.into()
+                ))
+            ))
             .collect()
     );
     let prepared = PreparedSpecification::prepare(&document("ID + 1", "input.PARQUET")).unwrap();
@@ -902,11 +911,13 @@ fn row_filter_carrier_findings_remain_normative_including_dead_branches() {
         assert_eq!(diagnostic.context.len(), 2);
         assert_eq!(
             diagnostic.context["predicate"],
-            serde_json::Value::String(filter.into())
+            yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                filter.into()
+            ))
         );
         assert_eq!(
             diagnostic.context["position"],
-            serde_json::Value::Number((position).parse().expect("canonical integer"))
+            yamaa_core::diagnostic::ContextValue::Integer(position.into())
         );
     }
 }
@@ -1069,11 +1080,13 @@ fn source_filters_charge_compilation_before_admission_and_retain_carrier_finding
     assert_eq!(diagnostic.context.len(), 2);
     assert_eq!(
         diagnostic.context["predicate"],
-        serde_json::Value::String("SRC.ID = 9223372036854775808".into())
+        yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+            "SRC.ID = 9223372036854775808".into()
+        ))
     );
     assert_eq!(
         diagnostic.context["position"],
-        serde_json::Value::Number(("9").parse().expect("canonical integer"))
+        yamaa_core::diagnostic::ContextValue::Integer("9".into())
     );
 }
 
@@ -1400,9 +1413,8 @@ fn verification_document(kind: &str, check: Tree<'_>, column: bool) -> Specifica
 }
 #[test]
 fn malformed_assert_carriers_and_numeric_bounds_are_typed_declaration_findings() {
-    use serde_json::Value as V;
-    use yamaa_core::diagnostic::ConditionCode as C;
-
+    use yamaa_core::diagnostic::{ConditionCode as C, ContextValue as V};
+    use yamaa_core::value::Value;
     use Tree::*;
     let checks = [
         (
@@ -1469,7 +1481,7 @@ fn malformed_assert_carriers_and_numeric_bounds_are_typed_declaration_findings()
         assert_eq!(findings[0].definition().phase, "validation");
         assert_eq!(
             findings[0].context,
-            [("reason".into(), V::String(reason.into()))].into()
+            [("reason".into(), V::Scalar(Value::Str(reason.into())))].into()
         );
         assert!(
             prepared.bind(&source()).is_ok(),

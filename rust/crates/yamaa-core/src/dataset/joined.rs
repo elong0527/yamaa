@@ -8,7 +8,7 @@ pub struct JoinedRead {
     /// Row-template joins read these raw driver fields; column joins read output keys.
     pub record_keys: Option<Vec<usize>>,
     pub name: String,
-    pub schema: std::sync::Arc<TableSchema>,
+    pub schema: alloc::sync::Arc<TableSchema>,
 }
 impl JoinedRead {
     pub(super) fn validate(
@@ -181,7 +181,7 @@ mod tests {
     use crate::{table::Column, value::ColumnType};
     #[test]
     fn raw_join_keys_validate_current_record_coordinates_and_group_membership() {
-        let schema = std::sync::Arc::new(
+        let schema = alloc::sync::Arc::new(
             TableSchema::new(vec![Column {
                 name: "K".into(),
                 kind: ColumnType::Str,

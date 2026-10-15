@@ -5,10 +5,13 @@ use crate::{
     producer_contract::{self, diagnostics::text, Contract},
     project_environment::ExecutionEnvironment,
     schema::{Document, DocumentNode as N, SpecificationDocument},
-    specification::{CompilationLimits, PrepareError, PreparedSpecification, SourceDeclaration},
+    specification::{
+        CompilationLimits, PrepareError, PreparedSpecification, SourceDeclaration,
+        UnsupportedFeature,
+    },
     table::TableSchema,
 };
-use std::vec;
+use alloc::{format, string::String, vec, vec::Vec};
 
 /// A spelling and the retained specification layer that authored it. These are
 /// provenance facts, not a filesystem lookup or a resource capability.
@@ -63,15 +66,11 @@ impl Default for Limits {
         }
     }
 }
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error {
-    #[error("producer admission limit: {0:?}")]
     Limit(&'static str),
-    #[error("producer admission invalid: {0:?}")]
     Invalid(Vec<Diagnostic>),
-    #[error("producer admission compilation: {0:?}")]
     Compilation(PrepareError),
-    #[error("producer admission boundary")]
     Boundary,
 }
 #[derive(Debug)]
@@ -143,6 +142,19 @@ impl Prepared {
     }
     pub fn called_functions(&self) -> &[usize] {
         self.compiled.called_functions()
+    }
+    /// No bind/build or compiled-plan accessor is exposed. The engine must refuse
+    /// an execution capability until the complete workflow qualifies under #1741.
+    pub fn execution_refusal(&self) -> PrepareError {
+        PrepareError::Unsupported(
+            self.producers
+                .iter()
+                .map(|p| UnsupportedFeature {
+                    operation: "producer_workflow".into(),
+                    path: format!("input.{}.schema", p.dataset),
+                })
+                .collect(),
+        )
     }
 }
 fn scalar(d: &Document, id: usize) -> Result<&str, Error> {
@@ -250,7 +262,7 @@ pub(crate) fn prepare_declarations(
         limits.text_bytes,
         "producer_metadata_text_bytes",
     )?;
-    for document in std::iter::once(consumer).chain(candidates.iter().map(|c| c.document)) {
+    for document in core::iter::once(consumer).chain(candidates.iter().map(|c| c.document)) {
         charge(
             &mut nodes,
             document.document().nodes().len(),

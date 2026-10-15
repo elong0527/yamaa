@@ -1,12 +1,11 @@
 use crate::support::producer as support;
-use serde_json::Value as V;
 use support::{candidate, consumer, document, producer, Tree};
 use yamaa_core::{
-    diagnostic::Diagnostic,
+    diagnostic::{ContextValue as V, Diagnostic},
     producer_admission::{prepare, Error, Input, Limits},
     producer_contract,
     specification::{PrepareError, PreparedSpecification},
-    value::ColumnType,
+    value::{ColumnType, Value},
 };
 fn invalid(result: Result<yamaa_core::producer_admission::Prepared, Error>) -> Vec<Diagnostic> {
     match result {
@@ -15,7 +14,7 @@ fn invalid(result: Result<yamaa_core::producer_admission::Prepared, Error>) -> V
     }
 }
 fn text(s: &str) -> V {
-    V::String(s.into())
+    V::Scalar(Value::Str(s.into()))
 }
 #[test]
 fn sealed_compiler_preserves_distinct_producer_identity_fields_and_authored_origins() {
@@ -64,6 +63,11 @@ fn sealed_compiler_preserves_distinct_producer_identity_fields_and_authored_orig
     );
     assert_eq!(metadata.projection(), ["ID"]);
     assert!(metadata.called_functions().is_empty());
+    let PrepareError::Unsupported(features) = metadata.execution_refusal() else {
+        panic!("execution refusal")
+    };
+    assert_eq!(features[0].operation, "producer_workflow");
+    assert_eq!(features[0].path, "input.SRC.schema");
     assert!(matches!(
         PreparedSpecification::prepare(&consumer),
         Err(PrepareError::Unsupported(_))
@@ -278,10 +282,7 @@ fn producer_contract_findings_retain_selected_field_order() {
     assert!(findings
         .iter()
         .all(|f| f.definition().requirement == Some("REQ-0534")));
-    assert_eq!(
-        findings[2].context["declarations"],
-        V::Number(("0").parse().expect("canonical integer"))
-    );
+    assert_eq!(findings[2].context["declarations"], V::Integer("0".into()));
 }
 #[test]
 fn aggregate_metadata_quotas_and_source_field_limits_precede_compiled_result() {
@@ -381,13 +382,13 @@ fn actual_metadata_comparison_is_ordered_typed_bounded_and_portable() {
         .unwrap();
     assert_eq!(
         finding.context["expected_types"],
-        V::Array(vec![text("int"), text("float")])
+        V::Sequence(vec![text("int"), text("float")])
     );
     assert_eq!(
         finding.context["actual_types"],
-        V::Array(vec![text("int"), text("str")])
+        V::Sequence(vec![text("int"), text("str")])
     );
-    assert_eq!(finding.context["reordered"], V::Bool(false));
+    assert_eq!(finding.context["reordered"], V::Scalar(Value::Bool(false)));
     assert!(matches!(
         contract.validate_header(
             "SRC",

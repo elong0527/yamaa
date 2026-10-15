@@ -687,7 +687,7 @@ fn invalid_introduced_null_collections_keep_value_findings_when_later_replaced()
         ("intermediates", Null),
     ]));
     let result = schema()
-        .compose_layer_fragments(std::slice::from_ref(&first), &mut budget())
+        .compose_layer_fragments(core::slice::from_ref(&first), &mut budget())
         .unwrap();
     assert_eq!(result.diagnostics.len(), 3);
     for (finding, path) in result

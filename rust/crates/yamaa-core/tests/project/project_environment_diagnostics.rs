@@ -1,6 +1,6 @@
 use crate::support::project_environment as support;
-use serde_json::Value as JsonValue;
 use yamaa_core::{
+    diagnostic::ContextValue,
     project_environment::{self, Draft, Finding, LockKind, LockReference},
     project_environment_diagnostics::{diagnostics, diagnostics_with_text_limit, Error},
     project_function::{Case, Definition, Finding as F, Language, Parameter},
@@ -28,10 +28,13 @@ fn classified_unavailable_root_maps_to_the_supplied_environment_requirement() {
             )
         );
         assert_eq!(diagnostic.spec_paths, ["environment"]);
-        assert_eq!(diagnostic.context["cause"], JsonValue::String(cause.into()));
+        assert_eq!(
+            diagnostic.context["cause"],
+            ContextValue::Scalar(Value::Str(cause.into()))
+        );
         assert_eq!(
             diagnostic.context["path"],
-            JsonValue::String("/study/environment.yaml".into())
+            ContextValue::Scalar(Value::Str("/study/environment.yaml".into()))
         );
     }
 }
@@ -44,19 +47,22 @@ fn every_root_and_terminology_cause_has_independent_normative_paths_and_mapping(
         &project_environment::validate(Language::Python, &draft),
     )
     .unwrap();
-    assert_eq!(projected[3].context["value"], JsonValue::Bool(true));
+    assert_eq!(
+        projected[3].context["value"],
+        ContextValue::Scalar(Value::Bool(true))
+    );
     assert_eq!(projected[1].context.len(), 2);
     assert_eq!(
         projected[1].context["runner"],
-        JsonValue::String("python".into())
+        ContextValue::Scalar(Value::Str("python".into()))
     );
     assert_eq!(
         projected[7].context["field"],
-        JsonValue::String("decode".into())
+        ContextValue::Scalar(Value::Str("decode".into()))
     );
     assert_eq!(
         projected[8].context["field"],
-        JsonValue::String("rank".into())
+        ContextValue::Scalar(Value::Str("rank".into()))
     );
 }
 fn draft() -> Draft {
@@ -226,12 +232,21 @@ fn every_function_field_route_preserves_authored_indices_and_exact_scalar_kinds(
             ("project_environment_invalid", Some("REQ-0695"))
         );
         assert_eq!(d.spec_paths, [path]);
-        assert_eq!(d.context["reason"], JsonValue::String(reason.into()));
+        assert_eq!(
+            d.context["reason"],
+            ContextValue::Scalar(Value::Str(reason.into()))
+        );
         if path.ends_with(".args.x") && reason != "missing_required_case_argument" {
-            assert_eq!(d.context["value"], JsonValue::from(i64::MIN));
+            assert_eq!(
+                d.context["value"],
+                ContextValue::Scalar(Value::Int(i64::MIN))
+            );
         }
         if path.ends_with(".result") {
-            assert_eq!(d.context["value"], JsonValue::from(i64::MAX));
+            assert_eq!(
+                d.context["value"],
+                ContextValue::Scalar(Value::Int(i64::MAX))
+            );
         }
     }
 }
@@ -307,7 +322,10 @@ fn retained_admission_reports_all_independent_root_errors_and_captured_lock_synt
         ("study", "missing_study"),
     ]) {
         assert_eq!(finding.spec_paths, [path]);
-        assert_eq!(finding.context["reason"], JsonValue::String(reason.into()));
+        assert_eq!(
+            finding.context["reason"],
+            ContextValue::Scalar(Value::Str(reason.into()))
+        );
         assert_eq!(finding.context.len(), 1);
     }
     let mut d = draft();
@@ -323,14 +341,14 @@ fn retained_admission_reports_all_independent_root_errors_and_captured_lock_synt
     );
     assert_eq!(
         projected[1].context["actual_lock_kind"],
-        JsonValue::String("uv".into())
+        ContextValue::Scalar(Value::Str("uv".into()))
     );
     assert_eq!(
         projected[1].context["language"],
-        JsonValue::String("r".into())
+        ContextValue::Scalar(Value::Str("r".into()))
     );
     assert_eq!(
         projected[1].context["reason"],
-        JsonValue::String("lock_kind_mismatch".into())
+        ContextValue::Scalar(Value::Str("lock_kind_mismatch".into()))
     );
 }

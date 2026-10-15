@@ -1,7 +1,7 @@
 //! Standalone key combinations and their complete feeding-record memberships.
 use super::*;
 use crate::table_grouping::Key;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 /// Evaluate every key lifecycle before non-key derivation, then retain first occurrences.
 pub(super) fn construct<T: TableAccess + ?Sized>(
@@ -80,7 +80,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         key_table.rows.push(
             plan.keys()
                 .iter()
-                .map(|&column| std::mem::replace(&mut probe.values[column], Value::Missing))
+                .map(|&column| core::mem::replace(&mut probe.values[column], Value::Missing))
                 .collect(),
         );
     }
@@ -118,7 +118,7 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
         .try_reserve_exact(groups.len())
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
     for members in groups {
-        let keys = std::mem::take(&mut key_table.rows[members[0]]);
+        let keys = core::mem::take(&mut key_table.rows[members[0]]);
         for &duplicate in &members[1..] {
             state.budget.discard_candidate(&key_table.rows[duplicate]);
             key_table.rows[duplicate].clear();
@@ -286,7 +286,7 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
             }
             handlers
                 .record(
-                    &std::format!("{}.multiple_matches", path),
+                    &alloc::format!("{}.multiple_matches", path),
                     HandlerKind::MultipleMatches,
                 )
                 .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
@@ -310,7 +310,7 @@ fn select<T: TableAccess + ?Sized>(
     selection: &SourceSelection,
     budget: &mut Budget,
 ) -> Result<usize, Box<ExecutionError<T::Error>>> {
-    use std::cmp::Ordering;
+    use core::cmp::Ordering;
     let mut best = carrying[0];
     for &row in &carrying[1..] {
         let mut order = Ordering::Equal;

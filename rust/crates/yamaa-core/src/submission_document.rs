@@ -4,6 +4,7 @@ use crate::{
     project_environment::Submission,
     schema::{Document, DocumentNode as N},
 };
+use alloc::vec::Vec;
 
 mod decode;
 mod model;
@@ -62,8 +63,7 @@ pub enum Cause {
     /// The complete admitted structural set, never a fitting prefix.
     Findings(Vec<Finding>),
 }
-#[derive(Debug, thiserror::Error)]
-#[error("submission document: cause={cause:?}")]
+#[derive(Debug)]
 pub struct Error<'a> {
     pub input: &'a Document,
     pub cause: Cause,

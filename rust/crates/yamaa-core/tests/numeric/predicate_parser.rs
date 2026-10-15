@@ -51,11 +51,13 @@ fn integer_carrier_admission_preserves_exact_boundaries_and_whole_grammar_order(
         assert_eq!(finding.spec_paths, ["filter"]);
         assert_eq!(
             finding.context["predicate"],
-            serde_json::Value::String(expression.into())
+            yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                expression.into()
+            ))
         );
         assert_eq!(
             finding.context["position"],
-            serde_json::Value::from(position.character)
+            yamaa_core::diagnostic::ContextValue::Integer(position.character.to_string())
         );
         assert!(failure
             .original_diagnostic_with_limit("filter", expression, position.character, 0)

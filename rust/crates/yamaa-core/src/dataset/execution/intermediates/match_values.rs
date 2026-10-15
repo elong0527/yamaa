@@ -236,7 +236,7 @@ pub(crate) fn evaluate<'a, T: TableAccess + ?Sized>(
                     let snapshot = Operands::<T::Error> {
                         expression,
                         current,
-                        marker: std::marker::PhantomData,
+                        marker: core::marker::PhantomData,
                     };
                     evaluate_raw(
                         &snapshot,
@@ -280,7 +280,7 @@ fn clone_value<E>(value: &Value, budget: &mut Budget) -> Result<Value, Box<Execu
 struct Operands<'a, E> {
     expression: &'a crate::dataset::MatchExpression,
     current: &'a Current<'a>,
-    marker: std::marker::PhantomData<E>,
+    marker: core::marker::PhantomData<E>,
 }
 impl<E> TableAccess for Operands<'_, E> {
     type Error = E;

@@ -1,10 +1,10 @@
 //! Exercise the original-document compiler, not constructed failure enum values.
-use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::ConditionCode,
+    diagnostic::{ConditionCode, ContextValue as V},
     schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
     specification::{PrepareError, PreparedSpecification},
+    value::Value,
 };
 
 enum Tree<'a> {
@@ -54,10 +54,10 @@ fn inputs<'a>() -> Tree<'a> {
     ])
 }
 fn text(value: &str) -> V {
-    V::String(value.into())
+    V::Scalar(Value::Str(value.into()))
 }
 fn texts(values: &[&str]) -> V {
-    V::Array(values.iter().map(|v| text(v)).collect())
+    V::Sequence(values.iter().map(|v| text(v)).collect())
 }
 type Expected<'a> = (&'a str, Option<&'a str>, Vec<&'a str>, Vec<(&'a str, V)>);
 
@@ -149,10 +149,7 @@ pub(super) fn output_reached() -> BTreeSet<ConditionCode> {
             "REQ-0744",
             vec![
                 ("expected", text("an integer from 0 through 18")),
-                (
-                    "actual",
-                    V::Number(("-9223372036854775809").parse().expect("canonical integer")),
-                ),
+                ("actual", V::Integer("-9223372036854775809".into())),
             ],
         ),
         (
@@ -440,12 +437,9 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
                 Some("REQ-0014"),
                 vec!["columns.ID.derivation.literal"],
                 vec![
-                    (
-                        "actual",
-                        V::Number(("9223372036854775808").parse().expect("canonical integer")),
-                    ),
-                    ("minimum", V::from(-9223372036854775808_i64)),
-                    ("maximum", V::from(9223372036854775807_i64)),
+                    ("actual", V::Integer("9223372036854775808".into())),
+                    ("minimum", V::Scalar(Value::Int(-9223372036854775808))),
+                    ("maximum", V::Scalar(Value::Int(9223372036854775807))),
                 ],
             ),
         ),
@@ -699,7 +693,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "driver_unavailable",
             Some("REQ-0064"),
             vec!["base"],
-            vec![("row", V::Null)],
+            vec![("row", V::Scalar(Value::Missing))],
         )],
     ));
     let aggregate = Map(vec![(
@@ -797,7 +791,10 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
                 "driver_unavailable",
                 Some("REQ-0034"),
                 vec!["rows[2].dataset"],
-                vec![("row", text("third")), ("dataset", V::Null)],
+                vec![
+                    ("row", text("third")),
+                    ("dataset", V::Scalar(Value::Missing)),
+                ],
             ),
         ],
     ));

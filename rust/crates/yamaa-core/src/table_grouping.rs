@@ -4,7 +4,7 @@ use crate::{
     table::{CellError, TableAccess, ValueRef},
     temporal::{Date, DateTime},
 };
-use std::collections::BTreeMap;
+use alloc::{collections::BTreeMap, vec::Vec};
 
 /// Map ordering is internal: returned groups always follow first source occurrence.
 /// Finite float bits suffice for equality after canonicalizing signed zero. Types
@@ -39,21 +39,25 @@ impl<'a> From<ValueRef<'a>> for Key<'a> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum GroupingError<E> {
-    #[error("table grouping empty columns")]
     EmptyColumns,
-    #[error("table grouping invalid column: position={position:?}, column={column:?}")]
-    InvalidColumn { position: usize, column: usize },
-    #[error("table grouping duplicate column: position={position:?}, column={column:?}")]
-    DuplicateColumn { position: usize, column: usize },
-    #[error("table grouping row limit: limit={limit:?}, required={required:?}")]
-    RowLimit { limit: usize, required: usize },
-    #[error("table grouping key cell limit: limit={limit:?}")]
-    KeyCellLimit { limit: usize },
-    #[error("table grouping allocation")]
+    InvalidColumn {
+        position: usize,
+        column: usize,
+    },
+    DuplicateColumn {
+        position: usize,
+        column: usize,
+    },
+    RowLimit {
+        limit: usize,
+        required: usize,
+    },
+    KeyCellLimit {
+        limit: usize,
+    },
     Allocation,
-    #[error("table grouping cell: row={row:?}, column={column:?}, error={error:?}")]
     Cell {
         row: usize,
         column: usize,

@@ -4,7 +4,11 @@
 //! It owns no source reader, lock verifier, import mechanism or callable port.
 use crate::project_limits::{AdmissionError, Budget, Limit, Limits};
 use crate::value::{ColumnType, Value, ValueType};
-use std::collections::{BTreeMap, BTreeSet};
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    string::String,
+    vec::Vec,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Language {
@@ -157,7 +161,7 @@ impl Function {
     /// for a non-accepting parameter and causes a runtime short circuit.
     pub fn bind_call(&self, arguments: &[CallArgument]) -> Vec<CallFinding> {
         if let Err(limit) = Budget::new(Limits::default()).arguments(&self.definition, arguments) {
-            return std::vec![CallFinding::Limit(limit)];
+            return alloc::vec![CallFinding::Limit(limit)];
         }
         let mut findings = Vec::new();
         let mut names = BTreeSet::new();
@@ -341,9 +345,9 @@ fn obligations(def: &Definition) -> BTreeSet<String> {
     let mut needed = BTreeSet::from([String::from("normal"), String::from("boundary")]);
     for p in &def.params {
         if !p.required {
-            needed.insert(std::format!("default:{}", p.name));
+            needed.insert(alloc::format!("default:{}", p.name));
         }
-        needed.insert(std::format!(
+        needed.insert(alloc::format!(
             "{}:{}",
             if p.accepts_missing {
                 "accepted-missing"
@@ -353,8 +357,8 @@ fn obligations(def: &Definition) -> BTreeSet<String> {
             p.name
         ));
         if p.kind == ValueType::Bool {
-            needed.insert(std::format!("boolean-true:{}", p.name));
-            needed.insert(std::format!("boolean-false:{}", p.name));
+            needed.insert(alloc::format!("boolean-true:{}", p.name));
+            needed.insert(alloc::format!("boolean-false:{}", p.name));
         }
     }
     if def.may_return_missing {

@@ -12,7 +12,7 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
                 ("invalid", HandlerKind::Invalid),
             ] {
                 if operation.handler(name).is_some() {
-                    counter.register(&std::format!("{}.{}", operation.path(), name), kind);
+                    counter.register(&alloc::format!("{}.{}", operation.path(), name), kind);
                 }
             }
             for source in operands {
@@ -25,7 +25,7 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
         } => {
             if operation.invalid_handler().is_some() {
                 counter.register(
-                    &std::format!("{}.invalid", operation.path()),
+                    &alloc::format!("{}.invalid", operation.path()),
                     HandlerKind::Invalid,
                 );
             }
@@ -76,7 +76,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         Ok(step) => match step {
             ImputationStep::Value(value) => Ok(value),
             ImputationStep::Recovered { handler } => {
-                let path = std::format!("{}.{}", operation.path(), handler);
+                let path = alloc::format!("{}.{}", operation.path(), handler);
                 let value = operation.handler(handler).expect("declared recovery");
                 if let Value::Str(text) = value {
                     state.budget.scalar_text(text.len())?;

@@ -1,9 +1,8 @@
 //! Actual binder, scope and dependency failures reach the canonical cause registry.
-use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
     column_dependencies,
-    diagnostic::{ConditionCode, Context, Diagnostic},
+    diagnostic::{ConditionCode, Context, ContextValue as V, Diagnostic},
     reference_binding::{Catalog, Dataset, Field},
     reference_scope::{self, Phase, Reach, Scope},
     schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
@@ -11,11 +10,11 @@ use yamaa_core::{
         BindError, BindFinding, PreparedSpecification, SourceDeclaration, SourceProfile,
     },
     table::{Column, TableSchema},
-    value::ColumnType,
+    value::{ColumnType, Value},
 };
 
 fn text(v: &str) -> V {
-    V::String(v.into())
+    V::Scalar(Value::Str(v.into()))
 }
 fn check(
     d: Diagnostic,
@@ -178,8 +177,8 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             &["columns.VALUE.derivation.source"],
             vec![
                 ("operation", text("source")),
-                ("declared", V::Array(vec![text(declared)])),
-                ("missing", V::Array(vec![text(missing)])),
+                ("declared", V::Sequence(vec![text(declared)])),
+                ("missing", V::Sequence(vec![text(missing)])),
             ],
         ));
     }
@@ -424,7 +423,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
                     vec![paths[0].as_str(), paths[1].as_str()],
                     vec![(
                         "cycle",
-                        V::Array(vec![text("ID"), text("VALUE"), text("ID")]),
+                        V::Sequence(vec![text("ID"), text("VALUE"), text("ID")]),
                     )],
                 ),
                 column_dependencies::Diagnostic::ForwardReference { .. } => (
@@ -488,7 +487,7 @@ pub(super) fn window_reached() -> BTreeSet<ConditionCode> {
             "zero_offset",
             "REQ-0328",
             ".offset",
-            vec![("offset", V::from(0))],
+            vec![("offset", V::Scalar(Value::Int(0)))],
         ),
         (
             "rank",
@@ -1056,7 +1055,7 @@ pub(super) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
             "REQ-0152",
             vec![
                 ("dataset", text("DONOR")),
-                ("keys", V::Array(vec![text("ID")])),
+                ("keys", V::Sequence(vec![text("ID")])),
                 (
                     "hint",
                     text("declare an explicit `intermediate:` with `source`/`key` pairs"),
@@ -1170,7 +1169,7 @@ pub(super) fn intermediate_key_reached() -> BTreeSet<ConditionCode> {
         &["intermediates[0]"],
         vec![
             ("dataset", text("DONOR")),
-            ("keys", V::Array(vec![text("ID")])),
+            ("keys", V::Sequence(vec![text("ID")])),
             ("hint", text("declare the `key` explicitly")),
         ],
     )]

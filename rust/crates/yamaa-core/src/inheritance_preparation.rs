@@ -6,6 +6,7 @@ use crate::schema::{
     SchemaDiagnostic, SchemaOrigin, SchemaStructure, SpecificationDocument, ValidationError,
     WindowReference,
 };
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 /// The host respells paths using captured canonical file identities, without reopening them.
 pub trait PathPort: SourcePort {
@@ -34,27 +35,17 @@ impl Default for Limits {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error<E> {
-    #[error("inheritance preparation parents required")]
     ParentsRequired,
-    #[error("inheritance preparation traversal: {0:?}")]
     Traversal(inheritance::Error<E>),
-    #[error("inheritance preparation path: {0:?}")]
     Path(E),
-    #[error("inheritance preparation path bytes")]
     PathBytes,
-    #[error("inheritance preparation document: {0:?}")]
     Document(DocumentError),
-    #[error("inheritance preparation composition: {0:?}")]
     Composition(LayerCompositionError),
-    #[error("inheritance preparation normalize: {0:?}")]
     Normalize(Box<FailureContext<NormalizationError>>),
-    #[error("inheritance preparation dependencies: {0:?}")]
     Dependencies(Box<FailureContext<InheritanceDependencyError>>),
-    #[error("inheritance preparation validation: {0:?}")]
     Validation(ValidationError),
-    #[error("inheritance preparation model: {0:?}")]
     Model(Vec<SchemaDiagnostic>),
 }
 

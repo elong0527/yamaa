@@ -1,5 +1,5 @@
 use std::{collections::BTreeMap, convert::Infallible};
-use yamaa_core::conversion::ConversionError;
+use yamaa_core::conversion::{ConversionError, ConversionValue};
 use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver};
 use yamaa_core::numeric::ArithmeticErrorKind;
 use yamaa_core::numeric_compiler::{compile_numeric, CompileLimits};
@@ -62,27 +62,14 @@ fn column_type(text: &str) -> ColumnType {
 fn conversion_value(error: &ConversionError, target: ColumnType) -> String {
     assert_eq!(error.target, target);
     assert_eq!(error.applicable_handler(), "unconvertible");
-    match error.source_type() {
-        None => {
-            assert!(error.value.is_null());
-            "missing".into()
+    match &error.value {
+        ConversionValue::Runtime(value) => {
+            assert_eq!(error.source_type(), value.value_type());
+            encoded(value)
         }
-        Some(ValueType::Float) => format!("float:{:016x}", error.value.as_f64().unwrap().to_bits()),
-        Some(ValueType::Int) => {
-            let number = error.value.as_number().unwrap();
-            format!(
-                "{}:{number}",
-                if number.as_i64().is_some() {
-                    "int"
-                } else {
-                    "integer"
-                }
-            )
-        }
-        Some(ValueType::Bool) => format!("bool:{}", error.value.as_bool().unwrap()),
-        Some(ValueType::Str) => format!("str:{}", error.value.as_str().unwrap()),
-        Some(ValueType::Date | ValueType::DateTime) => {
-            panic!("unexpected temporal lifecycle fixture input")
+        ConversionValue::Integer(text) => {
+            assert_eq!(error.source_type(), Some(ValueType::Int));
+            format!("integer:{text}")
         }
     }
 }

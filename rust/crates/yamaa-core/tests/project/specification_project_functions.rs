@@ -1,17 +1,17 @@
 use crate::support::id_source_schema as source;
 use crate::support::project_call_compiler as support;
-use serde_json::Value as JsonValue;
 use support::{call, function, specification, Tree};
 use yamaa_core::{
     bound_expression::Read,
     dataset::{Expression, FunctionInput},
+    diagnostic::ContextValue,
     schema::DocumentNode as N,
     specification::{
         BindError, BindFinding, FunctionCause, PreflightFinding, PrepareError,
         PreparedSpecification,
     },
     table::{Column, TableSchema},
-    value::ColumnType,
+    value::{ColumnType, Value},
 };
 #[test]
 fn absent_environment_and_empty_function_catalogue_retain_identical_static_nested_call_causes() {
@@ -136,15 +136,15 @@ fn complete_static_faults_are_projected_in_authored_call_order_without_source_bi
     }
     assert_eq!(
         diagnostics[1].context["expected_type"],
-        JsonValue::String("int".into())
+        ContextValue::Scalar(Value::Str("int".into()))
     );
     assert_eq!(
         diagnostics[1].context["actual_type"],
-        JsonValue::String("float".into())
+        ContextValue::Scalar(Value::Str("float".into()))
     );
     assert_eq!(
         diagnostics[2].context["cause"],
-        JsonValue::String("integer_range".into())
+        ContextValue::Scalar(Value::Str("integer_range".into()))
     );
 }
 
@@ -183,7 +183,7 @@ fn declared_output_reference_types_and_unknown_names_fail_during_prepare() {
     );
     assert_eq!(
         findings[1].diagnostic().context["identifier"],
-        JsonValue::String("UNDECLARED".into())
+        ContextValue::Scalar(Value::Str("UNDECLARED".into()))
     );
 }
 
@@ -260,7 +260,7 @@ fn missing_stored_fields_and_unknown_relations_keep_authored_argument_diagnostic
         );
         assert_eq!(
             diagnostic.context["identifier"],
-            JsonValue::String(name.into())
+            ContextValue::Scalar(Value::Str(name.into()))
         );
         assert_eq!(diagnostic.context.len(), 1);
         assert_eq!(diagnostic.source_span, None);
@@ -347,6 +347,6 @@ fn unknown_function_is_retained_alongside_an_invalid_scalar_in_the_same_call() {
     );
     assert_eq!(
         findings[1].diagnostic().context["cause"],
-        JsonValue::String("integer_range".into())
+        ContextValue::Scalar(Value::Str("integer_range".into()))
     );
 }

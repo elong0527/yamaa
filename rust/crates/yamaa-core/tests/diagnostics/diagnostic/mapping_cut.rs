@@ -1,13 +1,12 @@
-use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::{ConditionCode, Diagnostic},
+    diagnostic::{ConditionCode, ContextValue as V, Diagnostic},
     mapping_cut::{AdmissionError, Cut, Mapping},
     table::ValueRef,
     value::Value,
 };
 fn text(s: &str) -> V {
-    V::String(s.into())
+    V::Scalar(Value::Str(s.into()))
 }
 pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
@@ -77,7 +76,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "columns.V.derivation.mapping.dict",
             vec![
                 ("folded_key", text("A")),
-                ("entries", V::Array(vec![text("a"), text("A")])),
+                ("entries", V::Sequence(vec![text("a"), text("A")])),
             ],
         ),
         (

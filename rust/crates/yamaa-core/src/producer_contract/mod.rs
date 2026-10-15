@@ -3,6 +3,7 @@ use crate::{
     schema::{Document, DocumentNode as N, SpecificationDocument},
     value::ColumnType,
 };
+use alloc::{string::String, vec::Vec};
 
 pub(crate) mod diagnostics;
 
@@ -37,13 +38,10 @@ pub enum Cause {
         field: String,
     },
 }
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Error {
-    #[error("producer contract limit: {0:?}")]
     Limit(&'static str),
-    #[error("producer contract invalid: {0:?}")]
     Invalid(Vec<Cause>),
-    #[error("producer contract boundary")]
     Boundary,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

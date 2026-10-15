@@ -1,16 +1,16 @@
-use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
     dataset::{
         date_policy, DatePolicyError, DayDeclaration as D, Imputation, ImputationKind as K,
         TimeRule,
     },
-    diagnostic::{ConditionCode, Diagnostic},
+    diagnostic::{ConditionCode, ContextValue as V, Diagnostic},
     table::ValueRef,
     temporal::DatePrecision as P,
+    value::Value,
 };
 fn text(value: &str) -> V {
-    V::String(value.into())
+    V::Scalar(Value::Str(value.into()))
 }
 fn operation(kind: K) -> Imputation {
     Imputation::new(
@@ -60,7 +60,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "month_not_permitted",
             "REQ-0592",
             "impute.month",
-            vec![("month", V::from(6))],
+            vec![("month", V::Scalar(Value::Int(6)))],
         ),
         (
             None,
@@ -78,7 +78,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "month_out_of_range",
             "REQ-0608",
             "impute.month",
-            vec![("month", V::from(15))],
+            vec![("month", V::Scalar(Value::Int(15)))],
         ),
         (
             Some("6"),
@@ -89,7 +89,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "impute",
             vec![
                 ("field", text("day")),
-                ("value", V::from(32)),
+                ("value", V::Scalar(Value::Int(32))),
                 ("permitted", text("1 to 31")),
             ],
         ),
@@ -102,7 +102,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "impute.day",
             vec![
                 ("value", text("mid")),
-                ("permitted", V::Array(vec![text("first"), text("last")])),
+                ("permitted", V::Sequence(vec![text("first"), text("last")])),
             ],
         ),
     ] {

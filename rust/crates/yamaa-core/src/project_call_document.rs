@@ -7,7 +7,7 @@ use crate::{
     schema::{Document, DocumentNode as N},
     value::{Value, ValueType},
 };
-use std::collections::BTreeMap;
+use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Input {
@@ -89,11 +89,9 @@ impl Default for Limits {
         }
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
-    #[error("project call document limit: {0:?}")]
     Limit(&'static str),
-    #[error("project call document findings: {0:?}")]
     Findings(Vec<Finding>),
 }
 

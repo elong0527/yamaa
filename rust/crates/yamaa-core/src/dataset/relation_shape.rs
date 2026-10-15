@@ -1,4 +1,5 @@
 //! Bounded donor metadata preserves unknown derived kinds without inventing a schema type.
+use super::*;
 use crate::value::{ColumnType, ValueType};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,19 +37,13 @@ impl Default for RelationShapeLimits {
         }
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RelationShapeError {
-    #[error("dataset relation shape limit")]
     Limit,
-    #[error("dataset relation shape empty identifier")]
     EmptyIdentifier,
-    #[error("dataset relation shape duplicate identifier")]
     DuplicateIdentifier,
-    #[error("dataset relation shape invalid origin")]
     InvalidOrigin,
-    #[error("dataset relation shape invalid kind")]
     InvalidKind,
-    #[error("dataset relation shape invalid projection")]
     InvalidProjection,
 }
 /// Projection restricts readable fields; all donor slots remain available to key,
@@ -89,11 +84,11 @@ impl RelationShape {
         let _ = work;
         let bytes = fields
             .capacity()
-            .checked_mul(std::mem::size_of::<RelationField>())
+            .checked_mul(core::mem::size_of::<RelationField>())
             .and_then(|n| {
                 projection.as_ref().map_or(Some(n), |p| {
                     p.capacity()
-                        .checked_mul(std::mem::size_of::<usize>())
+                        .checked_mul(core::mem::size_of::<usize>())
                         .and_then(|p| n.checked_add(p))
                 })
             })

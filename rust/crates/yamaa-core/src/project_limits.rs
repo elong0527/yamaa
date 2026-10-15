@@ -34,12 +34,10 @@ pub enum Resource {
 pub struct Limit {
     pub resource: Resource,
 }
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AdmissionError<F> {
-    #[error("project limits limit: {0:?}")]
     Limit(Limit),
-    #[error("project limits findings: {0:?}")]
-    Findings(std::vec::Vec<F>),
+    Findings(alloc::vec::Vec<F>),
 }
 
 pub(crate) struct Budget {

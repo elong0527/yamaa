@@ -1,7 +1,7 @@
 //! One actual charge owner for serial entered dataset executions.
 use crate::dataset::Limits;
 use crate::{predicate, regex};
-use std::cell::Cell;
+use core::cell::Cell;
 
 /// Actual admitted graph execution counters. Shape tracks retained successful outputs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

@@ -1,7 +1,6 @@
-use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::ConditionCode,
+    diagnostic::{ConditionCode, ContextValue as V},
     table::ValueRef,
     text_case::{Case, Error, StringCase},
     value::Value,
@@ -52,7 +51,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             diagnostic.context,
             fields
                 .into_iter()
-                .map(|(key, text)| (key.into(), V::String(text.into())))
+                .map(|(key, text)| (key.into(), V::Scalar(Value::Str(text.into()))))
                 .collect()
         );
         assert_eq!(diagnostic.source_span, None);

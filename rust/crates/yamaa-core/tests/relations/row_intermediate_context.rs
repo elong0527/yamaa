@@ -201,11 +201,11 @@ fn unknown_and_omitted_drivers_keep_model_preflight_and_exact_typed_context() {
         assert_eq!(diagnostic.context.len(), 2);
         assert_eq!(
             diagnostic.context["row"],
-            serde_json::Value::String("second".into())
+            yamaa_core::diagnostic::ContextValue::Scalar(Value::Str("second".into()))
         );
         assert_eq!(
             diagnostic.context["dataset"],
-            serde_json::Value::from(
+            yamaa_core::diagnostic::ContextValue::Scalar(
                 expected
                     .map(|v| Value::Str(v.into()))
                     .unwrap_or(Value::Missing)
@@ -246,7 +246,7 @@ fn foreign_driver_defaults_require_raw_keys_and_grouped_named_reads_bind() {
             diagnostic.context,
             std::collections::BTreeMap::from([(
                 "identifier".into(),
-                serde_json::Value::String("DONOR.ID".into())
+                yamaa_core::diagnostic::ContextValue::Scalar(Value::Str("DONOR.ID".into()))
             )])
         );
     }
@@ -299,7 +299,7 @@ fn unknown_named_field_retains_full_lookup_cause_at_authored_read_boundary() {
             d.context,
             std::collections::BTreeMap::from([(
                 "identifier".into(),
-                serde_json::Value::String("P.ABSENT".into())
+                yamaa_core::diagnostic::ContextValue::Scalar(Value::Str("P.ABSENT".into()))
             )])
         );
     }

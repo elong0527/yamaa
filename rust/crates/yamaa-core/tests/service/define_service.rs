@@ -475,8 +475,7 @@ fn clock_is_observed_once_and_calendar_admission_is_owned_by_the_engine() {
 #[test]
 fn resource_observations_keep_original_normative_and_implementation_wire_owners() {
     use define::ResourceObservation as R;
-    use serde_json::Value as C;
-
+    use yamaa_core::{diagnostic::ContextValue as C, value::Value};
     for (path, observation, code, requirement) in [
         (
             "datasets.DM.artifact",
@@ -504,7 +503,7 @@ fn resource_observations_keep_original_normative_and_implementation_wire_owners(
         assert_eq!(finding.spec_paths, [path]);
         assert_eq!(
             finding.context,
-            [("path".into(), C::String("declared.csv".into()))].into()
+            [("path".into(), C::Scalar(Value::Str("declared.csv".into())))].into()
         );
         assert_eq!(finding.source_span, None);
         assert_eq!(finding.operand_route, None);
@@ -527,9 +526,9 @@ fn resource_observations_keep_original_normative_and_implementation_wire_owners(
         assert_eq!(
             finding.context,
             [
-                ("path".into(), C::String("declared.yaml".into())),
-                ("stage".into(), C::String("define".into())),
-                ("code".into(), C::String(expected.into())),
+                ("path".into(), C::Scalar(Value::Str("declared.yaml".into()))),
+                ("stage".into(), C::Scalar(Value::Str("define".into()))),
+                ("code".into(), C::Scalar(Value::Str(expected.into()))),
             ]
             .into()
         );
@@ -537,8 +536,10 @@ fn resource_observations_keep_original_normative_and_implementation_wire_owners(
 }
 #[test]
 fn changed_resource_uses_the_authored_define_field_and_ingest_cause() {
-    use serde_json::Value as C;
-    use yamaa_core::diagnostic::ConditionCode;
+    use yamaa_core::{
+        diagnostic::{ConditionCode, ContextValue as C},
+        value::Value,
+    };
     let finding = define::resource_diagnostic(
         "datasets.DM.artifact",
         "../declared.csv",
@@ -554,14 +555,17 @@ fn changed_resource_uses_the_authored_define_field_and_ingest_cause() {
     assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
     assert_eq!(
         finding.context,
-        [("path".into(), C::String("../declared.csv".into()))].into()
+        [(
+            "path".into(),
+            C::Scalar(Value::Str("../declared.csv".into()))
+        )]
+        .into()
     );
 }
 #[test]
 fn publication_stage_projection_preserves_full_width_artifact_index_and_cause_text() {
     use define::PublicationFailure as P;
-    use serde_json::Value as C;
-
+    use yamaa_core::{diagnostic::ContextValue as C, value::Value};
     for (stage, code, phase, requirement) in [
         (
             P::TargetAdmission,
@@ -583,14 +587,17 @@ fn publication_stage_projection_preserves_full_width_artifact_index_and_cause_te
         assert_eq!(finding.definition().requirement, requirement);
         assert_eq!(finding.spec_paths, ["define"]);
         let mut expected: yamaa_core::diagnostic::Context = [
-            ("artifact".into(), C::from(usize::MAX)),
-            ("cause".into(), C::String("opaque original cause".into())),
+            ("artifact".into(), C::Integer(usize::MAX.to_string())),
+            (
+                "cause".into(),
+                C::Scalar(Value::Str("opaque original cause".into())),
+            ),
         ]
         .into();
         if stage == P::TargetAdmission {
             expected.insert(
                 "stage".into(),
-                C::String("publication_target_admission".into()),
+                C::Scalar(Value::Str("publication_target_admission".into())),
             );
         }
         assert_eq!(finding.context, expected);

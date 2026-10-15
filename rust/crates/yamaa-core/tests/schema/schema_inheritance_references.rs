@@ -689,7 +689,9 @@ fn unknown_dependencies_are_lexical_and_precede_cycle_reporting() {
         assert_eq!(diagnostic.definition().requirement, Some("REQ-0070"));
         assert_eq!(
             diagnostic.context["dependency"],
-            serde_json::Value::String(expected.into())
+            yamaa_core::diagnostic::ContextValue::Scalar(yamaa_core::value::Value::Str(
+                expected.into()
+            ))
         );
     }
 }

@@ -1,12 +1,11 @@
 //! Actual aggregate preparation and joined row binding reach their new causes.
-use serde_json::Value as JsonValue;
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::{ConditionCode, Diagnostic},
+    diagnostic::{ConditionCode, ContextValue, Diagnostic},
     schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
     specification::{BindError, PreflightFinding, PrepareError, PreparedSpecification},
     table::{Column, TableSchema},
-    value::ColumnType,
+    value::{ColumnType, Value},
 };
 enum T<'a> {
     Text(&'a str),
@@ -210,10 +209,13 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(d.definition().phase, "validation");
         assert_eq!(d.definition().requirement, Some("REQ-1262"));
         assert_eq!(d.spec_paths, ["rows[0].dataset"]);
-        assert_eq!(d.context["intermediate"], JsonValue::String("CAP".into()));
+        assert_eq!(
+            d.context["intermediate"],
+            ContextValue::Scalar(Value::Str("CAP".into()))
+        );
         assert_eq!(
             d.context["fields"],
-            JsonValue::Array(vec![JsonValue::String(field.into())])
+            ContextValue::Sequence(vec![ContextValue::Scalar(Value::Str(field.into()))])
         );
         reached.insert(d.code);
     }
@@ -276,7 +278,10 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             .unwrap();
         assert_eq!(d.definition().phase, "validation");
         for (key, text) in context {
-            assert_eq!(d.context[key], JsonValue::String(text.into()));
+            assert_eq!(
+                d.context[key],
+                ContextValue::Scalar(Value::Str(text.into()))
+            );
         }
         reached.insert(d.code);
     }
@@ -295,7 +300,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(d.spec_paths, ["rows[0].derivations.VALUE.compute.expr"]);
         assert_eq!(
             d.context["identifier"],
-            JsonValue::String("SECOND.V".into())
+            ContextValue::Scalar(Value::Str("SECOND.V".into()))
         );
         reached.insert(d.code);
     }

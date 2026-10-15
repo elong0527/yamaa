@@ -1,5 +1,4 @@
 //! Actual capture/decoder ordering with payloads that are neither Clone nor Debug nor Send.
-use serde_json::Value as V;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use yamaa_core::{
     dataset,
@@ -9,8 +8,8 @@ use yamaa_core::{
 };
 use yamaa_core::{
     diagnostic::{
-        admit_source_diagnostics, ConditionCode as C, Diagnostic, ProjectionError,
-        MAX_PROJECTION_BYTES,
+        admit_source_diagnostics, ConditionCode as C, ContextValue as V, Diagnostic,
+        ProjectionError, MAX_PROJECTION_BYTES,
     },
     schema::{
         Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
@@ -18,7 +17,7 @@ use yamaa_core::{
     specification::{PreparedSpecification, SourceDeclaration},
     table::{CellError, TableAccess, TableSchema, ValueRef},
     typed_csv::Error as TypingError,
-    value::ColumnType,
+    value::{ColumnType, Value},
 };
 
 enum Tree<'a> {
@@ -264,7 +263,7 @@ fn fixtures(opaque_third: bool) -> (Port, Decoder, Rc<()>, *const u8) {
     )
 }
 fn text(value: &str) -> V {
-    V::String(value.into())
+    V::Scalar(Value::Str(value.into()))
 }
 fn expected(code: C, path: &str, context: Vec<(&str, V)>) -> Diagnostic {
     Diagnostic {

@@ -1,5 +1,6 @@
 //! Bounded closed specification submission metadata. No IO or execution grant.
 use crate::schema::{Document, DocumentNode as N};
+use alloc::vec::Vec;
 
 mod decode;
 mod model;
@@ -60,8 +61,7 @@ pub enum Cause {
     /// Complete admitted structural findings, never a fitting prefix.
     Findings(Vec<Finding>),
 }
-#[derive(Debug, thiserror::Error)]
-#[error("specification submission document: cause={cause:?}")]
+#[derive(Debug)]
 pub struct Error<'a> {
     pub input: &'a Document,
     pub cause: Cause,

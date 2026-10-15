@@ -1,10 +1,10 @@
-use serde_json::Value as V;
 use std::collections::BTreeSet;
 use yamaa_core::{
-    diagnostic::ConditionCode,
+    diagnostic::{ConditionCode, ContextValue as V},
     predicate,
     table::ValueRef,
     text_extract::{Error, Step, StringExtract},
+    value::Value,
 };
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
     let path = "columns.TEXT.derivation.str_extract";
@@ -36,9 +36,9 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0308",
             format!("{path}.source"),
             vec![
-                ("source", V::String("SRC.TEXT".into())),
-                ("expected", V::String("str".into())),
-                ("actual", V::String("int".into())),
+                ("source", V::Scalar(Value::Str("SRC.TEXT".into()))),
+                ("expected", V::Scalar(Value::Str("str".into()))),
+                ("actual", V::Scalar(Value::Str("int".into()))),
             ],
         ),
         (
@@ -47,7 +47,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "missing_input",
             "REQ-0334",
             path.into(),
-            vec![("variable", V::String("SRC.TEXT".into()))],
+            vec![("variable", V::Scalar(Value::Str("SRC.TEXT".into())))],
         ),
         (
             op.failure_diagnostic(Step::NoMatch("abc"), 4096).unwrap(),
@@ -56,8 +56,8 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0334",
             path.into(),
             vec![
-                ("value", V::String("abc".into())),
-                ("pattern", V::String("(a)".into())),
+                ("value", V::Scalar(Value::Str("abc".into()))),
+                ("pattern", V::Scalar(Value::Str("(a)".into()))),
             ],
         ),
         (
@@ -66,7 +66,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "unknown_field",
             "REQ-0308",
             format!("{path}.source"),
-            vec![("identifier", V::String("SRC.TEXT".into()))],
+            vec![("identifier", V::Scalar(Value::Str("SRC.TEXT".into())))],
         ),
         (
             make("[", "0").declaration_diagnostic().unwrap().clone(),
@@ -75,10 +75,10 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0827",
             format!("{path}.pattern"),
             vec![
-                ("pattern", V::String("[".into())),
+                ("pattern", V::Scalar(Value::Str("[".into()))),
                 (
                     "reason",
-                    V::String("a character class is never closed".into()),
+                    V::Scalar(Value::Str("a character class is never closed".into())),
                 ),
             ],
         ),
@@ -89,9 +89,9 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0816",
             format!("{path}.group"),
             vec![
-                ("group", V::from(2)),
-                ("group_count", V::from(1)),
-                ("pattern", V::String("(a)".into())),
+                ("group", V::Scalar(Value::Int(2))),
+                ("group_count", V::Scalar(Value::Int(1))),
+                ("pattern", V::Scalar(Value::Str("(a)".into()))),
             ],
         ),
     ];
@@ -114,7 +114,7 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
     let invalid = make("(a)", wide);
     assert_eq!(
         invalid.declaration_diagnostic().unwrap().context["group"],
-        V::Number((wide).parse().expect("canonical integer"))
+        V::Integer(wide.into())
     );
     reached
 }

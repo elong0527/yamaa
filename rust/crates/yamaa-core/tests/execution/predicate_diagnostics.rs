@@ -1,12 +1,11 @@
 //! Predicate projection inspects one completed native failure without port effects.
-use serde_json::Value as JsonValue;
 use std::cell::RefCell;
 use yamaa_core::dataset::{
     Assignment, DatasetPlan, ExecutionError, Expression, Limits, RowMode, RowTemplate,
 };
 use yamaa_core::{
     bound_expression::{Binding, BoundPredicate, Read},
-    diagnostic::PredicateDiagnosticError,
+    diagnostic::{ContextValue, PredicateDiagnosticError},
     predicate::{Comparison, ErrorKind, Limits as PredicateLimits, Node, Plan, Scalar},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
@@ -154,8 +153,14 @@ fn semantic_filter_failure_precedes_assignments_and_the_next_source_record() {
     assert_eq!(
         diagnostic.context,
         [
-            ("left_type".into(), JsonValue::String("int".into())),
-            ("right_type".into(), JsonValue::String("str".into())),
+            (
+                "left_type".into(),
+                ContextValue::Scalar(Value::Str("int".into()))
+            ),
+            (
+                "right_type".into(),
+                ContextValue::Scalar(Value::Str("str".into()))
+            ),
         ]
         .into()
     );

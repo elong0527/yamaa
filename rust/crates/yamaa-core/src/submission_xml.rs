@@ -6,7 +6,12 @@ use crate::{
     submission_document as e,
     value::Value,
 };
-use std::collections::BTreeSet;
+use alloc::{
+    collections::BTreeSet,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 const MAX_BYTES: usize = 67_108_864;
 struct Element {
@@ -307,7 +312,7 @@ fn item_definition(
 fn variants(dataset: &model::Dataset) -> impl Iterator<Item = (&model::Column, String)> {
     dataset.columns.iter().flat_map(move |column| {
         let identity = format!("{}.{}", dataset.id, column.declaration.name.value);
-        std::iter::once((column, identity.clone())).chain(
+        core::iter::once((column, identity.clone())).chain(
             column
                 .values
                 .iter()

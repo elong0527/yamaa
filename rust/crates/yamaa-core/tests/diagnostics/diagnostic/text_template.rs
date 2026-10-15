@@ -1,6 +1,9 @@
-use serde_json::Value as V;
 use std::collections::BTreeSet;
-use yamaa_core::{diagnostic::ConditionCode, text_template::StringTemplate};
+use yamaa_core::{
+    diagnostic::{ConditionCode, ContextValue as V},
+    text_template::StringTemplate,
+    value::Value,
+};
 pub(super) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     for (template, reason, placeholder) in [
@@ -25,10 +28,15 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
             diagnostic.spec_paths,
             ["columns.RESULT.derivation.str_template"]
         );
-        let mut context =
-            std::collections::BTreeMap::from([("reason".into(), V::String(reason.into()))]);
+        let mut context = std::collections::BTreeMap::from([(
+            "reason".into(),
+            V::Scalar(Value::Str(reason.into())),
+        )]);
         if let Some(placeholder) = placeholder {
-            context.insert("placeholder".into(), V::String(placeholder.into()));
+            context.insert(
+                "placeholder".into(),
+                V::Scalar(Value::Str(placeholder.into())),
+            );
         }
         assert_eq!(diagnostic.context, context);
         assert!(diagnostic.source_span.is_none());

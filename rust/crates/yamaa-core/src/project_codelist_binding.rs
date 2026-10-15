@@ -1,13 +1,12 @@
 //! Bind admitted catalogue metadata without code, source access or dictionary resolution.
 use crate::{
     dataset::{Check, Verification},
-    diagnostic::{ConditionCode as C, Diagnostic},
+    diagnostic::{ConditionCode as C, ContextValue as V, Diagnostic},
     project_limits::{Budget, Limit, Limits, Resource},
     project_terminology::{BindingFinding, Catalogue},
     value::{ColumnType, Value},
 };
-use serde_json::Value as V;
-use std::vec;
+use alloc::{string::String, vec, vec::Vec};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AllowedValues<'a> {
@@ -89,8 +88,11 @@ impl Finding {
     pub fn diagnostic(&self) -> Diagnostic {
         let mut paths = vec![self.path.clone()];
         let mut context: crate::diagnostic::Context = [
-            ("column".into(), V::String(self.column.clone())),
-            ("codelist".into(), V::String(self.codelist.clone())),
+            ("column".into(), V::Scalar(Value::Str(self.column.clone()))),
+            (
+                "codelist".into(),
+                V::Scalar(Value::Str(self.codelist.clone())),
+            ),
         ]
         .into();
         let code = match &self.cause {
@@ -111,8 +113,14 @@ impl Finding {
                     ColumnType::Float => "float",
                     _ => unreachable!("catalogue admits only text and numeric types"),
                 };
-                context.insert("codelist_data_type".into(), V::String(datatype.into()));
-                context.insert("column_type".into(), V::String(kind(*actual).into()));
+                context.insert(
+                    "codelist_data_type".into(),
+                    V::Scalar(Value::Str(datatype.into())),
+                );
+                context.insert(
+                    "column_type".into(),
+                    V::Scalar(Value::Str(kind(*actual).into())),
+                );
                 C::CodelistBindingTypeMismatch
             }
             Cause::ValuesConflict {
@@ -123,11 +131,11 @@ impl Finding {
                 paths.push(verification.clone());
                 context.insert(
                     "codelist_values".into(),
-                    V::Array(codelist_values.iter().cloned().map(V::from).collect()),
+                    V::Sequence(codelist_values.iter().cloned().map(V::Scalar).collect()),
                 );
                 context.insert(
                     "allowed_values".into(),
-                    V::Array(allowed_values.iter().cloned().map(V::from).collect()),
+                    V::Sequence(allowed_values.iter().cloned().map(V::Scalar).collect()),
                 );
                 C::CodelistBindingValuesConflict
             }
@@ -141,11 +149,9 @@ impl Finding {
         }
     }
 }
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error {
-    #[error("project codelist binding limit: {0:?}")]
     Limit(Limit),
-    #[error("project codelist binding findings: {0:?}")]
     Findings(Vec<Finding>),
 }
 impl From<Limit> for Error {

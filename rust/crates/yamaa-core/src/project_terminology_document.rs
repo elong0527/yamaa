@@ -4,6 +4,7 @@ use crate::{
     project_terminology::{Codelist, DataType, External, Item, Source, Standard},
     schema::Document,
 };
+use alloc::{format, vec::Vec};
 
 pub fn decode(document: &Document, root: usize) -> Result<Source, Vec<Finding>> {
     let mut reader = Reader::new(document);

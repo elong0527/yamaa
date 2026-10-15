@@ -1,5 +1,9 @@
-use serde_json::Value as JsonValue;
-use yamaa_core::{dataset::Rounding, diagnostic::ConditionCode, table::ValueRef, value::Value};
+use yamaa_core::{
+    dataset::Rounding,
+    diagnostic::{ConditionCode, ContextValue},
+    table::ValueRef,
+    value::Value,
+};
 
 #[test]
 fn declarative_rounding_reuses_independent_numeric_truth_and_missing() {
@@ -65,9 +69,18 @@ fn nonnumeric_cause_retains_original_source_without_formula_geometry() {
     assert_eq!(
         error.context,
         [
-            ("source".into(), JsonValue::String("SEX".into())),
-            ("expected".into(), JsonValue::String("numeric".into())),
-            ("actual".into(), JsonValue::String("str".into())),
+            (
+                "source".into(),
+                ContextValue::Scalar(Value::Str("SEX".into()))
+            ),
+            (
+                "expected".into(),
+                ContextValue::Scalar(Value::Str("numeric".into()))
+            ),
+            (
+                "actual".into(),
+                ContextValue::Scalar(Value::Str("str".into()))
+            ),
         ]
         .into()
     );

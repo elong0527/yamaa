@@ -1,5 +1,6 @@
 //! Closed declaration values and normalized occurrence facts. None grants IO.
 use crate::{diagnostic::ScalarSubmissionRule, project_environment::Submission};
+use alloc::{string::String, vec::Vec};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FieldName {
@@ -260,11 +261,9 @@ impl SourceVersions<'_> {
         self.override_origin
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VersionError {
-    #[error("submission documentel empty installed version")]
     EmptyInstalledVersion,
-    #[error("submission documentel empty override")]
     EmptyOverride,
 }
 impl Section {

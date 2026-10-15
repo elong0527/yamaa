@@ -285,7 +285,7 @@ fn unsupported_operations_keep_the_authored_gate_path() {
 }
 #[test]
 fn borrowed_equality_preserves_complete_integer_precision_and_missingness() {
-    use std::cmp::Ordering::*;
+    use core::cmp::Ordering::*;
     for (left, right, result) in [
         (Value::Int(7), Value::float(7.), Equal),
         (

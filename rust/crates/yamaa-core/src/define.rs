@@ -2,16 +2,22 @@
 //! This service owns admission, composition, rendering and effect order. Ports
 //! observe file geometry and codecs without interpreting submission declarations.
 use crate::{
-    diagnostic::{ConditionCode, Diagnostic},
+    diagnostic::{ConditionCode, ContextValue, Diagnostic},
     producer_admission::WrittenPath,
     project_terminology::Catalogue,
     schema::Document,
     submission_composition::{self as composition, Finding},
     submission_document,
     table::TableAccess,
+    value::Value,
 };
-use serde_json::Value as JsonValue;
-use std::vec;
+use alloc::{
+    borrow::ToOwned,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
 pub(crate) const MAX_ARTIFACT_BYTES: usize = 67_108_864;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -109,17 +115,12 @@ pub trait Ports {
         bytes: &[u8],
     ) -> Result<(), Self::PublicationError>;
 }
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Failure<E, PE> {
-    #[error("define port: {0:?}")]
     Port(E),
-    #[error("define metadata: {0:?}")]
     Metadata(Vec<Finding>),
-    #[error("define diagnostic: {0:?}")]
     Diagnostic(Vec<Diagnostic>),
-    #[error("define target admission: index={index:?}, error={error:?}")]
     TargetAdmission { index: usize, error: PE },
-    #[error("define publication: index={index:?}, error={error:?}")]
     Publication { index: usize, error: PE },
 }
 fn published_source_failure<E, PE>(
@@ -185,7 +186,6 @@ pub struct Attempt<P: Ports> {
     pub application: Application<P>,
     pub outcome: Result<(), Failure<P::Error, P::PublicationError>>,
 }
-#[derive(Debug)]
 pub enum SaveFailure<E, PE> {
     Refused,
     Failure(Failure<E, PE>),
@@ -685,8 +685,11 @@ pub fn resource_diagnostic(
         R::Changed => ConditionCode::ResourceContentChanged,
         _ => ConditionCode::ApplicationRejected,
     };
-    let mut context: crate::diagnostic::Context =
-        [(String::from("path"), JsonValue::String(written.into()))].into();
+    let mut context: crate::diagnostic::Context = [(
+        String::from("path"),
+        ContextValue::Scalar(Value::Str(written.into())),
+    )]
+    .into();
     if code == ConditionCode::ApplicationRejected {
         let classification = match observation {
             R::Unreadable => "resource_unreadable",
@@ -701,8 +704,14 @@ pub fn resource_diagnostic(
                 unreachable!("normative resource cause selected")
             }
         };
-        context.insert("stage".into(), JsonValue::String("define".into()));
-        context.insert("code".into(), JsonValue::String(classification.into()));
+        context.insert(
+            "stage".into(),
+            ContextValue::Scalar(Value::Str("define".into())),
+        );
+        context.insert(
+            "code".into(),
+            ContextValue::Scalar(Value::Str(classification.into())),
+        );
     }
     Diagnostic {
         code,
@@ -712,11 +721,9 @@ pub fn resource_diagnostic(
         operand_route: None,
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PublicationFailure {
-    #[error("define target admission")]
     TargetAdmission,
-    #[error("define publication")]
     Publication,
 }
 /// Project the entered publication stage, not an inferred exception message.
@@ -731,14 +738,20 @@ pub fn publication_diagnostic(
         PublicationFailure::Publication => ConditionCode::OutputPublicationFailed,
     };
     let mut context: crate::diagnostic::Context = [
-        (String::from("artifact"), JsonValue::from(index)),
-        (String::from("cause"), JsonValue::String(cause)),
+        (
+            String::from("artifact"),
+            ContextValue::Integer(index.to_string()),
+        ),
+        (
+            String::from("cause"),
+            ContextValue::Scalar(Value::Str(cause)),
+        ),
     ]
     .into();
     if stage == PublicationFailure::TargetAdmission {
         context.insert(
             "stage".into(),
-            JsonValue::String("publication_target_admission".into()),
+            ContextValue::Scalar(Value::Str("publication_target_admission".into())),
         );
     }
     Diagnostic {
@@ -749,13 +762,6 @@ pub fn publication_diagnostic(
         operand_route: None,
     }
 }
-
-impl<E: std::fmt::Debug, PE: std::fmt::Debug> std::fmt::Display for SaveFailure<E, PE> {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "define: {self:?}")
-    }
-}
-impl<E: std::fmt::Debug, PE: std::fmt::Debug> std::error::Error for SaveFailure<E, PE> {}
 
 #[cfg(test)]
 mod projection_tests {
@@ -787,11 +793,11 @@ mod projection_tests {
         assert_eq!(findings[0].spec_paths, ["sdtm.specs[0]"]);
         assert_eq!(
             findings[0].context["resource"],
-            JsonValue::String("diagnostic_context_bytes".into())
+            ContextValue::Scalar(Value::Str("diagnostic_context_bytes".into()))
         );
         assert_eq!(
             findings[0].context["limit"],
-            JsonValue::from(MAX_PROJECTION_BYTES)
+            ContextValue::Integer(MAX_PROJECTION_BYTES.to_string())
         );
     }
 }

@@ -1,7 +1,7 @@
 //! Pure dataset declarations and admission. No study data or host effects.
 use super::*;
 use crate::value::ColumnType;
-
+use alloc::string::ToString;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecordMatchKey {
     pub source_column: usize,
@@ -30,29 +30,36 @@ impl IntermediateUnique {
         dataset: &str,
         duplicate_count: usize,
     ) -> crate::diagnostic::Diagnostic {
-        use crate::diagnostic::{ConditionCode, Diagnostic};
-        use serde_json::Value as JsonValue;
-        let mut context = std::collections::BTreeMap::from([
+        use crate::diagnostic::{ConditionCode, ContextValue, Diagnostic};
+        let mut context = alloc::collections::BTreeMap::from([
             (
                 "intermediate".into(),
-                JsonValue::String(item.identifier.clone()),
+                ContextValue::Scalar(Value::Str(item.identifier.clone())),
             ),
-            ("dataset".into(), JsonValue::String(dataset.into())),
+            (
+                "dataset".into(),
+                ContextValue::Scalar(Value::Str(dataset.into())),
+            ),
             (
                 "columns".into(),
-                JsonValue::Array(
+                ContextValue::Sequence(
                     self.columns
                         .iter()
-                        .map(|&column| JsonValue::String(schema.columns()[column].name.clone()))
+                        .map(|&column| {
+                            ContextValue::Scalar(Value::Str(schema.columns()[column].name.clone()))
+                        })
                         .collect(),
                 ),
             ),
-            ("duplicate_count".into(), JsonValue::from(duplicate_count)),
+            (
+                "duplicate_count".into(),
+                ContextValue::Integer(duplicate_count.to_string()),
+            ),
         ]);
         if let Some(identity) = &self.identity {
             context.insert(
                 "verification_id".into(),
-                JsonValue::String(identity.clone()),
+                ContextValue::Scalar(Value::Str(identity.clone())),
             );
         }
         Diagnostic {
@@ -68,7 +75,7 @@ impl IntermediateUnique {
 /// A donor plan evaluates values in declaration order before filter/key/order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct IntermediateDerivations {
-    pub plan: std::rc::Rc<DatasetPlan>,
+    pub plan: alloc::rc::Rc<DatasetPlan>,
     pub current: Vec<CurrentField>,
     pub stored_columns: usize,
     pub driver_kinds: Vec<Option<ColumnType>>,

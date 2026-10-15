@@ -5,7 +5,7 @@ use crate::{
     table::{Column, SchemaError, TableAccess, TableSchema},
     value::ColumnType,
 };
-use std::collections::BTreeSet;
+use alloc::{collections::BTreeSet, string::String, vec::Vec};
 
 pub use crate::specification::SourceProfile as Profile;
 pub use crate::value::ColumnType as Kind;
@@ -137,21 +137,14 @@ impl SourceSchema {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error {
-    #[error("source metadata limit")]
     Limit,
-    #[error("source metadata invalid carrier")]
     InvalidCarrier,
-    #[error("source metadata schema: {0:?}")]
     Schema(SchemaError),
-    #[error("source metadata source identity")]
     SourceIdentity,
-    #[error("source metadata binding: {0:?}")]
     Binding(BindError),
-    #[error("source metadata projection")]
     Projection,
-    #[error("source metadata graph: {0:?}")]
     Graph(crate::producer_graph::MetadataBindingError),
 }
 
@@ -443,9 +436,9 @@ pub(crate) fn graph_normalized_schemas(
                     return Err(Error::SourceIdentity);
                 }
                 match normalize(
-                    std::slice::from_ref(declaration),
+                    core::slice::from_ref(declaration),
                     |_| node.source_interpretation(source_index),
-                    std::slice::from_ref(&actual.source),
+                    core::slice::from_ref(&actual.source),
                     limits,
                 )? {
                     Ok(mut schemas) => complete.push(schemas.remove(0)),

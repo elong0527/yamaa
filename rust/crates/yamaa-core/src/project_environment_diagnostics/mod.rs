@@ -1,33 +1,27 @@
 //! Project admission findings retain their typed input and authored field paths.
 //! Resource exhaustion and host failures remain outside semantic vocabulary.
 use crate::{
-    diagnostic::{ConditionCode as C, Diagnostic},
+    diagnostic::{ConditionCode as C, ContextValue, Diagnostic},
     project_environment::{Draft, Finding, LockKind},
     project_function::{Definition, Finding as F, Language},
     project_terminology::{Fault, Finding as T},
     value::Value,
 };
-use serde_json::Value as JsonValue;
-use std::vec;
+use alloc::{format, string::String, vec, vec::Vec};
 
 pub mod projection;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
-    #[error("project environment diagnostics limit")]
     Limit,
-    #[error("project environment diagnostics invalid index")]
     InvalidIndex,
-    #[error("project environment diagnostics unavailable shape")]
     UnavailableShape,
 }
 
 /// Closed native root-read facts; arbitrary error messages cannot establish them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReadFailure {
-    #[error("project environment diagnostics missing")]
     Missing,
-    #[error("project environment diagnostics unreadable")]
     Unreadable,
 }
 impl ReadFailure {
@@ -36,16 +30,16 @@ impl ReadFailure {
             code: C::ProjectEnvironmentMissing,
             spec_paths: vec!["environment".into()],
             context: [
-                ("path".into(), JsonValue::String(path.into())),
+                ("path".into(), ContextValue::Scalar(Value::Str(path.into()))),
                 (
                     "cause".into(),
-                    JsonValue::String(
+                    ContextValue::Scalar(Value::Str(
                         match self {
                             Self::Missing => "missing",
                             Self::Unreadable => "unreadable",
                         }
                         .into(),
-                    ),
+                    )),
                 ),
             ]
             .into(),
@@ -223,7 +217,8 @@ impl<'a> Project<'a> for Budget {
     ) -> Result<(), Error> {
         let key = self.text(key)?;
         let text = self.text(text)?;
-        d.context.insert(key, JsonValue::String(text));
+        d.context
+            .insert(key, ContextValue::Scalar(Value::Str(text)));
         Ok(())
     }
     fn scalar(
@@ -237,7 +232,7 @@ impl<'a> Project<'a> for Budget {
             Value::Str(s) => s.len(),
             _ => 32,
         })?;
-        d.context.insert(key, JsonValue::from(value.clone()));
+        d.context.insert(key, ContextValue::Scalar(value.clone()));
         Ok(())
     }
     fn integer(
@@ -248,10 +243,7 @@ impl<'a> Project<'a> for Budget {
     ) -> Result<(), Error> {
         let key = self.text(key)?;
         let text = self.text(text)?;
-        d.context.insert(
-            key,
-            JsonValue::Number((text).parse().expect("canonical integer")),
-        );
+        d.context.insert(key, ContextValue::Integer(text));
         Ok(())
     }
 }

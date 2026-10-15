@@ -12,6 +12,7 @@ use crate::{
         NormalizationError, NormalizationLimits, SchemaStructure, SpecificationDocument,
     },
 };
+use alloc::{boxed::Box, vec::Vec};
 
 /// Only the retained declaring contribution can authorize a relative resource path.
 pub enum Origins<'a> {
@@ -82,8 +83,7 @@ pub enum Cause<E, X> {
     Materialize(NormalizationError),
     Limit(X),
 }
-#[derive(Debug, thiserror::Error)]
-#[error("dictionary preparation: cause={cause:?}, captures={captures:?}")]
+#[derive(Debug)]
 pub struct Error<E, X, R> {
     pub cause: Cause<E, X>,
     pub captures: Vec<Captured<R>>,

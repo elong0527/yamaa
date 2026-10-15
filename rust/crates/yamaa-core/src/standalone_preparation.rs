@@ -7,17 +7,14 @@ use crate::schema::{
     SchemaDiagnostic, SchemaOrigin, SchemaStructure, SpecificationDocument, ValidationError,
     WindowReference,
 };
+use alloc::{boxed::Box, vec::Vec};
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error {
-    #[error("standalone preparation inheritance required")]
     InheritanceRequired,
-    #[error("standalone preparation normalize: {0:?}")]
     Normalize(Box<FailureContext>),
-    #[error("standalone preparation validation: {0:?}")]
     Validation(ValidationError),
     /// Final model findings have no document-value references.
-    #[error("standalone preparation model: {0:?}")]
     Model(Vec<SchemaDiagnostic>),
 }
 
@@ -120,7 +117,7 @@ mod tests {
         BundleLimits, DocumentLimits, DocumentNode as N, NormalizationLimits, SchemaContext,
         SchemaModule,
     };
-    use std::vec;
+    use alloc::{string::String, vec};
 
     #[test]
     fn strict_failure_moves_the_actual_normalized_checkpoint_allocation() {

@@ -1,15 +1,34 @@
 //! Dataset-JSON byte writer over a held published table; never executes a spec.
 use crate::{
-    diagnostic::ConditionCode,
+    diagnostic::{ConditionCode, ContextValue},
     submission_composition::{Dataset, Finding, Study},
     table::{TableAccess, ValueRef},
     value::{ColumnType, Value},
 };
-use serde_json::Value as JsonValue;
-use std::collections::BTreeMap;
+use alloc::{
+    collections::BTreeMap,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 fn string(value: &str) -> String {
-    serde_json::to_string(value).expect("JSON strings serialize")
+    let mut result = String::from("\"");
+    for c in value.chars() {
+        match c {
+            '"' => result.push_str("\\\""),
+            '\\' => result.push_str("\\\\"),
+            '\n' => result.push_str("\\n"),
+            '\r' => result.push_str("\\r"),
+            '\t' => result.push_str("\\t"),
+            '\u{8}' => result.push_str("\\b"),
+            '\u{c}' => result.push_str("\\f"),
+            c if c < '\u{20}' => result.push_str(&format!("\\u{:04x}", c as u32)),
+            c => result.push(c),
+        }
+    }
+    result.push('"');
+    result
 }
 fn object(fields: Vec<(&str, String)>) -> String {
     format!(
@@ -74,7 +93,7 @@ pub fn render<T: TableAccess>(
         return Err(invalid("table cell limit"));
     }
     validate_artifact(study, dataset, table)?;
-    let mut fields = std::vec![
+    let mut fields = alloc::vec![
         ("datasetJSONCreationDateTime", string(&study.created)),
         ("datasetJSONVersion", string("1.1.0")),
         (
@@ -88,7 +107,7 @@ pub fn render<T: TableAccess>(
     fields.extend([
         (
             "sourceSystem",
-            object(std::vec![
+            object(alloc::vec![
                 ("name", string("yamaa")),
                 ("version", string(&study.source_version))
             ]),
@@ -111,7 +130,7 @@ pub fn render<T: TableAccess>(
     for column in &dataset.columns {
         let declaration = &column.declaration;
         let meta = declaration.submission.as_ref().expect("composed column");
-        let mut values = std::vec![
+        let mut values = alloc::vec![
             (
                 "itemOID",
                 string(&format!("IT.{}.{}", dataset.id, declaration.name.value))
@@ -166,7 +185,7 @@ pub fn render<T: TableAccess>(
         rows.push(row);
     }
     fields.push(("rows", list(&rows)));
-    let mut lines = std::vec!["{".into()];
+    let mut lines = alloc::vec!["{".into()];
     for (index, (key, value)) in fields.iter().enumerate() {
         lines.push(format!(
             "  {}: {}{}",
@@ -188,12 +207,13 @@ fn artifact_mismatch(dataset: &Dataset, detail: &str) -> Finding {
         &format!("datasets.{}.artifact", dataset.id),
         detail,
     );
-    finding
-        .context
-        .insert("dataset".into(), JsonValue::String(dataset.id.clone()));
+    finding.context.insert(
+        "dataset".into(),
+        ContextValue::Scalar(Value::Str(dataset.id.clone())),
+    );
     finding.context.insert(
         "artifact".into(),
-        JsonValue::String(dataset.artifact.clone()),
+        ContextValue::Scalar(Value::Str(dataset.artifact.clone())),
     );
     finding
 }
@@ -242,7 +262,7 @@ fn validate_artifact<T: TableAccess>(
     }
     let mut work = 0usize;
     for column in dataset.columns.iter().flat_map(|column| {
-        std::iter::once(column).chain(column.values.iter().map(|value| &value.column))
+        core::iter::once(column).chain(column.values.iter().map(|value| &value.column))
     }) {
         let meta = column
             .declaration
@@ -365,38 +385,44 @@ fn validate_artifact<T: TableAccess>(
                 if outside_inventory && !outside_list {
                     finding.code = ConditionCode::SubmissionInventoryFailed;
                 }
-                finding
-                    .context
-                    .insert("dataset".into(), JsonValue::String(dataset.id.clone()));
+                finding.context.insert(
+                    "dataset".into(),
+                    ContextValue::Scalar(Value::Str(dataset.id.clone())),
+                );
                 finding.context.insert(
                     "column".into(),
-                    JsonValue::String(column.declaration.name.value.clone()),
+                    ContextValue::Scalar(Value::Str(column.declaration.name.value.clone())),
                 );
                 finding.context.insert(
                     "artifact".into(),
-                    JsonValue::String(dataset.artifact.clone()),
+                    ContextValue::Scalar(Value::Str(dataset.artifact.clone())),
                 );
-                finding.context.insert("row".into(), JsonValue::from(row));
                 finding
                     .context
-                    .insert("value".into(), JsonValue::from(owned(value)));
+                    .insert("row".into(), ContextValue::Integer(row.to_string()));
+                finding
+                    .context
+                    .insert("value".into(), ContextValue::Scalar(owned(value)));
                 if let Some(variant) = variant {
                     finding.context.insert(
                         "testcd".into(),
-                        JsonValue::String(variant.test_code.clone()),
+                        ContextValue::Scalar(Value::Str(variant.test_code.clone())),
                     );
                 }
                 if let Some(list) = list {
-                    finding
-                        .context
-                        .insert("codelist".into(), JsonValue::String(list.id.clone()));
+                    finding.context.insert(
+                        "codelist".into(),
+                        ContextValue::Scalar(Value::Str(list.id.clone())),
+                    );
                 }
                 let mut names = Vec::new();
                 let mut values = Vec::new();
                 for (key, column) in dataset.columns.iter().enumerate() {
                     if column.key_sequence.is_some() {
-                        names.push(JsonValue::String(column.declaration.name.value.clone()));
-                        values.push(JsonValue::from(owned(
+                        names.push(ContextValue::Scalar(Value::Str(
+                            column.declaration.name.value.clone(),
+                        )));
+                        values.push(ContextValue::Scalar(owned(
                             table
                                 .cell(row, key)
                                 .map_err(|_| mismatch("held artifact key access"))?,
@@ -405,10 +431,10 @@ fn validate_artifact<T: TableAccess>(
                 }
                 finding
                     .context
-                    .insert("key_columns".into(), JsonValue::Array(names));
+                    .insert("key_columns".into(), ContextValue::Sequence(names));
                 finding
                     .context
-                    .insert("key_values".into(), JsonValue::Array(values));
+                    .insert("key_values".into(), ContextValue::Sequence(values));
                 return Err(finding);
             }
         }
@@ -422,7 +448,7 @@ fn equal_value(actual: ValueRef<'_>, expected: &Value) -> bool {
     if matches!(actual, ValueRef::Str(_)) {
         return false;
     }
-    crate::value::compare_present(&owned(actual), expected) == Ok(std::cmp::Ordering::Equal)
+    crate::value::compare_present(&owned(actual), expected) == Ok(core::cmp::Ordering::Equal)
 }
 fn owned(value: ValueRef<'_>) -> Value {
     match value {
