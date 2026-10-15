@@ -28,7 +28,10 @@ pub fn observe(text: &str) -> Value {
                     "identifiers":parsed.identifiers()})
             }
         }
-        Err(AdmissionError::Shape) => json!({"status":"invalid_shape"}),
+        Err(error) => json!({"status":match error {
+            AdmissionError::Shape => "invalid_shape",
+            AdmissionError::Limit | AdmissionError::Work { .. } => "resource_limit",
+        }}),
     };
     json!({"outcome":outcome})
 }
