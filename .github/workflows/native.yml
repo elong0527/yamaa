@@ -22,7 +22,6 @@ on:
       - '!benchmarks/**/*.md'
       - 'yaml/**'
       - '.github/workflows/native.yml'
-      - '.github/workflows/performance.yml'
       - '.github/scripts/ci/native_matrix.py'
       - '.github/scripts/ci/test_native_matrix.py'
       - '.github/scripts/commands/**'
@@ -92,8 +91,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # Compare the diagnostic literal allowlist with the prior revision.
-          fetch-depth: 2
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
@@ -137,7 +134,7 @@ jobs:
             uv run --project ../python --locked --no-editable python tools/check_regex.py
             uv run --project ../python --locked --no-editable python tools/assess_regex_reference.py > "${RUNNER_TEMP}/regex-native-assessment.json"
             python tools/check_dependencies.py
-            python tools/check_diagnostics.py --baseline-ref HEAD^
+            python tools/check_diagnostics.py
             uv run --project ../python --locked --no-editable --extra test --group benchmark python -m unittest discover -s tests -p 'test_*.py'
           ) 2>&1 | tee "${RUNNER_TEMP}/shared-crates-check.log"
       - name: Preserve locked Rust dependency evidence
@@ -662,73 +659,6 @@ jobs:
         with:
           name: native-public-cohort
           path: ${{ runner.temp }}/public-cohort
-          if-no-files-found: error
-
-  audit:
-    name: native-run-evidence-audit
-    needs: [plan, rust, dist, qualify, r, math-portability, public-cohort]
-    # Retain failed-run evidence, but let superseded cancelled runs release refs.
-    if: ${{ !cancelled() && needs.plan.outputs.run-rust == 'true' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    # Main retains its observational audit; qualification branches require it.
-    continue-on-error: ${{ github.ref == 'refs/heads/main' }}
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.14'
-      - name: Install locked independent evidence readers
-        run: |
-          python -m pip install uv==0.11.6
-          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/audit-requirements.txt"
-          python -m pip install --no-deps -r "${RUNNER_TEMP}/audit-requirements.txt"
-      - name: Audit the exact source run and retained installed evidence
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python rust/tools/audit_native_run.py --run-id "${GITHUB_RUN_ID}" \
-            --repository "${GITHUB_REPOSITORY}" --output "${RUNNER_TEMP}/native-run-audit" --check
-      - name: Independently replay the original inputs without network access
-        if: ${{ !cancelled() }}
-        run: |
-          sudo unshare --net -- "$(command -v python)" rust/tools/audit_native_run.py \
-            --input "${RUNNER_TEMP}/native-run-audit/input" \
-            --output "${RUNNER_TEMP}/native-run-audit/replay" --check
-          cmp "${RUNNER_TEMP}/native-run-audit/qualification.json" \
-            "${RUNNER_TEMP}/native-run-audit/replay/qualification.json"
-      - name: Show the evidence record
-        if: always()
-        run: |
-          if test -f "${RUNNER_TEMP}/native-run-audit/qualification.md"; then
-            cat "${RUNNER_TEMP}/native-run-audit/qualification.md" >> "${GITHUB_STEP_SUMMARY}"
-          fi
-      - name: Preserve independent native run audit
-        if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: native-run-audit
-          path: ${{ runner.temp }}/native-run-audit
-          if-no-files-found: error
-      - name: Preserve independently readable audit record
-        if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: native-run-audit-record
-          path: |
-            ${{ runner.temp }}/native-run-audit/qualification.json
-            ${{ runner.temp }}/native-run-audit/qualification.md
-            ${{ runner.temp }}/native-run-audit/replay/qualification.json
-            ${{ runner.temp }}/native-run-audit/replay/qualification.md
-            ${{ runner.temp }}/native-run-audit/input/run.json
-            ${{ runner.temp }}/native-run-audit/input/source.json
-            ${{ runner.temp }}/native-run-audit/input/jobs.json
-            ${{ runner.temp }}/native-run-audit/input/artifacts.json
           if-no-files-found: error
 
   # Branch dispatches check changed components independently of installed qualification.

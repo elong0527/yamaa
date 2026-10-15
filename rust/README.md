@@ -8,8 +8,8 @@ and executable examples with authored expected results in
 
 The [development guide](../docs/development.md) owns crate boundaries, Rust
 1.90.0/locked builds and local verification commands. The
-[release guide](../docs/release.md) owns approved decisions, pending migration
-gates, rollback and publication state. The declared API inventory lives in
+[release guide](../docs/release.md) owns supported platforms, approved decisions
+and migration notes. The declared API inventory lives in
 `qualification/release-api.json`. Current rule checks and independent schema-owner
 controls are described in the [development guide](../docs/development.md#local-checks).
 [Installed package checks](qualification/README.md) compare actual Python and R

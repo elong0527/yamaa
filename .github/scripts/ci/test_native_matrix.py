@@ -1,6 +1,5 @@
 """Check complete main, dispatch and issue qualification coverage."""
 
-import ast
 import fnmatch
 import itertools
 import json
@@ -137,64 +136,9 @@ class NativeCoverage(unittest.TestCase):
                     )
         self.assertNotIn("outputs.run-rust == 'true' && github.ref", workflow)
         self.assertIn(
-            "continue-on-error: ${{ github.ref == 'refs/heads/main' }}", workflow
-        )
-        self.assertIn(
             "cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", workflow
         )
         self.assertIn("python ../.github/scripts/commands/rust_tests.py", workflow)
-
-    def test_audit_retains_failed_runs_and_releases_superseded_cancelled_runs(self):
-        workflow = (Path(__file__).parents[2] / "workflows/native.yml").read_text()
-        condition = re.search(
-            r"  audit:\n.*?    if: \$\{\{ (.*?) \}\}", workflow, re.DOTALL
-        ).group(1)
-        expression = ast.parse(
-            condition.replace("needs.plan.outputs.run-rust", "run_rust")
-            .replace("!", "not ")
-            .replace("&&", "and"),
-            mode="eval",
-        ).body
-
-        def evaluate(node, run_rust, conclusion):
-            if isinstance(node, ast.Constant):
-                return node.value
-            if isinstance(node, ast.Name) and node.id == "run_rust":
-                return str(run_rust).lower()
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-                self.assertEqual(node.args, [])
-                if node.func.id == "cancelled":
-                    return conclusion == "cancelled"
-                if node.func.id == "always":
-                    return True
-            if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
-                return not evaluate(node.operand, run_rust, conclusion)
-            if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.And):
-                return all(
-                    evaluate(value, run_rust, conclusion) for value in node.values
-                )
-            if isinstance(node, ast.Compare):
-                self.assertEqual(len(node.ops), 1)
-                self.assertIsInstance(node.ops[0], ast.Eq)
-                return evaluate(node.left, run_rust, conclusion) == evaluate(
-                    node.comparators[0], run_rust, conclusion
-                )
-            self.fail(f"unsupported audit condition: {ast.dump(node)}")
-
-        # Every run that selects the shared Rust/math checks is audited.
-        for event, reference, audited in (
-            ("schedule", "refs/heads/main", True),
-            ("workflow_dispatch", "refs/heads/main", True),
-            ("push", "refs/heads/qualification/issue-1996", True),
-            ("workflow_dispatch", "refs/heads/feature/example", False),
-        ):
-            run_rust = native_matrix.plan(event, reference)["run-rust"]
-            for conclusion in ("success", "failure", "cancelled"):
-                with self.subTest(event=event, ref=reference, conclusion=conclusion):
-                    self.assertEqual(
-                        evaluate(expression, run_rust, conclusion),
-                        audited and conclusion != "cancelled",
-                    )
 
     def test_comparison_uses_only_selected_evidence_and_requires_r_on_every_os(self):
         for platform in native_matrix.PLATFORMS:

@@ -46,12 +46,9 @@ its entry specification:
     <domain> = yamaa.domain("<entry spec>").output
     <domain>
 
-Existing runners move to `yamaa.domain` only when their benchmark appears in
-both host lists in `rust/qualification/public-conformance.json`. Run
-`python rust/tools/migrate_benchmark_runners.py` to inspect the eligible batch,
-then add `--write` to apply it. The tool preserves unqualified runners and
-passes the host function environment explicitly. Repeat it as the gate grows.
-The example tests compare public outputs and logs with independent truth and
+Pass the host function environment explicitly, as
+`environment="python/environment.yaml"`, when the benchmark calls project
+functions. The example tests compare public outputs and logs with independent truth and
 check exact saved CSV bytes in an isolated study directory.
 
 Every positive benchmark also carries `run.R`, the same snippet in R. It

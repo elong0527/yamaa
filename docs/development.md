@@ -34,7 +34,7 @@ and [R guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md)
 describe public usage and installation. The
 [Rust entry point](https://github.com/elong0527/yamaa/blob/main/rust/README.md)
 describes crate checks. [Release guidance](release.md) owns migration decisions
-and pending acceptance.
+and supported platforms.
 
 ## Resource refusal diagnostics
 
@@ -97,7 +97,6 @@ installed-host checks and release qualification separate:
 | `stage-python`, `test-python` | Stage the cataloged supplemental suites and run them through a separately installed noneditable Python package outside the checkout. |
 | `stage-r`, `stage-r-tests`, `test-r`, `check-r` | Stage the standalone source and cataloged R suites; run installed supplemental checks or a fresh package check requiring `Status: OK`. |
 | `docs-test`, `docs-generate`, `docs-build`, `docs` | Canonical-page tests, dashboard generation and strict site build with the pinned documentation dependencies. |
-| `audit-native`, `audit-replay` | Independent exact-run fetch or offline retained-input replay, both requiring the auditor's `--check` verdict. |
 
 For boundary/API guards and focused component checks beyond these targets:
 
@@ -169,7 +168,7 @@ Normative rule checks derive current REQ owners from `rules/` and schema
 navigation from `yaml/`. The generated requirement and schema-field indexes follow
 those sources. Independent owner expectations live in
 [schema-navigation.tsv](https://github.com/elong0527/yamaa/blob/main/.github/scripts/yaml-validation/fixtures/schema-navigation.tsv);
-`test_rule_rewrite.py` checks all 363 owners without regenerating this fixture.
+`test_rule_rewrite.py` checks every owner without regenerating this fixture.
 Run from the repository root:
 
 ```sh
@@ -193,11 +192,6 @@ formats native findings; it does not supply a second language evaluator.
 | Expected artifacts and diagnostic manifests | `repository_artifacts.py`, `repository_manifests.py` and `validation_diagnostics.py` compare authored expected bytes, shapes and registered findings. CSV-profile, declared-error, manifest and condition-registry controls keep their expected truth. |
 | Closed grammar and regex observations | `grammar_checks.py` and `regex_checks.py` transport shared syntax/regex observations; closed-grammar and regex classes retain every authored positive, negative and poisoned observation. |
 
-The immutable retired assertion map linked in [release guidance](release.md)
-remains the original inventory. PR evidence records each assertion's current
-replacement and any explicit disposition; test-only witnesses do not become
-runtime APIs or derive expected truth from the implementation under test.
-
 ## Documentation and CI
 
 Edit the root `README.md` for the site home and `rules/README.md` for its rules
@@ -210,9 +204,8 @@ tests and builds. Deployment also renders the Quarto decks.
 [CI guidance](https://github.com/elong0527/yamaa/blob/main/.github/ci.md)
 defines the scoped Linux PR smoke checks and full native qualification route.
 PR feedback does not establish complete installed or release qualification. [Release guidance](release.md)
-separates merged implementation, qualified revisions, pending decisions and
-publication. Keep current guidance here and there; retain historical plans in
-Git and put new evidence in the relevant PR/issue and qualification records.
+lists supported platforms, approved decisions and migration notes. Keep current
+guidance here and there; put release status and evidence in issues and PRs.
 
 ## SAS reader packaging
 

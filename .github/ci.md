@@ -115,20 +115,17 @@ qualification; source packaging, optimized behavior, the complete integration
 suite and installed R behavior remain covered by these full runs. R lanes install
 declared suggested test dependencies before strict `R CMD check`; installation
 alone does not establish **Status: OK**. A branch dispatch omits the shared
-Rust/math qualification and audit; retain a nightly or dispatched main run for
-final acceptance.
+Rust/math qualification; retain a nightly or dispatched main run for final
+acceptance.
 
 Benchmark Markdown changes trigger documentation checks without rebuilding
 the Python/native runtimes. Specification, input, expected-output, and SDK
-changes still trigger runtime coverage. The full native evidence audit stays
-observational on main and must pass on qualification branches. Complete repository
+changes still trigger runtime coverage. Complete repository
 semantic validation and live validation blocker issue checks run on every main
 push or a manual `yaml-validation.yml` dispatch. Deterministic dashboard
 generation runs on a dispatch, or on a main push that changed a dashboard source
 since the previous main commit. Dashboard sources include the public conformance
 planner, MkDocs configuration and authored dashboard assets used by the checks.
-R grammar/rollback and standalone numerical workflows remain available by manual
-dispatch; native-rust runs the same numerical checks.
 
 For release qualification, platform-specific changes, or changes needing complete
 installed evidence before merge, dispatch the native matrix on the branch head:
@@ -147,9 +144,9 @@ exact head when using this qualification gate. Shared Rust checks and the math
 comparison run on main nightly or by dispatch on main; retain that combined run
 for work-package acceptance.
 When dispatch access is unavailable, push the reviewed head to an explicit
-`qualification/issue-<number>` branch. Its complete installed, shared Rust,
-numerical and audit checks supply exact-head premerge evidence. Its audit records
-`qualification_scope: reviewed-branch`; renew combined-main evidence after merge.
+`qualification/issue-<number>` branch. Its complete installed, shared Rust and
+numerical checks supply exact-head premerge evidence; renew main evidence after
+merge.
 
 The shared-crates step and `make test-rust` both call
 `scripts/commands/rust_tests.py` for locked debug, engine `test-support` and
@@ -170,65 +167,6 @@ updating a pin.
 
 See [Repository Validation](yaml-validation.md) for validation scope and local
 commands.
-
-### Independent native run audit
-
-Nightly and dispatched main runs append a nonblocking `native-run-evidence-audit`
-job after all native lanes finish. Qualification branch pushes run the same audit
-as a required job.
-Its `native-run-audit` artifact retains `qualification.json` and
-`qualification.md`, the exact source revision and parents, selected Actions
-attempt metadata, downloaded artifacts, and canonical source files. The audit
-job itself may still be running when the metadata snapshot is taken; acceptance
-uses the named dependency jobs and never treats the workflow's pending overall
-conclusion as a pass. The small `native-run-audit-record` artifact separately
-retains the verdicts and source/run/job/artifact metadata for review; independent
-replay still requires the canonical files and original artifact bytes retained in
-the full audit. Both records distinguish combined-main from reviewed-branch scope.
-The job also independently replays the original `input` directory in an isolated
-network namespace without Actions credentials, requires its complete verdict and
-exact JSON agreement, and retains the second record under `replay/` in both audit
-artifacts.
-The audit installs independent report and artifact readers from `python/uv.lock`
-without installing the candidate engine. Missing readers stay explicit missing
-evidence and cannot produce a complete audit.
-
-To audit a completed main run locally, authenticate `gh` for
-repository and Actions reads, then use a fresh output directory:
-
-```sh
-make audit-native RUN_ID="$YAMAA_RUN_ID" REPOSITORY=elong0527/yamaa OUTPUT=/tmp/yamaa-native-audit
-```
-
-Set `YAMAA_RUN_ID` to the completed run's ID first.
-`PYTHON` must select an interpreter with the locked independent reader
-dependencies from `python/uv.lock`; it need not contain the candidate engine.
-Branch dispatches retain installed package and cohort evidence. Auditing one
-with the same tool reports the missing shared Rust and math evidence; use the
-main run for the complete acceptance check.
-
-To replay downloaded evidence without network access, use the retained `input`
-directory and another fresh output directory:
-
-```sh
-make audit-replay AUDIT_INPUT=/tmp/yamaa-native-audit/input OUTPUT=/tmp/yamaa-native-replay
-```
-
-Both Make targets call `rust/tools/audit_native_run.py` with `--check`.
-This snapshot contains `run.json`, `source.json`, `jobs.json`,
-`artifacts.json`, canonical files under `source/`, and artifact directories under
-`artifacts/` using their Actions artifact names. An artifact-only directory also produces a
-record: missing metadata and exact source remain unavailable, and no tuple can
-pass. `--check` returns failure for
-failed or missing evidence after writing both records; omit it for a report-only
-local audit. API artifact digest fields are discarded, and package checks compare
-actual archive and wheel bytes.
-
-The record names all 18 installed Python combinations, three R hosts, nine math
-assessments and their exact comparison, 18 complete public cohort and producer
-comparisons, 21 corpus-wide public inventories, six package build records, and three shared-crates checks.
-Every missing, expired, failed, stale, wrong-attempt or incomplete tuple remains
-visible. CI-script discovery runs independent fixture tests for this protocol.
 
 ## Harbor Oracle coverage
 

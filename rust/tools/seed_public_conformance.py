@@ -12,12 +12,32 @@ import argparse
 import contextlib
 import io
 import itertools
+import json
 import re
 import tempfile
 from pathlib import Path
 
-from audit_native_run import FORMS, PLATFORMS, PYTHONS, read, require, write
 from public_conformance import PROTOCOL, compare, plan, platform_matches
+
+PLATFORMS = ("ubuntu-24.04", "macos-15", "windows-latest")
+PYTHONS = ("3.12", "3.13", "3.14")
+FORMS = ("wheel", "source")
+
+
+def read(path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(value, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
+    )
+
+
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
 
 
 def lanes():

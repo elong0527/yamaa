@@ -6,7 +6,7 @@ engine through public `yamaa.check` and bounded native project metadata services
 Native CSV/Parquet/ODM/regex and grammar fixtures replace the deleted
 `_reference_checks.py` boundary. Repository schema/layout/editorial checks remain
 in Python. See [development](../docs/development.md) for architecture and
-[release](../docs/release.md) for final installed migration acceptance.
+[release](../docs/release.md) for supported platforms and migration notes.
 
 Automatic PR feedback uses the lightweight repository checks in
 [`pr.yml`](workflows/pr.yml), plus selected Rust/Python smoke tests. Complete
@@ -27,15 +27,15 @@ separate qualification workflow.
 | Layout and prose | Required example files, negative remediation sections, variant layout, benchmark index, badges, line width, described columns and rule metadata. |
 | Grammar and regex | Shared grammar/vocabulary vectors and pinned R022 regex conformance through native bindings. Missing bindings fail rather than falling back. |
 | Environments and Define | `environment_class` and `define_class` schema validation for authored documents. Complete generation and saved-byte comparison belong to installed public suites. |
-| Rules and references | Current normative contracts and schema navigation determine requirement ownership, citations and generated references. `test_rule_rewrite.py` checks the 363 independent owners in [schema-navigation.tsv](scripts/yaml-validation/fixtures/schema-navigation.tsv); historical mappings remain in Git. |
+| Rules and references | Current normative contracts and schema navigation determine requirement ownership, citations and generated references. `test_rule_rewrite.py` checks the independent owners in [schema-navigation.tsv](scripts/yaml-validation/fixtures/schema-navigation.tsv); historical mappings remain in Git. |
 
 The historical `negative-path-absolute` and `negative-path-parent-escape` cases
 remain explicit public-conformance exclusions. Four old resolved-spec expected
 outputs were removed; no public resolved-spec API or required expected resolved
 artifact remains. The validator does not execute clinical derivations or prove
 golden output values. Full installed domain/check/Define, R grammar and
-cross-platform parity evidence belongs to the native workflow and its independent
-audit, not a repository-validation pass.
+cross-platform parity evidence belongs to the native workflow, not a
+repository-validation pass.
 
 ## Local commands
 

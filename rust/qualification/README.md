@@ -5,8 +5,6 @@ Benchmark directories and `tools/public_conformance.py` define the current activ
 set and explicit exclusions for both hosts. `public-conformance.json` retains
 prior passing observations and their original source/run/attempt/artifact identities.
 `supplemental.json` declares component contracts and installed probe suites.
-`audit_native_run.py` checks package identity, toolchain observations, complete
-reports, saved artifacts and R package checks for every selected platform.
 
 ## Public reports
 
@@ -20,8 +18,8 @@ compares logical fields, types, nulls, rows and values.
 ## Benchmark conformance
 
 `tools/public_conformance.py` discovers benchmark specifications and explicit
-runner arguments. Its shared plan accounts for 329 authored cases, 327 active
-cases and two reviewed exclusions. Runnable entries describe host metadata;
+runner arguments. Its shared plan accounts for every authored case, with two
+reviewed exclusions. Runnable entries describe host metadata;
 qualification requires each installed host's actual passing inventory.
 The installed Python and R runners stage execution inputs
 without `expected/`, build domains and save outputs. The comparator reads
