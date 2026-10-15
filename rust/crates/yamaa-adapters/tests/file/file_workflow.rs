@@ -278,6 +278,24 @@ fn metadata_failures_name_each_written_dependency_and_cause_before_study_reads()
 }
 
 #[test]
+fn supplied_environment_directory_names_its_path_and_file_kind_before_entry_reads() {
+    let study = Study::new();
+    fs::create_dir(study.0.join("directory.yaml")).unwrap();
+    let path = study.path("directory.yaml");
+    let rows = yamaa_adapters::project_application::check(
+        &study.path("absent-spec.yaml"),
+        &path,
+        Language::Python,
+    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].condition, "project_environment_invalid");
+    assert_eq!(rows[0].spec_paths, ["environment"]);
+    let context: serde_json::Value = serde_json::from_str(&rows[0].context).unwrap();
+    assert_eq!(context["path"], path);
+    assert_eq!(context["cause"], "not_regular_file");
+}
+
+#[test]
 fn complete_original_diamond_checks_each_canonical_node_once_without_data() {
     let study = Study::new();
     study.write(

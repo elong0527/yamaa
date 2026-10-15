@@ -422,11 +422,6 @@ fn environment_issues<'a>(
     let mut budget = Budget::new(maximum);
     if let crate::file_project::Error::Resource(resource) = cause {
         use yamaa_core::project_environment_diagnostics::ReadFailure;
-        let failure = match resource {
-            crate::file_resources::Error::Missing => ReadFailure::Missing,
-            crate::file_resources::Error::Unreadable => ReadFailure::Unreadable,
-            _ => return Err(Error::Original(owner)),
-        };
         let file_workflow::Error::Environment(environment) = owner else {
             return Err(invalid());
         };
@@ -434,6 +429,17 @@ fn environment_issues<'a>(
         // Admit both owned/escaped layers before cloning any request path.
         budget.entries(16)?;
         budget.text(path)?;
+        let failure = match resource {
+            crate::file_resources::Error::Missing => ReadFailure::Missing,
+            crate::file_resources::Error::Unreadable => ReadFailure::Unreadable,
+            crate::file_resources::Error::Limit => return Err(Error::Original(owner)),
+            _ => {
+                return complete(
+                    D::root_resource(resource, path).map_err(|_| invalid())?,
+                    maximum,
+                )
+            }
+        };
         return complete(vec![issue(failure.diagnostic(path), None)?], maximum);
     }
     let crate::file_project::Error::Environment(cause) = cause else {

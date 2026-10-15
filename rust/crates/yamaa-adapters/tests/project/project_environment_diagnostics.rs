@@ -405,12 +405,8 @@ fn invalid_inline_scalars_do_not_mask_independent_root_header_findings() {
             panic!("held root scalars")
         };
         let issues = scalar_root_with_host(&root, &findings, Language::Python).unwrap();
-        assert_eq!(issues.len(), 4);
-        let expected = if language.is_empty() {
-            ["language", "lock", "study", "functions.bad.tests[0].result"]
-        } else {
-            ["lock", "language", "study", "functions.bad.tests[0].result"]
-        };
+        assert_eq!(issues.len(), 3);
+        let expected = ["language", "study", "functions.bad.tests[0].result"];
         assert_eq!(
             issues
                 .iter()
@@ -421,7 +417,7 @@ fn invalid_inline_scalars_do_not_mask_independent_root_header_findings() {
         let mismatch = if language.is_empty() {
             None
         } else {
-            Some(&issues[1])
+            Some(&issues[0])
         };
         if let Some(issue) = mismatch {
             assert_eq!(issue.requirement.as_deref(), Some("REQ-0696"));

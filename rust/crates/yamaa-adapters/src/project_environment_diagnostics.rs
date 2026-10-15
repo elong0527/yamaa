@@ -270,6 +270,19 @@ fn read_issue(
     Issue::from_core(diagnostic).map_err(|_| Error::Projection)
 }
 
+pub(crate) fn root_resource(
+    error: &crate::file_resources::Error,
+    written: &str,
+) -> Result<Vec<Issue>, Error> {
+    let maximum = crate::specification_check::MAX_ISSUE_BYTES;
+    Budget(maximum).text(written, 36)?;
+    let rows = vec![read_issue(error, written, written, "environment")?];
+    if !crate::issue_rows::within_limit(&rows, maximum) {
+        return Err(Error::Limit);
+    }
+    Ok(rows)
+}
+
 fn decode_issues(
     error: &SourceError,
     entry: &str,
