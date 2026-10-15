@@ -2,6 +2,7 @@ library(yamaa)
 host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
   system.file("host-fixtures",package="yamaa",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
+source(file.path(host_fixture_root,"context.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-environment")
 domain_file_native <- get("wrap__domain_file", asNamespace("yamaa"))
 for (capabilities in list(list(), list(NULL, function(...) NULL, function(...) NULL))) {
@@ -484,11 +485,7 @@ qualify_matching_budget <- function() {
       identical(failed$issues$condition, truth$condition),
       identical(failed$issues$spec_paths[[1]], unlist(truth$paths, use.names = FALSE)))
     context <- jsonlite::fromJSON(failed$issues$context[[1]], simplifyVector = FALSE)
-    stopifnot(identical(context$code, truth$context$code),
-      identical(context$stage, truth$context$stage),
-      identical(context$incomplete_checks_from, truth$context$incomplete_checks_from),
-      identical(context$resource, truth$context$resource),
-      identical(context$limit, truth$context$limit),
+    stopifnot(context_equal(context[names(truth$context)], truth$context),
       inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"),
       !file.exists("output.csv"))
   }

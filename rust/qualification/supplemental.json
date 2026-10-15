@@ -1737,6 +1737,10 @@
       "role": "input"
     },
     {
+      "path": "rust/tests/host-fixtures/context.R",
+      "role": "input"
+    },
+    {
       "path": "rust/tests/host-fixtures/README.md",
       "role": "documentation"
     },

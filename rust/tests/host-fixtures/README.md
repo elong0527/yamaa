@@ -7,6 +7,9 @@ expected values. Integer boundaries remain decimal strings; each host constructs
 its original integer type. Text is UTF-8, and CSV comparisons retain all bytes,
 including quoting, trailing zeros and final newlines.
 
+The R assertions share `context.R` to compare decoded diagnostic objects with
+key order ignored at every level. Array order and scalar types remain exact.
+
 The private and public producer suites share the `producer-graph` section. The
 function contract has an explicit `HOST_CALLABLE` slot because the installed
 Python and R programs have different callable names. Environment languages,
