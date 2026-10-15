@@ -1,0 +1,105 @@
+use crate::support::producer as support;
+use crate::support::producer_graph as graph;
+use std::collections::BTreeSet;
+use support::{candidate, consumer, document, producer, Tree};
+use yamaa_core::{
+    diagnostic::{ConditionCode, Diagnostic},
+    producer_admission::{prepare, Error},
+    producer_contract,
+};
+pub fn reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    let check = |finding: Diagnostic, condition, requirement, paths: &[&str]| {
+        assert_eq!(
+            (
+                finding.definition().phase,
+                finding.definition().condition,
+                finding.definition().requirement
+            ),
+            ("validation", condition, Some(requirement))
+        );
+        assert_eq!(finding.spec_paths, paths);
+        assert_eq!(finding.source_span, None);
+        assert_eq!(finding.operand_route, None);
+        finding.code
+    };
+    let source = producer();
+    let Err(Error::Invalid(findings)) = prepare(
+        "/consumer.yaml",
+        &consumer(Some(Tree::map(vec![]))),
+        &[candidate(&source)],
+        None,
+    ) else {
+        panic!("redundant authority")
+    };
+    reached.insert(check(
+        findings.into_iter().next().unwrap(),
+        "redundant_field_type",
+        "REQ-0523",
+        &["input.SRC.types"],
+    ));
+    let invalid = document(
+        Tree::map(vec![(
+            "RAW",
+            Tree::map(vec![("path", Tree::text("raw.csv"))]),
+        )]),
+        &[("ID", "int", None)],
+        &["ID"],
+        false,
+    );
+    let Err(Error::Invalid(findings)) = prepare(
+        "/consumer.yaml",
+        &consumer(None),
+        &[candidate(&invalid)],
+        None,
+    ) else {
+        panic!("invalid producer")
+    };
+    reached.insert(check(
+        findings.into_iter().next().unwrap(),
+        "invalid_producer_contract",
+        "REQ-0534",
+        &["input.SRC.schema.columns.ID.label"],
+    ));
+    let mut mismatch = candidate(&source);
+    mismatch.output_identity = "/other.csv";
+    let Err(Error::Invalid(findings)) =
+        prepare("/consumer.yaml", &consumer(None), &[mismatch], None)
+    else {
+        panic!("path mismatch")
+    };
+    reached.insert(check(
+        findings.into_iter().next().unwrap(),
+        "producer_output_path_mismatch",
+        "REQ-0534",
+        &["input.SRC.path", "input.SRC.schema"],
+    ));
+    let contract = producer_contract::prepare(&source).unwrap();
+    reached.insert(check(
+        contract
+            .validate_header("SRC", &["VALUE", "ID"])
+            .unwrap()
+            .unwrap(),
+        "producer_contract_mismatch",
+        "REQ-0535",
+        &["input.SRC.schema", "input.SRC.path"],
+    ));
+    let own = graph::document(&[("SELF", Some("/self"))], None);
+    let links = [graph::candidate("/self", "SELF", "/self", &own)];
+    let Err(yamaa_core::producer_graph::Error::Cycle { diagnostic, .. }) =
+        yamaa_core::producer_graph::prepare(
+            "/self",
+            &[graph::node("/self", &own, &links)],
+            graph::environment(&[]),
+        )
+    else {
+        panic!("actual graph cycle cause")
+    };
+    reached.insert(check(
+        diagnostic,
+        "producer_workflow_cycle",
+        "REQ-0534",
+        &["input.SELF.schema"],
+    ));
+    reached
+}
