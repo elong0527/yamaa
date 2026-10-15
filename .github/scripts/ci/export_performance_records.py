@@ -53,30 +53,70 @@ def validate_identity(run, repository, run_id, attempt, revision, workflow):
         raise ValueError("original run/source/attempt/repository/workflow mismatch")
 
 
-def terminal_snapshot(repository, run_id, attempt, revision, records, wait_minutes):
+def producer_snapshots(repository, run_id, attempt, revision, records, wait_minutes):
+    # Preserve the first authentic run receipt. A later jobs/artifacts snapshot
+    # must never manufacture a different status for this original receipt.
+    run = api(repository, f"actions/runs/{run_id}")
+    write_json(records / "run.json", run)
+    validate_identity(
+        run, repository, run_id, attempt, revision, ".github/workflows/performance.yml"
+    )
     deadline = time.monotonic() + wait_minutes * 60
+    current = run
+    owners = {
+        "performance-python (ubuntu-24.04, 3.12, wheel)": "performance-python-ubuntu-24.04-3.12-wheel",
+        "performance-r (ubuntu-24.04, source)": "performance-r-ubuntu-24.04-source",
+    }
     while True:
-        run = api(repository, f"actions/runs/{run_id}")
-        write_json(records / "run.json", run)
+        jobs = pages(
+            repository, f"actions/runs/{run_id}/attempts/{attempt}/jobs", "jobs"
+        )
+        artifacts = pages(repository, f"actions/runs/{run_id}/artifacts", "artifacts")
+        write_json(records / "jobs.json", jobs)
+        write_json(records / "artifacts.json", artifacts)
+        if current["status"] == "completed":
+            write_json(records / "completion-run.json", current)
+            if current["conclusion"] != "success":
+                raise ValueError(
+                    "original performance attempt failed; retained actual outcome"
+                )
+        ready = True
+        for job_name, artifact_name in owners.items():
+            producers = [job for job in jobs["jobs"] if job["name"] == job_name]
+            archives = [
+                item for item in artifacts["artifacts"] if item["name"] == artifact_name
+            ]
+            if len(producers) > 1 or len(archives) > 1:
+                raise ValueError("ambiguous original owner job/artifact")
+            if (
+                producers
+                and producers[0]["status"] == "completed"
+                and producers[0]["conclusion"] != "success"
+            ):
+                raise ValueError("original performance producer failed")
+            ready = ready and bool(
+                producers and archives and producers[0]["status"] == "completed"
+            )
+        if ready:
+            return run
+        if time.monotonic() >= deadline:
+            raise ValueError(
+                "original producers did not complete within the bounded wait"
+            )
+        print(
+            "Waiting only for original successful producers; no measurements are started",
+            flush=True,
+        )
+        time.sleep(60)
+        current = api(repository, f"actions/runs/{run_id}")
         validate_identity(
-            run,
+            current,
             repository,
             run_id,
             attempt,
             revision,
             ".github/workflows/performance.yml",
         )
-        if run["status"] == "completed":
-            return run
-        if time.monotonic() >= deadline:
-            raise ValueError(
-                "original performance run did not complete within the bounded wait"
-            )
-        print(
-            "Waiting for the original terminal outcome; no measurements are started",
-            flush=True,
-        )
-        time.sleep(60)
 
 
 def bind_archives(payload, root, artifacts):
@@ -128,54 +168,32 @@ def prepare(args):
         },
     )
     run_id = int(requested)
-    run = terminal_snapshot(
+    producer_snapshots(
         repository, run_id, args.attempt, args.revision, records, args.wait_minutes
     )
-    for prefix, identity, attempt in (
-        ("", run_id, args.attempt),
-        ("native-", int(args.native_run_id), None),
-    ):
-        original = run if not prefix else api(repository, f"actions/runs/{identity}")
-        if prefix:
-            validate_identity(
-                original,
-                repository,
-                identity,
-                original["run_attempt"],
-                args.revision,
-                ".github/workflows/native.yml",
-            )
-            write_json(records / "native-run.json", original)
-            attempt = original["run_attempt"]
-        write_json(
-            records / f"{prefix}jobs.json",
-            pages(
-                repository, f"actions/runs/{identity}/attempts/{attempt}/jobs", "jobs"
-            ),
-        )
-        write_json(
-            records / f"{prefix}artifacts.json",
-            pages(repository, f"actions/runs/{identity}/artifacts", "artifacts"),
-        )
-    if run["conclusion"] != "success":
-        # Preserve the actual failed original audit as a failure, including its
-        # available job log. Never turn its run metadata into a success receipt.
-        jobs = json.loads((records / "jobs.json").read_text())["jobs"]
-        for job in jobs:
-            if job["name"] == "Audit issue 2288 Linux installed coverage":
-                with (records / "original-audit.log").open("wb") as stream:
-                    subprocess.run(
-                        [
-                            "gh",
-                            "api",
-                            f"repos/{repository}/actions/jobs/{job['id']}/logs",
-                        ],
-                        stdout=stream,
-                        check=False,
-                    )
-        raise ValueError(
-            "original performance attempt did not succeed; retained its actual failure"
-        )
+    native_id = int(args.native_run_id)
+    native = api(repository, f"actions/runs/{native_id}")
+    validate_identity(
+        native,
+        repository,
+        native_id,
+        native["run_attempt"],
+        args.revision,
+        ".github/workflows/native.yml",
+    )
+    write_json(records / "native-run.json", native)
+    write_json(
+        records / "native-jobs.json",
+        pages(
+            repository,
+            f"actions/runs/{native_id}/attempts/{native['run_attempt']}/jobs",
+            "jobs",
+        ),
+    )
+    write_json(
+        records / "native-artifacts.json",
+        pages(repository, f"actions/runs/{native_id}/artifacts", "artifacts"),
+    )
     subprocess.run(
         [
             sys.executable,
@@ -192,6 +210,8 @@ def prepare(args):
         check=True,
     )
     payload = json.loads((records / "input.json").read_text())
+    if (records / "completion-run.json").is_file():
+        payload["completion_run"] = "completion-run.json"
     artifacts = json.loads((records / "artifacts.json").read_text())
     (records / "raw").mkdir()
     for entry in payload["entries"]:

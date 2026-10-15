@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: Original completed performance workflow run
+        description: Original performance workflow run
         required: true
         type: string
       native_run_id:
@@ -29,7 +29,7 @@ permissions:
 jobs:
   read:
     runs-on: ubuntu-24.04
-    # Finite original-run wait (180m), original full audit (120m), download margin.
+    # Finite producer wait (180m), full replay (120m), and download margin.
     timeout-minutes: 360
     env:
       GH_TOKEN: ${{ github.token }}

@@ -37,21 +37,104 @@ class ExistingPerformanceRecords(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 exporter.validate_identity({**self.run, key: value}, *args)
 
-    def test_terminal_failure_is_retained_without_a_success_rewrite(self):
+    def producer_metadata(self, ready):
+        jobs = {
+            "jobs": [
+                {
+                    "name": name,
+                    "status": "completed" if ready else "in_progress",
+                    "conclusion": "success" if ready else None,
+                }
+                for name in (
+                    "performance-python (ubuntu-24.04, 3.12, wheel)",
+                    "performance-r (ubuntu-24.04, source)",
+                )
+            ]
+        }
+        artifacts = {
+            "artifacts": [
+                {"name": name}
+                for name in (
+                    "performance-python-ubuntu-24.04-3.12-wheel",
+                    "performance-r-ubuntu-24.04-source",
+                )
+            ]
+            if ready
+            else []
+        }
+        return jobs, artifacts
+
+    def test_running_snapshot_is_preserved_when_producers_finish_before_original_audit(
+        self,
+    ):
+        running = {**self.run, "status": "in_progress", "conclusion": None}
+        pending = self.producer_metadata(False)
+        ready = self.producer_metadata(True)
+        with tempfile.TemporaryDirectory() as temporary:
+            records = Path(temporary)
+            with (
+                patch.object(exporter, "api", return_value=running),
+                patch.object(exporter, "pages", side_effect=[*pending, *ready]),
+                patch.object(exporter.time, "sleep") as wait,
+            ):
+                result = exporter.producer_snapshots(
+                    "owner/repo", 123, 1, exporter.SOURCE, records, 1
+                )
+            self.assertEqual(result, running)
+            self.assertEqual(json.loads((records / "run.json").read_text()), running)
+            self.assertFalse((records / "completion-run.json").exists())
+            self.assertEqual(json.loads((records / "jobs.json").read_text()), ready[0])
+            wait.assert_called_once_with(60)
+
+    def test_known_terminal_failure_is_retained_and_refused(self):
         failed = {**self.run, "conclusion": "failure"}
         running = {**self.run, "status": "in_progress", "conclusion": None}
         with tempfile.TemporaryDirectory() as temporary:
             records = Path(temporary)
             with (
                 patch.object(exporter, "api", side_effect=[running, failed]),
-                patch.object(exporter.time, "sleep") as wait,
+                patch.object(
+                    exporter,
+                    "pages",
+                    side_effect=[
+                        *self.producer_metadata(False),
+                        *self.producer_metadata(True),
+                    ],
+                ),
+                patch.object(exporter.time, "sleep"),
+                self.assertRaises(ValueError),
             ):
-                result = exporter.terminal_snapshot(
+                exporter.producer_snapshots(
                     "owner/repo", 123, 1, exporter.SOURCE, records, 1
                 )
-            self.assertEqual(result, failed)
-            self.assertEqual(json.loads((records / "run.json").read_text()), failed)
-            wait.assert_called_once_with(60)
+            self.assertEqual(json.loads((records / "run.json").read_text()), running)
+            self.assertEqual(
+                json.loads((records / "completion-run.json").read_text()), failed
+            )
+
+    def test_genuine_terminal_success_receipt_is_retained_separately(self):
+        running = {**self.run, "status": "in_progress", "conclusion": None}
+        with tempfile.TemporaryDirectory() as temporary:
+            records = Path(temporary)
+            with (
+                patch.object(exporter, "api", side_effect=[running, self.run]),
+                patch.object(
+                    exporter,
+                    "pages",
+                    side_effect=[
+                        *self.producer_metadata(False),
+                        *self.producer_metadata(True),
+                    ],
+                ),
+                patch.object(exporter.time, "sleep"),
+            ):
+                exporter.producer_snapshots(
+                    "owner/repo", 123, 1, exporter.SOURCE, records, 1
+                )
+            self.assertEqual(json.loads((records / "run.json").read_text()), running)
+            self.assertEqual(
+                json.loads((records / "completion-run.json").read_text()), self.run
+            )
 
     def test_wait_expiration_retains_the_actual_in_progress_snapshot(self):
         running = {**self.run, "status": "in_progress", "conclusion": None}
@@ -59,10 +142,13 @@ class ExistingPerformanceRecords(unittest.TestCase):
             records = Path(temporary)
             with (
                 patch.object(exporter, "api", return_value=running),
+                patch.object(
+                    exporter, "pages", side_effect=self.producer_metadata(False)
+                ),
                 patch.object(exporter.time, "monotonic", side_effect=[0, 61]),
                 self.assertRaises(ValueError),
             ):
-                exporter.terminal_snapshot(
+                exporter.producer_snapshots(
                     "owner/repo", 123, 1, exporter.SOURCE, records, 1
                 )
             self.assertEqual(json.loads((records / "run.json").read_text()), running)
