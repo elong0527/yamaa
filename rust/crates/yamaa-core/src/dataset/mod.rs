@@ -1353,6 +1353,27 @@ fn function_record_read(
         _ => false,
     })
 }
+/// One bound read inside a Compute/Flag arm, judged by the same rules the
+/// fixed Function/Case arms apply: raw and record-keyed joined reads count
+/// outside `PrimaryMatching`, and an intermediate binding recurses into the
+/// intermediate it names instead of being invisible to the guard.
+fn bound_record_read(read: &Read, intermediates: &[Intermediate], scope: RecordReadScope) -> bool {
+    match read {
+        Read::Source(_) => scope != RecordReadScope::PrimaryMatching,
+        Read::Joined(read) => {
+            scope != RecordReadScope::PrimaryMatching && read.record_keys.is_some()
+        }
+        Read::Intermediate { index, column } => current_record_read(
+            &Expression::Intermediate {
+                index: *index,
+                column: *column,
+            },
+            intermediates,
+            scope,
+        ),
+        Read::Column(_) => false,
+    }
+}
 fn current_record_read(
     expression: &Expression,
     intermediates: &[Intermediate],
@@ -1431,8 +1452,19 @@ fn current_record_read(
         | Expression::Imputation { operands, .. } => operands
             .iter()
             .any(|source| current_record_read(&source.expression, intermediates, scope)),
-        Expression::Compute(expression) => include_raw && expression.reads_source(),
-        Expression::Flag(flag) => include_raw && flag.reads_source(),
+        Expression::Compute(expression) => expression
+            .bindings()
+            .iter()
+            .any(|binding| bound_record_read(&binding.read, intermediates, scope)),
+        Expression::Flag(flag) => flag.bindings().iter().any(|binding| match &binding.read {
+            FlagRead::Read(read) => bound_record_read(read, intermediates, scope),
+            // A flag collection is a key-grain read like `Expression::Collect`:
+            // it counts only in the column phase, never for a driver template.
+            FlagRead::Collect { .. } => scope == RecordReadScope::All,
+        }),
+        // Column-phase reductions read the primary table at the caller's row
+        // indices (PR #2030 Minor, adjudicated with #2430).
+        Expression::Reduce { .. } | Expression::Count { .. } => include_raw,
         Expression::Function(function) => {
             function_record_read(function.arguments(), intermediates, scope)
         }
