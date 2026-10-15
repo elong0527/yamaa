@@ -3,7 +3,7 @@
 use crate::{
     file_application::{self, Failure},
     file_project::{self, FileProject},
-    project_source::{CaptureFailure, Failure as EnvironmentFailure},
+    project_source::Failure as EnvironmentFailure,
     specification_source::Error as SourceError,
 };
 use yamaa_core::{project_function::Language, specification::PrepareError};
@@ -113,23 +113,11 @@ fn environment_failure(
             for projection in [
                 diagnostics::scalar_sources(rejected),
                 diagnostics::schema_sources(rejected),
+                diagnostics::capture_sources(rejected),
             ] {
                 match projection {
                     Ok(rows) => issues.extend(rows),
                     Err(_) => return refused("environment"),
-                }
-            }
-            for source in &rejected.sources {
-                match &source.error {
-                    CaptureFailure::Port(error) | CaptureFailure::Interrupted(error) => {
-                        issues.extend(file_application::resource_failure("environment", error))
-                    }
-                    CaptureFailure::Structural(SourceError::Findings(_))
-                    | CaptureFailure::Scalar { .. } => (),
-                    _ => issues.extend(file_application::rejected(
-                        "environment",
-                        "metadata_boundary",
-                    )),
                 }
             }
             if !crate::issue_rows::within_limit(

@@ -58,7 +58,7 @@ impl ReadFailure {
 fn root_findings(
     document: &crate::schema::Document,
     host: Language,
-) -> Result<[Option<Finding>; 4], Error> {
+) -> Result<[Option<Finding>; 3], Error> {
     use crate::schema::DocumentNode as N;
     let root = document.root();
     if !matches!(document.nodes().get(root), Some(N::Mapping(_))) {
@@ -81,14 +81,8 @@ fn root_findings(
         Some(N::Text(text)) if text == "r" => Some(Language::R),
         _ => return Err(Error::UnavailableShape),
     };
-    let lock = match document.field(root, "lock").map(|n| &document.nodes()[n]) {
-        None => false,
-        Some(N::Text(_)) => true,
-        _ => return Err(Error::UnavailableShape),
-    };
     Ok([
         (present && declared.is_none()).then_some(Finding::MissingLanguage),
-        (present && !lock).then_some(Finding::MissingLock),
         declared
             .filter(|declared| *declared != host)
             .map(|declared| Finding::LanguageMismatch { declared, host }),
@@ -470,7 +464,6 @@ fn finding_diagnostic<'a, B: Project<'a>>(
 ) -> Result<B::Output, Error> {
     let (reason, path) = match finding {
         Finding::MissingLanguage => ("missing_language", "language"),
-        Finding::MissingLock => ("missing_lock", "lock"),
         Finding::MissingStudy => ("missing_study", "study"),
         Finding::LanguageMismatch { declared, host } => {
             let mut d = budget.start(C::RunnerLanguageMismatch, "language")?;

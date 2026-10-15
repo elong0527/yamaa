@@ -151,7 +151,7 @@ fn draft() -> Draft {
     }
 }
 #[test]
-fn independent_complete_eighteen_record_environment_report_preserves_every_field_and_order() {
+fn independent_complete_seventeen_record_environment_report_preserves_every_field_and_order() {
     assert_eq!(support::reached().len(), 9);
     let draft = support::draft();
     let doc = root_document(&[], &[false]);
@@ -174,22 +174,13 @@ fn independent_complete_eighteen_record_environment_report_preserves_every_field
     .unwrap()
     .diagnostics()
     .unwrap();
-    let mut want = vec![
-        expected(
-            C::ProjectEnvironmentInvalid,
-            "lock",
-            &[("reason", text("missing_lock"))],
-            "held/environment.yaml",
-            "lock",
-        ),
-        expected(
-            C::RunnerLanguageMismatch,
-            "language",
-            &[("declared", text("r")), ("runner", text("python"))],
-            "held/environment.yaml",
-            "language",
-        ),
-    ];
+    let mut want = vec![expected(
+        C::RunnerLanguageMismatch,
+        "language",
+        &[("declared", text("r")), ("runner", text("python"))],
+        "held/environment.yaml",
+        "language",
+    )];
     for list in 0..2 {
         let base = format!("codelists[0].codelists[{list}]");
         if list == 1 {
@@ -263,7 +254,7 @@ fn independent_complete_eighteen_record_environment_report_preserves_every_field
         ));
     }
     assert_eq!(result, want);
-    assert_eq!(result.len(), 18);
+    assert_eq!(result.len(), 17);
 }
 #[test]
 fn every_function_route_has_complete_independent_inline_and_external_context() {
@@ -561,7 +552,7 @@ fn malformed_origin_relationships_and_wrong_held_nodes_refuse_explicitly() {
     let captured = document(vec![N::Mapping(vec![])]);
     let names = ["id".into()];
     let wrong_names = ["other".into()];
-    let findings = [Finding::MissingLock];
+    let findings = [Finding::MissingLanguage];
     let capture = Capture {
         origin: Origin::Function("id"),
         document: &captured,
@@ -660,13 +651,6 @@ fn root_headers_and_wide_scalars_are_one_admitted_complete_report() {
                 C::ProjectEnvironmentInvalid,
                 "language",
                 &[("reason", text("missing_language"))],
-                "held/environment.yaml",
-                "$"
-            ),
-            expected(
-                C::ProjectEnvironmentInvalid,
-                "lock",
-                &[("reason", text("missing_lock"))],
                 "held/environment.yaml",
                 "$"
             ),

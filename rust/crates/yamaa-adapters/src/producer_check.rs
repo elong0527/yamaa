@@ -446,6 +446,13 @@ fn environment_issues<'a>(
             budget.captured(captured)?;
             issues.extend(D::schema_root(captured).map_err(|_| projection())?);
         }
+        F::Root(error) => {
+            let file_workflow::Error::Environment(environment) = owner else {
+                return Err(invalid());
+            };
+            let written = environment.environment().ok_or_else(invalid)?;
+            issues.extend(D::root_boundary(error, written).map_err(|_| projection())?);
+        }
         F::RootScalar { root, findings } => {
             for _ in 0..findings.len().saturating_add(8) {
                 budget.text(&root.source().identity)?;
@@ -472,12 +479,12 @@ fn environment_issues<'a>(
                         C::Structural(S::Findings(captured)) => {
                             count.checked_add(captured.findings().len())
                         }
-                        _ => None,
+                        _ => count.checked_add(1),
                     }
                 })
                 .ok_or(Error::Original(owner))?;
-            // A complete typed result is projected only when every capture
-            // cause is supported. Opaque/native/transport causes stay owned.
+            // Native capture failures are projected from closed facts while
+            // the original error and all successful snapshots stay owned.
             budget.entries(count)?;
             for _ in 0..count {
                 budget.text(&rejected.root.source().identity)?;
@@ -501,13 +508,14 @@ fn environment_issues<'a>(
                         budget.document(&document.normalized().document, count)?;
                     }
                     C::Structural(S::Findings(captured)) => budget.captured(captured)?,
-                    _ => return Err(Error::Original(owner)),
+                    _ => (),
                 }
             }
             for rows in [
                 D::admission(rejected),
                 D::scalar_sources(rejected),
                 D::schema_sources(rejected),
+                D::capture_sources(rejected),
             ] {
                 issues.extend(rows.map_err(|_| projection())?);
             }

@@ -153,7 +153,15 @@ pub fn activation_with_limit(
     {
         return Err(Error::InvalidObservation);
     }
-    if !observed.bindings.is_empty() && observed.lock != LockObservation::Verified {
+    let lock_ready = if run.environment().lock().is_some() {
+        observed.lock == LockObservation::Verified
+    } else {
+        if observed.lock != LockObservation::NotRequested {
+            return Err(Error::InvalidObservation);
+        }
+        true
+    };
+    if !observed.bindings.is_empty() && !lock_ready {
         return Err(Error::InvalidObservation);
     }
     let mut budget = Budget {

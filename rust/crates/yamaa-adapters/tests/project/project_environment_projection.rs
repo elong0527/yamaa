@@ -297,12 +297,6 @@ fn original_root_temporal_and_wide_scalar_report_keeps_independent_headers_witho
     let wide: Value = serde_json::from_str("123456789012345678901234567890").unwrap();
     let want = [
         expected(
-            "project_environment_invalid",
-            "REQ-0695",
-            "lock",
-            json!({"reason":"missing_lock","source":"held/environment.yaml","entry":"held/environment.yaml","environment_path":"$"}),
-        ),
-        expected(
             "runner_language_mismatch",
             "REQ-0696",
             "language",

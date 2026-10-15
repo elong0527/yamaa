@@ -71,6 +71,49 @@ qualify_static_check_without_study_inputs <- function() {
 }
 qualify_static_check_without_study_inputs()
 
+qualify_functions_without_packaging_lock <- function() {
+  previous <- getwd(); on.exit(setwd(previous))
+  work <- tempfile("unlocked-functions-"); dir.create(work)
+  on.exit(unlink(work, recursive = TRUE), add = TRUE)
+  stopifnot(file.copy(file.path(root, "adam-adsl-bmi"), work, recursive = TRUE))
+  setwd(file.path(work, "adam-adsl-bmi"))
+  environment <- "r/environment.yaml"
+  writeLines(readtext(environment)[!grepl("^lock:", readtext(environment))], environment)
+  unlink("r/renv.lock")
+  expected <- list.files("expected", pattern = "[.]csv$", full.names = TRUE)
+  stopifnot(length(expected) == 1L,
+    nrow(yamaa_check("spec.yaml", environment = environment)$issues) == 0L)
+  for (attempt in 1:2) {
+    result <- yamaa_domain("spec.yaml", environment = environment)
+    evidence <- observations(result)
+    stopifnot(nrow(result$issues) == 0L, is.data.frame(result$output),
+      grepl('"lock":"not_requested"', evidence, fixed = TRUE),
+      grepl('"outcome":"passed"', evidence, fixed = TRUE),
+      isTRUE(result$save()), identical(rawfile(basename(expected)), rawfile(expected)))
+  }
+}
+qualify_functions_without_packaging_lock()
+
+qualify_metadata_failure_locations <- function() {
+  previous <- getwd(); on.exit(setwd(previous))
+  work <- tempfile("metadata-locations-"); dir.create(work)
+  on.exit(unlink(work, recursive = TRUE), add = TRUE)
+  setwd(work)
+  writeLines(c("schema_version: '1.0'", "language: r", "lock: missing.lock",
+    "functions: {id: missing-function.yaml}", "codelists: [missing-codelists.yaml]"),
+    "environment.yaml")
+  for (result in list(yamaa_check("absent-spec.yaml", environment = "environment.yaml"),
+                      yamaa_domain("absent-spec.yaml", environment = "environment.yaml"))) {
+    stopifnot(identical(result$issues$condition, rep("project_environment_invalid", 3L)))
+    for (i in seq_len(3L)) {
+      path <- c("missing.lock", "missing-function.yaml", "missing-codelists.yaml")[[i]]
+      stopifnot(grepl(paste0('"path":"', path, '"'), result$issues$context[[i]], fixed = TRUE),
+        grepl('"cause":"missing"', result$issues$context[[i]], fixed = TRUE))
+    }
+  }
+}
+qualify_metadata_failure_locations()
+
 previous <- getwd()
 work <- tempfile("public-environment-"); dir.create(work)
 for (name in fixture_strings(host_truth[["original_case_names"]])) {

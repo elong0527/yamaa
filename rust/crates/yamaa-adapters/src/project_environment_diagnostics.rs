@@ -215,6 +215,155 @@ impl Budget {
         self.charge(text.len().checked_mul(expansion).ok_or(Error::Limit)?)
     }
 }
+
+fn metadata_path(origin: &Origin, budget: &mut Budget) -> Result<String, Error> {
+    budget.charge(128)?;
+    Ok(match origin {
+        Origin::Lock => "lock".into(),
+        Origin::Function(name) => {
+            budget.text(name, 12)?;
+            format!("functions.{name}")
+        }
+        Origin::Codelist(index) => format!("codelists[{index}]"),
+    })
+}
+
+fn read_issue(
+    error: &crate::file_resources::Error,
+    entry: &str,
+    written: &str,
+    declaration: &str,
+) -> Result<Issue, Error> {
+    use crate::file_resources::Error as E;
+    let cause = match error {
+        E::Missing => "missing",
+        E::Unreadable => "unreadable",
+        E::NotRegularFile => "not_regular_file",
+        E::InvalidRoot => "invalid_root",
+        E::InvalidBase => "invalid_base",
+        E::InvalidPath | E::WrittenForm(_) => "invalid_path",
+        E::OutsideRoots => "outside_roots",
+        E::Symlink => "symbolic_link",
+        E::Changed => "content_changed",
+        E::InvalidLock => "invalid_packaging_lock",
+        E::Limit => "resource_limit",
+    };
+    let mut diagnostic = if matches!(error, E::Limit) {
+        yamaa_core::application_issue::rejected("environment", cause)
+    } else {
+        Diagnostic {
+            code: yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentInvalid,
+            spec_paths: vec![declaration.into()],
+            context: Default::default(),
+            source_span: None,
+            operand_route: None,
+        }
+    };
+    for (key, value) in [
+        ("entry", entry),
+        ("path", written),
+        ("environment_path", declaration),
+        ("cause", cause),
+    ] {
+        diagnostic.context.insert(key.into(), value.into());
+    }
+    Issue::from_core(diagnostic).map_err(|_| Error::Projection)
+}
+
+fn decode_issues(
+    error: &SourceError,
+    entry: &str,
+    written: &str,
+    declaration: &str,
+    budget: &mut Budget,
+) -> Result<Vec<Issue>, Error> {
+    if let SourceError::Decode { error, .. } = error {
+        use crate::yaml_decode::DecodeFailure as D;
+        match error {
+            D::InvalidYaml { reason, .. } => budget.text(reason, 12)?,
+            D::InvalidText(findings) => {
+                for finding in findings {
+                    budget.charge(256)?;
+                    budget.text(&finding.path, 12)?;
+                }
+            }
+            D::NonAscii(_) => (),
+            D::Limit(_) | D::Internal => return Err(Error::Limit),
+        }
+    }
+    let message = crate::specification_diagnostics::capture_failure(error);
+    let mut rows = crate::file_application::preparation_failure(message);
+    for row in &mut rows {
+        let mut context: serde_json::Value =
+            serde_json::from_str(&row.context).map_err(|_| Error::Projection)?;
+        for (key, value) in [
+            ("entry", entry),
+            ("path", written),
+            ("environment_path", declaration),
+        ] {
+            context[key] = value.into();
+        }
+        row.context = context.to_string();
+    }
+    Ok(rows)
+}
+
+/// Project a root decoder failure with the caller's explicit environment path.
+pub(crate) fn root_boundary(error: &SourceError, written: &str) -> Result<Vec<Issue>, Error> {
+    let maximum = crate::specification_check::MAX_ISSUE_BYTES;
+    let mut budget = Budget(maximum);
+    budget.text(written, 36)?;
+    let rows = decode_issues(error, written, written, "$", &mut budget)?;
+    if !crate::issue_rows::within_limit(&rows, maximum) {
+        return Err(Error::Limit);
+    }
+    Ok(rows)
+}
+
+/// Native metadata failures retain the authored dependency path and declaration.
+/// Schema/scalar findings are projected separately from their retained arenas.
+pub(crate) fn capture_sources(
+    rejected: &RejectedEnvironment<crate::file_resources::Error>,
+) -> Result<Vec<Issue>, Error> {
+    let maximum = crate::specification_check::MAX_ISSUE_BYTES;
+    let mut budget = Budget(maximum);
+    if rejected.sources.len() > 128 {
+        return Err(Error::Limit);
+    }
+    let mut rows = Vec::new();
+    for source in &rejected.sources {
+        if matches!(
+            source.error,
+            CaptureFailure::Scalar { .. } | CaptureFailure::Structural(SourceError::Findings(_))
+        ) {
+            continue;
+        }
+        let entry = &rejected.root.source().identity;
+        budget.charge(512)?;
+        budget.text(entry, 12)?;
+        budget.text(&source.written, 12)?;
+        let declaration = metadata_path(&source.origin, &mut budget)?;
+        match &source.error {
+            CaptureFailure::Port(error) | CaptureFailure::Interrupted(error) => {
+                rows.push(read_issue(error, entry, &source.written, &declaration)?);
+            }
+            CaptureFailure::Structural(error) => rows.extend(decode_issues(
+                error,
+                entry,
+                &source.written,
+                &declaration,
+                &mut budget,
+            )?),
+            CaptureFailure::Limit(_) => return Err(Error::Limit),
+            CaptureFailure::Protocol => return Err(Error::Projection),
+            CaptureFailure::Scalar { .. } => unreachable!("handled scalar finding"),
+        }
+    }
+    if !crate::issue_rows::within_limit(&rows, maximum) {
+        return Err(Error::Limit);
+    }
+    Ok(rows)
+}
 /// Return admission issues in their original order. This borrows the rejected
 /// draft and held capture records; it never reads, decodes or activates anything.
 /// Resource-limit failures have no fabricated semantic condition.

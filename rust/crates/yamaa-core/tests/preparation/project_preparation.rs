@@ -801,9 +801,6 @@ fn explicitly_empty_functions_keep_presence_and_original_independent_root_findin
     assert_eq!(rejected.draft.functions, Some(vec![]));
     assert_eq!(
         rejected.admission,
-        Some(AdmissionError::Findings(vec![
-            Finding::MissingLanguage,
-            Finding::MissingLock
-        ]))
+        Some(AdmissionError::Findings(vec![Finding::MissingLanguage]))
     );
 }

@@ -220,6 +220,39 @@ fn project_report_uses_held_external_function_origins_after_metadata_files_chang
 }
 
 #[test]
+fn project_functions_build_without_any_adjacent_packaging_lock() {
+    let study = Study::new();
+    study.write(
+        "env/environment.yaml",
+        "schema_version: '1.0'\nlanguage: python\nfunctions: {id: id.yaml}\ncodelists: [ct.yaml]\n",
+    );
+    fs::remove_file(study.0.join("uv.lock")).unwrap();
+    study.write("entry/input.csv", "ID\n1\n");
+    let mut project = study.prepare(&study.text(""), &[]).unwrap();
+    assert!(project.run().environment().lock().is_none());
+    assert!(project.run().captured_environment().lock().is_none());
+    let mut activation = Activation {
+        reject: true,
+        ..Default::default()
+    };
+    let attempt = project.build(&mut activation);
+    assert!(attempt.boundary.is_ok());
+    assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
+    assert_eq!(activation.trace, ["bind", "call", "call", "call"]);
+    assert_eq!(
+        attempt
+            .dataset
+            .result
+            .unwrap()
+            .result
+            .unwrap()
+            .dataset
+            .rows(),
+        &[vec![Value::Int(1), Value::Int(1)]]
+    );
+}
+
+#[test]
 fn native_project_retains_metadata_and_reuses_exact_snapshots_with_fresh_activation() {
     let study = Study::new();
     let mut project = study.prepare(&study.text(""), &[]).unwrap();

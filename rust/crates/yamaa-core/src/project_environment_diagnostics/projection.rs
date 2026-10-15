@@ -95,7 +95,7 @@ pub struct AdmissionReport<'a> {
 pub struct RootScalarReport<'a> {
     root: Root<'a>,
     findings: &'a [ScalarFinding],
-    header: [Option<Finding>; 4],
+    header: [Option<Finding>; 3],
 }
 pub struct ScalarSourcesReport<'a> {
     root: Root<'a>,
@@ -705,9 +705,9 @@ impl AdmissionReport<'_> {
     }
 }
 
-fn headers(document: &Document, host: Option<Language>) -> Result<[Option<Finding>; 4], Error> {
+fn headers(document: &Document, host: Option<Language>) -> Result<[Option<Finding>; 3], Error> {
     let Some(host) = host else {
-        return Ok([None, None, None, None]);
+        return Ok([None, None, None]);
     };
     super::root_findings(document, host).map_err(Error::Core)
 }

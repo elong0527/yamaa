@@ -148,6 +148,45 @@ fn lock() -> LockReference {
 }
 
 #[test]
+fn absent_packaging_lock_still_binds_and_runs_every_conformance_case() {
+    use yamaa_core::project_activation::{
+        activate_references_observed, Limits, LockObservation, Observations,
+    };
+    let function = function("identity");
+    let mut port = Port::new();
+    port.lock_failure = true;
+    let mut observations = Observations::default();
+    let activated = activate_references_observed(
+        Language::Python,
+        None,
+        &[&function],
+        &mut port,
+        Limits::default(),
+        &mut observations,
+    )
+    .unwrap();
+    assert_eq!(activated.len(), 1);
+    assert_eq!(activated[0].cases.len(), function.definition().tests.len());
+    assert_eq!(observations.lock, LockObservation::NotRequested);
+    assert_eq!(port.trace.first().unwrap(), "bind:identity");
+    assert_eq!(observations.tests.len(), function.definition().tests.len());
+    assert!(!port.trace.iter().any(|entry| entry.starts_with("lock:")));
+
+    port.mismatch = true;
+    assert!(matches!(
+        activate_references_observed(
+            Language::Python,
+            None,
+            &[&function],
+            &mut port,
+            Limits::default(),
+            &mut observations,
+        ),
+        Err(Failure::Tests(_))
+    ));
+}
+
+#[test]
 fn successful_activation_handles_feed_versionless_dataset_without_rebinding_or_retesting() {
     use std::cell::RefCell;
     use yamaa_core::bound_expression::Read;
@@ -704,7 +743,7 @@ fn borrowed_compiler_selection_activates_only_held_definitions_and_repeats_cases
     port.bind_failure = Some("first".into());
     for _ in 0..2 {
         let activated =
-            activate_references(Language::Python, &lock(), &selected, &mut port).unwrap();
+            activate_references(Language::Python, Some(&lock()), &selected, &mut port).unwrap();
         assert_eq!(
             activated
                 .iter()
@@ -735,7 +774,8 @@ fn borrowed_compiler_selection_activates_only_held_definitions_and_repeats_cases
     );
     port.trace.clear();
     port.bind_failure = Some("second".into());
-    let error = activate_references(Language::Python, &lock(), &selected, &mut port).unwrap_err();
+    let error =
+        activate_references(Language::Python, Some(&lock()), &selected, &mut port).unwrap_err();
     assert_eq!(
         error,
         Failure::Bindings(vec![yamaa_core::project_activation::BindingFailure {
@@ -758,7 +798,7 @@ fn borrowed_selection_keeps_empty_duplicate_and_quota_gates_before_ports() {
     let mut port = Port::new();
     port.lock_failure = true;
     assert!(
-        activate_references(Language::Python, &lock(), &[], &mut port)
+        activate_references(Language::Python, Some(&lock()), &[], &mut port)
             .unwrap()
             .is_empty()
     );
@@ -766,7 +806,7 @@ fn borrowed_selection_keeps_empty_duplicate_and_quota_gates_before_ports() {
     assert_eq!(
         activate_references(
             Language::Python,
-            &lock(),
+            Some(&lock()),
             &[&environment[0], &environment[0]],
             &mut port
         )
@@ -777,7 +817,7 @@ fn borrowed_selection_keeps_empty_duplicate_and_quota_gates_before_ports() {
     assert_eq!(
         activate_references_with_limits(
             Language::Python,
-            &lock(),
+            Some(&lock()),
             &[&environment[0], &environment[1]],
             &mut port,
             Limits {
@@ -792,7 +832,7 @@ fn borrowed_selection_keeps_empty_duplicate_and_quota_gates_before_ports() {
     assert_eq!(
         activate_references_with_limits(
             Language::Python,
-            &lock(),
+            Some(&lock()),
             &[&environment[1]],
             &mut port,
             Limits {
@@ -807,7 +847,7 @@ fn borrowed_selection_keeps_empty_duplicate_and_quota_gates_before_ports() {
     assert_eq!(
         activate_references_with_limits(
             Language::Python,
-            &lock(),
+            Some(&lock()),
             &[&environment[1]],
             &mut port,
             Limits {
@@ -897,7 +937,7 @@ mod observed {
     ) -> Result<Vec<ActivatedFunction<Handle>>, Failure<Payload>> {
         activate_references_observed(
             Language::Python,
-            &lock(),
+            Some(&lock()),
             &functions.iter().collect::<Vec<_>>(),
             port,
             limits,

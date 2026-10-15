@@ -300,12 +300,11 @@ fn retained_admission_reports_all_independent_root_errors_and_captured_lock_synt
         panic!("semantic admission")
     };
     let projected = diagnostics(&rejection.draft, findings).unwrap();
-    assert_eq!(projected.len(), 3);
-    for (finding, (path, reason)) in projected.iter().zip([
-        ("language", "missing_language"),
-        ("lock", "missing_lock"),
-        ("study", "missing_study"),
-    ]) {
+    assert_eq!(projected.len(), 2);
+    for (finding, (path, reason)) in projected
+        .iter()
+        .zip([("language", "missing_language"), ("study", "missing_study")])
+    {
         assert_eq!(finding.spec_paths, [path]);
         assert_eq!(finding.context["reason"], JsonValue::String(reason.into()));
         assert_eq!(finding.context.len(), 1);

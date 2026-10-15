@@ -38,7 +38,6 @@ pub struct Draft {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Finding {
     MissingLanguage,
-    MissingLock,
     LanguageMismatch {
         declared: Language,
         host: Language,
@@ -203,13 +202,8 @@ impl Environment {
 
 pub fn validate(host: Language, draft: &Draft) -> Vec<Finding> {
     let mut findings = Vec::new();
-    if draft.functions.is_some() {
-        if draft.language.is_none() {
-            findings.push(Finding::MissingLanguage);
-        }
-        if draft.lock.is_none() {
-            findings.push(Finding::MissingLock);
-        }
+    if draft.functions.is_some() && draft.language.is_none() {
+        findings.push(Finding::MissingLanguage);
     }
     if let Some(language) = draft.language {
         if language != host {

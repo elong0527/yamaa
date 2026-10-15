@@ -41,16 +41,17 @@ fn empty_environment_and_submission_only_environments_need_no_code_or_lock() {
     assert!(Environment::admit(Language::R, submission).is_ok());
 }
 #[test]
-fn present_functions_even_empty_require_language_and_lock() {
+fn present_functions_even_empty_require_language_but_no_lock() {
     let mut d = draft();
     d.functions = Some(vec![]);
     assert_eq!(
         validate(Language::Python, &d),
-        vec![Finding::MissingLanguage, Finding::MissingLock]
+        vec![Finding::MissingLanguage]
     );
-    d.functions = None;
     d.language = Some(Language::Python);
     assert!(validate(Language::Python, &d).is_empty());
+    d.functions = Some(vec![definition()]);
+    assert!(Environment::admit(Language::Python, d).is_ok());
 }
 #[test]
 fn declared_language_and_captured_lock_kind_are_independent_findings() {
@@ -85,7 +86,6 @@ fn all_function_and_root_faults_remain_owned_without_any_effect_port() {
         validate(Language::Python, &d),
         vec![
             Finding::MissingLanguage,
-            Finding::MissingLock,
             Finding::DuplicateFunction { function: 1 },
             Finding::MissingStudy
         ]
@@ -178,7 +178,6 @@ fn rejected_admission_retains_exact_draft_ownership_for_findings_and_limits() {
         rejected.error,
         AdmissionError::Findings(vec![
             Finding::MissingLanguage,
-            Finding::MissingLock,
             Finding::DuplicateFunction { function: 1 },
             Finding::MissingStudy
         ])
