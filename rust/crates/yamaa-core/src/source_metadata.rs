@@ -275,12 +275,11 @@ pub(crate) fn graph_normalized_schemas(
     let mut next = 0;
     for node in graph.nodes() {
         for declaration in node.sources() {
-            if let Some(producer) = node
+            if !node
                 .producers()
                 .iter()
-                .find(|p| p.dataset() == declaration.name)
+                .any(|p| p.dataset() == declaration.name)
             {
-            } else {
                 let actual = external.get(next).ok_or(Error::SourceIdentity)?;
                 next += 1;
                 if actual.owner != node.identity() || actual.source.dataset != declaration.name {
@@ -301,7 +300,9 @@ pub(crate) fn graph_normalized_schemas(
                 .find(|p| p.dataset() == declaration.name)
             {
                 let schema = TableSchema::new(
-                    fields
+                    producer
+                        .contract()
+                        .fields()
                         .iter()
                         .map(|field| Column {
                             name: field.name.clone(),
