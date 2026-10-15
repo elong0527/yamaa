@@ -17,8 +17,9 @@ feedback until it is accepted or rejected.
 ## Required reading, in order
 
 1. `benchmarks/agents.md` -- the layout, README, and golden contracts.
-2. `benchmarks/README.md` -- the index; your benchmark must not
-   duplicate an existing one.
+2. The existing case directories under `benchmarks/` (or the index
+   printed by `python .github/scripts/benchmark-docs/build_index.py`);
+   your benchmark must not duplicate an existing one.
 3. `automation/benchmark_prompt.md` -- the prompt recipe, if the
    benchmark is a positive `sdtm-*`/`adam-*` one.
 4. The existing benchmarks the task spec names as exemplars. Imitate
@@ -61,10 +62,7 @@ feedback until it is accepted or rejected.
    `full.md`) for positive `sdtm-*`/`adam-*` benchmarks, then
    `conventions.md` by hand from it. State what each value is, never
    how to compute it.
-7. **Regenerate the index** with
-   `python .github/scripts/benchmark-docs/build_index.py`. The directory and
-   README determine its row; public conformance derives the host entries.
-8. **Run `./factory.sh validate <name>`** and fix everything it
+7. **Run `./factory.sh validate <name>`** and fix everything it
    reports before declaring the draft done.
 
 ## Revision protocol

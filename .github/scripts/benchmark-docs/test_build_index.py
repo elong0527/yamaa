@@ -31,14 +31,19 @@ class BenchmarkIndex(unittest.TestCase):
     def test_generated_index_is_complete_and_stable(self):
         fixtures = index.ROOT / "benchmarks"
         current = (fixtures / "README.md").read_text(encoding="utf-8")
-        # The committed README carries only the heading; the table is
-        # generated at docs build time and must be complete and stable.
+        # The committed README keeps only its heading and prose; the
+        # rendered table must be complete and stable.
         self.assertNotIn("| [`", current)
         result = index.render_index(fixtures, current)
         self.assertEqual(index.render_index(fixtures, result), result)
-        self.assertEqual(result.count("| [`"), 329)
-        self.assertEqual(result.count("| Python, R |"), 327)
-        self.assertEqual(result.count("| Excluded: "), 2)
+        payload = index.plan(fixtures)
+        excluded = sum(bool(row["excluded"]) for row in payload["examples"])
+        self.assertEqual(result.count("| [`"), len(payload["examples"]))
+        self.assertEqual(
+            result.count("| Python, R |"), len(payload["examples"]) - excluded
+        )
+        self.assertEqual(result.count("| Excluded: "), excluded)
+        self.assertTrue(excluded)
         self.assertIn("reviewed-yellow)](https://github.com/", result)
 
     def test_directory_addition_and_removal_update_index_without_a_registry(self):

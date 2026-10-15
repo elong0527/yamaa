@@ -25,11 +25,11 @@ Each example carries a lifecycle badge showing its review state:
 
 ## Benchmarks
 
-The index table for the authored cases is generated at docs build time from
-the case directories themselves (`.github/scripts/benchmark-docs/build_index.py`);
-it is not committed. The generated gallery on the project site lists every
-case with its derivation, lifecycle and public host entries, and
-`build_index.py --output <path>` renders the full Markdown index locally.
+No index table is committed; the case directories are the index. The
+[benchmark gallery](https://elong0527.github.io/yamaa/benchmark/) on the project
+site lists every case with its derivation, lifecycle and public host entries,
+and `.github/scripts/benchmark-docs/build_index.py` prints the full Markdown
+index locally.
 
 Each active case uses the same public Python and R plan. Actual passing
 coverage is gated by the native run: every active benchmark must pass on
