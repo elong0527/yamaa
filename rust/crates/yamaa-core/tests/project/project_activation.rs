@@ -172,6 +172,24 @@ fn absent_packaging_lock_still_binds_and_runs_every_conformance_case() {
     assert_eq!(observations.tests.len(), function.definition().tests.len());
     assert!(!port.trace.iter().any(|entry| entry.starts_with("lock:")));
 
+    port.trace.clear();
+    port.bind_failure = Some("identity".into());
+    assert!(matches!(
+        activate_references_observed(
+            Language::Python,
+            None,
+            &[&function],
+            &mut port,
+            Limits::default(),
+            &mut observations,
+        ),
+        Err(Failure::Bindings(_))
+    ));
+    assert_eq!(port.trace, ["bind:identity"]);
+    assert_eq!(observations.lock, LockObservation::NotRequested);
+    assert!(observations.tests.is_empty());
+
+    port.bind_failure = None;
     port.mismatch = true;
     assert!(matches!(
         activate_references_observed(

@@ -161,12 +161,17 @@ env <- "r/environment.yaml"
 text <- readtext(env)
 text <- sub("result: 1.5", "result: 9.5", text, fixed = TRUE)
 text <- sub("result: 0.0", "result: 9.0", text, fixed = TRUE)
-writeLines(text, env)
-for (attempt in 1:2) {
-  failed <- yamaa_domain("spec.yaml", environment = env)
-  stopifnot(identical(failed$issues$condition, rep("function_conformance_failed", 2L)),
-            grepl('"source_reads":[]', observations(failed), fixed = TRUE))
+for (declared_lock in c(TRUE, FALSE)) {
+  writeLines(if (declared_lock) text else text[!grepl("^lock:", text)], env)
+  for (attempt in 1:2) {
+    failed <- yamaa_domain("spec.yaml", environment = env)
+    stopifnot(identical(failed$issues$condition, rep("function_conformance_failed", 2L)),
+      grepl('"source_reads":[]', observations(failed), fixed = TRUE),
+      grepl(if (declared_lock) '"lock":"verified"' else '"lock":"not_requested"',
+        observations(failed), fixed = TRUE))
+  }
 }
+writeLines(text, env)
 # Captured syntax, rather than the selected host or basename, identifies the lock.
 file.copy(file.path(root, name, "python/uv.lock"), lock, overwrite = TRUE)
 checked <- yamaa_check("spec.yaml", environment = env)

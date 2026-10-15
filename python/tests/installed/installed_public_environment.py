@@ -817,19 +817,29 @@ class PublicEnvironment(unittest.TestCase):
         tests = source["functions"]["project_value"]["tests"]
         tests[0]["result"] = 9.5
         tests[1]["result"] = 9.0
-        env.write_text(yaml.safe_dump(source, sort_keys=False))
-        for _ in range(2):
-            result = yamaa.domain("spec.yaml", environment="python/environment.yaml")
-            report = self.report(result)
-            self.assertEqual(report["source_reads"], [])
-            self.assertEqual(
-                [case["outcome"] for case in report["activation"]["tests"]],
-                ["result_mismatch", "result_mismatch", "passed"],
-            )
-            self.assertEqual(
-                result.issues["condition"].to_list(),
-                ["function_conformance_failed"] * 2,
-            )
+        for declared_lock in (True, False):
+            with self.subTest(declared_lock=declared_lock):
+                if not declared_lock:
+                    source.pop("lock")
+                env.write_text(yaml.safe_dump(source, sort_keys=False))
+                for _ in range(2):
+                    result = yamaa.domain(
+                        "spec.yaml", environment="python/environment.yaml"
+                    )
+                    report = self.report(result)
+                    self.assertEqual(report["source_reads"], [])
+                    self.assertEqual(
+                        report["activation"]["lock"],
+                        "verified" if declared_lock else "not_requested",
+                    )
+                    self.assertEqual(
+                        [case["outcome"] for case in report["activation"]["tests"]],
+                        ["result_mismatch", "result_mismatch", "passed"],
+                    )
+                    self.assertEqual(
+                        result.issues["condition"].to_list(),
+                        ["function_conformance_failed"] * 2,
+                    )
 
     def test_environment_codelists_bind_and_verify_with_independent_static_findings(
         self,
