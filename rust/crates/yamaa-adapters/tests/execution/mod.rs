@@ -31,6 +31,7 @@ mod namespace_admission;
 mod nested_windows;
 mod predicate_suggestions;
 mod probe_successors;
+mod row_count_lookups;
 mod row_derivations;
 mod row_filter_paths;
 mod row_intermediate_operands;

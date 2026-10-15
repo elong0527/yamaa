@@ -116,11 +116,6 @@ impl RowCount {
                 return Err(PlanError::InvalidColumns);
             }
         }
-        for predicate in self.filter.iter().chain(&self.when) {
-            predicate
-                .validate(0, &alloc::vec![true;width], true)
-                .map_err(PlanError::Predicate)?;
-        }
         Ok(())
     }
     pub fn accepts(&self, count: usize, total: usize) -> bool {
