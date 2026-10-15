@@ -829,7 +829,12 @@ mod file {
 
         #[test]
         fn row_shape_boundaries_are_per_template_and_preserve_authored_preflight_precedence() {
-            use yamaa_core::{json::json, limits::Limits};
+            use yamaa_core::{
+                json::json,
+                limits::Limits,
+                table::{TableAccess, ValueRef},
+                value::ColumnType,
+            };
             let study = Study::new();
             let spec = study.text("spec.yaml");
             let environment = study.text("environment.yaml");
@@ -968,7 +973,15 @@ mod file {
             )
             .unwrap();
             assert!(result.issues().is_empty());
-            assert_eq!(result.output().unwrap(), b"ID\n1\n2\n");
+            let table =
+                yamaa_adapters::ipc_table::decode_snapshot(result.output().unwrap()).unwrap();
+            assert_eq!(
+                table.schema(),
+                &crate::support::table_schema(&[("ID", ColumnType::Int)])
+            );
+            assert_eq!(table.row_count(), 2);
+            assert_eq!(table.cell(0, 0), Some(ValueRef::Int(1)));
+            assert_eq!(table.cell(1, 0), Some(ValueRef::Int(2)));
             struct Save(Vec<(String, Vec<u8>)>);
             impl yamaa_core::specification_output::ArtifactPort for Save {
                 type Error = ();
