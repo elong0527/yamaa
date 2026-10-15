@@ -340,7 +340,7 @@ impl Declarations {
                             "intermediate_keys",
                             crate::limits::Limits::KEYS,
                             Some(fields.len()),
-                            None,
+                            Some(&format!("{path}.key")),
                         ));
                     }
                     Some(
@@ -363,7 +363,7 @@ impl Declarations {
                             "intermediate_keys",
                             crate::limits::Limits::KEYS,
                             Some(fields.len()),
-                            None,
+                            Some(&format!("{path}.key")),
                         ));
                     }
                     if fields.is_empty() {

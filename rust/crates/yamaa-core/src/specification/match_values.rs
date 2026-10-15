@@ -444,7 +444,7 @@ fn reject_deferred_owners(branch: &cases::Branch, extra: &mut Vec<UnsupportedFea
     }
 }
 
-/// Reject aggregate key counts before the compiler owns paths or expressions.
+/// Reject aggregate key counts before compiling their authored expressions.
 pub(super) fn declaration_admission(d: &Document) -> Result<(), PrepareError> {
     let Some(items) = d
         .field(d.root(), "intermediates")
@@ -461,7 +461,7 @@ pub(super) fn declaration_admission(d: &Document) -> Result<(), PrepareError> {
             None,
         ));
     }
-    for &item in items {
+    for (index, &item) in items.iter().enumerate() {
         if let Some(key) = d.field(item, "key") {
             if let N::Mapping(fields) = &d.nodes()[key] {
                 if fields.len() > crate::limits::Limits::KEYS {
@@ -469,7 +469,7 @@ pub(super) fn declaration_admission(d: &Document) -> Result<(), PrepareError> {
                         "intermediate_keys",
                         crate::limits::Limits::KEYS,
                         Some(fields.len()),
-                        None,
+                        Some(&format!("intermediates[{index}].key")),
                     ));
                 }
             }

@@ -1,10 +1,8 @@
 //! Independent normalized-document admission, with no engine or host effects.
 use yamaa_core::{
     dataset::{MatchRead, MatchValue},
-    schema::{
-        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    },
-    specification::{BindError, CompilationLimits, PrepareError, PreparedSpecification},
+    schema::{Document, DocumentNode as N, SpecificationDocument},
+    specification::{BindError, PrepareError, PreparedSpecification},
     table::{Column, TableSchema, ValueRef},
     value::{compare_present_refs, ColumnType as T, Value},
 };
@@ -92,12 +90,9 @@ fn doc(key: Tree<'_>) -> SpecificationDocument {
     ]);
     let mut nodes = Vec::new();
     let root = tree.append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, DocumentLimits::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 fn schemas() -> (TableSchema, TableSchema) {
     let schema = |fields: &[(&str, T)]| {
@@ -244,28 +239,39 @@ fn literal_text_is_not_a_reference_and_boolean_family_is_not_coerced() {
     );
 }
 #[test]
-fn aggregate_key_count_refuses_before_deferred_width_ownership_or_findings() {
-    let document = doc(Tree::Map(vec![
-        ("K", pad("SRC.ABSENT", "0")),
-        (
-            "KINT",
-            Tree::Map(vec![("literal", Tree::Scalar(N::Integer("1".into())))]),
-        ),
-    ]));
-    let limits = CompilationLimits {
-        keys: 1,
-        ..Default::default()
-    };
-    assert!(matches!(
-        PreparedSpecification::prepare_with_limits(&document, limits),
-        Err(PrepareError::Limit(
-            yamaa_core::specification::CompilerLimit {
-                resource: "intermediate_keys",
-                ..
-            }
-        ))
-    ));
+fn fixed_intermediate_key_count_precedes_deferred_name_findings() {
+    let keys = (0..65).map(|index| format!("K{index}")).collect::<Vec<_>>();
+    for sequence in [false, true] {
+        let document = |count| {
+            let selected = keys.iter().take(count);
+            let key = if sequence {
+                Tree::List(selected.map(|name| Tree::Text(name)).collect())
+            } else {
+                Tree::Map(
+                    selected
+                        .map(|name| {
+                            (
+                                name.as_str(),
+                                Tree::Map(vec![("literal", Tree::Scalar(N::Integer("1".into())))]),
+                            )
+                        })
+                        .collect(),
+                )
+            };
+            doc(key)
+        };
+        PreparedSpecification::prepare(&document(64)).unwrap();
+        let Err(PrepareError::Limit(refusal)) = PreparedSpecification::prepare(&document(65))
+        else {
+            panic!("fixed intermediate key boundary")
+        };
+        assert_eq!(refusal.resource, "intermediate_keys");
+        assert_eq!(refusal.limit, 64);
+        assert_eq!(refusal.actual, Some(65));
+        assert_eq!(refusal.spec_paths, ["intermediates[0].key"]);
+    }
 }
+
 #[test]
 fn unsupported_operations_keep_the_authored_gate_path() {
     let (key, operation, path) = (
