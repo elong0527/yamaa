@@ -2894,6 +2894,8 @@ class IntermediateDependencies(unittest.TestCase):
                                 with self.assertRaises(yamaa.DomainError):
                                     result.save()
                             else:
+                                if "output_rows" in case:
+                                    self.assertEqual([list(row) for row in result.output.rows()], case["output_rows"])
                                 self.assertTrue(result.save())
                                 self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
                                 (root / "out.csv").unlink()
