@@ -532,9 +532,16 @@ def main(argv=None):
             json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text()),
         )
     )
-    passed = True
+    passed, errors = True, []
     for number in numbers:
-        verdict = verify(api, number, expected_head=args.head, publish=args.publish)
+        try:
+            verdict = verify(api, number, expected_head=args.head, publish=args.publish)
+        except GateError as error:
+            if not args.publish:
+                raise
+            # One invalid or unavailable PR must not starve later refreshes.
+            errors.append((number, str(error)))
+            continue
         if verdict is None:
             require(
                 args.publish, "PR is not open against this repository's main branch"
@@ -542,9 +549,11 @@ def main(argv=None):
             continue
         print(f"PR #{number} {verdict.head}: {verdict.state}: {verdict.description}")
         passed &= verdict.state == "success"
+    for number, message in errors:
+        print(f"review-completion: PR #{number}: {message}")
     # In Actions the published commit context is the gate. A normal pending
     # review is not an infrastructure failure of the updater workflow itself.
-    return 0 if args.publish or passed else 1
+    return 0 if not errors and (args.publish or passed) else 1
 
 
 if __name__ == "__main__":

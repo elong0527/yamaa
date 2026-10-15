@@ -1,9 +1,12 @@
 """Review coverage belongs to the current source, authentic app and full threads."""
 
 import copy
+import json
 import os
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from tools.ci import review_gate as gate
@@ -84,6 +87,40 @@ class Evidence:
     def publish(self, verdict):
         self.history.append(("publish", verdict.head, verdict.state))
         self.published.append(verdict)
+
+
+class MultipleEvidence(Evidence):
+    """A malformed large PR followed by a clean independently completed PR."""
+
+    def __init__(self):
+        super().__init__()
+        first, second = pull(), pull(OTHER)
+        first.update(
+            merged=False,
+            changed_files=301,
+            body="<!-- yamaa-review-batches: [invalid JSON] -->",
+        )
+        first["base"]["sha"] = OTHER
+        second["number"] = NUMBER + 1
+        self.pulls = {NUMBER: first, NUMBER + 1: second}
+        self.pages = Mock(return_value=list(self.pulls.values()))
+
+    def pull(self, number):
+        self.history.append(("pull", number))
+        return copy.deepcopy(self.pulls[number])
+
+    def statuses(self, head):
+        self.history.append(("statuses", head))
+        return [
+            status(
+                head=head,
+                description=(
+                    "Review skipped: 301 files exceed the limit of 300"
+                    if head == HEAD
+                    else "Review completed"
+                ),
+            )
+        ]
 
 
 def client(responses):
@@ -458,6 +495,56 @@ class TrustedRouting(unittest.TestCase):
                     expected,
                 )
             self.assertEqual(api.published, [])
+
+    def test_publisher_refreshes_later_prs_after_a_real_malformed_pr_failure(self):
+        api = MultipleEvidence()
+        with tempfile.TemporaryDirectory() as directory:
+            event = Path(directory) / "event.json"
+            event.write_text(json.dumps({"repository": EVENT_REPOSITORY}))
+            with (
+                patch.dict(
+                    os.environ,
+                    {
+                        "GITHUB_ACTIONS": "true",
+                        "GITHUB_REPOSITORY": REPOSITORY,
+                        "GITHUB_REF": "refs/heads/main",
+                        "GITHUB_EVENT_NAME": "workflow_dispatch",
+                        "GITHUB_EVENT_PATH": str(event),
+                    },
+                    clear=True,
+                ),
+                patch.object(gate, "GitHub", return_value=api),
+                patch("builtins.print") as output,
+            ):
+                self.assertEqual(gate.main(["--publish"]), 1)
+        # Neither the candidate selector nor verify/publication is mocked:
+        # the first PR publishes a failure and the second still gets success.
+        self.assertEqual(
+            [(verdict.head, verdict.state) for verdict in api.published],
+            [
+                (HEAD, "pending"),
+                (HEAD, "failure"),
+                (OTHER, "pending"),
+                (OTHER, "success"),
+            ],
+        )
+        self.assertIn(("threads", NUMBER + 1, OTHER), api.history)
+        self.assertTrue(
+            any(
+                f"PR #{NUMBER}: invalid review-batch JSON" in call.args[0]
+                for call in output.call_args_list
+            )
+        )
+
+    def test_read_only_cli_still_raises_immediately_for_the_same_invalid_pr(self):
+        api = MultipleEvidence()
+        with (
+            patch.object(gate, "GitHub", return_value=api),
+            self.assertRaisesRegex(gate.GateError, "invalid review-batch JSON"),
+        ):
+            gate.main(["--repository", REPOSITORY, "--pr", str(NUMBER), "--head", HEAD])
+        self.assertEqual(api.published, [])
+        self.assertNotIn(("pull", NUMBER + 1), api.history)
 
     def test_publication_cannot_be_enabled_from_a_normal_local_command(self):
         with (
