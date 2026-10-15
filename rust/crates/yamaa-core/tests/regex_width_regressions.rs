@@ -70,6 +70,60 @@ fn overflow_after_a_dense_assertion_checks_consumption_without_its_width() {
 }
 
 #[test]
+fn dense_assertion_sums_keep_reachable_huge_term_overflow() {
+    for count in [4, 8, 16] {
+        let dense = dense_reference_choices(count);
+        let byte = dense.find("(?<=").unwrap() + 4;
+        for term in [
+            "a".to_owned(),
+            format!(r"\{}", 4 * count - 3),
+            format!(r"\{}", 4 * count),
+        ] {
+            let source = dense.replacen("(?<=", &format!(r"(?<={term}{{{}}}", usize::MAX), 1);
+            // At least two outer blocks have the same participation state,
+            // so their linking term consumes one and the dense sum is positive.
+            // The two final captures require opposite states to contribute MAX.
+            // Lookbehind evaluates the dense sum first, then the huge term.
+            assert_eq!(
+                Pattern::compile(&source),
+                Err(CompileError::Unsupported {
+                    byte,
+                    feature: "pattern width exceeds addressable range",
+                }),
+                "{source}",
+            );
+        }
+    }
+}
+
+#[test]
+fn opposite_maximum_branches_require_complete_correlated_width_proofs() {
+    let maximum = usize::MAX;
+    // Exactly one of captures one and four participates. Their repeated
+    // references total MAX in either branch; the relaxed two-MAX bound is false.
+    let source = format!(r"(?:(a)()|()(a))(?<=\1{{{maximum}}}\4{{{maximum}}})");
+    assert_eq!(Pattern::compile(&source).unwrap().group_count(), 4);
+
+    // A safe MAX branch does not make the other width, two, equal to it.
+    let source = format!(r"(?:(a)()|()(aa))(?<=\1{{{maximum}}}\4)");
+    assert_variable(&source);
+
+    // The first outer branch still totals MAX, but the second enters both
+    // captures five and six. Reverse traversal reaches capture six last and
+    // overflows there, after the earlier terms have accumulated at most MAX.
+    let source = format!(
+        r"(?:(?:(a)()|()(a))|(a)(a))(?<=\6{{{maximum}}}\5{{{maximum}}}\1{{{maximum}}}\4{{{maximum}}})"
+    );
+    assert_eq!(
+        Pattern::compile(&source),
+        Err(CompileError::Unsupported {
+            byte: source.find(r"\6").unwrap(),
+            feature: "pattern width exceeds addressable range",
+        })
+    );
+}
+
+#[test]
 fn enclosing_captures_preserve_independent_and_correlated_widths() {
     // Group one captures the thirty-to-sixty scalar sum, and the remaining
     // references reproduce it. Their combined width still varies.
