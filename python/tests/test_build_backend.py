@@ -119,13 +119,15 @@ def test_intact_member_archive_preserved(tmp_path: Path) -> None:
     assert payloads["pkg-0.1/rust/crates/foo/build.rs"] == b"fn main() {}\n"
 
 
-def _make_archive_with_extra(tmp_path: Path, extra) -> Path:
+def _make_archive_with_extra(
+    tmp_path: Path, extra, *, archive_format=tarfile.DEFAULT_FORMAT
+) -> Path:
     archive = tmp_path / "sdist.tar.gz"
     entries = _BASE_ENTRIES + [
         ("pkg-0.1/rust/crates/foo/Cargo.toml", b'[package]\nname = "foo"\n'),
         ("pkg-0.1/rust/crates/foo/src/lib.rs", b"pub fn f() {}\n"),
     ]
-    with tarfile.open(archive, "w:gz") as target:
+    with tarfile.open(archive, "w:gz", format=archive_format) as target:
         for name, payload in entries:
             info = tarfile.TarInfo(name)
             info.size = len(payload)
@@ -252,6 +254,36 @@ def test_preserve_workspace_rejects_trailing_slash_member_file(
     with pytest.raises(ValueError, match="trailing slash"):
         preserve_workspace(archive, workspace)
     assert archive.read_bytes() == original
+
+
+def test_preserve_workspace_rejects_normalized_gnu_directory_collisions(
+    tmp_path: Path,
+) -> None:
+    workspace = _make_workspace(tmp_path)
+    directory = "pkg-0.1/" + "d" * 100
+
+    def extra(target) -> None:
+        # GNU long-name directories lose only one trailing slash when read.
+        for name in (directory, directory + "//"):
+            info = tarfile.TarInfo(name)
+            info.type = tarfile.DIRTYPE
+            target.addfile(info)
+
+    archive = _make_archive_with_extra(
+        tmp_path, extra, archive_format=tarfile.GNU_FORMAT
+    )
+    with tarfile.open(archive) as source:
+        entries = source.getmembers()
+        names = [entry.name for entry in entries]
+        assert all(entry.isdir() for entry in entries[-2:])
+        assert names[-2:] == [directory, directory + "/"]
+        assert len(set(names)) == len(entries)
+        assert len({name.rstrip("/") for name in names}) == len(entries) - 1
+    original = archive.read_bytes()
+    with pytest.raises(ValueError, match="duplicate members"):
+        preserve_workspace(archive, workspace)
+    assert archive.read_bytes() == original
+    assert list(tmp_path.glob("*.tar.gz")) == [archive]
 
 
 @pytest.mark.parametrize("tampered", [False, True])
