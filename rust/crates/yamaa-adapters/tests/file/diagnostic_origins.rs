@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use yamaa_adapters::{file_resources::Resources, file_workflow, shipped_schema, source_metadata};
+use yamaa_adapters::{file_resources::Resources, file_workflow, shipped_schema};
 use yamaa_core::build::Prepared;
 use yamaa_core::project_function::Language;
 
@@ -18,6 +18,11 @@ impl Study {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir_all(directory.join("parent")).unwrap();
+        fs::write(
+            directory.join("environment.yaml"),
+            "schema_version: '1.0'\nlanguage: python\n",
+        )
+        .unwrap();
         Self(fs::canonicalize(directory).unwrap())
     }
     fn identity(&self, name: &str) -> String {
@@ -84,11 +89,14 @@ fn physical_row_indices_preserve_literal_parent_ids_and_refuse_invalid_slots() {
             assert_eq!(document.declaring_source(invalid), None, "{invalid}");
         }
         assert_eq!(prepared.capture_reads(), 2);
+        let findings = prepared.run().check_diagnostics();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].spec_paths, ["rows[1].filter"]);
         assert_eq!(
-            source_metadata::selected_origins(&owner).unwrap(),
-            [("rows[1].filter".into(), parent.clone())]
+            document.declaring_source(&findings[0].spec_paths[0]),
+            Some(parent.as_str())
         );
-        let issues = source_metadata::selected_issues(&owner).unwrap();
+        let issues = yamaa_adapters::specification_check::issue_rows(prepared.run()).unwrap();
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].phase, "validation");
         assert_eq!(issues[0].condition, "invalid_predicate");
@@ -97,6 +105,14 @@ fn physical_row_indices_preserve_literal_parent_ids_and_refuse_invalid_slots() {
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
             serde_json::json!({"predicate": "ID >", "position": 4})
+        );
+        assert_eq!(
+            yamaa_adapters::project_application::check(
+                &study.identity("spec.yaml"),
+                &study.identity("environment.yaml"),
+                Language::Python,
+            ),
+            issues
         );
         assert_eq!(prepared.capture_reads(), 2);
         assert!(!study.0.join("parent/input.csv").exists());
@@ -123,18 +139,36 @@ fn ready_static_owner_returns_contributor_without_changing_public_issue_context(
         shipped_schema::capture_environment().unwrap(),
     )
     .unwrap();
-    let before = source_metadata::selected_reads(&owner);
+    let Prepared::Plain(prepared) = &owner else {
+        panic!("plain owner");
+    };
+    let before = prepared.capture_reads();
+    let parent = study.identity("parent/base.yaml");
+    let findings = prepared.run().check_diagnostics();
+    assert_eq!(findings.len(), 1);
     assert_eq!(
-        source_metadata::selected_origins(&owner).unwrap(),
-        [(
-            "columns.ID.verifications[0].matches.pattern".into(),
-            study.identity("parent/base.yaml")
-        )]
+        findings[0].spec_paths,
+        ["columns.ID.verifications[0].matches.pattern"]
     );
-    let issues = source_metadata::selected_issues(&owner).unwrap();
+    assert_eq!(
+        prepared
+            .run()
+            .document()
+            .declaring_source(&findings[0].spec_paths[0]),
+        Some(parent.as_str())
+    );
+    let issues = yamaa_adapters::specification_check::issue_rows(prepared.run()).unwrap();
     assert_eq!(issues.len(), 1);
     assert_eq!(issues[0].context, "{\"pattern\":\"(\"}");
-    assert_eq!(source_metadata::selected_reads(&owner), before);
+    assert_eq!(
+        yamaa_adapters::project_application::check(
+            &study.identity("spec.yaml"),
+            &study.identity("environment.yaml"),
+            Language::Python,
+        ),
+        issues
+    );
+    assert_eq!(prepared.capture_reads(), before);
     assert!(!study.0.join("parent/input.csv").exists());
     assert!(!study.0.join("parent/out.csv").exists());
 }

@@ -125,8 +125,6 @@ pub mod inheritance_preparation;
 
 pub mod build;
 
-pub mod source_metadata;
-
 pub mod table_grouping;
 
 pub mod producer_build;

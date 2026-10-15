@@ -28,7 +28,6 @@ pub mod sas_source;
 pub mod shipped_schema;
 pub mod specification_source;
 
-pub mod source_metadata;
 mod source_profile_inspection;
 pub mod specification_run;
 pub mod specification_run_view;

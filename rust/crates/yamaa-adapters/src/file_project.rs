@@ -147,15 +147,6 @@ impl FileProject {
         self.resources.capture_reads()
     }
     /// Explicit source-byte capture stays in the owner's original native roots.
-    pub fn capture_input_metadata(
-        &mut self,
-        index: usize,
-    ) -> Result<std::sync::Arc<[u8]>, Vec<crate::issue_rows::Issue>> {
-        let descriptors = crate::source_metadata::inputs(self.run()).map_err(|_| {
-            crate::file_application::rejected("source_metadata", "descriptor_admission")
-        })?;
-        crate::source_metadata::capture(&mut self.resources, &descriptors, index)
-    }
 
     pub(crate) fn publication_target(
         &self,

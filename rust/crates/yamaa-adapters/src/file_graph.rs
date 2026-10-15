@@ -265,15 +265,7 @@ impl FileGraph {
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }
-    pub fn capture_input_metadata(
-        &mut self,
-        index: usize,
-    ) -> Result<Arc<[u8]>, Vec<crate::issue_rows::Issue>> {
-        let descriptors = crate::source_metadata::graph_inputs(self).map_err(|_| {
-            crate::file_application::rejected("source_metadata", "descriptor_admission")
-        })?;
-        crate::source_metadata::capture(&mut self.resources, &descriptors, index)
-    }
+
     /// Consume the complete native graph into the distinct build owner. Static
     /// preparation never accepts ports or exposes a standalone producer plan.
     pub fn into_build(self) -> crate::file_producer_build::FileBuild {
