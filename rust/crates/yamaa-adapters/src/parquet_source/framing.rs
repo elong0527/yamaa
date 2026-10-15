@@ -137,7 +137,7 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
         .filter(|n| *n >= 4)
         .ok_or(Error::Malformed)?;
     let metadata = &bytes[start..footer];
-    let (root, _) = compact::parse(metadata)?;
+    let (root, _) = compact::metadata(metadata)?;
     let declared_rows = count(root.field(3))?;
     let groups = sequence(root.field(4))?;
     let schema = sequence(root.field(2))?;
@@ -172,7 +172,7 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
                 return Err(Error::Malformed);
             }
             while offset < end {
-                let (header, used) = compact::parse(&bytes[offset..end])?;
+                let (header, used) = compact::page(&bytes[offset..end])?;
                 let uncompressed = count(header.field(2))?;
                 let compressed = count(header.field(3))?;
                 let payload = match integer(header.field(1))? {
@@ -395,6 +395,43 @@ mod tests {
                 crate::parquet_source::profile::Error::Unsupported { field, .. }
             )) if field == "G0"
         ));
+    }
+
+    #[test]
+    fn unknown_footer_fanout_keeps_a_valid_empty_table_decodable() {
+        let mut bytes = geometry_container(0, 1, false);
+        // Remove root STOP and trailer. Unknown field 15 follows field 4: a
+        // 65,536-element byte list, valid for both Compact decoders.
+        bytes.truncate(bytes.len() - 9);
+        bytes.extend([0xb9, 0xf3, 0x80, 0x80, 4]);
+        for _ in 0..32_768 {
+            bytes.extend([1, 2]);
+        }
+        bytes.push(0);
+        let footer_length = (bytes.len() - 4) as u32;
+        bytes.extend(footer_length.to_le_bytes());
+        bytes.extend(b"PAR1");
+        let decoded = crate::parquet_source::reader::read(&bytes).unwrap();
+        assert_eq!(decoded.schema.columns()[0].name, "V0");
+        assert_eq!(decoded.batches[0].num_rows(), 0);
+    }
+
+    #[test]
+    fn wrong_schema_and_row_group_container_shapes_are_malformed() {
+        for footer in [
+            // schema is a bool list, rows=0, row_groups=[]
+            &[0x15, 2, 0x19, 0x31, 1, 2, 1, 0x16, 0, 0x19, 0x0c, 0][..],
+            // schema=[{num_children:0}], rows=0, row_groups is a bool list
+            &[
+                0x15, 2, 0x19, 0x1c, 0x55, 0, 0, 0x16, 0, 0x19, 0x31, 1, 2, 1, 0,
+            ][..],
+        ] {
+            let mut bytes = b"PAR1".to_vec();
+            bytes.extend(footer);
+            bytes.extend((footer.len() as u32).to_le_bytes());
+            bytes.extend(b"PAR1");
+            assert!(matches!(admit(&bytes), Err(Error::Malformed)));
+        }
     }
 
     #[test]
