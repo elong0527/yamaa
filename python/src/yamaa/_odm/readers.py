@@ -507,10 +507,9 @@ def iter_odm_records(
                     # either ODM version: the value is the `Value`
                     # attribute (1.3) or the text of a `Value` child (2.0).
                     # Dropping it would silently present a supplied value
-                    # as absent. Whitespace between children is layout,
-                    # not data, and stays accepted.
-                    if (element.text and element.text.strip()) or any(
-                        child.tail and child.tail.strip() for child in element
+                    # as absent. Only XML's space, tab, CR and LF are layout.
+                    if (element.text and element.text.strip(" \t\r\n")) or any(
+                        child.tail and child.tail.strip(" \t\r\n") for child in element
                     ):
                         raise ODMError(
                             f"ItemData {item_oid!r} contains text outside its value"
