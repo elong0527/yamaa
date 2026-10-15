@@ -1415,6 +1415,8 @@ impl PreparedSpecification {
             d,
             &sources,
             driver_index,
+            &output,
+            &keys,
             limits,
             project.as_ref(),
             &extraction,

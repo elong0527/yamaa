@@ -37,3 +37,5 @@ mod scoped_windows_checks;
 mod specification_run;
 mod temporal_arithmetic;
 mod typed_intermediate_derivations;
+
+mod intermediate_row_drivers;

@@ -354,6 +354,41 @@ pub(super) fn bind(
         return Ok(None);
     }
     let donor = item.source_schema(secondary).ok_or(BindError::Internal)?;
+    if item.keys.is_empty() {
+        if let Some(root_keys) = declarations.driver_keys(index) {
+            let keys = (0..root_keys.columns().len()).collect::<Vec<_>>();
+            let fields = root_keys
+                .columns()
+                .iter()
+                .map(|column| reference_binding::Field {
+                    name: &column.name,
+                    column_type: column.kind,
+                })
+                .collect::<Vec<_>>();
+            let root_catalog =
+                Catalog::compile(&fields, &[], Default::default()).map_err(BindError::Catalog)?;
+            // A scalar read still needs lookup keys even when this relation also drives rows.
+            let dataset = match &item.source {
+                crate::dataset::IntermediateSource::Input(index) => secondary
+                    .get(*index)
+                    .map(|source| source.name.as_str())
+                    .ok_or(BindError::Internal)?,
+                crate::dataset::IntermediateSource::Primary { name, .. } => name.as_str(),
+                crate::dataset::IntermediateSource::SelfRows { .. } => "SELF",
+            };
+            intermediate_admission::inferred_keys(
+                &root_catalog,
+                root_keys,
+                &keys,
+                donor,
+                &|column| item.admits_donor_column(column),
+                &item.path,
+                dataset,
+                findings,
+            )?;
+            return Ok(None);
+        }
+    }
     for key in &item.keys {
         let read_kind = key
             .value
