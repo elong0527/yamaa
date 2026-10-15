@@ -16,7 +16,7 @@ names retain exact scalar sequences without normalization. Pinning Unicode
 18.0.0 makes admission independent of the operating system or host interpreter;
 updating the data requires an explicit compatibility review.
 
-From the repository root, `python rust/tools/generate_regex_identifiers.py`
+From the repository root, `python -m tools.numeric.generate_regex_identifiers`
 checks the generated intervals and distributed license copies byte for byte.
 Use `--write` to regenerate them intentionally. The generator merges only
 adjacent intervals; it checks disjointness, scalar bounds and published property
@@ -30,7 +30,7 @@ Python wheel/source distributions and installed R packages. The generator
 maintains those required copies from the canonical notice.
 
 The in-progress shared schema service also derives printable diagnostic-label
-intervals from this source using `rust/tools/generate_schema_printable.py`.
+intervals from this source using `tools/packaging/generate_schema_printable.py`.
 They contain general categories L, M, N, P and S plus ASCII space, read from
 the category annotations on Grapheme_Base and Grapheme_Extend. A separate
 exhaustive Rust test checks the lookup against the authoritative annotations.

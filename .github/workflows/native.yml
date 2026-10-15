@@ -22,7 +22,7 @@ on:
       - '!benchmarks/**/*.md'
       - 'yaml/**'
       - '.github/workflows/native.yml'
-      - '.github/scripts/ci/native_matrix.py'
+      - 'tools/ci/native_matrix.py'
       - '.github/scripts/ci/test_native_matrix.py'
       - '.github/scripts/commands/**'
       - '.github/scripts/yaml-validation/fixtures/**'
@@ -67,7 +67,7 @@ jobs:
           python-version: '3.14'
       - name: Select the full installed matrix
         id: coverage
-        run: python .github/scripts/ci/native_matrix.py plan
+        run: python -m tools.ci.native_matrix plan
 
   # Nightly main, dispatches on main and explicit qualification pushes run all
   # shared checks. Branch dispatches qualify the installed R/Python packages.
@@ -118,7 +118,7 @@ jobs:
             cargo fmt --all --check
             python tools/check_cargo_lock.py --output-dir "${RUNNER_TEMP}/rust-dependencies"
             cargo clippy --locked -p yamaa-core -p yamaa-engine -p yamaa-adapters -p yamaa-python --all-targets -- -D warnings
-            python ../.github/scripts/commands/rust_tests.py
+            python ../tools/commands/rust_tests.py
             python tools/generate_regex_identifiers.py
             python tools/generate_schema_printable.py
             python tools/generate_shipped_schema.py
@@ -229,7 +229,7 @@ jobs:
           shared-key: native-dist-${{ matrix.os }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Check benchmark SDK lock versions
-        run: python rust/tools/check_benchmark_sdk_versions.py
+        run: python -m tools.packaging.check_benchmark_sdk_versions
       - name: Install build tools
         run: |
           rustup toolchain install 1.90.0 --profile minimal
@@ -256,8 +256,8 @@ jobs:
           cp "${RUNNER_TEMP}"/native-dist/*.whl "${RUNNER_TEMP}/reference-dist/"
       - name: Check Python distribution contents
         run: |
-          python rust/tools/check_python_package_hygiene.py "${RUNNER_TEMP}/native-dist"
-          python rust/tools/check_cargo_lock.py --output-dir "${RUNNER_TEMP}/rust-dependencies" "${RUNNER_TEMP}"/native-dist/*.tar.gz
+          python -m tools.packaging.check_python_package_hygiene "${RUNNER_TEMP}/native-dist"
+          python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies" "${RUNNER_TEMP}"/native-dist/*.tar.gz
       - name: Preserve the reference host wheel
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
@@ -331,7 +331,7 @@ jobs:
       - name: Stage installed checks outside checkout
         working-directory: ${{ runner.temp }}
         run: |
-          python "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" stage \
+          python "${GITHUB_WORKSPACE}/tools/commands/installed.py" stage \
             --runtime python --staged-root "${RUNNER_TEMP}"
       - name: Install the wheel
         if: matrix.form == 'wheel'
@@ -346,15 +346,15 @@ jobs:
       - name: Report installed Python public benchmark conformance
         working-directory: ${{ runner.temp }}
         run: |
-          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" plan \
+          python -I "${GITHUB_WORKSPACE}/tools/conformance/public_conformance.py" plan \
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
-          python -I "${GITHUB_WORKSPACE}/rust/tests/public_conformance.py" \
+          python -I "${GITHUB_WORKSPACE}/python/tests/installed/public_conformance.py" \
             --plan public-conformance-plan --fixtures "${GITHUB_WORKSPACE}/benchmarks" \
             --python-lock "${GITHUB_WORKSPACE}/python/uv.lock" \
             --output public-conformance/observed --source-revision "${QUALIFICATION_SOURCE_REVISION}" \
             --package-form "${{ matrix.form }}" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" compare \
+          python -I "${GITHUB_WORKSPACE}/tools/conformance/public_conformance.py" compare \
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
             --output public-conformance/inventory.json
       - name: Preserve Python public benchmark inventory and saved artifacts
@@ -371,7 +371,7 @@ jobs:
           ARCHIVE: ${{ matrix.form == 'wheel' && '*.whl' || '*.tar.gz' }}
         run: |
           archives=(native-dist/${ARCHIVE})
-          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/${FORM}/public-reports" python -I "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" run \
+          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/${FORM}/public-reports" python -I "${GITHUB_WORKSPACE}/tools/commands/installed.py" run \
             --output "qualification/${FORM}/supplemental" --runtime python --staged-root "${RUNNER_TEMP}" \
             --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form "${FORM}" \
             --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}/$(basename "${archives[0]}")" \
@@ -402,7 +402,7 @@ jobs:
           pattern: math-assessment-*
           path: math-assessments
       - name: Compare every candidate bit across the native matrix
-        run: python rust/tools/check_math_portability.py math-assessments
+        run: python -m tools.numeric.check_math_portability math-assessments
 
   r:
     needs: plan
@@ -437,7 +437,7 @@ jobs:
           rtools-version: ${{ runner.os == 'Windows' && '45' || '' }}
           use-public-rspm: true
       - name: Check benchmark SDK lock versions
-        run: python rust/tools/check_benchmark_sdk_versions.py
+        run: python -m tools.packaging.check_benchmark_sdk_versions
       - name: Install Rust
         run: |
           rustup toolchain install 1.90.0 --profile minimal --component clippy
@@ -464,14 +464,14 @@ jobs:
       - name: Install the shared grammar fixture codec
         run: python -m pip install py-yaml12==0.2.0
       - name: Stage standalone R package
-        run: python rust/tools/stage_r_package.py "${RUNNER_TEMP}/native-stage/yamaa"
+        run: python -m tools.staging.stage_r_package "${RUNNER_TEMP}/native-stage/yamaa"
       - name: Build and install R outside checkout
         id: r_install
         working-directory: ${{ runner.temp }}
         run: |
           mkdir -p native-r-library
           R CMD build --no-build-vignettes --no-manual native-stage/yamaa
-          python "${GITHUB_WORKSPACE}/rust/tools/check_cargo_lock.py" --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.4.0.tar.gz
+          python "${GITHUB_WORKSPACE}/tools/packaging/check_cargo_lock.py" --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.4.0.tar.gz
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.4.0.tar.gz
           if [ "${{ runner.os }}" = Windows ]; then
@@ -500,14 +500,14 @@ jobs:
           PUBLIC_CONFORMANCE_PACKAGE_FORM: source
         run: |
           python -m pip install py-yaml12==0.2.0 pyarrow==25.0.1
-          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" plan \
+          python -I "${GITHUB_WORKSPACE}/tools/conformance/public_conformance.py" plan \
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
           Rscript --vanilla "${GITHUB_WORKSPACE}/rust/tests/test_public_conformance.R" \
             "${GITHUB_WORKSPACE}/rust/tests/public_conformance.R"
           Rscript --vanilla "${GITHUB_WORKSPACE}/rust/tests/public_conformance.R" \
             public-conformance-plan "${GITHUB_WORKSPACE}/benchmarks" public-conformance/observed \
             "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)"
-          python -I "${GITHUB_WORKSPACE}/rust/tools/public_conformance.py" compare \
+          python -I "${GITHUB_WORKSPACE}/tools/conformance/public_conformance.py" compare \
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
             --output public-conformance/inventory.json
       - name: Preserve R public benchmark inventory and saved artifacts
@@ -544,9 +544,9 @@ jobs:
         if: ${{ !cancelled() && steps.r_install.outcome == 'success' }}
         working-directory: ${{ runner.temp }}
         run: |
-          python "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" stage \
+          python "${GITHUB_WORKSPACE}/tools/commands/installed.py" stage \
             --runtime r --staged-root "${RUNNER_TEMP}"
-          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/.github/scripts/commands/installed.py" run \
+          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I "${GITHUB_WORKSPACE}/tools/commands/installed.py" run \
             --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
             --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
             --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.4.0.tar.gz" \
@@ -557,8 +557,8 @@ jobs:
         env:
           R_LIBS: ${{ runner.temp }}/native-r-library
         run: |
-          cp "${GITHUB_WORKSPACE}/.github/scripts/yaml-validation/_r_check_transport.py" _r_check_transport.py
-          cp "${GITHUB_WORKSPACE}/rust/tests/check_repository_r_transport.py" check_repository_r_transport.py
+          cp "${GITHUB_WORKSPACE}/tools/validation/_r_check_transport.py" _r_check_transport.py
+          cp "${GITHUB_WORKSPACE}/tools/tests/check_repository_r_transport.py" check_repository_r_transport.py
           python -I check_repository_r_transport.py
       - name: Check R source package outside checkout
         id: r_package_check
@@ -567,7 +567,7 @@ jobs:
           _R_CHECK_CRAN_INCOMING_REMOTE_: 'false'
           R_LIBS: ${{ runner.temp }}/native-r-library
         run: |
-          python "${GITHUB_WORKSPACE}/.github/scripts/commands/check_r.py" \
+          python "${GITHUB_WORKSPACE}/tools/commands/check_r.py" \
             --archive "${RUNNER_TEMP}/yamaa_0.4.0.tar.gz" --work-dir "${RUNNER_TEMP}/native-r-check"
       - name: Preserve R package check
         if: ${{ always() && (steps.r_package_check.outcome == 'success' || steps.r_package_check.outcome == 'failure') }}
@@ -650,7 +650,7 @@ jobs:
         working-directory: ${{ runner.temp }}
         env:
           QUALIFICATION_MATRIX: ${{ needs.plan.outputs.qualify }}
-        run: python -I "${GITHUB_WORKSPACE}/.github/scripts/ci/native_matrix.py" compare
+        run: python -I "${GITHUB_WORKSPACE}/tools/ci/native_matrix.py" compare
       - name: Preserve complete public cohort inventory
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5

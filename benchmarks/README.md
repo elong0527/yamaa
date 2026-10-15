@@ -28,7 +28,7 @@ Each example carries a lifecycle badge showing its review state:
 No index table is committed; the case directories are the index. The
 [benchmark gallery](https://elong0527.github.io/yamaa/benchmark/) on the project
 site lists every case with its derivation, lifecycle and public host entries,
-and `.github/scripts/benchmark-docs/build_index.py` prints the full Markdown
+and `tools/benchmark_docs/build_index.py` prints the full Markdown
 index locally.
 
 Each active case uses the same public Python and R plan. Actual passing

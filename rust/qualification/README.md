@@ -32,13 +32,13 @@ the resulting inventory.
 Run from the repository root against an installed package:
 
 ```sh
-python -I rust/tools/public_conformance.py plan --fixtures benchmarks --output /tmp/public-plan
-python -I rust/tests/public_conformance.py --plan /tmp/public-plan --fixtures benchmarks \
+python -I tools/conformance/public_conformance.py plan --fixtures benchmarks --output /tmp/public-plan
+python -I python/tests/installed/public_conformance.py --plan /tmp/public-plan --fixtures benchmarks \
   --python-lock python/uv.lock --output /tmp/public-python --source-revision REVISION
 Rscript --vanilla rust/tests/public_conformance.R /tmp/public-plan benchmarks /tmp/public-r REVISION
-python -I rust/tools/public_conformance.py compare --fixtures benchmarks \
+python -I tools/conformance/public_conformance.py compare --fixtures benchmarks \
   --observed /tmp/public-python --output /tmp/public-python/inventory.json
-python -I rust/tools/public_conformance.py compare --fixtures benchmarks \
+python -I tools/conformance/public_conformance.py compare --fixtures benchmarks \
   --observed /tmp/public-r --output /tmp/public-r/inventory.json
 ```
 

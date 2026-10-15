@@ -92,7 +92,7 @@ jobs:
         run: |
           uv sync --project python --locked --extra test --group benchmark --no-editable
           uv pip install --python python/.venv/bin/python coverage==7.16.2 \
-            -r docs/requirements.txt -r .github/scripts/benchmark-docs/requirements.txt
+            -r docs/requirements.txt -r tools/benchmark_docs/requirements.txt
       - name: Run every Python package test with coverage
         run: |
           uv run --project python --no-sync coverage run --parallel-mode -m pytest python/tests
@@ -146,7 +146,7 @@ jobs:
           RS
       - name: Stage the standalone package and run every R package test
         run: |
-          python rust/tools/stage_r_package.py "${RUNNER_TEMP}/unit-r-stage/yamaa"
+          python -m tools.staging.stage_r_package "${RUNNER_TEMP}/unit-r-stage/yamaa"
           Rscript --vanilla - <<'RS'
           coverage <- covr::package_coverage(
             path = file.path(Sys.getenv("RUNNER_TEMP"), "unit-r-stage/yamaa"),
@@ -187,7 +187,7 @@ jobs:
           path: ${{ runner.temp }}/coverage-input
       - name: Calculate combined line coverage
         run: |
-          python .github/scripts/ci/coverage_report.py --input "${RUNNER_TEMP}/coverage-input" \
+          python -m tools.ci.coverage_report --input "${RUNNER_TEMP}/coverage-input" \
             --output "${RUNNER_TEMP}/coverage-site" --commit "${GITHUB_SHA}" \
             --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           cat "${RUNNER_TEMP}/coverage-site/index.md" >> "${GITHUB_STEP_SUMMARY}"

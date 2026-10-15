@@ -1,0 +1,122 @@
+"""Independent M1 owner mutation controls; synthetic reports are never evidence."""
+
+import copy
+import shutil
+import unittest
+
+from tools.tests import test_committed_cohort as controls
+
+cohort = controls.cohort
+producer = controls.producer
+
+
+class ProducerOwnerReview(unittest.TestCase):
+    def setUp(self):
+        self.fixture = controls.CompletePublicTruth("runTest")
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+
+    def source_owner(self):
+        return (
+            self.fixture.evidence
+            / "python/public-reports/producer-cohort/python"
+            / producer.NAME
+        )
+
+    def test_qualifier_publication_node_and_flag_types_are_exact(self):
+        owner = self.source_owner()
+        record = cohort.read(
+            self.fixture.evidence / "python/supplemental/supplemental.json"
+        )
+        expected = cohort.reports.read_report(
+            controls.ROOT / cohort.TRUTH_PATHS[producer.NAME]
+        )
+        saved = owner / "after-1/report.json"
+        original = cohort.read(saved)
+        for label, change in (
+            (
+                "boolean node",
+                lambda j: j["publication"]["entered"][0].update(node=True),
+            ),
+            ("float node", lambda j: j["publication"]["entered"][0].update(node=1.0)),
+            (
+                "integer flag",
+                lambda j: j["publication"]["entered"][0].update(published=1),
+            ),
+        ):
+            with self.subTest(label=label):
+                changed = copy.deepcopy(original)
+                change(changed)
+                cohort.write(saved, changed)
+                destination = self.fixture.directory / label
+                with self.assertRaisesRegex(ValueError, "publication"):
+                    producer.retain_owner(
+                        self.fixture.evidence / "python",
+                        "python",
+                        record,
+                        expected,
+                        destination,
+                    )
+        cohort.write(saved, original)
+
+    def test_original_seed_read_cannot_be_reassigned_to_consumer(self):
+        owner = self.source_owner()
+        raw = cohort.read(owner / "before.json")
+        case = (owner / "case-directory.txt").read_text()
+        self.assertEqual(len(raw["source_reads"]), 1)
+        self.assertEqual(raw["source_reads"][0]["path"], "seed.csv")
+        raw["source_reads"][0]["specification"] = case + "/spec.yaml"
+        with self.assertRaisesRegex(ValueError, "source|resource|owner|node"):
+            producer.project_report(raw, case)
+
+    def test_qualifier_rejects_nonnull_error_on_actual_complete_public_report(self):
+        path = (
+            self.fixture.evidence
+            / "python/public-reports/schema-lookup.python.rust.json"
+        )
+        raw = cohort.read(path)
+        self.assertEqual(raw["outcome"], "success")
+        raw["error"] = "unexpected infrastructure error"
+        cohort.write(path, raw)
+        with self.assertRaisesRegex(ValueError, "error|report|identity"):
+            self.fixture.compare()
+
+    def test_qualifier_binds_complete_public_reports_to_installed_runtime_version(self):
+        self.fixture.compare()
+        shutil.rmtree(self.fixture.output)
+        path = (
+            self.fixture.evidence
+            / "python/public-reports/schema-lookup.python.rust.json"
+        )
+        raw = cohort.read(path)
+        raw["runtime_version"] = "3.14.9"
+        cohort.write(path, raw)
+        with self.assertRaisesRegex(ValueError, "runtime|report|owner|version"):
+            self.fixture.compare()
+
+    def test_qualifier_binds_raw_producer_reports_to_installed_runtime_version(self):
+        self.fixture.compare(True)
+        owner = self.source_owner()
+        for relative in ("before.json", "after-1/report.json", "after-2/report.json"):
+            path = owner / relative
+            raw = cohort.read(path)
+            raw["runtime_version"] = "3.14.9"
+            cohort.write(path, raw)
+        record = cohort.read(
+            self.fixture.evidence / "python/supplemental/supplemental.json"
+        )
+        expected = cohort.reports.read_report(
+            controls.ROOT / cohort.TRUTH_PATHS[producer.NAME]
+        )
+        with self.assertRaisesRegex(ValueError, "runtime|report|owner|version"):
+            producer.retain_owner(
+                self.fixture.evidence / "python",
+                "python",
+                record,
+                expected,
+                self.fixture.directory / "changed-runtime",
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

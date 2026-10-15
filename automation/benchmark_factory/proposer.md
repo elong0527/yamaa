@@ -18,7 +18,7 @@ feedback until it is accepted or rejected.
 
 1. `benchmarks/AGENTS.md` -- the layout, README, and golden contracts.
 2. The existing case directories under `benchmarks/` (or the index
-   printed by `python .github/scripts/benchmark-docs/build_index.py`);
+   printed by `python -m tools.benchmark_docs.build_index`);
    your benchmark must not duplicate an existing one.
 3. `automation/benchmark_prompt.md` -- the prompt recipe, if the
    benchmark is a positive `sdtm-*`/`adam-*` one.

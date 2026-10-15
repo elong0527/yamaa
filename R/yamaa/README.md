@@ -113,7 +113,7 @@ from the repository root:
 
 ```sh
 python -m pip install py-yaml12==0.2.0
-python rust/tools/stage_r_package.py /tmp/yamaa-stage/yamaa
+python -m tools.staging.stage_r_package /tmp/yamaa-stage/yamaa
 R CMD build --no-build-vignettes --no-manual /tmp/yamaa-stage/yamaa
 R CMD INSTALL yamaa_0.4.0.tar.gz
 R CMD check --no-manual yamaa_0.4.0.tar.gz

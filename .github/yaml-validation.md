@@ -43,12 +43,12 @@ Run from the repository root. CI uses Python 3.14 and Rust 1.90.0:
 
 ```sh
 uv sync --project python --extra test --locked
-uv run --project python --no-sync python .github/scripts/yaml-validation/test_validate_repository.py
-uv run --project python --no-sync python .github/scripts/yaml-validation/validate_repository.py --root .
-uv run --project python --no-sync python .github/scripts/yaml-validation/check_documentation.py
-uv run --project python --no-sync python .github/scripts/yaml-validation/test_rule_rewrite.py
-uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_rewrite.py
-uv run --project python --no-sync python .github/scripts/yaml-validation/generate_rule_reference.py --check
+uv run --project python --no-sync python -m tools.tests.test_validate_repository
+uv run --project python --no-sync python -m tools.validation.validate_repository --root .
+uv run --project python --no-sync python -m tools.validation.check_documentation
+uv run --project python --no-sync python -m tools.tests.test_rule_rewrite
+uv run --project python --no-sync python -m tools.validation.check_rule_rewrite
+uv run --project python --no-sync python -m tools.validation.generate_rule_reference --check
 ```
 
 The script infers the repository root from its location when `--root` is omitted.
@@ -71,7 +71,7 @@ The R grammar replay requires jsonlite 2.0.0 in its selected test library to rea
 the shared fixture truth.
 
 ```sh
-uv run --project python --no-sync python rust/tools/check_shared_grammar.py
+uv run --project python --no-sync python -m tools.numeric.check_shared_grammar
 Rscript --vanilla R/yamaa/tests/public_grammar.R
 ```
 

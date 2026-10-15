@@ -101,8 +101,8 @@ installed-host checks and release qualification separate:
 For boundary/API guards and focused component checks beyond these targets:
 
 ```sh
-uv run --project python --no-sync python rust/tools/check_shared_release_versions.py
-uv run --project python --no-sync python rust/tools/check_dependencies.py
+uv run --project python --no-sync python -m tools.packaging.check_shared_release_versions
+uv run --project python --no-sync python -m tools.packaging.check_dependencies
 uv run --project python --no-sync python -m unittest discover -s rust/tests -p 'test_*.py'
 ```
 
@@ -174,8 +174,8 @@ sources on every docs build and are not committed;
 Run from the repository root:
 
 ```sh
-uv run --project python --no-sync python .github/scripts/commands/repository.py rule-references
-uv run --project python --no-sync python .github/scripts/commands/repository.py rules
+uv run --project python --no-sync python -m tools.commands.repository rule-references
+uv run --project python --no-sync python -m tools.commands.repository rules
 ```
 
 Repository validation has focused owners under `.github/scripts/yaml-validation/`.
@@ -199,7 +199,7 @@ formats native findings; it does not supply a second language evaluator.
 Edit the root `README.md` for the site home and `rules/README.md` for its rules
 index. The MkDocs hook reads those canonical sources; no copied pages exist.
 Other site pages live in `docs/`. The
-[documentation command guide](https://github.com/elong0527/yamaa/blob/main/.github/scripts/docs/README.md)
+[documentation command guide](https://github.com/elong0527/yamaa/blob/main/tools/docs/README.md)
 owns dependency setup, interpreter selection and the shared Make targets for
 tests and builds. Deployment also renders the Quarto decks.
 

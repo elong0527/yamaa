@@ -118,8 +118,8 @@ its spelling is not. A quoted value doubles an interior quote, as R004 does.
 From the repository root, with Rust 1.90.0 and `py-yaml12==0.2.0` installed:
 
 ```bash
-python3 .github/scripts/yaml-validation/validate_repository.py --root .
-python3 rust/tools/check_shared_grammar.py
+python3 -m tools.validation.validate_repository --root .
+python3 -m tools.numeric.check_shared_grammar
 ```
 
 The first checks the rule blocks and contract structure. The second replays
@@ -130,5 +130,5 @@ Neither command imports the reference evaluator.
 The `R shared grammar` workflow stages, builds and installs the standalone
 `R/yamaa` source package and runs `R/yamaa/tests/public_grammar.R` against its
 installed copies of these documents. The native workflow runs that suite and
-`rust/tests/installed_public_grammar.py` outside the checkout across the complete
+`python/tests/installed/installed_public_grammar.py` outside the checkout across the complete
 supported installed matrix. There is no R parser or public grammar probe API.

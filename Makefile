@@ -48,7 +48,7 @@ test-python:
 
 stage-r:
 	@test -n "$(R_STAGE)" || (echo 'Set R_STAGE to a fresh package directory outside the checkout' >&2; exit 2)
-	$(PYTHON) rust/tools/stage_r_package.py "$(R_STAGE)"
+	$(PYTHON) tools/staging/stage_r_package.py "$(R_STAGE)"
 
 stage-r-tests:
 	$(PYTHON) $(COMMANDS)/installed.py stage --runtime r --staged-root "$(HOST_WORK)"

@@ -34,7 +34,7 @@ jobs:
       - name: Select and download the exact qualified packages
         run: |
           git fetch --no-tags origin main:refs/remotes/origin/main
-          python rust/tools/select_release_artifacts.py \
+          python -m tools.ci.select_release_artifacts \
             --repository "${GITHUB_REPOSITORY}" --tag "${RELEASE_TAG}" \
             --destination "${RUNNER_TEMP}/qualified-release"
       - name: Publish qualified assets without rebuilding

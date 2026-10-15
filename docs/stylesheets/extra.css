@@ -3,7 +3,7 @@
  * Palette note (the single home for this rule; it is not in AGENTS.md):
  * the brand palette is sampled from the hex logo: a deep navy outline over
  * steel-blue bands. The generated benchmark dashboards carry the same values
- * in .github/scripts/benchmark-docs/dashboard.css, so the Material pages and
+ * in tools/benchmark_docs/dashboard.css, so the Material pages and
  * the self-contained pages read as one site. The dashboard tokens that mirror
  * the variables below are --brand (#2d5f8a, --yamaa-blue) and --brand-deep
  * (#1f3a5c, --yamaa-navy). Change a color or a bar treatment in one file and
@@ -102,7 +102,7 @@
 }
 
 /* Benchmark gallery (docs/benchmark/index.md, written by
- * .github/scripts/benchmark-docs/generate.py). The page is generated, so its
+ * tools/benchmark_docs/generate.py). The page is generated, so its
  * lists arrive as plain HTML and are laid out here. */
 .md-typeset .benchmark-jump {
   display: flex;

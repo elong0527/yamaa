@@ -11,7 +11,7 @@ on:
       - 'rust/Cargo.toml'
       - 'rust/**/Cargo.toml'
       - 'rust/rust-toolchain.toml'
-      - '.github/scripts/ci/requirements-pr.txt'
+      - 'tools/ci/requirements-pr.txt'
       - '.github/workflows/pr.yml'
   schedule:
     - cron: '43 4 * * 1'
@@ -48,9 +48,9 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: .github/scripts/ci/requirements-pr.txt
+          cache-dependency-path: tools/ci/requirements-pr.txt
       - name: Install static check dependencies
-        run: python -m pip install -r .github/scripts/ci/requirements-pr.txt
+        run: python -m pip install -r tools/ci/requirements-pr.txt
       - name: Check canonical site pages, Python formatting and lint
         run: |
           python -m unittest discover -s .github/scripts/docs -p 'test_*.py'
@@ -60,16 +60,16 @@ jobs:
         run: python -m unittest discover -s .github/scripts/ci -p 'test_*.py'
       - name: Check documentation, rule metadata and generated references
         run: |
-          python .github/scripts/yaml-validation/check_vocabulary_coverage.py
-          python .github/scripts/yaml-validation/check_rule_metadata.py
-          python .github/scripts/yaml-validation/check_documentation.py
-          python .github/scripts/yaml-validation/test_rule_rewrite.py
-          python .github/scripts/yaml-validation/check_rule_rewrite.py
-          python .github/scripts/yaml-validation/generate_rule_reference.py --check
-          python .github/scripts/yaml-validation/test_rationale_phrases.py
-          python .github/scripts/yaml-validation/check_rationale_phrases.py
-          python .github/scripts/yaml-validation/test_requirement_registry.py
-          python rust/tools/check_shared_release_versions.py
+          python -m tools.validation.check_vocabulary_coverage
+          python -m tools.validation.check_rule_metadata
+          python -m tools.validation.check_documentation
+          python -m tools.tests.test_rule_rewrite
+          python -m tools.validation.check_rule_rewrite
+          python -m tools.validation.generate_rule_reference --check
+          python -m tools.tests.test_rationale_phrases
+          python -m tools.validation.check_rationale_phrases
+          python -m tools.tests.test_requirement_registry
+          python -m tools.packaging.check_shared_release_versions
 
   rust:
     name: pr-rust-smoke
