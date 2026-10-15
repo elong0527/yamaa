@@ -3,7 +3,6 @@
 [![CI](https://github.com/elong0527/yamaa/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
 [![Nightly](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&event=schedule&label=nightly)](https://github.com/elong0527/yamaa/actions/workflows/native.yml)
 [![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
-[![R CMD check](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/ci.yml?branch=main&event=push&label=R%20CMD%20check)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/pypi/v/yamaa)](https://pypi.org/project/yamaa/)
 [![rustc](https://img.shields.io/badge/rustc-1.90%2B-orange?logo=rust)](https://www.rust-lang.org)
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
