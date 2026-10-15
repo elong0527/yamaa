@@ -12,7 +12,7 @@ name: Harbor Oracle
 
 on:
   push:
-    branches: [main]
+    branches: [main, validation/issue-2297-harbor]
     paths:
       - evaluations/harbor/**
       - python/tests/test_harbor*.py
@@ -88,6 +88,9 @@ jobs:
           options=()
           if [ "${FULL_COVERAGE}" != true ]; then
             options+=(--all-cases --allow-empty)
+          elif [ "${GITHUB_REF}" = refs/heads/validation/issue-2297-harbor ]; then
+            # Reviewed batch acceptance covers every R/Python case and tier.
+            options+=(--all-cases)
           fi
           uv run --project python --no-sync python evaluations/harbor/smoke.py \
             --benchmarks-file "${RUNNER_TEMP}/harbor-selection.json" "${options[@]}" \
