@@ -103,6 +103,20 @@ def test_source_ordinal_rejects_zero() -> None:
         ClinicalItemRow.model_validate(valid_row() | {"SourceOrdinal": 0})
 
 
+def test_source_ordinal_rejects_above_uint64() -> None:
+    # ODM_ITEM_SCHEMA declares SourceOrdinal as UInt64, so a value the
+    # model accepts must also fit the frame: 2**64 used to validate and
+    # then crash rows_to_frame with a raw Polars ComputeError.
+    with pytest.raises(ValidationError):
+        ClinicalItemRow.model_validate(valid_row() | {"SourceOrdinal": 2**64})
+
+
+def test_source_ordinal_accepts_uint64_max() -> None:
+    row = ClinicalItemRow.model_validate(valid_row() | {"SourceOrdinal": 2**64 - 1})
+    frame = rows_to_frame([row])
+    assert frame["SourceOrdinal"].to_list() == [2**64 - 1]
+
+
 def test_row_can_be_validated_by_field_name() -> None:
     row = ClinicalItemRow.model_validate(valid_row())
     by_field_name = row.model_dump(by_alias=False)
