@@ -1,5 +1,5 @@
 use parquet::{
-    basic::{Compression, LogicalType, Repetition, TimeUnit, Type},
+    basic::{Compression, LogicalType, Repetition, Type},
     file::{reader::FileReader, serialized_reader::SerializedFileReader},
     record::{Field, RowAccessor},
 };
@@ -128,6 +128,11 @@ fn closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero
     let meta = reader.metadata().file_metadata();
     assert!(meta.key_value_metadata().is_none());
     let schema = meta.schema_descr();
+    // Textual schema truth avoids a release-specific LogicalType constructor.
+    let timestamp = parquet::schema::parser::parse_message_type(
+        "message expected { OPTIONAL INT64 at (TIMESTAMP(MICROS,false)); }",
+    )
+    .unwrap();
     let expected = [
         (Type::BYTE_ARRAY, Some(LogicalType::String)),
         (Type::INT64, None),
@@ -135,7 +140,7 @@ fn closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero
         (Type::INT32, Some(LogicalType::Date)),
         (
             Type::INT64,
-            Some(LogicalType::timestamp(false, TimeUnit::MICROS)),
+            timestamp.get_fields()[0].get_basic_info().logical_type_ref().cloned(),
         ),
     ];
     for (i, (physical, logical)) in expected.into_iter().enumerate() {
