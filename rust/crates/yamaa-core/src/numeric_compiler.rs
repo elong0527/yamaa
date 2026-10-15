@@ -1,15 +1,45 @@
 //! Compile bounded numeric syntax using the pinned portable math contract.
 //!
 //! Literal overflow is deferred until evaluation reaches it in written order.
-//! Compiled trees retain the parser's fixed recursion guard and exact node spans.
+//! Compiled trees are private, so parse and resolution budgets cannot be bypassed
+//! by mutation. Budgets bound structure and call counts, not resolver running time.
 
 use crate::evaluation::{EvaluationError, NumericNode, NumericPlan, NumericResolver, Operand};
 use crate::numeric::{
     BinaryOperator, IntegralFunction, MathFunction, Number, SelectionFunction, UnaryOperator,
 };
 use crate::numeric_parser::{
-    parse_numeric, NumericFunction, ParseError, ParsedKind, ParsedNumeric, SourceSpan,
+    parse_numeric, NumericFunction, ParseError, ParseLimits, ParsedKind, ParsedNumeric, SourceSpan,
 };
+
+/// Parse budgets also bound compilation/evaluation work; every identifier
+/// occurrence consumes one resolution, including repeated names. The static
+/// maximum is checked before evaluation, even if an earlier operand would fail.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CompileLimits {
+    pub parse: ParseLimits,
+    pub resolutions: usize,
+}
+
+impl Default for CompileLimits {
+    /// Use the bounded parser defaults and at most 4,096 resolver calls per run.
+    fn default() -> Self {
+        Self {
+            parse: ParseLimits::default(),
+            resolutions: 4096,
+        }
+    }
+}
+
+/// Distinguish invalid syntax, parser policy and call policy.
+/// None of these outcomes runs a resolver or selects a language lifecycle handler.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum CompileError {
+    #[error("numeric compiler parse: {0:?}")]
+    Parse(ParseError),
+    #[error("numeric compiler resolution limit: limit={limit:?}, required={required:?}")]
+    ResolutionLimit { limit: usize, required: usize },
+}
 
 /// Evaluator failure plus the exact source extent of the failed semantic node.
 /// Group parentheses do not replace an inner node's span. An operator/call failure
@@ -27,6 +57,7 @@ pub struct CompiledEvaluationError<E> {
 pub struct CompiledNumeric {
     plan: NumericPlan,
     sources: Vec<(Vec<Operand>, SourceSpan)>,
+    resolutions: usize,
     identifiers: Vec<String>,
 }
 
@@ -49,9 +80,19 @@ impl CompiledNumeric {
         &self.plan.spec_path
     }
 
+    /// Static maximum resolver calls for one evaluation, not distinct name count.
+    pub fn resolution_count(&self) -> usize {
+        self.resolutions
+    }
+
     /// Distinct case-sensitive names in written first-occurrence order for static binding.
     pub fn identifiers(&self) -> impl Iterator<Item = &str> {
         self.identifiers.iter().map(String::as_str)
+    }
+
+    /// Semantic node visits charged by an enclosing application before evaluation.
+    pub fn node_count(&self) -> usize {
+        self.sources.len()
     }
 
     /// Evaluate within the compiled structural bounds and attach the failed span.
@@ -77,10 +118,25 @@ impl CompiledNumeric {
 
 /// Parse and preflight the whole expression before resolving any identifiers.
 /// No arithmetic folding, name binding, resolver invocation or handler accounting
-/// occurs here. The fixed recursion guard belongs to the parser.
-pub fn compile_numeric(text: &str, spec_path: &str) -> Result<CompiledNumeric, ParseError> {
-    let parsed = parse_numeric(text)?;
-    Ok(compile_parsed(&parsed, spec_path))
+/// occurs here. Node/token/byte limits and the hard depth ceiling come from parsing.
+pub fn compile_numeric(
+    text: &str,
+    spec_path: &str,
+    limits: CompileLimits,
+) -> Result<CompiledNumeric, CompileError> {
+    let parsed = parse_numeric(text, limits.parse).map_err(CompileError::Parse)?;
+    let resolutions = parsed
+        .nodes()
+        .iter()
+        .filter(|node| node.kind == ParsedKind::Identifier)
+        .count();
+    if resolutions > limits.resolutions {
+        return Err(CompileError::ResolutionLimit {
+            limit: limits.resolutions,
+            required: resolutions,
+        });
+    }
+    Ok(compile_parsed(&parsed, spec_path, resolutions))
 }
 
 /// R013 shares the same arithmetic evaluator and original spans. The parser has
@@ -89,11 +145,24 @@ pub(crate) fn compile_aggregate_subtree(
     parsed: &crate::aggregate_parser::ParsedAggregate,
     root: usize,
     spec_path: &str,
-) -> CompiledNumeric {
-    compile_parsed(&ParsedNumeric::aggregate_subtree(parsed, root), spec_path)
+    resolution_limit: usize,
+) -> Result<CompiledNumeric, CompileError> {
+    let parsed = ParsedNumeric::aggregate_subtree(parsed, root);
+    let resolutions = parsed
+        .nodes()
+        .iter()
+        .filter(|node| node.kind == ParsedKind::Identifier)
+        .count();
+    if resolutions > resolution_limit {
+        return Err(CompileError::ResolutionLimit {
+            limit: resolution_limit,
+            required: resolutions,
+        });
+    }
+    Ok(compile_parsed(&parsed, spec_path, resolutions))
 }
 
-fn compile_parsed(parsed: &ParsedNumeric, spec_path: &str) -> CompiledNumeric {
+fn compile_parsed(parsed: &ParsedNumeric, spec_path: &str, resolutions: usize) -> CompiledNumeric {
     let mut sources = Vec::new();
     let root = lower(parsed, parsed.root(), &mut Vec::new(), &mut sources);
     CompiledNumeric {
@@ -103,6 +172,7 @@ fn compile_parsed(parsed: &ParsedNumeric, spec_path: &str) -> CompiledNumeric {
             root,
         },
         sources,
+        resolutions,
         identifiers: parsed.identifiers().map(String::from).collect(),
     }
 }

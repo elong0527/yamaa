@@ -5,6 +5,8 @@ use crate::{
     table::ValueRef,
 };
 
+pub const MAX_FLAG_METADATA_BYTES: usize = 16_777_216;
+
 /// A lazy operand is a current/completed scalar or a distinct key-grain collection.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FlagRead {
@@ -18,6 +20,8 @@ pub struct FlagBinding {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum FlagError {
+    #[error("dataset flags metadata limit")]
+    MetadataLimit,
     #[error("dataset flags binding: {0:?}")]
     Binding(BindingError),
     #[error("dataset flags missing value required")]
@@ -42,6 +46,35 @@ impl Flag {
         false_value: Option<Value>,
         missing: Option<Value>,
     ) -> Result<Self, FlagError> {
+        let size = condition
+            .expression()
+            .len()
+            .checked_add(condition.spec_path().len())
+            .and_then(|n| {
+                bindings.iter().try_fold(n, |n, b| {
+                    n.checked_add(b.name.len())?
+                        .checked_add(match &b.read {
+                            FlagRead::Collect { identifier, .. } => identifier.len(),
+                            _ => 0,
+                        })?
+                        .checked_add(128)
+                })
+            })
+            .and_then(|n| {
+                std::iter::once(&true_value)
+                    .chain(false_value.iter())
+                    .chain(missing.iter())
+                    .try_fold(n, |n, v| {
+                        n.checked_add(match v {
+                            Value::Str(s) => s.len(),
+                            _ => 0,
+                        })
+                    })
+            })
+            .and_then(|n| n.checked_mul(8));
+        if bindings.len() > 65_536 || size.is_none_or(|n| n > MAX_FLAG_METADATA_BYTES) {
+            return Err(FlagError::MetadataLimit);
+        }
         if condition.spec_path().is_empty() {
             return Err(FlagError::Binding(BindingError::EmptyPath));
         }
@@ -79,7 +112,7 @@ impl Flag {
     pub fn bindings(&self) -> &[FlagBinding] {
         &self.bindings
     }
-    /// Borrow one raw literal without changing its logical type.
+    /// Borrow one raw literal; the engine admits text before owning this value.
     pub fn value(&self, truth: Truth) -> ValueRef<'_> {
         match truth {
             Truth::True => ValueRef::from(&self.true_value),

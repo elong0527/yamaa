@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     bound_expression::Read,
-    predicate::{self, Resolver},
+    predicate::{self, ContextError, EvaluationContext},
     value::Selection,
 };
 
@@ -37,6 +37,7 @@ pub(super) fn resolve_current<T: TableAccess + ?Sized>(
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     match field.read {
         CurrentRead::Record { source, column } => {
+            state.budget.work(candidate.members.len(), 1)?;
             let table = if source == 0 {
                 state.primary
             } else {
@@ -56,6 +57,7 @@ pub(super) fn resolve_current<T: TableAccess + ?Sized>(
                     plan,
                     row,
                 },
+                state.budget,
                 state.handlers,
             )
             .map_err(|mut error| {
@@ -79,6 +81,9 @@ pub(super) fn resolve_current<T: TableAccess + ?Sized>(
         }
         CurrentRead::Output(column) => {
             let value = &candidate.values[column];
+            if let Value::Str(text) = value {
+                state.budget.scalar_text(text.len())?;
+            }
             Ok(value.clone())
         }
         CurrentRead::Intermediate { index, column } => match observation {
@@ -102,9 +107,10 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     assignment: &Assignment,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<predicate::Truth, Box<ExecutionError<T::Error>>> {
+    state.budget.work(1, 1)?;
     filter
         .plan()
-        .evaluate(&mut Context {
+        .evaluate_in_context(&mut Context {
             filter,
             donor,
             table,
@@ -125,7 +131,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             }
             match error.kind {
                 predicate::ErrorKind::Resolution { error, .. } => error,
-                predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
+                predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
                 predicate::ErrorKind::Condition(_) => unreachable!("condition was projected above"),
             }
         })
@@ -140,9 +146,16 @@ struct Context<'a, 'state, T: TableAccess + ?Sized> {
     assignment: &'a Assignment,
     state: &'a mut EvaluationState<'state, T::Error>,
 }
-impl<T: TableAccess + ?Sized> Resolver for Context<'_, '_, T> {
+impl<T: TableAccess + ?Sized> EvaluationContext for Context<'_, '_, T> {
     type Error = Box<ExecutionError<T::Error>>;
-    fn resolve(&mut self, identifier: &str) -> Result<Selection, Self::Error> {
+    fn budget(&mut self) -> &mut predicate::Budget {
+        self.state.budget.predicate()
+    }
+    fn resolve(
+        &mut self,
+        identifier: &str,
+        local: &mut predicate::Budget,
+    ) -> Result<Selection, ContextError<Self::Error>> {
         let binding = self
             .filter
             .bindings()
@@ -150,12 +163,16 @@ impl<T: TableAccess + ?Sized> Resolver for Context<'_, '_, T> {
             .expect("all predicate names admitted before execution");
         let value = match self.filter.bindings()[binding].read {
             Read::Source(column) => {
+                self.state
+                    .budget
+                    .work(1, 1)
+                    .map_err(ContextError::Resolution)?;
                 let value = self
                     .donor
                     .table
                     .cell(self.donor.row, column)
                     .map_err(|error| {
-                        Box::new(match self.donor.owner {
+                        ContextError::Resolution(Box::new(match self.donor.owner {
                             DonorOwner::Primary => ExecutionError::Cell {
                                 path: self.filter.plan().spec_path().into(),
                                 source_row: self.donor.row,
@@ -168,9 +185,17 @@ impl<T: TableAccess + ?Sized> Resolver for Context<'_, '_, T> {
                                 error,
                             },
                             DonorOwner::Completed => ExecutionError::SchemaMismatch,
-                        })
+                        }))
                     })?;
-
+                let bytes = if let ValueRef::Str(text) = value {
+                    text.len()
+                } else {
+                    0
+                };
+                self.state
+                    .budget
+                    .predicate_operand_text(local, bytes)
+                    .map_err(ContextError::Limit)?;
                 return Ok(Selection::Present(own(value)));
             }
             Read::Column(slot) => {
@@ -185,13 +210,22 @@ impl<T: TableAccess + ?Sized> Resolver for Context<'_, '_, T> {
                     self.assignment,
                     CurrentObservation::Predicate,
                     self.state,
-                )?
+                )
+                .map_err(ContextError::Resolution)?
             }
             Read::Intermediate { .. } | Read::Joined(_) => {
                 unreachable!("relation predicate uses explicit current metadata")
             }
         };
-
+        let bytes = if let Value::Str(text) = &value {
+            text.len()
+        } else {
+            0
+        };
+        self.state
+            .budget
+            .predicate_operand_text(local, bytes)
+            .map_err(ContextError::Limit)?;
         Ok(Selection::Present(value))
     }
 }

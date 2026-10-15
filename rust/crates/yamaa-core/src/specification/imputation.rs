@@ -53,6 +53,26 @@ pub(super) fn prepare(
         .field(payload, "not_before")
         .map(|id| text(d, id))
         .transpose()?;
+    let handler_text = |name: &str| {
+        d.field(payload, name).and_then(|id| match &d.nodes()[id] {
+            N::Text(text) => Some(text.as_str()),
+            _ => None,
+        })
+    };
+    if !Imputation::metadata_fits(
+        source,
+        bound,
+        path,
+        handler_text("missing"),
+        handler_text("invalid"),
+    ) {
+        return Err(PrepareError::limit(
+            "imputation_metadata",
+            16_777_216,
+            None,
+            Some(path),
+        ));
+    }
     let kind = match op {
         "date_impute" => {
             let minimum = match d
@@ -79,7 +99,9 @@ pub(super) fn prepare(
                     DatePolicyError::Diagnostic(diagnostic) => {
                         PrepareError::Invalid(vec![PreflightFinding::Imputation(diagnostic)])
                     }
-
+                    DatePolicyError::Limit => {
+                        PrepareError::limit("imputation_metadata", 16_777_216, None, Some(path))
+                    }
                     DatePolicyError::Shape => PrepareError::Internal,
                 })?
                 .map_err(|findings| {
@@ -134,19 +156,53 @@ pub(super) fn declaration_findings(
         findings: &mut Vec<PreflightFinding>,
         depth: usize,
         rows: bool,
+        bytes: &mut usize,
     ) -> Result<(), PrepareError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+        if depth > 64 {
             return Err(PrepareError::limit(
-                "semantic_depth",
-                crate::limits::Limits::SEMANTIC_DEPTH,
+                "case_depth",
+                64,
                 Some(depth),
                 Some(path),
             ));
         }
-
+        if path.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(path.len()),
+                Some(path),
+            ));
+        }
         for &op in OPERATIONS {
             if let Some(payload) = d.field(value, op) {
                 let path = format!("{path}.{op}");
+                // Charge occurrence copies before policy/context construction, even
+                // if an admitted arena shares one long scalar across declarations.
+                *bytes = bytes
+                    .checked_add(path.len())
+                    .and_then(|n| n.checked_add(512))
+                    .filter(|n| *n <= 16_777_216)
+                    .ok_or_else(|| {
+                        PrepareError::limit("imputation_metadata", 16_777_216, None, Some(&path))
+                    })?;
+                for &(key, value) in mapping(d, payload)? {
+                    for id in [key, value] {
+                        if let N::Text(text) | N::Integer(text) = &d.nodes()[id] {
+                            *bytes = bytes
+                                .checked_add(text.len())
+                                .filter(|n| *n <= 16_777_216)
+                                .ok_or_else(|| {
+                                    PrepareError::limit(
+                                        "imputation_metadata",
+                                        16_777_216,
+                                        None,
+                                        Some(&path),
+                                    )
+                                })?;
+                        }
+                    }
+                }
                 match prepare(d, payload, op, &path, None, None, &mut Vec::new()) {
                     Ok(operation) => {
                         let kind = if rows {
@@ -218,13 +274,14 @@ pub(super) fn declaration_findings(
                     findings,
                     depth + 1,
                     rows,
+                    bytes,
                 )?;
             }
         }
         Ok(())
     }
     let rows = present(d, d.root(), "rows");
-
+    let mut bytes = 0;
     for (index, &column) in columns.iter().enumerate() {
         if let Some(value) = d
             .field(column, "derivation")
@@ -238,6 +295,7 @@ pub(super) fn declaration_findings(
                 findings,
                 0,
                 rows,
+                &mut bytes,
             )?;
         }
     }
@@ -257,6 +315,7 @@ pub(super) fn declaration_findings(
                             findings,
                             0,
                             true,
+                            &mut bytes,
                         )?;
                     }
                 }
@@ -272,6 +331,7 @@ pub(super) fn declaration_findings(
             findings,
             0,
             present(d, d.root(), "rows"),
+            &mut bytes,
         )
     })?;
     Ok(())

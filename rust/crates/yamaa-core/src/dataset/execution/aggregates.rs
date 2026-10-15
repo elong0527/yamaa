@@ -49,6 +49,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     row: usize,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    state.budget.work(1, bound.expression().node_count())?;
     match bound.relation() {
         AggregateRelation::CurrentGroup => run(
             bound,
@@ -111,7 +112,9 @@ fn cell<'a, T: TableAccess + ?Sized>(
     coordinate: Coordinate,
     row: usize,
     column: usize,
+    budget: &mut Budget,
 ) -> Result<ValueRef<'a>, Box<ExecutionError<T::Error>>> {
+    budget.work(1, 1)?;
     table.cell(row, column).map_err(|error| {
         Box::new(match coordinate {
             Coordinate::Secondary(source) => ExecutionError::SecondaryCell {
@@ -132,14 +135,21 @@ fn filter<T: TableAccess + ?Sized>(
     table: &T,
     bound: &BoundAggregate,
     source_row: usize,
+    state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<bool, Box<ExecutionError<T::Error>>> {
     if let Some(filter) = bound.filter() {
-        return crate::dataset::execution::predicates::evaluate(filter, table, source_row, &[])
-            .map(|truth| truth == crate::predicate::Truth::True)
-            .map_err(|error| match error.kind {
-                crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
-                _ => Box::new(ExecutionError::Predicate { source_row, error }),
-            });
+        return crate::dataset::execution::predicates::evaluate(
+            filter,
+            table,
+            source_row,
+            &[],
+            state.budget.predicate(),
+        )
+        .map(|truth| truth == crate::predicate::Truth::True)
+        .map_err(|error| match error.kind {
+            crate::predicate::ErrorKind::Limit(limit) => Box::new(predicate_limit(limit)),
+            _ => Box::new(ExecutionError::Predicate { source_row, error }),
+        });
     }
     Ok(true)
 }
@@ -160,7 +170,7 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
     } else {
         donor.row_count()
     };
-
+    state.budget.work(capacity, 1)?;
     let mut members = Vec::new();
     members
         .try_reserve_exact(capacity)
@@ -168,7 +178,7 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
     match bound.relation() {
         AggregateRelation::CurrentGroup => {
             for &source_row in &candidate.members {
-                if filter(donor, bound, source_row)? {
+                if filter(donor, bound, source_row, state)? {
                     members.push(source_row);
                 }
             }
@@ -182,8 +192,14 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
             for source_row in 0..donor.row_count() {
                 let mut matches = true;
                 for &column in group_by {
-                    if Key::from(cell(donor, bound, coordinate, source_row, column)?)
-                        != Key::from(ValueRef::from(&candidate.values[column]))
+                    if Key::from(cell(
+                        donor,
+                        bound,
+                        coordinate,
+                        source_row,
+                        column,
+                        state.budget,
+                    )?) != Key::from(ValueRef::from(&candidate.values[column]))
                     {
                         matches = false;
                         break;
@@ -191,7 +207,7 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                 }
                 if matches {
                     first.get_or_insert(source_row);
-                    if filter(donor, bound, source_row)? {
+                    if filter(donor, bound, source_row, state)? {
                         members.push(source_row);
                     }
                 }
@@ -215,7 +231,14 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
             // selected. Its predicate visits only matched donor records.
             let values = match current {
                 Some(current) => intermediates::match_values::evaluate(
-                    request, &current, candidate, plan, row, primary, state,
+                    request,
+                    &current,
+                    candidate,
+                    plan,
+                    row,
+                    primary,
+                    state.budget.limits(),
+                    state,
                 )?,
                 None => intermediates::match_values::ordinary(
                     request, candidate, plan, row, primary, state,
@@ -253,7 +276,7 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                 let mut matches = true;
                 for (column, expected) in &values {
                     if crate::value::compare_present_refs(
-                        cell(donor, bound, coordinate, source_row, *column)?,
+                        cell(donor, bound, coordinate, source_row, *column, state.budget)?,
                         ValueRef::from(expected),
                     ) != Ok(std::cmp::Ordering::Equal)
                     {
@@ -263,8 +286,15 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                 }
                 if matches {
                     first.get_or_insert(source_row);
-                    if filter(donor, bound, source_row)?
-                        && narrow(bound, range_value.as_ref(), donor, coordinate, source_row)?
+                    if filter(donor, bound, source_row, state)?
+                        && narrow(
+                            bound,
+                            range_value.as_ref(),
+                            donor,
+                            coordinate,
+                            source_row,
+                            state,
+                        )?
                     {
                         members.push(source_row);
                     }
@@ -284,6 +314,7 @@ fn narrow<T: TableAccess + ?Sized>(
     donor: &T,
     coordinate: Coordinate,
     source_row: usize,
+    state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<bool, Box<ExecutionError<T::Error>>> {
     use crate::dataset::RelationRangeFailure;
     let Some(range) = bound.range() else {
@@ -292,7 +323,7 @@ fn narrow<T: TableAccess + ?Sized>(
     range
         .allows(
             ValueRef::from(value.expect("bound range value")),
-            |column| cell(donor, bound, coordinate, source_row, column),
+            |column| cell(donor, bound, coordinate, source_row, column, state.budget),
         )
         .map_err(|error| match error {
             RelationRangeFailure::Access(error) => error,
@@ -308,10 +339,12 @@ struct Resolver<'a, T: TableAccess + ?Sized> {
     coordinate: Coordinate,
     source_row: Option<usize>,
     reductions: &'a [Value],
+    budget: &'a mut Budget,
 }
 impl<T: TableAccess + ?Sized> NumericResolver for Resolver<'_, T> {
     type Error = Box<ExecutionError<T::Error>>;
     fn resolve(&mut self, identifier: &str) -> Result<Selection, Self::Error> {
+        self.budget.work(1, 1)?;
         let value = if let Some(index) = self
             .bound
             .expression()
@@ -327,10 +360,14 @@ impl<T: TableAccess + ?Sized> NumericResolver for Resolver<'_, T> {
                 self.coordinate,
                 row,
                 self.bound.column(identifier),
+                self.budget,
             )?
         } else {
             ValueRef::Missing
         };
+        if let ValueRef::Str(value) = value {
+            self.budget.scalar_text(value.len())?;
+        }
         Ok(Selection::Present(own(value)))
     }
 }
@@ -423,6 +460,7 @@ fn reduce_selected<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?
                             coordinate,
                             source_row,
                             bound.column(name),
+                            state.budget,
                         )?);
                     }
                     fold(
@@ -435,14 +473,22 @@ fn reduce_selected<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?
                         .try_reserve_exact(members.len())
                         .map_err(|_| Box::new(ExecutionError::Allocation))?;
                     for &source_row in members {
+                        state.budget.work(1, expression.node_count())?;
                         let result = expression.evaluate(&mut Resolver {
                             bound,
                             table: donor,
                             coordinate,
                             source_row: Some(source_row),
                             reductions: &[],
+                            budget: state.budget,
                         });
-                        values.push(numeric::project_result(result, candidate, plan, row)?);
+                        values.push(numeric::project_result(
+                            result,
+                            candidate,
+                            plan,
+                            row,
+                            state.budget,
+                        )?);
                     }
                     let refs = values.iter().map(ValueRef::from).collect::<Vec<_>>();
                     fold(
@@ -459,14 +505,16 @@ fn reduce_selected<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?
             Ok(std::mem::replace(&mut reductions[*index], Value::Missing))
         }
         AggregateResult::Numeric(expression) => {
+            state.budget.work(1, expression.node_count())?;
             let result = expression.evaluate(&mut Resolver {
                 bound,
                 table: donor,
                 coordinate,
                 source_row: representative,
                 reductions: &reductions,
+                budget: state.budget,
             });
-            numeric::project_result(result, candidate, plan, row)
+            numeric::project_result(result, candidate, plan, row, state.budget)
         }
     }
 }
@@ -485,6 +533,9 @@ fn fold<T: TableAccess + ?Sized>(
     let result = reduce_values(values, reduction.reducer, bound.expression().expression());
     let error = match result {
         Ok(value) => {
+            if let ValueRef::Str(value) = value {
+                state.budget.scalar_text(value.len())?;
+            }
             return Ok(own(value));
         }
         Err(error) => error,
@@ -509,7 +560,7 @@ fn fold<T: TableAccess + ?Sized>(
         AggregateReductionError::Numeric(error) => {
             let identity = if matches!(&error,crate::reduction::ReductionError::Arithmetic { error,.. } if error.phase() == "derivation")
             {
-                failure_identity(candidate, plan.keys(), row)?
+                failure_identity(candidate, plan.keys(), row, state.budget)?
             } else {
                 None
             };
@@ -546,6 +597,7 @@ fn fold<T: TableAccess + ?Sized>(
                             Coordinate::Primary,
                             candidate.members[0],
                             *column,
+                            state.budget,
                         )?
                     } else {
                         cell(
@@ -554,9 +606,10 @@ fn fold<T: TableAccess + ?Sized>(
                             Coordinate::Secondary(source - 1),
                             candidate.members[0],
                             *column,
+                            state.budget,
                         )?
                     };
-
+                    state.budget.identity_refs(std::iter::once(value))?;
                     group.push((name.clone(), own(value)));
                 }
             }
@@ -571,7 +624,7 @@ fn fold<T: TableAccess + ?Sized>(
             .diagnostic()
             .map_err(|_| Box::new(ExecutionError::Capacity))?;
             let identity = if bound.phase() == AggregatePhase::Derivation {
-                failure_identity(candidate, plan.keys(), row)?
+                failure_identity(candidate, plan.keys(), row, state.budget)?
             } else {
                 None
             };
@@ -646,7 +699,14 @@ fn derive_records<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?S
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Vec<Vec<Value>>, Box<ExecutionError<T::Error>>> {
     use crate::numeric_lifecycle::{recover_conversion, ConversionRecoveryError};
-
+    state.budget.work(
+        members.len(),
+        bound
+            .derivations()
+            .len()
+            .checked_add(candidate.values.len())
+            .ok_or_else(|| Box::new(ExecutionError::Capacity))?,
+    )?;
     let mut enriched = Vec::new();
     enriched
         .try_reserve_exact(members.len())
@@ -657,6 +717,11 @@ fn derive_records<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?S
     // Record derivations operate on donor fields while named reads match against
     // the enclosing row. Restore nested evaluation context even when it fails.
     let previous = state.aggregate_row.take();
+    for value in &candidate.values {
+        if let Value::Str(text) = value {
+            state.budget.scalar_text(text.len())?;
+        }
+    }
     state.aggregate_row = Some(Candidate {
         template: candidate.template,
         selection_identity: candidate.selection_identity,
@@ -666,6 +731,11 @@ fn derive_records<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?S
     });
     let result = (|| {
         for &source_row in members {
+            for value in &candidate.values {
+                if let Value::Str(text) = value {
+                    state.budget.scalar_text(text.len())?;
+                }
+            }
             let mut record = Candidate {
                 template: candidate.template,
                 selection_identity: candidate.selection_identity,
@@ -679,10 +749,23 @@ fn derive_records<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?S
             );
             record.completed.resize(record.values.len(), false);
             for binding in bound.derivations() {
-                let value = evaluate_raw(donor, &binding.assignment, &record, plan, row, state)?;
+                let value = evaluate_raw(
+                    donor,
+                    &binding.assignment,
+                    &record,
+                    plan,
+                    row,
+                    state.budget.limits(),
+                    state,
+                )?;
                 let converted = match convert(&value, binding.kind) {
                     Ok(value) => value,
                     Err(error) => {
+                        if let Some(handler) = &binding.handler {
+                            if let Value::Str(text) = &handler.value {
+                                state.budget.scalar_text(text.len())?;
+                            }
+                        }
                         match recover_conversion(
                             binding.kind,
                             &binding.path,
@@ -705,13 +788,21 @@ fn derive_records<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?S
                                         path: spec_path,
                                         output_row: row,
                                         error,
-                                        identity: failure_identity(candidate, plan.keys(), row)?,
+                                        identity: failure_identity(
+                                            candidate,
+                                            plan.keys(),
+                                            row,
+                                            state.budget,
+                                        )?,
                                     }))
                                 }
                             },
                         }
                     }
                 };
+                if let Value::Str(text) = &converted {
+                    state.budget.scalar_text(text.len())?;
+                }
                 record.values[binding.assignment.column] = converted;
                 record.completed[binding.assignment.column] = true;
             }

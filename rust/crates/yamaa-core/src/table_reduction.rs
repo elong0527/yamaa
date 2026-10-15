@@ -1,6 +1,5 @@
-//! Selected-relation access for counts and ordered numeric folds.
+//! Bounded selected-relation access for counts and ordered numeric folds.
 
-use crate::limits::{LimitExceeded, Limits};
 use crate::{
     numeric::Number,
     reduction::{count_records, count_values, reduce_numeric, NumericReducer, ReductionError},
@@ -9,8 +8,8 @@ use crate::{
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum TableReductionError<E> {
-    #[error("table reduction boundary: {0}")]
-    Limit(LimitExceeded),
+    #[error("table reduction row limit: limit={limit:?}, required={required:?}")]
+    RowLimit { limit: usize, required: usize },
     #[error("table reduction invalid column: column={column:?}")]
     InvalidColumn { column: usize },
     #[error("table reduction invalid row: position={position:?}, row={row:?}")]
@@ -33,8 +32,8 @@ pub enum TableReductionError<E> {
 /// reordering are rejected, never silently sorted or deduplicated. An upstream
 /// sort constructs a new relation with its own row order.
 ///
-/// Preflight checks table geometry, column, then selected rows before cell access
-/// or allocation. All selected
+/// The caller supplies a resource budget, not a language limit. Preflight checks
+/// limit, column, then rows before any cell access or allocation. All selected
 /// arguments are read before folding, so a later port error wins over potential
 /// earlier arithmetic/type failures. Port errors remain opaque and need not Clone.
 /// This handles a bare bound column, not aggregate parsing/filtering/grouping.
@@ -42,10 +41,11 @@ pub fn reduce_column<T: TableAccess + ?Sized>(
     table: &T,
     column: usize,
     rows: &[usize],
+    max_rows: usize,
     reducer: NumericReducer,
     expression: &str,
 ) -> Result<Number, TableReductionError<T::Error>> {
-    validate_selection(table, Some(column), rows)?;
+    validate_selection(table, Some(column), rows, max_rows)?;
     let values = collect_column(table, column, rows)?;
     reduce_numeric(&values, reducer, expression).map_err(TableReductionError::Reduction)
 }
@@ -57,8 +57,9 @@ pub fn count_selected<T: TableAccess + ?Sized>(
     table: &T,
     column: Option<usize>,
     rows: &[usize],
+    max_rows: usize,
 ) -> Result<Number, TableReductionError<T::Error>> {
-    validate_selection(table, column, rows)?;
+    validate_selection(table, column, rows, max_rows)?;
     match column {
         None => count_records(rows.len()).map_err(TableReductionError::Reduction),
         Some(column) => {
@@ -68,14 +69,19 @@ pub fn count_selected<T: TableAccess + ?Sized>(
     }
 }
 
-/// Validate table geometry and selected coordinates before allocation or source cell reads.
+/// Validate limits and selected coordinates before allocation or source cell reads.
 fn validate_selection<T: TableAccess + ?Sized>(
     table: &T,
     column: Option<usize>,
     rows: &[usize],
+    max_rows: usize,
 ) -> Result<(), TableReductionError<T::Error>> {
-    Limits::table(table.row_count(), table.schema().columns().len())
-        .map_err(TableReductionError::Limit)?;
+    if rows.len() > max_rows {
+        return Err(TableReductionError::RowLimit {
+            limit: max_rows,
+            required: rows.len(),
+        });
+    }
     if let Some(column) = column {
         if column >= table.schema().columns().len() {
             return Err(TableReductionError::InvalidColumn { column });

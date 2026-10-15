@@ -3,8 +3,8 @@
 use super::*;
 use crate::{
     bound_expression::Binding,
-    function_signature::InvocationPlan,
-    numeric_compiler::{compile_numeric, CompiledNumeric},
+    function_signature::{InvocationPlan, Presence},
+    numeric_compiler::{compile_numeric, CompileError, CompileLimits, CompiledNumeric},
 };
 
 /// Decoded declarations carry coordinates, never authority to execute a plan.
@@ -118,10 +118,35 @@ pub fn validate_window_form(
     }
 }
 
+/// Trusted compilation policy; cumulative budgets precede signature copies.
+#[derive(Clone, Copy, Debug)]
+pub struct DatasetCompileLimits {
+    pub functions: usize,
+    pub function_arguments: usize,
+    pub copied_parameters: usize,
+    pub copied_text_bytes: usize,
+    pub numeric_bindings: usize,
+    pub numeric: CompileLimits,
+}
+impl Default for DatasetCompileLimits {
+    fn default() -> Self {
+        Self {
+            functions: 64,
+            function_arguments: 256,
+            copied_parameters: 16_384,
+            copied_text_bytes: 1_048_576,
+            numeric_bindings: 4096,
+            numeric: CompileLimits::default(),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum DatasetCompileError {
+    #[error("dataset compiler limit: {0:?}")]
+    Limit(&'static str),
     #[error("dataset compiler numeric: {0:?}")]
-    Numeric(crate::numeric_parser::ParseError),
+    Numeric(CompileError),
     #[error("dataset compiler plan: {0:?}")]
     Plan(PlanError),
 }
@@ -161,8 +186,9 @@ pub struct DatasetMetadata {
 /// callbacks, IO or host types. No partly admitted plan escapes on failure.
 pub fn compile_dataset(
     declaration: DatasetDeclaration,
+    limits: DatasetCompileLimits,
 ) -> Result<CompiledDataset, DatasetCompileError> {
-    let mut compiler = DatasetCompiler::new(declaration.functions);
+    let mut compiler = DatasetCompiler::new(declaration.functions, limits)?;
     for template in declaration.templates {
         compiler.begin_template(template.mode, template.filter)?;
         for assignment in template.assignments {
@@ -188,6 +214,7 @@ pub fn compile_dataset(
 #[derive(Debug)]
 pub struct DatasetCompiler {
     functions: Vec<InvocationPlan>,
+    limits: DatasetCompileLimits,
     templates: Vec<RowTemplate>,
     columns: Vec<Assignment>,
     reserved_function: Option<(usize, InvocationPlan)>,
@@ -195,15 +222,22 @@ pub struct DatasetCompiler {
     failed: bool,
 }
 impl DatasetCompiler {
-    pub fn new(functions: Vec<InvocationPlan>) -> Self {
-        Self {
+    pub fn new(
+        functions: Vec<InvocationPlan>,
+        limits: DatasetCompileLimits,
+    ) -> Result<Self, DatasetCompileError> {
+        if functions.len() > limits.functions {
+            return Err(DatasetCompileError::Limit("functions"));
+        }
+        Ok(Self {
             functions,
+            limits,
             templates: Vec::new(),
             columns: Vec::new(),
             reserved_function: None,
             reserved_numeric: None,
             failed: false,
-        }
+        })
     }
     pub fn begin_template(
         &mut self,
@@ -268,7 +302,7 @@ impl DatasetCompiler {
             self.failed = true;
             return Err(PlanError::InvalidColumns.into());
         }
-        match compile_numeric(text, path) {
+        match compile_numeric(text, path, self.limits.numeric) {
             Ok(compiled) => {
                 self.reserved_numeric = Some(compiled);
                 Ok(())
@@ -331,6 +365,40 @@ impl DatasetCompiler {
 
     fn copy_function(&mut self, slot: usize) -> Result<InvocationPlan, DatasetCompileError> {
         let signature = self.functions.get(slot).ok_or(PlanError::InvalidFunction)?;
+        Self::charge(
+            &mut self.limits.copied_parameters,
+            signature.parameters().len(),
+            "copied parameters",
+        )?;
+        let identity = signature.identity();
+        for text in [
+            &identity.name,
+            &identity.contract_version,
+            &identity.implementation_version,
+            &identity.call,
+        ] {
+            Self::charge(
+                &mut self.limits.copied_text_bytes,
+                text.len(),
+                "copied text",
+            )?;
+        }
+        for parameter in signature.parameters() {
+            for text in [&parameter.name, &parameter.host_name] {
+                Self::charge(
+                    &mut self.limits.copied_text_bytes,
+                    text.len(),
+                    "copied text",
+                )?;
+            }
+            if let Presence::Optional(Value::Str(text)) = &parameter.presence {
+                Self::charge(
+                    &mut self.limits.copied_text_bytes,
+                    text.len(),
+                    "copied text",
+                )?;
+            }
+        }
         Ok(signature.clone())
     }
 
@@ -343,6 +411,9 @@ impl DatasetCompiler {
         Ok(match declaration {
             D::Literal(value) => Expression::Literal(value),
             D::Compute { text, bindings } => {
+                if bindings.len() > self.limits.numeric_bindings {
+                    return Err(DatasetCompileError::Limit("numeric bindings"));
+                }
                 let compiled = match self.reserved_numeric.take() {
                     Some(compiled)
                         if compiled.expression() == text && compiled.spec_path() == path =>
@@ -350,13 +421,17 @@ impl DatasetCompiler {
                         compiled
                     }
                     Some(_) => return Err(PlanError::InvalidColumns.into()),
-                    None => compile_numeric(&text, path).map_err(DatasetCompileError::Numeric)?,
+                    None => compile_numeric(&text, path, self.limits.numeric)
+                        .map_err(DatasetCompileError::Numeric)?,
                 };
                 Expression::Compute(
                     BoundNumeric::new(compiled, bindings).map_err(|_| PlanError::InvalidColumns)?,
                 )
             }
             D::Function { slot, arguments } => {
+                if arguments.len() > self.limits.function_arguments {
+                    return Err(DatasetCompileError::Limit("function arguments"));
+                }
                 let signature = match self.reserved_function.take() {
                     Some((reserved, signature)) if reserved == slot => signature,
                     Some(_) => return Err(PlanError::InvalidFunction.into()),
@@ -401,5 +476,16 @@ impl DatasetCompiler {
             },
             D::Count { column, text } => Expression::Count { column, text },
         })
+    }
+
+    fn charge(
+        remaining: &mut usize,
+        amount: usize,
+        resource: &'static str,
+    ) -> Result<(), DatasetCompileError> {
+        *remaining = remaining
+            .checked_sub(amount)
+            .ok_or(DatasetCompileError::Limit(resource))?;
+        Ok(())
     }
 }

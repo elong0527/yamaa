@@ -1,8 +1,7 @@
-//! R004 predicate syntax with portable regex literal admission.
+//! Bounded R004 predicate syntax with portable regex literal admission.
 //! No names are resolved and no predicate, callback or data source is evaluated.
 
-use crate::limits::Limits;
-pub use crate::numeric_parser::{ParseResource, SourcePosition, SourceSpan};
+pub use crate::numeric_parser::{ParseLimits, ParseResource, SourcePosition, SourceSpan};
 use crate::{
     predicate::Comparison,
     regex,
@@ -172,15 +171,18 @@ impl ParsedPredicate {
 }
 
 /// Compile the complete predicate before any data can be resolved.
-/// Whole-input lexing precedes syntax/regex validation. Fixed recursion guards
-/// bound parser and arena nesting without limiting source or token counts.
-pub fn parse_predicate(text: &str) -> Result<ParsedPredicate, ParseError> {
-    let tokens = tokenize(text)?;
+/// Whole-input lexing precedes syntax/regex validation. Regex width-analysis work
+/// and logical allocations share a request budget; each pattern also retains its
+/// own limits. Parser byte/token/node policies bound total source and structure.
+pub fn parse_predicate(text: &str, limits: ParseLimits) -> Result<ParsedPredicate, ParseError> {
+    let tokens = tokenize(text, limits)?;
     let mut parser = Parser {
         text,
         tokens,
         cursor: 0,
         nodes: Vec::new(),
+        regex_budget: regex::CompileBudget::new(regex::CompileLimits::default()),
+        limits,
     };
     let root = parser.disjunction(1)?;
     if parser.token().kind != TokenKind::End {
@@ -277,7 +279,10 @@ fn name_continue(c: u8) -> bool {
 }
 
 /// Tokenize once, keeping strings as original spans until their operand is parsed.
-fn tokenize(text: &str) -> Result<Vec<Token>, ParseError> {
+fn tokenize(text: &str, limits: ParseLimits) -> Result<Vec<Token>, ParseError> {
+    if text.len() > limits.bytes {
+        return Err(limit(text, 0, ParseResource::Bytes, limits.bytes));
+    }
     let mut tokens = Vec::new();
     let bytes = text.as_bytes();
     let mut at = 0;
@@ -286,6 +291,9 @@ fn tokenize(text: &str) -> Result<Vec<Token>, ParseError> {
         if character.is_whitespace() || matches!(character, '\u{1c}'..='\u{1f}') {
             at += character.len_utf8();
             continue;
+        }
+        if tokens.len() >= limits.tokens {
+            return Err(limit(text, at, ParseResource::Tokens, limits.tokens));
         }
         let start = at;
         let kind = if bytes[at] == b'\'' {
@@ -414,6 +422,8 @@ struct Parser<'a> {
     tokens: Vec<Token>,
     cursor: usize,
     nodes: Vec<ParsedNode>,
+    regex_budget: regex::CompileBudget,
+    limits: ParseLimits,
 }
 impl Parser<'_> {
     /// EOF is always present and is never consumed.
@@ -459,7 +469,7 @@ impl Parser<'_> {
     }
     /// Bound parser recursion independently of the eventual flat arena's depth.
     fn enter(&self, depth: usize) -> Result<(), ParseError> {
-        let ceiling = Limits::SEMANTIC_DEPTH;
+        let ceiling = self.limits.depth.min(64);
         if depth > ceiling {
             Err(limit(
                 self.text,
@@ -484,9 +494,17 @@ impl Parser<'_> {
             .max()
             .unwrap_or(0)
             + 1;
-        let ceiling = Limits::SEMANTIC_DEPTH;
+        let ceiling = self.limits.depth.min(64);
         if depth > ceiling {
             return Err(limit(self.text, start, ParseResource::Depth, ceiling));
+        }
+        if self.nodes.len() >= self.limits.nodes {
+            return Err(limit(
+                self.text,
+                start,
+                ParseResource::Nodes,
+                self.limits.nodes,
+            ));
         }
         let end = self.tokens[self.cursor - 1].span.end;
         let id = self.nodes.len();
@@ -754,7 +772,12 @@ impl Parser<'_> {
             unreachable!()
         };
         let site = self.nodes[pattern].span.start;
-        regex::Pattern::compile(text).map_err(|error| match error {
+        regex::Pattern::compile_with_budget(
+            text,
+            regex::CompileLimits::default(),
+            &mut self.regex_budget,
+        )
+        .map_err(|error| match error {
             regex::CompileError::Invalid { byte, reason } => grammar(
                 self.text,
                 site,

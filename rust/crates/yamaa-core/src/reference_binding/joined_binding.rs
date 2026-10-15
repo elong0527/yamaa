@@ -29,6 +29,7 @@ type JoinedReadValue = (Read, ColumnType, Vec<usize>);
 type JoinedResolution = Result<Option<Result<JoinedReadValue, JoinedFinding>>, Error>;
 impl Catalog {
     pub(crate) fn joined_read(&self, name: &str, available: Option<&[usize]>) -> JoinedResolution {
+        limit("reference_bytes", name.len(), self.limits.reference_bytes)?;
         let Some((owner, field)) = name.split_once('.') else {
             return Ok(None);
         };
@@ -66,6 +67,7 @@ impl Catalog {
                             group_by: groups.as_deref(),
                         },
                     },
+                    Default::default(),
                 )?;
                 if let Some(&finding) = findings.first() {
                     return Ok(Some(Err(JoinedFinding::CurrentKey {
@@ -73,13 +75,13 @@ impl Catalog {
                         finding,
                     })));
                 }
-                let Some(Binding::Dataset { field, .. }) = self.bind(&identifier) else {
+                let Some(Binding::Dataset {
+                    field, column_type, ..
+                }) = self.bind(&identifier)?
+                else {
                     return Err(Error::InvalidAvailableOutput);
                 };
-                if let Some(column_type) = self
-                    .type_of(&identifier)
-                    .filter(|kind| !crate::key_relation::comparable((*kind).into(), actual.into()))
-                {
+                if !crate::key_relation::comparable(column_type.into(), actual.into()) {
                     return Ok(Some(Err(JoinedFinding::KeyType {
                         source: name.clone(),
                         expected: column_type,

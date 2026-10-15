@@ -50,7 +50,7 @@ fn predicate(
             operand_route: None,
         }));
     };
-    let plan = match predicate_compiler::compile(expression, &path) {
+    let plan = match predicate_compiler::compile(expression, &path, Default::default()) {
         Ok(plan) => plan,
         // Every grammar failure, including an invalid expression, reports the
         // shared structured {position, predicate} context that `when` and
@@ -60,11 +60,11 @@ fn predicate(
             failure,
             ..
         })) => {
-            return Ok(Err(failure.original_diagnostic(
-                &path,
-                expression,
-                position.character,
-            )));
+            return Ok(Err(failure
+                .original_diagnostic(&path, expression, position.character)
+                .map_err(|_| {
+                    PrepareError::limit("predicate_diagnostic_bytes", 16_777_216, None, None)
+                })?));
         }
         Err(predicate_compiler::Error::Parse(
             crate::predicate_parser::ParseError::UnsupportedRegex { .. },
@@ -199,6 +199,14 @@ impl Verifications {
         column: Option<usize>,
     ) -> Result<Self, PrepareError> {
         let mut result = Self::default();
+        if entries.len() > 16 {
+            return Err(PrepareError::limit(
+                "verifications",
+                16,
+                Some(entries.len()),
+                Some(prefix),
+            ));
+        }
         let mut extra = Vec::new();
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
@@ -257,13 +265,20 @@ impl Verifications {
             return Err(PrepareError::Unsupported(extra));
         }
         let mut predicates = BTreeMap::new();
+        let mut regex_budget = crate::regex::CompileBudget::new(Default::default());
         // Admit the complete operation/field/severity vocabulary before any
         // payload compiler can refuse on policy. Later vocabulary still matters
         // even when an earlier declaration finding makes its payload unreachable.
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
             let path = format!("{prefix}[{index}].{op}");
-
+            if op == "row_count" {
+                for name in ["min", "max"] {
+                    if d.field(payload, name).is_some_and(|id| matches!(&d.nodes()[id], N::Integer(value) if value.len() > crate::dataset::MAX_COUNT_BOUND_BYTES)) {
+                        return Err(PrepareError::limit("verification_bound_bytes", crate::dataset::MAX_COUNT_BOUND_BYTES, None, None));
+                    }
+                }
+            }
             if op == "assert" || op == "row_count" {
                 for name in if op == "assert" {
                     ["when", "require"]
@@ -279,6 +294,11 @@ impl Verifications {
                 }
             }
         }
+        let mut quote_budget = crate::schema::ValidationBudget::new(Default::default());
+        let mut quote = |value: &str| {
+            crate::schema::quoted_diagnostic_text(value, &mut quote_budget)
+                .map_err(|_| PrepareError::limit("verification_diagnostic", 16_777_216, None, None))
+        };
         let mut ids = BTreeMap::<String, String>::new();
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
@@ -293,10 +313,7 @@ impl Verifications {
                             result.deferred = invalid(
                                 path,
                                 ConditionCode::VerificationIdentifierRepeated,
-                                format!(
-                                    "verification id {} repeats {previous}",
-                                    crate::schema::quoted_diagnostic_text(value)
-                                ),
+                                format!("verification id {} repeats {previous}", quote(value)?),
                             );
                             break;
                         }
@@ -318,8 +335,14 @@ impl Verifications {
             let check = if let Some(column) = column {
                 // IDs and each payload are prepared in declaration order. A
                 // deferred finding ends the prefix before any later compiler.
-                let check =
-                    column_checks::prepare(d, op, payload, &path, output.columns()[column].kind)?;
+                let check = column_checks::prepare(
+                    d,
+                    op,
+                    payload,
+                    &path,
+                    output.columns()[column].kind,
+                    &mut regex_budget,
+                )?;
                 if let Check::InvalidDiagnostic(diagnostic) = check {
                     result.deferred = Some(DeclarationFinding::Diagnostic(diagnostic));
                     break;
@@ -352,10 +375,7 @@ impl Verifications {
                         result.deferred = invalid(
                             format!("{path}.columns"),
                             ConditionCode::VerificationDeclaredColumnUnknown,
-                            format!(
-                                "unknown column {}",
-                                crate::schema::quoted_diagnostic_text(name)
-                            ),
+                            format!("unknown column {}", quote(name)?),
                         );
                         break;
                     }
@@ -415,6 +435,12 @@ impl Verifications {
                             };
                             RowCountBound::new(value).map_err(|error| match error {
                                 CountBoundError::Invalid => PrepareError::Internal,
+                                CountBoundError::Limit => PrepareError::limit(
+                                    "verification_bound_bytes",
+                                    crate::dataset::MAX_COUNT_BOUND_BYTES,
+                                    None,
+                                    None,
+                                ),
                             })
                         })
                         .transpose()
@@ -488,10 +514,7 @@ impl Verifications {
                             result.deferred = invalid(
                                 format!("{path}.group_by"),
                                 ConditionCode::VerificationDeclaredColumnUnknown,
-                                format!(
-                                    "unknown column {}",
-                                    crate::schema::quoted_diagnostic_text(name)
-                                ),
+                                format!("unknown column {}", quote(name)?),
                             );
                             break;
                         };

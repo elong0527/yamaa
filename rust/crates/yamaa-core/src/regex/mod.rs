@@ -7,14 +7,57 @@ mod identifiers;
 mod parser;
 mod widths;
 
+// Request-owned accounting for capture-dependent compilation across literals.
+pub(crate) use widths::Budget as CompileBudget;
+
 /// Pinned ID_Start / ID_Continue data used for capture-group name admission.
 pub const IDENTIFIER_UNICODE_VERSION: &str = "18.0.0";
 
-/// Fixed recursion and per-match interpretation boundaries.
+/// Caller-selected compilation budgets; recursive pattern nesting is capped at 64.
+#[derive(Clone, Copy, Debug)]
+pub struct CompileLimits {
+    pub bytes: usize,
+    pub nodes: usize,
+    pub groups: usize,
+    pub depth: usize,
+    pub repetition: usize,
+    /// Maximum statically fixed consumed width; no repetition is expanded.
+    pub width: usize,
+    /// Cumulative visits/comparisons for capture-dependent lookbehind admission.
+    pub width_work: usize,
+    /// Cumulative logical capture/path slots allocated during width analysis.
+    pub width_cells: usize,
+}
+impl Default for CompileLimits {
+    /// Conservative defaults are compiler/matcher policies, not language limits.
+    fn default() -> Self {
+        Self {
+            bytes: 65_536,
+            nodes: 4096,
+            groups: 256,
+            depth: 64,
+            repetition: 1_000_000,
+            width: 1_048_576,
+            width_work: 1_000_000,
+            width_cells: 1_000_000,
+        }
+    }
+}
+
+/// Resource policy is distinct from language rejection and execution failure.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resource {
+    PatternBytes,
+    Nodes,
+    Groups,
     Depth,
+    Repetition,
+    Width,
+    WidthWork,
+    WidthCells,
+    SubjectBytes,
     Work,
+    StateCells,
 }
 
 /// Invalid syntax owns REQ-0827. Unsupported features never masquerade as invalid syntax.
@@ -26,6 +69,29 @@ pub enum CompileError {
     Limit { resource: Resource, limit: usize },
     #[error("regex unsupported: byte={byte:?}, feature={feature:?}")]
     Unsupported { byte: usize, feature: &'static str },
+}
+
+/// Per-call budgets span every candidate position, backtrack and lookaround.
+/// These are independent ceilings, not a guarantee that every admitted input
+/// fits the remaining work/storage budgets. Callers may raise them separately.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MatchLimits {
+    /// Input byte ceiling checked before scalar indexing or matching.
+    pub subject_bytes: usize,
+    pub work: usize,
+    /// Cumulative logical task/capture/scalar cells created or copied.
+    /// Allocator capacity and process-wide memory are not measured by this count.
+    pub state_cells: usize,
+}
+impl Default for MatchLimits {
+    /// Conservative defaults are compiler/matcher policies, not language limits.
+    fn default() -> Self {
+        Self {
+            subject_bytes: 1_048_576,
+            work: 1_000_000,
+            state_cells: 1_000_000,
+        }
+    }
 }
 
 /// A policy refusal cannot be confused with no match.
@@ -133,14 +199,6 @@ struct Node {
     captures: std::ops::Range<usize>,
 }
 
-/// Predicate LIKE has already validated its escape syntax before arena construction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum LikeToken {
-    Any,
-    One,
-    Literal(char),
-}
-
 /// Immutable postorder arena. Compilation never resolves fields or calls a host.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pattern {
@@ -150,88 +208,83 @@ pub struct Pattern {
 }
 impl Pattern {
     /// Parse the closed grammar before any subject is read.
-    pub fn compile(source: &str) -> Result<Self, CompileError> {
-        parser::compile(source)
+    pub fn compile(source: &str, limits: CompileLimits) -> Result<Self, CompileError> {
+        Self::compile_with_budget(source, limits, &mut CompileBudget::new(limits))
     }
-    /// Lower validated LIKE tokens without interpreting them as regex syntax.
-    /// The wildcard class includes every scalar, including all line terminators.
-    pub(crate) fn from_like_tokens(tokens: &[LikeToken]) -> Self {
-        let mut nodes = Vec::new();
-        let mut children = Vec::with_capacity(tokens.len());
-        let mut variable = false;
-        for token in tokens {
-            let kind = match token {
-                LikeToken::Literal(character) => Kind::Literal(*character as u32),
-                LikeToken::Any | LikeToken::One => Kind::Class {
-                    items: vec![SetItem::Range(0, char::MAX as u32)],
-                    negative: false,
-                },
-            };
-            let child = nodes.len();
-            nodes.push(Node {
-                kind,
-                byte: 0,
-                width: Width::Fixed(1),
-                captures: 1..1,
-            });
-            if matches!(token, LikeToken::Any) {
-                variable = true;
-                children.push(nodes.len());
-                nodes.push(Node {
-                    kind: Kind::Repeat {
-                        child,
-                        min: 0,
-                        max: None,
-                        greedy: true,
-                    },
-                    byte: 0,
-                    width: Width::Variable,
-                    captures: 1..1,
-                });
-            } else {
-                children.push(child);
-            }
-        }
-        let root = nodes.len();
-        nodes.push(Node {
-            kind: Kind::Sequence(children),
-            byte: 0,
-            width: if variable {
-                Width::Variable
-            } else {
-                Width::Fixed(tokens.len())
-            },
-            captures: 1..1,
-        });
-        Self {
-            nodes,
-            root,
-            groups: 0,
-        }
+    /// Share capture-path compilation work/storage across literals in one request.
+    /// Per-pattern ceilings still apply; failed work retains its consumed prefix.
+    pub(crate) fn compile_with_budget(
+        source: &str,
+        limits: CompileLimits,
+        shared: &mut CompileBudget,
+    ) -> Result<Self, CompileError> {
+        parser::compile(source, limits, shared)
     }
     /// Count numbered captures; the whole match is group zero in returned results.
     pub fn group_count(&self) -> usize {
         self.groups
     }
-    /// Search leftmost-first with one fixed step guard for the complete match.
-    pub fn search<'s>(&self, subject: &'s str) -> Result<Option<Match<'s>>, MatchError> {
-        self.execute(subject, false)
+    /// Search leftmost-first with a fresh cumulative resource budget.
+    pub fn search<'s>(
+        &self,
+        subject: &'s str,
+        limits: MatchLimits,
+    ) -> Result<Option<Match<'s>>, MatchError> {
+        self.search_with_budget(subject, limits, &mut MatchBudget::new(limits))
     }
     /// Anchor the entire pattern, preserving alternatives that fail the final anchor.
-    pub fn full_match<'s>(&self, subject: &'s str) -> Result<Option<Match<'s>>, MatchError> {
-        self.execute(subject, true)
+    pub fn full_match<'s>(
+        &self,
+        subject: &'s str,
+        limits: MatchLimits,
+    ) -> Result<Option<Match<'s>>, MatchError> {
+        self.full_match_with_budget(subject, limits, &mut MatchBudget::new(limits))
     }
-    fn execute<'s>(&self, subject: &'s str, full: bool) -> Result<Option<Match<'s>>, MatchError> {
-        let mut machine = Machine {
-            steps: Steps(crate::limits::Limits::REGEX_STEPS),
-            tasks: Vec::new(),
-            captures: Captures {
-                groups: self.groups + 1,
-                nodes: Vec::new(),
-            },
-        };
-        // Retain exact Unicode-scalar and UTF-8 byte coordinates.
-
+    /// Search under fresh per-call ceilings and a caller-owned cumulative scope.
+    /// Failed attempts retain consumed work; only the caller starts a new scope.
+    pub fn search_with_budget<'s>(
+        &self,
+        subject: &'s str,
+        limits: MatchLimits,
+        shared: &mut MatchBudget,
+    ) -> Result<Option<Match<'s>>, MatchError> {
+        self.search_in_budgets(subject, &mut MatchBudget::new(limits), shared)
+    }
+    /// Full-match alternatives share both per-call and cumulative accounting.
+    pub fn full_match_with_budget<'s>(
+        &self,
+        subject: &'s str,
+        limits: MatchLimits,
+        shared: &mut MatchBudget,
+    ) -> Result<Option<Match<'s>>, MatchError> {
+        self.execute(subject, true, &mut MatchBudget::new(limits), shared)
+    }
+    /// A predicate reuses its local scope across all calls and its shared dataset scope.
+    pub(crate) fn search_in_budgets<'s>(
+        &self,
+        subject: &'s str,
+        local: &mut MatchBudget,
+        shared: &mut MatchBudget,
+    ) -> Result<Option<Match<'s>>, MatchError> {
+        self.execute(subject, false, local, shared)
+    }
+    /// Charge both scopes before scalar indexing, matching or allocation.
+    fn execute<'s>(
+        &self,
+        subject: &'s str,
+        full: bool,
+        local: &mut MatchBudget,
+        shared: &mut MatchBudget,
+    ) -> Result<Option<Match<'s>>, MatchError> {
+        let mut budget = Budget { local, shared };
+        budget.consume(Resource::SubjectBytes, subject.len())?;
+        // Count before allocating scalar storage or its byte-boundary map.
+        let size = subject.chars().count();
+        budget.cells(
+            size.checked_mul(2)
+                .and_then(|n| n.checked_add(1))
+                .unwrap_or(usize::MAX),
+        )?;
         let chars: Vec<_> = subject.chars().collect();
         let offsets: Vec<_> = subject
             .char_indices()
@@ -239,20 +292,21 @@ impl Pattern {
             .chain(std::iter::once(subject.len()))
             .collect();
         for start in 0..=if full { 0 } else { chars.len() } {
-            machine.steps.work(1)?;
-            machine.tasks.clear();
-            machine.captures.nodes.clear();
-            let mut state = State {
+            budget.work(1)?;
+            budget.cells(self.groups + 2)?;
+            let state = State {
                 at: start,
-                tasks: None,
-                captures: None,
+                tasks: vec![Task::Node(self.root)],
+                captures: vec![None; self.groups + 1],
             };
-            machine.push(&mut state, Task::Node(self.root));
-            if let Some(found) = self.run(&chars, state, false, full, &mut machine)? {
-                let mut groups = machine
+            if let Some(mut found) = self.run(&chars, state, false, full, &mut budget)? {
+                found.captures[0] = Some((start, found.at));
+                budget.cells(found.captures.len())?;
+                let groups = found
                     .captures
-                    .materialize(found.captures, |a, b| &subject[offsets[a]..offsets[b]]);
-                groups[0] = Some(&subject[offsets[start]..offsets[found.at]]);
+                    .iter()
+                    .map(|span| span.map(|(a, b)| &subject[offsets[a]..offsets[b]]))
+                    .collect();
                 return Ok(Some(Match { groups }));
             }
         }
@@ -265,47 +319,20 @@ impl Pattern {
         initial: State,
         backwards: bool,
         require_end: bool,
-        machine: &mut Machine,
+        budget: &mut Budget<'_>,
     ) -> Result<Option<State>, MatchError> {
+        budget.cells(1)?;
         let mut alternatives = vec![initial];
         while let Some(mut state) = alternatives.pop() {
             let mut failed = false;
-            while let Some(task) = machine.pop(&mut state) {
-                machine.steps.work(1)?;
+            while let Some(task) = state.tasks.pop() {
+                budget.work(1)?;
                 match task {
                     Task::FinishGroup(number, start) => {
-                        state.captures = machine.captures.set(
-                            state.captures,
-                            number,
-                            (start.min(state.at), start.max(state.at)),
-                        );
-                    }
-                    Task::Sequence { id, next } => {
-                        let Kind::Sequence(children) = &self.nodes[id].kind else {
-                            unreachable!()
-                        };
-                        if next < children.len() {
-                            let child = children[if backwards {
-                                children.len() - next - 1
-                            } else {
-                                next
-                            }];
-                            if next + 1 < children.len() {
-                                machine.push(&mut state, Task::Sequence { id, next: next + 1 });
-                            }
-                            machine.push(&mut state, Task::Node(child));
-                        }
-                    }
-                    Task::Alternative { id, next } => {
-                        let Kind::Alternative(children) = &self.nodes[id].kind else {
-                            unreachable!()
-                        };
-                        if next + 1 < children.len() {
-                            let mut branch = state;
-                            machine.push(&mut branch, Task::Alternative { id, next: next + 1 });
-                            alternatives.push(branch);
-                        }
-                        machine.push(&mut state, Task::Node(children[next]));
+                        state.captures[number] = Some((
+                            std::cmp::min(start, state.at),
+                            std::cmp::max(start, state.at),
+                        ));
                     }
                     Task::RepeatEnd { id, count, before } => {
                         let Kind::Repeat { min, .. } = self.nodes[id].kind else {
@@ -316,13 +343,13 @@ impl Pattern {
                             failed = true;
                             break;
                         }
-                        machine.push(
-                            &mut state,
+                        state.push(
                             Task::Repeat {
                                 id,
                                 count: count + 1,
                             },
-                        );
+                            budget,
+                        )?;
                     }
                     Task::Repeat { id, count } => {
                         let Kind::Repeat {
@@ -337,56 +364,67 @@ impl Pattern {
                         if max.is_some_and(|max| count >= max) {
                             continue;
                         }
-                        let mut iteration = state;
-                        iteration.captures = machine
-                            .captures
-                            .clear(iteration.captures, self.nodes[child].captures.clone());
-                        machine.push(
-                            &mut iteration,
+                        let mut iteration = state.copy(budget)?;
+                        for capture in self.nodes[child].captures.clone() {
+                            iteration.captures[capture] = None;
+                        }
+                        iteration.push(
                             Task::RepeatEnd {
                                 id,
                                 count,
                                 before: state.at,
                             },
-                        );
-                        machine.push(&mut iteration, Task::Node(child));
+                            budget,
+                        )?;
+                        iteration.push(Task::Node(child), budget)?;
                         if count < min {
                             state = iteration;
                         } else if greedy {
+                            budget.cells(1)?;
                             alternatives.push(state);
                             state = iteration;
                         } else {
+                            budget.cells(1)?;
                             alternatives.push(iteration);
                         }
                     }
                     Task::Node(id) => match &self.nodes[id].kind {
-                        Kind::Sequence(_) => {
-                            machine.push(&mut state, Task::Sequence { id, next: 0 })
+                        Kind::Sequence(children) => {
+                            if backwards {
+                                for &child in children {
+                                    state.push(Task::Node(child), budget)?;
+                                }
+                            } else {
+                                for &child in children.iter().rev() {
+                                    state.push(Task::Node(child), budget)?;
+                                }
+                            }
                         }
-                        Kind::Alternative(_) => {
-                            machine.push(&mut state, Task::Alternative { id, next: 0 })
+                        Kind::Alternative(children) => {
+                            for &child in children[1..].iter().rev() {
+                                let mut branch = state.copy(budget)?;
+                                branch.push(Task::Node(child), budget)?;
+                                budget.cells(1)?;
+                                alternatives.push(branch);
+                            }
+                            state.push(Task::Node(children[0]), budget)?;
                         }
                         Kind::Group { child, number } => {
                             if let Some(number) = number {
-                                let start = state.at;
-                                machine.push(&mut state, Task::FinishGroup(*number, start));
+                                state.push(Task::FinishGroup(*number, state.at), budget)?;
                             }
-                            machine.push(&mut state, Task::Node(*child));
+                            state.push(Task::Node(*child), budget)?;
                         }
-                        Kind::Repeat { .. } => {
-                            machine.push(&mut state, Task::Repeat { id, count: 0 })
-                        }
+                        Kind::Repeat { .. } => state.push(Task::Repeat { id, count: 0 }, budget)?,
                         Kind::Look {
                             child,
                             behind,
                             positive,
                         } => {
-                            let mut probe = State {
-                                tasks: None,
-                                ..state
-                            };
-                            machine.push(&mut probe, Task::Node(*child));
-                            let result = self.run(input, probe, *behind, false, machine)?;
+                            let mut probe = state.copy(budget)?;
+                            probe.tasks.clear();
+                            probe.push(Task::Node(*child), budget)?;
+                            let result = self.run(input, probe, *behind, false, budget)?;
                             if result.is_some() != *positive {
                                 failed = true;
                                 break;
@@ -416,7 +454,7 @@ impl Pattern {
                             }
                         }
                         Kind::Backreference(Reference::Number(number)) => {
-                            if let Some((a, b)) = machine.captures.get(state.captures, *number) {
+                            if let Some((a, b)) = state.captures[*number] {
                                 let length = b - a;
                                 let target = if backwards {
                                     state.at.checked_sub(length)
@@ -431,7 +469,7 @@ impl Pattern {
                                     failed = true;
                                     break;
                                 };
-                                machine.steps.work(length)?;
+                                budget.work(length)?;
                                 if input[a..b] != input[target..target + length] {
                                     failed = true;
                                     break;
@@ -457,7 +495,7 @@ impl Pattern {
                                 Kind::Literal(value) => c as u32 == *value,
                                 Kind::Dot => !matches!(c, '\n' | '\r' | '\u{2028}' | '\u{2029}'),
                                 Kind::Class { items, negative } => {
-                                    machine.steps.work(items.len())?;
+                                    budget.work(items.len())?;
                                     items.iter().any(|item| item.accepts(c)) != *negative
                                 }
                                 _ => unreachable!(),
@@ -479,18 +517,10 @@ impl Pattern {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 enum Task {
     Node(usize),
     FinishGroup(usize, usize),
-    Sequence {
-        id: usize,
-        next: usize,
-    },
-    Alternative {
-        id: usize,
-        next: usize,
-    },
     Repeat {
         id: usize,
         count: usize,
@@ -501,186 +531,96 @@ enum Task {
         before: usize,
     },
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct State {
     at: usize,
-    tasks: Option<usize>,
-    captures: Option<usize>,
+    tasks: Vec<Task>,
+    captures: Vec<Option<(usize, usize)>>,
 }
-/// Backtracking shares immutable task tails and capture roots. Forking a state
-/// copies three coordinates, regardless of pending tasks or capture count.
-struct Machine {
-    steps: Steps,
-    tasks: Vec<(Task, Option<usize>)>,
-    captures: Captures,
+impl State {
+    /// Charge task/capture copies before allocating a backtracking snapshot.
+    fn copy(&self, budget: &mut Budget<'_>) -> Result<Self, MatchError> {
+        budget.cells(self.tasks.len().saturating_add(self.captures.len()))?;
+        Ok(self.clone())
+    }
+    /// Charge every logical continuation slot before extending the task stack.
+    fn push(&mut self, task: Task, budget: &mut Budget<'_>) -> Result<(), MatchError> {
+        budget.cells(1)?;
+        self.tasks.push(task);
+        Ok(())
+    }
 }
-impl Machine {
-    fn push(&mut self, state: &mut State, task: Task) {
-        self.tasks.push((task, state.tasks));
-        state.tasks = Some(self.tasks.len() - 1);
-    }
-    fn pop(&self, state: &mut State) -> Option<Task> {
-        let (task, previous) = self.tasks[state.tasks?];
-        state.tasks = previous;
-        Some(task)
-    }
+/// Logical consumption across match attempts, including failed attempts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MatchUsage {
+    pub subject_bytes: usize,
+    pub work: usize,
+    pub state_cells: usize,
 }
 
-#[derive(Clone, Copy)]
-enum CaptureNode {
-    Branch(Option<usize>, Option<usize>),
-    Span(usize, usize),
+/// Caller-owned cumulative matching scope; no matcher resets or refunds it.
+/// Logical cells exclude allocator overhead and process-wide memory accounting.
+#[derive(Debug)]
+pub struct MatchBudget {
+    limits: MatchLimits,
+    used: MatchUsage,
 }
-/// A sparse persistent tree needs no initial capture vector. Updates copy only
-/// the search path; resetting a repeated group's capture interval drops covered
-/// subtrees. Empty roots preserve the distinction between unset and empty spans.
-struct Captures {
-    groups: usize,
-    nodes: Vec<CaptureNode>,
-}
-impl Captures {
-    fn branches(&self, root: Option<usize>) -> (Option<usize>, Option<usize>) {
-        match root.map(|root| self.nodes[root]) {
-            Some(CaptureNode::Branch(left, right)) => (left, right),
-            None => (None, None),
-            Some(CaptureNode::Span(..)) => unreachable!("capture leaves have unit width"),
+impl MatchBudget {
+    /// Resume an explicitly owned scope from its already admitted prefix.
+    pub fn with_usage(limits: MatchLimits, used: MatchUsage) -> Self {
+        assert!(used.subject_bytes <= limits.subject_bytes);
+        assert!(used.work <= limits.work);
+        assert!(used.state_cells <= limits.state_cells);
+        Self { limits, used }
+    }
+    /// Create an explicitly fresh scope with independently selected resource ceilings.
+    pub fn new(limits: MatchLimits) -> Self {
+        Self {
+            limits,
+            used: MatchUsage::default(),
         }
     }
-    fn push(&mut self, node: CaptureNode) -> Option<usize> {
-        self.nodes.push(node);
-        Some(self.nodes.len() - 1)
+    /// Observe successful charge prefixes even after a failed attempt.
+    pub fn used(&self) -> MatchUsage {
+        self.used
     }
-    fn set(&mut self, root: Option<usize>, group: usize, span: (usize, usize)) -> Option<usize> {
-        self.set_at(root, group, span, 0, self.groups)
+    /// Admit an application's aggregate scope while retaining every prior charge.
+    /// Per-match limits are checked independently by the local matching scope.
+    pub(crate) fn application_limits(&mut self, limits: MatchLimits) {
+        self.limits = limits;
     }
-    fn set_at(
-        &mut self,
-        root: Option<usize>,
-        group: usize,
-        span: (usize, usize),
-        start: usize,
-        end: usize,
-    ) -> Option<usize> {
-        if end - start == 1 {
-            return self.push(CaptureNode::Span(span.0, span.1));
-        }
-        let middle = start + (end - start) / 2;
-        let (mut left, mut right) = self.branches(root);
-        if group < middle {
-            left = self.set_at(left, group, span, start, middle);
-        } else {
-            right = self.set_at(right, group, span, middle, end);
-        }
-        self.push(CaptureNode::Branch(left, right))
-    }
-    fn clear(&mut self, root: Option<usize>, range: std::ops::Range<usize>) -> Option<usize> {
-        self.clear_at(root, &range, 0, self.groups)
-    }
-    fn clear_at(
-        &mut self,
-        root: Option<usize>,
-        range: &std::ops::Range<usize>,
-        start: usize,
-        end: usize,
-    ) -> Option<usize> {
-        if range.start >= end || range.end <= start || root.is_none() {
-            return root;
-        }
-        if range.start <= start && end <= range.end {
-            return None;
-        }
-        let middle = start + (end - start) / 2;
-        let (left, right) = self.branches(root);
-        let next_left = self.clear_at(left, range, start, middle);
-        let next_right = self.clear_at(right, range, middle, end);
-        if (left, right) == (next_left, next_right) {
-            root
-        } else if next_left.is_none() && next_right.is_none() {
-            None
-        } else {
-            self.push(CaptureNode::Branch(next_left, next_right))
-        }
-    }
-    fn get(&self, mut root: Option<usize>, group: usize) -> Option<(usize, usize)> {
-        let (mut start, mut end) = (0, self.groups);
-        while let Some(id) = root {
-            match self.nodes[id] {
-                CaptureNode::Span(a, b) => return Some((a, b)),
-                CaptureNode::Branch(left, right) => {
-                    let middle = start + (end - start) / 2;
-                    if group < middle {
-                        root = left;
-                        end = middle;
-                    } else {
-                        root = right;
-                        start = middle;
-                    }
-                }
-            }
-        }
-        None
-    }
-    fn materialize<T: Copy>(
-        &self,
-        root: Option<usize>,
-        mut span: impl FnMut(usize, usize) -> T,
-    ) -> Vec<Option<T>> {
-        fn fill<T>(
-            captures: &Captures,
-            root: Option<usize>,
-            output: &mut [Option<T>],
-            span: &mut impl FnMut(usize, usize) -> T,
-        ) {
-            let Some(id) = root else { return };
-            match captures.nodes[id] {
-                CaptureNode::Span(a, b) => output[0] = Some(span(a, b)),
-                CaptureNode::Branch(left, right) => {
-                    let (a, b) = output.split_at_mut(output.len() / 2);
-                    fill(captures, left, a, span);
-                    fill(captures, right, b, span);
-                }
-            }
-        }
-        let mut output = vec![None; self.groups];
-        fill(self, root, &mut output, &mut span);
-        output
-    }
-}
-/// The only matching counter spans starts, backtracking and nested lookarounds.
-struct Steps(usize);
-impl Steps {
-    fn work(&mut self, amount: usize) -> Result<(), MatchError> {
-        self.0 = self.0.checked_sub(amount).ok_or(MatchError {
-            resource: Resource::Work,
-            limit: crate::limits::Limits::REGEX_STEPS,
-        })?;
+    /// Refuse overflow and quota exhaustion before changing the selected counter.
+    fn consume(&mut self, resource: Resource, amount: usize) -> Result<(), MatchError> {
+        let (used, limit) = match resource {
+            Resource::SubjectBytes => (&mut self.used.subject_bytes, self.limits.subject_bytes),
+            Resource::Work => (&mut self.used.work, self.limits.work),
+            Resource::StateCells => (&mut self.used.state_cells, self.limits.state_cells),
+            _ => unreachable!("compilation resources have separate accounting"),
+        };
+        *used = used
+            .checked_add(amount)
+            .filter(|&next| next <= limit)
+            .ok_or(MatchError { resource, limit })?;
         Ok(())
     }
 }
 
-#[cfg(test)]
-mod matching_tests {
-    use super::*;
-
-    #[test]
-    fn many_captures_share_backtracking_state_and_keep_repeat_participation() {
-        let prefix = "(a)".repeat(3000);
-        let pattern = Pattern::compile(&(prefix.clone() + r"(?:(a)|(b))+\3001\3002$")).unwrap();
-        let subject = "a".repeat(3000) + "abb";
-        let found = pattern.full_match(&subject).unwrap().unwrap();
-        assert_eq!(found.groups.len(), 3003);
-        assert_eq!(found.groups[0], Some(subject.as_str()));
-        assert!(found.groups[1..=3000].iter().all(|span| *span == Some("a")));
-        assert_eq!(&found.groups[3001..], &[None, Some("b")]);
-
-        let refusing = Pattern::compile(&(prefix + r"(a+)+$")).unwrap();
-        assert_eq!(
-            refusing.full_match(&("a".repeat(3030) + "!")),
-            Err(MatchError {
-                resource: Resource::Work,
-                limit: crate::limits::Limits::REGEX_STEPS,
-            })
-        );
-        assert!(refusing.full_match(&"a".repeat(3001)).unwrap().is_some());
+struct Budget<'a> {
+    local: &'a mut MatchBudget,
+    shared: &'a mut MatchBudget,
+}
+impl Budget<'_> {
+    /// Both scopes must admit a charge before its operation is performed.
+    fn consume(&mut self, resource: Resource, amount: usize) -> Result<(), MatchError> {
+        self.local.consume(resource, amount)?;
+        self.shared.consume(resource, amount)
+    }
+    /// Charge interpretation and scalar-comparison work across every attempt.
+    fn work(&mut self, n: usize) -> Result<(), MatchError> {
+        self.consume(Resource::Work, n)
+    }
+    /// Charge logical storage before copying or allocating matcher state.
+    fn cells(&mut self, n: usize) -> Result<(), MatchError> {
+        self.consume(Resource::StateCells, n)
     }
 }
