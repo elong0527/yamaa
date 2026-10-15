@@ -1,80 +1,102 @@
-pub use crate::support::document::Tree;
 use yamaa_core::{
     producer_admission::{Candidate, WrittenPath},
-    schema::{Document, SpecificationDocument},
+    schema::{
+        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
+    },
 };
-
+pub enum Tree<'a> {
+    Text(&'a str),
+    Null,
+    Map(Vec<(&'a str, Tree<'a>)>),
+    List(Vec<Tree<'a>>),
+}
+impl Tree<'_> {
+    fn append(self, nodes: &mut Vec<N>) -> usize {
+        let node = match self {
+            Self::Text(s) => N::Text(s.into()),
+            Self::Null => N::Null,
+            Self::Map(fields) => N::Mapping(
+                fields
+                    .into_iter()
+                    .map(|(k, v)| (Self::Text(k).append(nodes), v.append(nodes)))
+                    .collect(),
+            ),
+            Self::List(values) => {
+                N::Sequence(values.into_iter().map(|v| v.append(nodes)).collect())
+            }
+        };
+        let id = nodes.len();
+        nodes.push(node);
+        id
+    }
+}
 pub fn document(
-    input: Tree,
+    input: Tree<'_>,
     columns: &[(&str, &str, Option<&str>)],
     output: &[&str],
     unsupported_parent: bool,
 ) -> SpecificationDocument {
+    use Tree::*;
     let first = match &input {
-        Tree::Map(fields) => fields[0].0.as_str(),
+        Map(fields) => fields[0].0,
         _ => panic!("input mapping"),
     };
     let variable = format!("{first}.ID");
     let mut fields = vec![
-        ("schema_version", Tree::text("1.0")),
-        ("domain", Tree::text("TEST")),
-        ("base", Tree::text(first)),
+        ("schema_version", Text("1.0")),
+        ("domain", Text("TEST")),
+        ("base", Text(first)),
         ("input", input),
-        ("keys", Tree::List(vec![Tree::text("ID")])),
+        ("keys", List(vec![Text("ID")])),
         (
             "columns",
-            Tree::List(
+            List(
                 columns
                     .iter()
                     .map(|(name, kind, label)| {
                         let mut fields = vec![
-                            ("name", Tree::text(name)),
-                            ("type", Tree::text(kind)),
+                            ("name", Text(name)),
+                            ("type", Text(kind)),
                             (
                                 "derivation",
-                                Tree::map(vec![(
+                                Map(vec![(
                                     "value",
-                                    Tree::map(vec![(
-                                        "source",
-                                        Tree::map(vec![("variable", Tree::text(&variable))]),
-                                    )]),
+                                    Map(vec![("source", Map(vec![("variable", Text(&variable))]))]),
                                 )]),
                             ),
                         ];
                         if let Some(label) = label {
-                            fields.push(("label", Tree::text(label)));
+                            fields.push(("label", Text(label)));
                         }
-                        Tree::map(fields)
+                        Map(fields)
                     })
                     .collect(),
             ),
         ),
         (
             "output",
-            Tree::map(vec![
-                ("path", Tree::text("produced.csv")),
-                (
-                    "columns",
-                    Tree::List(output.iter().copied().map(Tree::text).collect()),
-                ),
+            Map(vec![
+                ("path", Text("produced.csv")),
+                ("columns", List(output.iter().copied().map(Text).collect())),
             ]),
         ),
     ];
     if unsupported_parent {
-        fields.push(("parents", Tree::List(vec![Tree::text("parent.yaml")])));
+        fields.push(("parents", List(vec![Text("parent.yaml")])));
     }
     let mut nodes = Vec::new();
-    let root = Tree::map(fields).append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    let root = Map(fields).append(&mut nodes);
+    SpecificationDocument::admit(
+        Document::new(nodes, root, DocumentLimits::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap()
 }
 pub fn producer() -> SpecificationDocument {
+    use Tree::*;
     document(
-        Tree::map(vec![(
-            "RAW",
-            Tree::map(vec![("path", Tree::text("raw.csv"))]),
-        )]),
+        Map(vec![("RAW", Map(vec![("path", Text("raw.csv"))]))]),
         &[
             ("VALUE", "float", Some("Reported value")),
             ("ID", "int", Some("Identifier")),
@@ -84,16 +106,17 @@ pub fn producer() -> SpecificationDocument {
         false,
     )
 }
-pub fn consumer(types: Option<Tree>) -> SpecificationDocument {
+pub fn consumer(types: Option<Tree<'_>>) -> SpecificationDocument {
+    use Tree::*;
     let mut fields = vec![
-        ("path", Tree::text("produced.csv")),
-        ("schema", Tree::text("nested/producer.yaml")),
+        ("path", Text("produced.csv")),
+        ("schema", Text("nested/producer.yaml")),
     ];
     if let Some(types) = types {
         fields.push(("types", types));
     }
     document(
-        Tree::map(vec![("SRC", Tree::map(fields))]),
+        Map(vec![("SRC", Map(fields))]),
         &[("ID", "int", Some("ID"))],
         &["ID"],
         false,
