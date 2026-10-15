@@ -246,18 +246,14 @@ fn read_issue(
         E::Symlink => "symbolic_link",
         E::Changed => "content_changed",
         E::InvalidLock => "invalid_packaging_lock",
-        E::Limit => "resource_limit",
+        E::Limit => return Err(Error::Limit),
     };
-    let mut diagnostic = if matches!(error, E::Limit) {
-        yamaa_core::application_issue::rejected("environment", cause)
-    } else {
-        Diagnostic {
-            code: yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentInvalid,
-            spec_paths: vec![declaration.into()],
-            context: Default::default(),
-            source_span: None,
-            operand_route: None,
-        }
+    let mut diagnostic = Diagnostic {
+        code: yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentInvalid,
+        spec_paths: vec![declaration.into()],
+        context: Default::default(),
+        source_span: None,
+        operand_route: None,
     };
     for (key, value) in [
         ("entry", entry),
@@ -290,6 +286,9 @@ fn decode_issues(
     declaration: &str,
     budget: &mut Budget,
 ) -> Result<Vec<Issue>, Error> {
+    if matches!(error, SourceError::Limit(_)) {
+        return Err(Error::Limit);
+    }
     if let SourceError::Decode { error, .. } = error {
         use crate::yaml_decode::DecodeFailure as D;
         match error {
