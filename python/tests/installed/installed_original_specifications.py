@@ -26,6 +26,18 @@ ROOT = Path(__file__).with_name("specification-original")
 CASES = tuple(TRUTH["original_case_names"])
 
 
+def fixture_rows(filename):
+    return json.loads((ROOT / filename).read_text(encoding="utf-8"))
+
+
+def fixture_bytes(value):
+    return (
+        bytes.fromhex(value["hex"])
+        if isinstance(value, dict)
+        else value.encode("utf-8")
+    )
+
+
 def table_snapshot(content):
     """Decode owned IPC in the test codec; no native snapshot probe is installed."""
     reader = pa.ipc.open_stream(content)
@@ -499,22 +511,36 @@ class OriginalSpecifications(unittest.TestCase):
         def no_port(*_):
             self.fail("source decoding failure reached a host port")
 
-        with (ROOT / "decode-replay.tsv").open(encoding="ascii") as stream:
-            records = list(csv.DictReader(stream, delimiter="\t"))
+        records = [
+            row
+            for row in fixture_rows("yaml_transport.json")
+            if row["expected"]["outcome"]["status"] == "invalid"
+        ]
         self.assertEqual(len(records), 8)
         for record in records:
+            expected = record["expected"]
+            expected["protocol"] = "specification/prototype"
+            for finding in expected["outcome"]["diagnostics"]:
+                finding.update(
+                    phase="validation",
+                    requirement={
+                        "non_ascii_source": "REQ-0705",
+                        "invalid_text": "REQ-0029",
+                        "invalid_yaml": "REQ-0280",
+                    }[finding["condition"]],
+                )
+                if finding["condition"] == "non_ascii_source":
+                    finding["context"]["path"] = "source.yaml"
             with self.subTest(case=record["id"]):
                 with self.assertRaises(ValueError) as caught:
                     yamaa_native._prepare_document(
                         "source.yaml",
-                        bytes.fromhex(record["source_hex"]),
+                        fixture_bytes(record["source"]),
                         no_port,
                         no_port,
                         no_port,
                     )
-                self.assertEqual(
-                    json.loads(str(caught.exception)), json.loads(record["expected"])
-                )
+                self.assertEqual(json.loads(str(caught.exception)), expected)
 
     def test_schema_context_preserves_exact_integers_and_constraint_values(self):
         def no_port(*_):
@@ -940,8 +966,7 @@ class OriginalSpecifications(unittest.TestCase):
             self.assertIsNotNone(result.output())
 
     def test_original_source_bindings_complete_reports_and_exact_csv(self):
-        with (ROOT / "original-source-bindings.tsv").open(encoding="ascii") as stream:
-            cases = list(csv.DictReader(stream, delimiter="\t"))
+        cases = fixture_rows("original_source_bindings.json")
         self.assertEqual(len(cases), 16)
 
         def no_port(*_):
@@ -951,17 +976,17 @@ class OriginalSpecifications(unittest.TestCase):
             with self.subTest(case=row["case"]):
                 handle = yamaa_native._prepare_document(
                     "spec.yaml",
-                    bytes.fromhex(row["source_hex"]),
+                    fixture_bytes(row["source"]),
                     no_port,
                     no_port,
                     no_port,
                 )
                 inputs = {
-                    name: bytes.fromhex(content)
-                    for name, content in json.loads(row["inputs_json"]).items()
+                    name: fixture_bytes(content)
+                    for name, content in row["inputs"].items()
                 }
-                expected = json.loads(row["expected"])
-                artifact = bytes.fromhex(row["artifact_hex"])
+                expected = row["expected"]
+                artifact = fixture_bytes(row["artifact"])
                 for _ in range(2):
                     calls = []
 
@@ -1016,13 +1041,12 @@ class OriginalSpecifications(unittest.TestCase):
             "record_mapping": "{Y: 1}",
             "multiple_distinct_input": "{Y: yes}",
         }
-        with (ROOT / "original-mapping-cut.tsv").open(encoding="ascii") as stream:
-            cases = {row["case"]: row for row in csv.DictReader(stream, delimiter="\t")}
+        cases = {row["case"]: row for row in fixture_rows("original_mapping_cut.json")}
         for name, dictionary in dictionaries.items():
             with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory).resolve()
                 row = cases[name]
-                authored = bytes.fromhex(row["source_hex"]).decode("ascii")
+                authored = fixture_bytes(row["source"]).decode("ascii")
                 inline = "dict: " + dictionary
                 self.assertEqual(authored.count(inline), 1)
                 (root / "spec.yaml").write_text(
@@ -1032,10 +1056,7 @@ class OriginalSpecifications(unittest.TestCase):
                 (root / "dictionary.yaml").write_text(
                     dictionary + "\n", encoding="ascii"
                 )
-                inputs = {
-                    n: bytes.fromhex(value)
-                    for n, value in json.loads(row["inputs_json"]).items()
-                }
+                inputs = {n: fixture_bytes(value) for n, value in row["inputs"].items()}
                 for source, value in inputs.items():
                     (root / (source.lower() + ".csv")).write_bytes(value)
                 prepared = yamaa_native._prepare_file_specification(
@@ -1043,8 +1064,8 @@ class OriginalSpecifications(unittest.TestCase):
                 )
                 self.assertEqual(prepared.capture_reads(), 2)
                 self.assertEqual(json.loads(prepared.check_issues()), [])
-                expected = json.loads(row["expected"])
-                artifact = bytes.fromhex(row["artifact_hex"])
+                expected = row["expected"]
+                artifact = fixture_bytes(row["artifact"])
                 metadata = (
                     "fixture-runtime",
                     "fixture-engine",
@@ -1080,26 +1101,22 @@ class OriginalSpecifications(unittest.TestCase):
         def no_port(*_):
             self.fail("mapping/cut admission reached a study or inheritance port")
 
-        with (ROOT / "mapping-cut-admission.tsv").open(encoding="ascii") as stream:
-            rows = list(csv.DictReader(stream, delimiter="\t"))
+        rows = fixture_rows("mapping_cut_admission.json")
         self.assertEqual(len(rows), 5)
         for row in rows:
             with self.subTest(case=row["case"]):
                 with self.assertRaises(ValueError) as failure:
                     yamaa_native._prepare_document(
                         "spec.yaml",
-                        bytes.fromhex(row["source_hex"]),
+                        fixture_bytes(row["source"]),
                         no_port,
                         no_port,
                         no_port,
                     )
-                self.assertEqual(
-                    json.loads(str(failure.exception)), json.loads(row["expected"])
-                )
+                self.assertEqual(json.loads(str(failure.exception)), row["expected"])
 
     def test_original_mapping_cut_complete_reports_and_exact_csv(self):
-        with (ROOT / "original-mapping-cut.tsv").open(encoding="ascii") as stream:
-            cases = list(csv.DictReader(stream, delimiter="\t"))
+        cases = fixture_rows("original_mapping_cut.json")
         self.assertEqual(len(cases), 21)
 
         def no_port(*_):
@@ -1109,17 +1126,17 @@ class OriginalSpecifications(unittest.TestCase):
             with self.subTest(case=row["case"]):
                 handle = yamaa_native._prepare_document(
                     "spec.yaml",
-                    bytes.fromhex(row["source_hex"]),
+                    fixture_bytes(row["source"]),
                     no_port,
                     no_port,
                     no_port,
                 )
                 inputs = {
-                    name: bytes.fromhex(content)
-                    for name, content in json.loads(row["inputs_json"]).items()
+                    name: fixture_bytes(content)
+                    for name, content in row["inputs"].items()
                 }
-                expected = json.loads(row["expected"])
-                artifact = bytes.fromhex(row["artifact_hex"])
+                expected = row["expected"]
+                artifact = fixture_bytes(row["artifact"])
                 for _ in range(2):
                     calls = []
 
@@ -1165,42 +1182,41 @@ class OriginalSpecifications(unittest.TestCase):
                         self.assertEqual(saves, [])
 
     def test_original_filtered_sources_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("source-filters.tsv", "source-filter", 13)
+        self._source_selection_reports("source_filters.json", "source-filter", 13)
 
     def test_original_first_available_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("first-available.tsv", "first-available", 11)
+        self._source_selection_reports("first_available.json", "first-available", 11)
 
     def test_original_all_or_none_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("original-all-or-none.tsv", "all-or-none", 11)
+        self._source_selection_reports("original_all_or_none.json", "all-or-none", 11)
 
     def test_original_column_not_missing_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("original-not-missing.tsv", "column-check", 10)
+        self._source_selection_reports("original_not_missing.json", "column-check", 10)
 
     def test_row_filter_carrier_failures_match_complete_normative_reports(self):
         self._source_selection_reports(
-            "row-filter-admission.tsv", "predicate-carrier", 2
+            "row_filter_admission.json", "predicate-carrier", 2
         )
 
     def test_row_filters_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("row-filters.tsv", "row-filter", 27)
+        self._source_selection_reports("row_filters.json", "row-filter", 27)
 
     def test_row_reductions_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("row-reductions.tsv", "row-reduction", 25)
+        self._source_selection_reports("row_reductions.json", "row-reduction", 25)
 
     def test_aggregate_relations_complete_reports_and_exact_csv(self):
         self._source_selection_reports(
-            "correlated-aggregates.tsv", "correlated-aggregate", 16
+            "correlated_aggregates.json", "correlated-aggregate", 16
         )
 
     def test_odm_reads_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("odm-reads.tsv", "odm", 14)
+        self._source_selection_reports("odm_reads.json", "odm", 14)
 
     def test_deferred_odm_defaults_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("odm-deferred.tsv", "odm-deferred", 8)
+        self._source_selection_reports("odm_deferred.json", "odm-deferred", 8)
 
     def test_odm_preflight_complete_findings_before_any_resource_port(self):
-        with (ROOT / "odm-preflight.tsv").open(encoding="ascii") as stream:
-            cases = list(csv.DictReader(stream, delimiter="\t"))
+        cases = fixture_rows("odm_preflight.json")
         self.assertEqual(len(cases), 8)
 
         def no_port(*_):
@@ -1212,21 +1228,18 @@ class OriginalSpecifications(unittest.TestCase):
                     with self.assertRaises(ValueError) as caught:
                         yamaa_native._prepare_document(
                             "spec.yaml",
-                            bytes.fromhex(row["source_hex"]),
+                            fixture_bytes(row["source"]),
                             no_port,
                             no_port,
                             no_port,
                         )
-                    self.assertEqual(
-                        json.loads(str(caught.exception)), json.loads(row["expected"])
-                    )
+                    self.assertEqual(json.loads(str(caught.exception)), row["expected"])
 
     def test_row_column_checks_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("row-column-checks.tsv", "row-column", 48)
+        self._source_selection_reports("row_column_checks.json", "row-column", 48)
 
     def test_static_verification_check_issues_need_no_study_authority(self):
-        with (ROOT / "static-verification-checks.tsv").open(encoding="utf-8") as stream:
-            cases = list(csv.DictReader(stream, delimiter="\t"))
+        cases = fixture_rows("static_verification_checks.json")
         self.assertEqual(len(cases), 15)
 
         def no_port(*args):
@@ -1236,14 +1249,14 @@ class OriginalSpecifications(unittest.TestCase):
             with self.subTest(case=row["case"]):
                 handle = yamaa_native._prepare_document(
                     "spec.yaml",
-                    bytes.fromhex(row["source_hex"]),
+                    fixture_bytes(row["source"]),
                     no_port,
                     no_port,
                     no_port,
                 )
                 for _ in range(2):
-                    self.assertEqual(handle.check_issues(), row["expected"])
-                    expected = json.loads(row["expected"])
+                    self.assertEqual(json.loads(handle.check_issues()), row["expected"])
+                    expected = row["expected"]
                     self.assertEqual(
                         handle.check_issue_rows(),
                         [
@@ -1320,22 +1333,23 @@ class OriginalSpecifications(unittest.TestCase):
 
     def test_original_column_matches_complete_reports_and_exact_csv(self):
         self._source_selection_reports(
-            "original-column-matches.tsv", "column-matches", 16
+            "original_column_matches.json", "column-matches", 16
         )
 
     def test_original_column_values_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("original-column-values.tsv", "column-value", 20)
+        self._source_selection_reports(
+            "original_column_values.json", "column-value", 20
+        )
 
     def test_original_assertions_complete_reports_and_exact_csv(self):
-        self._source_selection_reports("original-assertions.tsv", "assert", 17)
+        self._source_selection_reports("original_assertions.json", "assert", 17)
 
     def _source_selection_reports(self, filename, prefix, cases):
-        with (ROOT / filename).open(encoding="utf-8") as stream:
-            records = list(csv.DictReader(stream, delimiter="\t"))
+        records = fixture_rows(filename)
         self.assertEqual(len(records), cases)
         for record in records:
             with self.subTest(case=record["case"]):
-                raw = bytes.fromhex(record["source_hex"])
+                raw = fixture_bytes(record["source"])
 
                 def no_parent(*_):
                     self.fail("standalone filtered source reached parent authority")
@@ -1343,8 +1357,8 @@ class OriginalSpecifications(unittest.TestCase):
                 spec = yamaa_native._prepare_document(
                     "spec.yaml", raw, no_parent, no_parent, no_parent
                 )
-                content = bytes.fromhex(record["input_hex"])
-                expected = json.loads(record["expected"])
+                content = fixture_bytes(record["input"])
+                expected = record["expected"]
                 # Require captured citations without changing any finding.
                 if prefix == "row-filter" and record["case"] in tuple(
                     TRUTH["phase_replay_cases"]
@@ -1379,7 +1393,7 @@ class OriginalSpecifications(unittest.TestCase):
                     result = spec.build(capture, metadata)
                     unsaved = dict(expected, artifacts=[])
                     self.assertEqual(json.loads(result.observations()), unsaved)
-                    if not record["artifact_hex"]:
+                    if not record["artifact"]:
                         self.assertIsNone(result.output())
                         with self.assertRaisesRegex(
                             ValueError, "cannot save a failed build"
@@ -1392,9 +1406,7 @@ class OriginalSpecifications(unittest.TestCase):
 
                         def publish(path, actual):
                             self.assertEqual(path, "result.csv")
-                            self.assertEqual(
-                                actual, bytes.fromhex(record["artifact_hex"])
-                            )
+                            self.assertEqual(actual, fixture_bytes(record["artifact"]))
                             published.append(actual)
 
                         for _ in range(2):
@@ -1483,7 +1495,7 @@ class OriginalSpecifications(unittest.TestCase):
 
     def test_core_csv_profile_preserves_independent_complete_failed_reports(self):
         self._assert_independent_failed_reports(
-            "csv-profile-diagnostics.tsv", "csv", 13, 13
+            "csv_profile_diagnostics.json", "csv", 13, 13
         )
 
     def test_core_window_findings_preserve_independent_complete_failed_reports(self):
@@ -1497,29 +1509,28 @@ class OriginalSpecifications(unittest.TestCase):
         )
 
     def test_core_source_typing_preserves_independent_complete_failed_reports(self):
-        self._assert_independent_failed_reports("source-typing.tsv", "typing", 4, 4)
+        self._assert_independent_failed_reports("source_typing.json", "typing", 4, 4)
 
     def test_original_column_literals_preserve_reference_reports_and_exact_csv(self):
-        self._assert_independent_scalar_reports("column-literals.tsv", "literal", 4)
+        self._assert_independent_scalar_reports("column_literals.json", "literal", 4)
 
     def test_original_conversion_handlers_preserve_reference_reports_and_exact_csv(
         self,
     ):
         self._assert_independent_scalar_reports(
-            "original-conversion-handlers.tsv", "handler", 5
+            "original_conversion_handlers.json", "handler", 5
         )
 
     def test_original_row_conversion_handlers_complete_reports_and_exact_csv(self):
         self._assert_independent_scalar_reports(
-            "original-row-conversion-handlers.tsv", "row-handler", 8
+            "original_row_conversion_handlers.json", "row-handler", 8
         )
 
     def _assert_independent_scalar_reports(self, fixture, prefix, cases):
         def no_parent(*_):
             self.fail("standalone literal document reached inheritance authority")
 
-        with (ROOT / fixture).open(encoding="utf-8") as stream:
-            records = list(csv.DictReader(stream, delimiter="\t"))
+        records = fixture_rows(fixture)
         self.assertEqual(len(records), cases)
         for record in records:
             with self.subTest(case=record["case"]):
@@ -1550,10 +1561,10 @@ class OriginalSpecifications(unittest.TestCase):
                 )
                 del spec
                 gc.collect()
-                expected = json.loads(record["expected"])
+                expected = record["expected"]
                 unsaved = dict(expected, artifacts=[])
                 self.assertEqual(json.loads(result.observations()), unsaved)
-                content = bytes.fromhex(record["output_hex"])
+                content = fixture_bytes(record["output"])
                 if content:
                     self.assertIsNotNone(result.output())
 
@@ -1584,18 +1595,23 @@ class OriginalSpecifications(unittest.TestCase):
         def no_parent(*_):
             self.fail("standalone document reached an inheritance port")
 
-        with (ROOT / fixture).open(encoding="ascii") as stream:
-            records = list(csv.DictReader(stream, delimiter="\t"))
+        if fixture.endswith(".json"):
+            records = fixture_rows(fixture)
+        else:
+            with (ROOT / fixture).open(encoding="ascii") as stream:
+                records = list(csv.DictReader(stream, delimiter="\t"))
+            for record in records:
+                record["expected"] = json.loads(record["expected"])
         self.assertEqual(len(records), cases)
         self.assertEqual(
-            sum(len(json.loads(r["expected"])["diagnostics"]) for r in records),
+            sum(len(r["expected"]["diagnostics"]) for r in records),
             findings,
         )
         for record in records:
             with self.subTest(case=record["case"]):
                 held = (
-                    bytes.fromhex(record["source_hex"])
-                    if "source_hex" in record
+                    fixture_bytes(record["source_bytes"])
+                    if "source_bytes" in record
                     else content
                 )
                 reads = []
@@ -1625,9 +1641,7 @@ class OriginalSpecifications(unittest.TestCase):
                 )
                 del spec
                 gc.collect()
-                self.assertEqual(
-                    json.loads(result.observations()), json.loads(record["expected"])
-                )
+                self.assertEqual(json.loads(result.observations()), record["expected"])
                 self.assertIsNone(result.output())
                 for _ in range(2):
                     with self.assertRaisesRegex(
@@ -1640,11 +1654,11 @@ class OriginalSpecifications(unittest.TestCase):
                         )
                     self.assertEqual(
                         json.loads(result.observations()),
-                        json.loads(record["expected"]),
+                        record["expected"],
                     )
                 self.assertEqual(
                     reads,
-                    [r["path"] for r in json.loads(record["expected"])["source_reads"]],
+                    [r["path"] for r in record["expected"]["source_reads"]],
                 )
 
     def test_inherited_raw_loader_replays_existing_complete_failure_contracts(self):
