@@ -203,7 +203,6 @@ pub fn prepare<P: CapturePort, D: DecodePort>(
         }
         let mut dictionaries = Vec::new();
         for reference in references {
-            if let Origins::Inherited(prepared) = &origins {}
             let declaring = match origins.declaring(reference.path()) {
                 Some(declaring) => declaring,
                 None => return Err(Cause::MissingOrigin(reference)),

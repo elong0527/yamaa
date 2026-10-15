@@ -396,10 +396,7 @@ impl<'a> Run<'a> {
                 }
             }
         }
-        // Reserve comparisons before the sort; diagnostics use lexical dependency order.
-        let chars = names
-            .iter()
-            .fold(0usize, |n, s| n.saturating_add(s.len().saturating_add(1)));
+
         names.sort();
         diagnosable.sort();
         Ok((names, diagnosable))
@@ -475,13 +472,7 @@ impl<'a> Run<'a> {
             for &index in members {
                 paths.push(self.derivation_path(selected[index])?);
             }
-            let text_bytes = columns
-                .iter()
-                .chain(&cycle)
-                .chain(&paths)
-                .fold(12usize, |total, name: &String| {
-                    total.saturating_add(name.len())
-                });
+
             return Err(Error::Invalid(vec![InheritanceDependencyIssue::Cycle {
                 columns,
                 cycle,
@@ -528,15 +519,7 @@ impl<'a> Run<'a> {
             .into());
         }
         let source = &self.input.nodes()[node];
-        let edges = match source {
-            N::Sequence(v) => v.len(),
-            N::Mapping(v) => v.len().saturating_mul(2),
-            _ => 0,
-        };
-        let bytes = match source {
-            N::Text(s) | N::Integer(s) => s.len(),
-            _ => 0,
-        };
+
         let result = match source {
             N::Sequence(items) => {
                 let mut output = Vec::new();

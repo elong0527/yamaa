@@ -21,7 +21,7 @@ pub(super) fn predicate(
                 expression,
                 position.character,
                 failure,
-            )?));
+            )));
             Ok(())
         }
         Err(error) => Err(BindError::PredicatePolicy(error.clone())),

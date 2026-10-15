@@ -57,7 +57,6 @@ impl Run<'_> {
         Ok(())
     }
     fn field(&mut self, value: usize, name: &str) -> Result<Option<usize>, NormalizationError> {
-        let length = self.input.nodes()[value].length().unwrap_or(0);
         Ok(self.input.field(value, name))
     }
     fn path(&mut self, parent: &str, suffix: &str) -> Result<String, NormalizationError> {
@@ -69,13 +68,7 @@ impl Run<'_> {
     }
     fn label(&mut self, node: usize) -> Result<String, NormalizationError> {
         let value = &self.input.nodes()[node];
-        let maximum = match value {
-            N::Text(text) | N::Integer(text) => text.len(),
-            N::Boolean(_) => 5,
-            N::Null => 4,
-            N::Float(_) => 512,
-            _ => return Err(ValidationError::InvalidDescriptor.into()),
-        };
+
         scalar_diagnostic_label(value).ok_or_else(|| ValidationError::InvalidDescriptor.into())
     }
     fn descriptor(
@@ -372,7 +365,7 @@ impl Materialize<'_> {
             }
         }
         let node = match &input.nodes()[value] {
-            N::Text(text) | N::Integer(text) => input.nodes()[value].clone(),
+            N::Text(_) | N::Integer(_) => input.nodes()[value].clone(),
             N::Sequence(items) => {
                 let mut copied = Vec::with_capacity(items.len());
                 for &item in items {

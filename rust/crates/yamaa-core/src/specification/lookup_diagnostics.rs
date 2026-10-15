@@ -106,12 +106,7 @@ impl LookupFinding {
         }
         finding
     }
-    pub(super) fn grammar(
-        path: &str,
-        text: &str,
-        position: usize,
-        error: &GrammarFailure,
-    ) -> Result<Self, BindError> {
-        Ok(Self(error.original_diagnostic(path, text, position)))
+    pub(super) fn grammar(path: &str, text: &str, position: usize, error: &GrammarFailure) -> Self {
+        Self(error.original_diagnostic(path, text, position))
     }
 }

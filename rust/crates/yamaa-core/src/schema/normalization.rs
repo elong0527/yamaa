@@ -158,7 +158,7 @@ impl Run<'_> {
     fn copy(&mut self, site: Site<'_>) -> Result<usize, NormalizationError> {
         self.step(site)?;
         let node = match &site.input.nodes()[site.value] {
-            N::Text(text) | N::Integer(text) => site.input.nodes()[site.value].clone(),
+            N::Text(_) | N::Integer(_) => site.input.nodes()[site.value].clone(),
             N::Sequence(items) => {
                 let mut result = Vec::with_capacity(items.len());
                 for &value in items {

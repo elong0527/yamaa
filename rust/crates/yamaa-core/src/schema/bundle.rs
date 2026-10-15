@@ -188,10 +188,6 @@ impl Builder {
     }
     /// Find a descriptor member; the scan is charged even if no name matches.
     fn field(&mut self, raw: Raw, name: &str) -> Result<Option<Raw>, BundleError> {
-        let amount = match self.node(raw) {
-            N::Mapping(items) => items.len(),
-            _ => 1,
-        };
         Ok(self.modules[raw.module]
             .document
             .field(raw.node, name)
@@ -562,9 +558,6 @@ impl SchemaStructure {
                         let N::Mapping(items) = builder.node(value) else {
                             unreachable!()
                         };
-                        let N::Mapping(items) = builder.node(value) else {
-                            unreachable!()
-                        };
                         let items = items.clone();
                         for (key, payload) in items {
                             let key = Raw { module, node: key };
@@ -573,11 +566,6 @@ impl SchemaStructure {
                                 node: payload,
                             };
                             for &(previous, _) in &raw_registries[index].entries {
-                                let bytes = |node: &N| match node {
-                                    N::Text(text) | N::Integer(text) => text.len(),
-                                    N::Float(_) => 2048,
-                                    _ => 1,
-                                };
                                 if super::document::scalar_keys_equal(
                                     builder.node(previous),
                                     builder.node(key),

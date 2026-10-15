@@ -66,21 +66,12 @@ impl Run<'_> {
         Ok(None)
     }
 
-    fn label_bytes(&self, node: usize) -> usize {
-        match &self.input.nodes()[node] {
-            N::Text(text) | N::Integer(text) => text.len(),
-            _ => 64,
-        }
-    }
-
     fn label(&mut self, node: usize) -> Result<String, NormalizationError> {
-        let size = self.label_bytes(node);
         scalar_diagnostic_label(&self.input.nodes()[node])
             .ok_or_else(|| ValidationError::InvalidDescriptor.into())
     }
 
     fn join(&mut self, path: &str, name: &str) -> Result<String, NormalizationError> {
-        let size = path.len().saturating_add(name.len()).saturating_add(1);
         Ok(if path.is_empty() {
             name.into()
         } else {
@@ -89,7 +80,6 @@ impl Run<'_> {
     }
 
     fn indexed(&mut self, path: &str, label: &str) -> Result<String, NormalizationError> {
-        let size = path.len().saturating_add(label.len()).saturating_add(2);
         Ok(format!("{path}[{label}]"))
     }
 
@@ -366,23 +356,16 @@ impl Run<'_> {
     }
 
     fn scalar(&mut self, node: usize) -> Result<usize, NormalizationError> {
-        let bytes = match &self.input.nodes()[node] {
-            N::Text(text) | N::Integer(text) => text.len(),
-            N::Sequence(_) | N::Mapping(_) => return Err(ValidationError::InvalidDescriptor.into()),
-            _ => 0,
-        };
+        if matches!(self.input.nodes()[node], N::Sequence(_) | N::Mapping(_)) {
+            return Err(ValidationError::InvalidDescriptor.into());
+        }
+
         Ok(self.push(self.input.nodes()[node].clone(), self.origin(node, false)))
     }
 
     fn import(&mut self, normalized: NormalizedDocument) -> Result<usize, NormalizationError> {
         let offset = self.nodes.len();
         for (node, origin) in normalized.document.nodes().iter().zip(normalized.origins) {
-            let (bytes, edges) = match node {
-                N::Text(text) | N::Integer(text) => (text.len(), 0),
-                N::Sequence(items) => (0, items.len()),
-                N::Mapping(entries) => (0, entries.len().saturating_mul(2)),
-                _ => (0, 0),
-            };
             let node = match node {
                 N::Sequence(items) => N::Sequence(items.iter().map(|n| n + offset).collect()),
                 N::Mapping(entries) => N::Mapping(
@@ -464,10 +447,6 @@ impl Run<'_> {
             let mut selected: Vec<(usize, usize)> = Vec::with_capacity(entries.len());
             let mut positions: BTreeMap<String, usize> = BTreeMap::new();
             for &(key, member) in entries {
-                let bytes = self.label_bytes(key);
-                // Bound string comparisons in lookup and insertion, including
-                // the number of possible entries before either allocation.
-                let comparisons = (usize::BITS - entries.len().leading_zeros()) as usize;
                 let label = self.label(key)?;
                 if let Some(&position) = positions.get(&label) {
                     selected[position].1 = member;

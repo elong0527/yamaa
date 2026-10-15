@@ -59,7 +59,7 @@ impl RootFilter {
                     &self.expression,
                     position.character,
                     failure,
-                )?));
+                )));
                 return Ok(None);
             }
             Err(error) => return Err(BindError::PredicatePolicy(error.clone())),

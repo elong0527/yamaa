@@ -64,7 +64,6 @@ impl Run<'_> {
         Ok(())
     }
     fn field(&mut self, value: usize, name: &str) -> Result<Option<usize>, NormalizationError> {
-        let length = self.input.nodes()[value].length().unwrap_or(0);
         Ok(self.input.field(value, name))
     }
     fn path(&mut self, parent: &str, suffix: &str) -> Result<String, NormalizationError> {
@@ -278,7 +277,7 @@ impl Run<'_> {
         };
         let expanded = source != value;
         let node = match &self.input.nodes()[source] {
-            N::Text(text) | N::Integer(text) => self.input.nodes()[source].clone(),
+            N::Text(_) | N::Integer(_) => self.input.nodes()[source].clone(),
             N::Sequence(items) => {
                 let mut output = Vec::with_capacity(items.len());
                 for &item in items {

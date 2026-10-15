@@ -128,7 +128,7 @@ impl Run<'_, '_> {
     fn copy(&mut self, site: Site<'_>, depth: usize) -> Result<usize, NormalizationError> {
         self.step(depth)?;
         let value = match site.value() {
-            N::Text(text) | N::Integer(text) => site.value().clone(),
+            N::Text(_) | N::Integer(_) => site.value().clone(),
             N::Sequence(items) => {
                 let mut output = Vec::with_capacity(items.len());
                 for &item in items {
@@ -158,12 +158,6 @@ impl Run<'_, '_> {
     ) -> Result<usize, NormalizationError> {
         let offset = self.nodes.len();
         for (index, node) in composed.document.nodes().iter().enumerate() {
-            let (bytes, edges) = match node {
-                N::Text(s) | N::Integer(s) => (s.len(), 0),
-                N::Sequence(items) => (0, items.len()),
-                N::Mapping(items) => (0, items.len().saturating_mul(2)),
-                _ => (0, 0),
-            };
             let value = match node {
                 N::Sequence(items) => N::Sequence(items.iter().map(|n| n + offset).collect()),
                 N::Mapping(items) => N::Mapping(

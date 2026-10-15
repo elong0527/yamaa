@@ -47,7 +47,7 @@ fn copy(
         }
     }
     let value = match &input.nodes()[node] {
-        N::Text(text) | N::Integer(text) => input.nodes()[node].clone(),
+        N::Text(_) | N::Integer(_) => input.nodes()[node].clone(),
         N::Sequence(items) => {
             let mut values = Vec::with_capacity(items.len());
             for &item in items {
@@ -104,7 +104,7 @@ impl SchemaStructure {
                 .ok_or(ValidationError::InvalidDescriptor)?
                 .fields;
             for &column in columns {
-                let N::Mapping(members) = &document.nodes()[column] else {
+                let N::Mapping(_) = &document.nodes()[column] else {
                     return Err(ValidationError::InvalidDescriptor.into());
                 };
                 for field in fields {

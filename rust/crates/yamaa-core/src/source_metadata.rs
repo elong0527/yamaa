@@ -280,7 +280,6 @@ pub(crate) fn graph_normalized_schemas(
                 .iter()
                 .find(|p| p.dataset() == declaration.name)
             {
-                let fields = producer.contract().fields();
             } else {
                 let actual = external.get(next).ok_or(Error::SourceIdentity)?;
                 next += 1;
@@ -301,7 +300,6 @@ pub(crate) fn graph_normalized_schemas(
                 .iter()
                 .find(|p| p.dataset() == declaration.name)
             {
-                let fields = producer.contract().fields();
                 let schema = TableSchema::new(
                     fields
                         .iter()

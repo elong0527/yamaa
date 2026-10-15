@@ -177,10 +177,7 @@ impl Declaration {
             _ => format!("key[{field}]"),
         }
     }
-    pub(super) fn result_type(
-        &self,
-        catalog: &Catalog,
-    ) -> Result<Option<ComparableType>, BindError> {
+    pub(super) fn result_type(&self, catalog: &Catalog) -> Option<ComparableType> {
         let expression = match self {
             Self::Variable(name) | Self::Source(name) => match_value::Expression::Source(name),
             Self::StrPad(_) => match_value::Expression::Operation("str_pad"),
@@ -194,7 +191,7 @@ impl Declaration {
                 _ => LiteralKind::Other,
             }),
         };
-        match_value::result_type(catalog, expression).map_err(BindError::Catalog)
+        match_value::result_type(catalog, expression)
     }
     pub(super) fn bind(
         &self,
@@ -333,7 +330,7 @@ impl Declaration {
                         },
                         reads,
                         TableSchema::new(fields).map_err(|_| BindError::Internal)?,
-                        self.result_type(catalog)?,
+                        self.result_type(catalog),
                     )
                     .map(|expression| MatchValue::Expression(Box::new(expression)))
                     .map_err(BindError::InvalidPlan)

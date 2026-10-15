@@ -709,7 +709,7 @@ impl Declarations {
             for (field, declaration) in pairs_declared {
                 if let (Some(donor), Some(expected)) = (
                     schema.columns().iter().find(|column| column.name == *field),
-                    declaration.result_type(&catalog)?,
+                    declaration.result_type(&catalog),
                 ) {
                     if !crate::key_relation::comparable(expected, donor.kind.into()) {
                         findings.push(BindFinding::Lookup(LookupFinding::key_type(
@@ -828,7 +828,7 @@ impl Declarations {
                         item.filter_text.as_deref().expect("written predicate"),
                         position.character,
                         failure,
-                    )?));
+                    )));
                     // A syntax rejection does not remove the declaration's schema.
                     None
                 }
@@ -1163,7 +1163,7 @@ impl Declarations {
             }
             for (field, value) in declaration.keys.iter().flatten() {
                 if let (Some(actual), Some(expected)) =
-                    (donor.get(field), value.result_type(&catalog)?)
+                    (donor.get(field), value.result_type(&catalog))
                 {
                     if !crate::key_relation::comparable(expected, (*actual).into()) {
                         findings.push(BindFinding::Lookup(LookupFinding::key_type(

@@ -76,7 +76,7 @@ impl Run<'_> {
     fn copy(&mut self, site: Site<'_>, depth: usize) -> Result<usize, NormalizationError> {
         self.step(depth)?;
         let value = match site.value() {
-            N::Text(text) | N::Integer(text) => site.value().clone(),
+            N::Text(_) | N::Integer(_) => site.value().clone(),
             N::Sequence(items) => {
                 let mut values = Vec::with_capacity(items.len());
                 for &item in items {

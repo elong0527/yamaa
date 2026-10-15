@@ -892,7 +892,7 @@ pub(super) fn bind(
                 expr,
                 position.character,
                 failure,
-            )?));
+            )));
             None
         }
         Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
@@ -1001,7 +1001,7 @@ pub(super) fn bind(
                     )?;
                     continue;
                 };
-                if let Some(expected) = value.result_type(catalog)? {
+                if let Some(expected) = value.result_type(catalog) {
                     if !crate::key_relation::comparable(expected, actual.into()) {
                         finding(
                             Finding::KeyType {

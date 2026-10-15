@@ -340,10 +340,6 @@ impl Run<'_> {
             }
         }
         for &(key, _) in items {
-            let name_bytes = match &self.input.nodes()[key] {
-                N::Text(name) => name.len(),
-                _ => 0,
-            };
             let known = matches!(&self.input.nodes()[key],N::Text(name) if fields.iter().any(|f|f.name==*name));
             if !known {
                 let (key, index) = self.key(key)?;
