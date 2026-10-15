@@ -145,7 +145,14 @@ fn metadata_inspection_and_capture_reuse_only_exact_retained_bytes() {
         resources.resource_failure(&Error::Changed),
         Some(ResourceFailure::ContentChanged)
     );
-    for opaque in [Error::Limit, Error::Unreadable, Error::InvalidPath] {
+    for opaque in [
+        Error::Limit(
+            yamaa_core::limits::Limits::source_bytes(yamaa_core::limits::Limits::SOURCE_BYTES + 1)
+                .unwrap_err(),
+        ),
+        Error::Unreadable,
+        Error::InvalidPath,
+    ] {
         assert_eq!(resources.resource_failure(&opaque), None);
     }
 }

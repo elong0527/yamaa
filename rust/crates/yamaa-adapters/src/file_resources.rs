@@ -14,7 +14,7 @@ use std::{
     sync::Arc,
 };
 
-use yamaa_core::limits::Limits;
+use yamaa_core::limits::{LimitExceeded, Limits};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
@@ -29,7 +29,7 @@ pub enum Error {
     OutsideRoots,
     Symlink,
     Changed,
-    Limit,
+    Limit(LimitExceeded),
 }
 impl Error {
     pub fn message(&self) -> &'static str {
@@ -45,7 +45,7 @@ impl Error {
             Self::OutsideRoots => "resource path outside approved roots",
             Self::Symlink => "resource path contains a symbolic link",
             Self::Changed => "captured resource content changed",
-            Self::Limit => "resource capture limit",
+            Self::Limit(_) => "resource capture limit",
         }
     }
 }
@@ -176,11 +176,16 @@ impl Resources {
     }
     /// Capture source bytes under the fixed per-file source boundary.
     pub fn capture(&mut self, written: &str) -> Result<(Arc<[u8]>, bool), Error> {
-        self.capture_at(self.base.clone(), written, Limits::SOURCE_BYTES)
+        self.capture_at(
+            self.base.clone(),
+            written,
+            "source_bytes",
+            Limits::SOURCE_BYTES,
+        )
     }
     /// Capture specification bytes under the fixed per-file metadata boundary.
     pub fn capture_metadata(&mut self, written: &str) -> Result<(Arc<[u8]>, bool), Error> {
-        self.capture_at(self.base.clone(), written, Limits::SPEC_BYTES)
+        self.capture_at(self.base.clone(), written, "spec_bytes", Limits::SPEC_BYTES)
     }
     /// A declaring identity comes from this reader's canonical regular-file resolution.
     pub fn resolve_from(&self, declaring: &str, written: &str) -> Result<String, Error> {
@@ -234,14 +239,24 @@ impl Resources {
         declaring: &str,
         written: &str,
     ) -> Result<(Arc<[u8]>, bool), Error> {
-        self.capture_at(file_base(declaring)?, written, Limits::SOURCE_BYTES)
+        self.capture_at(
+            file_base(declaring)?,
+            written,
+            "source_bytes",
+            Limits::SOURCE_BYTES,
+        )
     }
     pub fn capture_metadata_from(
         &mut self,
         declaring: &str,
         written: &str,
     ) -> Result<(Arc<[u8]>, bool), Error> {
-        self.capture_at(file_base(declaring)?, written, Limits::SPEC_BYTES)
+        self.capture_at(
+            file_base(declaring)?,
+            written,
+            "spec_bytes",
+            Limits::SPEC_BYTES,
+        )
     }
     /// Keep the same path authority and captures for data declared by this entry.
     pub fn select_entry_base(&mut self, identity: &str) -> Result<(), Error> {
@@ -267,12 +282,20 @@ impl Resources {
         &mut self,
         base: Segments,
         written: &str,
+        resource: &'static str,
         maximum: usize,
     ) -> Result<(Arc<[u8]>, bool), Error> {
+        let refusal = |actual| {
+            Error::Limit(LimitExceeded {
+                resource,
+                limit: maximum,
+                actual: usize::try_from(actual).ok(),
+            })
+        };
         let mut opened = self.open_at(&base, written)?;
         let length = opened.file.metadata().map_err(|_| Error::Unreadable)?.len();
         if !self.by_path.contains_key(&opened.key) && length > maximum as u64 {
-            return Err(Error::Limit);
+            return Err(refusal(length));
         }
         let physical = (opened.identity.0, opened.identity.1);
         let accepted = if let Some(&index) = self.by_path.get(&opened.key) {
@@ -299,10 +322,10 @@ impl Resources {
                 .iter()
                 .any(|(key, path, from)| key == &opened.key && path == written && from == &base);
             if self.snapshots[index].bytes.len() > maximum {
-                return Err(Error::Limit);
+                return Err(refusal(self.snapshots[index].bytes.len() as u64));
             }
             let bytes = Arc::clone(&self.snapshots[index].bytes);
-            if read_bounded(&mut opened.file, bytes.len())
+            if read_bounded(&mut opened.file, bytes.len(), |_| Error::Changed)
                 .map_err(|_| Error::Changed)?
                 .as_slice()
                 != bytes.as_ref()
@@ -318,10 +341,10 @@ impl Resources {
             self.by_path.insert(opened.key, index);
             return Ok((bytes, false));
         }
-        let content = read_bounded(&mut opened.file, maximum)?;
+        let content = read_bounded(&mut opened.file, maximum, refusal)?;
         let mut current = self.open_at(&base, written).map_err(|_| Error::Changed)?;
         if current.key != opened.key
-            || read_bounded(&mut current.file, content.len())
+            || read_bounded(&mut current.file, content.len(), |_| Error::Changed)
                 .map_err(|_| Error::Changed)?
                 .as_slice()
                 != content.as_slice()
@@ -348,7 +371,7 @@ impl Resources {
             let result = (|| {
                 let mut opened = self.open_at(base, written).map_err(|_| Error::Changed)?;
                 if &opened.key != key
-                    || read_bounded(&mut opened.file, snapshot.bytes.len())
+                    || read_bounded(&mut opened.file, snapshot.bytes.len(), |_| Error::Changed)
                         .map_err(|_| Error::Changed)?
                         .as_slice()
                         != snapshot.bytes.as_ref()
@@ -867,9 +890,14 @@ fn rooted_segments(path: &str) -> Option<Segments> {
     }
     Some(result)
 }
-fn read_bounded(file: &mut File, maximum: usize) -> Result<Vec<u8>, Error> {
-    if file.metadata().map_err(|_| Error::Unreadable)?.len() > maximum as u64 {
-        return Err(Error::Limit);
+fn read_bounded(
+    file: &mut File,
+    maximum: usize,
+    refusal: impl Fn(u64) -> Error,
+) -> Result<Vec<u8>, Error> {
+    let length = file.metadata().map_err(|_| Error::Unreadable)?.len();
+    if length > maximum as u64 {
+        return Err(refusal(length));
     }
     let mut bytes = Vec::new();
     let mut buffer = [0u8; 65_536];
@@ -885,7 +913,7 @@ fn read_bounded(file: &mut File, maximum: usize) -> Result<Vec<u8>, Error> {
             return Ok(bytes);
         }
         if count > maximum.saturating_sub(bytes.len()) {
-            return Err(Error::Limit);
+            return Err(refusal(bytes.len() as u64 + count as u64));
         }
         bytes.extend_from_slice(&buffer[..count]);
     }
@@ -1012,6 +1040,16 @@ mod physical_capture_tests {
         assert_eq!(retained[1].0, fixture.identity("second.yaml"));
         assert!(Arc::ptr_eq(&retained[0].1, &first));
         assert!(Arc::ptr_eq(&retained[1].1, &second));
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(fixture.0.join("first.yaml"))
+            .unwrap()
+            .set_len((Limits::SPEC_BYTES + 1) as u64)
+            .unwrap();
+        assert_eq!(
+            resources.capture_metadata("first.yaml"),
+            Err(Error::Changed)
+        );
         std::fs::remove_file(fixture.0.join("first.yaml")).unwrap();
         std::fs::remove_file(fixture.0.join("second.yaml")).unwrap();
         assert!(retained
@@ -1026,13 +1064,23 @@ mod physical_capture_tests {
         let file = File::create(fixture.0.join("large.yaml")).unwrap();
         file.set_len((Limits::SPEC_BYTES + 1) as u64).unwrap();
         let mut resources = fixture.resources();
-        assert_eq!(resources.capture_metadata("large.yaml"), Err(Error::Limit));
+        assert_eq!(
+            resources.capture_metadata("large.yaml"),
+            Err(Error::Limit(
+                Limits::spec_bytes(Limits::SPEC_BYTES + 1).unwrap_err()
+            ))
+        );
         assert_eq!(resources.capture_reads(), 0);
         assert_eq!(resources.snapshot_count(), 0);
         let (source, new) = resources.capture("large.yaml").unwrap();
         assert!(new);
         assert_eq!(source.len(), Limits::SPEC_BYTES + 1);
-        assert_eq!(resources.capture_metadata("large.yaml"), Err(Error::Limit));
+        assert_eq!(
+            resources.capture_metadata("large.yaml"),
+            Err(Error::Limit(
+                Limits::spec_bytes(Limits::SPEC_BYTES + 1).unwrap_err()
+            ))
+        );
         assert_eq!(resources.capture_reads(), 1);
         assert_eq!(resources.snapshot_count(), 1);
         #[cfg(unix)]
@@ -1040,8 +1088,14 @@ mod physical_capture_tests {
             // Unix truncation creates a sparse extent; refuse its logical size
             // before reading or allocating the ten-gigabyte source contents.
             file.set_len((Limits::SOURCE_BYTES + 1) as u64).unwrap();
+            assert_eq!(resources.capture("large.yaml"), Err(Error::Changed));
             let mut uncaptured = fixture.resources();
-            assert_eq!(uncaptured.capture("large.yaml"), Err(Error::Limit));
+            assert_eq!(
+                uncaptured.capture("large.yaml"),
+                Err(Error::Limit(
+                    Limits::source_bytes(Limits::SOURCE_BYTES + 1).unwrap_err()
+                ))
+            );
             assert_eq!(uncaptured.capture_reads(), 0);
             assert_eq!(uncaptured.snapshot_count(), 0);
         }
