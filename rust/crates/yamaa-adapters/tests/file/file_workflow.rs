@@ -328,7 +328,13 @@ fn per_source_resource_and_structural_limits_refuse_partial_metadata_diagnostics
             shipped_schema::capture().unwrap(),
             environment_schema,
             Limits {
-                captured_bytes: if structural { 16384 } else { environment.len() },
+                // Metadata owns both its snapshot and the preparation copy.
+                // Reach the dependency boundary instead of refusing the root.
+                captured_bytes: if structural {
+                    32_768
+                } else {
+                    environment.len() * 2
+                },
                 ..Default::default()
             },
         )
@@ -340,7 +346,7 @@ fn per_source_resource_and_structural_limits_refuse_partial_metadata_diagnostics
         let yamaa_adapters::file_project::Error::Environment(Failure::Rejected(rejected)) =
             owner.error()
         else {
-            panic!("original source failures remain owned")
+            panic!("original source failures remain owned: {:?}", owner.error())
         };
         assert_eq!(rejected.sources.len(), 2);
         assert!(matches!(
