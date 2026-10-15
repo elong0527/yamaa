@@ -100,7 +100,12 @@ def last_line(node: yaml.Node) -> int:
         # A block scalar's end mark follows its trailing blank lines; the
         # scalar ends on its last written line.
         written = end.buffer[: end.pointer].rstrip()
-        return max(node.start_mark.line, written.count("\n"))
+        # The buffer keeps the file's written breaks, so count CR, LF and
+        # CRLF alike (as `parse` splits them): counting "\n" alone ends a
+        # lone-CR scalar on its first line, demoting its remaining lines
+        # from content to layout.
+        breaks = len(re.findall(r"\r\n|\r|\n", written))
+        return max(node.start_mark.line, breaks)
     if end.column == 0 and end.line > node.start_mark.line:
         return end.line - 1
     return end.line
