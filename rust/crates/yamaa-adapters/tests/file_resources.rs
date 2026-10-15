@@ -200,6 +200,101 @@ mod file {
         }
 
         #[test]
+        fn entry_relative_shared_program_uses_each_study_input_and_saves_held_artifacts() {
+            use yamaa_adapters::{file_application, specification_report::Identity};
+            use yamaa_core::domain_entry::Request;
+            let study = Study::new();
+            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], warning_log: output/warnings.csv, verification_log: output/verifications.csv}\n").unwrap();
+            fs::create_dir(study.0.join("shared/input")).unwrap();
+            fs::write(study.0.join("shared/input/data.csv"), b"ID\n999\n").unwrap();
+            let mut results = Vec::new();
+            for (name, bytes) in [("first", b"ID\n1\n"), ("second", b"ID\n2\n")] {
+                fs::create_dir_all(study.0.join(name).join("input")).unwrap();
+                fs::create_dir_all(study.0.join(name).join("output")).unwrap();
+                fs::write(study.0.join(name).join("input/data.csv"), bytes).unwrap();
+                fs::write(
+                    study.0.join(name).join("spec.yaml"),
+                    "schema_version: '1.0'\nparents: ../shared/base.yaml\ndomain: STUDY\n",
+                )
+                .unwrap();
+                let path = study.text(&format!("{name}/spec.yaml"));
+                let result = file_application::domain(
+                    Request {
+                        specification: &path,
+                        environment: None,
+                    },
+                    Identity {
+                        runtime: "test",
+                        runtime_version: "test",
+                        engine_version: "test",
+                        example: "test",
+                        specification: &path,
+                        base_directory: ".",
+                    },
+                )
+                .unwrap();
+                assert!(result.issues().is_empty(), "{:?}", result.issues());
+                assert!(result.output().is_some());
+                results.push((name, bytes, result));
+            }
+            fs::write(study.0.join("shared/base.yaml"), "[changed shared program").unwrap();
+            for (name, _, _) in &results {
+                fs::remove_file(study.0.join(name).join("input/data.csv")).unwrap();
+                fs::remove_file(study.0.join(name).join("spec.yaml")).unwrap();
+            }
+            for (name, bytes, result) in &mut results {
+                for _ in 0..2 {
+                    assert!(result.save().unwrap());
+                    assert_eq!(
+                        fs::read(study.0.join(*name).join("output/result.csv")).unwrap(),
+                        *bytes
+                    );
+                    assert!(study.0.join(*name).join("output/warnings.csv").is_file());
+                    assert!(study
+                        .0
+                        .join(*name)
+                        .join("output/verifications.csv")
+                        .is_file());
+                }
+            }
+            assert!(!study.0.join("shared/output").exists());
+        }
+
+        #[test]
+        fn composed_relative_input_base_can_change_without_redeclaring_the_inherited_path() {
+            let study = Study::new();
+            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: data.csv, relative_to: entry}}\noutput: {path: result.csv, relative_to: entry, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n").unwrap();
+            fs::write(study.0.join("entry/data.csv"), b"ID\n1\n").unwrap();
+            fs::write(study.0.join("shared/data.csv"), b"ID\n9\n").unwrap();
+            for (mode, expected) in [
+                ("entry", "data.csv"),
+                ("declaring", "../shared/data.csv"),
+                ("null", "../shared/data.csv"),
+            ] {
+                fs::write(study.0.join("entry/spec.yaml"), format!("schema_version: '1.0'\nparents: ../shared/base.yaml\ninput: {{SRC: {{relative_to: {mode}}}}}\n")).unwrap();
+                let (resources, entry) =
+                    file_configuration::resources(&study.text("entry/spec.yaml")).unwrap();
+                let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
+                assert_eq!(prepared.run().source().path, expected);
+                let origin = prepared
+                    .run()
+                    .document()
+                    .written_input_origin("SRC", "path")
+                    .unwrap();
+                assert_eq!(origin.declaring_source, study.text("shared/base.yaml"));
+                assert_eq!(
+                    origin.base_source,
+                    study.text(if mode == "entry" {
+                        "entry/spec.yaml"
+                    } else {
+                        "shared/base.yaml"
+                    })
+                );
+                assert!(prepared.build().result.is_ok());
+            }
+        }
+
+        #[test]
         fn parent_and_absolute_dot_aliases_share_bytes_and_detect_later_changes() {
             let study = Study::new();
             fs::write(study.0.join("entry/root.yaml"), b"declaring file").unwrap();
@@ -811,6 +906,46 @@ mod file {
             );
             assert!(run.issues().iter().any(|i| i.spec_paths == ["standard"]));
         }
+        #[test]
+        fn entry_relative_inherited_output_supplies_json_capture_and_publication_targets() {
+            let temp = Temp::fixture("sdtm-dm-metadata", false);
+            fs::create_dir(temp.0.join("parents")).unwrap();
+            fs::create_dir_all(temp.0.join("children/artifacts")).unwrap();
+            let parent = fs::read_to_string(temp.0.join("spec.yaml"))
+                .unwrap()
+                .replace(
+                    "path: dm.csv",
+                    "path: artifacts/dm.csv\n  relative_to: entry",
+                );
+            fs::write(temp.0.join("parents/base.yaml"), parent).unwrap();
+            fs::write(
+                temp.0.join("children/spec.yaml"),
+                "schema_version: '1.0'\nparents: ../parents/base.yaml\n",
+            )
+            .unwrap();
+            let environment = fs::read_to_string(temp.0.join("environment.yaml"))
+                .unwrap()
+                .replace("  - spec.yaml", "  - children/spec.yaml")
+                .replace(
+                    "define: define.xml",
+                    "define: children/artifacts/define.xml",
+                );
+            fs::write(temp.0.join("environment.yaml"), environment).unwrap();
+            fs::copy(
+                root().join("benchmarks/sdtm-dm-metadata/expected/dm.csv"),
+                temp.0.join("children/artifacts/dm.csv"),
+            )
+            .unwrap();
+            let mut result = temp.run("2026-09-11T00:00:00");
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(std::str::from_utf8(result.artifacts().nth(1).unwrap().1)
+                .unwrap()
+                .contains("xlink:href=\"dm.json\""));
+            assert!(result.save().unwrap());
+            assert!(temp.0.join("children/artifacts/dm.json").is_file());
+            assert!(!temp.0.join("parents/artifacts").exists());
+        }
+
         #[test]
         fn inherited_original_output_supplies_both_json_capture_and_publication_target() {
             let temp = Temp::fixture("sdtm-dm-metadata", false);

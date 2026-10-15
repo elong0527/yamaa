@@ -1399,10 +1399,12 @@ mod declaration {
                 let expected = decode_yaml(case["resolved"].as_str().unwrap().as_bytes()).unwrap();
                 let mut expected = value(&expected.document);
                 // The committed resolved documents precede the separately specified
-                // REQ-1158 default; exact descriptor/default authority is pinned below.
+                // REQ-1158 and REQ-0780 defaults; descriptor authority is pinned below.
                 for declaration in expected["input"].as_object_mut().unwrap().values_mut() {
                     declaration["empty_string"] = "missing".into();
+                    declaration["relative_to"] = "declaring".into();
                 }
+                expected["output"]["relative_to"] = "declaring".into();
                 assert_eq!(value(prepared.model().document()), expected, "{name}");
                 assert!(prepared
                     .model()
@@ -1558,8 +1560,8 @@ mod declaration {
             .unwrap_or_else(|_| panic!("valid independent window"));
             let expected = json!({
                 "schema_version":"1.0","domain":"OUT","base":"SRC","keys":["ID"],
-                "input":{"SRC":{"path":"input.csv","types":{"SEQ":"int","VAL":"int"},"empty_string":"missing"}},
-                "output":{"path":"out.csv","columns":["ID","PREV"]},
+                "input":{"SRC":{"path":"input.csv","types":{"SEQ":"int","VAL":"int"},"empty_string":"missing","relative_to":"declaring"}},
+                "output":{"path":"out.csv","relative_to":"declaring","columns":["ID","PREV"]},
                 "columns":[
                     {"name":"ID","type":"str","label":"ID","derivation":{"value":{"source":{"variable":"SRC.ID"}}}},
                     {"name":"SEQ","type":"int","label":"SEQ","derivation":{"value":{"source":{"variable":"SRC.SEQ"}}}},
@@ -1639,8 +1641,8 @@ mod declaration {
                 value(prepared.model().document()),
                 json!({
                     "schema_version":"1.0","domain":"OUT","keys":["ID"],
-                    "input":{"DM":{"path":"dm.csv","empty_string":"missing"},"EX":{"path":"ex.csv","empty_string":"missing"}}, "base":"DM",
-                    "output":{"path":"out.csv","columns":["ID","N"]},
+                    "input":{"DM":{"path":"dm.csv","empty_string":"missing","relative_to":"declaring"},"EX":{"path":"ex.csv","empty_string":"missing","relative_to":"declaring"}}, "base":"DM",
+                    "output":{"path":"out.csv","relative_to":"declaring","columns":["ID","N"]},
                     "columns":[
                         {"name":"ID","type":"str","derivation":{"value":{"source":{"variable":"DM.ID"}}}},
                         {"name":"N","type":"int","derivation":{"value":{"aggregate":{"expr":"COUNT(EX.*)"}}}}
@@ -1677,8 +1679,8 @@ mod declaration {
                 value(document),
                 json!({
                     "schema_version":"1.0","domain":"OUT","base":"SRC","keys":["ID"],
-                    "input":{"SRC":{"path":"input.csv","types":{"SEQ":"int","VAL":"int"},"empty_string":"missing"}},
-                    "output":{"path":"out.csv","columns":["ID","PREV"]},
+                    "input":{"SRC":{"path":"input.csv","types":{"SEQ":"int","VAL":"int"},"empty_string":"missing","relative_to":"declaring"}},
+                    "output":{"path":"out.csv","relative_to":"declaring","columns":["ID","PREV"]},
                     "columns":[
                         {"name":"ID","type":"str","label":"ID","derivation":{"value":{"source":{"variable":"SRC.ID"}}}},
                         {"name":"G","type":"str","label":"G","derivation":{"value":{"source":{"variable":"SRC.G"}}}},
@@ -1874,7 +1876,7 @@ mod declaration {
                 .unwrap_or_else(|_| panic!("valid canonical alias"));
             assert_eq!(
                 value(prepared.model().document()),
-                json!({"schema_version":"1.0","domain":"OUT","keys":["ID"],"input":{"DM":{"path":"data.csv","empty_string":"missing"}},"base":"DM","output":{"path":"out.csv","columns":["ID"]},"columns":[{"name":"ID","type":"str","derivation":{"value":{"source":{"variable":"DM.ID"}}}}]})
+                json!({"schema_version":"1.0","domain":"OUT","keys":["ID"],"input":{"DM":{"path":"data.csv","empty_string":"missing","relative_to":"declaring"}},"base":"DM","output":{"path":"out.csv","relative_to":"declaring","columns":["ID"]},"columns":[{"name":"ID","type":"str","derivation":{"value":{"source":{"variable":"DM.ID"}}}}]})
             );
             assert_eq!(
                 host.0.calls,

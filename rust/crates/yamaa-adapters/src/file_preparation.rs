@@ -176,7 +176,7 @@ impl FileSpecification {
             .written_output_field_origin(field)
             .ok_or(ResourceError::InvalidPath)?;
         self.resources
-            .publication_target_from(origin.declaring_source, origin.written)
+            .publication_target_from(origin.base_source, origin.written)
     }
     pub fn build(&mut self) -> CapturedAttempt<ResourceError> {
         self.run.execute_with_port(&mut self.resources)
