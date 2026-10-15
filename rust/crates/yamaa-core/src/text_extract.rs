@@ -92,7 +92,20 @@ impl StringExtract {
                         (
                             "group",
                             group.parse::<i64>().map_or_else(
-                                |_| V::Number((group.clone()).parse().expect("canonical integer")),
+                                |_| {
+                                    // Decimal declarations admit leading zeroes; JSON integers
+                                    // require canonical spelling. Overflow leaves nonzero digits.
+                                    let digits = group
+                                        .strip_prefix('-')
+                                        .unwrap_or(&group)
+                                        .trim_start_matches('0');
+                                    let canonical = if group.starts_with('-') {
+                                        format!("-{digits}")
+                                    } else {
+                                        digits.into()
+                                    };
+                                    V::Number(canonical.parse().expect("validated decimal integer"))
+                                },
                                 V::from,
                             ),
                         ),
@@ -222,5 +235,120 @@ fn diagnostic<const N: usize>(code: C, path: &str, fields: [(&str, V); N]) -> Di
             .collect(),
         source_span: None,
         operand_route: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn operation(pattern: &str, group: &str) -> StringExtract {
+        StringExtract::new(
+            "SRC.TEXT".into(),
+            "columns.TEXT.derivation.str_extract".into(),
+            pattern.into(),
+            group.into(),
+            None,
+            None,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn padded_overflow_group_retains_exact_integer_in_typed_finding() {
+        for (group, expected) in [
+            (
+                format!("{}18446744073709551616", "0".repeat(128)),
+                "18446744073709551616",
+            ),
+            (
+                format!("-{}9223372036854775809", "0".repeat(128)),
+                "-9223372036854775809",
+            ),
+        ] {
+            let operation = operation("(a)", &group);
+            let finding = operation.declaration_diagnostic().unwrap();
+            assert_eq!(finding.code, C::ExtractGroup);
+            assert_eq!(
+                finding.spec_paths,
+                ["columns.TEXT.derivation.str_extract.group"]
+            );
+            assert_eq!(
+                finding.context,
+                [
+                    ("group".into(), V::Number(expected.parse().unwrap())),
+                    ("group_count".into(), V::from(1)),
+                    ("pattern".into(), V::String("(a)".into())),
+                ]
+                .into_iter()
+                .collect()
+            );
+            assert!(finding.source_span.is_none());
+            assert!(finding.operand_route.is_none());
+            assert_eq!(
+                operation.apply(ValueRef::Str("a")),
+                Err(Error::Diagnostic(finding.clone()))
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_overflow_and_small_padded_groups_keep_numeric_facts() {
+        for (group, expected) in [
+            ("18446744073709551616", "18446744073709551616"),
+            ("-9223372036854775809", "-9223372036854775809"),
+            ("0002", "2"),
+            ("-0001", "-1"),
+        ] {
+            let operation = operation("(a)", group);
+            let finding = operation.declaration_diagnostic().unwrap();
+            assert_eq!(finding.code, C::ExtractGroup);
+            assert_eq!(
+                finding.context["group"],
+                V::Number(expected.parse().unwrap())
+            );
+        }
+    }
+
+    #[test]
+    fn padded_valid_groups_and_signed_zero_keep_capture_semantics() {
+        for (group, expected) in [
+            ("0", "pa"),
+            ("0000", "pa"),
+            ("-0", "pa"),
+            ("-0000", "pa"),
+            ("1", "a"),
+            ("0001", "a"),
+        ] {
+            let operation = operation("p(a)", group);
+            assert!(operation.declaration_diagnostic().is_none());
+            assert_eq!(
+                operation.apply(ValueRef::Str("pa")),
+                Ok(Step::Capture(Some(expected)))
+            );
+        }
+    }
+
+    #[test]
+    fn group_shape_and_invalid_pattern_precedence_are_unchanged() {
+        for group in ["", "-", "+1", "1.0", "1e2", " 1", "\u{ff11}"] {
+            assert_eq!(
+                StringExtract::new(
+                    "SRC.TEXT".into(),
+                    "path".into(),
+                    "(a)".into(),
+                    group.into(),
+                    None,
+                    None,
+                ),
+                Err(AdmissionError::Shape)
+            );
+        }
+        let group = format!("{}18446744073709551616", "0".repeat(128));
+        let operation = operation("[", &group);
+        assert_eq!(
+            operation.declaration_diagnostic().unwrap().code,
+            C::RegexInvalidPattern
+        );
     }
 }
