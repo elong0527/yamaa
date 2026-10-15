@@ -83,6 +83,13 @@ impl Error {
         })
     }
 }
+fn limit(error: crate::limits::LimitExceeded) -> Error {
+    Error::Limit {
+        resource: error.resource,
+        limit: error.limit,
+        actual: error.actual,
+    }
+}
 fn failure(cause: ProfileCause, record: usize, field: usize) -> Error {
     Error::Profile {
         cause,
@@ -132,13 +139,9 @@ fn coordinates(prefix: &[u8]) -> (usize, usize) {
 }
 
 /// Decode completely, then scan all syntax, then validate header and row widths.
-/// A source byte boundary precedes decoding; table geometry follows validation.
+/// A source byte boundary precedes decoding; scanning admits each retained shape.
 pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
-    crate::limits::Limits::source_bytes(content.len()).map_err(|error| Error::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        actual: error.actual,
-    })?;
+    crate::limits::Limits::source_bytes(content.len()).map_err(limit)?;
     let text = std::str::from_utf8(content).map_err(|error| {
         let (record, field) = coordinates(&content[..error.valid_up_to()]);
         failure(ProfileCause::InvalidText, record, field)
@@ -178,15 +181,23 @@ pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
         }
         rows.push(record);
     }
-    crate::limits::Limits::table(rows.len(), names.len()).map_err(|error| Error::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        actual: error.actual,
-    })?;
+    crate::limits::Limits::table(rows.len(), names.len()).map_err(limit)?;
     Ok(CsvSource {
         names,
         records: rows,
     })
+}
+
+fn retain_record(
+    records: &mut Vec<Vec<Option<String>>>,
+    record: Vec<Option<String>>,
+) -> Result<(), Error> {
+    let columns = records.first().map_or(record.len(), Vec::len);
+    // The first retained record is the header, so the current record count is
+    // exactly the proposed data-row count after retaining this record.
+    crate::limits::Limits::table(records.len(), columns).map_err(limit)?;
+    records.push(record);
+    Ok(())
 }
 
 fn scan(text: &str) -> Result<Vec<Vec<Option<String>>>, Error> {
@@ -197,6 +208,9 @@ fn scan(text: &str) -> Result<Vec<Vec<Option<String>>>, Error> {
     loop {
         let number = records.len() + 1;
         let column = record.len() + 1;
+        // Every transition that starts a field returns through this point,
+        // including empty leading fields and the first field after CRLF.
+        crate::limits::Limits::columns(column).map_err(limit)?;
         let field = if bytes.get(index) == Some(&b'"') {
             index += 1;
             let mut start = index;
@@ -243,7 +257,7 @@ fn scan(text: &str) -> Result<Vec<Vec<Option<String>>>, Error> {
         record.push(if field.is_empty() { None } else { Some(field) });
         match bytes.get(index) {
             None => {
-                records.push(record);
+                retain_record(&mut records, record)?;
                 break;
             }
             Some(b',') => {
@@ -259,11 +273,54 @@ fn scan(text: &str) -> Result<Vec<Vec<Option<String>>>, Error> {
             Some(b'\n') => index += 1,
             _ => unreachable!("scanned field stops at a delimiter"),
         }
-        records.push(record);
+        retain_record(&mut records, record)?;
         record = Vec::new();
         if index >= bytes.len() {
             break;
         }
     }
     Ok(records)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn field_admission_covers_empty_leading_and_post_line_ending_fields() {
+        for prefix in ["", "A\n", "A\r\n", "\n", "\r\n"] {
+            let source = format!("{prefix}{}", ",".repeat(crate::limits::Limits::COLUMNS));
+            assert_eq!(
+                scan(&source),
+                Err(Error::Limit {
+                    resource: "columns",
+                    limit: crate::limits::Limits::COLUMNS,
+                    actual: Some(crate::limits::Limits::COLUMNS + 1),
+                }),
+                "{prefix:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn exact_column_boundary_is_accepted_and_next_field_stops_before_decoding() {
+        let header = (0..crate::limits::Limits::COLUMNS)
+            .map(|index| format!("C{index}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let admitted = parse(header.as_bytes()).unwrap();
+        assert_eq!(admitted.names.len(), crate::limits::Limits::COLUMNS);
+        assert!(admitted.records.is_empty());
+        // The next field is not scanned or allocated, even if its quoted
+        // spelling would otherwise fail only at the end of a long payload.
+        let oversized = format!("{header},\"");
+        assert_eq!(
+            parse(oversized.as_bytes()),
+            Err(Error::Limit {
+                resource: "columns",
+                limit: crate::limits::Limits::COLUMNS,
+                actual: Some(crate::limits::Limits::COLUMNS + 1),
+            })
+        );
+    }
 }

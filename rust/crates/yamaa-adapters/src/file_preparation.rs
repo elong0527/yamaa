@@ -87,6 +87,7 @@ pub struct RejectedPlain {
     entry: String,
     resources: Resources,
 }
+
 impl std::fmt::Debug for RejectedPlain {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RejectedPlain")
@@ -702,5 +703,28 @@ mod dispatch_policy_tests {
         );
         assert_eq!(resources.capture_reads(), 2);
         assert_eq!(resources.resolve("root.yaml").unwrap(), original);
+    }
+}
+
+#[cfg(test)]
+mod inventory_rejection_tests {
+    use super::*;
+
+    #[test]
+    fn plain_selection_keeps_inventory_failure_in_the_preparation_stage() {
+        let error = || Error::Inventory(yamaa_core::submission_inventory::MetadataError::Shape);
+        let base = crate::file_resources::caller_path(&std::env::current_dir().unwrap()).unwrap();
+        let rejected = crate::file_workflow::SelectionError::Plain(Box::new(RejectedPlain {
+            error: error(),
+            entry: "spec.yaml".into(),
+            resources: Resources::for_entry(&base).unwrap(),
+        }));
+        assert_eq!(
+            crate::project_application::selection_failure(
+                &rejected,
+                yamaa_core::project_function::Language::Python,
+            ),
+            crate::file_application::preparation_failure(error().into_message())
+        );
     }
 }

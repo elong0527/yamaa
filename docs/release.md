@@ -124,12 +124,11 @@ refusals through `ODMError`.
 | Rows in a decoded or materialized table | 10,000,000 |
 | Cells in a decoded or materialized table | 640,000,000 |
 | Columns in a source, output or intermediate table | 1,024 |
-| Expanded field occurrences in one schema class | 65,536 |
 | Keys in one key or grouping declaration | 64 |
 | Inputs to one specification | 16 |
 | Operands in one source selection | 64 |
 | Parent occurrences in one inheritance traversal, including aliases | 8,192 |
-| Steps in one regex compilation or match | 1,000,000 |
+| Steps in one regex match | 1,000,000 |
 | Findings in the final public issue collection | 10,000 |
 | YAML nesting depth | 64 |
 | Semantic expression and context nesting depth | 128 |
@@ -138,8 +137,7 @@ A MiB is 1,048,576 bytes; a GiB is 1,073,741,824 bytes. File readers check the
 encoded size before retaining bytes and check growth during reading. Writers
 check the saved file size before extending it. Table admission checks rows,
 columns and their product before constructing or growing the corresponding
-geometry. A regex step counter is fresh for each compilation or match and
-includes capture storage, state copies and dependent-width analysis.
+geometry. The regex step counter is fresh for each match.
 
 Semantic admission and retained observations stay complete. The final public
 issue collection keeps its first 10,000 findings in their existing order. Source

@@ -11,7 +11,6 @@ pub(super) fn compile(source: &str) -> Result<Pattern, CompileError> {
         nodes: Vec::new(),
         groups: 0,
         names: BTreeMap::new(),
-        steps: Steps(crate::limits::Limits::REGEX_STEPS),
     };
     let root = parser.disjunction(0)?;
     if parser.peek().is_some() {
@@ -35,7 +34,7 @@ pub(super) fn compile(source: &str) -> Result<Pattern, CompileError> {
             *reference = Reference::Number(number);
         }
     }
-    widths::validate(&parser.nodes, root, parser.groups, &mut parser.steps)?;
+    widths::validate(&parser.nodes, root)?;
     Ok(Pattern {
         nodes: parser.nodes,
         root,
@@ -50,7 +49,6 @@ struct Parser<'s> {
     nodes: Vec<Node>,
     groups: usize,
     names: BTreeMap<String, usize>,
-    steps: Steps,
 }
 enum Escape {
     Scalar(u32),
@@ -361,7 +359,6 @@ impl Parser<'_> {
             }
         }
         let number = if capture {
-            self.steps.compile_work(1)?;
             self.groups += 1;
             if let Some(name) = name {
                 if self.names.insert(name, self.groups).is_some() {
@@ -584,34 +581,5 @@ impl Parser<'_> {
             self.at += 1;
         }
         Ok(n)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn exhausted_capture_registration_stops_before_allocating_more_groups() {
-        // Model a compilation after its final admitted capture without building
-        // a million-node arena just to exercise the next opening delimiter.
-        let mut parser = Parser {
-            source: "()",
-            chars: "()".char_indices().collect(),
-            at: 1,
-            nodes: Vec::new(),
-            groups: crate::limits::Limits::REGEX_STEPS,
-            names: BTreeMap::new(),
-            steps: Steps(0),
-        };
-        assert_eq!(
-            parser.group(0, 0, parser.groups + 1),
-            Err(CompileError::Limit {
-                resource: Resource::Work,
-                limit: crate::limits::Limits::REGEX_STEPS,
-            })
-        );
-        assert_eq!(parser.groups, crate::limits::Limits::REGEX_STEPS);
-        assert!(parser.nodes.is_empty());
     }
 }

@@ -359,6 +359,15 @@ fn numeric_selection_functions_promote_present_values_without_inventing_missing_
 }
 
 #[test]
+fn nullif_preserves_an_integer_until_a_present_float_operand_promotes_it() {
+    assert_integer_day_count(
+        "{compute: {expr: 'NULLIF(EXINT, EXFLOAT)'}}",
+        "S01,2024-01-01,,1,",
+        "S01,2024-01-01,,1,0.0",
+    );
+}
+
+#[test]
 fn unknown_kind_survives_later_aliases_and_choices() {
     for expression in HETEROGENEOUS_CHOICES {
         for alias in [

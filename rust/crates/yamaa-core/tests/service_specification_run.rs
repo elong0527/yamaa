@@ -218,6 +218,102 @@ mod service {
         }
 
         #[test]
+        fn held_bytes_and_captured_sources_refuse_the_same_non_odm_table_geometry() {
+            struct Geometry {
+                schema: TableSchema,
+                rows: usize,
+            }
+            impl TableAccess for Geometry {
+                type Error = Payload;
+                fn schema(&self) -> &TableSchema {
+                    &self.schema
+                }
+                fn row_count(&self) -> usize {
+                    self.rows
+                }
+                fn cell(
+                    &self,
+                    _row: usize,
+                    _column: usize,
+                ) -> Result<ValueRef<'_>, CellError<Payload>> {
+                    panic!("table admission must precede all cell reads")
+                }
+            }
+            struct GeometryDecoder {
+                rows: usize,
+                columns: usize,
+            }
+            impl SourceDecoder for GeometryDecoder {
+                type Error = Payload;
+                type Table = Geometry;
+                fn continue_after(&self, _error: &Payload) -> bool {
+                    false
+                }
+                fn decode(
+                    &mut self,
+                    _source: &SourceDeclaration,
+                    _bytes: &[u8],
+                    interpretation: yamaa_core::specification::SourceInterpretation,
+                    _contract: Option<&yamaa_core::producer_contract::Contract>,
+                ) -> Result<Geometry, Payload> {
+                    assert_ne!(
+                        interpretation,
+                        yamaa_core::specification::SourceInterpretation::Odm
+                    );
+                    Ok(Geometry {
+                        schema: TableSchema::new(
+                            (0..self.columns)
+                                .map(|index| Column {
+                                    name: format!("C{index}"),
+                                    kind: ColumnType::Int,
+                                })
+                                .collect(),
+                        )
+                        .unwrap(),
+                        rows: self.rows,
+                    })
+                }
+            }
+            use yamaa_core::limits::Limits;
+            let prepared =
+                PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
+            for (rows, columns, resource) in [
+                (Limits::TABLE_ROWS + 1, 1, "table_rows"),
+                (3_575_419, 179, "table_cells"),
+                (0, Limits::COLUMNS + 1, "columns"),
+            ] {
+                let expected = Limits::table(rows, columns).unwrap_err();
+                assert_eq!(expected.resource, resource);
+                let mut decoder = GeometryDecoder { rows, columns };
+                let decoded = run::execute_bytes(&prepared, b"held snapshot", &mut decoder);
+                assert!(decoded.table.is_some());
+                assert!(matches!(
+                    decoded.result,
+                    Err(RunError::Boundary { source: 0, error }) if error == expected
+                ));
+
+                let (mut port, _) = fixtures();
+                let mut attempt = CapturedAttempt::new(prepared.source());
+                run::execute_into(
+                    &prepared,
+                    &mut port,
+                    &mut decoder,
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    &mut attempt,
+                    yamaa_core::application_observer::Scope::new(
+                        &yamaa_core::application_observer::Noop,
+                    ),
+                );
+                assert!(attempt.sources[0].table.is_some());
+                assert!(matches!(
+                    attempt.result,
+                    Err(PortError::Run(RunError::Boundary { source: 0, error }))
+                        if error == expected
+                ));
+            }
+        }
+
+        #[test]
         fn held_non_odm_bytes_refuse_oversized_tables_before_any_cell_access() {
             struct Oversized(TableSchema);
             impl TableAccess for Oversized {

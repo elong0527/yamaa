@@ -18,7 +18,8 @@ Local changes are limited to removal of writer helpers, the integration bridge
 and iconv shim, checked
 allocation initialization, byte-preserving conversion rejecting embedded NUL,
 source-authority encoding metadata treatment, early fixed table-shape
-admission, SAS physical extent validation, unsupported compression signature
+admission, SAS physical extent validation, source-extent bounds on retained
+text-blob copies, unsupported compression signature
 rejection, transport physical type/offset and partial-row validation, overlapping RDC
 back-reference propagation, and exact IBM numeric precision
 facts used by narrowing. SAS metadata still records the embedded encoding but
@@ -35,6 +36,8 @@ their ranges against the held input.
 The SAS header/page sizes are bounded by the captured snapshot framing, rather
 than a separate 16 MiB threshold. Their minimum framing sizes still apply.
 Text-blob count follows the 65,536 slots addressable by source uint16 references.
+Their cumulative retained bytes cannot exceed the captured file length, including
+copies reached through repeated or overlapping subheader pointers.
 A small independently repacked haven fixture with 4,097 valid text
 blobs preserves all twenty numeric cells and is accepted by the independent
 pandas SAS reader; no lower 4,096-blob ceiling is applied.

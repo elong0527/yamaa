@@ -10,7 +10,7 @@ mod widths;
 /// Pinned ID_Start / ID_Continue data used for capture-group name admission.
 pub const IDENTIFIER_UNICODE_VERSION: &str = "18.0.0";
 
-/// Fixed recursion and regex compilation/matching work boundaries.
+/// Fixed recursion and per-match interpretation boundaries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resource {
     Depth,
@@ -158,7 +158,14 @@ impl Pattern {
         self.execute(subject, true)
     }
     fn execute<'s>(&self, subject: &'s str, full: bool) -> Result<Option<Match<'s>>, MatchError> {
-        let mut steps = Steps(crate::limits::Limits::REGEX_STEPS);
+        let mut machine = Machine {
+            steps: Steps(crate::limits::Limits::REGEX_STEPS),
+            tasks: Vec::new(),
+            captures: Captures {
+                groups: self.groups + 1,
+                nodes: Vec::new(),
+            },
+        };
         // Retain exact Unicode-scalar and UTF-8 byte coordinates.
 
         let chars: Vec<_> = subject.chars().collect();
@@ -168,22 +175,20 @@ impl Pattern {
             .chain(std::iter::once(subject.len()))
             .collect();
         for start in 0..=if full { 0 } else { chars.len() } {
-            steps.work(1)?;
-            steps.work(self.groups)?;
-            steps.work(1)?;
-            let state = State {
+            machine.steps.work(1)?;
+            machine.tasks.clear();
+            machine.captures.nodes.clear();
+            let mut state = State {
                 at: start,
-                tasks: vec![Task::Node(self.root)],
-                captures: vec![None; self.groups + 1],
+                tasks: None,
+                captures: None,
             };
-            if let Some(mut found) = self.run(&chars, state, false, full, &mut steps)? {
-                found.captures[0] = Some((start, found.at));
-
-                let groups = found
+            machine.push(&mut state, Task::Node(self.root));
+            if let Some(found) = self.run(&chars, state, false, full, &mut machine)? {
+                let mut groups = machine
                     .captures
-                    .iter()
-                    .map(|span| span.map(|(a, b)| &subject[offsets[a]..offsets[b]]))
-                    .collect();
+                    .materialize(found.captures, |a, b| &subject[offsets[a]..offsets[b]]);
+                groups[0] = Some(&subject[offsets[start]..offsets[found.at]]);
                 return Ok(Some(Match { groups }));
             }
         }
@@ -196,19 +201,47 @@ impl Pattern {
         initial: State,
         backwards: bool,
         require_end: bool,
-        steps: &mut Steps,
+        machine: &mut Machine,
     ) -> Result<Option<State>, MatchError> {
         let mut alternatives = vec![initial];
         while let Some(mut state) = alternatives.pop() {
             let mut failed = false;
-            while let Some(task) = state.tasks.pop() {
-                steps.work(1)?;
+            while let Some(task) = machine.pop(&mut state) {
+                machine.steps.work(1)?;
                 match task {
                     Task::FinishGroup(number, start) => {
-                        state.captures[number] = Some((
-                            std::cmp::min(start, state.at),
-                            std::cmp::max(start, state.at),
-                        ));
+                        state.captures = machine.captures.set(
+                            state.captures,
+                            number,
+                            (start.min(state.at), start.max(state.at)),
+                        );
+                    }
+                    Task::Sequence { id, next } => {
+                        let Kind::Sequence(children) = &self.nodes[id].kind else {
+                            unreachable!()
+                        };
+                        if next < children.len() {
+                            let child = children[if backwards {
+                                children.len() - next - 1
+                            } else {
+                                next
+                            }];
+                            if next + 1 < children.len() {
+                                machine.push(&mut state, Task::Sequence { id, next: next + 1 });
+                            }
+                            machine.push(&mut state, Task::Node(child));
+                        }
+                    }
+                    Task::Alternative { id, next } => {
+                        let Kind::Alternative(children) = &self.nodes[id].kind else {
+                            unreachable!()
+                        };
+                        if next + 1 < children.len() {
+                            let mut branch = state;
+                            machine.push(&mut branch, Task::Alternative { id, next: next + 1 });
+                            alternatives.push(branch);
+                        }
+                        machine.push(&mut state, Task::Node(children[next]));
                     }
                     Task::RepeatEnd { id, count, before } => {
                         let Kind::Repeat { min, .. } = self.nodes[id].kind else {
@@ -219,10 +252,13 @@ impl Pattern {
                             failed = true;
                             break;
                         }
-                        state.tasks.push(Task::Repeat {
-                            id,
-                            count: count + 1,
-                        });
+                        machine.push(
+                            &mut state,
+                            Task::Repeat {
+                                id,
+                                count: count + 1,
+                            },
+                        );
                     }
                     Task::Repeat { id, count } => {
                         let Kind::Repeat {
@@ -237,17 +273,19 @@ impl Pattern {
                         if max.is_some_and(|max| count >= max) {
                             continue;
                         }
-                        let mut iteration = state.copy(steps)?;
-                        steps.work(self.nodes[child].captures.len())?;
-                        for capture in self.nodes[child].captures.clone() {
-                            iteration.captures[capture] = None;
-                        }
-                        iteration.tasks.push(Task::RepeatEnd {
-                            id,
-                            count,
-                            before: state.at,
-                        });
-                        iteration.tasks.push(Task::Node(child));
+                        let mut iteration = state;
+                        iteration.captures = machine
+                            .captures
+                            .clear(iteration.captures, self.nodes[child].captures.clone());
+                        machine.push(
+                            &mut iteration,
+                            Task::RepeatEnd {
+                                id,
+                                count,
+                                before: state.at,
+                            },
+                        );
+                        machine.push(&mut iteration, Task::Node(child));
                         if count < min {
                             state = iteration;
                         } else if greedy {
@@ -258,43 +296,33 @@ impl Pattern {
                         }
                     }
                     Task::Node(id) => match &self.nodes[id].kind {
-                        Kind::Sequence(children) => {
-                            steps.work(children.len())?;
-                            if backwards {
-                                for &child in children {
-                                    state.tasks.push(Task::Node(child));
-                                }
-                            } else {
-                                for &child in children.iter().rev() {
-                                    state.tasks.push(Task::Node(child));
-                                }
-                            }
+                        Kind::Sequence(_) => {
+                            machine.push(&mut state, Task::Sequence { id, next: 0 })
                         }
-                        Kind::Alternative(children) => {
-                            for &child in children[1..].iter().rev() {
-                                let mut branch = state.copy(steps)?;
-                                branch.tasks.push(Task::Node(child));
-
-                                alternatives.push(branch);
-                            }
-                            state.tasks.push(Task::Node(children[0]));
+                        Kind::Alternative(_) => {
+                            machine.push(&mut state, Task::Alternative { id, next: 0 })
                         }
                         Kind::Group { child, number } => {
                             if let Some(number) = number {
-                                state.tasks.push(Task::FinishGroup(*number, state.at));
+                                let start = state.at;
+                                machine.push(&mut state, Task::FinishGroup(*number, start));
                             }
-                            state.tasks.push(Task::Node(*child));
+                            machine.push(&mut state, Task::Node(*child));
                         }
-                        Kind::Repeat { .. } => state.tasks.push(Task::Repeat { id, count: 0 }),
+                        Kind::Repeat { .. } => {
+                            machine.push(&mut state, Task::Repeat { id, count: 0 })
+                        }
                         Kind::Look {
                             child,
                             behind,
                             positive,
                         } => {
-                            let mut probe = state.copy(steps)?;
-                            probe.tasks.clear();
-                            probe.tasks.push(Task::Node(*child));
-                            let result = self.run(input, probe, *behind, false, steps)?;
+                            let mut probe = State {
+                                tasks: None,
+                                ..state
+                            };
+                            machine.push(&mut probe, Task::Node(*child));
+                            let result = self.run(input, probe, *behind, false, machine)?;
                             if result.is_some() != *positive {
                                 failed = true;
                                 break;
@@ -324,7 +352,7 @@ impl Pattern {
                             }
                         }
                         Kind::Backreference(Reference::Number(number)) => {
-                            if let Some((a, b)) = state.captures[*number] {
+                            if let Some((a, b)) = machine.captures.get(state.captures, *number) {
                                 let length = b - a;
                                 let target = if backwards {
                                     state.at.checked_sub(length)
@@ -339,7 +367,7 @@ impl Pattern {
                                     failed = true;
                                     break;
                                 };
-                                steps.work(length)?;
+                                machine.steps.work(length)?;
                                 if input[a..b] != input[target..target + length] {
                                     failed = true;
                                     break;
@@ -365,7 +393,7 @@ impl Pattern {
                                 Kind::Literal(value) => c as u32 == *value,
                                 Kind::Dot => !matches!(c, '\n' | '\r' | '\u{2028}' | '\u{2029}'),
                                 Kind::Class { items, negative } => {
-                                    steps.work(items.len())?;
+                                    machine.steps.work(items.len())?;
                                     items.iter().any(|item| item.accepts(c)) != *negative
                                 }
                                 _ => unreachable!(),
@@ -387,10 +415,18 @@ impl Pattern {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 enum Task {
     Node(usize),
     FinishGroup(usize, usize),
+    Sequence {
+        id: usize,
+        next: usize,
+    },
+    Alternative {
+        id: usize,
+        next: usize,
+    },
     Repeat {
         id: usize,
         count: usize,
@@ -401,25 +437,152 @@ enum Task {
         before: usize,
     },
 }
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 struct State {
     at: usize,
-    tasks: Vec<Task>,
-    captures: Vec<Option<(usize, usize)>>,
+    tasks: Option<usize>,
+    captures: Option<usize>,
 }
-impl State {
-    /// Reserve the copy work before allocating either backtracking vector.
-    fn copy(&self, steps: &mut Steps) -> Result<Self, MatchError> {
-        steps.work(self.tasks.len())?;
-        steps.work(self.captures.len())?;
-        Ok(Self {
-            at: self.at,
-            tasks: self.tasks.clone(),
-            captures: self.captures.clone(),
-        })
+/// Backtracking shares immutable task tails and capture roots. Forking a state
+/// copies three coordinates, regardless of pending tasks or capture count.
+struct Machine {
+    steps: Steps,
+    tasks: Vec<(Task, Option<usize>)>,
+    captures: Captures,
+}
+impl Machine {
+    fn push(&mut self, state: &mut State, task: Task) {
+        self.tasks.push((task, state.tasks));
+        state.tasks = Some(self.tasks.len() - 1);
+    }
+    fn pop(&self, state: &mut State) -> Option<Task> {
+        let (task, previous) = self.tasks[state.tasks?];
+        state.tasks = previous;
+        Some(task)
     }
 }
-/// One fixed work scope per compilation or match, including copied state.
+
+#[derive(Clone, Copy)]
+enum CaptureNode {
+    Branch(Option<usize>, Option<usize>),
+    Span(usize, usize),
+}
+/// A sparse persistent tree needs no initial capture vector. Updates copy only
+/// the search path; resetting a repeated group's capture interval drops covered
+/// subtrees. Empty roots preserve the distinction between unset and empty spans.
+struct Captures {
+    groups: usize,
+    nodes: Vec<CaptureNode>,
+}
+impl Captures {
+    fn branches(&self, root: Option<usize>) -> (Option<usize>, Option<usize>) {
+        match root.map(|root| self.nodes[root]) {
+            Some(CaptureNode::Branch(left, right)) => (left, right),
+            None => (None, None),
+            Some(CaptureNode::Span(..)) => unreachable!("capture leaves have unit width"),
+        }
+    }
+    fn push(&mut self, node: CaptureNode) -> Option<usize> {
+        self.nodes.push(node);
+        Some(self.nodes.len() - 1)
+    }
+    fn set(&mut self, root: Option<usize>, group: usize, span: (usize, usize)) -> Option<usize> {
+        self.set_at(root, group, span, 0, self.groups)
+    }
+    fn set_at(
+        &mut self,
+        root: Option<usize>,
+        group: usize,
+        span: (usize, usize),
+        start: usize,
+        end: usize,
+    ) -> Option<usize> {
+        if end - start == 1 {
+            return self.push(CaptureNode::Span(span.0, span.1));
+        }
+        let middle = start + (end - start) / 2;
+        let (mut left, mut right) = self.branches(root);
+        if group < middle {
+            left = self.set_at(left, group, span, start, middle);
+        } else {
+            right = self.set_at(right, group, span, middle, end);
+        }
+        self.push(CaptureNode::Branch(left, right))
+    }
+    fn clear(&mut self, root: Option<usize>, range: std::ops::Range<usize>) -> Option<usize> {
+        self.clear_at(root, &range, 0, self.groups)
+    }
+    fn clear_at(
+        &mut self,
+        root: Option<usize>,
+        range: &std::ops::Range<usize>,
+        start: usize,
+        end: usize,
+    ) -> Option<usize> {
+        if range.start >= end || range.end <= start || root.is_none() {
+            return root;
+        }
+        if range.start <= start && end <= range.end {
+            return None;
+        }
+        let middle = start + (end - start) / 2;
+        let (left, right) = self.branches(root);
+        let next_left = self.clear_at(left, range, start, middle);
+        let next_right = self.clear_at(right, range, middle, end);
+        if (left, right) == (next_left, next_right) {
+            root
+        } else if next_left.is_none() && next_right.is_none() {
+            None
+        } else {
+            self.push(CaptureNode::Branch(next_left, next_right))
+        }
+    }
+    fn get(&self, mut root: Option<usize>, group: usize) -> Option<(usize, usize)> {
+        let (mut start, mut end) = (0, self.groups);
+        while let Some(id) = root {
+            match self.nodes[id] {
+                CaptureNode::Span(a, b) => return Some((a, b)),
+                CaptureNode::Branch(left, right) => {
+                    let middle = start + (end - start) / 2;
+                    if group < middle {
+                        root = left;
+                        end = middle;
+                    } else {
+                        root = right;
+                        start = middle;
+                    }
+                }
+            }
+        }
+        None
+    }
+    fn materialize<T: Copy>(
+        &self,
+        root: Option<usize>,
+        mut span: impl FnMut(usize, usize) -> T,
+    ) -> Vec<Option<T>> {
+        fn fill<T>(
+            captures: &Captures,
+            root: Option<usize>,
+            output: &mut [Option<T>],
+            span: &mut impl FnMut(usize, usize) -> T,
+        ) {
+            let Some(id) = root else { return };
+            match captures.nodes[id] {
+                CaptureNode::Span(a, b) => output[0] = Some(span(a, b)),
+                CaptureNode::Branch(left, right) => {
+                    let (a, b) = output.split_at_mut(output.len() / 2);
+                    fill(captures, left, a, span);
+                    fill(captures, right, b, span);
+                }
+            }
+        }
+        let mut output = vec![None; self.groups];
+        fill(self, root, &mut output, &mut span);
+        output
+    }
+}
+/// The only matching counter spans starts, backtracking and nested lookarounds.
 struct Steps(usize);
 impl Steps {
     fn work(&mut self, amount: usize) -> Result<(), MatchError> {
@@ -429,58 +592,31 @@ impl Steps {
         })?;
         Ok(())
     }
-
-    fn compile_work(&mut self, amount: usize) -> Result<(), CompileError> {
-        self.work(amount).map_err(|error| CompileError::Limit {
-            resource: error.resource,
-            limit: error.limit,
-        })
-    }
 }
 
 #[cfg(test)]
-mod tests {
+mod matching_tests {
     use super::*;
 
     #[test]
-    fn initial_capture_storage_is_refused_before_allocating_it() {
-        // Model the requested storage directly; no million-element vector is built.
-        let pattern = Pattern {
-            nodes: Vec::new(),
-            root: 0,
-            groups: crate::limits::Limits::REGEX_STEPS,
-        };
+    fn many_captures_share_backtracking_state_and_keep_repeat_participation() {
+        let prefix = "(a)".repeat(3000);
+        let pattern = Pattern::compile(&(prefix.clone() + r"(?:(a)|(b))+\3001\3002$")).unwrap();
+        let subject = "a".repeat(3000) + "abb";
+        let found = pattern.full_match(&subject).unwrap().unwrap();
+        assert_eq!(found.groups.len(), 3003);
+        assert_eq!(found.groups[0], Some(subject.as_str()));
+        assert!(found.groups[1..=3000].iter().all(|span| *span == Some("a")));
+        assert_eq!(&found.groups[3001..], &[None, Some("b")]);
+
+        let refusing = Pattern::compile(&(prefix + r"(a+)+$")).unwrap();
         assert_eq!(
-            pattern.full_match(""),
+            refusing.full_match(&("a".repeat(3030) + "!")),
             Err(MatchError {
                 resource: Resource::Work,
                 limit: crate::limits::Limits::REGEX_STEPS,
             })
         );
-    }
-
-    #[test]
-    fn repeated_capture_copies_consume_the_match_work_scope() {
-        // All three continuations match the empty string structurally. Their
-        // repeats, alternatives and assertions copy the full capture state.
-        for continuation in [
-            "(){1000}".to_owned(),
-            "(?:|)".repeat(1000),
-            "(?=)".repeat(1000),
-        ] {
-            let pattern = Pattern::compile(&("()".repeat(1000) + &continuation)).unwrap();
-            assert_eq!(
-                pattern.full_match(""),
-                Err(MatchError {
-                    resource: Resource::Work,
-                    limit: crate::limits::Limits::REGEX_STEPS,
-                })
-            );
-        }
-        let small = Pattern::compile("(){1000}").unwrap();
-        assert_eq!(
-            small.full_match("").unwrap().unwrap().groups,
-            [Some(""), Some("")]
-        );
+        assert!(refusing.full_match(&"a".repeat(3001)).unwrap().is_some());
     }
 }
