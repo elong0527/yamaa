@@ -1035,6 +1035,35 @@ mod file {
             );
             assert!(!study.0.join("output.csv").exists());
         }
+        #[test]
+        fn data_driven_like_preserves_false_and_unicode_truth_at_publication() {
+            let study = Study::new();
+            fs::write(
+                study.0.join("spec.yaml"),
+                format!(
+                    "{}rows:\n  - id: selected\n    dataset: SRC\n    filter: SRC.A LIKE SRC.B\n    derivations: {{ID: SRC.ID}}\n",
+                    VALID.replace(", derivation: {source: SRC.ID}", "")
+                ),
+            )
+            .unwrap();
+            fs::write(
+                study.0.join("input.csv"),
+                format!("ID,A,B\n1,{},{}\n", "a".repeat(100), "%a".repeat(100) + "b"),
+            )
+            .unwrap();
+            let mut result = study.build();
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.output().is_some());
+            assert!(result.save().unwrap());
+            assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n");
+
+            // A fresh build retains ordinary Unicode full-match truth.
+            fs::write(study.0.join("input.csv"), "ID,A,B\n1,😀,_\n2,a,b\n").unwrap();
+            let mut result = study.build();
+            assert!(result.issues().is_empty());
+            assert!(result.save().unwrap());
+            assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
+        }
     }
     mod file_graph {
         use std::{

@@ -558,6 +558,7 @@ mod preparation {
                 panic!()
             };
             assert_eq!(effects(&log), full_effects());
+            // The shared Python fixture's three callables are also invalid under R.
             assert_eq!(
                 rejected.admission,
                 Some(vec![
@@ -568,6 +569,18 @@ mod preparation {
                     Finding::LockKindMismatch {
                         language: Language::R,
                         actual: LockKind::Uv,
+                    },
+                    Finding::Function {
+                        function: 0,
+                        finding: yamaa_core::project_function::Finding::InvalidCallable,
+                    },
+                    Finding::Function {
+                        function: 1,
+                        finding: yamaa_core::project_function::Finding::InvalidCallable,
+                    },
+                    Finding::Function {
+                        function: 2,
+                        finding: yamaa_core::project_function::Finding::InvalidCallable,
                     },
                 ])
             );

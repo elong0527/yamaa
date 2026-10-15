@@ -527,4 +527,113 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn nested_group_nodes_do_not_replace_the_supported_profile_finding() {
+        use parquet::{file::writer::SerializedFileWriter, schema::types::Type};
+        use std::sync::Arc;
+        let fields = (0..yamaa_core::limits::Limits::COLUMNS)
+            .map(|index| {
+                Arc::new(
+                    Type::group_type_builder(&format!("G{index}"))
+                        .with_repetition(parquet::basic::Repetition::OPTIONAL)
+                        .with_fields(vec![Arc::new(
+                            Type::primitive_type_builder("ID", parquet::basic::Type::INT64)
+                                .build()
+                                .unwrap(),
+                        )])
+                        .build()
+                        .unwrap(),
+                )
+            })
+            .collect();
+        let schema = Arc::new(
+            Type::group_type_builder("schema")
+                .with_fields(fields)
+                .build()
+                .unwrap(),
+        );
+        let mut bytes = Vec::new();
+        SerializedFileWriter::new(&mut bytes, schema, Default::default())
+            .unwrap()
+            .close()
+            .unwrap();
+        let result = super::super::parse(&bytes);
+        assert!(
+            matches!(&result, Err(super::super::Error::Unsupported { .. })),
+            "1024 physical leaves remain within geometry; got {:?}",
+            result.as_ref().err()
+        );
+    }
+
+    #[test]
+    fn unknown_footer_collections_preserve_independent_cells_and_reject_bad_children() {
+        use yamaa_core::table::{TableAccess, ValueRef};
+        fn unsigned(bytes: &mut Vec<u8>, mut value: u64) {
+            while value >= 128 {
+                bytes.push(value as u8 | 128);
+                value >>= 7;
+            }
+            bytes.push(value as u8);
+        }
+        let fixture = include_bytes!("../../tests/fixtures/pq/none-1-0.parquet");
+        let footer = fixture.len() - 8;
+        let old_length =
+            u32::from_le_bytes(fixture[footer..footer + 4].try_into().unwrap()) as usize;
+        let start = footer - old_length;
+        assert_eq!(
+            compact::metadata(&fixture[start..footer]).unwrap().1,
+            old_length
+        );
+        assert_eq!(fixture[footer - 1], 0); // FileMetaData STOP
+        let mut bytes = fixture[..footer - 1].to_vec();
+        bytes.push(0x09); // explicit unknown field 30000: empty-struct list
+        unsigned(&mut bytes, 60000);
+        bytes.push(0xfc);
+        unsigned(&mut bytes, 65536);
+        let elements = bytes.len();
+        bytes.resize(elements + 65536, 0);
+        bytes.push(0);
+        let length = bytes.len() - start;
+        bytes.extend((length as u32).to_le_bytes());
+        bytes.extend(b"PAR1");
+        let table = super::super::parse(&bytes).unwrap();
+        assert_eq!(table.row_count(), 3);
+        assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str(""));
+        assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Str("β\0z"));
+        assert_eq!(table.cell(0, 1).unwrap(), ValueRef::Int(i64::MIN));
+        assert_eq!(table.cell(2, 1).unwrap(), ValueRef::Int(i64::MAX));
+        for column in 0..5 {
+            assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing);
+        }
+        for (row, bits) in [(0, (-0.0f64).to_bits()), (2, 1)] {
+            let ValueRef::Float(value) = table.cell(row, 2).unwrap() else {
+                panic!();
+            };
+            assert_eq!(value.get().to_bits(), bits);
+        }
+        bytes[elements + 65535] = 0x1e;
+        assert!(matches!(
+            super::super::parse(&bytes),
+            Err(super::super::Error::Malformed)
+        ));
+    }
+
+    #[test]
+    fn leaf_column_cell_boundary_keeps_the_one_row_edge() {
+        for rows in [625_000, 625_001] {
+            let bytes = geometry_container(rows, 1024, true);
+            if rows == 625_000 {
+                admit(&bytes).unwrap();
+            } else {
+                assert!(matches!(
+                    admit(&bytes),
+                    Err(Error::ResourceLimit {
+                        resource: "table_cells",
+                        limit: 640_000_000,
+                        actual: Some(640_001_024),
+                    })
+                ));
+            }
+        }
+    }
 }
