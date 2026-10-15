@@ -450,6 +450,21 @@ def iter_odm_records(
                         and etree.QName(child.tag).namespace == odm_namespace
                         and _local_name(child.tag) == "Value"
                     ]
+                    # A `Value` element in a foreign or absent namespace is
+                    # not an extension element to ignore: it names the item's
+                    # value, so dropping it would silently present a supplied
+                    # value as absent. Reject it like other unsupported
+                    # value layouts instead.
+                    if any(
+                        isinstance(child.tag, str)
+                        and etree.QName(child.tag).namespace != odm_namespace
+                        and _local_name(child.tag) == "Value"
+                        for child in element
+                    ):
+                        raise ODMError(
+                            f"ItemData {item_oid!r} Value child is in an "
+                            "unsupported namespace"
+                        )
                     if "Value" in element.attrib and value_children:
                         raise ODMError(
                             f"ItemData {item_oid!r} has attribute and child values"

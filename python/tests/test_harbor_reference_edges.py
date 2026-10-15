@@ -91,8 +91,8 @@ def worsening_track(request):
 def _worsening_rows(tmp_path, track, ae=None, fa=None):
     name = "adam-adae-worsening-emergence"
     changes = {
-        "ae.csv": ae or _input(name, "ae.csv"),
-        "fa.csv": fa or _input(name, "fa.csv"),
+        "ae.csv": _input(name, "ae.csv") if ae is None else ae,
+        "fa.csv": _input(name, "fa.csv") if fa is None else fa,
     }
     if track != "yamaa":
         return _run(tmp_path, name, track, changes)["adae.csv"]
@@ -126,6 +126,21 @@ def _event_rows(rows, subject="P7-101", sequence="1"):
         [row for row in rows if row["USUBJID"] == subject and row["AESEQ"] == sequence],
         key=lambda row: row["ASTDTM"],
     )
+
+
+def test_worsening_rows_honours_an_explicit_empty_change_set(tmp_path, monkeypatch):
+    captured = {}
+
+    def fake_run(tmp_path_, name, language, changes):
+        captured.update(changes)
+        return {"adae.csv": []}
+
+    monkeypatch.setattr(sys.modules[__name__], "_run", fake_run)
+    _worsening_rows(tmp_path, "python", ae=[], fa=[])
+    assert captured == {"ae.csv": [], "fa.csv": []}
+    _worsening_rows(tmp_path, "python")
+    assert captured["ae.csv"]
+    assert captured["fa.csv"]
 
 
 def test_one_source_ae_expands_to_continuous_analysis_periods(

@@ -51,8 +51,21 @@ pub(super) fn prepare_value_with_driver(
     driver: Option<&str>,
     window_limits: CompilationLimits,
 ) -> Result<cases::Branch, PrepareError> {
-    if depth > 64 || result_path.len() > 65_536 {
-        return Err(PrepareError::Limit("expression_depth"));
+    if depth > 64 {
+        return Err(PrepareError::limit(
+            "expression_depth",
+            64,
+            Some(depth),
+            Some(result_path),
+        ));
+    }
+    if result_path.len() > 65_536 {
+        return Err(PrepareError::limit(
+            "path_bytes",
+            65_536,
+            Some(result_path.len()),
+            Some(result_path),
+        ));
     }
     let &[(op, payload)] = mapping(d, value)? else {
         return Err(PrepareError::Internal);
@@ -905,7 +918,12 @@ fn references_mode(
     aggregate_relation: bool,
 ) -> Result<(), PrepareError> {
     if depth > 64 {
-        return Err(PrepareError::Limit("expression_depth"));
+        return Err(PrepareError::limit(
+            "expression_depth",
+            64,
+            Some(depth),
+            None,
+        ));
     }
     scalar::operand_references(d, value, names, depth)?;
     if let Some(payload) = d.field(value, "function") {
@@ -929,7 +947,7 @@ fn references_mode(
         ) {
             Ok(parsed) => names.extend(parsed.identifiers().map(String::from)),
             Err(crate::numeric_parser::ParseError::Grammar { .. }) => (),
-            Err(_) => return Err(PrepareError::Limit("numeric_parser")),
+            Err(error) => return Err(PrepareError::numeric_parse(error, None)),
         }
     }
     if let Some(payload) = d.field(value, "aggregate") {
@@ -951,7 +969,7 @@ fn references_mode(
                 }
             }
             Err(crate::aggregate_parser::ParseError::Grammar { .. }) => (),
-            Err(_) => return Err(PrepareError::Limit("aggregate_parser")),
+            Err(error) => return Err(PrepareError::aggregate_parse(error, None)),
         }
         if let Some(key) = d.field(payload, "key") {
             match &d.nodes()[key] {
@@ -1113,7 +1131,7 @@ fn predicate_references(
     match crate::predicate_parser::parse_predicate(text(d, id)?, Default::default()) {
         Ok(parsed) => names.extend(parsed.identifiers().map(String::from)),
         Err(crate::predicate_parser::ParseError::Grammar { .. }) => (),
-        Err(_) => return Err(PrepareError::Limit("predicate_parser")),
+        Err(error) => return Err(PrepareError::predicate_parse(error, None)),
     }
     Ok(())
 }

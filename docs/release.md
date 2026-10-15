@@ -1,11 +1,12 @@
 # Release and migration
 
-Reviewed 2026-10-13 (America/New_York) against main
-[`1b795ca4`](https://github.com/elong0527/yamaa/commit/1b795ca4), the current
-[#1969](https://github.com/elong0527/yamaa/issues/1969) and
-[#1973](https://github.com/elong0527/yamaa/issues/1973) gate records, retained
-qualification records and the authenticated GitHub release listing. This is the
-current narrative; qualification observations keep their own tested revisions.
+Current release checklist:
+[#2288](https://github.com/elong0527/yamaa/issues/2288), with the maintainer's
+2026-10-14 capacity and performance decisions. It supersedes #1969, #1973,
+#1994, #1998, #1999, #2142, #2144, #2145 and #2147. The harness and auditor
+owners #2141 and #2143 are completed. The remaining assertion migration and
+cleanup belong to [#2289](https://github.com/elong0527/yamaa/issues/2289).
+Historical qualification observations below keep their original tested revisions.
 
 The [final release handoff](release-handoff.md) reconciles every entry gate,
 independently re-admitted rollback receipts, measured-source renewal and exact
@@ -17,8 +18,10 @@ pending there until all evidence gates pass.
 | State | Observed scope |
 | --- | --- |
 | Implemented and merged | Shared language execution; Python/R domain/check/define; runner conversion; legacy evaluator/API/probe and R/cdiscbuilder removal; coordinated Python/R/Cargo 0.4.0 source versions. The performance harness is merged through PR #2137; subsequent native dependency/guard, portable-math control and performance admission repairs are merged through PRs #2164-#2168. |
+| Implemented candidate | Longitudinal defaults and actual native usage pools in PRs [#2365](https://github.com/elong0527/yamaa/pull/2365) and [#2367](https://github.com/elong0527/yamaa/pull/2367). Paired capacity controls passed in local installed Python and hosted Linux R runs at `983e9c96`; the scope is recorded in the [handoff](release-handoff.md#candidate-implementation-and-scoped-installed-controls). |
+| Qualified candidate | Source `46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689`, [native run 38657181937](https://github.com/elong0527/yamaa/actions/runs/38657181937), attempt 1: all 31 required jobs passed, all 21 installed tuples passed, and all 97 independent audit lanes passed with byte-identical original-input replay. This is `reviewed-branch` evidence; final combined-main acceptance remains pending. |
 | Qualified at earlier revisions | Retained public-conformance ratchet: run 38416920074, attempt 1, source `2ba10418607933f92597f7c00ac363a3113a49db`; earlier rollback rehearsals below. Their results do not qualify current main or its 0.4.0 composition. |
-| Pending evidence/decisions | Final combined-main installed/numerical audit, adopted capacity bounds, complete performance campaign and item-10 budgets, item-11 transition acceptance and exact artifact handoff. |
+| Pending evidence | Final combined-main installed/numerical qualification and independent audit/replay, renewed capacity controls at that source, the Linux performance measurements below, remaining assertion migration under #2289, and exact package/tag selection and artifact handoff. |
 | Published | [Python source release 0.3.0](https://github.com/elong0527/yamaa/releases/tag/yamaa-py-0.3.0), source `845a91ff`, published 2026-10-11, with no package assets. No shared 0.4.0 release is listed. Prior source-built Python rollback packages and the pre-cutover R 0.3.0 candidate remain unpublished drafts. |
 
 PR [#2165](https://github.com/elong0527/yamaa/pull/2165) merged without a passing
@@ -33,8 +36,8 @@ Removal and version changes landed **before** final evidence-based item-10/item-
 acceptance. Planning removal in PR #2161 and math-record replacement in PR #2162
 also preceded this consolidated guide. Record the actual chronology; completed
 implementation, closed work packages and approved target policy do not imply
-transition approval. [#2147](https://github.com/elong0527/yamaa/issues/2147) records
-acceptance only after the remaining evidence passes. Publication/tagging/asset
+transition approval. #2288 now owns the remaining release evidence.
+Publication/tagging/asset
 replacement is a separate operation.
 
 ## Approved decisions
@@ -86,10 +89,53 @@ retain provenance. Their current policy is:
   contract, cache and resource identities use references/canonical forms/bytes;
   only packaging-tool lockfiles carry their own checksum fields.
 
+The current #2288 decision adopts the public hosts' longitudinal profile:
+10,000,000 source/output rows, 640,000,000 cells, 1 GiB scalar text,
+512 MiB output text and 1 GiB output. Lower decoder, CSV, IPC, report and
+publication ceilings must not refuse an otherwise admitted input below this
+profile. The candidate implementation in
+[#2365](https://github.com/elong0527/yamaa/pull/2365) and
+[#2367](https://github.com/elong0527/yamaa/pull/2367) supplies this default and
+actual native usage pools. Paired 100-column, 50,000-record Build/Save controls
+passed in the local installed Python run and hosted Linux R 4.6.1 native job at source
+[`983e9c96`](https://github.com/elong0527/yamaa/commit/983e9c9687a1a49a7d283fe70e681196eef7bd8f),
+with the [installed evidence scope](release-handoff.md#candidate-implementation-and-scoped-installed-controls)
+recorded in the handoff.
+Final combined-main renewal remains required. Preparation work for inherited
+documents follows the #2300 policy below.
+
 These are target decisions, not qualification results. Host behavior and source
 installation commands have one home in the
 [Python](https://github.com/elong0527/yamaa/blob/main/python/README.md) and
 [R](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md) guides.
+
+## Specification and environment migration from 0.2.0
+
+The 0.4.0 upgrade also includes language and environment changes introduced
+before 0.3.0. Update old specifications and project locks together:
+
+| Earlier spelling or behavior | Current form |
+| --- | --- |
+| `implies: {when: W, then: T}` | `assert: {when: W, require: T}`; the implication semantics are preserved. |
+| `assert: {expr: P}` | `assert: {require: P}`. |
+| Function call with `contract_version` | Keep only `name` and `args`. |
+| Environment `version`, `runtime`, per-function contracts, bindings and external conformance files | Declare `schema_version`, `language`, the project `lock`, and function definitions with `function`, `description`, `params`, `returns` and inline `tests`. Implementations are ordinary installed packages checked against that lock. |
+| Runner discovers a project environment | Pass it explicitly: Python `domain(spec, environment="python/environment.yaml")` or R `yamaa_domain(spec, environment="r/environment.yaml")`. |
+| Data roots or `yamaa-project.yaml` | Relative resources resolve from the YAML file that declares them, including inherited layers. |
+| Symbolic link below the entry directory | Copy or hard-link the input; the resource policy refuses symbolic links. |
+| Lock pins an earlier yamaa | Regenerate the project lock for 0.4.0 before using project functions; each applicable build checks the runtime version. |
+
+The normative contracts are [verification](https://github.com/elong0527/yamaa/blob/main/rules/execution/verification.md),
+[functions and project environments](https://github.com/elong0527/yamaa/blob/main/rules/operations/functions.md) and
+[resources](https://github.com/elong0527/yamaa/blob/main/rules/storage/resources.md). The original changes are
+[#1782](https://github.com/elong0527/yamaa/pull/1782) and
+[#1856](https://github.com/elong0527/yamaa/pull/1856); retired requirement
+provenance remains in Git history.
+
+Integer literals must fit signed i64 and otherwise report `integer_overflow`
+(REQ-0014). CSV `output.decimals` accepts 0 through 18. The approved width is
+1,024 columns; the new longitudinal limits are recorded above. Resource bounds
+remain separate from schema validity and mathematical function behavior.
 
 The width decision in [#2299](https://github.com/elong0527/yamaa/issues/2299),
 implemented in [#2327](https://github.com/elong0527/yamaa/pull/2327), admits
@@ -136,9 +182,9 @@ caller-selected ceilings and cumulative accounting.
 Installed Python/R controls cover
 flat, explicit empty-parent, empty-child and two-layer case specifications at
 40, 64 and 1,024 columns, including independent expected output and saved bytes.
-Source and output cell ceilings remain 2,097,152 and 1,048,576: at width 1,024,
-these permit at most 2,048 source rows and 1,024 output rows before other budgets
-apply. This width policy does not qualify the broader capacity or installed
+The earlier source/output cell ceilings of 2,097,152 and 1,048,576 are
+superseded by the approved longitudinal defaults above. This width policy does
+not qualify the broader capacity or installed
 release gates under [#2288](https://github.com/elong0527/yamaa/issues/2288).
 
 ## Remaining gates and owners
@@ -148,45 +194,41 @@ implementation owners are not reopened; the following owners renew final evidenc
 
 | Gate | Current disposition and acceptance owner |
 | --- | --- |
-| B01 - active conformance | 316 active of 318 authored cases, with two explicit historical exclusions; final 21-tuple admission: [#2145](https://github.com/elong0527/yamaa/issues/2145). |
-| B02 - Python API | Shared facade merged; final signatures/results/arguments/helpers: #2145; export/archive reconciliation: [#2147](https://github.com/elong0527/yamaa/issues/2147). |
-| B03 - R API/scalars | Approved i64/NUL/error/Define surface merged; renew installed ownership/conversions: #2145. |
-| B04 - filesystem/platforms | Declaring-file paths and Windows controls merged; renew final installed source: #2145. |
-| B05 - probe/JSON retirement | Removal merged; reconcile unique retired assertions and retained consumers: #2147. |
-| B06 - route/environment selection | Unified composition merged; final full installed evidence: #2145. |
-| B07 - producers | Orchestration merged; final port/callback/failure/publication order: #2145. |
-| B08 - submission | Shared Define and registry ownership merged; final installed render/Save/default-version controls: #2145. |
-| B09 - language | Language families merged; renew complete active conformance and predicate/intermediate contracts: #2145. |
-| B10 - codecs/publication | Implemented; renew exact CSV/logical Parquet, original failures and held Saves: #2145. |
-| B11 - diagnostics | Shared ownership and null exceptions decided; final registry/installed controls: #2145. |
-| B12 - numerical | PortableLibmV1 decided; final public truth, nine assessments and exact comparison: #2145. |
-| B13 - builds/locks | Canonical locks and 0.4.0 versions merged; renew actual archive membership, byte equality, features/toolchains: #2145/#2147. |
+| B01 - active conformance | Current directory-derived active corpus, with two explicit historical exclusions; final 21-tuple admission: #2288. |
+| B02 - Python API | Shared facade merged; final signatures/results/arguments/helpers and export/archive reconciliation: #2288. |
+| B03 - R API/scalars | Approved i64/NUL/error/Define surface merged; renew installed ownership/conversions: #2288. |
+| B04 - filesystem/platforms | Declaring-file paths and Windows controls merged; renew final installed source: #2288. |
+| B05 - probe/JSON retirement | Removal merged; reconcile unique retired assertions and retained consumers: #2289. |
+| B06 - route/environment selection | Unified composition merged; final full installed evidence: #2288. |
+| B07 - producers | Orchestration merged; final port/callback/failure/publication order: #2288. |
+| B08 - submission | Shared Define and registry ownership merged; final installed render/Save/default-version controls: #2288. |
+| B09 - language | Language families merged; renew complete active conformance and predicate/intermediate contracts: #2288. |
+| B10 - codecs/publication | Implemented; renew exact CSV/logical Parquet, original failures and held Saves: #2288. |
+| B11 - diagnostics | Shared ownership and null exceptions decided; final registry/installed controls: #2288. |
+| B12 - numerical | PortableLibmV1 decided; final public truth, nine assessments and exact comparison: #2288. |
+| B13 - builds/locks | Canonical locks and 0.4.0 versions merged; renew actual archive membership, byte equality, features/toolchains: #2288. |
 | B14 - content identity | Policy resolved by the lockfile exception above; build evidence belongs to B13. |
-| B15 - independent audit | Audit implemented; passing post-removal combined-main verdict and original-input offline replay: #2145. |
-| B16 - lifecycle/removal | Installed controls retained; final ownership/interruptions/reentrancy/repeated use/Save: #2145; removal reconciliation: #2147. |
-| B17 - performance/capacity | Harness merged, complete acceptance pending: [#2141](https://github.com/elong0527/yamaa/issues/2141) replay, [#2142](https://github.com/elong0527/yamaa/issues/2142) adopted bounds, [#2144](https://github.com/elong0527/yamaa/issues/2144) collection. |
-| B18 - numeric budgets | Item 10 remains unrecorded: [#2143](https://github.com/elong0527/yamaa/issues/2143) independent auditor and #2144 observations/budgets. |
-| B19 - transition/rollback | Concrete plan and earlier rollback receipts exist; item 11, final re-admission and artifact handoff: #2147. |
+| B15 - independent audit | Audit implemented; passing post-removal combined-main verdict and original-input offline replay: #2288. |
+| B16 - lifecycle/removal | Installed controls retained; final ownership/interruptions/reentrancy/repeated use/Save: #2288; removal reconciliation: #2289. |
+| B17 - performance/capacity | Harness complete; capacity implemented in PRs #2365/#2367 with scoped local Python and hosted Linux R installed controls at `983e9c96`. Final combined-main renewal and scoped Linux measurements remain under #2288. |
+| B18 - numeric budgets | The maintainer sets no performance pass/fail budgets for 0.4.0. Retain observed latency/RSS and check coverage with the independent auditor. |
+| B19 - transition/rollback | Rollback receipts already re-admitted; exact final tested package selection and artifact handoff: #2288. |
 
-For [#1969](https://github.com/elong0527/yamaa/issues/1969), fixtures/language/API
-and installed/numerical gates map to #2145; performance/capacity to #2142-#2144;
-transition/removal/handoff to #2147. This guide is
-[#2146](https://github.com/elong0527/yamaa/issues/2146).
-[#1998](https://github.com/elong0527/yamaa/issues/1998) accepts performance,
-[#1999](https://github.com/elong0527/yamaa/issues/1999) accepts transition,
-[#1994](https://github.com/elong0527/yamaa/issues/1994) accepts the existing cutover
-and #1973 records items 10/11. Close #1969 last.
+The remaining native release qualification still covers all 21 installed tuples.
+Performance for 0.4.0 is a smaller scope: all 27 authored cases (nine dimension
+variants at 1k/10k/100k) on Linux, using an installed Python 3.12 wheel and an
+R 4.6.1 source installation. Keep ten cold samples, three retained warmups and
+thirty warm samples per case. Use `collect_public_performance.py`, independently
+audit that declared scope with `audit_public_performance.py`, and record observed
+latency and RSS here once the measured run completes. No numeric pass/fail
+budgets are set. The original 21-tuple campaign remains historical tooling;
+its acceptance requirements are not the current release decision.
 
-Performance acceptance is 27 cases (nine dimension variants at 1k/10k/100k) on
-all 21 tuples: 567 combinations, ten cold and thirty warm samples after three
-retained warmups. Use independent typed/output truth, raw clocks/RSS/phases/callbacks,
-both Saves and the prior Python 0.3.0 baseline on the same machine without
-concurrent compilation. Capacity constants remain unapproved. Logical rows/cells/work, captured bytes,
-graph ownership, encoded reports and publication prefixes have separate bounded
-scopes. Retained admission counters are per owner and do not cap whole-process
-RSS. Refusals and
-unavailable/incomparable metrics require explicit dispositions; do not choose
-thresholds merely to make results pass.
+Independent typed/output truth, original clocks, RSS, lifecycle observations and
+both Saves remain required. Measure without concurrent compilation. Logical
+rows/cells/work, captured bytes, graph ownership, encoded reports and publication
+prefixes have separate bounded scopes. Admission counters do not cap whole-process
+RSS. Refusals and unavailable/incomparable metrics retain explicit dispositions.
 
 ## Qualification and retained records
 
@@ -199,10 +241,31 @@ nonblocking: inspect its verdict and replay the original inputs. Branch
 qualification stays `reviewed-branch`; only genuine postmerge evidence is
 `combined-main`.
 
+Candidate source
+[`46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689`](https://github.com/elong0527/yamaa/commit/46ee4dcb0f7ffe5cd8a95b477d242cfadcf0c689)
+passed [native run 38657181937](https://github.com/elong0527/yamaa/actions/runs/38657181937),
+attempt 1. All 18 Python tuples passed 319 active conformance cases and 18
+supplemental suites each; all three R 4.6.1 source tuples passed the same 319
+active cases, 17 supplemental suites and strict `R CMD check` **Status: OK**.
+Each tuple retains the two explicit historical exclusions. The three shared
+Rust checks, nine numerical assessments and exact comparison passed. All 18
+public/producer cohort tuple directories retain 468 passing comparison records.
+The independent native audit passed all 97 lanes; its original network-isolated
+replay and the independent replay of reconstituted original inputs both reproduce
+the original verdict bytes. Exact artifact references and replay scope are in the
+[handoff](release-handoff.md#candidate-implementation-and-scoped-installed-controls).
+
+The Linux performance campaign
+[38657181920](https://github.com/elong0527/yamaa/actions/runs/38657181920)
+is still collecting at the same frozen source `46ee4dcb`; no measured results are
+recorded here. Later documentation commits must retain that measured source.
+Final postmerge main qualification, assertion migration under #2289 and release
+package/tag selection and publication remain pending under #2288.
+
 Benchmark directories and the public-conformance configuration determine the
 current authored inventory and explicit exclusions. The generated
 [benchmark index](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#benchmarks)
-accounts for all 318 authored cases, including 316 active cases shared by Python
+accounts for the current authored cases, the active cases shared by Python
 and R and the two reviewed path-history exclusions. Runnable host entries describe
 metadata. Each installed inventory must supply actual passing results for the
 same current active set; the earlier JSON observations keep their original
@@ -214,13 +277,13 @@ New native audit snapshots retain exact-source benchmark specification paths in
 snapshot uses its original `source/benchmarks/execution-manifest.yaml` and metadata.
 This retained-input reader does not restore a runtime API or infer qualification
 from current checkout labels. Original retained-snapshot replay and final
-installed Python/R results remain evidence gates under #2145.
+installed Python/R results remain evidence gates under #2288.
 
 The live inventory is:
 
 | Record | Reader and purpose |
 | --- | --- |
-| [Current rules](articles/rules.md) and [schema-navigation.tsv](https://github.com/elong0527/yamaa/blob/main/.github/scripts/yaml-validation/fixtures/schema-navigation.tsv) | `check_rule_rewrite.py` derives current normative ownership; `test_rule_rewrite.py` checks 363 independent schema owners. `generate_rule_reference.py` derives navigation from current contracts and schemas. |
+| [Current rules](articles/rules.md) and [schema-navigation.tsv](https://github.com/elong0527/yamaa/blob/main/.github/scripts/yaml-validation/fixtures/schema-navigation.tsv) | `check_rule_rewrite.py` derives current normative ownership; `test_rule_rewrite.py` checks the independent schema-owner fixture. `generate_rule_reference.py` derives navigation from current contracts and schemas. |
 | [release-api.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/release-api.json) | `check_release_api.py` and its tests compare declared exports/dispositions. `retain_candidate` labels remain inventory classifications, not final acceptance. |
 | [benchmarks/](https://github.com/elong0527/yamaa/tree/main/benchmarks) and [public_conformance.py](https://github.com/elong0527/yamaa/blob/main/rust/tools/public_conformance.py) | Directories and explicit exclusions derive the current inventory, index/dashboard membership and the same mandatory active set for both installed hosts. |
 | [public-conformance.json](https://github.com/elong0527/yamaa/blob/main/rust/qualification/public-conformance.json) | Prior passing observations retain original evidence identities. The comparator gates the current directory-derived active set and compares new passes with these observations. |
@@ -232,7 +295,7 @@ No active reader uses `rust/planning/`: its live API inventory moved atomically
 to `rust/qualification/release-api.json` in #2161. Historical
 [Python retirement](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/python-retirement-inventory.json)
 and [validator assertion](https://github.com/elong0527/yamaa/blob/43bb4437d9c0890ec7877ec7575a517c771a8147/rust/planning/validator-assertion-disposition.json)
-maps are retrievable at their original revision; #2147 must reconcile every
+maps are retrievable at their original revision; #2289 must reconcile every
 unique replacement with final installed evidence. Git retrieval proves map
 availability, not replay of external artifacts. Current normative ownership and
 schema navigation use [the current rules](articles/rules.md), schema sources and
@@ -248,12 +311,13 @@ with the original reader. The reader at `140d936b37a40e0d4250983372f38079189b1b0
 preserved all 97 lane identities and verdicts: 42 pass, 49 fail and 6 missing.
 The original record remains incomplete, with its captured run metadata unchanged;
 this historical replay does not qualify a new source or replace capacity inputs.
-[#2154](https://github.com/elong0527/yamaa/issues/2154) owns physical history removal
-and durable replay. Historical
+The 17 dated raw measurement files were deleted by
+[#2345](https://github.com/elong0527/yamaa/pull/2345), following the maintainer's
+finite disposition recorded in #2288/#2289. Historical
 [measurement reports](https://github.com/elong0527/yamaa/tree/558d3671d920872bb8b509cc726eaf5fd94f21fd/rust/measurements)
-remain retrievable from Git. Retention and replay of their original external
-inputs remain unverified; a scratch path or expiring Actions URL is not a durable
-archive. Add evidence to PR/issues and this compact index, without new per-issue
+remain retrievable from Git. The old capacity evidence tied to unavailable
+original inputs is abandoned by that decision. Add new evidence to PR/issues
+and this compact index, without new per-issue
 ledgers or rewriting previous observations.
 
 ## Rollback and artifact handoff
@@ -310,8 +374,8 @@ stopifnot(identical(as.character(packageVersion("yamaa")), "0.3.0"))
 Rollback starts a new whole run; earlier saved outputs retain their original
 provenance.
 
-After #2141-#2145 pass, #2147 re-admits rollback, records evidence-backed item-11
-acceptance without backdating, and hands off the exact final source, run/attempt,
-package names/bytes and artifact identities. Renew evidence affected by later
+After the remaining #2288 gates pass, record the exact final source, run/attempt,
+package names/bytes and artifact identities in the release handoff. The rollback
+receipts above are already re-admitted. Renew evidence affected by later
 changes. The 0.4.0 source filenames and install templates identify preparation;
 qualified download URLs and publication identities remain pending.

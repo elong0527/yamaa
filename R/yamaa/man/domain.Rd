@@ -31,4 +31,5 @@ output and \code{save()} publication unchanged.}
 \description{Runs native preparation and static checks. A build additionally captures
 study inputs and derives output. Save publishes retained bytes to the declared path.
 Failed-build saves signal \code{yamaa_domain_error}; operational save failures return
-FALSE and remain in issues. The current approved-root path policy remains in effect.}
+FALSE and remain in issues. Relative resources resolve from the YAML file that
+declares them, including inherited layers.}

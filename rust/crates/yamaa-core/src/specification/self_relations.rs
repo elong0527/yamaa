@@ -32,7 +32,7 @@ pub(super) fn declaration_findings(
             .and_then(|bytes| bytes.checked_add(name.len()))
             .and_then(|bytes| bytes.checked_add(128))
             .filter(|&bytes| bytes <= 16_777_216)
-            .ok_or(PrepareError::Limit("self_findings"))?;
+            .ok_or_else(|| PrepareError::limit("self_findings", 16_777_216, None, None))?;
         let (code, paths, context) = if sources.iter().any(|source| source.name == "SELF") {
             (
                 C::IntermediateIdentifierCollision,
@@ -130,7 +130,12 @@ pub(super) fn template_references(
     depth: usize,
 ) -> Result<(), PrepareError> {
     if depth > 64 {
-        return Err(PrepareError::Limit("expression_depth"));
+        return Err(PrepareError::limit(
+            "expression_depth",
+            64,
+            Some(depth),
+            None,
+        ));
     }
     if let Some(payload) = d.field(value, "str_template") {
         names.extend(templates.get(payload)?.identifiers().iter().cloned());
@@ -194,14 +199,19 @@ impl<'a> FirstTemplate<'a> {
             .checked_add(name.len())
             .and_then(|bytes| bytes.checked_add(128))
             .and_then(|bytes| bytes.checked_mul(4))
-            .ok_or(PrepareError::Limit("self_findings"))?;
+            .ok_or_else(|| PrepareError::limit("self_findings", 16_777_216, None, None))?;
         self.bytes = self
             .bytes
             .checked_add(cost)
             .filter(|&bytes| bytes <= 16_777_216)
-            .ok_or(PrepareError::Limit("self_findings"))?;
+            .ok_or_else(|| PrepareError::limit("self_findings", 16_777_216, None, None))?;
         if self.findings.len() >= 65_536 {
-            return Err(PrepareError::Limit("self_findings"));
+            return Err(PrepareError::limit(
+                "self_findings",
+                65_536,
+                Some(self.findings.len() + 1),
+                None,
+            ));
         }
         self.findings
             .push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
@@ -239,8 +249,21 @@ impl<'a> FirstTemplate<'a> {
         prefix: &str,
         depth: usize,
     ) -> Result<(), PrepareError> {
-        if depth > 64 || prefix.len() > 65_536 {
-            return Err(PrepareError::Limit("self_read_metadata"));
+        if depth > 64 {
+            return Err(PrepareError::limit(
+                "self_read_metadata",
+                64,
+                Some(depth),
+                Some(prefix),
+            ));
+        }
+        if prefix.len() > 65_536 {
+            return Err(PrepareError::limit(
+                "path_bytes",
+                65_536,
+                Some(prefix.len()),
+                Some(prefix),
+            ));
         }
         let d = self.d;
         let &[(operation, payload)] = mapping(d, value)? else {

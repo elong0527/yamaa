@@ -143,7 +143,12 @@ fn whole_expression_quota_precedes_deferred_grammar_and_name_findings() {
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("numeric_bytes"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "numeric_bytes",
+                ..
+            }
+        ))
     ));
 }
 #[test]
@@ -245,7 +250,12 @@ fn all_unselected_literals_and_repeated_row_defaults_are_admitted_before_ownersh
                 ..Default::default()
             }
         ),
-        Err(PrepareError::Limit("flag_metadata"))
+        Err(PrepareError::Limit(
+            yamaa_core::specification::CompilerLimit {
+                resource: "flag_metadata",
+                ..
+            }
+        ))
     ));
 }
 

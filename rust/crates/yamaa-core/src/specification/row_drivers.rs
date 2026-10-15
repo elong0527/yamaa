@@ -169,7 +169,7 @@ pub(super) fn admit_reads(
         depth: usize,
     ) -> Result<(), PrepareError> {
         if depth > 64 {
-            return Err(PrepareError::Limit("expression_depth"));
+            return Err(PrepareError::limit("expression_depth", 64, None, None));
         }
         if let Some(payload) = d.field(value, "str_template") {
             names.extend(templates.get(payload)?.identifiers().iter().cloned());

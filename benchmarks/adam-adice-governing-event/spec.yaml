@@ -1,0 +1,169 @@
+schema_version: '1.0'
+domain: ADICE
+keys:
+- STUDYID
+- USUBJID
+- ASEQ
+input:
+  ICE_RAW:
+    path: input/ice_raw.csv
+    types:
+      ICESEQ: int
+      ICEDTC: date
+  ADSL: input/adsl.csv
+base: ICE_RAW
+
+output:
+  path: adice.csv
+  columns:
+  - STUDYID
+  - USUBJID
+  - ASEQ
+  - ADECOD1
+  - ASTDT
+  - ICEPRIO
+  - ICERANK
+  - GOVFL
+  - SUPERFL
+  - GOVTYPE
+  - GOVDT
+  - GOVSEQ
+  order_by:
+  - STUDYID
+  - USUBJID
+  - ASEQ
+
+windows:
+  ICE_ORDER:
+    group_by:
+    - STUDYID
+    - USUBJID
+    order_by:
+    - ICEPRIO
+    - ASTDT
+    - ASEQ
+
+intermediates:
+- id: SUBJECT
+  dataset: ADSL
+  key:
+  - STUDYID
+  - USUBJID
+
+- id: GOVERN
+  dataset: ICE_RAW
+  key:
+  - STUDYID
+  - USUBJID
+  order_by:
+  - ICE_RAW.PRIORITY
+  - ICE_RAW.ICEDTC
+  - ICE_RAW.ICESEQ
+  keep: first
+  derivations:
+    PRIORITY:
+      mapping:
+        source: ICETYPE
+        dict:
+          ICE04: 1
+          ICE05: 1
+          ICE01: 2
+          ICE02: 3
+          ICE03: 4
+
+columns:
+- name: STUDYID
+  type: str
+  label: Study Identifier
+  derivation: ICE_RAW.STUDYID
+
+- name: USUBJID
+  type: str
+  label: Unique Subject Identifier
+  derivation: ICE_RAW.USUBJID
+
+- name: ASEQ
+  type: int
+  label: Analysis Sequence Number
+  derivation: ICE_RAW.ICESEQ
+
+- name: ADECOD1
+  type: str
+  label: Analysis Dictionary Derived Term
+  derivation: ICE_RAW.ICETYPE
+
+- name: ASTDT
+  type: date
+  label: Analysis Start Date
+  derivation: ICE_RAW.ICEDTC
+  verifications:
+    not_missing: {}
+
+- name: ICEPRIO
+  type: int
+  label: Intercurrent Event Type Priority
+  derivation:
+    mapping:
+      source: ADECOD1
+      dict:
+        ICE04: 1
+        ICE05: 1
+        ICE01: 2
+        ICE02: 3
+        ICE03: 4
+
+- name: ICERANK
+  type: int
+  label: Intercurrent Event Priority Position
+  derivation:
+    row_number:
+      window: ICE_ORDER
+
+- name: GOVFL
+  type: str
+  label: Governing Intercurrent Event Flag
+  derivation:
+    flag: ICERANK = 1
+
+- name: SUPERFL
+  type: str
+  label: Superseded Intercurrent Event Flag
+  derivation:
+    flag: ICERANK > 1
+
+- name: GOVTYPE
+  type: str
+  label: Governing Intercurrent Event Type
+  derivation: GOVERN.ICETYPE
+
+- name: GOVDT
+  type: date
+  label: Governing Intercurrent Event Date
+  derivation: GOVERN.ICEDTC
+
+- name: GOVSEQ
+  type: int
+  label: Governing Intercurrent Event Sequence
+  derivation: GOVERN.ICESEQ
+
+- name: SUBJECTID
+  type: str
+  label: Matched Subject Identifier
+  derivation: SUBJECT.USUBJID
+  verifications:
+    not_missing: {}
+
+verifications:
+- unique:
+    columns:
+    - STUDYID
+    - USUBJID
+    - ASEQ
+- assert:
+    id: governing-event-agrees-with-selection
+    when: GOVFL = 'Y'
+    require: ASEQ = GOVSEQ AND ADECOD1 = GOVTYPE AND ASTDT = GOVDT
+- assert:
+    id: governing-or-superseded
+    require: (GOVFL = 'Y' AND SUPERFL IS NULL)
+      OR (GOVFL IS NULL AND SUPERFL = 'Y')

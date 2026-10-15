@@ -124,6 +124,67 @@ run_column_ceilings <- function() {
     }
   }
 
+  # Compiler capacity facts are identical through both operations and routes.
+  for (resource in c("columns", "inputs", "source_fields", "projected_columns")) {
+    case_root <- path(paste0("details-", resource))
+    actual <- if (resource == "inputs") 17L else 1025L
+    limit <- if (resource == "inputs") 16L else 1024L
+    spec <- write_case(case_root,
+      columns = if (resource == "columns") actual else 1L,
+      fields = if (resource == "source_fields") actual else 1L,
+      typed = resource == "source_fields",
+      selected = if (resource == "projected_columns") rep("ID", actual) else "ID")
+    if (resource == "inputs") {
+      lines <- readLines(spec)
+      lines[startsWith(lines, "input:")] <- sprintf("input: {%s}",
+        paste(sprintf("S%s: input.csv", seq_len(actual)), collapse = ", "))
+      writeLines(lines, spec)
+    }
+    env <- file.path(case_root, "environment.yaml")
+    writeLines(c("schema_version: '1.0'", "language: r"), env)
+    spec_path <- switch(resource, inputs = "input", source_fields = "input.SRC.types",
+                        projected_columns = "output.columns", "columns")
+    expected <- sprintf('{"actual":%s,"code":"compiler_limit","limit":%s,"resource":"%s","stage":"prepare"}',
+                        actual, limit, resource)
+    for (environment in list(NULL, env)) {
+      for (operation in list(yamaa_check, yamaa_domain)) {
+        issue <- operation(spec, environment = environment)$issues
+        stopifnot(nrow(issue) == 1L, identical(issue$phase, "engine"),
+          identical(issue$condition, "engine_rejected"), is.na(issue$requirement),
+          identical(issue$spec_paths, list(spec_path)), identical(issue$context, expected))
+      }
+    }
+  }
+
+  # Layered traversal and strict YAML decoding retain their original phase and bound.
+  for (resource in c("depth", "numeric_digits")) {
+    case_root <- path(paste0("preparation-", resource))
+    spec <- write_case(case_root)
+    if (resource == "depth") {
+      file.copy(spec, file.path(case_root, "base.yaml"))
+      for (index in 0:64) {
+        parent <- if (index < 64L) sprintf("layer-%s.yaml", index + 1L) else "base.yaml"
+        writeLines(c("schema_version: '1.0'", sprintf("parents: [%s]", parent)),
+                   file.path(case_root, sprintf("layer-%s.yaml", index)))
+      }
+      writeLines(c("schema_version: '1.0'", "parents: [layer-0.yaml]"), spec)
+      expected <- '{"code":"resource_limit","limit":64,"phase":"inheritance","resource":"depth","stage":"prepare"}'
+    } else {
+      writeLines(paste0("value: ", paste(rep("9", 4097L), collapse = "")), spec)
+      expected <- '{"actual":4097,"code":"resource_limit","limit":4096,"phase":"yaml_decode","resource":"numeric_digits","stage":"capture"}'
+    }
+    env <- file.path(case_root, "environment.yaml")
+    writeLines(c("schema_version: '1.0'", "language: r"), env)
+    for (environment in list(NULL, env)) {
+      for (operation in list(yamaa_check, yamaa_domain)) {
+        issue <- operation(spec, environment = environment)$issues
+        stopifnot(nrow(issue) == 1L, identical(issue$phase, "engine"),
+          identical(issue$condition, "engine_rejected"), is.na(issue$requirement),
+          identical(issue$context, expected))
+      }
+    }
+  }
+
   # Narrow output isolates the declared-column ceiling from projection width.
   assert_build(write_case(path("admit-columns"), 1024L, selected = "ID"))
   spec <- write_case(path("refuse-columns"), 1025L, selected = "ID")

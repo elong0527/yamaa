@@ -1,0 +1,70 @@
+schema_version: '1.0'
+domain: SUBJECT
+keys:
+- STUDYID
+- USUBJID
+input:
+  ADSL: adsl.csv
+  ADAE:
+    path: adae.csv
+    types:
+      ASEQ: int
+base: ADSL
+filter: ADSL.SAFFL = 'Y'
+
+output:
+  path: subjects.csv
+  columns:
+  - STUDYID
+  - USUBJID
+  - TRT01P
+  - TRT01PN
+  - EVENTN
+
+intermediates:
+- id: FIRST
+  dataset: ADAE
+  key:
+  - STUDYID
+  - USUBJID
+  filter: ADAE.TRTEMFL = 'Y'
+  order_by:
+  - ADAE.ASEQ
+  keep: first
+  no_match: null
+
+columns:
+- name: STUDYID
+  type: str
+  label: Study Identifier
+  derivation: ADSL.STUDYID
+
+- name: USUBJID
+  type: str
+  label: Unique Subject Identifier
+  derivation: ADSL.USUBJID
+
+- name: TRT01P
+  type: str
+  label: Planned Treatment for Period 01
+  derivation: ADSL.TRT01P
+
+- name: TRT01PN
+  type: int
+  label: Planned Treatment for Period 01 Numeric
+  derivation: ADSL.TRT01PN
+
+- name: EVENTN
+  type: int
+  label: Subject Has a Treatment Emergent Event
+  derivation:
+    case:
+    - when: FIRST.ASEQ IS NOT NULL
+      then: {literal: 1}
+    - otherwise: {literal: 0}
+
+verifications:
+- unique:
+    columns:
+    - STUDYID
+    - USUBJID

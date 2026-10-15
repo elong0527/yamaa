@@ -63,12 +63,30 @@ pub(super) fn prepare(
     extraction: &str_extract::Prepared,
     templates: &str_template::Prepared,
 ) -> Result<Vec<Branch>, PrepareError> {
-    if depth > 64 || path.len() > 65_536 {
-        return Err(PrepareError::Limit("case_depth"));
+    if depth > 64 {
+        return Err(PrepareError::limit(
+            "case_depth",
+            64,
+            Some(depth),
+            Some(path),
+        ));
+    }
+    if path.len() > 65_536 {
+        return Err(PrepareError::limit(
+            "path_bytes",
+            65_536,
+            Some(path.len()),
+            Some(path),
+        ));
     }
     let items = sequence(d, node)?;
     if items.len() > 1024 {
-        return Err(PrepareError::Limit("case_branches"));
+        return Err(PrepareError::limit(
+            "case_branches",
+            1024,
+            Some(items.len()),
+            None,
+        ));
     }
     // The schema owns REQ-0339 shape failures. These branches defend the
     // normalized-document contract rather than declare a language subset.
@@ -104,7 +122,12 @@ pub(super) fn prepare(
                     crate::predicate_parser::ParseError::UnsupportedRegex { .. },
                 )) => return Err(unsupported(&format!("{prefix}.when"), "predicate_regex")),
                 Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
-                Err(_) => return Err(PrepareError::Limit("predicate_compilation")),
+                Err(error) => {
+                    return Err(PrepareError::predicate(
+                        error.clone(),
+                        Some(&format!("{prefix}.when")),
+                    ))
+                }
             };
             (
                 Some(compiled),
@@ -534,58 +557,108 @@ pub(super) fn bind(
 pub(super) fn charge(
     d: &Document,
     value: usize,
+    path: &str,
     total: &mut usize,
     limit: usize,
     depth: usize,
 ) -> Result<(), PrepareError> {
     if depth > 64 {
-        return Err(PrepareError::Limit("case_depth"));
+        return Err(PrepareError::limit(
+            "case_depth",
+            64,
+            Some(depth),
+            Some(path),
+        ));
     }
     if let Some(flag) = d.field(value, "flag") {
-        let condition = if matches!(d.nodes()[flag], N::Text(_)) {
+        let scalar = matches!(d.nodes()[flag], N::Text(_));
+        let condition = if scalar {
             flag
         } else {
             field(d, flag, "condition")?
         };
-        *total = total
-            .checked_add(text(d, condition)?.len())
-            .filter(|&n| n <= limit)
-            .ok_or(PrepareError::Limit("numeric_bytes"))?;
+        let condition_path = if scalar {
+            format!("{path}.flag")
+        } else {
+            format!("{path}.flag.condition")
+        };
+        compiler_limits::charge(
+            "numeric_bytes",
+            total,
+            text(d, condition)?.len(),
+            limit,
+            Some(&condition_path),
+        )?;
     }
     if let Some(payload) = d.field(value, "str_concat") {
-        for &child in sequence(d, field(d, payload, "sources")?)? {
+        for (index, &child) in sequence(d, field(d, payload, "sources")?)?
+            .iter()
+            .enumerate()
+        {
+            let child_path = format!("{path}.str_concat.sources[{index}]");
             if let Some(expr) = d.field(child, "compute").and_then(|id| d.field(id, "expr")) {
-                *total = total
-                    .checked_add(text(d, expr)?.len())
-                    .filter(|&n| n <= limit)
-                    .ok_or(PrepareError::Limit("numeric_bytes"))?;
+                compiler_limits::charge(
+                    "numeric_bytes",
+                    total,
+                    text(d, expr)?.len(),
+                    limit,
+                    Some(&format!("{child_path}.compute.expr")),
+                )?;
             }
-            charge(d, child, total, limit, depth + 1)?;
+            charge(d, child, &child_path, total, limit, depth + 1)?;
         }
     }
     let Some(case) = d.field(value, "case") else {
         return Ok(());
     };
-    for &branch in sequence(d, case)? {
+    for (index, &branch) in sequence(d, case)?.iter().enumerate() {
+        let prefix = format!("{path}.case[{index}]");
         let when = d.field(branch, "when");
         let child = d
             .field(branch, "then")
-            .or_else(|| d.field(branch, "otherwise"));
+            .map(|id| (id, "then"))
+            .or_else(|| d.field(branch, "otherwise").map(|id| (id, "otherwise")));
+        let child_path = child.map(|(_, name)| format!("{prefix}.{name}"));
         let compute = child
-            .and_then(|id| d.field(id, "compute"))
+            .and_then(|(id, _)| d.field(id, "compute"))
             .and_then(|id| d.field(id, "expr"));
         let filter = child
-            .and_then(|id| d.field(id, "source"))
+            .and_then(|(id, _)| d.field(id, "source"))
             .and_then(|id| d.field(id, "filter"))
             .filter(|&id| !matches!(d.nodes()[id], N::Null));
-        for id in when.into_iter().chain(compute).chain(filter) {
-            *total = total
-                .checked_add(text(d, id)?.len())
-                .filter(|&count| count <= limit)
-                .ok_or(PrepareError::Limit("numeric_bytes"))?;
+        for (id, expression_path) in when
+            .map(|id| (id, format!("{prefix}.when")))
+            .into_iter()
+            .chain(compute.map(|id| {
+                (
+                    id,
+                    format!("{}.compute.expr", child_path.as_deref().unwrap()),
+                )
+            }))
+            .chain(filter.map(|id| {
+                (
+                    id,
+                    format!("{}.source.filter", child_path.as_deref().unwrap()),
+                )
+            }))
+        {
+            compiler_limits::charge(
+                "numeric_bytes",
+                total,
+                text(d, id)?.len(),
+                limit,
+                Some(&expression_path),
+            )?;
         }
-        if let Some(child) = child {
-            charge(d, child, total, limit, depth + 1)?;
+        if let Some((child, _)) = child {
+            charge(
+                d,
+                child,
+                child_path.as_deref().unwrap(),
+                total,
+                limit,
+                depth + 1,
+            )?;
         }
     }
     Ok(())
