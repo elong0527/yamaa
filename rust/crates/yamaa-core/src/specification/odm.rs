@@ -574,11 +574,7 @@ pub(super) fn context_findings(
                             }
                             _ => ConditionCode::SourceFilterReference,
                         };
-                        let fields = if code == ConditionCode::SourceFilterReference {
-                            vec![("identifier", identifier), ("dataset", site.dataset)]
-                        } else {
-                            vec![("identifier", identifier)]
-                        };
+                        let fields = [("identifier", identifier), ("dataset", site.dataset)];
                         findings.push(PreflightFinding::Odm(
                             source_expressions::SourceFinding::new(code, &path, &fields)
                                 .diagnostic(),
