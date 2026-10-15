@@ -130,7 +130,12 @@ pub(crate) fn validate_activation<E>(
                 .len()
         })
         .sum::<usize>();
-    let bound = observed.lock == LockObservation::Verified
+    let lock_ready = if run.environment().lock().is_some() {
+        observed.lock == LockObservation::Verified
+    } else {
+        observed.lock == LockObservation::NotRequested
+    };
+    let bound = lock_ready
         && observed.bindings.len() == selected.len()
         && observed
             .bindings
@@ -159,7 +164,7 @@ pub(crate) fn validate_activation<E>(
         }
         ActivationBoundary::Failed(Failure::Bindings(failures)) => {
             if failures.is_empty()
-                || observed.lock != LockObservation::Verified
+                || !lock_ready
                 || observed.bindings.len() != selected.len()
                 || !observed.tests.is_empty()
                 || observed.bindings.iter().any(|binding| {

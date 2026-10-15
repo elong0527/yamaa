@@ -3,7 +3,7 @@
 use crate::{
     file_application::{self, Failure},
     file_project::{self, FileProject},
-    project_source::{CaptureFailure, Failure as EnvironmentFailure},
+    project_source::Failure as EnvironmentFailure,
     specification_source::Error as SourceError,
 };
 use yamaa_core::{project_function::Language, specification::PrepareError};
@@ -111,41 +111,49 @@ fn environment_failure(
         EnvironmentFailure::Rejected(rejected) => {
             let mut issues = match diagnostics::admission(rejected) {
                 Ok(issues) => issues,
-                Err(_) => return refused("environment"),
+                Err(error) => return environment_projection_failure(error),
             };
             for projection in [
                 diagnostics::scalar_sources(rejected),
                 diagnostics::schema_sources(rejected),
+                diagnostics::capture_sources(rejected),
             ] {
                 match projection {
                     Ok(rows) => issues.extend(rows),
-                    Err(_) => return refused("environment"),
+                    Err(error) => return environment_projection_failure(error),
                 }
             }
-            for source in &rejected.sources {
-                match &source.error {
-                    CaptureFailure::Port(error) | CaptureFailure::Interrupted(error) => {
-                        issues.extend(file_application::resource_failure("environment", error))
-                    }
-                    CaptureFailure::Structural(SourceError::Findings(_))
-                    | CaptureFailure::Scalar { .. } => (),
-                    _ => issues.extend(file_application::rejected(
-                        "environment",
-                        "metadata_boundary",
-                    )),
-                }
-            }
-
             Ok(issues)
         }
         EnvironmentFailure::Interrupted { error, .. } => {
             return file_application::resource_failure("environment", error)
         }
+        EnvironmentFailure::Root(error @ SourceError::Decode { identity, .. }) => {
+            diagnostics::root_boundary(error, identity)
+        }
+        EnvironmentFailure::Root(SourceError::Limit(error)) => {
+            return environment_projection_failure(diagnostics::Error::Limit(*error))
+        }
         EnvironmentFailure::Root(_) => {
             return file_application::rejected("environment", "environment_boundary")
         }
     };
-    projected.unwrap_or_else(|_| refused("environment"))
+    projected.unwrap_or_else(environment_projection_failure)
+}
+fn environment_projection_failure(error: crate::project_environment_diagnostics::Error) -> Failure {
+    match error {
+        crate::project_environment_diagnostics::Error::Limit(error) => {
+            file_application::resource_rejected(
+                "environment",
+                "resource_limit",
+                error.resource,
+                error.limit,
+                error.actual,
+                Vec::new(),
+            )
+        }
+        _ => refused("environment"),
+    }
 }
 pub fn check(specification: &str, environment: &str, host: Language) -> Failure {
     crate::issue_rows::collect(
@@ -169,7 +177,7 @@ fn workflow_issues(error: &crate::file_workflow::Error, host: Language) -> Failu
         crate::producer_check::Error::Original(crate::file_workflow::Error::Schema(_)) => {
             file_application::rejected("prepare", "shipped_schema")
         }
-        crate::producer_check::Error::Original(error) => workflow_failure(error),
+        crate::producer_check::Error::Original(error) => workflow_failure(error, host),
         crate::producer_check::Error::Projection(_) => refused("check"),
     })
 }
@@ -219,19 +227,14 @@ pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Lan
         },
     }
 }
-fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
+fn workflow_failure(error: &crate::file_workflow::Error, host: Language) -> Failure {
     use crate::{file_graph::Error as G, file_preparation::Error as D, file_workflow::Error as W};
     match error {
         W::Environment(environment) => match environment.error() {
             file_project::Error::Resource(error) => {
                 file_application::resource_failure("environment", error)
             }
-            file_project::Error::Environment(EnvironmentFailure::Interrupted { error, .. }) => {
-                file_application::resource_failure("environment", error)
-            }
-            file_project::Error::Environment(EnvironmentFailure::Root(_)) => {
-                file_application::rejected("environment", "environment_boundary")
-            }
+            file_project::Error::Environment(error) => environment_failure(error, host),
             _ => file_application::rejected("environment", "metadata_boundary"),
         },
         W::Graph(graph) => match graph.error() {

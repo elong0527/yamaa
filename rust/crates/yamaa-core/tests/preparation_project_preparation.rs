@@ -613,10 +613,7 @@ mod preparation {
             };
             assert_eq!(effects(&log), ["decode Environment empty.yaml"]);
             assert_eq!(rejected.draft.functions, Some(vec![]));
-            assert_eq!(
-                rejected.admission,
-                Some(vec![Finding::MissingLanguage, Finding::MissingLock])
-            );
+            assert_eq!(rejected.admission, Some(vec![Finding::MissingLanguage]));
         }
 
         #[test]

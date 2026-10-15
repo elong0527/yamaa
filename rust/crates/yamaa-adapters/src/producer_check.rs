@@ -192,20 +192,28 @@ fn environment_issues<'a>(
     host: yamaa_core::project_function::Language,
 ) -> Result<Vec<Issue>, Error<'a>> {
     use crate::project_environment_diagnostics as D;
-    use crate::project_source::{CaptureFailure as C, Failure as F};
+    use crate::project_source::Failure as F;
     use crate::specification_source::Error as S;
+    let projection = |error| match error {
+        D::Error::Limit(_) => Error::Original(owner),
+        _ => invalid(),
+    };
     if let crate::file_project::Error::Resource(resource) = cause {
         use yamaa_core::project_environment_diagnostics::ReadFailure;
         let failure = match resource {
-            crate::file_resources::Error::Missing => ReadFailure::Missing,
-            crate::file_resources::Error::Unreadable => ReadFailure::Unreadable,
-            _ => return Err(Error::Original(owner)),
+            crate::file_resources::Error::Missing => Some(ReadFailure::Missing),
+            crate::file_resources::Error::Unreadable => Some(ReadFailure::Unreadable),
+            crate::file_resources::Error::Limit(_) => return Err(Error::Original(owner)),
+            _ => None,
         };
         let file_workflow::Error::Environment(environment) = owner else {
             return Err(invalid());
         };
         let path = environment.environment().ok_or_else(invalid)?;
-        return Ok(vec![issue(failure.diagnostic(path), None)?]);
+        return match failure {
+            Some(failure) => Ok(vec![issue(failure.diagnostic(path), None)?]),
+            None => D::root_resource(resource, path).map_err(projection),
+        };
     }
     let crate::file_project::Error::Environment(cause) = cause else {
         return Err(Error::Original(owner));
@@ -213,28 +221,26 @@ fn environment_issues<'a>(
     let mut issues = Vec::new();
     match cause {
         F::Root(S::Findings(captured)) => {
-            issues.extend(D::schema_root(captured).map_err(|_| invalid())?)
+            issues.extend(D::schema_root(captured).map_err(projection)?)
+        }
+        F::Root(error) => {
+            let file_workflow::Error::Environment(environment) = owner else {
+                return Err(invalid());
+            };
+            let written = environment.environment().ok_or_else(invalid)?;
+            issues.extend(D::root_boundary(error, written).map_err(projection)?);
         }
         F::RootScalar { root, findings } => {
-            issues.extend(D::scalar_root_with_host(root, findings, host).map_err(|_| invalid())?)
+            issues.extend(D::scalar_root_with_host(root, findings, host).map_err(projection)?)
         }
         F::Rejected(rejected) => {
-            // A complete typed result requires every capture cause to be supported.
-            // Opaque/native/transport failures retain their exact original owner.
-            if rejected.sources.iter().any(|source| {
-                !matches!(
-                    &source.error,
-                    C::Scalar { .. } | C::Structural(S::Findings(_))
-                )
-            }) {
-                return Err(Error::Original(owner));
-            }
             for rows in [
                 D::admission(rejected),
                 D::scalar_sources(rejected),
                 D::schema_sources(rejected),
+                D::capture_sources(rejected),
             ] {
-                issues.extend(rows.map_err(|_| invalid())?);
+                issues.extend(rows.map_err(projection)?);
             }
         }
         _ => return Err(Error::Original(owner)),

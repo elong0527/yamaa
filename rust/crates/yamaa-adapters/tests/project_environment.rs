@@ -266,6 +266,87 @@ mod project {
         }
 
         #[test]
+        fn retained_structural_limit_keeps_exact_facts_and_refuses_earlier_missing_rows() {
+            use yamaa_adapters::{
+                file_project,
+                file_resources::Error as ResourceError,
+                project_application::{self, Error as ApplicationError},
+                specification_source::Error as SourceError,
+            };
+            use yamaa_core::limits::{LimitExceeded, Limits};
+
+            struct RefusingPort {
+                reads: usize,
+            }
+            impl CapturePort for RefusingPort {
+                type Error = ResourceError;
+                fn capture(&mut self, _: Request<'_>) -> Result<Reply, Self::Error> {
+                    self.reads += 1;
+                    Err(ResourceError::Missing)
+                }
+            }
+            let mut port = RefusingPort { reads: 0 };
+            let root = source(
+                "held/environment.yaml",
+                "schema_version: '1.0'\ncodelists: [missing.yaml, ct.yaml]\n",
+            );
+            let Failure::Rejected(mut rejected) =
+                project_source::prepare(schema(), root, Language::Python, &mut port).unwrap_err()
+            else {
+                panic!("retained metadata capture owner")
+            };
+            let expected = LimitExceeded {
+                resource: "spec_bytes",
+                limit: Limits::SPEC_BYTES,
+                actual: Some(Limits::SPEC_BYTES + 1),
+            };
+            // Supply the public retained codec-refusal shape directly: native
+            // fixed byte limits normally stop this at the resource reader.
+            rejected.sources[1].error = CaptureFailure::Structural(SourceError::Limit(expected));
+            let error = ApplicationError::Project(file_project::Error::Environment(
+                Failure::Rejected(rejected),
+            ));
+            let ApplicationError::Project(file_project::Error::Environment(Failure::Rejected(
+                owner,
+            ))) = &error
+            else {
+                unreachable!()
+            };
+            assert_eq!(owner.sources.len(), 2);
+            assert!(matches!(
+                owner.sources[0].error,
+                CaptureFailure::Port(ResourceError::Missing)
+            ));
+            assert!(matches!(
+                owner.sources[1].error,
+                CaptureFailure::Structural(SourceError::Limit(limit)) if limit == expected
+            ));
+            let held_root = owner.root.source().bytes.as_ptr();
+            let held_sources = owner.sources.as_ptr();
+            for _ in 0..2 {
+                let rows = project_application::failure(&error, Language::Python);
+                assert_eq!(
+                    rows,
+                    [Issue {
+                        phase: "engine".into(),
+                        condition: "engine_rejected".into(),
+                        requirement: None,
+                        spec_paths: vec![],
+                        context: json!({
+                            "stage": "environment", "code": "resource_limit",
+                            "resource": "spec_bytes", "limit": Limits::SPEC_BYTES,
+                            "actual": Limits::SPEC_BYTES + 1,
+                        })
+                        .to_string(),
+                    }],
+                );
+                assert_eq!(owner.root.source().bytes.as_ptr(), held_root);
+                assert_eq!(owner.sources.as_ptr(), held_sources);
+                assert_eq!(port.reads, 2);
+            }
+        }
+
+        #[test]
         fn original_root_temporal_and_wide_scalar_report_keeps_independent_headers_without_capture_effects(
         ) {
             let allocation = Rc::new(Cell::new(19));
@@ -290,12 +371,6 @@ mod project {
             };
             let wide: Value = serde_json::from_str("123456789012345678901234567890").unwrap();
             let want = [
-                expected(
-                    "project_environment_invalid",
-                    "REQ-0695",
-                    "lock",
-                    json!({"reason":"missing_lock","source":"held/environment.yaml","entry":"held/environment.yaml","environment_path":"$"}),
-                ),
                 expected(
                     "runner_language_mismatch",
                     "REQ-0696",
