@@ -814,7 +814,7 @@ pub(super) fn bind(
             })
     };
     findings.extend(
-        static_types::aggregate_kinds(compiled, kind)?
+        static_types::aggregate_kinds(compiled, kind, matches!(phase, Phase::Row { .. }))?
             .into_iter()
             .map(BindFinding::AggregateDiagnostic),
     );

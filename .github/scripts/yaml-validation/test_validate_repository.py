@@ -76,6 +76,24 @@ RULE_CHECK = importlib.util.module_from_spec(RULE_SPEC)
 RULE_SPEC.loader.exec_module(RULE_CHECK)
 
 
+class TestSemanticFinding(unittest.TestCase):
+    def test_native_findings_keep_structured_message_and_own_their_context(self):
+        row = {'phase': 'validation', 'condition': 'unknown_field',
+            'requirement': 'REQ-0103', 'spec_paths': ['columns.X'],
+            'context': {'identifier': 'SRC.UNKNOWN'}, 'span': [1, 12]}
+        finding = CONTROLS.Finding(row, 'spec')
+        self.assertIsInstance(finding, OWNER_VALIDATION_DIAGNOSTICS.ValidationDiagnostic)
+        self.assertEqual(str(finding),
+            'ERROR: spec.columns.X: unknown_field: {"identifier": "SRC.UNKNOWN"}')
+        self.assertEqual(finding.message, 'unknown_field: {"identifier": "SRC.UNKNOWN"}')
+        self.assertEqual(finding.path, 'spec.columns.X')
+        self.assertEqual(finding.span, (1, 12))
+        self.assertEqual(finding.requirement, 'REQ-0103')
+        self.assertEqual(finding.phase, 'validation')
+        row['context']['identifier'] = 'changed'
+        self.assertEqual(finding.context, {'identifier': 'SRC.UNKNOWN'})
+
+
 class TestYamlLoader(unittest.TestCase):
     def test_yaml_12_boolean_resolution(self):
         loaded = yaml.load(
@@ -4048,10 +4066,47 @@ class TestSpecContracts(unittest.TestCase):
         message = "\n".join(errors)
         self.assertEqual([error.condition for error in errors], ['unpaired_fields'])
         self.assertEqual(errors[0].context, {'intermediate': 'FIRST', 'declared': ['order_by'], 'missing': ['keep']})
-        spec.pop('intermediates')
-        remaining = CONTROLS.contracts(spec, 'example/spec.yaml')
-        self.assertTrue(remaining)
-        self.assertIn('verifications', '\n'.join(remaining))
+        # Observe every original independent defect with valid surrounding
+        # declarations. A prior pairing/schema refusal cannot stand in for the
+        # row-count, cardinality, duplicate-id and column-type assertions.
+        base = {
+            'domain': 'ADSL', 'input': {'DM': 'dm.csv'}, 'base': 'DM',
+            'keys': ['USUBJID'], 'output': {'columns': ['USUBJID']},
+            'columns': [{'name': 'USUBJID', 'type': 'str',
+                'derivation': {'source': 'DM.USUBJID'}}],
+        }
+        cases = [
+            ({'verifications': [{'row_count': {}}]},
+             'verifications[0].row_count', 'invalid_declaration',
+             {'reason': 'row_count requires one bound'}),
+            ({'verifications': [{'all_or_none': {
+                'id': 'complete', 'columns': ['USUBJID']}}]},
+             'verifications[0].all_or_none', 'invalid_declaration',
+             {'reason': 'all_or_none names two distinct columns'}),
+            ({'columns': [base['columns'][0],
+                {'name': 'AGE', 'type': 'int', 'derivation': {'literal': 1}}],
+              'verifications': [
+                {'all_or_none': {'id': 'complete', 'columns': ['USUBJID', 'AGE']}},
+                {'assert': {'id': 'complete', 'require': 'TRUE'}}]},
+             'verifications[1].assert', 'duplicate_identifier',
+             {'reason': "verification id 'complete' repeats verifications[0].all_or_none"}),
+            ({'columns': [{**base['columns'][0],
+                'verifications': [{'range': {'min': 1}}]}]},
+             'columns.USUBJID.verifications[0].range', 'invalid_declaration',
+             {'reason': 'a str column does not admit this verification'}),
+            ({'columns': [{**base['columns'][0], 'type': 'int',
+                'derivation': {'literal': 1}, 'verifications': [{'range': {}}]}]},
+             'columns.USUBJID.verifications[0].range', 'invalid_declaration',
+             {'reason': 'range requires one bound'}),
+        ]
+        for changes, path, condition, context in cases:
+            with self.subTest(path=path, context=context):
+                [finding] = CONTROLS.contracts(
+                    {**copy.deepcopy(base), **changes}, 'example/spec.yaml'
+                )
+                self.assertEqual(finding.path, 'example/spec.yaml.' + path)
+                self.assertEqual(finding.condition, condition)
+                self.assertEqual(finding.context, context)
 
     def test_a_row_may_override_an_odm_column_derivation(self):
         # REQ-1260: the item read is a default in the row that uses its own

@@ -1889,12 +1889,6 @@ local({
   on.exit(unlink(directory,recursive=TRUE))
   for(name in names(key_truth)) {
     truth <- key_truth[[name]]
-    # REQ-0190 now admits predicate types before cell-dependent key reads.
-    # Preserve the historical fixture and author the current finding here.
-    if(identical(name,"dependency_before_bad_filter")) truth$issues <- list(
-      phase="validation",condition="incompatible_input_type",requirement="REQ-0190",
-      spec_paths=list("intermediates[0].filter"),context='{"left_type":"int","right_type":"str"}')
-
     stopifnot(file.copy(file.path(root,"keys",name),directory,recursive=TRUE))
     case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
     written <- rawfile(entry);output <- file.path(case,"out.csv")
@@ -1920,7 +1914,7 @@ local({
       stopifnot(!file.exists(output),identical(rawfile(entry),written))
     }
   }
-  cat("all 19 scalar-key controls match current complete ordered findings, CSV and handler ledgers twice without Python passed\n")
+  cat("all 19 unchanged scalar-key captures match complete ordered findings, CSV and handler ledgers twice without Python passed\n")
 })
 
 # Compare complete independently authored ledgers while ignoring only JSON object
