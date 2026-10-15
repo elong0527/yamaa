@@ -1,150 +1,36 @@
-use yamaa_core::regex::{
-    CompileError, CompileLimits, MatchBudget, MatchError, MatchLimits, Pattern, Resource,
-};
+use yamaa_core::regex::{CompileError, MatchError, Pattern, Resource};
 
-/// Successful matches cannot repeatedly reset the surrounding work/storage scope.
+/// Each match owns its fixed step guard; successful earlier matches do not consume it.
 #[test]
-fn cumulative_match_work_storage_and_fresh_retry() {
+fn each_match_has_one_fresh_step_scope() {
     let compiled = pattern("a+");
-    let limits = MatchLimits::default();
-    let mut measured = MatchBudget::new(limits);
-    assert_eq!(
-        compiled
-            .search_with_budget("aaaa", limits, &mut measured)
-            .unwrap()
-            .unwrap()
-            .groups,
-        [Some("aaaa")]
-    );
-    let cost = measured.used();
-    assert!(cost.work > 0 && cost.state_cells > 0);
-    for resource in [Resource::Work, Resource::StateCells] {
-        let mut shared_limits = limits;
-        let ceiling = if resource == Resource::Work {
-            shared_limits.work = 2 * cost.work - 1;
-            shared_limits.work
-        } else {
-            shared_limits.state_cells = 2 * cost.state_cells - 1;
-            shared_limits.state_cells
-        };
-        let mut shared = MatchBudget::new(shared_limits);
-        assert!(compiled
-            .search_with_budget("aaaa", limits, &mut shared)
-            .unwrap()
-            .is_some());
+    for _ in 0..3 {
         assert_eq!(
-            compiled
-                .search_with_budget("aaaa", limits, &mut shared)
-                .unwrap_err(),
-            MatchError {
-                resource,
-                limit: ceiling
-            }
+            compiled.search("aaaa").unwrap().unwrap().groups,
+            [Some("aaaa")]
         );
-        let used = shared.used();
-        assert!(used.work >= cost.work && used.state_cells >= cost.state_cells);
-        assert!(used.work <= shared_limits.work && used.state_cells <= shared_limits.state_cells);
-        let mut retry = MatchBudget::new(limits);
-        assert!(compiled
-            .search_with_budget("aaaa", limits, &mut retry)
-            .unwrap()
-            .is_some());
-        assert_eq!(retry.used(), cost);
     }
 }
 
-/// Subject quotas use UTF-8 bytes across both modes; local limits and no-match stay distinct.
+/// Unicode subjects retain exact capture text in both matching modes.
 #[test]
-fn cumulative_subject_bytes_and_failure_prefixes() {
+fn unicode_subjects_keep_exact_scalar_captures() {
     let compiled = pattern(".");
-    let limits = MatchLimits::default();
-    let mut shared = MatchBudget::new(MatchLimits {
-        subject_bytes: 7,
-        ..limits
-    });
+    assert_eq!(compiled.search("😀").unwrap().unwrap().groups, [Some("😀")]);
     assert_eq!(
-        compiled
-            .search_with_budget("😀", limits, &mut shared)
-            .unwrap()
-            .unwrap()
-            .groups,
+        compiled.full_match("😀").unwrap().unwrap().groups,
         [Some("😀")]
     );
-    let before = shared.used();
-    assert_eq!(before.subject_bytes, 4);
-    assert_eq!(
-        compiled
-            .full_match_with_budget("😀", limits, &mut shared)
-            .unwrap_err(),
-        MatchError {
-            resource: Resource::SubjectBytes,
-            limit: 7
-        }
-    );
-    assert_eq!(shared.used(), before);
-    assert_eq!(
-        compiled
-            .search_with_budget(
-                "x",
-                MatchLimits {
-                    subject_bytes: 0,
-                    ..limits
-                },
-                &mut shared
-            )
-            .unwrap_err(),
-        MatchError {
-            resource: Resource::SubjectBytes,
-            limit: 0
-        }
-    );
-    assert_eq!(shared.used(), before);
-    let mut fresh = MatchBudget::new(MatchLimits {
-        subject_bytes: 8,
-        ..limits
-    });
-    assert!(compiled
-        .search_with_budget("😀", limits, &mut fresh)
-        .unwrap()
-        .is_some());
-    assert!(compiled
-        .full_match_with_budget("😀", limits, &mut fresh)
-        .unwrap()
-        .is_some());
-    assert_eq!(fresh.used().subject_bytes, 8);
-
-    let mut failed = MatchBudget::new(MatchLimits { work: 0, ..limits });
-    assert_eq!(
-        compiled
-            .search_with_budget("x", limits, &mut failed)
-            .unwrap_err(),
-        MatchError {
-            resource: Resource::Work,
-            limit: 0
-        }
-    );
-    assert_eq!(failed.used().subject_bytes, 1);
-    assert_eq!(failed.used().work, 0);
-    assert!(failed.used().state_cells > 0);
-    let mut fresh = MatchBudget::new(limits);
-    assert!(pattern("a")
-        .search_with_budget("b", limits, &mut fresh)
-        .unwrap()
-        .is_none());
-    assert!(fresh.used().work > 0);
-    assert_eq!(fresh.used().subject_bytes, 1);
+    assert!(pattern("a").search("b").unwrap().is_none());
 }
 
 /// Compile a test pattern under production defaults.
 fn pattern(text: &str) -> Pattern {
-    Pattern::compile(text, CompileLimits::default()).unwrap()
+    Pattern::compile(text).unwrap()
 }
 /// Observe borrowed capture text without converting missing groups to empty strings.
 fn captures<'a>(text: &str, subject: &'a str) -> Option<Vec<Option<&'a str>>> {
-    pattern(text)
-        .search(subject, MatchLimits::default())
-        .unwrap()
-        .map(|m| m.groups)
+    pattern(text).search(subject).unwrap().map(|m| m.groups)
 }
 
 /// Written truth covers leftmost order, greedy/lazy branching and full-match continuation.
@@ -152,11 +38,7 @@ fn captures<'a>(text: &str, subject: &'a str) -> Option<Vec<Option<&'a str>>> {
 fn backtracking_order_and_empty_matches() {
     assert_eq!(captures("a|ab", "ab"), Some(vec![Some("a")]));
     assert_eq!(
-        pattern("a|ab")
-            .full_match("ab", MatchLimits::default())
-            .unwrap()
-            .unwrap()
-            .groups,
+        pattern("a|ab").full_match("ab").unwrap().unwrap().groups,
         vec![Some("ab")]
     );
     assert_eq!(captures("a+?", "aaa"), Some(vec![Some("a")]));
@@ -243,7 +125,7 @@ fn lookbehind_backreference_width_rejects_proven_variation() {
     ] {
         assert!(
             matches!(
-                Pattern::compile(source, CompileLimits::default()),
+                Pattern::compile(source),
                 Err(CompileError::Invalid {
                     reason: "variable-length lookbehind",
                     ..
@@ -287,7 +169,7 @@ fn lookbehind_width_preserves_repeat_capture_lifecycle() {
     ] {
         assert!(
             matches!(
-                Pattern::compile(source, CompileLimits::default()),
+                Pattern::compile(source),
                 Err(CompileError::Invalid {
                     reason: "variable-length lookbehind",
                     ..
@@ -346,7 +228,7 @@ fn lookbehind_width_validates_nested_and_unexecuted_assertions() {
     ] {
         assert!(
             matches!(
-                Pattern::compile(source, CompileLimits::default()),
+                Pattern::compile(source),
                 Err(CompileError::Invalid {
                     reason: "variable-length lookbehind",
                     ..
@@ -356,7 +238,7 @@ fn lookbehind_width_validates_nested_and_unexecuted_assertions() {
         );
     }
     assert_eq!(
-        Pattern::compile("\u{e9}(a+)(?<=\\1)b", CompileLimits::default()).unwrap_err(),
+        Pattern::compile("\u{e9}(a+)(?<=\\1)b").unwrap_err(),
         CompileError::Invalid {
             byte: 6,
             reason: "variable-length lookbehind"
@@ -364,62 +246,19 @@ fn lookbehind_width_validates_nested_and_unexecuted_assertions() {
     );
 }
 
-/// Exponential capture choices stop at caller budgets, and a fresh compile can retry.
+/// Fixed repetition widths are calculated symbolically.
 #[test]
-fn lookbehind_width_analysis_budgets_and_retry() {
-    let source = r"(a)(?<=\1)b";
-    for (limits, expected) in [
-        (
-            CompileLimits {
-                width_work: 0,
-                ..CompileLimits::default()
-            },
-            Resource::WidthWork,
-        ),
-        (
-            CompileLimits {
-                width_cells: 0,
-                ..CompileLimits::default()
-            },
-            Resource::WidthCells,
-        ),
+fn fixed_lookbehind_counts_are_symbolic_without_artificial_width_ceilings() {
+    for source in [
+        r"(a)(?<=\1)b",
+        r"(a){1000000}(?<=\1)",
+        r"(a)(?<=\1{1000000})",
+        r"(aa)(?<=\1{1000000})",
     ] {
-        assert!(matches!(Pattern::compile(source, limits),
-            Err(CompileError::Limit { resource, limit: 0 }) if resource == expected));
-        assert!(Pattern::compile(source, CompileLimits::default()).is_ok());
+        assert!(Pattern::compile(source).is_ok(), "{source}");
     }
-    let choices = "(?:(a)|b)".repeat(16) + r"(?<=\1)";
-    for (limits, expected) in [
-        (
-            CompileLimits {
-                width_work: 1000,
-                ..CompileLimits::default()
-            },
-            Resource::WidthWork,
-        ),
-        (
-            CompileLimits {
-                width_cells: 1000,
-                ..CompileLimits::default()
-            },
-            Resource::WidthCells,
-        ),
-    ] {
-        assert!(matches!(Pattern::compile(&choices, limits),
-            Err(CompileError::Limit { resource, limit: 1000 }) if resource == expected));
-    }
-    // Symbolic count handling must not unroll a million repetitions.
-    assert!(Pattern::compile(r"(a){1000000}(?<=\1)", CompileLimits::default()).is_ok());
-    assert!(Pattern::compile(r"(a)(?<=\1{1000000})", CompileLimits::default()).is_ok());
-    assert!(matches!(
-        Pattern::compile(r"(aa)(?<=\1{1000000})", CompileLimits::default()),
-        Err(CompileError::Limit {
-            resource: Resource::Width,
-            ..
-        })
-    ));
     let flat = "a".repeat(3000) + r"(a)(?<=\1)";
-    assert!(Pattern::compile(&flat, CompileLimits::default()).is_ok());
+    assert!(Pattern::compile(&flat).is_ok());
 }
 
 /// An unrelated reference must not make a statically fixed assertion need analysis.
@@ -427,26 +266,11 @@ fn lookbehind_width_analysis_budgets_and_retry() {
 fn fixed_lookbehind_does_not_analyze_unrelated_capture_paths() {
     let choices = "(?:(a)|b)".repeat(16) + r"(?<=c)\1";
     for source in [&choices, r"(a{1000})\1{2000}(?<=b)", r"(a)(?<=(?=\1))a"] {
-        assert!(
-            Pattern::compile(source, CompileLimits::default()).is_ok(),
-            "{source}"
-        );
-        assert!(
-            Pattern::compile(
-                source,
-                CompileLimits {
-                    width_work: 0,
-                    width_cells: 0,
-                    ..CompileLimits::default()
-                }
-            )
-            .is_ok(),
-            "{source}"
-        );
+        assert!(Pattern::compile(source).is_ok(), "{source}");
     }
     // A fixed outer assertion must not hide a dependent nested assertion.
     assert!(matches!(
-        Pattern::compile(r"(a+)(?<=(?<=\1))b", CompileLimits::default()),
+        Pattern::compile(r"(a+)(?<=(?<=\1))b"),
         Err(CompileError::Invalid {
             reason: "variable-length lookbehind",
             ..
@@ -458,7 +282,7 @@ fn fixed_lookbehind_does_not_analyze_unrelated_capture_paths() {
 #[test]
 fn lookbehind_width_agrees_with_independent_count_truth() {
     let assert_fixed = |source: &str, fixed: bool| {
-        let compiled = Pattern::compile(source, CompileLimits::default());
+        let compiled = Pattern::compile(source);
         if fixed {
             assert!(compiled.is_ok(), "{source}: {compiled:?}");
         } else {
@@ -564,10 +388,7 @@ fn invalid_patterns() {
         r"\",
     ] {
         assert!(
-            matches!(
-                Pattern::compile(text, CompileLimits::default()),
-                Err(CompileError::Invalid { .. })
-            ),
+            matches!(Pattern::compile(text), Err(CompileError::Invalid { .. })),
             "{text}"
         );
     }
@@ -638,17 +459,14 @@ fn unicode_group_names_reject_invalid_positions_and_aliases() {
     ] {
         for source in [format!("(?<{name}>a)"), format!(r"\k<{name}>(?<x>a)")] {
             assert!(
-                matches!(
-                    Pattern::compile(&source, CompileLimits::default()),
-                    Err(CompileError::Invalid { .. })
-                ),
+                matches!(Pattern::compile(&source), Err(CompileError::Invalid { .. })),
                 "{source}"
             );
         }
     }
     for source in [r"(?<x>a)(?<\u0078>b)", "(?<\u{e9}>a)(?<\\u00E9>b)"] {
         assert!(matches!(
-            Pattern::compile(source, CompileLimits::default()),
+            Pattern::compile(source),
             Err(CompileError::Invalid {
                 reason: "duplicate group name",
                 ..
@@ -656,7 +474,7 @@ fn unicode_group_names_reject_invalid_positions_and_aliases() {
         ));
     }
     assert_eq!(
-        Pattern::compile("(?<\u{e9}\\u0030->a)", CompileLimits::default()).unwrap_err(),
+        Pattern::compile("(?<\u{e9}\\u0030->a)").unwrap_err(),
         CompileError::Invalid {
             byte: 11,
             reason: "invalid group name"
@@ -666,208 +484,75 @@ fn unicode_group_names_reject_invalid_positions_and_aliases() {
 
 /// Compilation and matching enforce independent budgets; failure cannot poison the next run.
 #[test]
-fn resource_refusal_and_retry() {
-    for (source, limits, resource) in [
-        (
-            "a",
-            CompileLimits {
-                bytes: 0,
-                ..CompileLimits::default()
-            },
-            Resource::PatternBytes,
-        ),
-        (
-            "ab",
-            CompileLimits {
-                nodes: 1,
-                ..CompileLimits::default()
-            },
-            Resource::Nodes,
-        ),
-        (
-            "(a)",
-            CompileLimits {
-                groups: 0,
-                ..CompileLimits::default()
-            },
-            Resource::Groups,
-        ),
-        (
-            "((a))",
-            CompileLimits {
-                depth: 1,
-                ..CompileLimits::default()
-            },
-            Resource::Depth,
-        ),
-        (
-            "a{10}",
-            CompileLimits {
-                repetition: 9,
-                ..CompileLimits::default()
-            },
-            Resource::Repetition,
-        ),
-    ] {
-        assert!(
-            matches!(Pattern::compile(source,limits),Err(CompileError::Limit {resource:r,..}) if r==resource)
-        );
+fn fixed_depth_and_per_match_steps_refuse_only_their_real_boundaries() {
+    for depth in [127, 128] {
+        let source = "(".repeat(depth) + "a" + &")".repeat(depth);
+        assert!(Pattern::compile(&source).is_ok());
     }
-    let deep = "(".repeat(65) + "a" + &")".repeat(65);
+    let source = "(".repeat(129) + "a" + &")".repeat(129);
     assert!(matches!(
-        Pattern::compile(
-            &deep,
-            CompileLimits {
-                depth: usize::MAX,
-                ..CompileLimits::default()
-            }
-        ),
+        Pattern::compile(&source),
         Err(CompileError::Limit {
             resource: Resource::Depth,
-            limit: 64
+            limit: 128
         })
     ));
-    let compiled = pattern("(a+)+$");
-    for (limits, resource) in [
-        (
-            MatchLimits {
-                subject_bytes: 0,
-                ..MatchLimits::default()
-            },
-            Resource::SubjectBytes,
-        ),
-        (
-            MatchLimits {
-                work: 8,
-                ..MatchLimits::default()
-            },
-            Resource::Work,
-        ),
-        (
-            MatchLimits {
-                state_cells: 2,
-                ..MatchLimits::default()
-            },
-            Resource::StateCells,
-        ),
-    ] {
-        assert!(
-            matches!(compiled.search("aaaaaaaaaaaaab",limits),Err(MatchError {resource:r,..}) if r==resource)
-        );
-    }
+    // Each literal candidate consumes one start and one interpretation step.
+    let literal = pattern("z");
+    assert_eq!(literal.search(&"a".repeat(499_998)), Ok(None));
+    assert_eq!(literal.search(&"a".repeat(499_999)), Ok(None));
     assert_eq!(
-        compiled
-            .search("a", MatchLimits::default())
-            .unwrap()
-            .unwrap()
-            .groups,
+        literal.search(&"a".repeat(500_000)),
+        Err(MatchError {
+            resource: Resource::Work,
+            limit: 1_000_000
+        })
+    );
+    let compiled = pattern("(a+)+$");
+    assert_eq!(
+        compiled.search(&("a".repeat(30) + "!")),
+        Err(MatchError {
+            resource: Resource::Work,
+            limit: 1_000_000
+        })
+    );
+    assert_eq!(
+        compiled.search("a").unwrap().unwrap().groups,
         vec![Some("a"), Some("a")]
     );
 }
 
-/// Width arithmetic must refuse by policy rather than misclassify a fixed-width pattern.
+/// Machine-width overflow is a capability refusal rather than a grammar finding.
 #[test]
-fn fixed_width_zero_repetition_and_overflow() {
+fn fixed_width_zero_repetition_and_addressable_range() {
     assert_eq!(captures(r"(?<=(?:a|bc){0})x", "x"), Some(vec![Some("x")]));
-    let limits = CompileLimits {
-        width: 8,
-        ..CompileLimits::default()
-    };
-    assert!(matches!(
-        Pattern::compile(r"(?:a{3}){3}", limits),
-        Err(CompileError::Limit {
-            resource: Resource::Width,
-            limit: 8
-        })
-    ));
+    assert!(Pattern::compile(r"(?:a{3}){3}").is_ok());
     let large = format!("(?:a{{{}}}){{2}}", usize::MAX);
     assert!(matches!(
-        Pattern::compile(
-            &large,
-            CompileLimits {
-                repetition: usize::MAX,
-                width: usize::MAX,
-                ..CompileLimits::default()
-            }
-        ),
-        Err(CompileError::Limit {
-            resource: Resource::Width,
+        Pattern::compile(&large),
+        Err(CompileError::Unsupported {
+            feature: "pattern width exceeds addressable range",
             ..
         })
     ));
 }
 
-/// Flat patterns and nested assertions spend one shared budget without native-stack growth per row.
+/// Flat patterns and nested assertions retain matching order without quota plumbing.
 #[test]
-fn large_flat_patterns_and_cumulative_assertion_work() {
+fn large_flat_patterns_and_nested_assertions_keep_their_match_results() {
     let source = "a".repeat(3000);
-    let compiled = pattern(&source);
-    assert!(compiled
-        .full_match(&source, MatchLimits::default())
-        .unwrap()
-        .is_some());
+    assert!(pattern(&source).full_match(&source).unwrap().is_some());
     let nested = "(?=".repeat(60) + "a" + &")".repeat(60) + "a";
     assert_eq!(captures(&nested, "a"), Some(vec![Some("a")]));
-    assert!(matches!(
-        pattern(&nested).search(
-            "a",
-            MatchLimits {
-                work: 30,
-                ..MatchLimits::default()
-            }
-        ),
-        Err(MatchError {
-            resource: Resource::Work,
-            ..
-        })
-    ));
-    assert!(matches!(
-        pattern("z").search(
-            &"a".repeat(100),
-            MatchLimits {
-                work: 30,
-                ..MatchLimits::default()
-            }
-        ),
-        Err(MatchError {
-            resource: Resource::Work,
-            ..
-        })
-    ));
 }
 
-/// Byte admission never promises sufficient storage; callers can raise a separate cap.
+/// Matching steps count interpretation rather than the allocation of subject indexes.
 #[test]
-fn independent_subject_and_storage_ceilings() {
-    let limits = MatchLimits::default();
-    let subject = "a".repeat(limits.subject_bytes);
-    let compiled = pattern("a");
+fn long_subjects_are_not_charged_as_matching_steps() {
+    let subject = "a".repeat(1_048_577);
     assert_eq!(
-        compiled.search(&subject, limits),
-        Err(MatchError {
-            resource: Resource::StateCells,
-            limit: limits.state_cells,
-        })
-    );
-    let sufficient = MatchLimits {
-        state_cells: 3 * limits.subject_bytes,
-        ..limits
-    };
-    assert_eq!(
-        compiled
-            .search(&subject, sufficient)
-            .unwrap()
-            .unwrap()
-            .groups,
+        pattern("a").search(&subject).unwrap().unwrap().groups,
         vec![Some("a")]
-    );
-    let oversized = subject + "a";
-    assert_eq!(
-        compiled.search(&oversized, sufficient),
-        Err(MatchError {
-            resource: Resource::SubjectBytes,
-            limit: limits.subject_bytes,
-        })
     );
 }
 
@@ -877,10 +562,7 @@ fn braced_code_point_expansion_requires_a_scalar() {
     for value in 0xd800..=0xdfff {
         for source in [format!(r"\u{{{value:X}}}"), format!(r"[\u{{{value:x}}}]")] {
             assert!(
-                matches!(
-                    Pattern::compile(&source, CompileLimits::default()),
-                    Err(CompileError::Invalid { .. })
-                ),
+                matches!(Pattern::compile(&source), Err(CompileError::Invalid { .. })),
                 "{source}"
             );
         }
@@ -910,19 +592,13 @@ fn lookbehind_width_distinguishes_variable_from_backreference_dependent() {
         r"(a)(?<=(?:b\1)+)c",
     ] {
         assert!(
-            matches!(
-                Pattern::compile(source, CompileLimits::default()),
-                Err(CompileError::Invalid { .. })
-            ),
+            matches!(Pattern::compile(source), Err(CompileError::Invalid { .. })),
             "{source}"
         );
     }
     // A backreference can be empty, so repetition alone does not prove variability.
     for source in [r"(a)(?<=\1)b", r"()(?<=\1+)b", r"()(?<=\1{1,2})b"] {
-        assert!(
-            Pattern::compile(source, CompileLimits::default()).is_ok(),
-            "{source}"
-        );
+        assert!(Pattern::compile(source).is_ok(), "{source}");
     }
     // Zero repetitions and zero-width assertions do not consume their descendants.
     assert_eq!(
