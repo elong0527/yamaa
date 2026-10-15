@@ -1,11 +1,8 @@
 //! Borrowed facts from retained project invocation and activation failures.
 //! Admit the whole report before allocating paths or copying authored text.
 use crate::{
-    dataset::RowIdentity,
     diagnostic::ConditionCode,
-    function_invocation::{FailureKind, InvocationFailure},
     function_signature::ProjectFunctionIdentity,
-    project_activation::{BindingFailure, TestFailure},
     project_function::Function,
     project_function_result::results_match,
     value::{ColumnType, Value, ValueType},
@@ -68,10 +65,73 @@ pub struct Diagnostic<'a> {
     pub context: Context<'a>,
 }
 
+/// Retained engine variants are mapped to these facts without cloning payloads.
+#[derive(Debug)]
+pub enum InvocationKind<'a, E> {
+    UnknownArguments(&'a [String]),
+    MissingRequired {
+        parameter: &'a str,
+    },
+    ArgumentType {
+        parameter: &'a str,
+        expected: ValueType,
+        actual: ValueType,
+    },
+    CallFailed(&'a E),
+    InvalidHostResult(&'a E),
+    BooleanResult,
+    UndeclaredMissing,
+    ResultType {
+        expected: ColumnType,
+        actual: ValueType,
+    },
+}
+impl<E> InvocationKind<'_, E> {
+    pub fn code(&self) -> ConditionCode {
+        match self {
+            Self::UnknownArguments(_)
+            | Self::MissingRequired { .. }
+            | Self::ArgumentType { .. } => ConditionCode::RuntimeFunctionArgument,
+            Self::CallFailed(_) => ConditionCode::RuntimeFunctionCallFailed,
+            _ => ConditionCode::RuntimeFunctionResult,
+        }
+    }
+}
+pub struct Invocation<'a, E> {
+    pub identity: &'a ProjectFunctionIdentity,
+    pub kind: InvocationKind<'a, E>,
+}
 pub struct DefinitionSource<'a> {
     pub function: &'a Function,
     pub path: &'a str,
 }
+pub struct BindingFailure<'a, E> {
+    pub function: usize,
+    pub error: &'a E,
+}
+pub enum TestFailure<'a, E> {
+    Invocation {
+        function: usize,
+        case: usize,
+        error: Invocation<'a, E>,
+    },
+    Result {
+        function: usize,
+        case: usize,
+        actual: &'a Value,
+        expected: &'a Value,
+    },
+}
+impl<E> TestFailure<'_, E> {
+    fn position(&self) -> (usize, usize) {
+        match self {
+            Self::Invocation { function, case, .. } | Self::Result { function, case, .. } => {
+                (*function, *case)
+            }
+        }
+    }
+}
+
 struct Budget(usize);
 impl Budget {
     fn text<'a, E>(&mut self, text: &str) -> Result<(), Error<'a, E>> {
@@ -146,45 +206,44 @@ fn host_context<'a>(context: &mut Context<'a>, host: HostDetails<'a>) {
     }
 }
 fn invocation_admission<'a, E>(
-    kind: &'a FailureKind<E>,
+    kind: &InvocationKind<'a, E>,
     host: Option<HostDetails<'_>>,
 ) -> Result<(), Error<'a, E>> {
     match (kind, host) {
-        (FailureKind::CallFailed(e) | FailureKind::InvalidHostResult(e), None) => {
+        (InvocationKind::CallFailed(e) | InvocationKind::InvalidHostResult(e), None) => {
             Err(Error::Opaque(e))
         }
-        (FailureKind::CallFailed(_) | FailureKind::InvalidHostResult(_), Some(_)) => Ok(()),
+        (InvocationKind::CallFailed(_) | InvocationKind::InvalidHostResult(_), Some(_)) => Ok(()),
         (_, Some(_)) => Err(Error::InvalidContext),
         _ => Ok(()),
     }
 }
 fn invocation_budget<'a, E>(
-    kind: &FailureKind<E>,
+    kind: &InvocationKind<'_, E>,
     budget: &mut Budget,
 ) -> Result<(), Error<'a, E>> {
     match kind {
-        FailureKind::UnknownArguments(names) => {
+        InvocationKind::UnknownArguments(names) => {
             if names.len() > MAX_CASES {
                 return Err(Error::Limit);
             }
-            for name in names {
+            for name in *names {
                 budget.text(name)?;
             }
         }
-        FailureKind::MissingRequired { parameter }
-        | FailureKind::ArgumentType { parameter, .. } => budget.text(parameter)?,
+        InvocationKind::MissingRequired { parameter }
+        | InvocationKind::ArgumentType { parameter, .. } => budget.text(parameter)?,
         _ => (),
     }
     Ok(())
 }
 pub fn invocation<'a, 'e: 'a, E>(
     path: &str,
-    failure: &'e InvocationFailure<E, ProjectFunctionIdentity>,
-    row: Option<&'a RowIdentity>,
+    failure: &Invocation<'e, E>,
+    row: Option<&'a [Value]>,
     key_names: &[&'a str],
     host: Option<HostDetails<'a>>,
 ) -> Result<Diagnostic<'a>, Error<'e, E>> {
-    let row = row.map(|row| row.values.as_slice());
     // Opaque failure precedence is preserved even for malformed identity facts.
     invocation_admission(&failure.kind, host)?;
     if path.is_empty() || failure.identity.name.is_empty() || failure.identity.call.is_empty() {
@@ -218,17 +277,17 @@ pub fn invocation<'a, 'e: 'a, E>(
     ]
     .into();
     match &failure.kind {
-        FailureKind::UnknownArguments(names) => {
+        InvocationKind::UnknownArguments(names) => {
             context.insert(
                 "unknown",
                 Fact::Sequence(names.iter().map(|name| Fact::Text(name)).collect()),
             );
         }
-        FailureKind::MissingRequired { parameter } => {
+        InvocationKind::MissingRequired { parameter } => {
             context.insert("parameter", Fact::Text(parameter));
             context.insert("reason", Fact::Text("a required argument was not supplied"));
         }
-        FailureKind::ArgumentType {
+        InvocationKind::ArgumentType {
             parameter,
             expected,
             actual,
@@ -237,20 +296,20 @@ pub fn invocation<'a, 'e: 'a, E>(
             context.insert("expected", Fact::Text(kind(*expected)));
             context.insert("actual", Fact::Text(kind(*actual)));
         }
-        FailureKind::CallFailed(_) | FailureKind::InvalidHostResult(_) => {
+        InvocationKind::CallFailed(_) | InvocationKind::InvalidHostResult(_) => {
             host_context(&mut context, host.expect("classified above"))
         }
-        FailureKind::BooleanResult => {
+        InvocationKind::BooleanResult => {
             context.insert("reason", Fact::Text("a binding returned a Boolean"));
             context.insert("returned", Fact::Text("bool"));
         }
-        FailureKind::UndeclaredMissing => {
+        InvocationKind::UndeclaredMissing => {
             context.insert(
                 "reason",
                 Fact::Text("an invoked binding returned an undeclared missing"),
             );
         }
-        FailureKind::ResultType { expected, actual } => {
+        InvocationKind::ResultType { expected, actual } => {
             context.insert("expected", Fact::Text(column(*expected)));
             context.insert("actual", Fact::Text(kind(*actual)));
         }
@@ -291,7 +350,7 @@ fn selection<'a, E>(
 }
 pub fn binding_diagnostics<'a, 'e, E>(
     definitions: &[DefinitionSource<'a>],
-    failures: &'e [BindingFailure<E>],
+    failures: &[BindingFailure<'e, E>],
     details: &[Option<HostDetails<'a>>],
     maximum: usize,
 ) -> Result<Vec<Diagnostic<'a>>, Error<'e, E>> {
@@ -315,7 +374,7 @@ pub fn binding_diagnostics<'a, 'e, E>(
             return Err(Error::InvalidContext);
         }
         if host.is_none() {
-            return Err(Error::Opaque(&failure.error));
+            return Err(Error::Opaque(failure.error));
         }
         for text in [
             source.path,
@@ -354,7 +413,7 @@ fn exact(left: &Value, right: &Value) -> bool {
 }
 pub fn test_diagnostics<'a, 'e: 'a, E>(
     definitions: &[DefinitionSource<'a>],
-    failures: &'e [TestFailure<E>],
+    failures: &[TestFailure<'e, E>],
     details: &[Option<HostDetails<'a>>],
     maximum: usize,
 ) -> Result<Vec<Diagnostic<'a>>, Error<'e, E>> {

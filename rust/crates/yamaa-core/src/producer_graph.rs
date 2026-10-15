@@ -187,11 +187,8 @@ impl PreparedGraph {
     }
     /// Transfer the complete admitted closure, its plans and its one environment
     /// together. Metadata nodes never expose a standalone compiled producer.
-    pub fn into_build(self) -> crate::producer_build::PreparedBuild {
-        crate::producer_build::PreparedBuild::new(self)
-    }
-    pub(crate) fn plans(&self) -> impl ExactSizeIterator<Item = &PreparedSpecification> {
-        self.nodes.iter().map(|node| &node.compiled)
+    pub fn into_build(self) -> BuildGraph {
+        BuildGraph { graph: self }
     }
     /// This static capability grants no data, activation, build or publication
     /// authority. #1741 must qualify the complete orchestration before release.
@@ -226,6 +223,23 @@ pub enum MetadataBindingError {
         node: usize,
         error: crate::specification::BindError,
     },
+}
+
+/// Whole-closure compilation ownership for the application engine. Construction
+/// consumes a validated graph; plans can only be borrowed with that owner alive.
+#[derive(Debug)]
+pub struct BuildGraph {
+    graph: PreparedGraph,
+}
+impl BuildGraph {
+    pub fn metadata(&self) -> &PreparedGraph {
+        &self.graph
+    }
+    /// Borrow the complete compiled collection in the metadata's node order.
+    /// No node plan is moved out, substituted or compiled again at this boundary.
+    pub fn plans(&self) -> impl ExactSizeIterator<Item = &PreparedSpecification> {
+        self.graph.nodes.iter().map(|node| &node.compiled)
+    }
 }
 
 fn boundary(node: Option<usize>, reason: &'static str) -> Error {

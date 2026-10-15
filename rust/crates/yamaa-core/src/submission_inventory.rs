@@ -9,11 +9,11 @@ pub struct Inventory {
     names: Vec<String>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MetadataError {
+pub enum Error {
     Shape,
     Limit(Limit),
 }
-impl From<Limit> for MetadataError {
+impl From<Limit> for Error {
     fn from(value: Limit) -> Self {
         Self::Limit(value)
     }
@@ -21,19 +21,16 @@ impl From<Limit> for MetadataError {
 impl Inventory {
     /// Capture ports supply admitted specification documents; no data table or
     /// filename can stand in for the dataset's declared domain identity.
-    pub fn from_specifications(
-        documents: &[&Document],
-        limits: Limits,
-    ) -> Result<Self, MetadataError> {
+    pub fn from_specifications(documents: &[&Document], limits: Limits) -> Result<Self, Error> {
         let mut budget = Budget::new(limits);
         let mut selected = BTreeSet::new();
         for document in documents {
             budget.work(document.nodes().len())?;
             let id = document
                 .field(document.root(), "domain")
-                .ok_or(MetadataError::Shape)?;
+                .ok_or(Error::Shape)?;
             let N::Text(name) = &document.nodes()[id] else {
-                return Err(MetadataError::Shape);
+                return Err(Error::Shape);
             };
             budget.text(name)?;
             selected.insert(name.as_str());
@@ -79,85 +76,24 @@ pub fn requested(document: &Document) -> bool {
 }
 /// Select only authored section specifications. Full Define/family admission is
 /// deliberately left with its existing composition use case (REQ-0908).
-pub fn references(document: &Document, limits: Limits) -> Result<Vec<&str>, MetadataError> {
+pub fn references(document: &Document, limits: Limits) -> Result<Vec<&str>, Error> {
     let locations =
         crate::submission_document::locate(document, document.root(), Default::default())
-            .map_err(|_| MetadataError::Shape)?;
+            .map_err(|_| Error::Shape)?;
     let mut budget = Budget::new(limits);
     let mut references = Vec::new();
     for &(_, section) in locations.sections() {
-        let specs = document
-            .field(section, "specs")
-            .ok_or(MetadataError::Shape)?;
+        let specs = document.field(section, "specs").ok_or(Error::Shape)?;
         let N::Sequence(specs) = &document.nodes()[specs] else {
-            return Err(MetadataError::Shape);
+            return Err(Error::Shape);
         };
         for &spec in specs {
             let N::Text(written) = &document.nodes()[spec] else {
-                return Err(MetadataError::Shape);
+                return Err(Error::Shape);
             };
             budget.text(written)?;
             references.push(written.as_str());
         }
     }
     Ok(references)
-}
-
-pub trait Ports {
-    type Specification;
-    type Error;
-    fn capture(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Self::Specification, Self::Error>;
-    fn document(specification: &Self::Specification) -> &Document;
-    fn identity(specification: &Self::Specification) -> &str;
-}
-#[derive(Debug)]
-pub enum Error<E> {
-    Port { written: String, error: E },
-    Metadata(MetadataError),
-    Limit,
-}
-pub struct Captured<S> {
-    pub inventory: Inventory,
-    pub specifications: Vec<S>,
-}
-pub fn capture<P: Ports>(
-    environment: &Document,
-    declaring: &str,
-    port: &mut P,
-) -> Result<Captured<P::Specification>, Error<P::Error>> {
-    let references = references(environment, Default::default()).map_err(Error::Metadata)?;
-    if references.len() > crate::define::METADATA_LIMITS.snapshots {
-        return Err(Error::Limit);
-    }
-    let mut specifications = Vec::new();
-    let mut nodes = 0usize;
-    let mut text = 0usize;
-    for written in references {
-        let specification = port
-            .capture(declaring, written)
-            .map_err(|error| Error::Port {
-                written: written.into(),
-                error,
-            })?;
-        nodes = nodes
-            .checked_add(P::document(&specification).nodes().len())
-            .filter(|&nodes| nodes <= 262_144)
-            .ok_or(Error::Limit)?;
-        text = text
-            .checked_add(P::identity(&specification).len())
-            .filter(|&text| text <= crate::define::METADATA_LIMITS.text)
-            .ok_or(Error::Limit)?;
-        specifications.push(specification);
-    }
-    let documents = specifications.iter().map(P::document).collect::<Vec<_>>();
-    let inventory =
-        Inventory::from_specifications(&documents, Default::default()).map_err(Error::Metadata)?;
-    Ok(Captured {
-        inventory,
-        specifications,
-    })
 }

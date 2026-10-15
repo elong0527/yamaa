@@ -1,8 +1,9 @@
 //! Complete borrowed verification reports from retained engine observations.
 //! Formatting never reads a table, rechecks a row, or narrows authored bounds.
 use crate::{
-    dataset::{Check, CheckRecord, RowIdentity, VerificationSeverity},
+    dataset::{Check, VerificationSeverity},
     diagnostic::ConditionCode,
+    project_codelist_diagnostics::{CheckObservation, RowObservation},
     project_diagnostics::{Context, Diagnostic, Fact},
     specification::PreparedSpecification,
 };
@@ -31,7 +32,7 @@ pub struct Projection<'a> {
     pub diagnostics: Vec<Diagnostic<'a>>,
 }
 
-fn code(record: &CheckRecord, phase: Phase) -> Result<ConditionCode, Error> {
+fn code<R>(record: &CheckObservation<'_, R>, phase: Phase) -> Result<ConditionCode, Error> {
     use ConditionCode::*;
     if matches!(
         record.code,
@@ -56,37 +57,36 @@ fn code(record: &CheckRecord, phase: Phase) -> Result<ConditionCode, Error> {
     }
 }
 
-fn keys<'a>(names: &[&'a str], rows: &'a [RowIdentity]) -> Result<Vec<Fact<'a>>, Error> {
+fn keys<'a, R: RowObservation>(names: &[&'a str], rows: &'a [R]) -> Result<Vec<Fact<'a>>, Error> {
     rows.iter()
         .map(|row| {
-            if names.len() != row.values.as_slice().len() {
+            if names.len() != row.values().len() {
                 return Err(Error::InvalidObservation);
             }
             Ok(Fact::Object(
                 names
                     .iter()
                     .copied()
-                    .zip(row.values.as_slice().iter().map(Fact::Scalar))
+                    .zip(row.values().iter().map(Fact::Scalar))
                     .collect(),
             ))
         })
         .collect()
 }
 
-fn base_context<'a>(
+fn base_context<'a, R>(
     compiled: &'a PreparedSpecification,
-    record: &'a CheckRecord,
+    record: &CheckObservation<'a, R>,
     code: ConditionCode,
 ) -> Result<Context<'a>, Error> {
     use ConditionCode::*;
     let failed = Fact::Unsigned(record.failed_count);
     Ok(match code {
         VerificationRowCountFailed => {
-            if let Some(observation) = record.row_count.as_ref() {
+            if let Some(observation) = record.row_count {
                 if observation.counts.len() != record.failed_count
                     || observation
                         .denominators
-                        .as_deref()
                         .is_some_and(|d| d.len() != record.failed_count)
                 {
                     return Err(Error::InvalidObservation);
@@ -94,7 +94,7 @@ fn base_context<'a>(
                 let mut context: Context<'a> = [("failure_count", failed)].into();
                 if observation.counts.len() == 1 {
                     context.insert("count", Fact::Unsigned(observation.counts[0]));
-                    if let Some(d) = observation.denominators.as_deref() {
+                    if let Some(d) = observation.denominators {
                         context.insert("denominator", Fact::Unsigned(d[0]));
                     }
                 } else {
@@ -108,7 +108,7 @@ fn base_context<'a>(
                                 .collect(),
                         ),
                     );
-                    if let Some(d) = observation.denominators.as_deref() {
+                    if let Some(d) = observation.denominators {
                         context.insert(
                             "denominators",
                             Fact::Sequence(d.iter().map(|&n| Fact::Unsigned(n)).collect()),
@@ -128,7 +128,7 @@ fn base_context<'a>(
             let Some(Check::Unique(columns)) = compiled
                 .verifications()
                 .iter()
-                .find(|check| check.path == record.path.as_str())
+                .find(|check| check.path == record.path)
                 .map(|check| &check.check)
             else {
                 return Err(Error::InvalidObservation);
@@ -183,10 +183,10 @@ fn base_context<'a>(
         | VerificationMaxLengthFailed
         | VerificationMatchesFailed => {
             let column = compiled
-                .verification_target(record.path.as_str())
+                .verification_target(record.path)
                 .ok_or(Error::InvalidObservation)?;
             let check = compiled
-                .column_check(record.path.as_str())
+                .column_check(record.path)
                 .ok_or(Error::InvalidObservation)?;
             let mapping =
                 crate::dataset_checks::column_definition(check).ok_or(Error::InvalidObservation)?;
@@ -203,9 +203,9 @@ fn base_context<'a>(
             {
                 context.insert("max", Fact::Bound(maximum));
             }
-            if let Some(observation) = record.codelist.as_ref() {
+            if let Some(observation) = record.codelist {
                 let (id, _) = check
-                    .codelist(&observation.id)
+                    .codelist(observation.id)
                     .ok_or(Error::InvalidObservation)?;
                 context.insert("codelist", Fact::Text(id));
             }
@@ -219,9 +219,9 @@ fn base_context<'a>(
 /// context. Ordinary issue display uses the existing first-five-key policy;
 /// codelist values retain every key. Existing report admission/byte limits remain
 /// at the caller, and no new approximation or bound carrier is introduced here.
-pub fn project<'a>(
+pub fn project<'a, R: RowObservation>(
     compiled: &'a PreparedSpecification,
-    records: &'a [CheckRecord],
+    records: &[CheckObservation<'a, R>],
     phase: Phase,
     specification: &'a str,
 ) -> Result<Projection<'a>, Error> {
@@ -231,17 +231,15 @@ pub fn project<'a>(
     for record in records {
         let code = code(record, phase)?;
         let mapping = code.definition();
-        let severity = compiled.verification_severity(record.path.as_str());
+        let severity = compiled.verification_severity(record.path);
         let mut failure = Fact::Null;
         if record.failed_count > 0 {
             let mut key_names = names.clone();
-            if code == ConditionCode::VerificationRowCountFailed
-                && record.row_count.as_ref().is_some()
-            {
+            if code == ConditionCode::VerificationRowCountFailed && record.row_count.is_some() {
                 let Some(Check::ScopedRowCount(check)) = compiled
                     .verifications()
                     .iter()
-                    .find(|c| c.path == record.path.as_str())
+                    .find(|c| c.path == record.path)
                     .map(|c| &c.check)
                 else {
                     return Err(Error::InvalidObservation);
@@ -253,26 +251,24 @@ pub fn project<'a>(
                     .map(|&c| compiled.output().columns()[c].name.as_str())
                     .collect();
             }
-            let mut keys = keys(&key_names, &record.offending_rows)?;
-            if code == ConditionCode::VerificationRowCountFailed
-                && record.row_count.as_ref().is_none()
-            {
+            let mut keys = keys(&key_names, record.offending_rows)?;
+            if code == ConditionCode::VerificationRowCountFailed && record.row_count.is_none() {
                 keys = vec![Fact::Object(Context::new())];
             }
             let mut context = base_context(compiled, record, code)?;
             if phase == Phase::Verification {
-                if let Some(identity) = compiled.verification_identity(record.path.as_str()) {
+                if let Some(identity) = compiled.verification_identity(record.path) {
                     context.insert("verification_id", Fact::Text(identity));
                 }
             }
-            if let Some(codelist) = record.codelist.as_ref() {
+            if let Some(codelist) = record.codelist {
                 let Some((id, _)) = compiled
-                    .column_check(record.path.as_str())
-                    .and_then(|check| check.codelist(codelist.id.as_str()))
+                    .column_check(record.path)
+                    .and_then(|check| check.codelist(codelist.id))
                 else {
                     return Err(Error::InvalidObservation);
                 };
-                if id != codelist.id.as_str() {
+                if id != codelist.id {
                     return Err(Error::InvalidObservation);
                 }
                 context.insert(
@@ -280,10 +276,10 @@ pub fn project<'a>(
                     Fact::Sequence(codelist.values.iter().map(Fact::Scalar).collect()),
                 );
             }
-            if let Some(values) = record.inventory.as_ref() {
+            if let Some(values) = record.inventory {
                 if code != ConditionCode::SubmissionInventoryFailed
                     || !matches!(
-                        compiled.column_check(record.path.as_str()),
+                        compiled.column_check(record.path),
                         Some(Check::Inventory { .. })
                     )
                     || values.len() != record.failed_count
@@ -305,19 +301,19 @@ pub fn project<'a>(
             }
             let mut log_context = context.clone();
             log_context.insert("keys", Fact::Sequence(keys.clone()));
-            let display = if record.codelist.as_ref().is_some() {
+            let display = if record.codelist.is_some() {
                 keys.clone()
             } else {
                 keys[..keys.len().min(5)].to_vec()
             };
             context.insert("keys", Fact::Sequence(display));
-            if record.inventory.as_ref().is_some() {
+            if record.inventory.is_some() {
                 if let Some(Fact::Sequence(values)) = context.get_mut("values") {
                     values.truncate(5);
                 }
             }
             // Display samples and complete governed logs retain aligned group counts.
-            if record.row_count.as_ref().is_some() && record.failed_count > 5 {
+            if record.row_count.is_some() && record.failed_count > 5 {
                 for name in ["counts", "denominators"] {
                     if let Some(Fact::Sequence(values)) = context.get_mut(name) {
                         values.truncate(5);
@@ -327,7 +323,7 @@ pub fn project<'a>(
             if severity == VerificationSeverity::Error {
                 diagnostics.push(Diagnostic {
                     code,
-                    spec_path: record.path.as_str().into(),
+                    spec_path: record.path.into(),
                     context: context.clone(),
                 });
             }
@@ -339,10 +335,7 @@ pub fn project<'a>(
                         "requirement",
                         Fact::Text(mapping.requirement.expect("registered normative check")),
                     ),
-                    (
-                        "spec_paths",
-                        Fact::Sequence(vec![Fact::Text(record.path.as_str())]),
-                    ),
+                    ("spec_paths", Fact::Sequence(vec![Fact::Text(record.path)])),
                     ("context", Fact::Object(context)),
                     ("severity", Fact::Text(severity.name())),
                     ("offending_keys", Fact::Sequence(keys)),
@@ -363,12 +356,12 @@ pub fn project<'a>(
             observations.push(Fact::Object(
                 [
                     ("specification", Fact::Text(specification)),
-                    ("spec_path", Fact::Text(record.path.as_str())),
+                    ("spec_path", Fact::Text(record.path)),
                     ("check", Fact::Text(check)),
                     (
                         "target",
                         compiled
-                            .verification_target(record.path.as_str())
+                            .verification_target(record.path)
                             .map(Fact::Text)
                             .unwrap_or(Fact::Null),
                     ),
@@ -379,7 +372,7 @@ pub fn project<'a>(
                     (
                         "verification_id",
                         compiled
-                            .verification_identity(record.path.as_str())
+                            .verification_identity(record.path)
                             .map(Fact::Text)
                             .unwrap_or(Fact::Null),
                     ),

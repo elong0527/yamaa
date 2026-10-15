@@ -1,6 +1,6 @@
 //! Complete borrowed codelist observations, independent of retained output.
 use crate::{
-    dataset::{Check, CheckRecord},
+    dataset::Check,
     diagnostic::ConditionCode,
     project_diagnostics::{Context, Diagnostic, Fact},
     specification::PreparedSpecification,
@@ -13,6 +13,32 @@ pub enum Error {
     InvalidObservation,
     Limit,
     Projection,
+}
+/// A retained row identity; projection neither reads a table nor reruns a check.
+pub trait RowObservation {
+    fn position(&self) -> usize;
+    fn values(&self) -> &[Value];
+}
+#[derive(Clone, Copy)]
+pub struct CodelistObservation<'a> {
+    pub id: &'a str,
+    pub values: &'a [Value],
+}
+#[derive(Clone, Copy)]
+pub struct RowCountObservation<'a> {
+    pub counts: &'a [usize],
+    pub denominators: Option<&'a [usize]>,
+}
+pub struct CheckObservation<'a, R> {
+    pub path: &'a str,
+    pub code: ConditionCode,
+    pub evaluated_count: usize,
+    pub failed_count: usize,
+    pub output_rows: usize,
+    pub offending_rows: &'a [R],
+    pub codelist: Option<CodelistObservation<'a>>,
+    pub inventory: Option<&'a [Value]>,
+    pub row_count: Option<RowCountObservation<'a>>,
 }
 struct Budget(usize);
 impl Budget {
@@ -34,9 +60,9 @@ impl Budget {
 }
 /// Admit all observation geometry and cumulative escaping cost before allocating
 /// a diagnostic path or context tree. Other check families are left untouched.
-pub fn diagnostics<'a>(
+pub fn diagnostics<'a, R: RowObservation>(
     compiled: &'a PreparedSpecification,
-    records: &'a [CheckRecord],
+    records: &[CheckObservation<'a, R>],
     maximum: usize,
 ) -> Result<Vec<Diagnostic<'a>>, Error> {
     if records.len() > 65_536 {
@@ -56,9 +82,9 @@ pub fn diagnostics<'a>(
     }
     let mut paths = BTreeSet::new();
     for record in records {
-        budget.text(record.path.as_str())?;
-        let check = compiled.column_check(record.path.as_str());
-        let Some(observation) = record.codelist.as_ref() else {
+        budget.text(record.path)?;
+        let check = compiled.column_check(record.path);
+        let Some(observation) = record.codelist else {
             if matches!(
                 check,
                 Some(Check::Codelist { .. } | Check::ValueCodelists { .. })
@@ -68,20 +94,20 @@ pub fn diagnostics<'a>(
             }
             continue;
         };
-        budget.text(observation.id.as_str())?;
-        let Some((id, _)) = check.and_then(|check| check.codelist(observation.id.as_str())) else {
+        budget.text(observation.id)?;
+        let Some((id, _)) = check.and_then(|check| check.codelist(observation.id)) else {
             return Err(Error::InvalidObservation);
         };
         if record.offending_rows.len() > 65_536 || observation.values.len() > 65_536 {
             return Err(Error::Limit);
         }
-        if id != observation.id.as_str()
+        if id != observation.id
             || record.code != ConditionCode::VerificationCodelistFailed
             || record.failed_count != observation.values.len()
             || record.failed_count != record.offending_rows.len()
             || record.failed_count > record.evaluated_count
             || record.failed_count > record.output_rows
-            || !paths.insert((record.path.as_str(), observation.id.as_str()))
+            || !paths.insert((record.path, observation.id))
         {
             return Err(Error::InvalidObservation);
         }
@@ -89,25 +115,24 @@ pub fn diagnostics<'a>(
             continue;
         }
         let column = compiled
-            .verification_target(record.path.as_str())
+            .verification_target(record.path)
             .ok_or(Error::InvalidObservation)?;
         budget.text(column)?;
         let mut previous = None;
-        for (row, value) in record.offending_rows.iter().zip(&observation.values) {
-            if row.values.as_slice().len() != names.len()
-                || row.position >= record.output_rows
-                || previous.is_some_and(|position| row.position <= position)
+        for (row, value) in record.offending_rows.iter().zip(observation.values) {
+            if row.values().len() != names.len()
+                || row.position() >= record.output_rows
+                || previous.is_some_and(|position| row.position() <= position)
                 || matches!(value, Value::Missing)
                 || row
-                    .values
-                    .as_slice()
+                    .values()
                     .iter()
                     .any(|value| matches!(value, Value::Missing))
             {
                 return Err(Error::InvalidObservation);
             }
-            previous = Some(row.position);
-            for (name, key) in names.iter().zip(row.values.as_slice()) {
+            previous = Some(row.position());
+            for (name, key) in names.iter().zip(row.values()) {
                 budget.text(name)?;
                 budget.value(key)?;
             }
@@ -116,18 +141,18 @@ pub fn diagnostics<'a>(
     }
     let mut diagnostics = Vec::new();
     for record in records {
-        let Some(observation) = record.codelist.as_ref() else {
+        let Some(observation) = record.codelist else {
             continue;
         };
         if record.failed_count == 0 {
             continue;
         }
         let column = compiled
-            .verification_target(record.path.as_str())
+            .verification_target(record.path)
             .ok_or(Error::InvalidObservation)?;
         let Some((id, _)) = compiled
-            .column_check(record.path.as_str())
-            .and_then(|check| check.codelist(observation.id.as_str()))
+            .column_check(record.path)
+            .and_then(|check| check.codelist(observation.id))
         else {
             return Err(Error::Projection);
         };
@@ -138,7 +163,7 @@ pub fn diagnostics<'a>(
                 Fact::Object(
                     names
                         .iter()
-                        .zip(row.values.as_slice())
+                        .zip(row.values())
                         .map(|(name, value)| (*name, Fact::Scalar(value)))
                         .collect(),
                 )
@@ -158,7 +183,7 @@ pub fn diagnostics<'a>(
         .into();
         diagnostics.push(Diagnostic {
             code: ConditionCode::VerificationCodelistFailed,
-            spec_path: record.path.as_str().into(),
+            spec_path: record.path.into(),
             context,
         });
     }

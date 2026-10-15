@@ -91,16 +91,6 @@ pub fn environment(names: &[&str]) -> ExecutionEnvironment {
     .into_execution()
 }
 pub fn document(inputs: &[(&str, Option<&str>)], call: Option<&str>) -> SpecificationDocument {
-    document_mode(inputs, call, false)
-}
-pub fn grouped_document(inputs: &[(&str, Option<&str>)]) -> SpecificationDocument {
-    document_mode(inputs, None, true)
-}
-fn document_mode(
-    inputs: &[(&str, Option<&str>)],
-    call: Option<&str>,
-    grouped: bool,
-) -> SpecificationDocument {
     use Tree as T;
     let first = inputs[0].0;
     let source = T::map(vec![(
@@ -125,7 +115,7 @@ fn document_mode(
         },
     );
     let mut nodes = Vec::new();
-    let mut fields = vec![
+    let root = T::map(vec![
         ("schema_version", T::text("1.0")),
         ("domain", T::text("TEST")),
         ("base", T::text(first)),
@@ -169,19 +159,8 @@ fn document_mode(
                 ("columns", T::List(vec![T::text("ID"), T::text("VALUE")])),
             ]),
         ),
-    ];
-    if grouped {
-        fields.push((
-            "rows",
-            T::List(vec![T::map(vec![
-                ("id", T::text("one")),
-                ("dataset", T::text(first)),
-                ("derivations", T::map(Vec::new())),
-                ("group_by", T::List(vec![T::text(&format!("{first}.ID"))])),
-            ])]),
-        ));
-    }
-    let root = T::map(fields).append(&mut nodes);
+    ])
+    .append(&mut nodes);
     SpecificationDocument::admit(
         Document::new(nodes, root, Default::default()).unwrap(),
         &mut ValidationBudget::new(Default::default()),

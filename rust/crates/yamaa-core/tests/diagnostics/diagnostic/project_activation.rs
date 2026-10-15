@@ -1,12 +1,12 @@
 use super::project_support as support;
 use std::{collections::BTreeSet, rc::Rc};
 use yamaa_core::{
-    dataset::RowIdentity,
     diagnostic::ConditionCode,
-    function_invocation::{FailureKind, InvocationFailure},
     function_signature::ProjectFunctionIdentity,
-    project_activation::{BindingFailure, TestFailure},
-    project_diagnostics::{self as projection, DefinitionSource, Error, Fact, HostDetails},
+    project_diagnostics::{
+        self as projection, DefinitionSource, Error, Fact, HostDetails, Invocation, InvocationKind,
+        TestFailure,
+    },
     value::{ColumnType, FiniteFloat, Value, ValueType},
 };
 
@@ -26,22 +26,20 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     for (kind, details, condition, requirement) in [
         (
-            FailureKind::UnknownArguments(names.clone()),
+            InvocationKind::UnknownArguments(&names),
             None,
             "invalid_function_argument",
             "REQ-0700",
         ),
         (
-            FailureKind::MissingRequired {
-                parameter: "x".into(),
-            },
+            InvocationKind::MissingRequired { parameter: "x" },
             None,
             "invalid_function_argument",
             "REQ-0700",
         ),
         (
-            FailureKind::ArgumentType {
-                parameter: "x".into(),
+            InvocationKind::ArgumentType {
+                parameter: "x",
                 expected: ValueType::Int,
                 actual: ValueType::Str,
             },
@@ -50,31 +48,31 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0700",
         ),
         (
-            FailureKind::CallFailed(&payload),
+            InvocationKind::CallFailed(&payload),
             host,
             "function_call_failed",
             "REQ-0701",
         ),
         (
-            FailureKind::InvalidHostResult(&payload),
+            InvocationKind::InvalidHostResult(&payload),
             host,
             "invalid_function_result",
             "REQ-0702",
         ),
         (
-            FailureKind::BooleanResult,
+            InvocationKind::BooleanResult,
             None,
             "invalid_function_result",
             "REQ-0702",
         ),
         (
-            FailureKind::UndeclaredMissing,
+            InvocationKind::UndeclaredMissing,
             None,
             "invalid_function_result",
             "REQ-0702",
         ),
         (
-            FailureKind::ResultType {
+            InvocationKind::ResultType {
                 expected: ColumnType::Int,
                 actual: ValueType::Str,
             },
@@ -83,12 +81,17 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0702",
         ),
     ] {
-        let failure = InvocationFailure {
-            identity: identity.clone(),
-            kind,
-        };
-        let diagnostic =
-            projection::invocation("columns.X.derivation", &failure, None, &[], details).unwrap();
+        let diagnostic = projection::invocation(
+            "columns.X.derivation",
+            &Invocation {
+                identity: &identity,
+                kind,
+            },
+            None,
+            &[],
+            details,
+        )
+        .unwrap();
         let mapping = diagnostic.code.definition();
         assert_eq!(
             (mapping.phase, mapping.condition, mapping.requirement),
@@ -98,7 +101,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         let Fact::Text(name) = diagnostic.context["function"] else {
             panic!("borrowed function")
         };
-        assert!(std::ptr::eq(name.as_ptr(), failure.identity.name.as_ptr()));
+        assert!(std::ptr::eq(name.as_ptr(), identity.name.as_ptr()));
         reached.insert(diagnostic.code);
     }
     let function = support::function("id");
@@ -108,7 +111,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     }];
     let binding = projection::binding_diagnostics(
         &definitions,
-        &[BindingFailure {
+        &[projection::BindingFailure {
             function: 0,
             error: &payload,
         }],
@@ -120,11 +123,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(binding[0].spec_path, "functions.id.function");
     reached.insert(binding[0].code);
     let actual = Value::Int(8);
-    let failures: [TestFailure<Rc<&str>>; 1] = [TestFailure::Result {
+    let failures: [TestFailure<'_, Rc<&str>>; 1] = [TestFailure::Result {
         function: 0,
         case: 0,
-        actual: actual.clone(),
-        expected: function.definition().tests[0].result.clone(),
+        actual: &actual,
+        expected: &function.definition().tests[0].result,
     }];
     let diagnostic = projection::test_diagnostics(
         &definitions,
@@ -142,9 +145,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let Fact::Scalar(held) = diagnostic.context["actual"] else {
         panic!("borrowed actual")
     };
-    assert!(
-        matches!(&failures[0], TestFailure::Result { actual, .. } if std::ptr::eq(held, actual))
-    );
+    assert!(std::ptr::eq(held, &actual));
     reached.insert(diagnostic.code);
     reached
 }
@@ -157,21 +158,21 @@ fn opaque_payloads_remain_borrowed_with_original_precedence() {
         name: String::new(),
         call: String::new(),
     };
-    let failure = InvocationFailure {
-        identity: identity.clone(),
-        kind: FailureKind::CallFailed(&payload),
+    let failure = Invocation {
+        identity: &identity,
+        kind: InvocationKind::CallFailed(&payload),
     };
     let Err(Error::Opaque(held)) = projection::invocation("", &failure, None, &[], None) else {
         panic!("opaque failure precedence")
     };
-    assert!(std::ptr::eq(*held, &payload));
+    assert!(std::ptr::eq(held, &payload));
     assert_eq!(Rc::strong_count(&held.0), 1);
     let function = support::function("id");
     let definitions = [DefinitionSource {
         function: &function,
         path: "functions.id",
     }];
-    let failure = [BindingFailure {
+    let failure = [projection::BindingFailure {
         function: 0,
         error: &payload,
     }];
@@ -183,7 +184,7 @@ fn opaque_payloads_remain_borrowed_with_original_precedence() {
     ) else {
         panic!("opaque binding")
     };
-    assert!(std::ptr::eq(*held, &payload));
+    assert!(std::ptr::eq(held, &payload));
 }
 
 #[test]
@@ -195,18 +196,18 @@ fn late_contradictions_and_budget_exhaustion_return_no_partial_report() {
     }];
     let actual = Value::Int(8);
     let expected = &function.definition().tests[0].result;
-    let failures: [TestFailure<()>; 2] = [
+    let failures: [TestFailure<'_, ()>; 2] = [
         TestFailure::Result {
             function: 0,
             case: 0,
-            actual: actual.clone(),
-            expected: expected.clone(),
+            actual: &actual,
+            expected,
         },
         TestFailure::Result {
             function: 0,
             case: 99,
-            actual: actual.clone(),
-            expected: expected.clone(),
+            actual: &actual,
+            expected,
         },
     ];
     assert!(matches!(
@@ -223,11 +224,11 @@ fn late_contradictions_and_budget_exhaustion_return_no_partial_report() {
         Err(Error::Limit)
     ));
     let wrong = Value::Int(9);
-    let failures: [TestFailure<()>; 1] = [TestFailure::Result {
+    let failures: [TestFailure<'_, ()>; 1] = [TestFailure::Result {
         function: 0,
         case: 0,
-        actual: actual.clone(),
-        expected: wrong.clone(),
+        actual: &actual,
+        expected: &wrong,
     }];
     assert!(matches!(
         projection::test_diagnostics(
@@ -251,14 +252,12 @@ fn nested_invocation_and_row_keys_preserve_borrowed_scalar_geometry() {
         function: &function,
         path: "functions.id",
     }];
-    let failures: [TestFailure<()>; 1] = [TestFailure::Invocation {
+    let failures: [TestFailure<'_, ()>; 1] = [TestFailure::Invocation {
         function: 0,
         case: 0,
-        error: InvocationFailure {
-            identity: identity.clone(),
-            kind: FailureKind::MissingRequired {
-                parameter: "x".into(),
-            },
+        error: Invocation {
+            identity: &identity,
+            kind: InvocationKind::MissingRequired { parameter: "x" },
         },
     }];
     let diagnostics = projection::test_diagnostics(
@@ -282,17 +281,12 @@ fn nested_invocation_and_row_keys_preserve_borrowed_scalar_geometry() {
         Value::Float(FiniteFloat::new(-0.0).unwrap()),
         Value::Str("\u{e9}\0\u{1f642}".into()),
     ];
-    let row = RowIdentity {
-        position: 0,
-        values: row.to_vec(),
-    };
-    let failure = InvocationFailure::<(), ProjectFunctionIdentity> {
-        identity,
-        kind: FailureKind::BooleanResult,
-    };
     let diagnostic = projection::invocation(
         "columns.X.derivation",
-        &failure,
+        &Invocation::<()> {
+            identity: &identity,
+            kind: InvocationKind::BooleanResult,
+        },
         Some(&row),
         &["MIN", "MAX", "ZERO", "TEXT"],
         None,
@@ -304,7 +298,7 @@ fn nested_invocation_and_row_keys_preserve_borrowed_scalar_geometry() {
     let [Fact::Object(keys)] = keys.as_slice() else {
         panic!("one exact key observation")
     };
-    for (name, value) in ["MIN", "MAX", "ZERO", "TEXT"].into_iter().zip(&row.values) {
+    for (name, value) in ["MIN", "MAX", "ZERO", "TEXT"].into_iter().zip(&row) {
         let Fact::Scalar(held) = keys[name] else {
             panic!("scalar key")
         };

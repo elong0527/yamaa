@@ -20,15 +20,3 @@ mod specification_project_codelists;
 mod specification_project_functions;
 mod specification_project_rows;
 mod specification_str_pad;
-
-mod function_invocation;
-mod producer_build;
-mod producer_graph_closure;
-mod producer_metadata;
-mod project_activation;
-mod project_codelist_execution;
-mod project_compiled_rows;
-mod project_dataset;
-mod project_function_execution;
-mod project_lock_diagnostics;
-mod specification_codelist_execution;

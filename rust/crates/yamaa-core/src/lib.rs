@@ -1,4 +1,4 @@
-//! Shared language semantics, preparation, execution and publication services.
+//! Host-independent value contracts and scalar primitives, not a dataset engine.
 #![no_std]
 #![forbid(unsafe_code)]
 
@@ -97,72 +97,3 @@ pub mod verification_diagnostics;
 pub mod yaml_diagnostics;
 
 pub mod scalar_operator;
-
-pub mod schema_capture;
-
-pub mod table_reduction;
-
-pub mod domain;
-
-pub mod specification_run;
-
-pub mod project_preparation;
-
-pub mod capacity;
-
-pub mod dictionary_preparation;
-
-mod dataset_budget;
-
-pub mod document_preparation;
-
-pub mod domain_entry;
-
-pub mod inheritance;
-
-pub mod application_observer;
-
-pub mod specification_output;
-
-pub mod define;
-
-pub mod project_domain;
-
-pub mod inheritance_preparation;
-
-pub mod execution_work;
-
-pub mod build;
-
-pub mod source_metadata;
-
-pub mod table_grouping;
-
-pub mod producer_build;
-
-pub mod standalone_preparation;
-
-pub mod style_values;
-
-pub mod source_header;
-
-pub mod numeric_lifecycle;
-
-pub mod function_invocation;
-
-pub mod structural_preparation;
-
-pub mod inheritance_outcome;
-
-pub mod file_preparation;
-
-pub mod project_activation;
-
-pub mod inheritance_capture;
-
-#[cfg(any(test, feature = "test-support"))]
-pub mod test_support;
-
-pub mod source_profile_inspection;
-
-pub mod producer_publication;
