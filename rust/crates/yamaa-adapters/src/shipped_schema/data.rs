@@ -243,6 +243,11 @@ dataset_class:
         type: "dict[identifier, column_type]"
         required: false
         description: See REQ-1060.
+    - encoding:
+        type: str
+        required: false
+        values: [utf-8, windows-1252, iso-8859-1, ascii]
+        description: See REQ-1311.
     - schema:
         type: project_path
         required: false

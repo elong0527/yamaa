@@ -9,7 +9,7 @@ use std::{
 };
 
 const MAX_PATH_BYTES: usize = 65_536;
-const MAX_OUTPUT_BYTES: usize = 67_108_864;
+const MAX_OUTPUT_BYTES: usize = yamaa_engine::capacity::SOURCE_BYTES;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
@@ -235,10 +235,19 @@ impl Publisher {
         content: &[u8],
         checkpoint: impl FnOnce(&str) -> Result<(), Error>,
     ) -> Result<(), Error> {
+        self.publish_with_limit(declared, content, MAX_OUTPUT_BYTES, checkpoint)
+    }
+    fn publish_with_limit(
+        &mut self,
+        declared: &str,
+        content: &[u8],
+        maximum: usize,
+        checkpoint: impl FnOnce(&str) -> Result<(), Error>,
+    ) -> Result<(), Error> {
         if declared != self.declared {
             return Err(Error::PathMismatch);
         }
-        if content.len() > MAX_OUTPUT_BYTES {
+        if content.len() > maximum.min(MAX_OUTPUT_BYTES) {
             return Err(Error::Limit);
         }
         let _lock = DirectoryLock::acquire(&self.parent)?;
@@ -479,6 +488,31 @@ fn identity(status: &fs::Stat) -> (i128, i128, FileType) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn selected_byte_limit_refuses_one_over_before_target_changes_and_admits_exact_bytes() {
+        let path = std::env::temp_dir().join(format!(
+            "yamaa-publication-selected-capacity-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&path).unwrap();
+        let target = path.join("result.csv");
+        std::fs::write(&target, b"old").unwrap();
+        let mut publisher = Publisher::new("result.csv", target.to_str().unwrap()).unwrap();
+        assert!(matches!(
+            publisher.publish_with_limit("result.csv", b"123456789", 8, |_| {
+                panic!("capacity refusal must precede publication checkpoints")
+            }),
+            Err(Error::Limit)
+        ));
+        assert_eq!(std::fs::read(&target).unwrap(), b"old");
+        assert_eq!(std::fs::read_dir(&path).unwrap().count(), 1);
+        publisher
+            .publish_with_limit("result.csv", b"12345678", 8, |_| Ok(()))
+            .unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"12345678");
+        assert_eq!(std::fs::read_dir(&path).unwrap().count(), 1);
+        std::fs::remove_dir_all(path).unwrap();
+    }
     #[test]
     fn the_target_name_is_never_used_as_a_staging_directory() {
         let path = std::env::temp_dir().join(format!(

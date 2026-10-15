@@ -123,6 +123,15 @@ pub fn findings(error: &Error, source: Option<&SourceDeclaration>) -> Option<Vec
                 error.diagnostic(&source.name, &source.path)?,
             )?])
         }
+        Error::SasSource(error) => {
+            let source = source?;
+            Some(vec![portable_diagnostic(
+                error
+                    .finding(&source.name, &source.path)?
+                    .diagnostic()
+                    .ok()?,
+            )?])
+        }
         Error::TypedSource(crate::typed_csv::Error::Typing(error)) => {
             Some(vec![portable_diagnostic(error.diagnostic(&source?.name)?)?])
         }
@@ -145,6 +154,7 @@ pub fn findings_with_limit(
     match error {
         Error::Sources(_)
         | Error::ParquetSource(_)
+        | Error::SasSource(_)
         | Error::TypedSource(_)
         | Error::Source(_)
         | Error::Ordinal(_)
@@ -193,6 +203,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             Error::Source(TextTableError::Csv(_)) => "csv_limit",
             Error::Source(TextTableError::Table(_)) => "table_limit",
             Error::ParquetSource(_) => "parquet_limit",
+            Error::SasSource(_) => "sas_limit",
             _ => "source_limit",
         };
         let mut outcome = json!({"status":"rejected","stage":"ingest","code":code,"resource":refusal.resource,"limit":refusal.limit,"spec_paths":refusal.spec_paths});
@@ -222,6 +233,8 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
                 ("ingest", "parquet_codec_unavailable")
             }
             Error::ParquetSource(_) => ("ingest", "parquet_boundary"),
+            Error::SasSource(crate::sas_source::Error::Limit { .. }) => ("ingest", "sas_limit"),
+            Error::SasSource(_) => ("ingest", "sas_boundary"),
             Error::Ordinal(_) => ("ingest", "source_ordinal_boundary"),
             Error::Bind(BindError::Catalog(_)) => ("bind", "reference_catalog"),
             Error::Bind(BindError::DependencyPolicy(_)) => ("bind", "dependency_policy"),

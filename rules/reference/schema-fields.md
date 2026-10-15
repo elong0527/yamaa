@@ -69,6 +69,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `dataset_source` | `["project_path", "dataset_class"]` | `false` | Absent | -- | [REQ-1059](../storage/ingestion.md#req-1059) |
 | `dataset_class.path` | `"project_path"` | `true` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
 | `dataset_class.types` | `"dict[identifier, column_type]"` | `false` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
+| `dataset_class.encoding` | `"str"` | `false` | Absent | `{"values": ["utf-8", "windows-1252", "iso-8859-1", "ascii"]}` | [REQ-1311](../storage/sas.md#req-1311) |
 | `dataset_class.schema` | `"project_path"` | `false` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
 | `dataset_class.empty_string` | `"str"` | `false` | `"missing"` | `{"values": ["missing", "present"]}` | [REQ-1158](../storage/ingestion.md#req-1158) |
 | `dataset_class.ordinal` | `"identifier"` | `false` | Absent | -- | [REQ-1291](../storage/ingestion.md#req-1291) |

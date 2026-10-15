@@ -1229,3 +1229,11 @@ Active IDs identify requirements independently of file paths.
 | [REQ-1300](../operations/temporal.md#req-1300) | `operations/temporal.md` |
 | [REQ-1301](../operations/temporal.md#req-1301) | `operations/temporal.md` |
 | [REQ-1302](../operations/temporal.md#req-1302) | `operations/temporal.md` |
+| [REQ-1310](../storage/sas.md#req-1310) | `storage/sas.md` |
+| [REQ-1311](../storage/sas.md#req-1311) | `storage/sas.md` |
+| [REQ-1312](../storage/sas.md#req-1312) | `storage/sas.md` |
+| [REQ-1313](../storage/sas.md#req-1313) | `storage/sas.md` |
+| [REQ-1314](../storage/sas.md#req-1314) | `storage/sas.md` |
+| [REQ-1315](../storage/sas.md#req-1315) | `storage/sas.md` |
+| [REQ-1316](../storage/sas.md#req-1316) | `storage/sas.md` |
+| [REQ-1317](../storage/sas.md#req-1317) | `storage/sas.md` |

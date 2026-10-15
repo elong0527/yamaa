@@ -40,6 +40,15 @@ pub(super) fn convert(
     staged_bytes: usize,
     limits: TableLimits,
 ) -> Result<ArrowTable, Error> {
+    convert_with_usage(decoded, staged_bytes, limits, None)
+}
+
+pub(super) fn convert_with_usage(
+    decoded: Decoded,
+    staged_bytes: usize,
+    limits: TableLimits,
+    mut usage: Option<&mut crate::source_decode_usage::Usage>,
+) -> Result<ArrowTable, Error> {
     let mut rows = 0usize;
     let columns = decoded.schema.columns().len();
     for (resource, required, limit) in [
@@ -73,6 +82,9 @@ pub(super) fn convert(
                 .checked_mul(columns)
                 .and_then(|cells| cells.checked_mul(32)),
         )?;
+        if let Some(usage) = usage.as_deref_mut() {
+            usage.storage(staged_bytes - remaining);
+        }
         for array in batch.columns() {
             if let Some(strings) = array.as_any().downcast_ref::<LargeStringArray>() {
                 let mut bytes = 0usize;
@@ -95,6 +107,9 @@ pub(super) fn convert(
                     }));
                 }
                 retain(&mut remaining, staged_bytes, Some(bytes))?;
+                if let Some(usage) = usage.as_deref_mut() {
+                    usage.storage(staged_bytes - remaining);
+                }
             }
         }
     }

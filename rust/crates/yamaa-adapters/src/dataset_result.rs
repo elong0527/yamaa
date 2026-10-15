@@ -14,9 +14,10 @@ use yamaa_engine::{
     table_grouping::GroupingError,
     table_reduction::TableReductionError,
 };
-pub(crate) const MAX_SOURCE_CELLS: usize = dataset::ExecutionBudget::bounded().max_decoded_cells;
-pub(crate) const LIMITS: dataset::Limits = dataset::ExecutionBudget::bounded().execution;
-const MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const MAX_SOURCE_CELLS: usize =
+    dataset::ExecutionBudget::longitudinal().max_decoded_cells;
+pub(crate) const LIMITS: dataset::Limits = dataset::ExecutionBudget::longitudinal().execution;
+const MAX_OUTPUT_BYTES: usize = yamaa_engine::capacity::REPORT_ENCODED_BYTES;
 /// Typed result and boundary failures are not language diagnostics.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DatasetError {

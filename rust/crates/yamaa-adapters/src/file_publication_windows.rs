@@ -7,8 +7,15 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 const MAX_PATH_BYTES: usize = 65_536;
-const MAX_OUTPUT_BYTES: usize = 67_108_864;
+const MAX_OUTPUT_BYTES: usize = yamaa_engine::capacity::SOURCE_BYTES;
 static NEXT: AtomicU64 = AtomicU64::new(0);
+fn admit_output_bytes(length: usize) -> Result<(), Error> {
+    if length > MAX_OUTPUT_BYTES {
+        Err(Error::Limit)
+    } else {
+        Ok(())
+    }
+}
 #[derive(Debug)]
 pub enum Error {
     InvalidTarget,
@@ -203,9 +210,7 @@ impl Publisher {
         if declared != self.declared {
             return Err(Error::PathMismatch);
         }
-        if content.len() > MAX_OUTPUT_BYTES {
-            return Err(Error::Limit);
-        }
+        admit_output_bytes(content.len())?;
         let _lock = DirectoryLock::acquire(&self.parent)?;
         self.check_target()?;
         let mut temporary = self.temporary()?;
@@ -403,9 +408,10 @@ mod tests {
             Err(Error::PathMismatch)
         ));
         assert!(matches!(
-            publisher.publish("output.csv", &vec![0; MAX_OUTPUT_BYTES + 1]),
+            admit_output_bytes(MAX_OUTPUT_BYTES + 1),
             Err(Error::Limit)
         ));
+        assert!(admit_output_bytes(MAX_OUTPUT_BYTES).is_ok());
         for target in [
             "output.csv/",
             "output.csv/.",

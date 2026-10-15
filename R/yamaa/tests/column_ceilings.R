@@ -124,6 +124,38 @@ run_column_ceilings <- function() {
     }
   }
 
+  # A quota refusal does not certify that later semantic checks passed. Once
+  # capacity is repaired, both operations and routes expose the remaining error.
+  case_root <- path("incomplete-checks")
+  spec <- write_case(case_root, columns = 1025L, selected = "ID")
+  lines <- readLines(spec)
+  lines[grepl("name: C0001,", lines, fixed = TRUE)] <-
+    "  - {name: C0001, type: int, derivation: {literal: 1}}"
+  lines[grepl("name: C0002,", lines, fixed = TRUE)] <-
+    "  - {name: C0002, type: str, derivation: {str_case: {source: C0001, to: upper}}}"
+  env <- file.path(case_root, "environment.yaml")
+  writeLines(c("schema_version: '1.0'", "language: r"), env)
+  for (environment in list(NULL, env)) {
+    writeLines(lines, spec)
+    for (operation in list(yamaa_check, yamaa_domain)) {
+      refused <- operation(spec, environment = environment)
+      assert_refusal(refused, TRUE)
+      issue <- refused$issues
+      stopifnot(nrow(issue) == 1L, is.na(issue$requirement),
+        grepl('"incomplete_checks_from":"specification"', issue$context, fixed = TRUE),
+        grepl('"actual":1025', issue$context, fixed = TRUE),
+        grepl('"limit":1024', issue$context, fixed = TRUE))
+    }
+    writeLines(lines[!grepl("name: C1024,", lines, fixed = TRUE)], spec)
+    for (operation in list(yamaa_check, yamaa_domain)) {
+      issue <- operation(spec, environment = environment)$issues
+      stopifnot(nrow(issue) == 1L, identical(issue$condition, "incompatible_input_type"),
+        identical(issue$requirement, "REQ-0308"),
+        !grepl("incomplete_checks_from", issue$context, fixed = TRUE))
+    }
+    stopifnot(!file.exists(file.path(case_root, "out.csv")))
+  }
+
   # Compiler capacity facts are identical through both operations and routes.
   for (resource in c("columns", "inputs", "source_fields", "projected_columns")) {
     case_root <- path(paste0("details-", resource))
@@ -144,7 +176,7 @@ run_column_ceilings <- function() {
     writeLines(c("schema_version: '1.0'", "language: r"), env)
     spec_path <- switch(resource, inputs = "input", source_fields = "input.SRC.types",
                         projected_columns = "output.columns", "columns")
-    expected <- sprintf('{"actual":%s,"code":"compiler_limit","limit":%s,"resource":"%s","stage":"prepare"}',
+    expected <- sprintf('{"actual":%s,"code":"compiler_limit","incomplete_checks_from":"specification","limit":%s,"resource":"%s","stage":"prepare"}',
                         actual, limit, resource)
     for (environment in list(NULL, env)) {
       for (operation in list(yamaa_check, yamaa_domain)) {
@@ -168,10 +200,10 @@ run_column_ceilings <- function() {
                    file.path(case_root, sprintf("layer-%s.yaml", index)))
       }
       writeLines(c("schema_version: '1.0'", "parents: [layer-0.yaml]"), spec)
-      expected <- '{"code":"resource_limit","limit":64,"phase":"inheritance","resource":"depth","stage":"prepare"}'
+      expected <- '{"code":"resource_limit","incomplete_checks_from":"specification","limit":64,"phase":"inheritance","resource":"depth","stage":"prepare"}'
     } else {
       writeLines(paste0("value: ", paste(rep("9", 4097L), collapse = "")), spec)
-      expected <- '{"actual":4097,"code":"resource_limit","limit":4096,"phase":"yaml_decode","resource":"numeric_digits","stage":"capture"}'
+      expected <- '{"actual":4097,"code":"resource_limit","incomplete_checks_from":"specification","limit":4096,"phase":"yaml_decode","resource":"numeric_digits","stage":"capture"}'
     }
     env <- file.path(case_root, "environment.yaml")
     writeLines(c("schema_version: '1.0'", "language: r"), env)

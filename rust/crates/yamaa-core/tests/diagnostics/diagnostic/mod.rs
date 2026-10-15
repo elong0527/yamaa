@@ -39,6 +39,7 @@ mod preflight;
 mod producer;
 mod project_activation;
 mod project_codelist_binding;
+mod sas;
 use crate::support::project_environment;
 mod project_functions;
 mod project_lock;
@@ -53,6 +54,47 @@ impl NumericResolver for Bindings {
             Selection::Absent
         })
     }
+}
+
+#[test]
+fn resource_refusals_name_the_incomplete_check_scope_without_reclassifying_prior_work() {
+    for (stage, code, expected) in [
+        ("capture", "resource_limit", "specification"),
+        ("prepare", "compiler_limit", "specification"),
+        ("check", "compiler_limit", "specification"),
+        ("ingest", "source_limit", "source_binding"),
+        ("bind", "source_limit", "source_binding"),
+        ("execute", "execution_limit", "data"),
+        ("build", "source_boundary", "source_binding"),
+        ("build", "execution_boundary", "data"),
+        ("build", "result_projection", "build"),
+        ("output", "publication_report_limit", "output"),
+        ("report", "output_limit", "output"),
+    ] {
+        let finding = yamaa_core::application_issue::resource_rejected(
+            stage,
+            code,
+            "bytes",
+            7,
+            Some(8),
+            vec!["input.SRC".into()],
+        );
+        assert_eq!(finding.definition().condition, "engine_rejected");
+        assert_eq!(finding.definition().requirement, None);
+        assert_eq!(finding.spec_paths, ["input.SRC"]);
+        assert_eq!(
+            finding.context["incomplete_checks_from"],
+            ContextValue::Scalar(Value::Str(expected.into()))
+        );
+        assert_eq!(finding.context["limit"], ContextValue::Integer("7".into()));
+        assert_eq!(finding.context["actual"], ContextValue::Integer("8".into()));
+    }
+    // An opaque failure cannot establish a resource refusal or its completion boundary.
+    assert!(
+        !yamaa_core::application_issue::rejected("capture", "changed")
+            .context
+            .contains_key("incomplete_checks_from")
+    );
 }
 
 /// Every registry entry must be reached by its evaluator, converter or resource cause. Expected
@@ -510,6 +552,7 @@ fn every_registered_cause_is_reached_with_its_normative_mapping() {
     reached.extend(csv::reached());
     reached.extend(csv::typing_reached());
     reached.extend(parquet::reached());
+    reached.extend(sas::reached());
     let check = yamaa_core::dataset::Check::Codelist {
         id: "SEX".into(),
         values: vec![Value::Str("F".into())],
