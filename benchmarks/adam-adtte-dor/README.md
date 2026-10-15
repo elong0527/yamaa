@@ -1,5 +1,8 @@
 # Duration of Response
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adtte-dor.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build duration of response (`DOR`) records labeled
 `Duration of Response`, one for each responder, carrying
 `STARTDT`, `ADT`, `AVAL`, `CNSR`, `EVNTDESC`, `CNSDTDSC`,
@@ -59,3 +62,5 @@ progression or death after the therapy start date never becomes
 the event, even when no valid assessment exists, and a record
 censored there traces to the subject-level therapy date with a
 blank sequence number.
+
+**Standard:** ADaM | **Domain:** ADTTE

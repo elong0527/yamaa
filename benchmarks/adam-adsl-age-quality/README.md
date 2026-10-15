@@ -1,5 +1,8 @@
 # Keep Out-of-Range Ages for Review
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-quality.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry each subject's collected age (`AGE`) into the ADSL analysis
 dataset, keeping values outside the expected range of 18 to 100 for later
 data review.
@@ -18,3 +21,5 @@ the dataset (`ARTIFACT`, `LOG_VERSION`), what was checked (`CONDITION`,
 `REQUIREMENT`, `SPEC_PATH`, `VERIFICATION_ID`), how serious the failure is
 (`SEVERITY`), and which subjects failed (`FAILURE_COUNT`, `OFFENDING_KEYS`,
 `DETAILS`).
+
+**Standard:** ADaM | **Domain:** ADSL

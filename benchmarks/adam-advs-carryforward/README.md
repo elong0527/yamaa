@@ -1,5 +1,8 @@
 # Once-Measured Carryforward
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-carryforward.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive `ADT`, `AVAL`, `TRTSDT`, and `HEIGHTBL` for each
 planned measurement: height is planned under the code
 `HEIGHT` (one subject plans it twice to exercise baseline-height
@@ -32,3 +35,5 @@ the collection date matches `ADT`.
 **Note:** a carried value never crosses subjects or parameters,
 while `HEIGHTBL` repeats one selected height across both
 parameters.
+
+**Standard:** ADaM | **Domain:** ADVS

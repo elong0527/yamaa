@@ -1,5 +1,8 @@
 # Keep an Investigator Comment Exactly as Collected
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-investigator-comment.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** keep the investigator comment in `CMNT` and whether one
 was collected in `CMNTFL`.
 
@@ -18,3 +21,5 @@ was collected in `CMNTFL`.
 comment collected: the flag is `N` and the comment is absent. A
 field holding only spaces is still a comment: the flag is `Y` and
 the spaces are kept.
+
+**Standard:** ADaM | **Domain:** ADSL

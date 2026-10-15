@@ -1,5 +1,8 @@
 # Flag Measurable Disease at Baseline
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adrs-measurable-disease.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive `AVALC` and `AVAL` flagging whether each subject had
 measurable disease at baseline.
 
@@ -22,3 +25,5 @@ result (`TUSTRESC`), and a sequence number (`TUSEQ`).
 record, even with no screening tumor assessment, so such a subject is
 `N` / `0`. A tumor record for a subject outside the subject-level
 dataset contributes to no flag and creates none.
+
+**Standard:** ADaM | **Domain:** ADRS

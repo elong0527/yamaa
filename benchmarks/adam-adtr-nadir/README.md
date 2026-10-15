@@ -1,5 +1,8 @@
 # Track the Running Nadir Sum
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adtr-nadir.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry each prepared target-lesion assessment forward and
 add `NADIR`, the running lowest sum for the same subject. All
 records share the fixed parameter `SDIAM` (`Sum of Target Lesion
@@ -36,3 +39,5 @@ entry-selected count (`NTARGET`), and completeness flag
 **Note:** an incomplete current assessment keeps the nadir set by an
 earlier complete one, while a complete assessment with a blank date
 never counts toward any nadir, its own included.
+
+**Standard:** ADaM | **Domain:** ADTR

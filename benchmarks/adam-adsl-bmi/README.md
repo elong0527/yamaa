@@ -1,5 +1,8 @@
 # Derive BMI Two Ways
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-bmi.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive body mass index (`BMI`) two ways - once as an inline
 expression and once via a routine the project supplies (`BMI_FN`) -
 and show both columns carry the same value on every record.
@@ -19,3 +22,5 @@ through unchanged.
 
 **Note:** both columns agree on every record: a zero weight gives a
 zero index, and a missing height or weight leaves both empty.
+
+**Standard:** ADaM | **Domain:** ADSL

@@ -1,5 +1,8 @@
 # Derive growth percentile records
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-percentiles.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** turn each collected body measurement (`BMI` or `WEIGHT`)
 into one growth-percentile record holding the percentile in `AVAL`;
 the collected records are not kept.
@@ -26,3 +29,5 @@ measurement code, sex, and age in days.
 
 **Note:** a collected result exactly at the reference median (`M`)
 has a z-score of 0 and so a percentile of exactly 50.
+
+**Standard:** ADaM | **Domain:** ADVS

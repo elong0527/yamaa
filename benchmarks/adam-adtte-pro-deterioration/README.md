@@ -1,5 +1,8 @@
 # Time to Deterioration for a PRO Endpoint
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adtte-pro-deterioration.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** flag each visit-level patient-reported outcome (PRO) score as a
 deterioration or not, then build one time-to-deterioration record per
 subject with parameter code `TTDGHS` (`Time to Deterioration in Global
@@ -52,3 +55,5 @@ reasons, never events: a subject who progresses before any
 deterioration is censored at the last assessment on or before the
 progression date, and a deterioration dated the same day as the
 progression still counts as the event.
+
+**Standard:** ADaM | **Domain:** ADTTE

@@ -1,5 +1,8 @@
 # Measure Time to the First Adverse Event
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adtte-first-ae.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one `TTAE` (Time to First Adverse Event) record
 per subject, counting the days from treatment start to the
 first adverse event, or to the end of the study when no event
@@ -36,3 +39,5 @@ the only event the subject is censored at the end of study.
 Moving a date up to the treatment start changes only the
 date: the record keeps its event-or-censoring status and
 source, and the day count is `1`.
+
+**Standard:** ADaM | **Domain:** ADTTE

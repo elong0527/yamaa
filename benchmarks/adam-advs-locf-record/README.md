@@ -1,5 +1,8 @@
 # Carry one observed record to each planned visit
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-locf-record.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** give each planned visit the result, date, and sequence number
 (`AVAL`, `ADT`, `QSSEQ`) of one observation carried forward to it.
 
@@ -19,3 +22,5 @@ analysis or not.
 
 **Note:** the latest observation is the one with the highest visit
 number, then the highest sequence number within that visit.
+
+**Standard:** ADaM | **Domain:** ADVS

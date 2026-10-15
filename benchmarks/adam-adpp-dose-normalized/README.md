@@ -1,5 +1,8 @@
 # Add dose-normalized exposure parameters
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adpp-dose-normalized.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** keep every pharmacokinetic (PK) parameter record and add, for each
 maximum concentration (`CMAX`) and area under the curve (`AUCLST`, `AUCIFO`)
 record, its dose-normalized parameter (`CMAXD`, `AUCLSTD`, `AUCIFOD`): the
@@ -32,3 +35,5 @@ value, or for a profile whose reference time has no dosing record or a zero
 dose. Two dosing records with one start, a dose unit other than mg or ug, a
 negative dose, or an input that already holds a dose-normalized code stops
 the run.
+
+**Standard:** ADaM | **Domain:** ADPP

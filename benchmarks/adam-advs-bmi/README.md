@@ -1,5 +1,8 @@
 # Derive BMI
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-bmi.html)
+[![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive one body mass index (BMI) record for each
 collected weight record with a result, holding the index in `AVAL`.
 
@@ -22,3 +25,5 @@ per subject and visit, plus each subject's baseline height.
 in place with an empty value instead of dropping it; a weight
 record with no result is the only case that produces no BMI
 record.
+
+**Standard:** ADaM | **Domain:** ADVS

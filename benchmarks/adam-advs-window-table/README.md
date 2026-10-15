@@ -1,5 +1,8 @@
 # Assign Analysis Windows from the Window Table
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-window-table.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** place each systolic blood pressure (`SYSBP`) measurement
 into its analysis window, assigning the visit order number
 (`AVISITN`), the window target day (`AWTARGET`), and the distance
@@ -38,3 +41,5 @@ day sits on or past the first day of a window whose last day was
 never stated: an absent bound is not an open-ended one. Window
 edges are inclusive, so study day 21 closes Week 2 and day 22
 opens Week 4.
+
+**Standard:** ADaM | **Domain:** ADVS

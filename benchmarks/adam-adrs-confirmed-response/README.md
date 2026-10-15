@@ -1,5 +1,8 @@
 # Confirmed Response
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adrs-confirmed-response.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive the confirmation flag `CONFIRMED` for tumor
 response assessments.
 
@@ -20,3 +23,5 @@ standardized result `RSSTRESC`.
 **Note:** assessments sharing a date are ordered by sequence
 number `RSSEQ`: the higher-numbered one is the next assessment for
 the lower-numbered one, zero days later, so it never confirms it.
+
+**Standard:** ADaM | **Domain:** ADRS
