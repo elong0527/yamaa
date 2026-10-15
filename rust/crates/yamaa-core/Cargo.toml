@@ -7,6 +7,9 @@ rust-version.workspace = true
 license = "MIT AND Unicode-3.0"
 publish.workspace = true
 
+[features]
+test-support = []
+
 [dependencies]
 # Pure no_std numeric formatting; no host, filesystem, or table dependencies.
 ryu = { version = "=1.0.20", default-features = false }
@@ -47,3 +50,20 @@ path = "tests/diagnostics_tests.rs"
 [[test]]
 name = "portable_math_golden"
 path = "tests/portable_math_golden.rs"
+
+[[test]]
+name = "execution_tests"
+path = "tests/execution_tests.rs"
+
+[[test]]
+name = "preparation_tests"
+path = "tests/preparation_tests.rs"
+
+[[test]]
+name = "service_tests"
+path = "tests/service_tests.rs"
+
+[[test]]
+name = "test_support"
+path = "tests/test_support.rs"
+required-features = ["test-support"]

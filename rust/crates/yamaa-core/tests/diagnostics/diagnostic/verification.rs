@@ -2,8 +2,8 @@ use super::project_support as support;
 use std::collections::BTreeSet;
 use support::Tree as T;
 use yamaa_core::{
+    dataset::{CheckRecord, RowIdentity},
     diagnostic::ConditionCode,
-    project_codelist_diagnostics::{CheckObservation, RowObservation},
     project_diagnostics::Fact,
     schema::DocumentNode,
     specification::PreparedSpecification,
@@ -11,14 +11,6 @@ use yamaa_core::{
     verification_diagnostics::{project, Error, Phase},
 };
 struct Row(Vec<Value>);
-impl RowObservation for Row {
-    fn position(&self) -> usize {
-        0
-    }
-    fn values(&self) -> &[Value] {
-        &self.0
-    }
-}
 fn compiled() -> PreparedSpecification {
     let list = || T::List(vec![T::text("VAL"), T::text("ID")]);
     let spec = support::specification_with_verifications(
@@ -60,14 +52,20 @@ fn compiled() -> PreparedSpecification {
     );
     PreparedSpecification::prepare(&spec).unwrap()
 }
-fn record<'a>(code: ConditionCode, path: &'a str, rows: &'a [Row]) -> CheckObservation<'a, Row> {
-    CheckObservation {
-        path,
+fn record(code: ConditionCode, path: &str, rows: &[Row]) -> CheckRecord {
+    CheckRecord {
+        path: path.into(),
         code,
         evaluated_count: 9,
         failed_count: 1,
         output_rows: 9,
-        offending_rows: rows,
+        offending_rows: rows
+            .iter()
+            .map(|row| RowIdentity {
+                position: 0,
+                values: row.0.clone(),
+            })
+            .collect(),
         codelist: None,
         inventory: None,
         row_count: None,
@@ -129,8 +127,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0385",
         ),
     ] {
-        let projected =
-            project(&compiled, &[record(code, path, &rows)], phase, "test.yaml").unwrap();
+        let records = [record(code, path, &rows)];
+        let projected = project(&compiled, &records, phase, "test.yaml").unwrap();
         if code == VerificationUniqueFailed {
             assert!(projected.diagnostics.is_empty());
         } else {
@@ -180,7 +178,8 @@ fn warning_display_is_bounded_but_all_keys_and_exact_scalars_remain_in_order() {
     record.output_rows = usize::MAX;
     // Unique failure count is repeated groups, rather than all group members.
     record.failed_count = 2;
-    let projected = project(&compiled, &[record], Phase::Verification, "study.yaml").unwrap();
+    let records = [record];
+    let projected = project(&compiled, &records, Phase::Verification, "study.yaml").unwrap();
     assert!(projected.diagnostics.is_empty());
     let observation = object(&projected.observations[0]);
     assert_eq!(observation["severity"], Fact::Text("warning"));
@@ -204,7 +203,7 @@ fn warning_display_is_bounded_but_all_keys_and_exact_scalars_remain_in_order() {
     let Fact::Scalar(value) = object(&retained[0])["ID"] else {
         panic!("borrowed key")
     };
-    assert!(std::ptr::eq(value, &rows[0].0[0]));
+    assert!(std::ptr::eq(value, &records[0].offending_rows[0].values[0]));
     let Fact::Sequence(logged) = &object(&failure["log_context"])["keys"] else {
         panic!("log keys")
     };
@@ -214,17 +213,12 @@ fn warning_display_is_bounded_but_all_keys_and_exact_scalars_remain_in_order() {
 fn output_missing_keys_are_not_rejected_or_lost_and_row_count_keeps_full_width() {
     let compiled = compiled();
     let rows = [Row(vec![Value::Missing])];
-    let result = project(
-        &compiled,
-        &[record(
-            ConditionCode::OutputMissingKeyFailed,
-            "keys[0]",
-            &rows,
-        )],
-        Phase::Output,
-        "s.yaml",
-    )
-    .unwrap();
+    let records = [record(
+        ConditionCode::OutputMissingKeyFailed,
+        "keys[0]",
+        &rows,
+    )];
+    let result = project(&compiled, &records, Phase::Output, "s.yaml").unwrap();
     let context = &result.diagnostics[0].context;
     assert_eq!(context["column"], Fact::Text("ID"));
     let Fact::Sequence(keys) = &context["keys"] else {
@@ -238,7 +232,8 @@ fn output_missing_keys_are_not_rejected_or_lost_and_row_count_keeps_full_width()
     );
     count.output_rows = usize::MAX;
     count.evaluated_count = 1;
-    let result = project(&compiled, &[count], Phase::Verification, "s.yaml").unwrap();
+    let counts = [count];
+    let result = project(&compiled, &counts, Phase::Verification, "s.yaml").unwrap();
     assert_eq!(
         result.diagnostics[0].context["count"],
         Fact::Unsigned(usize::MAX)
