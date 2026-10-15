@@ -797,14 +797,6 @@ impl Rows {
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
                 .map(|id| {
                     let values = sequence(d, id)?;
-                    if values.len() > crate::limits::Limits::KEYS {
-                        return Err(PrepareError::limit(
-                            "group_keys",
-                            crate::limits::Limits::KEYS,
-                            Some(values.len()),
-                            Some(&format!("{path}.group_by")),
-                        ));
-                    }
                     values
                         .iter()
                         .map(|&id| text(d, id).map(String::from))
@@ -812,14 +804,6 @@ impl Rows {
                 })
                 .transpose()?;
             let entries = mapping(d, field(d, row, "derivations")?)?;
-            if entries.len() > crate::limits::Limits::COLUMNS {
-                return Err(PrepareError::limit(
-                    "row_columns",
-                    crate::limits::Limits::COLUMNS,
-                    Some(entries.len()),
-                    Some(&format!("{path}.derivations")),
-                ));
-            }
             for &(name, _) in entries {
                 if !output
                     .columns()
