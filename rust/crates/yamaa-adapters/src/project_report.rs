@@ -265,21 +265,7 @@ pub(crate) fn activation_origins(
     let mut budget =
         crate::report_projection::Budget::new(crate::specification_check::MAX_ISSUE_BYTES);
     let captured = run.captured_environment();
-    budget.entries(captured.captures().len())?;
-    budget.entries(paths.len())?;
-    for selected in functions.clone() {
-        budget.entries(1)?;
-        budget.work(captured.captures().len())?;
-        budget.text(&captured.root().source().identity)?;
-        budget.text(
-            paths
-                .get(selected)
-                .ok_or(report::Error::InvalidObservation)?,
-        )?;
-        for capture in captured.captures() {
-            budget.text(&capture.document.source().identity)?;
-        }
-    }
+
     let functions = functions.collect::<Vec<_>>();
     if issues.len() != functions.len() {
         return Err(report::Error::InvalidObservation);

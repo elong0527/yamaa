@@ -6,7 +6,6 @@ use crate::{
     file_resources::{Error as ResourceError, Resources},
     producer_publication::{same_location, selected_bound, AdmissionFailure},
     producer_report::{NativeAttempt, NodeLogs},
-    report_projection::Budget,
     report_storage::StoredReport,
     specification_report::Error as ReportError,
 };
@@ -341,12 +340,7 @@ impl Publication {
                 .checked_sub(request.path.len())
                 .and_then(|n| n.checked_sub(request.bytes.len()))
                 .ok_or(AdmissionFailure::Limit("producer_publication_work"))?;
-            let copied = (|| {
-                budget.entries(1)?;
-                budget.text(request.path)?;
-                budget.text(request.specification)?;
-                budget.json(request.observation)
-            })();
+            let copied = (|| budget.json(request.observation))();
             copied.map_err(|_| AdmissionFailure::Limit("publication_report_limit"))
         })?;
         if count == 0 {
@@ -506,22 +500,12 @@ impl Publication {
         diagnostic: bool,
         entered: usize,
         completed: usize,
-        budget: &mut Budget,
     ) -> Result<StoredReport, ReportError> {
         let count = self.requests(diagnostic).count();
         if completed > entered || entered > count {
             return Err(ReportError::InvalidObservation);
         }
-        budget.shared_report(original)?;
-        budget.entries(32)?;
-        for (_, request) in self.requests(diagnostic).take(entered) {
-            budget.entries(16)?;
-            budget.text(request.field)?;
-            budget.text(&request.path)?;
-        }
-        for (_, request) in self.requests(diagnostic).take(completed) {
-            budget.json(&request.observation)?;
-        }
+
         let mut result = original.without_artifacts_cloned()?;
         result["artifacts"] = Value::Array(
             self.requests(diagnostic)

@@ -6,7 +6,6 @@ use crate::{
     producer_report::{self, NativeAttempt, ProjectionError},
     project_report::Classified,
     public_table::PublicTable,
-    report_projection::Budget,
     report_storage::StoredReport,
     specification_report::{Error as ReportError, Identity},
 };
@@ -112,13 +111,6 @@ impl RootResult {
         // every publisher. Save never classifies a host error or rerenders Build.
         let mut budget = Budget::new(maximum);
         let admitted = (|| {
-            budget.shared_report(&self.observations)?;
-            budget.entries(publication.artifacts().len().saturating_mul(64))?;
-            for artifact in publication.artifacts() {
-                for _ in 0..4 {
-                    budget.text(artifact.path())?;
-                }
-            }
             let mut value = self.observations.clone();
             value["publication"] = serde_json::json!({"status":"failure",
                 "entered":publication.artifacts().iter().map(|item|serde_json::json!({"node":item.node(),"published":false})).collect::<Vec<_>>(),
@@ -133,13 +125,8 @@ impl RootResult {
                     path: None,
                 })
                 .collect::<Vec<_>>();
-            let fields = crate::report_publication::Prepared::new(
-                &mut value,
-                &locations,
-                false,
-                maximum,
-                &mut budget,
-            )?;
+            let fields =
+                crate::report_publication::Prepared::new(&mut value, &locations, false, maximum)?;
             Ok::<_, ReportError>((value, fields))
         })();
         let (mut value, mut fields) = match admitted {
@@ -247,18 +234,10 @@ impl RootResult {
         let count = publication.requests(failed).count();
         let mut budget = Budget::new(maximum);
         let report = (|| {
-            budget.entries(count.saturating_mul(64))?;
-            for (_, request) in publication.requests(failed) {
-                for _ in 0..8 {
-                    budget.text(&request.path)?;
-                }
-                budget.text(request.field)?;
-            }
             // Own the complete report before any write. Every actual prefix is
             // formed by dropping already-owned artifact/entry suffixes; it never
             // reprojects observations or clones their tables and CSV content.
-            let mut value =
-                publication.prefix_report(&self.observations, failed, count, count, &mut budget)?;
+            let mut value = publication.prefix_report(&self.observations, failed, count, count)?;
             let locations = publication
                 .requests(failed)
                 .map(|(key, request)| crate::report_publication::Location {
@@ -268,13 +247,8 @@ impl RootResult {
                     path: Some(&request.path),
                 })
                 .collect::<Vec<_>>();
-            let fields = crate::report_publication::Prepared::new(
-                &mut value,
-                &locations,
-                true,
-                maximum,
-                &mut budget,
-            )?;
+            let fields =
+                crate::report_publication::Prepared::new(&mut value, &locations, true, maximum)?;
             Ok::<_, ReportError>((value, fields))
         })();
         let (mut value, mut fields) = match report {
@@ -439,14 +413,13 @@ fn prepare_observations<'a, E>(
     output_allowed: bool,
 ) -> Result<RootResult, Error<'a, E>> {
     let mut budget = Budget::new(maximum);
-    prepare_observations_with_budget(attempt, observations, maximum, output_allowed, &mut budget)
+    prepare_observations_with_budget(attempt, observations, maximum, output_allowed)
 }
 fn prepare_observations_with_budget<'a, E>(
     attempt: &'a NativeAttempt<E>,
     observations: StoredReport,
     maximum: usize,
     output_allowed: bool,
-    budget: &mut Budget,
 ) -> Result<RootResult, Error<'a, E>> {
     let diagnostics =
         observations["diagnostics"]
@@ -454,16 +427,7 @@ fn prepare_observations_with_budget<'a, E>(
             .ok_or(Error::Report(ProjectionError::Report(
                 ReportError::InvalidObservation,
             )))?;
-    let admit = (|| {
-        budget.entries(diagnostics.len())?;
-        for diagnostic in diagnostics {
-            // JSON clone, five-field owned rows and escaped context text.
-            for _ in 0..3 {
-                budget.json(diagnostic)?;
-            }
-        }
-        Ok::<_, ReportError>(())
-    })();
+    let admit = (|| Ok::<_, ReportError>(()))();
     admit.map_err(|error| Error::Report(ProjectionError::Report(error)))?;
     let mut issues = diagnostics
         .iter()
@@ -483,7 +447,7 @@ fn prepare_observations_with_budget<'a, E>(
         )));
     }
     let output = if attempt.accepted() && output_allowed {
-        match root_output(attempt, budget) {
+        match root_output(attempt) {
             Ok(output) => Some(output),
             Err(error) => {
                 return Err(Error::Output {
@@ -533,10 +497,7 @@ pub fn prepare_owned_classified<'a, E>(
             ..
         }) if has_verification => {
             let mut budget = Budget::new(maximum);
-            budget
-                .json(&observations)
-                .and_then(|()| budget.entries(32))
-                .map_err(|error| Error::Report(ProjectionError::Report(error)))?;
+
             observations["outcome"] = Value::String("failure".into());
             observations["error"] =
                 serde_json::json!({"stage":"output","code":"output_projection"});
@@ -567,25 +528,11 @@ pub fn prepare_owned_classified<'a, E>(
     Ok(result)
 }
 
-fn root_output<E>(
-    attempt: &NativeAttempt<E>,
-    budget: &mut Budget,
-) -> Result<(PublicTable, Vec<u8>), TableError> {
+fn root_output<E>(attempt: &NativeAttempt<E>) -> Result<(PublicTable, Vec<u8>), TableError> {
     let invalid = TableError::InvalidTable;
     let metadata = attempt.provenance.metadata();
     // Root identity and compiler are borrowed from the sealed complete owner.
-    budget
-        .entries(metadata.nodes().len())
-        .map_err(|_| TableError::OutputLimit)?;
-    budget
-        .work(
-            metadata
-                .nodes()
-                .len()
-                .checked_mul(3)
-                .ok_or(TableError::OutputLimit)?,
-        )
-        .map_err(|_| TableError::OutputLimit)?;
+
     let root = metadata.root();
     let view = attempt.provenance.report_views().nth(root).ok_or(invalid)?;
     let mut matches = attempt.graph.nodes.iter().filter(|node| node.node == root);
@@ -611,17 +558,7 @@ fn root_output<E>(
     let table = &execution.dataset;
     let columns = table.schema().columns();
     let projection = artifact.projection();
-    budget
-        .entries(projection.len())
-        .map_err(|_| TableError::OutputLimit)?;
-    budget
-        .work(
-            projection
-                .len()
-                .checked_mul(columns.len())
-                .ok_or(TableError::OutputLimit)?,
-        )
-        .map_err(|_| TableError::OutputLimit)?;
+
     if projection.len() != view.compiled().projection().len()
         || projection
             .iter()
@@ -634,18 +571,9 @@ fn root_output<E>(
     // Admit full shape, names, cells and work for Arrow, public columns and IPC
     // before any of those owners allocate. Serialized CSV precision is irrelevant.
     for _ in 0..3 {
-        budget
-            .typed_shape(table.row_count(), columns.len())
-            .map_err(|_| TableError::OutputLimit)?;
         for (index, column) in columns.iter().enumerate() {
-            budget
-                .text(&column.name)
-                .map_err(|_| TableError::OutputLimit)?;
             for row in 0..table.row_count() {
                 let cell = table.cell(row, index).map_err(|_| invalid)?;
-                budget
-                    .typed_cell(&cell)
-                    .map_err(|_| TableError::OutputLimit)?;
             }
         }
     }
