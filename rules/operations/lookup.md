@@ -813,7 +813,7 @@ fields or names the intermediate derives under [REQ-1185](lookup.md#req-1185).
 
 | Field | Meaning |
 | --- | --- |
-| `filtered_source` | A variable, or a variable with the predicate selecting the records it reads. |
+| `filtered_source` | A variable, or the class form carrying the variable with its filter, selection, or absent value. |
 
 <a id="req-1053"></a>
 
@@ -823,3 +823,6 @@ fields or names the intermediate derives under [REQ-1185](lookup.md#req-1185).
 | --- | --- |
 | `filtered_source_class.variable` | Variable to copy. |
 | `filtered_source_class.filter` | Predicate selecting the right-side records this source reads; [Lookup and joins](lookup.md) defines the selection. |
+| `filtered_source_class.absent` | Value used when the source variable or item is absent. |
+| `filtered_source_class.order_by` | Terms ordering eligible right-side matches; declared with keep ([REQ-0119](lookup.md#req-0119)). |
+| `filtered_source_class.keep` | Ordered match to retain; declared with order_by ([REQ-0119](lookup.md#req-0119)). |
