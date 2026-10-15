@@ -90,7 +90,7 @@ jobs:
           python/tests/test_harbor_reference_edges.py
 
       - name: Reject R literal golden writers
-        if: github.ref == 'refs/heads/validation/issue-2297-harbor' || github.ref == 'refs/heads/validation/issue-2297-r-rejection'
+        if: always() && (github.ref == 'refs/heads/validation/issue-2297-harbor' || github.ref == 'refs/heads/validation/issue-2297-r-rejection')
         run: >-
           uv run --project python --no-sync python evaluations/harbor/check_pkqt_r_golden_copy.py
           --out "${RUNNER_TEMP}/pkqt-r-golden-copy"
