@@ -445,28 +445,16 @@ impl Imputation {
                 date_code(precision)
             }
             (K::DateTime { time }, ValueRef::Str(text)) => {
-                if let Ok(moment) = text.parse::<DateTime>() {
-                    Value::DateTime(moment)
-                } else if let Ok(date) = text.parse::<Date>() {
-                    let (hour, minute, second) = match time {
-                        TimeRule::First => (0, 0, 0),
-                        TimeRule::Last => (23, 59, 59),
-                    };
-                    Value::DateTime(
-                        DateTime::new(date, hour, minute, second, DateTimePrecision::Day).unwrap(),
-                    )
-                } else {
+                let Some(moment) = reduced_datetime(text, time) else {
                     return self.recover("invalid", Some(text));
-                }
+                };
+                Value::DateTime(moment)
             }
             (K::DateTimePrecision, ValueRef::Str(text)) => {
-                if text.parse::<DateTime>().is_ok() {
-                    datetime_code(DateTimePrecision::Second)
-                } else if text.parse::<Date>().is_ok() {
-                    datetime_code(DateTimePrecision::Day)
-                } else {
+                let Some(moment) = reduced_datetime(text, TimeRule::First) else {
                     return self.recover("invalid", Some(text));
-                }
+                };
+                datetime_code(moment.collected_precision())
             }
             (_, other) => return Err(self.input_diagnostic(type_name(other))),
         };
@@ -525,6 +513,8 @@ fn datetime_code(precision: DateTimePrecision) -> Value {
     Value::Str(
         match precision {
             DateTimePrecision::Day => "D",
+            DateTimePrecision::Hour => "H",
+            DateTimePrecision::Minute => "M",
             DateTimePrecision::Second => "S",
         }
         .into(),
@@ -573,6 +563,36 @@ fn prefix(text: &str) -> Option<(u16, Option<u8>, Option<u8>, DatePrecision)> {
     }
     let date = text.parse::<Date>().ok()?;
     Some((year, Some(month), Some(date.fields().2), DatePrecision::Day))
+}
+/// Complete ISO 8601 date text, or datetime text cut after its hour, minute or
+/// second. The time rule supplies only the fields the text does not carry, and
+/// the result's collected precision is the last field the text carried.
+fn reduced_datetime(text: &str, time: TimeRule) -> Option<DateTime> {
+    let bytes = text.as_bytes();
+    let precision = match bytes.len() {
+        10 => DateTimePrecision::Day,
+        13 => DateTimePrecision::Hour,
+        16 => DateTimePrecision::Minute,
+        19 => DateTimePrecision::Second,
+        _ => return None,
+    };
+    let date = text.get(..10)?.parse::<Date>().ok()?;
+    let mut fields = match time {
+        TimeRule::First => [0, 0, 0],
+        TimeRule::Last => [23, 59, 59],
+    };
+    // Each collected field is two digits after `T` (hour) or `:` (minute, second).
+    for (index, field) in fields.iter_mut().enumerate().take((bytes.len() - 10) / 3) {
+        let start = 10 + 3 * index;
+        let separator = if index == 0 { b'T' } else { b':' };
+        let (high, low) = (bytes[start + 1], bytes[start + 2]);
+        if bytes[start] != separator || !high.is_ascii_digit() || !low.is_ascii_digit() {
+            return None;
+        }
+        *field = (high - b'0') * 10 + (low - b'0');
+    }
+    let [hour, minute, second] = fields;
+    DateTime::new(date, hour, minute, second, precision).ok()
 }
 pub(crate) fn diagnostic(code: C, path: &str, fields: &[(&str, Value)]) -> Diagnostic {
     Diagnostic {

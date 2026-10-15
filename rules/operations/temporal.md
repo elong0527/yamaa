@@ -107,11 +107,55 @@ exists is already a value of its type.
 <a id="req-0589"></a>
 
 **REQ-0589.** The date operations do not answer about a `datetime`.
-`datetime_impute` supplies only the time of a complete collected date, under an
-explicit first- or last-second rule; it does not supply a missing day.
-`datetime_precision` reports whether a complete date or datetime source
-carried a time. A source truncated before the day stays `str` and is invalid to
-both datetime operations rather than silently combining date and time policies.
+`datetime_impute` supplies only time fields, under an explicit first or last
+rule: the whole time of a complete collected date, or the fields a datetime
+collected to the hour or minute does not carry. It does not supply a missing
+day. `datetime_precision` reports how much of a time a complete date or
+datetime source carried. A source truncated before the day stays `str` and is
+invalid to both datetime operations rather than silently combining date and
+time policies.
+
+### Partial collected times
+
+<a id="req-1326"></a>
+
+**REQ-1326.** A study collects times truncated to the hour or to the minute,
+as ISO 8601 reduced precision allows. `datetime_impute` and
+`datetime_precision` read source text in exactly these forms:
+
+    source := date [ "T" hh [ ":" mm [ ":" ss ] ] ]
+
+`date`, `hh`, `mm`, and `ss` are the fields of
+[Temporal values](../values/temporal.md), with their widths and ranges. Any
+other text is invalid to both operations, including a zone, an offset, a
+fractional second, hour 24, a leap second, and a field of one digit.
+
+<a id="req-1327"></a>
+
+**REQ-1327.** One precision ladder orders `day`, `hour`, `minute`, then
+`second`. Each source form carries the level of its last field:
+`2025-03-04` is `day`, `2025-03-04T08` is `hour`, `2025-03-04T08:30` is
+`minute`, and `2025-03-04T08:30:15` is `second`. `datetime_precision` returns
+the ladder code: `D`, `H`, `M`, or `S`.
+
+<a id="req-1328"></a>
+
+**REQ-1328.** `datetime_impute` keeps every field its source text carries and
+supplies each missing time field from its `time` rule. `first` supplies hour
+`00`, minute `00`, and second `00`; `last` supplies hour `23`, minute `59`,
+and second `59`. `2025-03-04T08` therefore completes to `2025-03-04T08:00:00`
+under `first` and to `2025-03-04T08:59:59` under `last`. A source carrying
+seconds is returned unchanged. The result carries the source form's collected
+precision.
+
+<a id="req-1329"></a>
+
+**REQ-1329.** Reading source text is not converting it. Text converted to a
+`datetime` column, or ingested as one, follows the lexical form of
+[Temporal values](../values/temporal.md): `2025-03-04T08:30` names second zero
+there, with collected precision `second`, and `2025-03-04T08` is not a
+`datetime`. A specification that must record a minute or hour precision keeps
+the collected text as `str` and completes it with `datetime_impute`.
 
 ### Operations
 
@@ -126,8 +170,8 @@ nests these operations. Their input and result types are:
 | `study_day` | `date` and `reference` are `date` | `int`, never zero |
 | `date_impute` | inputs in [REQ-0578](temporal.md#req-0578)--[REQ-0589](temporal.md#req-0589) | `date` |
 | `date_precision` | `source` is `str` or `date` | `str` |
-| `datetime_impute` | `source` is complete date or datetime text; `time` is `first` or `last` | `datetime` |
-| `datetime_precision` | `source` is complete date or datetime text, or `datetime` | `str` |
+| `datetime_impute` | `source` is date or datetime text in a [REQ-1326](temporal.md#req-1326) form, or `datetime`; `time` is `first` or `last` | `datetime` |
+| `datetime_precision` | `source` is date or datetime text in a [REQ-1326](temporal.md#req-1326) form, or `datetime` | `str` |
 | `to_date` | `source` is `datetime`, ISO 8601 date text, or ISO 8601 datetime text | `date` with collected precision `day` |
 | `to_epoch_day` | `source` is `date` | `int` days since 1970-01-01 |
 | `date_shift` | `source` is `date`; `days` is `int` | `date` |
@@ -173,7 +217,8 @@ position, and is rejected where the specification is read.
 <a id="req-0593"></a>
 
 **REQ-0593.** A `datetime` is produced by converting datetime text or by
-`datetime_impute`, which completes a date source under its declared time rule.
+`datetime_impute`, which completes a date, or a datetime collected to the hour
+or minute, under its declared time rule.
 It is also produced by `datetime_shift` and consumed by `datetime_diff`,
 `datetime_shift`, comparisons, `datetime_precision`, or `to_date`, which copies
 calendar fields and drops time fields. ISO 8601 datetime text parses as a
@@ -423,11 +468,11 @@ meanings.
 
 | Field | Meaning |
 | --- | --- |
-| `expressions.datetime_impute.source` | ISO 8601 datetime text or complete date text. |
-| `expressions.datetime_impute.time` | Time supplied when the source has no time: `first` is `00:00:00` and `last` is `23:59:59`. |
+| `expressions.datetime_impute.source` | ISO 8601 complete date text, or datetime text collected to the hour, minute, or second. |
+| `expressions.datetime_impute.time` | Time fields supplied when the source does not carry them: `first` supplies `00` to each, as in `00:00:00`, and `last` supplies `23`, `59`, and `59`, as in `23:59:59`. |
 | `expressions.datetime_impute.missing` | Result when the source value is missing. |
-| `expressions.datetime_impute.invalid` | Result when the source is neither a datetime nor a complete date. |
-| `Result` | Returns a datetime. A complete datetime is returned unchanged with collected precision `second`; a complete date receives the declared edge of its day and carries collected precision `day`. A source truncated before its day is invalid rather than receiving a second imputation policy. Missing and invalid sources yield no datetime unless their local handlers are declared. |
+| `expressions.datetime_impute.invalid` | Result when the source is neither a complete date nor a datetime collected to the hour, minute, or second. |
+| `Result` | Returns a datetime. Datetime text carrying seconds is returned unchanged with collected precision `second`. Text collected to the hour or minute keeps its collected fields, receives the missing ones from the declared rule, and carries collected precision `hour` or `minute`. A complete date receives the declared edge of its day and carries collected precision `day`. A datetime value is returned unchanged. A source truncated before its day is invalid rather than receiving a second imputation policy. Missing and invalid sources yield no datetime unless their local handlers are declared. |
 
 <a id="req-1183"></a>
 
@@ -436,10 +481,10 @@ meanings.
 
 | Field | Meaning |
 | --- | --- |
-| `expressions.datetime_precision.source` | ISO 8601 datetime or complete date text, or a datetime whose collected precision is reported. |
+| `expressions.datetime_precision.source` | ISO 8601 complete date text or datetime text collected to the hour, minute, or second, or a datetime whose collected precision is reported. |
 | `expressions.datetime_precision.missing` | Result when the source value is missing. |
-| `expressions.datetime_precision.invalid` | Result when the source is neither a datetime nor a complete date. |
-| `Result` | Returns `S` when the source carried a time and `D` when `datetime_impute` supplied it. Reading a datetime value binds the answer to the completed value; reading its source text reports the same distinction before completion. Invalid text and a missing source behave as they do for `datetime_impute`; a datetime value is never invalid. |
+| `expressions.datetime_precision.invalid` | Result when the source is neither a complete date nor a datetime collected to the hour, minute, or second. |
+| `Result` | Returns how much of a time its source carries: `S` through the second, `M` through the minute, `H` through the hour, and `D` for a date alone, whose whole time `datetime_impute` supplies. Reading a datetime value binds the answer to the completed value; reading its source text reports the same answer before completion. Invalid text and a missing source behave as they do for `datetime_impute`; a datetime value is never invalid. |
 
 <a id="req-1184"></a>
 
@@ -447,7 +492,7 @@ meanings.
 
 | Field | Meaning |
 | --- | --- |
-| `time_rule` | Whole second at the beginning or end of the completed day. |
+| `time_rule` | Earliest or latest civil moment the collected source admits: each missing time field takes its first or last value. |
 
 ## Error conditions
 

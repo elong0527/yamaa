@@ -479,6 +479,19 @@ class DerivationShapeTests(unittest.TestCase):
             "Whole years from BRTHDT to RANDDT, counting the end date but not the start.",
         )
 
+    def test_datetime_precision_names_its_own_codes(self):
+        rule = mapping_doc.describe_derivation(
+            {"datetime_precision": {"source": "ASTDTM", "missing": None}}
+        )
+        self.assertIn("M through the minute, H through the hour", rule)
+        self.assertNotIn("year", rule)
+
+    def test_datetime_impute_supplies_only_missing_time_parts(self):
+        rule = mapping_doc.describe_derivation(
+            {"datetime_impute": {"source": "AEENDTC", "time": "last"}}
+        )
+        self.assertIn("each time part the source lacks its latest value", rule)
+
     def test_cut_names_the_closed_side_of_each_interval(self):
         rule = method_column("adam-adsl-demographics")["AGEGR1"]
         self.assertIn("intervals closed on the left", rule)

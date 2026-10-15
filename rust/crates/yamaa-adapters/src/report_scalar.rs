@@ -61,6 +61,8 @@ impl ScalarValue {
                             Json::String(
                                 match temporal.precision {
                                     DateTimeCollected::Day => "day",
+                                    DateTimeCollected::Hour => "hour",
+                                    DateTimeCollected::Minute => "minute",
                                     DateTimeCollected::Second => "second",
                                 }
                                 .into(),
@@ -126,6 +128,8 @@ impl ScalarValue {
                     text,
                     precision: match precision.as_str() {
                         "day" => DateTimeCollected::Day,
+                        "hour" => DateTimeCollected::Hour,
+                        "minute" => DateTimeCollected::Minute,
                         "second" => DateTimeCollected::Second,
                         _ => return Err(invalid),
                     },
@@ -173,6 +177,8 @@ enum DateCollected {
 #[serde(rename_all = "lowercase")]
 enum DateTimeCollected {
     Day,
+    Hour,
+    Minute,
     Second,
 }
 
@@ -220,6 +226,8 @@ impl Scalar {
                 let (year, month, day, hour, minute, second) = date.fields();
                 let precision = match precision {
                     DateTimeCollected::Day => DateTimePrecision::Day,
+                    DateTimeCollected::Hour => DateTimePrecision::Hour,
+                    DateTimeCollected::Minute => DateTimePrecision::Minute,
                     DateTimeCollected::Second => DateTimePrecision::Second,
                 };
                 let date = Date::new(year, month, day, DatePrecision::Day).map_err(|_| invalid)?;
@@ -250,9 +258,41 @@ impl Scalar {
                 text: value.to_string(),
                 precision: match value.collected_precision() {
                     DateTimePrecision::Day => DateTimeCollected::Day,
+                    DateTimePrecision::Hour => DateTimeCollected::Hour,
+                    DateTimePrecision::Minute => DateTimeCollected::Minute,
                     DateTimePrecision::Second => DateTimeCollected::Second,
                 },
             }),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hour_and_minute_datetime_precision_survive_the_json_projection() {
+        let day = Date::new(2025, 3, 4, DatePrecision::Day).unwrap();
+        for (value, precision) in [
+            (
+                DateTime::new(day, 8, 59, 59, DateTimePrecision::Hour).unwrap(),
+                "hour",
+            ),
+            (
+                DateTime::new(day, 8, 30, 0, DateTimePrecision::Minute).unwrap(),
+                "minute",
+            ),
+        ] {
+            let json = ScalarValue::from_core(Value::DateTime(value)).to_json();
+            assert_eq!(json["datetime"]["precision"].as_str(), Some(precision));
+            let Value::DateTime(decoded) =
+                ScalarValue::from_json(&json).unwrap().into_core().unwrap()
+            else {
+                panic!("datetime required")
+            };
+            assert_eq!(decoded.fields(), value.fields());
+            assert_eq!(decoded.collected_precision(), value.collected_precision());
         }
     }
 }
