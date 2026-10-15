@@ -1,5 +1,8 @@
 # Reject Conflicting Ages
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-keys-conflict.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build one subject-level record carrying the collected age
 (`AGE`) and sex (`SEX`), one for each subject the collected
 demographics carry.
@@ -21,6 +24,8 @@ them reports, is one answer and carries without complaint. Two
 different ages are two answers to a question the record has one
 place for, so the run fails where the age is read and no artifact is
 accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

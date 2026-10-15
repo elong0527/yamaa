@@ -1,5 +1,8 @@
 # Reject Self-Named Treatment
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-lookup-id-collision.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry the first treatment received in `TRT01A`, one
 record per subject.
 
@@ -18,6 +21,8 @@ means the treatment of the chosen record or of every exposure
 record. The two readings differ whenever a subject has more than one
 administration. The name itself is rejected before any data is
 read, so no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

@@ -1,5 +1,8 @@
 # Reject Mixed Units
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-date-diff-units.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build a subject-level record carrying the exposure start
 (`TRTSDT`) and end (`TRTEDT`) dates and counting whole months between
 them in `TRTDURM`.
@@ -21,6 +24,8 @@ for each subject.
 inclusive bounds answer "how many days, endpoints included", which has
 no whole-month reading. The request is rejected before any data is
 read, so no output is produced.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

@@ -1,8 +1,0 @@
-lifecycle: reviewed
-standard: ADaM
-domain: ADSL
-validation:
-  rule: R016
-  validator: temporal_contract
-covers:
-- date_diff

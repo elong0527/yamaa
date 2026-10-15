@@ -1,6 +1,0 @@
-lifecycle: reviewed
-standard: TEST
-domain: TEST
-validation:
-  rule: R018
-  validator: project_function

@@ -1,5 +1,8 @@
 # Reject Datetime Precision from a Partial Date
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-datetime-precision-bad-source.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** report whether the first treatment start (`TRTSTPR`) included a
 collected time.
 
@@ -11,6 +14,8 @@ collected time.
   complete date with no time. A start collected to the year and month only is
   neither a complete date nor a moment, so it cannot answer whether only the
   time is absent; the run stops rather than reporting a misleading precision.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

@@ -1,6 +1,0 @@
-lifecycle: reviewed
-standard: ADaM
-domain: ADEX
-validation:
-  rule: R010
-  validator: numeric_expression

@@ -1,5 +1,8 @@
 # Reject Rename-Only Intermediate
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-lookup-rename-intermediate.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** attach the standardized medication name (`CMDECOD`) to each
 collected concomitant medication by joining the coding team's output
 to the WHODrug extract.
@@ -16,6 +19,8 @@ record and ATC code.
   is also given a second name that selects, computes, and reshapes
   nothing, so the run is rejected before any data is read and no artifact
   is accepted.
+
+**Standard:** SDTM | **Domain:** CM
 
 ## How to fix
 

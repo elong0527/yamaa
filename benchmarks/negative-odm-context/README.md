@@ -1,5 +1,8 @@
 # Reject an Item Read for Rows Built Elsewhere
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-odm-context.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive `SEX` for each subject of a subject list from the
 subject's collected answer.
 
@@ -13,6 +16,8 @@ Data Model (ODM) data with one row per collected item.
 Each record is built from the subject list, so none of them was built from
 collected items, and an item has no records of its own to be read from.
 The request is rejected before any data is read.
+
+**Standard:** SDTM | **Domain:** DM
 
 ## How to fix
 

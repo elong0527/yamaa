@@ -1,5 +1,8 @@
 # Reject Log Zero
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-log-zero.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry each collected laboratory result into `AVAL` and
 add its natural logarithm as `AVALLN`, with one record for each
 subject and parameter.
@@ -20,6 +23,8 @@ each subject and parameter.
   limit of detection needs a stated substitution before it can be
   transformed, so the run fails while the values are computed and no
   artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

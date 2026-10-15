@@ -1,5 +1,8 @@
 # Reject Mixed Zones
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-datetime-zones.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry each adverse event (AE) term into `AETERM` and its
 start moment into `ASTDTM`.
 
@@ -12,6 +15,8 @@ and start text (`AESTDTC`).
   site-clock reading with no clock offset. A start that carries an
   offset, such as `+02:00`, is not the same kind of value, so the
   run stops while converting values and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

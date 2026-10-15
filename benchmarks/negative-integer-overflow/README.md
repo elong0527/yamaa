@@ -1,5 +1,8 @@
 # Reject Integer Overflow
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-integer-overflow.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** compute `CELLTOT`, the whole number of cells in the
 sample, as `CELLCNT * VOLUML` for each subject.
 
@@ -16,6 +19,8 @@ product past that largest whole number.
   multiplied by `VOLUML`, and missing when either is missing. A
   product beyond the largest whole number the result can hold
   stops the run, and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

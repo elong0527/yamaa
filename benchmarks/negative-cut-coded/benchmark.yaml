@@ -1,8 +1,0 @@
-lifecycle: reviewed
-standard: ADaM
-domain: ADSL
-validation:
-  rule: R007
-  validator: expression_contract
-covers:
-- cut

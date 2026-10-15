@@ -1,5 +1,8 @@
 # Reject Fractional Pulse
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-conversion-fractional.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive `AVAL` from the collected pulse rate.
 
 **Input:** collected vital signs (VS) records carrying `VSTESTCD`
@@ -10,6 +13,8 @@ and `VSSTRESN`; one record carries a fractional pulse rate.
 - `AVAL` would be the collected result from `VSSTRESN`, held as a
   whole number. A fractional result has no whole-number form unless a
   rounding rule is stated, so the run fails and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADVS
 
 ## How to fix
 

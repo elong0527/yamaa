@@ -1,5 +1,8 @@
 # Reject Ambiguous Type
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-ambiguous-type.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** attempt one laboratory analysis record per collected
 laboratory result, carrying `AVAL` for the numeric analysis value.
 
@@ -14,6 +17,8 @@ standard units (`LBSTRESN`).
   representation would invent a precision decision the
   declaration did not make, so the run is rejected before any
   data is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

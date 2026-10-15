@@ -1,5 +1,8 @@
 # Reject a Site-Scoped Subject Identity
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-keys-internal.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry the investigator (`INVID`) responsible for each
 subject's site.
 
@@ -15,6 +18,8 @@ and its investigator (`INVID`).
 result does not carry it, so a reader of the result could not check
 which site a row answers for. The run is rejected before any data is
 read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

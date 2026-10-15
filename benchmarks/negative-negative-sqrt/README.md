@@ -1,5 +1,8 @@
 # Reject Negative Sqrt
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-negative-sqrt.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** derive body surface area (`BSA`) for each subject from
 collected height and weight.
 
@@ -16,6 +19,8 @@ collected height and weight.
 **Note:** when height times weight is negative, as with a negative
 weight, the area has no real value. Any answer would be invented
 rather than derived, so the run fails and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

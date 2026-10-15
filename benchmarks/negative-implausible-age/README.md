@@ -1,5 +1,8 @@
 # Reject Implausible Age
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-implausible-age.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry each subject's age in `AGE` from the collected
 demographics, accepting only ages from 18 to 100.
 
@@ -14,6 +17,8 @@ demographics, accepting only ages from 18 to 100.
 **Note:** an age below 18 or above 100 is rejected once the dataset
 is complete, so no artifact is accepted; a missing age is not
 rejected.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

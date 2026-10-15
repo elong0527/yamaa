@@ -1,5 +1,8 @@
 # Reject a Key That Depends on a Later Column
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-keys-missing.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry the analysis date (`ADT`), study day (`ADY`), and
 measured value (`AVAL`) through from a pre-derived ADVS slice
 (`ADVS_RAW`), placing each record in the analysis window its study
@@ -25,6 +28,8 @@ and no artifact is accepted. Even if the window read the slice's
 study day directly, a record with no study day would have no window
 and so no identity. The expected file shows the intended rows, not
 an accepted result.
+
+**Standard:** ADaM | **Domain:** ADVS
 
 ## How to fix
 

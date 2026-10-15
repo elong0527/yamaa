@@ -1,8 +1,0 @@
-lifecycle: reviewed
-standard: ADaM
-domain: ADSL
-validation:
-  rule: R022
-  validator: regex
-covers:
-- verify:matches

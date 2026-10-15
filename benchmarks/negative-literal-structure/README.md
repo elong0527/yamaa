@@ -1,5 +1,8 @@
 # Reject Structured Literal
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-literal-structure.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry age into `AGE` and group subjects into `AGEGRP`,
 with the older group holding `elderly` and the younger group
 holding `younger`.
@@ -14,6 +17,8 @@ holding `younger`.
   structure instead of a single value, and no reader may guess which
   part names the group, so the run is rejected before any data is
   read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

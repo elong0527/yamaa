@@ -1,5 +1,8 @@
 # Reject Rederived RR
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-adeg-rrr.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** keep each collected heart rate (HR) record and add a
 rederived RR duration (time between successive R waves) record
 under the code `RRR` for each subject and analysis visit with a
@@ -30,6 +33,8 @@ collected `RRR` record breaks the stated requirement. The
 completed dataset is presented to that check and rejected, and no
 artifact is accepted from this input. The expected file records
 the completed rows presented to the check.
+
+**Standard:** ADaM | **Domain:** ADEG
 
 ## How to fix
 

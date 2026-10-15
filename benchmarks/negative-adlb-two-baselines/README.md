@@ -1,5 +1,8 @@
 # Reject Duplicate Baselines
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-adlb-two-baselines.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry over the analysis value (`AVAL`) and the baseline
 record flag (`ABLFL`) for each laboratory record.
 
@@ -19,6 +22,8 @@ the change from baseline undefined, and neither record can be preferred
 without inventing a rule the study did not state. The run is rejected and no
 artifact is accepted. The expected output records the completed rows
 presented to that check.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

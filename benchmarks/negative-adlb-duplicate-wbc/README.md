@@ -1,5 +1,8 @@
 # Reject Duplicate WBC
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-adlb-duplicate-wbc.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** add an absolute lymphocyte (`LYMPH`) record carrying
 `AVAL` and `DTYPE`.
 
@@ -21,6 +24,8 @@ fractions (`LYMLE`).
 subject and visit. A repeated `WBC` or `LYMLE` result leaves no single value
 to multiply, so the run stops with no artifact rather than choosing one
 record by amount or position or adding both values.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

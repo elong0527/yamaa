@@ -1,5 +1,8 @@
 # Reject Unreachable Month
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-impute-unreachable-month.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** complete the analysis start date (`ASTDT`) of each
 adverse event (AE) from the collected start (`AESTDTC`), supplying
 a day only where the collected text already carries a month.
@@ -16,6 +19,8 @@ a day only where the collected text already carries a month.
   least a month. No collected start can therefore ever take a
   supplied month, so the written month `6` is unreachable and the
   run is rejected before any data is read. No artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

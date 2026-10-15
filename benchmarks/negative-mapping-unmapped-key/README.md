@@ -1,5 +1,8 @@
 # Reject Unmapped Key
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-mapping-unmapped-key.html)
+[![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry sex and the collected result into the output and
 attach the upper limit of normal (`ANRHI`) chosen by test and sex.
 
@@ -16,6 +19,8 @@ reference table carrying test code, sex, and upper limit
   table entry has no stated answer. Leaving the limit missing would
   hide that the result was never checked against a range, so the
   run is rejected with no artifact accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

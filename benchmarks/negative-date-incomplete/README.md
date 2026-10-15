@@ -1,5 +1,8 @@
 # Reject Incomplete Date
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-date-incomplete.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry the collected adverse event (AE) start text
 (`AESTDTC`) toward `ASTDT`.
 
@@ -15,6 +18,8 @@ start text (`AESTDTC`).
   middle, or the last day would record a day nobody collected. Such
   text cannot be read as a date, so the run fails and no artifact
   is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

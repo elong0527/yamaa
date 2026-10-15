@@ -1,5 +1,8 @@
 # Reject Dose Expansion
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-dose-expansion.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** build an administration record for each administration
 in a collected exposure (EX) record, carrying the collected
 record's sequence number and `EXTRT`, `EXDOSE`, `EXDOSU`,
@@ -31,6 +34,8 @@ start and end dates, and a count of administrations: `EXTRT`,
 **Note:** administrations built from one collected record share
 that record's treatment, dose, unit, and dates; only `ADOSEN`
 differs between them.
+
+**Standard:** ADaM | **Domain:** ADEX
 
 ## How to fix
 

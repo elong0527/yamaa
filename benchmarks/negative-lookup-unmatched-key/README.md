@@ -1,5 +1,8 @@
 # Reject Unmatched Key
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-lookup-unmatched-key.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** attach the reference upper limit (`LBSTNRHI`) to each
 collected result by test and sex.
 
@@ -13,6 +16,8 @@ sex (`SEX`), plus a reference table carrying an upper limit
   table matched on test code and sex. A result whose test code and
   sex have no reference entry has no stated answer, so it rejects
   the run with no artifact accepted.
+
+**Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 

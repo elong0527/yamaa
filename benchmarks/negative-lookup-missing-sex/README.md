@@ -1,5 +1,8 @@
 # Reject Missing Sex
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-lookup-missing-sex.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** look up the sex-specific reference upper limit
 (`LBSTNRHI`) for each collected laboratory result by its test
 code and sex.
@@ -17,6 +20,8 @@ carrying the upper limit (`NRHI`) by test code and sex.
 and cannot find its sex-specific limit. Every result is required to
 find one, so such a result rejects the run with no artifact
 accepted.
+
+**Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 

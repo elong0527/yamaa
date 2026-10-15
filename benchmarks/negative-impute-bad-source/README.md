@@ -1,5 +1,8 @@
 # Reject Non-Date Source
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-impute-bad-source.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** complete the analysis start date (`ASTDT`) of each
 adverse event (AE) from its collected onset text (`AESTDTC`).
 
@@ -18,6 +21,8 @@ adverse event (AE) from its collected onset text (`AESTDTC`).
 **Note:** a date that was never collected and text that cannot be
 read as a date are different defects, and neither has a stated
 outcome here.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

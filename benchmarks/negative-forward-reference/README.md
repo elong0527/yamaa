@@ -1,5 +1,8 @@
 # Reject Forward Reference
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-forward-reference.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
 **Goal:** carry the collected analysis value in `AVAL` and add
 its doubled value in `AVALDOUBLED`, one record per collected
 result.
@@ -19,6 +22,8 @@ collected result in `AVAL`, identified by study and subject.
 it reads, and a value may read only values listed before it, so
 the run is rejected before any data is read and no artifact is
 accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
