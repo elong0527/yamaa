@@ -777,6 +777,10 @@ pub(super) fn bind(
             )?;
         }
     }
+    // Baseline for the REQ-0470 guard below: findings already reported
+    // (for example an ungrouped identifier) must not suppress it, while
+    // findings from resolving the group_by columns themselves must.
+    let group_columns_before = findings.len();
     let mut group_columns = Vec::new();
     for (index, name) in grain.iter().enumerate() {
         if let Some((column, _)) = resolve(
@@ -787,6 +791,52 @@ pub(super) fn bind(
             group_columns.push(column);
             if relation.is_none() {
                 edges.push(column);
+            }
+        }
+    }
+    // REQ-0470: a qualified aggregate's group_by columns must also be
+    // output keys: the keys the reduction joins on, either its explicit
+    // `key` pairs or the defaults inferred from the output keys. The
+    // Matched executor matches donor records on those keys only, so a
+    // group_by column outside them would silently merge distinct groups.
+    if matches!(phase, Phase::Column { .. }) && findings.len() == group_columns_before {
+        if let Some(relation_name) = relation {
+            let applicable: Vec<&str> = match &declaration.keys {
+                Some(pairs) => pairs.iter().map(|(field, _)| field.as_str()).collect(),
+                None => declaration
+                    .output_keys
+                    .iter()
+                    .map(String::as_str)
+                    .filter(|name| {
+                        let written = format!("{relation_name}.{name}");
+                        match donor {
+                            AggregateSource::Primary => {
+                                catalog.bind(&written).is_ok_and(|value| value.is_some())
+                            }
+                            AggregateSource::Secondary(index) => secondary[index]
+                                .schema
+                                .columns()
+                                .iter()
+                                .any(|column| column.name == *name),
+                        }
+                    })
+                    .collect(),
+            };
+            if declaration.groups.iter().any(|name| {
+                name.strip_prefix(relation_name)
+                    .and_then(|tail| tail.strip_prefix('.'))
+                    .is_some_and(|field| !applicable.contains(&field))
+            }) {
+                let path = format!("{}.group_by", declaration.path);
+                finding(
+                    Finding::InvalidContext {
+                        path: &path,
+                        expression: &declaration.expression,
+                        cause: Cause::QualifiedGroupNotOutputKey,
+                    },
+                    findings,
+                )?;
+                return Ok(None);
             }
         }
     }

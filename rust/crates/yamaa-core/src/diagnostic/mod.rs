@@ -343,6 +343,7 @@ conditions! {
     AggregateKeyReference => ("validation", "unknown_field", Some("REQ-0141")),
     AggregateKeyType => ("validation", "incompatible_input_type", Some("REQ-0004")),
     AggregateMissingKeys => ("validation", "missing_aggregate_keys", Some("REQ-0140")),
+    AggregateGroupNotOutputKey => ("validation", "invalid_aggregate_context", Some("REQ-0470")),
     SourceNonAscii => ("validation", "non_ascii_source", Some("REQ-0705")),
     SourceInvalidText => ("validation", "invalid_text", Some("REQ-0029")),
     SourceInvalidYaml => ("validation", "invalid_yaml", Some("REQ-0280")),

@@ -132,11 +132,6 @@ impl Flag {
             )
         })
     }
-    pub(super) fn reads_source(&self) -> bool {
-        self.bindings
-            .iter()
-            .any(|b| matches!(b.read, FlagRead::Read(Read::Source(_))))
-    }
     pub(super) fn validate(
         &self,
         source: &TableSchema,
