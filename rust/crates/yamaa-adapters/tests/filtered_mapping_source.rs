@@ -1,7 +1,6 @@
 //! A mapping source carries the same filter, selection, and absent value as
 //! a plain source binding, so a filtered raw column no longer needs a
 //! helper column that exists only to feed the dictionary lookup.
-use serde_json::Value;
 use std::{
     fs,
     path::PathBuf,
@@ -9,6 +8,7 @@ use std::{
 };
 use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
 use yamaa_core::domain_entry::Request;
+use yamaa_core::json::Value;
 
 struct Fixture(PathBuf);
 impl Fixture {
@@ -147,7 +147,7 @@ fn mapping_source_selection_without_its_pair_is_rejected() {
         assert!(domain.save().is_err(), "{source}");
         assert_eq!(
             issue_rows(&domain.issues()),
-            serde_json::json!([{
+            yamaa_core::json::json!([{
                 "phase": "validation",
                 "condition": "unpaired_fields",
                 "requirement": "REQ-0119",

@@ -970,10 +970,10 @@ mod file {
             assert_eq!(findings.len(), 1);
             assert_eq!(findings[0].condition, "engine_rejected");
             assert_eq!(findings[0].phase, "engine");
-            let context: serde_json::Value = serde_json::from_str(&findings[0].context).unwrap();
+            let context: yamaa_core::json::Value = serde_json::from_str(&findings[0].context).unwrap();
             assert_eq!(
                 context,
-                serde_json::json!({"code":"execution_limit","stage":"execute","resource":"regex_steps","limit":1_000_000})
+                yamaa_core::json::json!({"code":"execution_limit","stage":"execute","resource":"regex_steps","limit":1_000_000})
             );
             assert!(!study.0.join("output.csv").exists());
 
