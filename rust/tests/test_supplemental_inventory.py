@@ -29,6 +29,22 @@ class RepositoryCatalog(unittest.TestCase):
             "def lazy():\n    from yamaa.models import TypedColumn",
             "import importlib\nimportlib.import_module('yamaa.runtime')",
             "from importlib import import_module as load\nload('yamaa.specification')",
+            "import importlib\nimportlib.import_module(name='yamaa.io.project')",
+            ("from importlib import import_module as load\nload(name='yamaa.runtime')"),
+            (
+                "import importlib\n"
+                "importlib.import_module('.io.project', package='yamaa')"
+            ),
+            (
+                "import importlib\n"
+                "importlib.import_module(name='.io.project', package='yamaa')"
+            ),
+            "import importlib\nimportlib.import_module('.runtime', 'yamaa')",
+            (
+                "import importlib\n"
+                "importlib.import_module('..io.project', package='yamaa.subpackage')"
+            ),
+            "__import__(name='yamaa.io.project')",
         ):
             with (
                 self.subTest(source=source),
@@ -39,6 +55,14 @@ class RepositoryCatalog(unittest.TestCase):
             "import yamaa\nfrom yamaa import domain, _native\n"
             "blocked = ('yamaa.io.project', 'yamaa.runtime')\n"
             "import importlib\nimportlib.import_module('yamaa._native_results')",
+            "installed_control.py",
+        )
+        # The keyword and relative spellings of a native import stay allowed.
+        module.require_native_consumer(
+            "import importlib\n"
+            "importlib.import_module(name='yamaa._native_results')\n"
+            "importlib.import_module('.helpers', package='installed_suite')\n"
+            "importlib.import_module('..helpers', package='installed_suite.sub')",
             "installed_control.py",
         )
 

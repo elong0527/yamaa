@@ -60,6 +60,41 @@ def require_native_consumer(source, name):
             )
         )
 
+    def constant_string(node):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        return None
+
+    def constant_int(node):
+        if isinstance(node, ast.Constant) and isinstance(node.value, int):
+            return node.value
+        return None
+
+    def argument(node, index, keyword):
+        if len(node.args) > index:
+            return node.args[index]
+        for item in node.keywords:
+            if item.arg == keyword:
+                return item.value
+        return None
+
+    def resolve_relative(module, package):
+        """Resolve leading dots against ``package`` as importlib would."""
+        if not module.startswith("."):
+            return module
+        level = len(module) - len(module.lstrip("."))
+        remainder = module[level:]
+        if package is None:
+            # No anchor package is available, so the absolute name cannot be
+            # known; check the remainder so a relative spelling is never
+            # recorded as an unrelated absolute import.
+            return remainder
+        base = [part for part in package.split(".") if part]
+        if level > 1:
+            base = base[: -(level - 1)] if level - 1 <= len(base) else []
+        parts = base + ([remainder] if remainder else [])
+        return ".".join(parts)
+
     tree = ast.parse(source, filename=name)
     imports = {
         alias.asname or alias.name
@@ -77,18 +112,38 @@ def require_native_consumer(source, name):
             modules = [node.module or ""]
             if node.module == "yamaa":
                 modules.extend("yamaa." + alias.name for alias in node.names)
-        elif (
-            isinstance(node, ast.Call)
-            and node.args
-            and isinstance(node.args[0], ast.Constant)
-        ):
+        elif isinstance(node, ast.Call):
             function = node.func
-            if (isinstance(function, ast.Name) and function.id in imports) or (
+            is_import_module = (
+                isinstance(function, ast.Name) and function.id in imports
+            ) or (
                 isinstance(function, ast.Attribute) and function.attr == "import_module"
-            ):
-                modules = (
-                    [node.args[0].value] if isinstance(node.args[0].value, str) else []
-                )
+            )
+            if is_import_module:
+                target_node = argument(node, 0, "name")
+                target = constant_string(target_node) if target_node else None
+                if target is not None:
+                    is_dunder_import = (
+                        isinstance(function, ast.Name) and function.id == "__import__"
+                    )
+                    if is_dunder_import:
+                        level_node = argument(node, 4, "level")
+                        level = (
+                            constant_int(level_node) if level_node is not None else 0
+                        )
+                        if level:
+                            target = "." * level + target
+                            modules = [resolve_relative(target, None)]
+                        else:
+                            modules = [target]
+                    else:
+                        package_node = argument(node, 1, "package")
+                        package = (
+                            constant_string(package_node)
+                            if package_node is not None
+                            else None
+                        )
+                        modules = [resolve_relative(target, package)]
         for module in modules:
             if reference(module) or module in (
                 "yamaa.yamaa_domain",
