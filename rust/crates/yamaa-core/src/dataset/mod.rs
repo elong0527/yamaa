@@ -1,4 +1,4 @@
-//! Dataset admission and execution over explicit source and function ports.
+//! Immutable admitted dataset model, independent of execution and host effects.
 pub use crate::bound_expression::BoundNumeric;
 use crate::bound_expression::Read;
 use crate::{
@@ -2127,10 +2127,3 @@ mod donor_admission_tests;
 
 mod metadata_types;
 mod verification_predicates;
-
-mod execution;
-pub use execution::{
-    CheckRecord, CodelistObservation, Dataset, Execution, ExecutionAttempt, ExecutionBudget,
-    ExecutionError, ExecutionEvent, ExecutionPhase, Limits, Resource, RowCountObservation,
-    RowIdentity,
-};
