@@ -720,6 +720,75 @@ mod log_tests {
         report
     }
     #[test]
+    #[cfg(unix)]
+    fn actual_sparse_source_boundary_keeps_facts_across_plain_project_and_graph_results() {
+        for route in ["plain", "project", "producer"] {
+            let study = Study::new();
+            study.fixture(false, false, false);
+            let source = fs::OpenOptions::new()
+                .write(true)
+                .open(study.0.join("input.csv"))
+                .unwrap();
+            source.set_len(10 * 1024 * 1024 * 1024 + 1).unwrap();
+            drop(source);
+            let resources = || Resources::new(&study.path(), &study.path(), &[]).unwrap();
+            let issues = match route {
+                "plain" => {
+                    let prepared = crate::file_preparation::FileSpecification::prepare(
+                        resources(),
+                        "producer.yaml",
+                    )
+                    .unwrap();
+                    let result = crate::file_application::plain(prepared, id()).unwrap();
+                    assert!(result.output().is_none());
+                    result.issues()
+                }
+                "project" => {
+                    study.write("environment.yaml", "schema_version: '1.0'\n");
+                    let mut prepared = crate::file_project::FileProject::prepare(
+                        resources(),
+                        "producer.yaml",
+                        "environment.yaml",
+                        Language::Python,
+                        shipped_schema::capture().unwrap(),
+                        shipped_schema::capture_environment().unwrap(),
+                    )
+                    .unwrap();
+                    let attempt = prepared.build(&mut NoActivation);
+                    let result =
+                        crate::project_report::build_result(prepared.run(), &attempt, id(), &[])
+                            .unwrap();
+                    assert!(result.output().is_none());
+                    result.issues().to_vec()
+                }
+                _ => {
+                    let owned = study.owned(Language::Python);
+                    assert!(!owned.accepted());
+                    let result = root(&owned);
+                    assert!(result.output().is_none());
+                    result.issues().to_vec()
+                }
+            };
+            assert_eq!(issues.len(), 1, "{route}");
+            assert_eq!(
+                issues[0].condition,
+                yamaa_core::diagnostic::ConditionCode::ApplicationRejected
+                    .definition()
+                    .condition
+            );
+            assert_eq!(issues[0].requirement, None);
+            assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
+            let context: Value = serde_json::from_str(&issues[0].context).unwrap();
+            assert_eq!(
+                context,
+                serde_json::json!({"stage":"capture", "code":"resource_limit", "resource":"source_bytes",
+                "limit":10_737_418_240_u64,"actual":10_737_418_241_u64,"dataset":"SRC","path":"input.csv"}),
+                "{route}"
+            );
+            assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+        }
+    }
+    #[test]
     fn actual_alias_logs_publish_in_node_order_and_repeat_only_held_bytes() {
         for language in [Language::Python, Language::R] {
             let study = Study::new();
