@@ -898,7 +898,7 @@ pub(super) fn references(
     names: &mut Vec<String>,
     depth: usize,
 ) -> Result<(), PrepareError> {
-    references_mode(d, value, project, names, depth, true)
+    references_mode(d, value, project, names, depth, true, true)
 }
 pub(super) fn current_references(
     d: &Document,
@@ -907,7 +907,18 @@ pub(super) fn current_references(
     names: &mut Vec<String>,
     depth: usize,
 ) -> Result<(), PrepareError> {
-    references_mode(d, value, project, names, depth, false)
+    references_mode(d, value, project, names, depth, false, true)
+}
+/// A donor window cannot read a named selector (REQ-1263). Its invalid fields
+/// remain window binding findings, rather than executable dependency edges.
+pub(super) fn donor_references(
+    d: &Document,
+    value: usize,
+    project: Option<&functions::Prepared>,
+    names: &mut Vec<String>,
+    depth: usize,
+) -> Result<(), PrepareError> {
+    references_mode(d, value, project, names, depth, true, false)
 }
 fn references_mode(
     d: &Document,
@@ -916,6 +927,7 @@ fn references_mode(
     names: &mut Vec<String>,
     depth: usize,
     aggregate_relation: bool,
+    window_references: bool,
 ) -> Result<(), PrepareError> {
     if depth > 64 {
         return Err(PrepareError::limit(
@@ -991,6 +1003,7 @@ fn references_mode(
                                 names,
                                 depth + 1,
                                 aggregate_relation,
+                                window_references,
                             )?;
                         }
                     }
@@ -1066,14 +1079,33 @@ fn references_mode(
                 predicate_references(d, when, names)?;
             }
             if let Some(child) = d.field(item, "then").or_else(|| d.field(item, "otherwise")) {
-                references_mode(d, child, project, names, depth + 1, aggregate_relation)?;
+                references_mode(
+                    d,
+                    child,
+                    project,
+                    names,
+                    depth + 1,
+                    aggregate_relation,
+                    window_references,
+                )?;
             }
         }
     }
     if let Some(payload) = d.field(value, "str_concat") {
         for &child in sequence(d, field(d, payload, "sources")?)? {
-            references_mode(d, child, project, names, depth + 1, aggregate_relation)?;
+            references_mode(
+                d,
+                child,
+                project,
+                names,
+                depth + 1,
+                aggregate_relation,
+                window_references,
+            )?;
         }
+    }
+    if !window_references {
+        return Ok(());
     }
     for op in [
         "row_number",

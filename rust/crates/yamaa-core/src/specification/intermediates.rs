@@ -245,7 +245,9 @@ impl Declarations {
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
-        for (index, &id) in items.iter().enumerate() {
+        let order = derivation_order(d, items, project, templates, limits)?;
+        for index in order {
+            let id = items[index];
             let path = format!("intermediates[{index}]");
             let name = text(d, field(d, id, "id")?)?;
             let range = intermediate_range::prepare(d, id, &path, name)?;
@@ -913,6 +915,124 @@ impl Declarations {
         }
         Ok((secondary, result))
     }
+}
+
+/// Donor derivations may read another declared selector in either source order.
+/// Analyze their shared extracted references before any selector is bound.
+fn derivation_order(
+    d: &Document,
+    items: &[usize],
+    project: Option<&functions::Prepared>,
+    templates: &str_template::Prepared,
+    limits: CompilationLimits,
+) -> Result<Vec<usize>, PrepareError> {
+    use crate::dependency_analysis::{self, Error};
+    const EDGE_LIMIT: usize = 65_536;
+    let names = items
+        .iter()
+        .map(|&item| text(d, field(d, item, "id")?))
+        .collect::<Result<Vec<_>, _>>()?;
+    let indices = names
+        .iter()
+        .enumerate()
+        .map(|(index, &name)| (name, index))
+        .collect::<BTreeMap<_, _>>();
+    let mut graph = vec![Vec::new(); items.len()];
+    let mut sites = vec![Vec::new(); items.len()];
+    let mut edges = 0usize;
+    let mut projection =
+        crate::diagnostic::ProjectionBudget::new(crate::diagnostic::MAX_PROJECTION_BYTES)
+            .map_err(|_| PrepareError::Internal)?;
+    for (index, &item) in items.iter().enumerate() {
+        let Some(derivations) = d
+            .field(item, "derivations")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        else {
+            continue;
+        };
+        for &(name, handled) in mapping(d, derivations)? {
+            let path = format!("intermediates[{index}].derivations.{}", text(d, name)?);
+            let (value, expression_path) = intermediate_derivations::value(d, handled, &path)?;
+            let &[(operation, _)] = mapping(d, value)? else {
+                return Err(PrepareError::Internal);
+            };
+            let path = format!("{expression_path}.{}", text(d, operation)?);
+            let mut references = Vec::new();
+            derivations::donor_references(d, value, project, &mut references, 0)?;
+            self_relations::template_references(d, value, templates, &mut references, 0)?;
+            for reference in references {
+                let Some(dependency) = reference
+                    .split_once('.')
+                    .and_then(|(name, _)| indices.get(name))
+                    .copied()
+                else {
+                    continue;
+                };
+                edges = edges
+                    .checked_add(1)
+                    .filter(|&edges| edges <= EDGE_LIMIT)
+                    .ok_or_else(|| {
+                        PrepareError::limit("intermediate_dependency_edges", EDGE_LIMIT, None, None)
+                    })?;
+                projection
+                    .text(&path)
+                    .and_then(|()| projection.text(names[index]))
+                    .and_then(|()| projection.text(names[dependency]))
+                    .and_then(|()| projection.charge(64))
+                    .map_err(|_| {
+                        PrepareError::limit(
+                            "intermediate_dependency_metadata",
+                            crate::diagnostic::MAX_PROJECTION_BYTES,
+                            None,
+                            None,
+                        )
+                    })?;
+                graph[index].push(dependency);
+                sites[index].push((dependency, path.clone()));
+            }
+        }
+    }
+    let analysis = dependency_analysis::analyze(
+        &graph,
+        dependency_analysis::Limits {
+            nodes: limits.columns,
+            edges: EDGE_LIMIT,
+        },
+    )
+    .map_err(|error| match error {
+        Error::NodeLimit { limit, required } => {
+            PrepareError::limit("intermediate_dependency_nodes", limit, Some(required), None)
+        }
+        Error::EdgeLimit { limit, required } => {
+            PrepareError::limit("intermediate_dependency_edges", limit, Some(required), None)
+        }
+        Error::SizeOverflow => {
+            PrepareError::limit("intermediate_dependency_edges", EDGE_LIMIT, None, None)
+        }
+        Error::InvalidDependency { .. } => PrepareError::Internal,
+    })?;
+    if let Some(cycle) = analysis.cycle {
+        let mut paths = Vec::new();
+        for pair in cycle.windows(2) {
+            for (dependency, path) in &sites[pair[0]] {
+                if *dependency == pair[1] && !paths.contains(path) {
+                    paths.push(path.clone());
+                }
+            }
+        }
+        let mut finding = LookupFinding::new(
+            "",
+            crate::diagnostic::ConditionCode::IntermediateDerivationCycle,
+        );
+        let names = cycle.iter().map(|&index| names[index]).collect::<Vec<_>>();
+        finding.texts("cycle", &names);
+        let mut diagnostic = finding.diagnostic();
+        diagnostic.spec_paths = paths;
+        return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
+            diagnostic,
+        )]));
+    }
+    Ok(analysis.order)
 }
 
 impl Declarations {

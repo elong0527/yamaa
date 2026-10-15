@@ -261,6 +261,14 @@ pub(super) fn reached() -> BTreeSet<ConditionCode> {
     };
     let cases = vec![
         (
+            vec![("derivations", Map(vec![("NEXT", source("P.ID"))]))],
+            false,
+            "dependency_cycle",
+            "REQ-1263",
+            "intermediates[0].derivations.NEXT.source",
+            vec![("cycle", V::Sequence(vec![text("P"), text("P")]))],
+        ),
+        (
             vec![("derivations", Map(vec![("NEXT", source("D.ABSENT"))]))],
             false,
             "unknown_field",
