@@ -1,39 +1,20 @@
+use crate::support::document::Tree;
 use yamaa_core::{
     project_environment::{Draft, Environment, ExecutionEnvironment},
     project_function::Language,
     project_terminology::{Codelist, DataType, Item, Source},
-    schema::{Document, DocumentNode as N, SpecificationDocument, ValidationBudget},
+    schema::{Document, DocumentNode as N, SpecificationDocument},
     table::{Column, TableSchema},
     value::{ColumnType, Value},
 };
-enum Tree {
-    Scalar(N),
-    Map(Vec<(&'static str, Tree)>),
-    List(Vec<Tree>),
-}
+
 fn t(value: &str) -> Tree {
     Tree::Scalar(N::Text(value.into()))
 }
 fn m(fields: Vec<(&'static str, Tree)>) -> Tree {
-    Tree::Map(fields)
+    Tree::map(fields)
 }
-fn append(tree: Tree, nodes: &mut Vec<N>) -> usize {
-    let node = match tree {
-        Tree::Scalar(node) => node,
-        Tree::List(items) => {
-            N::Sequence(items.into_iter().map(|item| append(item, nodes)).collect())
-        }
-        Tree::Map(items) => N::Mapping(
-            items
-                .into_iter()
-                .map(|(key, item)| (append(t(key), nodes), append(item, nodes)))
-                .collect(),
-        ),
-    };
-    let id = nodes.len();
-    nodes.push(node);
-    id
-}
+
 fn read(name: &str) -> Tree {
     m(vec![(
         "value",
@@ -114,13 +95,10 @@ pub fn spec(
         fields.push(("metadata", m(vec![("has_no_data", t("true"))])));
     }
     let mut nodes = vec![];
-    let root = append(m(fields), &mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    let root = (m(fields)).append(&mut nodes);
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 pub fn environment(extensible: bool) -> ExecutionEnvironment {
     Environment::admit(
