@@ -101,6 +101,20 @@ impl OutputLogs {
     }
 }
 impl LogFinding {
+    pub fn visit_text(&self, mut visit: impl FnMut(&str)) {
+        match self {
+            Self::MissingWarning { warnings } => warnings.iter().for_each(|path| visit(path)),
+            Self::UnknownProfile { field, path } => {
+                visit(field);
+                visit(path);
+            }
+            Self::Collision { left, right, path } => {
+                visit(left);
+                visit(right);
+                visit(path);
+            }
+        }
+    }
     pub fn diagnostic(&self) -> Diagnostic {
         let text = |value: &str| JsonValue::String(value.into());
         let (code, spec_paths, context) = match self {

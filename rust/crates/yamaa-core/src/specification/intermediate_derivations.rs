@@ -61,23 +61,16 @@ fn value_kind(value: &N) -> Option<ColumnType> {
         _ => None,
     }
 }
-fn literal_kind(value: &N) -> Kind {
-    if matches!(value, N::Null) {
-        Kind::Literal(None)
-    } else {
-        value_kind(value).map_or(Kind::Unavailable, |kind| Kind::Literal(Some(kind)))
-    }
-}
 fn prepare_kind(
     d: &Document,
     value: usize,
     depth: usize,
     project: Option<&functions::Prepared>,
 ) -> Result<Kind, PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+    if depth > 64 {
         return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
+            "intermediate_type_depth",
+            64,
             Some(depth),
             None,
         ));
@@ -87,47 +80,31 @@ fn prepare_kind(
     };
     let op = text(d, op)?;
     Ok(match op {
-        "function" => project
-            .and_then(|project| project.returns.get(&payload).copied())
-            .map_or(Kind::Unavailable, |kind| Kind::Literal(Some(kind))),
-        "literal" => literal_kind(&d.nodes()[payload]),
+        "function" => {
+            Kind::Literal(project.and_then(|project| project.returns.get(&payload).copied()))
+        }
+        "literal" => Kind::Literal(value_kind(&d.nodes()[payload])),
         "source" => Kind::Reference(match &d.nodes()[payload] {
             N::Text(name) => name.clone(),
             _ => text(d, field(d, payload, "variable")?)?.into(),
         }),
-        "first_available" | "greatest" | "least" => {
-            let mut kinds = sequence(d, field(d, payload, "sources")?)?
-                .iter()
-                .map(|&source| {
-                    Ok(Kind::Reference(match &d.nodes()[source] {
-                        N::Text(name) => name.clone(),
-                        _ => text(d, field(d, source, "variable")?)?.into(),
-                    }))
-                })
-                .collect::<Result<Vec<_>, PrepareError>>()?;
-            if op == "first_available" {
-                if let Some(missing) = d.field(payload, "missing") {
-                    kinds.push(literal_kind(&d.nodes()[missing]));
-                }
-            }
-            Kind::Choice(kinds)
-        }
-        "compute" => {
-            match crate::numeric_parser::parse_numeric(text(d, field(d, payload, "expr")?)?) {
-                Ok(plan) => Kind::Numeric(plan),
-                Err(_) => Kind::Unavailable,
-            }
-        }
+        "compute" => match crate::numeric_parser::parse_numeric(
+            text(d, field(d, payload, "expr")?)?,
+            Default::default(),
+        ) {
+            Ok(plan) => Kind::Numeric(plan),
+            Err(_) => Kind::Literal(None),
+        },
         "mapping" => Kind::Choice(
             mapping(d, field(d, payload, "dict")?)?
                 .iter()
-                .map(|&(_, value)| literal_kind(&d.nodes()[value]))
+                .map(|&(_, value)| Kind::Literal(value_kind(&d.nodes()[value])))
                 .collect(),
         ),
         "cut" => Kind::Choice(
             sequence(d, field(d, payload, "labels")?)?
                 .iter()
-                .map(|&value| literal_kind(&d.nodes()[value]))
+                .map(|&value| Kind::Literal(value_kind(&d.nodes()[value])))
                 .collect(),
         ),
         "case" => Kind::Choice(
@@ -152,10 +129,11 @@ fn prepare_kind(
         | "date_precision" | "datetime_precision" | "baseline_flag" => {
             Kind::Literal(Some(ColumnType::Str))
         }
-        "flag" => d
-            .field(payload, "true_value")
-            .map(|id| literal_kind(&d.nodes()[id]))
-            .unwrap_or(Kind::Literal(Some(ColumnType::Str))),
+        "flag" => Kind::Literal(
+            d.field(payload, "true_value")
+                .map(|id| value_kind(&d.nodes()[id]))
+                .unwrap_or(Some(ColumnType::Str)),
+        ),
         "date_impute" | "to_date" | "date_shift" => Kind::Literal(Some(ColumnType::Date)),
         "datetime_impute" | "datetime_shift" => Kind::Literal(Some(ColumnType::DateTime)),
         "datetime_diff" => {
@@ -165,19 +143,17 @@ fn prepare_kind(
                 ColumnType::Float
             }))
         }
-        "duration_value" => {
-            if text(d, field(d, payload, "unit")?)? == "second" {
-                Kind::Unavailable
-            } else {
-                Kind::Literal(Some(ColumnType::Float))
-            }
-        }
+        "duration_value" => Kind::Literal(if text(d, field(d, payload, "unit")?)? == "second" {
+            None
+        } else {
+            Some(ColumnType::Float)
+        }),
         "duration_text" => Kind::Literal(Some(ColumnType::Str)),
         "round_half_away_from_zero" => Kind::Literal(Some(ColumnType::Float)),
         "row_value" | "previous_non_missing" | "locf" => {
             Kind::Reference(text(d, field(d, payload, "source")?)?.into())
         }
-        _ => Kind::Unavailable,
+        _ => Kind::Literal(None),
     })
 }
 fn prepare_driver_kind(
@@ -186,10 +162,10 @@ fn prepare_driver_kind(
     depth: usize,
     project: Option<&functions::Prepared>,
 ) -> Result<Kind, PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+    if depth > 64 {
         return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
+            "intermediate_type_depth",
+            64,
             Some(depth),
             None,
         ));
@@ -222,8 +198,7 @@ fn prepare_driver_kind(
 }
 fn unify(items: impl Iterator<Item = Option<ColumnType>>) -> Option<ColumnType> {
     let mut kind = None;
-    for item in items {
-        let item = item?;
+    for item in items.flatten() {
         kind = match kind {
             None => Some(item),
             Some(previous) if previous == item => Some(item),
@@ -237,24 +212,7 @@ fn unify(items: impl Iterator<Item = Option<ColumnType>>) -> Option<ColumnType> 
     }
     kind
 }
-fn unify_exact(mut items: impl Iterator<Item = Option<ColumnType>>) -> Option<ColumnType> {
-    let kind = items.next()??;
-    for item in items {
-        if item? != kind {
-            return None;
-        }
-    }
-    Some(kind)
-}
-
 impl Kind {
-    fn missing_only(&self) -> bool {
-        match self {
-            Self::Literal(None) => true,
-            Self::Choice(items) | Self::StrictChoice(items) => items.iter().all(Self::missing_only),
-            _ => false,
-        }
-    }
     fn infer(&self, lookup: &impl Fn(&str) -> Option<ColumnType>) -> Option<ColumnType> {
         match self {
             Self::Unavailable => None,
@@ -274,12 +232,7 @@ impl Kind {
             }
             Self::Literal(kind) => *kind,
             Self::Reference(name) => lookup(name),
-            Self::Choice(items) => unify_exact(
-                items
-                    .iter()
-                    .filter(|item| !item.missing_only())
-                    .map(|item| item.infer(lookup)),
-            ),
+            Self::Choice(items) => unify(items.iter().map(|item| item.infer(lookup))),
             Self::Numeric(parsed) => {
                 use crate::numeric_parser::{NumericFunction as F, ParsedKind as K};
                 let mut kinds = Vec::new();
@@ -303,34 +256,9 @@ impl Kind {
                             unify([kinds[*left], kinds[*right]].into_iter())
                         }
                         K::Call {
-                            function:
-                                F::Sqrt
-                                | F::Exp
-                                | F::Ln
-                                | F::Power
-                                | F::RoundHalfAwayFromZero
-                                | F::Ceil
-                                | F::Floor
-                                | F::Trunc,
+                            function: F::Sqrt | F::Exp | F::Ln | F::Power | F::RoundHalfAwayFromZero,
                             ..
                         } => Some(ColumnType::Float),
-                        // A missing float does not promote a present integer,
-                        // so mixed operand kinds cannot promise a float result.
-                        K::Call {
-                            function: F::NullIf,
-                            arguments,
-                            ..
-                        } => unify_exact(arguments.iter().map(|&index| kinds[index])),
-                        K::Call {
-                            function: F::Greatest | F::Least | F::Coalesce,
-                            arguments,
-                            ..
-                        } => unify_exact(
-                            arguments
-                                .iter()
-                                .filter(|&&index| !matches!(parsed.nodes()[index].kind, K::Null))
-                                .map(|&index| kinds[index]),
-                        ),
                         K::Call { arguments, .. } => {
                             unify(arguments.iter().map(|&index| kinds[index]))
                         }
@@ -348,6 +276,7 @@ pub(super) fn prepare(
     id: usize,
     path: &str,
     dataset: &str,
+    limits: CompilationLimits,
     project: Option<&functions::Prepared>,
     extraction: &str_extract::Prepared,
     templates: &str_template::Prepared,
@@ -360,15 +289,16 @@ pub(super) fn prepare(
         return Ok(Vec::new());
     };
     let items = mapping(d, items)?;
-    if items.len() > crate::limits::Limits::COLUMNS {
+    if items.len() > limits.columns {
         return Err(PrepareError::limit(
             "intermediate_derivations",
-            crate::limits::Limits::COLUMNS,
+            limits.columns,
             Some(items.len()),
             Some(&format!("{path}.derivations")),
         ));
     }
     let mut result = Vec::new();
+    let mut bytes = 0;
     for &(name, handled) in items {
         let name = text(d, name)?;
         let path = format!("{path}.derivations.{name}");
@@ -386,6 +316,14 @@ pub(super) fn prepare(
                 })
             })
             .transpose()?;
+        cases::charge(
+            d,
+            value,
+            &expression_path,
+            &mut bytes,
+            limits.numeric_bytes,
+            0,
+        )?;
         let branch = derivations::prepare_value_with_driver(
             d,
             value,
@@ -397,6 +335,7 @@ pub(super) fn prepare(
             extraction,
             templates,
             Some(dataset),
+            limits,
         )?;
         let mut references = Vec::new();
         derivations::references(d, value, project, &mut references, 0)?;
@@ -440,9 +379,27 @@ pub(super) fn bind(
     let before = findings.len();
     // Shared earlier donor plans do not recursively copy their expression trees.
     // Admit aggregate retained schema/catalog copies before making the first copy.
+    intermediate_sources::admit(
+        sources
+            .iter()
+            .zip(schemas)
+            .flat_map(|(source, schema)| std::iter::repeat_n((*schema, source.name.as_str()), 4))
+            .chain(std::iter::repeat_n((outer_output, "output"), 2))
+            .chain(
+                previous
+                    .iter()
+                    .flatten()
+                    .filter_map(|item| match &item.source {
+                        IntermediateSource::Primary { schema, name } => {
+                            Some((schema, name.as_str()))
+                        }
+                        IntermediateSource::SelfRows { schema, .. } => Some((schema, "SELF")),
+                        _ => None,
+                    }),
+            ),
+    )?;
     let original_secondary = outer_secondary(sources, schemas, driver);
     let mut fields = stored.columns().to_vec();
-    let mut result_kinds = Vec::new();
     let mut driver_kinds = Vec::new();
     for declaration in declarations {
         let lookup = |name: &str| {
@@ -450,21 +407,15 @@ pub(super) fn bind(
             if owner == dataset {
                 fields
                     .iter()
-                    .position(|column| column.name == field)
-                    .and_then(|column| {
-                        if column < stored.columns().len() {
-                            Some(fields[column].kind)
-                        } else {
-                            result_kinds
-                                .get(column - stored.columns().len())
-                                .copied()
-                                .flatten()
-                        }
-                    })
+                    .find(|column| column.name == field)
+                    .map(|column| column.kind)
             } else if let Some((index, field)) = named.reference(name) {
-                let item = previous.get(index).and_then(Option::as_ref)?;
-                let column = item.source_column(&original_secondary, field)?;
-                item.source_kind(&original_secondary, column)
+                previous
+                    .get(index)
+                    .and_then(Option::as_ref)
+                    .and_then(|item| item.source_schema(&original_secondary))
+                    .and_then(|schema| schema.columns().iter().find(|column| column.name == field))
+                    .map(|column| column.kind)
             } else {
                 sources
                     .iter()
@@ -478,16 +429,18 @@ pub(super) fn bind(
                     .map(|column| column.kind)
             }
         };
-        let result_kind = declaration.result_kind(&lookup);
-        let kind = result_kind.unwrap_or({
-            // An unresolved numeric operand must not turn a later read of
-            // this computed field into a spurious text-input diagnostic.
-            if matches!(declaration.kind, Kind::Numeric(_)) {
-                ColumnType::Float
-            } else {
-                ColumnType::Str
-            }
-        });
+        let kind = declaration
+            .typed
+            .or_else(|| declaration.kind.infer(&lookup))
+            .unwrap_or({
+                // An unresolved numeric operand must not turn a later read of
+                // this computed field into a spurious text-input diagnostic.
+                if matches!(declaration.kind, Kind::Numeric(_)) {
+                    ColumnType::Float
+                } else {
+                    ColumnType::Str
+                }
+            });
         driver_kinds.push(declaration.typed.or_else(|| {
             declaration.driver_kind.infer(&|name| {
                 let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
@@ -538,7 +491,6 @@ pub(super) fn bind(
             name: declaration.name.clone(),
             kind,
         });
-        result_kinds.push(result_kind);
     }
     let output = TableSchema::new(fields).map_err(|_| BindError::Internal)?;
     *pending_schema = Some(output.clone());
@@ -673,17 +625,9 @@ pub(super) fn bind(
         .zip(&fields)
         .map(|(name, fields)| reference_binding::Dataset { name, fields })
         .collect::<Vec<_>>();
-    let catalog = Catalog::compile(&outputs, &datasets)
+    let catalog = Catalog::compile(&outputs, &datasets, Default::default())
         .map_err(BindError::Catalog)?
-        .with_record_derivation()
-        .with_record_kinds(
-            stored
-                .columns()
-                .iter()
-                .map(|column| Some(column.kind))
-                .chain(result_kinds.iter().copied())
-                .collect(),
-        );
+        .with_record_derivation();
     let references = declarations
         .iter()
         .flat_map(|item| &item.references)
@@ -749,12 +693,7 @@ pub(super) fn bind(
             .iter()
             .enumerate()
             .filter(|(_, field)| item.source_column(&secondary, &field.name).is_some())
-            .map(|(column, field)| {
-                (
-                    field.name.clone(),
-                    (column, item.source_kind(&secondary, column)),
-                )
-            })
+            .map(|(column, field)| (field.name.clone(), (column, field.kind)))
             .collect();
         selected.push((
             item.identifier.clone(),
@@ -850,12 +789,6 @@ pub(super) fn bind(
         output,
         rows,
         assignments,
-        stored
-            .columns()
-            .iter()
-            .map(|column| Some(column.kind))
-            .chain(result_kinds)
-            .collect(),
     )
     .and_then(|plan| plan.with_conversion_handlers(handlers))
     .map_err(BindError::InvalidPlan)?;
@@ -1116,6 +1049,7 @@ fn rebase(
                     range.value_kind(),
                     range.lower().cloned(),
                     range.upper().cloned(),
+                    16_777_216,
                 )
                 .map_err(|_| {
                     BindError::InvalidPlan(crate::dataset::PlanError::InvalidIntermediate)
@@ -1254,84 +1188,4 @@ fn rebase(
         }
     }
     Ok(result)
-}
-
-#[cfg(test)]
-mod inference_tests {
-    use super::*;
-    use crate::{evaluation::NumericResolver, numeric::Number, value::Selection};
-    use std::convert::Infallible;
-
-    struct Inputs {
-        integer: Value,
-        float: Value,
-    }
-    impl NumericResolver for Inputs {
-        type Error = Infallible;
-        fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
-            Ok(Selection::Present(match name {
-                "INT_COL" => self.integer.clone(),
-                "FLOAT_COL" => self.float.clone(),
-                _ => panic!("unexpected numeric operand"),
-            }))
-        }
-    }
-
-    #[test]
-    fn mixed_numeric_selection_kinds_remain_unknown_when_missing_floats_preserve_integers() {
-        for (expression, promoted) in [
-            ("NULLIF(INT_COL, FLOAT_COL)", Number::float(7.0)),
-            ("GREATEST(INT_COL, FLOAT_COL)", Number::float(7.0)),
-            ("LEAST(INT_COL, FLOAT_COL)", Number::float(2.5)),
-            ("COALESCE(INT_COL, FLOAT_COL)", Number::float(7.0)),
-        ] {
-            let parsed = crate::numeric_parser::parse_numeric(expression).unwrap();
-            assert_eq!(
-                Kind::Numeric(parsed).infer(&|name| match name {
-                    "INT_COL" => Some(ColumnType::Int),
-                    "FLOAT_COL" => Some(ColumnType::Float),
-                    _ => None,
-                }),
-                None,
-                "{expression}: a possibly missing float cannot promise a float result",
-            );
-            let plan =
-                crate::numeric_compiler::compile_numeric(expression, "donor.compute").unwrap();
-            for (integer, float, expected) in [
-                (Value::Int(7), Value::Missing, Number::Int(7)),
-                (Value::Int(7), Value::float(2.5), promoted),
-                (Value::Missing, Value::Missing, Number::Missing),
-            ] {
-                assert_eq!(
-                    plan.evaluate(&mut Inputs { integer, float }).unwrap(),
-                    expected,
-                    "{expression}",
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn coalesce_float_with_an_integer_fallback_keeps_the_fallbacks_runtime_kind() {
-        let expression = "COALESCE(FLOAT_COL, 0)";
-        let parsed = crate::numeric_parser::parse_numeric(expression).unwrap();
-        assert_eq!(
-            Kind::Numeric(parsed).infer(&|_| Some(ColumnType::Float)),
-            None,
-        );
-        let plan = crate::numeric_compiler::compile_numeric(expression, "donor.compute").unwrap();
-        for (float, expected) in [
-            (Value::Missing, Number::Int(0)),
-            (Value::float(2.5), Number::float(2.5)),
-        ] {
-            assert_eq!(
-                plan.evaluate(&mut Inputs {
-                    integer: Value::Missing,
-                    float
-                })
-                .unwrap(),
-                expected,
-            );
-        }
-    }
 }

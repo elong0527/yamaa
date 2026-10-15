@@ -1,17 +1,25 @@
 //! Declaration-ordered conversion recovery shared by every dataset assignment.
 use super::*;
-use crate::numeric_lifecycle::{recover_conversion, ConversionRecoveryError};
+use crate::numeric_lifecycle::{recover_conversion, ConversionRecoveryError, LiteralHandler};
 
-/// Recover initial conversion once and retain the reached handler.
+/// Recover initial conversion once; only a reached replacement consumes text budget.
 pub(super) fn recover<E>(
     original: ConversionError,
     assignment: &Assignment,
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
+    budget: &mut Budget,
     handlers: &mut HandlerCounter,
 ) -> Result<Value, Box<ExecutionError<E>>> {
     let handler = plan.conversion_handler(&assignment.path);
+    if let Some(LiteralHandler {
+        value: Value::Str(text),
+        ..
+    }) = handler
+    {
+        budget.scalar_text(text.len())?;
+    }
     let column_path = std::format!(
         "columns.{}",
         plan.output().columns()[assignment.column].name
@@ -34,7 +42,7 @@ pub(super) fn recover<E>(
                 replacement: error,
                 ..
             } => {
-                let identity = failure_identity(candidate, plan.keys(), row)?;
+                let identity = failure_identity(candidate, plan.keys(), row, budget)?;
                 Err(Box::new(ExecutionError::Conversion {
                     path: spec_path,
                     output_row: row,

@@ -6,6 +6,23 @@ use crate::{
     value::ColumnType,
 };
 
+/// Bound all submitted names, including duplicates and fields never selected as keys.
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    pub entries: usize,
+    pub context_bytes: usize,
+}
+
+impl Default for Limits {
+    /// Keep temporary relation metadata within the reference service's trusted policy.
+    fn default() -> Self {
+        Self {
+            entries: 65_536,
+            context_bytes: 1_048_576,
+        }
+    }
+}
+
 /// One inference outcome; indices refer to the original ordered output key names.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Inference {
@@ -51,40 +68,53 @@ pub fn comparable(left: ComparableType, right: ComparableType) -> bool {
 
 /// Infer REQ-0150 keys in output order and report the first REQ-0151 type mismatch.
 /// Right fields are normalized schema metadata (including SELF/derived fields), not values.
-/// Validate every submitted name before semantic early exits; invalid output identity
+/// Admit every submitted entry before semantic early exits; invalid output identity
 /// is explicit so hosts can retain their earlier REQ-0220 declaration diagnostic.
-pub fn infer(catalog: &Catalog, keys: &[&str], fields: &[Field<'_>]) -> Result<Inference, Error> {
-    let fields = fields
-        .iter()
-        .map(|field| (field.name, Some(field.column_type)))
-        .collect::<Vec<_>>();
-    infer_partial(catalog, keys, &fields)
-}
-
-/// Raw donor fields preserve applicability even when no one kind is known.
-pub(crate) fn infer_partial(
+pub fn infer(
     catalog: &Catalog,
     keys: &[&str],
-    fields: &[(&str, Option<ColumnType>)],
+    fields: &[Field<'_>],
+    limits: Limits,
 ) -> Result<Inference, Error> {
+    let entries = keys
+        .len()
+        .checked_add(fields.len())
+        .ok_or(Error::SizeOverflow)?;
+    if entries > limits.entries {
+        return Err(Error::Limit {
+            resource: "key_entries",
+            limit: limits.entries,
+            required: entries,
+        });
+    }
     let names = keys
         .iter()
         .copied()
-        .chain(fields.iter().map(|field| field.0));
+        .chain(fields.iter().map(|field| field.name));
+    let bytes = names.clone().try_fold(0usize, |total, name| {
+        total.checked_add(name.len()).ok_or(Error::SizeOverflow)
+    })?;
+    if bytes > limits.context_bytes {
+        return Err(Error::Limit {
+            resource: "key_context_bytes",
+            limit: limits.context_bytes,
+            required: bytes,
+        });
+    }
     if names.clone().any(str::is_empty) {
         return Err(Error::EmptyName);
     }
     let mut right = BTreeMap::new();
-    for &(name, kind) in fields {
-        if right.insert(name, kind).is_some() {
+    for field in fields {
+        if right.insert(field.name, field.column_type).is_some() {
             return Err(Error::DuplicateField);
         }
     }
     // Identity validity precedes join selection, including when no key is shared.
     let mut output_types = Vec::with_capacity(keys.len());
     for (key, name) in keys.iter().enumerate() {
-        if catalog.output_type(name).is_some() {
-            output_types.push(catalog.type_of(name));
+        if let Some(kind) = catalog.output_type(name) {
+            output_types.push(kind);
         } else {
             return Ok(Inference::UndeclaredOutput { key });
         }
@@ -92,14 +122,12 @@ pub(crate) fn infer_partial(
     let mut selected = Vec::new();
     for (key, (name, expected)) in keys.iter().zip(output_types).enumerate() {
         if let Some(&actual) = right.get(name) {
-            if let (Some(expected), Some(actual)) = (expected, actual) {
-                if !comparable(expected.into(), actual.into()) {
-                    return Ok(Inference::Incompatible {
-                        key,
-                        expected,
-                        actual,
-                    });
-                }
+            if !comparable(expected.into(), actual.into()) {
+                return Ok(Inference::Incompatible {
+                    key,
+                    expected,
+                    actual,
+                });
             }
             selected.push(key);
         }
@@ -114,6 +142,7 @@ pub(crate) fn infer_partial(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::reference_binding;
     use ColumnType::{Date, DateTime, Float, Int, Str};
 
     #[test]
@@ -155,6 +184,7 @@ mod tests {
                 },
             ],
             &[],
+            reference_binding::Limits::default(),
         )
         .unwrap()
     }
@@ -173,7 +203,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            infer(&catalog, &["D", "A", "B"], &fields),
+            infer(&catalog, &["D", "A", "B"], &fields, Limits::default()),
             Ok(Inference::Keys {
                 keys: std::vec![1, 2]
             })
@@ -189,7 +219,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            infer(&catalog, &["B", "D"], &fields),
+            infer(&catalog, &["B", "D"], &fields, Limits::default()),
             Ok(Inference::Incompatible {
                 key: 0,
                 expected: Str,
@@ -197,7 +227,7 @@ mod tests {
             })
         );
         assert_eq!(
-            infer(&catalog, &["D", "B"], &fields),
+            infer(&catalog, &["D", "B"], &fields, Limits::default()),
             Ok(Inference::Incompatible {
                 key: 0,
                 expected: Date,
@@ -205,28 +235,48 @@ mod tests {
             })
         );
         assert_eq!(
-            infer(&catalog, &["A"], &fields),
+            infer(&catalog, &["A"], &fields, Limits::default()),
             Ok(Inference::NoApplicableKeys)
         );
         assert_eq!(
-            infer(&catalog, &[], &fields),
+            infer(&catalog, &[], &fields, Limits::default()),
             Ok(Inference::NoApplicableKeys)
         );
         assert_eq!(
-            infer(&catalog, &["ABSENT", "B"], &fields),
+            infer(&catalog, &["ABSENT", "B"], &fields, Limits::default()),
             Ok(Inference::UndeclaredOutput { key: 0 })
         );
     }
 
     #[test]
-    fn invalid_names_duplicate_fields_and_repeated_keys_keep_distinct_outcomes() {
+    fn admission_counts_skipped_fields_duplicate_keys_and_utf8_bytes() {
         let catalog = catalog();
         let fields = [Field {
             name: "é",
             column_type: Int,
         }];
+        let limits = Limits {
+            entries: 2,
+            context_bytes: 2,
+        };
         assert_eq!(
-            infer(&catalog, &["A"], &[fields[0], fields[0]]),
+            infer(&catalog, &["A", "A"], &fields, limits),
+            Err(Error::Limit {
+                resource: "key_entries",
+                limit: 2,
+                required: 3
+            })
+        );
+        assert_eq!(
+            infer(&catalog, &["A"], &fields, limits),
+            Err(Error::Limit {
+                resource: "key_context_bytes",
+                limit: 2,
+                required: 3
+            })
+        );
+        assert_eq!(
+            infer(&catalog, &["A"], &[fields[0], fields[0]], Limits::default()),
             Err(Error::DuplicateField)
         );
         assert_eq!(
@@ -236,7 +286,8 @@ mod tests {
                 &[Field {
                     name: "",
                     column_type: Str
-                }]
+                }],
+                Limits::default()
             ),
             Err(Error::EmptyName)
         );
@@ -245,7 +296,7 @@ mod tests {
             column_type: Int,
         }];
         assert_eq!(
-            infer(&catalog, &["A", "A"], &fields),
+            infer(&catalog, &["A", "A"], &fields, Limits::default()),
             Ok(Inference::Keys {
                 keys: std::vec![0, 1]
             })

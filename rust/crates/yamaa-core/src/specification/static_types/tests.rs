@@ -1,40 +1,70 @@
 use super::*;
-use crate::{diagnostic::ConditionCode as C, schema::SpecificationDocument};
+use crate::{
+    diagnostic::ConditionCode as C,
+    schema::{DocumentLimits, SpecificationDocument, ValidationBudget},
+};
 
-use crate::test_document::Tree;
-
-fn operation<'a>(name: &'a str, fields: Vec<(&'a str, Tree)>) -> Tree {
-    Tree::map(vec![(name, Tree::map(fields))])
+#[derive(Clone)]
+enum Tree<'a> {
+    Scalar(N),
+    Text(&'a str),
+    Map(Vec<(&'a str, Tree<'a>)>),
+    List(Vec<Tree<'a>>),
 }
-fn literal(value: N) -> Tree {
-    Tree::map(vec![("literal", Tree::Scalar(value))])
+impl Tree<'_> {
+    fn append(self, nodes: &mut Vec<N>) -> usize {
+        let node = match self {
+            Self::Scalar(node) => node,
+            Self::Text(text) => N::Text(text.into()),
+            Self::List(values) => N::Sequence(
+                values
+                    .into_iter()
+                    .map(|value| value.append(nodes))
+                    .collect(),
+            ),
+            Self::Map(values) => N::Mapping(
+                values
+                    .into_iter()
+                    .map(|(key, value)| (Self::Text(key).append(nodes), value.append(nodes)))
+                    .collect(),
+            ),
+        };
+        let index = nodes.len();
+        nodes.push(node);
+        index
+    }
 }
-fn column<'a>(name: &'a str, kind: &'a str, value: Tree) -> Tree {
-    Tree::map(vec![
-        ("name", Tree::text(name)),
-        ("type", Tree::text(kind)),
-        ("derivation", Tree::map(vec![("value", value)])),
+fn operation<'a>(name: &'a str, fields: Vec<(&'a str, Tree<'a>)>) -> Tree<'a> {
+    Tree::Map(vec![(name, Tree::Map(fields))])
+}
+fn literal(value: N) -> Tree<'static> {
+    Tree::Map(vec![("literal", Tree::Scalar(value))])
+}
+fn column<'a>(name: &'a str, kind: &'a str, value: Tree<'a>) -> Tree<'a> {
+    use Tree::*;
+    Map(vec![
+        ("name", Text(name)),
+        ("type", Text(kind)),
+        ("derivation", Map(vec![("value", value)])),
     ])
 }
-fn document(value: Tree, verification: Option<Tree>) -> SpecificationDocument {
+fn document(value: Tree<'_>, verification: Option<Tree<'_>>) -> SpecificationDocument {
+    use Tree::*;
     let mut fields = vec![
-        ("schema_version", Tree::text("1.0")),
-        ("domain", Tree::text("TEST")),
+        ("schema_version", Text("1.0")),
+        ("domain", Text("TEST")),
         (
             "input",
-            Tree::map(vec![(
-                "SRC",
-                Tree::map(vec![("path", Tree::text("SRC.csv"))]),
-            )]),
+            Map(vec![("SRC", Map(vec![("path", Text("SRC.csv"))]))]),
         ),
-        ("keys", Tree::List(vec![Tree::text("ID")])),
+        ("keys", List(vec![Text("ID")])),
         (
             "columns",
-            Tree::List(vec![
+            List(vec![
                 column(
                     "ID",
                     "int",
-                    operation("source", vec![("variable", Tree::text("SRC.ID"))]),
+                    operation("source", vec![("variable", Text("SRC.ID"))]),
                 ),
                 column("TERM", "str", literal(N::Text("alpha".into()))),
                 column("DAY", "date", literal(N::Null)),
@@ -44,23 +74,23 @@ fn document(value: Tree, verification: Option<Tree>) -> SpecificationDocument {
         ),
         (
             "output",
-            Tree::map(vec![
-                ("path", Tree::text("result.csv")),
-                (
-                    "columns",
-                    Tree::List(vec![Tree::text("ID"), Tree::text("RESULT")]),
-                ),
+            Map(vec![
+                ("path", Text("result.csv")),
+                ("columns", List(vec![Text("ID"), Text("RESULT")])),
             ]),
         ),
     ];
     if let Some(verification) = verification {
-        fields.push(("verifications", Tree::List(vec![verification])));
+        fields.push(("verifications", List(vec![verification])));
     }
     let mut nodes = Vec::new();
-    let root = Tree::map(fields).append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    let root = Map(fields).append(&mut nodes);
+    SpecificationDocument::admit(
+        Document::new(nodes, root, DocumentLimits::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap()
 }
 fn source() -> TableSchema {
     TableSchema::new(vec![Column {
@@ -69,7 +99,7 @@ fn source() -> TableSchema {
     }])
     .unwrap()
 }
-fn binding_codes(value: Tree, verification: Option<Tree>) -> Vec<C> {
+fn binding_codes(value: Tree<'_>, verification: Option<Tree<'_>>) -> Vec<C> {
     let spec = PreparedSpecification::prepare(&document(value, verification)).unwrap();
     let BindError::Invalid(findings) = spec.bind(&source()).unwrap_err() else {
         panic!("typed binding findings")
@@ -83,12 +113,13 @@ fn binding_codes(value: Tree, verification: Option<Tree>) -> Vec<C> {
 
 #[test]
 fn independent_case_types_survive_an_unknown_operand() {
-    let case = Tree::map(vec![(
+    use Tree::*;
+    let case = Map(vec![(
         "case",
-        Tree::List(vec![Tree::map(vec![
+        List(vec![Map(vec![
             (
                 "when",
-                Tree::text("UNKNOWN = 1 OR DAY = '2025-01-01' OR COUNT LIKE '1%'"),
+                Text("UNKNOWN = 1 OR DAY = '2025-01-01' OR COUNT LIKE '1%'"),
             ),
             ("then", literal(N::Integer("1".into()))),
         ])]),
@@ -103,7 +134,7 @@ fn independent_case_types_survive_an_unknown_operand() {
 fn compute_and_reduction_reject_known_text_without_evaluation() {
     assert_eq!(
         binding_codes(
-            operation("compute", vec![("expr", Tree::text("TERM + 1"))]),
+            operation("compute", vec![("expr", Tree::Text("TERM + 1"))]),
             None
         ),
         vec![C::NumericInputType]
@@ -113,8 +144,8 @@ fn compute_and_reduction_reject_known_text_without_evaluation() {
             operation(
                 "aggregate",
                 vec![
-                    ("group_by", Tree::List(vec![Tree::text("ID")])),
-                    ("expr", Tree::text("SUM(TERM)"))
+                    ("group_by", Tree::List(vec![Tree::Text("ID")])),
+                    ("expr", Tree::Text("SUM(TERM)"))
                 ]
             ),
             None
@@ -125,16 +156,23 @@ fn compute_and_reduction_reject_known_text_without_evaluation() {
 
 #[test]
 fn numeric_and_aggregate_result_kinds_are_native_metadata() {
-    let numeric =
-        crate::numeric_compiler::compile_numeric("A + POWER(B, 2) / -3", "result").unwrap();
+    let numeric = crate::numeric_compiler::compile_numeric(
+        "A + POWER(B, 2) / -3",
+        "result",
+        Default::default(),
+    )
+    .unwrap();
     assert_eq!(numeric.result_type(), ColumnType::Float);
     let aggregate = crate::aggregate_compiler::compile_aggregate(
         "SUM(EX.DOSE) / NULLIF(EX.PLANDOSE, 0)",
         "result",
+        Default::default(),
     )
     .unwrap();
     assert_eq!(aggregate.numeric_result_type(), Some(ColumnType::Float));
-    let bare = crate::aggregate_compiler::compile_aggregate("MIN(EX.TERM)", "result").unwrap();
+    let bare =
+        crate::aggregate_compiler::compile_aggregate("MIN(EX.TERM)", "result", Default::default())
+            .unwrap();
     assert_eq!(bare.numeric_result_type(), None);
 }
 
@@ -172,7 +210,7 @@ fn independent_calendar_findings_keep_first_error_priority() {
     let invalid = operation(
         "date_impute",
         vec![
-            ("source", Tree::text("TERM")),
+            ("source", Tree::Text("TERM")),
             ("month", Tree::Scalar(N::Integer("13".into()))),
             ("day", Tree::Scalar(N::Integer("0".into()))),
         ],
@@ -195,7 +233,7 @@ fn independent_calendar_findings_keep_first_error_priority() {
 fn independent_cut_findings_keep_first_error_priority() {
     use crate::mapping_cut::{AdmissionError, Cut};
     let labels = vec![String::from("a")];
-    let findings = Cut::declaration_findings("cut", &[10.0, 5.0], &labels);
+    let findings = Cut::declaration_findings("COUNT", "cut", &[10.0, 5.0], &labels).unwrap();
     assert_eq!(findings.len(), 2);
     assert_ne!(findings[0].context, findings[1].context);
     let AdmissionError::Diagnostic(first) = Cut::new(
@@ -213,7 +251,7 @@ fn independent_cut_findings_keep_first_error_priority() {
     let invalid = operation(
         "cut",
         vec![
-            ("source", Tree::text("COUNT")),
+            ("source", Tree::Text("COUNT")),
             (
                 "breaks",
                 Tree::List(vec![
@@ -221,7 +259,7 @@ fn independent_cut_findings_keep_first_error_priority() {
                     Tree::Scalar(N::Integer("5".into())),
                 ]),
             ),
-            ("labels", Tree::List(vec![Tree::text("a")])),
+            ("labels", Tree::List(vec![Tree::Text("a")])),
         ],
     );
     let PrepareError::Invalid(findings) =
@@ -233,7 +271,7 @@ fn independent_cut_findings_keep_first_error_priority() {
 }
 
 #[test]
-fn repeated_type_findings_keep_the_complete_ordered_context() {
+fn repeated_type_findings_refuse_whole_projection_before_output() {
     let mut terms = (0..1024)
         .map(|index| format!("X{index}"))
         .collect::<Vec<_>>();
@@ -244,79 +282,73 @@ fn repeated_type_findings_keep_the_complete_ordered_context() {
             .collect();
     }
     let expression = terms.pop().unwrap();
-    let plan = crate::numeric_compiler::compile_numeric(&expression, "result").unwrap();
-    let findings = numeric_kinds(&plan, |_| Some(crate::value::ValueType::Str));
-    assert_eq!(findings.len(), 1024);
-    for (index, finding) in findings.iter().enumerate() {
-        assert_eq!(finding.code, C::NumericInputType);
-        assert_eq!(finding.spec_paths, ["result"]);
-        assert_eq!(
-            finding.context["source"],
-            serde_json::json!(format!("X{index}"))
-        );
-        assert_eq!(finding.context["expr"], serde_json::json!(expression));
-        assert_eq!(finding.context["expected"], serde_json::json!("numeric"));
-        assert_eq!(finding.context["actual"], serde_json::json!("str"));
-    }
+    let plan = crate::numeric_compiler::compile_numeric(&expression, "result", Default::default())
+        .unwrap();
+    assert!(matches!(
+        numeric_kinds(&plan, |_| Some(crate::value::ValueType::Str)),
+        Err(BindError::PredicateDiagnosticLimit)
+    ));
 }
 
 fn phase_document(
-    columns: Vec<Tree>,
-    intermediates: Vec<Tree>,
-    rows: Vec<Tree>,
+    columns: Vec<Tree<'_>>,
+    intermediates: Vec<Tree<'_>>,
+    rows: Vec<Tree<'_>>,
 ) -> SpecificationDocument {
+    use Tree::*;
     let mut fields = vec![
-        ("schema_version", Tree::text("1.0")),
-        ("domain", Tree::text("TEST")),
+        ("schema_version", Text("1.0")),
+        ("domain", Text("TEST")),
         (
             "input",
-            Tree::map(vec![(
-                "SRC",
-                Tree::map(vec![("path", Tree::text("SRC.csv"))]),
-            )]),
+            Map(vec![("SRC", Map(vec![("path", Text("SRC.csv"))]))]),
         ),
-        ("keys", Tree::List(vec![Tree::text("ID")])),
-        ("columns", Tree::List(columns)),
+        ("keys", List(vec![Text("ID")])),
+        ("columns", List(columns)),
         (
             "output",
-            Tree::map(vec![
-                ("path", Tree::text("result.csv")),
-                ("columns", Tree::List(vec![Tree::text("ID")])),
+            Map(vec![
+                ("path", Text("result.csv")),
+                ("columns", List(vec![Text("ID")])),
             ]),
         ),
     ];
     if !intermediates.is_empty() {
-        fields.push(("intermediates", Tree::List(intermediates)));
+        fields.push(("intermediates", List(intermediates)));
     }
     if !rows.is_empty() {
-        fields.push(("rows", Tree::List(rows)));
+        fields.push(("rows", List(rows)));
     }
     let mut nodes = Vec::new();
-    let root = Tree::map(fields).append(&mut nodes);
-    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
-        .unwrap()
-        .unwrap()
+    let root = Map(fields).append(&mut nodes);
+    SpecificationDocument::admit(
+        Document::new(nodes, root, DocumentLimits::default()).unwrap(),
+        &mut ValidationBudget::new(Default::default()),
+    )
+    .unwrap()
+    .unwrap()
 }
-fn empty_column(name: &str) -> Tree {
-    Tree::map(vec![
-        ("name", Tree::text(name)),
-        ("type", Tree::text("int")),
+fn empty_column(name: &str) -> Tree<'_> {
+    Tree::Map(vec![
+        ("name", Tree::Text(name)),
+        ("type", Tree::Text("int")),
     ])
 }
-fn source_value(name: &str) -> Tree {
-    operation("source", vec![("variable", Tree::text(name))])
+fn source_value(name: &str) -> Tree<'_> {
+    operation("source", vec![("variable", Tree::Text(name))])
 }
-fn row_value(value: Tree) -> Tree {
-    Tree::map(vec![("value", value)])
+fn row_value(value: Tree<'_>) -> Tree<'_> {
+    Tree::Map(vec![("value", value)])
 }
-fn row_number() -> Tree {
+fn row_number() -> Tree<'static> {
+    use Tree::*;
     operation(
         "row_number",
         vec![(
             "window",
-            Tree::map(vec![(
+            Map(vec![(
                 "order_by",
-                Tree::List(vec![Tree::map(vec![("variable", Tree::text("ID"))])]),
+                List(vec![Map(vec![("variable", Text("ID"))])]),
             )]),
         )],
     )
@@ -336,13 +368,14 @@ fn phase_findings(
 
 #[test]
 fn only_ungrouped_filters_refuse_direct_and_transitive_window_reads() {
+    use Tree::*;
     for grouped in [false, true] {
         let mut row = vec![
-            ("id", Tree::text("candidate")),
-            ("filter", Tree::text("ALIAS > 1")),
+            ("id", Text("candidate")),
+            ("filter", Text("ALIAS > 1")),
             (
                 "derivations",
-                Tree::map(vec![
+                Map(vec![
                     ("ID", row_value(source_value("SRC.ID"))),
                     ("SEQ", row_value(row_number())),
                     ("ALIAS", row_value(source_value("SEQ"))),
@@ -350,7 +383,7 @@ fn only_ungrouped_filters_refuse_direct_and_transitive_window_reads() {
             ),
         ];
         if grouped {
-            row.push(("group_by", Tree::List(vec![Tree::text("SRC.ID")])));
+            row.push(("group_by", List(vec![Text("SRC.ID")])));
         }
         let spec = PreparedSpecification::prepare(&phase_document(
             vec![
@@ -359,7 +392,7 @@ fn only_ungrouped_filters_refuse_direct_and_transitive_window_reads() {
                 empty_column("ALIAS"),
             ],
             vec![],
-            vec![Tree::map(row)],
+            vec![Map(row)],
         ))
         .unwrap();
         if grouped {
@@ -378,18 +411,19 @@ fn only_ungrouped_filters_refuse_direct_and_transitive_window_reads() {
 
 #[test]
 fn a_deferred_lookup_match_has_its_authored_filter_phase_witness() {
-    let intermediate = Tree::map(vec![
-        ("id", Tree::text("COLLECTED")),
-        ("dataset", Tree::text("SRC")),
-        ("key", Tree::List(vec![Tree::text("ID"), Tree::text("SEQ")])),
-        ("columns", Tree::List(vec![Tree::text("VAL")])),
+    use Tree::*;
+    let intermediate = Map(vec![
+        ("id", Text("COLLECTED")),
+        ("dataset", Text("SRC")),
+        ("key", List(vec![Text("ID"), Text("SEQ")])),
+        ("columns", List(vec![Text("VAL")])),
     ]);
-    let row = Tree::map(vec![
-        ("id", Tree::text("candidate")),
-        ("filter", Tree::text("COLLECTED.VAL IS NULL")),
+    let row = Map(vec![
+        ("id", Text("candidate")),
+        ("filter", Text("COLLECTED.VAL IS NULL")),
         (
             "derivations",
-            Tree::map(vec![
+            Map(vec![
                 ("ID", row_value(source_value("SRC.ID"))),
                 ("SEQ", row_value(row_number())),
                 ("VAL", row_value(source_value("SRC.VAL"))),
@@ -432,41 +466,38 @@ fn a_deferred_lookup_match_has_its_authored_filter_phase_witness() {
 #[test]
 fn input_backed_defaults_join_self_donors_while_self_backed_columns_stay_late() {
     use crate::dataset::Expression;
-
+    use Tree::*;
     for (named, self_backed) in [(false, false), (true, false), (true, true)] {
-        let prior = Tree::map(vec![
-            ("id", Tree::text("PRIOR_SAE")),
-            ("dataset", Tree::text("SELF")),
-            ("key", Tree::List(vec![Tree::text("ID")])),
-            ("filter", Tree::text("SELF.LATE > 0 AND SELF.ALIAS > 0")),
+        let prior = Map(vec![
+            ("id", Text("PRIOR_SAE")),
+            ("dataset", Text("SELF")),
+            ("key", List(vec![Text("ID")])),
+            ("filter", Text("SELF.LATE > 0 AND SELF.ALIAS > 0")),
             (
                 "order_by",
-                Tree::List(vec![Tree::map(vec![("variable", Tree::text("SELF.SEQ"))])]),
+                List(vec![Map(vec![("variable", Text("SELF.SEQ"))])]),
             ),
-            ("keep", Tree::text("first")),
+            ("keep", Text("first")),
         ]);
-        let first = Tree::map(vec![
-            ("id", Tree::text("FIRST_AE")),
-            (
-                "dataset",
-                Tree::text(if self_backed { "SELF" } else { "SRC" }),
-            ),
-            ("key", Tree::List(vec![Tree::text("ID")])),
+        let first = Map(vec![
+            ("id", Text("FIRST_AE")),
+            ("dataset", Text(if self_backed { "SELF" } else { "SRC" })),
+            ("key", List(vec![Text("ID")])),
             (
                 "order_by",
-                Tree::List(vec![Tree::map(vec![(
+                List(vec![Map(vec![(
                     "variable",
-                    Tree::text(if self_backed { "SELF.SEQ" } else { "SRC.SEQ" }),
+                    Text(if self_backed { "SELF.SEQ" } else { "SRC.SEQ" }),
                 )])]),
             ),
-            ("keep", Tree::text("first")),
+            ("keep", Text("first")),
         ]);
         let row = |id, prior| {
-            Tree::map(vec![
-                ("id", Tree::text(id)),
+            Map(vec![
+                ("id", Text(id)),
                 (
                     "derivations",
-                    Tree::map(vec![
+                    Map(vec![
                         ("ID", row_value(source_value("SRC.ID"))),
                         ("SEQ", row_value(source_value("SRC.SEQ"))),
                         ("PRIOR", row_value(prior)),
@@ -571,17 +602,18 @@ fn input_backed_defaults_join_self_donors_while_self_backed_columns_stay_late() 
 
 #[test]
 fn donor_filter_observes_the_computed_intermediate_type() {
-    let intermediate = Tree::map(vec![
-        ("id", Tree::text("EOT")),
-        ("dataset", Tree::text("SRC")),
-        ("filter", Tree::text("SRC.EOT_FALLBACK = 'x'")),
+    use Tree::*;
+    let intermediate = Map(vec![
+        ("id", Text("EOT")),
+        ("dataset", Text("SRC")),
+        ("filter", Text("SRC.EOT_FALLBACK = 'x'")),
         (
             "derivations",
-            Tree::map(vec![(
+            Map(vec![(
                 "EOT_FALLBACK",
                 row_value(operation(
                     "compute",
-                    vec![("expr", Tree::text("SEQ + VAL / 1000"))],
+                    vec![("expr", Text("SEQ + VAL / 1000"))],
                 )),
             )]),
         ),
@@ -613,16 +645,17 @@ fn donor_filter_observes_the_computed_intermediate_type() {
 
 #[test]
 fn explicit_named_row_reads_still_promote_their_local_match_defaults() {
-    let first = Tree::map(vec![
-        ("id", Tree::text("FIRST_AE")),
-        ("dataset", Tree::text("SRC")),
-        ("key", Tree::map(vec![("SEQ", Tree::text("CURRENT"))])),
+    use Tree::*;
+    let first = Map(vec![
+        ("id", Text("FIRST_AE")),
+        ("dataset", Text("SRC")),
+        ("key", Map(vec![("SEQ", Text("CURRENT"))])),
     ]);
-    let row = Tree::map(vec![
-        ("id", Tree::text("candidate")),
+    let row = Map(vec![
+        ("id", Text("candidate")),
         (
             "derivations",
-            Tree::map(vec![
+            Map(vec![
                 ("ID", row_value(source_value("SRC.ID"))),
                 ("VAL", row_value(source_value("FIRST_AE.SEQ"))),
             ]),

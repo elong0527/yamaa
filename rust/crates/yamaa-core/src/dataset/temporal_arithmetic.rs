@@ -27,6 +27,24 @@ impl Temporal {
         if !matches!(self.kind, TemporalKind::DurationValue { .. }) {
             return Err(super::InvalidTemporal::Shape);
         }
+        let bytes = self
+            .sources
+            .iter()
+            .try_fold(self.path.len(), |total, source| {
+                total.checked_add(source.len())
+            })
+            .and_then(|bytes| {
+                bytes.checked_add(if let Value::Str(text) = &value {
+                    text.len()
+                } else {
+                    0
+                })
+            })
+            .and_then(|bytes| bytes.checked_mul(6))
+            .and_then(|bytes| bytes.checked_add(1024));
+        if bytes.is_none_or(|bytes| bytes > crate::diagnostic::MAX_PROJECTION_BYTES) {
+            return Err(super::InvalidTemporal::Limit);
+        }
         self.invalid = Some(value);
         Ok(self)
     }
