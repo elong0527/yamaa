@@ -22,7 +22,6 @@ fn rejected(code: &str) -> Value {
 }
 fn context_failure(error: captured_schema::Error) -> Value {
     rejected(match error {
-        captured_schema::Error::Limit => "diagnostic_context_limit",
         captured_schema::Error::InvalidContext => "diagnostic_context",
     })
 }
@@ -47,13 +46,8 @@ fn literal(outcome: Value) -> Value {
 }
 fn traversal_finding<E>(error: &graph::Error<E>) -> Result<Option<Value>, captured_schema::Error> {
     let finding = error
-        .diagnostic_with_limit(16_777_216)
-        .map_err(|error| match error {
-            yamaa_core::diagnostic::ProjectionError::Limit => captured_schema::Error::Limit,
-            yamaa_core::diagnostic::ProjectionError::InvalidContext => {
-                captured_schema::Error::InvalidContext
-            }
-        })?;
+        .diagnostic()
+        .map_err(|_| captured_schema::Error::InvalidContext)?;
     let Some(finding) = finding else {
         return Ok(None);
     };
@@ -65,28 +59,23 @@ fn traversal_finding<E>(error: &graph::Error<E>) -> Result<Option<Value>, captur
 // already-owned fields; no source request or JSON reply crosses a host callback.
 fn traversal_outcome<E>(schema: &SchemaStructure, error: graph::Error<E>) -> Result<Value, E> {
     use yamaa_core::inheritance_outcome::{self, Outcome};
-    let error = match inheritance_outcome::traversal_outcome(error, 16_777_216) {
+    let error = match inheritance_outcome::traversal_outcome(error) {
         Ok(Outcome::Diagnostic(finding)) => {
             return Ok(
                 json!({"status":"invalid", "diagnostics":[super::portable_diagnostic(finding)]}),
             );
         }
         Ok(Outcome::Original(error)) => error,
-        Err(_) => return Ok(rejected("diagnostic_context_limit")),
+        Err(_) => return Ok(rejected("diagnostic_context")),
     };
     Ok(match error {
         graph::Error::Host(error) => return Err(error),
         graph::Error::Resource(error) => {
-            let resource = match error.resource {
-                graph::Resource::Layers => "layers",
-                graph::Resource::ParentVisits => "parent_visits",
-                graph::Resource::Depth => "depth",
-                graph::Resource::PathBytes => "path_bytes",
-                graph::Resource::InputNodes => "input_nodes",
-                graph::Resource::InputTextBytes => "input_text_bytes",
-                graph::Resource::Work => "work",
-            };
-            json!({"status":"resource_limit", "phase":"inheritance", "resource":resource, "limit":error.limit})
+            let mut outcome = json!({"status":"resource_limit", "phase":"inheritance", "resource":error.resource, "limit":error.limit});
+            if let Some(actual) = error.actual {
+                outcome["actual"] = json!(actual);
+            }
+            outcome
         }
         graph::Error::UnsupportedControlField { source, field } => {
             json!({"status":"unsupported", "feature":"inheritance_control_field", "source":source, "field":field})
@@ -164,13 +153,11 @@ fn dictionary_failure_ref<'a, T>(
         Cause::Materialize(error) => {
             normalized(document.schema().structure(), None, error.clone(), &[])
         }
-        Cause::Limit(error) => return Ok(capture_failure(error)),
         Cause::MissingOrigin(_) => {
             json!({"status":"rejected","stage":"dictionary","code":"declaring_origin"})
         }
     };
-    Ok(crate::yaml_diagnostics::encode_outcome("specification/prototype",outcome,16_777_216)
-        .unwrap_or_else(|_|json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"dictionary","code":"response_limit"}}).to_string()))
+    Ok(super::capture_response(outcome))
 }
 
 /// Borrow rejected preparation so a public carrier can retain its exact sources
@@ -230,7 +217,6 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
             }
         }
         E::ParentsRequired => rejected("parents_required"),
-        E::PathBytes => rejected("path_byte_limit"),
         E::Document(error) => errors::document(*error).unwrap_or_else(|_| rejected("document")),
         E::Normalize(failure) => {
             normalized(schema, failure.input.as_ref(), failure.error.clone(), &[])
@@ -261,13 +247,7 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
             &[],
         ),
     };
-    Ok(
-        crate::yaml_diagnostics::encode_outcome("specification/prototype", outcome, 16_777_216)
-            .unwrap_or_else(|_| {
-                json!({"protocol":"specification/prototype","outcome":rejected("response_limit")})
-                    .to_string()
-            }),
-    )
+    Ok(super::capture_response(outcome))
 }
 /// Both document forms return portable issue records, with source provenance
 /// resolved by the shared adapter. No host interprets context occurrence IDs.
@@ -311,7 +291,6 @@ pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
             },
         },
         E::ParentsRequired => rejected("parents_required"),
-        E::PathBytes => rejected("path_byte_limit"),
         E::Document(error) => errors::document(error).unwrap_or_else(|_| rejected("document")),
         E::Normalize(failure) => normalized(schema, failure.input.as_ref(), failure.error, &[]),
         E::Validation(error) => {
@@ -332,34 +311,29 @@ pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
             normalized(schema, error.context_document.as_ref(), error.error, &[])
         }
     };
-    Ok(
-        crate::yaml_diagnostics::encode_outcome("specification/prototype", outcome, 16_777_216)
-            .unwrap_or_else(|_| {
-                json!({"protocol":"specification/prototype","outcome":rejected("response_limit")})
-                    .to_string()
-            }),
-    )
+    Ok(super::capture_response(outcome))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn traversal_context_limit_preserves_original_whole_failure() {
+    fn traversal_preserves_the_complete_long_failure_and_original_owner() {
+        let path = "x".repeat(3_000_000);
         let error = graph::Error::<()>::Unavailable {
             declaring: "entry".into(),
-            path: "x".repeat(3_000_000),
+            path,
         };
         for _ in 0..2 {
-            assert!(matches!(
-                traversal_finding(&error),
-                Err(captured_schema::Error::Limit)
-            ));
+            let projected = traversal_finding(&error).unwrap().unwrap();
+            assert_eq!(
+                projected,
+                json!({"status":"invalid", "diagnostics":[{
+                    "phase":"validation", "condition":"parent_not_found", "requirement":"REQ-0654",
+                    "spec_paths":["parents"], "context":{"source":"entry", "path":"x".repeat(3_000_000)}
+                }]})
+            );
         }
-        assert_eq!(
-            context_failure(captured_schema::Error::Limit),
-            json!({"status":"rejected","stage":"inheritance","code":"diagnostic_context_limit"})
-        );
         let graph::Error::Unavailable { path, .. } = error else {
             panic!("failure replaced")
         };
