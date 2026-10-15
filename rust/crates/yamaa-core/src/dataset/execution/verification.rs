@@ -151,7 +151,7 @@ pub(crate) fn predicate_check<T: TableAccess + ?Sized>(
     // Validate types from immutable schemas, including an empty output. These
     // synthetic operands never select donors, run handlers or read source cells.
     for predicate in when.into_iter().chain([require]) {
-        validate_predicate::<T>(predicate, dataset, plan, state, records)?;
+        validate_predicate::<T::Error>(predicate, dataset, plan, records)?;
     }
     let Some(code) = metadata else {
         return Ok(None);
@@ -212,7 +212,7 @@ pub(crate) fn row_count_check<T: TableAccess + ?Sized>(
 ) -> Result<CheckRecord, Box<ExecutionError<T::Error>>> {
     // Type admission must not select a donor, even for empty or exempt groups.
     for predicate in check.filter.iter().chain(&check.when) {
-        validate_predicate::<T>(predicate, dataset, plan, state, records)?;
+        validate_predicate::<T::Error>(predicate, dataset, plan, records)?;
     }
     let assignment = dataset::Assignment {
         column: 0,
