@@ -135,12 +135,8 @@ impl Catalog {
     }
 
     pub(crate) fn selected_read(&self, name: &str) -> Option<Result<SelectedRead<'_>, Diagnostic>> {
-        let Some((owner, field)) = name.split_once('.') else {
-            return None;
-        };
-        let Some(relation) = self.selected.get(owner) else {
-            return None;
-        };
+        let (owner, field) = name.split_once('.')?;
+        let relation = self.selected.get(owner)?;
         Some(
             relation
                 .fields
