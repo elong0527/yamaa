@@ -219,7 +219,7 @@ pub fn prepare<P: CapturePort, D: DecodePort>(
         },
         D::document(raw).clone(),
         &mut application,
-        &mut NormalizationBudget::for_application(limits.normalization),
+        &mut NormalizationBudget::new(limits.normalization),
         limits.preparation,
     );
     match prepared {

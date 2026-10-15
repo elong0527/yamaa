@@ -96,7 +96,6 @@ pub fn prepare(
     if raw.field(raw.root(), "parents").is_some() {
         return Err(Error::InheritanceRequired);
     }
-    budget.admit_input(&raw);
     let normalized = match schema.normalize_document(&raw, budget) {
         Ok(normalized) => normalized,
         Err(error) => return Err(normalization_failure(error, raw)),

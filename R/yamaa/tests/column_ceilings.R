@@ -141,7 +141,7 @@ run_column_ceilings <- function() {
       assert_refusal(refused, TRUE)
       issue <- refused$issues
       stopifnot(nrow(issue) == 1L, is.na(issue$requirement),
-        grepl('"incomplete_checks_from":"specification"', issue$context, fixed = TRUE),
+        !grepl("incomplete_checks_from", issue$context, fixed = TRUE),
         grepl('"actual":1025', issue$context, fixed = TRUE),
         grepl('"limit":1024', issue$context, fixed = TRUE))
     }
@@ -175,7 +175,7 @@ run_column_ceilings <- function() {
     writeLines(c("schema_version: '1.0'", "language: r"), env)
     spec_path <- switch(resource, inputs = "input", source_fields = "input.SRC.types",
                         projected_columns = "output.columns", "columns")
-    expected <- sprintf('{"actual":%s,"code":"compiler_limit","incomplete_checks_from":"specification","limit":%s,"resource":"%s","stage":"prepare"}',
+    expected <- sprintf('{"actual":%s,"code":"compiler_limit","limit":%s,"resource":"%s","stage":"prepare"}',
                         actual, limit, resource)
     for (environment in list(NULL, env)) {
       for (operation in list(yamaa_check, yamaa_domain)) {
@@ -199,10 +199,10 @@ run_column_ceilings <- function() {
                    file.path(case_root, sprintf("layer-%s.yaml", index)))
       }
       writeLines(c("schema_version: '1.0'", "parents: [layer-0.yaml]"), spec)
-      expected <- '{"code":"resource_limit","incomplete_checks_from":"specification","limit":64,"phase":"inheritance","resource":"depth","stage":"prepare"}'
+      expected <- '{"code":"resource_limit","limit":64,"phase":"inheritance","resource":"depth","stage":"prepare"}'
     } else {
       writeLines(paste0("value: ", paste(rep("9", 4097L), collapse = "")), spec)
-      expected <- '{"actual":4097,"code":"resource_limit","incomplete_checks_from":"specification","limit":4096,"phase":"yaml_decode","resource":"numeric_digits","stage":"capture"}'
+      expected <- '{"actual":4097,"code":"resource_limit","limit":4096,"phase":"yaml_decode","resource":"numeric_digits","stage":"capture"}'
     }
     env <- file.path(case_root, "environment.yaml")
     writeLines(c("schema_version: '1.0'", "language: r"), env)

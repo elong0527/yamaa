@@ -124,7 +124,7 @@ class ColumnCeilings(unittest.TestCase):
                 rows = refused.issues.to_dicts()
                 self.assertEqual(len(rows), 1)
                 context = json.loads(rows[0]["context"])
-                self.assertEqual(context["incomplete_checks_from"], "specification")
+                self.assertNotIn("incomplete_checks_from", context)
                 self.assertEqual((context["limit"], context["actual"]), (1024, 1025))
                 self.assertIsNone(rows[0]["requirement"])
             repaired_capacity = {**document, "columns": document["columns"][:-1]}

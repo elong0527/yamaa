@@ -279,7 +279,6 @@ fn admit<E>(
     budget: &mut Budget,
 ) -> Result<Frame, Error<E>> {
     budget.input(&input)?;
-    normalization.admit_input(&input);
     let normalized = match schema.normalize_layer(&input, normalization) {
         Ok(value) => value.document,
         Err(error) => {

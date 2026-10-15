@@ -32,8 +32,9 @@ pub struct NormalizedDocument {
 #[derive(Clone, Copy, Debug)]
 pub struct NormalizationLimits {
     pub validation: ValidationLimits,
-    /// Per-arena storage; the budget separately accounts cumulative construction,
-    /// including temporary derivation shorthand and inherited planning arenas.
+    /// Storage bounds for each document and for cumulative arena construction
+    /// across the request, including temporary derivation shorthand and
+    /// inherited planning arenas.
     pub storage: DocumentLimits,
     /// Bounds interpretation independently of the resulting document depth.
     pub depth: usize,
@@ -85,11 +86,7 @@ pub struct NormalizationBudget {
     nodes: usize,
     bytes: usize,
     edges: usize,
-    input_nodes: usize,
-    input_bytes: usize,
-    work_multiplier: usize,
     cumulative_storage: DocumentLimits,
-    application: bool,
 }
 impl NormalizationBudget {
     pub fn new(limits: NormalizationLimits) -> Self {
@@ -99,105 +96,21 @@ impl NormalizationBudget {
             nodes: 0,
             bytes: 0,
             edges: 0,
-            input_nodes: 0,
-            input_bytes: 0,
-            work_multiplier: 1,
             cumulative_storage: limits.storage,
-            application: false,
         }
     }
-    /// Top-level host preparation applies finite input-size allowances. Explicit
-    /// component budgets created with new retain their exact caller-selected caps.
-    pub fn for_application(limits: NormalizationLimits) -> Self {
-        let mut budget = Self::new(limits);
-        budget.application = true;
-        budget
-    }
-    /// Layer admission, composition/dependencies, final normalization and model
-    /// admission share four flat allowances. Individual arenas keep their
-    /// original storage limits. Counters remain cumulative across
-    /// retries and all unique inputs; no successful or failed charge is refunded.
+    /// Layered preparation builds several planning arenas cumulatively in
+    /// one request. Its only allowance change is this fixed cumulative
+    /// storage bound: eight times the per-document storage limits. Work,
+    /// diagnostics and regex allowances are the same fixed defaults for
+    /// flat and layered preparation alike.
     pub fn begin_inheritance(&mut self) {
-        if !self.application {
-            return;
-        }
-        self.work_multiplier = 4;
-        // Descriptor output/import, composition and the four final planning
-        // arenas require separate construction shares, including temporary
-        // vectors. These counters count allocations across the entire request;
-        // each actual document still uses limits.storage unchanged.
-        self.cumulative_storage.nodes = self.limits.storage.nodes.saturating_mul(8);
-        self.cumulative_storage.text_bytes = self.limits.storage.text_bytes.saturating_mul(8);
-        self.cumulative_storage.edges = self.limits.storage.edges.saturating_mul(8);
-        self.update_work_limit();
-    }
-    /// Size work and attempted-diagnostic allowances using original decoded inputs, before any
-    /// expansion. Per-input and traversal admission still enforce their own
-    /// bounds. Clamping the cumulative size keeps this request finite even if a
-    /// caller supplies repeated inputs or larger trusted traversal limits.
-    pub fn admit_input(&mut self, input: &Document) {
-        if !self.application {
-            return;
-        }
-        self.input_nodes = self
-            .input_nodes
-            .saturating_add(input.nodes().len())
-            .min(self.limits.storage.nodes);
-        for node in input.nodes() {
-            if let N::Text(text) | N::Integer(text) = node {
-                self.input_bytes = self
-                    .input_bytes
-                    .saturating_add(text.len())
-                    .min(self.limits.storage.text_bytes);
-            }
-        }
-        self.update_work_limit();
-    }
-    fn update_work_limit(&mut self) {
-        let size = self.input_nodes.saturating_add(self.input_bytes);
-        // Reference reachability and ordering also revisit descriptor patterns.
-        let matcher_multiplier = if self.work_multiplier == 4 { 8 } else { 1 };
-        self.validation.application_limits(
-            self.limits
-                .validation
-                .work
-                .saturating_add(size.min(self.limits.validation.work))
-                .saturating_mul(self.work_multiplier),
-            self.limits
-                .validation
-                .diagnostics
-                .saturating_add(self.input_nodes.saturating_mul(2))
-                .saturating_mul(self.work_multiplier),
-            self.limits
-                .validation
-                .diagnostic_text_bytes
-                .saturating_add(self.input_nodes.saturating_mul(128))
-                .saturating_add(self.input_bytes)
-                .saturating_mul(self.work_multiplier),
-            crate::regex::MatchLimits {
-                subject_bytes: self
-                    .limits
-                    .validation
-                    .regex
-                    .subject_bytes
-                    .saturating_add(size.min(self.limits.validation.regex.subject_bytes))
-                    .saturating_mul(matcher_multiplier),
-                work: self
-                    .limits
-                    .validation
-                    .regex
-                    .work
-                    .saturating_add(size.min(self.limits.validation.regex.work))
-                    .saturating_mul(matcher_multiplier),
-                state_cells: self
-                    .limits
-                    .validation
-                    .regex
-                    .state_cells
-                    .saturating_add(size.min(self.limits.validation.regex.state_cells))
-                    .saturating_mul(matcher_multiplier),
-            },
-        );
+        self.cumulative_storage = DocumentLimits {
+            nodes: self.limits.storage.nodes.saturating_mul(8),
+            text_bytes: self.limits.storage.text_bytes.saturating_mul(8),
+            edges: self.limits.storage.edges.saturating_mul(8),
+            ..self.limits.storage
+        };
     }
     pub fn storage_used(&self) -> (usize, usize, usize) {
         (self.nodes, self.bytes, self.edges)
@@ -907,132 +820,5 @@ impl SchemaStructure {
         };
         let root = run.descriptor(descriptor, site)?;
         run.finish(root)
-    }
-}
-
-#[cfg(test)]
-mod application_work_tests {
-    use super::*;
-    use crate::schema::ConstraintError;
-
-    fn input(text: &str) -> Document {
-        Document::new(vec![N::Text(text.into())], 0, DocumentLimits::default()).unwrap()
-    }
-
-    #[test]
-    fn admitted_input_grows_flat_and_layered_work_without_refunding_charges() {
-        let limits = NormalizationLimits {
-            validation: ValidationLimits {
-                work: 100,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let mut flat = NormalizationBudget::for_application(limits);
-        flat.admit_input(&input("abc"));
-        assert!(flat.work(104).is_ok());
-        assert_eq!(
-            flat.work(1),
-            Err(NormalizationError::Validation(ValidationError::Constraint(
-                ConstraintError::Work { limit: 104 }
-            )))
-        );
-
-        let mut layered = NormalizationBudget::for_application(limits);
-        layered.work(10).unwrap();
-        layered.begin_inheritance();
-        layered.admit_input(&input("abc"));
-        layered.work(406).unwrap();
-        assert_eq!(layered.work_used(), 416);
-        assert!(layered.work(1).is_err());
-        layered.admit_input(&input("de"));
-        layered.work(12).unwrap();
-        assert_eq!(layered.work_used(), 428);
-        assert!(layered.work(1).is_err());
-    }
-
-    #[test]
-    fn repeated_input_admission_stops_increasing_the_finite_request_bound() {
-        let mut budget = NormalizationBudget::for_application(NormalizationLimits {
-            validation: ValidationLimits {
-                work: 100,
-                ..Default::default()
-            },
-            storage: DocumentLimits {
-                nodes: 3,
-                text_bytes: 5,
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-        budget.begin_inheritance();
-        for _ in 0..100 {
-            budget.admit_input(&input("abc"));
-        }
-        budget.work(432).unwrap();
-        assert_eq!(
-            budget.work(1),
-            Err(NormalizationError::Validation(ValidationError::Constraint(
-                ConstraintError::Work { limit: 432 }
-            )))
-        );
-    }
-
-    #[test]
-    fn diagnostic_and_text_charges_survive_application_size_admission() {
-        let mut budget = NormalizationBudget::for_application(NormalizationLimits {
-            validation: ValidationLimits {
-                diagnostics: 2,
-                diagnostic_text_bytes: 10,
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-        budget.admit_input(&input("abc"));
-        budget.validation.reserve_diagnostic(140).unwrap();
-        assert_eq!(
-            budget.validation.reserve_diagnostic(2),
-            Err(ValidationError::DiagnosticText { limit: 141 })
-        );
-        budget.begin_inheritance();
-        budget.validation.reserve_diagnostic(424).unwrap();
-        assert_eq!(budget.validation.diagnostics_used(), 3);
-        assert_eq!(
-            budget.validation.reserve_diagnostic(1),
-            Err(ValidationError::DiagnosticText { limit: 564 })
-        );
-        assert_eq!(budget.validation.diagnostics_used(), 4);
-    }
-
-    #[test]
-    fn aggregate_matching_admission_keeps_charges_and_single_subject_limits() {
-        use crate::regex::{MatchBudget, MatchError, MatchLimits, Pattern, Resource};
-        let pattern = Pattern::compile(".", Default::default()).unwrap();
-        let local = MatchLimits {
-            subject_bytes: 1,
-            ..Default::default()
-        };
-        let mut aggregate = MatchBudget::new(local);
-        assert!(pattern
-            .full_match_with_budget("a", local, &mut aggregate)
-            .unwrap()
-            .is_some());
-        aggregate.application_limits(MatchLimits {
-            subject_bytes: 8,
-            ..local
-        });
-        assert!(pattern
-            .full_match_with_budget("b", local, &mut aggregate)
-            .unwrap()
-            .is_some());
-        assert_eq!(aggregate.used().subject_bytes, 2);
-        assert_eq!(
-            pattern.full_match_with_budget("ab", local, &mut aggregate),
-            Err(MatchError {
-                resource: Resource::SubjectBytes,
-                limit: 1,
-            })
-        );
-        assert_eq!(aggregate.used().subject_bytes, 2);
     }
 }

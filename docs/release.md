@@ -100,15 +100,11 @@ refusals use `code: numeric_policy`; preparation and YAML resource refusals use
 `code: resource_limit` and retain their phase. Check and Build return the same
 preparation facts, with or without a project environment.
 
-Typed resource refusals also identify `incomplete_checks_from`, the earliest
-lifecycle scope without complete check results: `specification` for capture and
-preparation, `source_binding` for input admission and binding, `data` for
-execution and verification, or `output` for serialization and publication.
-Build/report boundaries use `build` when no narrower scope is available; other
-boundaries retain their stage name. Earlier completed checks remain valid. A
-refusal does not enumerate which individual requirements ran, execute later
-checks, or make static Check read study data. Reduce the exhausted resource and
-rerun to obtain remaining findings.
+A typed resource refusal names only its stage, resource, limit and counted
+actual; it does not identify a lifecycle scope of incomplete checks. Earlier
+completed checks remain valid. A refusal does not enumerate which individual
+requirements ran, execute later checks, or make static Check read study data.
+Reduce the exhausted resource and rerun to obtain remaining findings.
 
 ## Resource limits
 
@@ -133,39 +129,31 @@ because each selected contract field requires one declaration. Keys remain
 limited to 64, input datasets to 16 and source operands to 64. An `ordinal`
 field counts toward the source width.
 
-Validation and normalization start with 67,108,864 logical work units; the
-separate schema-bundle work ceiling remains 4,194,304. Specification
-preparation adds one unit per original decoded node and text byte to that flat
-allowance. Inheritance uses four times the flat allowance for the same total
-input size: one share each for layer admission, composition/dependencies, final
-normalization and model admission. Thus `W_flat(N, B) = 67,108,864 + N + B` and
-`W_layered(N, B) = 4 * W_flat(N, B)`, with `N` and `B` summed over unique
-captured layers, including the entry. Input nodes and text bytes keep their
-separate 131,072 and 8,388,608 limits, so layered work stops at at most
-302,514,176 units. All stages and failed attempts share cumulative charges;
-branches and repeated parents cannot reset them. Custom Rust work allowances
-keep a finite size credit of at most their original work allowance.
+Validation and normalization use one fixed allowance set for every
+preparation request: 302,514,176 logical work units, 1,310,720 attempted
+diagnostics and 134,217,728 bytes of diagnostic text — the former layered
+maximums, now applied flat. The allowance does not grow with the decoded
+input size, inheritance does not multiply it, and no stage receives a size
+credit; schema-bundle admission has no work ceiling at all and keeps only
+its module, node, text-byte and expanded-field count limits. All stages and
+failed attempts share cumulative charges within the request; branches and
+repeated parents cannot reset them.
 
-Flat preparation permits `65,536 + 2 * N` attempted diagnostics and
-`8,388,608 + 128 * N + B` bytes of diagnostic text. These counters include
-failed union alternatives that are discarded after another alternative
-succeeds; emitted findings and their ordering remain unchanged. Layered
-preparation uses four times those same allowances, capped at 1,310,720 attempts
-and 134,217,728 text bytes. Cumulative normalized arena construction has eight
-shares for descriptor output/import, composition and the subsequent planning
-arenas: 1,048,576 nodes, 67,108,864 text bytes and 2,097,152 edges. Each
-individual decoded, normalized and composed document keeps its 131,072-node,
-8,388,608-text-byte and 262,144-edge bounds. Traversal refuses more than 8,192
-parent occurrences, including repeated occurrences of the same parent. Its
-copied path bytes keep their 1,048,576-byte cumulative ceiling. Schema regex
-matching keeps the individual-match limits while its cumulative subject-byte,
-work and state-cell allowances receive the same four shares plus four more for
-dependency reachability/ordering, and a size credit capped at each original
-allowance. Their maximums are 16,777,216 subject bytes, 16,000,000 work units and
-16,000,000 state cells; runtime expression matching keeps its separate policies.
-These size allowances belong to top-level host preparation; explicit Rust
-component budgets created with `NormalizationBudget::new` keep their exact
-caller-selected ceilings and cumulative accounting.
+The attempted-diagnostics and diagnostic-text counters include failed union
+alternatives that are discarded after another alternative succeeds; emitted
+findings and their ordering remain unchanged. Each decoded, normalized and
+composed document keeps its 131,072-node, 8,388,608-text-byte and 262,144-edge
+bounds; cumulative normalized arena construction keeps those same bounds,
+except that layered (inheritance) preparation raises the cumulative arena
+allowance once to a fixed eight times the per-document bounds (1,048,576
+nodes, 67,108,864 text bytes and 2,097,152 edges). Traversal refuses more
+than 8,192 parent
+occurrences, including
+repeated occurrences of the same parent. Its copied path bytes keep their
+1,048,576-byte cumulative ceiling. Schema regex matching keeps the
+individual-match limits and fixed cumulative allowances of 16,777,216 subject
+bytes, 16,000,000 work units and 16,000,000 state cells; runtime expression
+matching keeps its separate policies.
 
 Representation allowances derive from the admitted geometry. Let `C` be
 640,000,000 cells, `R` be 10,000,000 rows, `S` be 1 GiB source/scalar text,

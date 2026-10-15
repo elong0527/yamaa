@@ -24,7 +24,6 @@ pub struct BundleLimits {
     pub input_nodes: usize,
     pub input_text_bytes: usize,
     pub expanded_fields: usize,
-    pub work: usize,
     pub descriptors: DescriptorLimits,
 }
 impl Default for BundleLimits {
@@ -35,7 +34,6 @@ impl Default for BundleLimits {
             input_nodes: 262_144,
             input_text_bytes: 16_777_216,
             expanded_fields: 65_536,
-            work: 4_194_304,
             descriptors: DescriptorLimits::default(),
         }
     }
@@ -47,7 +45,6 @@ pub enum BundleResource {
     InputNodes,
     InputTextBytes,
     ExpandedFields,
-    Work,
     Depth,
 }
 
@@ -188,7 +185,6 @@ struct RawRegistry {
 struct Builder {
     modules: Vec<SchemaModule>,
     limits: BundleLimits,
-    work: usize,
     expanded: usize,
     descriptor_budget: DescriptorBudget,
     descriptors: Vec<LocatedDescriptor>,
@@ -237,11 +233,6 @@ impl Builder {
     }
     /// Find a descriptor member; the scan is charged even if no name matches.
     fn field(&mut self, raw: Raw, name: &str) -> Result<Option<Raw>, BundleError> {
-        let amount = match self.node(raw) {
-            N::Mapping(items) => items.len(),
-            _ => 1,
-        };
-        self.work(amount)?;
         Ok(self.modules[raw.module]
             .document
             .field(raw.node, name)
@@ -250,18 +241,8 @@ impl Builder {
                 node,
             }))
     }
-    /// Account scans, lookups and copied names with a request-owned work ceiling.
-    fn work(&mut self, amount: usize) -> Result<(), BundleError> {
-        charge(
-            &mut self.work,
-            amount,
-            self.limits.work,
-            BundleResource::Work,
-        )
-    }
     /// Append a structured finding without discarding its declaring module or path.
     fn issue(&mut self, raw: Raw, path: &str, kind: BundleIssueKind) -> Result<(), BundleError> {
-        self.work(path.len().saturating_add(1))?;
         self.issues.push(BundleIssue {
             module: raw.module,
             path: path.into(),
@@ -294,7 +275,6 @@ impl Builder {
             self.issue(raw, path, BundleIssueKind::Descriptor(finding.clone()))?;
         }
         for reference in report.references() {
-            self.work(path.len().saturating_add(reference.len()).saturating_add(1))?;
             self.references.push((raw, path.into(), reference.clone()));
         }
         Ok(report.into_descriptor().map(|descriptor| {
@@ -313,7 +293,6 @@ impl Builder {
         let mut fields = Vec::new();
         let mut names = BTreeSet::new();
         for (index, &raw) in entries.iter().enumerate() {
-            self.work(1)?;
             let N::Mapping(items) = self.node(raw) else {
                 self.issue(
                     raw,
@@ -343,7 +322,6 @@ impl Builder {
                 continue;
             }
             let name = name.clone();
-            self.work(name.len())?;
             let field_path = format!("{path}.{name}");
             if !names.insert(name.clone()) {
                 self.issue(
@@ -384,7 +362,6 @@ impl Builder {
             ));
         }
         if let Some(fields) = &expanded[index] {
-            self.work(fields.len())?;
             return Ok(fields.clone());
         }
         if active.len() >= 64 {
@@ -399,7 +376,6 @@ impl Builder {
             unreachable!("class classified at collection");
         };
         let entries = entries.clone();
-        self.work(entries.len())?;
         let mut result = Vec::new();
         for node in entries {
             let item = Raw {
@@ -443,7 +419,6 @@ impl Builder {
             }
         }
         active.pop();
-        self.work(result.len())?;
         expanded[index] = Some(result.clone());
         Ok(result)
     }
@@ -515,7 +490,6 @@ impl SchemaStructure {
         let mut builder = Builder {
             modules,
             limits,
-            work: 0,
             expanded: 0,
             descriptor_budget: DescriptorBudget::new(limits.descriptors),
             descriptors: Vec::new(),
@@ -530,7 +504,6 @@ impl SchemaStructure {
         let mut raw_aliases = Vec::new();
         let mut raw_registries: Vec<RawRegistry> = Vec::new();
         while let Some((module, ancestors)) = pending.pop() {
-            builder.work(1)?;
             let raw = Raw {
                 module,
                 node: builder.modules[module].document.root(),
@@ -556,7 +529,6 @@ impl SchemaStructure {
                 return Err(builder.fail(raw, "$", BundleIssueKind::ExpectedMapping));
             };
             let entries = entries.clone();
-            builder.work(entries.len())?;
             let Some(v) = builder.field(raw, "version")? else {
                 return Err(builder.fail(raw, "$", BundleIssueKind::Version));
             };
@@ -586,7 +558,6 @@ impl SchemaStructure {
                     return Err(builder.fail(raw, "includes", BundleIssueKind::IncludesList));
                 };
                 let items = items.clone();
-                builder.work(items.len())?;
                 for node in items {
                     let N::Text(name) = builder.node(Raw { module, node }) else {
                         return Err(builder.fail(
@@ -610,7 +581,6 @@ impl SchemaStructure {
                             BundleIssueKind::MissingInclude(name),
                         ));
                     };
-                    builder.work(ancestors.len().saturating_add(1))?;
                     let mut chain = ancestors.clone();
                     chain.push(module);
                     pending.push((target, chain));
@@ -627,7 +597,6 @@ impl SchemaStructure {
                     return Err(builder.fail(raw, "$", BundleIssueKind::DeclarationName));
                 }
                 let name = name.clone();
-                builder.work(name.len().saturating_add(1))?;
                 let value = Raw { module, node };
                 let kind = match builder.node(value) {
                     N::Sequence(_) => 0,
@@ -685,10 +654,6 @@ impl SchemaStructure {
                         let N::Mapping(items) = builder.node(value) else {
                             unreachable!()
                         };
-                        builder.work(items.len())?;
-                        let N::Mapping(items) = builder.node(value) else {
-                            unreachable!()
-                        };
                         let items = items.clone();
                         for (key, payload) in items {
                             let key = Raw { module, node: key };
@@ -697,15 +662,6 @@ impl SchemaStructure {
                                 node: payload,
                             };
                             for &(previous, _) in &raw_registries[index].entries {
-                                let bytes = |node: &N| match node {
-                                    N::Text(text) | N::Integer(text) => text.len(),
-                                    N::Float(_) => 2048,
-                                    _ => 1,
-                                };
-                                builder.work(
-                                    bytes(builder.node(previous))
-                                        .saturating_add(bytes(builder.node(key))),
-                                )?;
                                 if super::document::scalar_keys_equal(
                                     builder.node(previous),
                                     builder.node(key),

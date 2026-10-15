@@ -348,7 +348,7 @@ mod resource_tests {
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&issue.context).unwrap(),
             serde_json::json!({
-                "code":"resource_limit", "stage":"prepare", "phase":"validation", "resource":"work", "limit":7, "incomplete_checks_from":"specification",
+                "code":"resource_limit", "stage":"prepare", "phase":"validation", "resource":"work", "limit":7,
             })
         );
     }

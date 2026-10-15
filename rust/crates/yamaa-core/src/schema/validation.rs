@@ -63,14 +63,20 @@ impl Default for ValidationLimits {
     /// Cap recursive alias/type traversal even when the decoded value itself is shallow.
     fn default() -> Self {
         Self {
-            // Normalization revalidates shorthand and expanded columns in the
-            // same request scope. Scale with the 16-fold width increase so a
-            // 1,024-column specification can reach compiler admission.
-            work: 64 * 1024 * 1024,
-            diagnostics: 65_536,
-            diagnostic_text_bytes: 8_388_608,
+            // One fixed coarse allowance set for every preparation request.
+            // These are the former layered maximums: normalization revalidates
+            // shorthand and expanded columns in the same request scope, so a
+            // 1,024-column layered specification must reach compiler admission
+            // without the allowance growing with input size or layer count.
+            work: 302_514_176,
+            diagnostics: 1_310_720,
+            diagnostic_text_bytes: 134_217_728,
             depth: 128,
-            regex: MatchLimits::default(),
+            regex: MatchLimits {
+                subject_bytes: 16_777_216,
+                work: 16_000_000,
+                state_cells: 16_000_000,
+            },
         }
     }
 }
@@ -111,18 +117,6 @@ impl ValidationBudget {
     /// Expose charged work without allowing callers to refund failed union attempts.
     pub fn work_used(&self) -> usize {
         self.constraints.used().work
-    }
-    pub(super) fn application_limits(
-        &mut self,
-        work: usize,
-        diagnostics: usize,
-        text: usize,
-        regex: MatchLimits,
-    ) {
-        self.limits.work = work;
-        self.limits.diagnostics = diagnostics;
-        self.limits.diagnostic_text_bytes = text;
-        self.constraints.application_limits(work, regex);
     }
     /// Every attempted diagnostic consumes its allocation quota, even if a later union wins.
     pub fn diagnostics_used(&self) -> usize {

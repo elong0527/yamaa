@@ -58,19 +58,19 @@ impl NumericResolver for Bindings {
 }
 
 #[test]
-fn resource_refusals_name_the_incomplete_check_scope_without_reclassifying_prior_work() {
-    for (stage, code, expected) in [
-        ("capture", "resource_limit", "specification"),
-        ("prepare", "compiler_limit", "specification"),
-        ("check", "compiler_limit", "specification"),
-        ("ingest", "source_limit", "source_binding"),
-        ("bind", "source_limit", "source_binding"),
-        ("execute", "execution_limit", "data"),
-        ("build", "source_boundary", "source_binding"),
-        ("build", "execution_boundary", "data"),
-        ("build", "result_projection", "build"),
-        ("output", "publication_report_limit", "output"),
-        ("report", "output_limit", "output"),
+fn resource_refusals_carry_no_incomplete_checks_context() {
+    for (stage, code) in [
+        ("capture", "resource_limit"),
+        ("prepare", "compiler_limit"),
+        ("check", "compiler_limit"),
+        ("ingest", "source_limit"),
+        ("bind", "source_limit"),
+        ("execute", "execution_limit"),
+        ("build", "source_boundary"),
+        ("build", "execution_boundary"),
+        ("build", "result_projection"),
+        ("output", "publication_report_limit"),
+        ("report", "output_limit"),
     ] {
         let finding = yamaa_core::application_issue::resource_rejected(
             stage,
@@ -83,10 +83,7 @@ fn resource_refusals_name_the_incomplete_check_scope_without_reclassifying_prior
         assert_eq!(finding.definition().condition, "engine_rejected");
         assert_eq!(finding.definition().requirement, None);
         assert_eq!(finding.spec_paths, ["input.SRC"]);
-        assert_eq!(
-            finding.context["incomplete_checks_from"],
-            JsonValue::String(expected.into())
-        );
+        assert!(!finding.context.contains_key("incomplete_checks_from"));
         assert_eq!(
             finding.context["limit"],
             JsonValue::Number(("7").parse().expect("canonical integer"))
@@ -96,7 +93,7 @@ fn resource_refusals_name_the_incomplete_check_scope_without_reclassifying_prior
             JsonValue::Number(("8").parse().expect("canonical integer"))
         );
     }
-    // An opaque failure cannot establish a resource refusal or its completion boundary.
+    // An opaque failure cannot establish a resource refusal either.
     assert!(
         !yamaa_core::application_issue::rejected("capture", "changed")
             .context

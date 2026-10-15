@@ -52,11 +52,6 @@ impl ConstraintBudget {
             regex: self.regex.used(),
         }
     }
-    /// Adjust a request's admitted input allowance without refunding charged work.
-    pub(super) fn application_limits(&mut self, limit: usize, regex: MatchLimits) {
-        self.work_limit = limit;
-        self.regex.application_limits(regex);
-    }
     /// Reserve work before scanning a string or comparing a permitted choice.
     pub(super) fn charge(&mut self, amount: usize) -> Result<(), ConstraintError> {
         self.work = self

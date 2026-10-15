@@ -289,7 +289,7 @@ fn whole_declaration_admission_precedes_parser_rejections_even_with_zero_rows() 
     assert_eq!(issues[0].phase, "engine");
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
-        serde_json::json!({"code":"compiler_limit","stage":"prepare","resource":"str_extract_metadata","limit":16_777_216,"incomplete_checks_from":"specification"})
+        serde_json::json!({"code":"compiler_limit","stage":"prepare","resource":"str_extract_metadata","limit":16_777_216})
     );
     assert!(!fixture.0.join("output.csv").exists());
 }

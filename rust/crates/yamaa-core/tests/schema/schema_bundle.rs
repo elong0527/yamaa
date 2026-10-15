@@ -351,14 +351,6 @@ fn reuse_and_input_budgets_bound_expansion_and_allow_independent_retry() {
         ),
         (
             BundleLimits {
-                work: 0,
-                ..Default::default()
-            },
-            BundleResource::Work,
-            0,
-        ),
-        (
-            BundleLimits {
                 expanded_fields: 1,
                 ..Default::default()
             },
