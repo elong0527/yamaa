@@ -162,6 +162,25 @@ def test_preserve_workspace_rejects_non_regular_entries(
     assert archive.read_bytes() == original
 
 
+def test_preserve_workspace_rejects_sparse_entries(tmp_path: Path) -> None:
+    # A GNU sparse entry reports isfile(), so the regular-file check
+    # alone admits it, but rewriting it drops its sparse map and would
+    # publish damaged data instead of the verified bytes.
+    workspace = _make_workspace(tmp_path)
+
+    def extra(target) -> None:
+        info = tarfile.TarInfo("pkg-0.1/sparse.bin")
+        info.type = tarfile.GNUTYPE_SPARSE
+        info.sparse = [(0, 1)]
+        target.addfile(info)
+
+    archive = _make_archive_with_extra(tmp_path, extra)
+    original = archive.read_bytes()
+    with pytest.raises(ValueError, match="must not contain links"):
+        preserve_workspace(archive, workspace)
+    assert archive.read_bytes() == original
+
+
 def test_preserve_workspace_rejects_trailing_slash_member_file(
     tmp_path: Path,
 ) -> None:
