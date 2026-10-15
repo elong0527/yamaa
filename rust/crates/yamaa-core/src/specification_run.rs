@@ -259,13 +259,13 @@ fn decode_and_execute<D: SourceDecoder>(
     let table = captured_table
         .as_ref()
         .expect("decoded table is held for this attempt");
+    crate::limits::Limits::table(table.row_count(), table.schema().columns().len()).map_err(
+        |error| RunError::Boundary {
+            source: prepared.driver_index(),
+            error,
+        },
+    )?;
     if prepared.source_interpretation(prepared.driver_index()) == Some(SourceInterpretation::Odm) {
-        crate::limits::Limits::table(table.row_count(), table.schema().columns().len()).map_err(
-            |error| RunError::Boundary {
-                source: prepared.driver_index(),
-                error,
-            },
-        )?;
         match odm_records(
             table,
             prepared.source(),

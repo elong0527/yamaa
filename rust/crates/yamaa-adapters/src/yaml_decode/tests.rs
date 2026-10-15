@@ -476,3 +476,75 @@ fn fixed_yaml_depth_is_inclusive_and_wide_integer_lexemes_remain_exact() {
     assert_eq!(scalar(&digits), N::Integer(digits));
     assert_eq!(scalar("'1234'"), N::Text("1234".into()));
 }
+
+#[test]
+fn unicode_walk_does_not_copy_long_ancestor_paths_for_valid_siblings() {
+    let position = SourcePosition {
+        offset: 0,
+        line: 1,
+        column: 1,
+    };
+    let node = |value| Node {
+        value,
+        start: position,
+        merge: false,
+    };
+    let mut nodes = vec![node(Value::Scalar(N::Text("a".repeat(131_072))))];
+    let mut entries = Vec::new();
+    for index in 0..8192 {
+        let key = nodes.len();
+        nodes.push(node(Value::Scalar(N::Integer(index.to_string()))));
+        let value = nodes.len();
+        nodes.push(node(Value::Scalar(N::Null)));
+        entries.push((key, value));
+    }
+    let wide = nodes.len();
+    nodes.push(node(Value::Mapping(entries)));
+    let bad_key = nodes.len();
+    nodes.push(node(Value::Scalar(N::Text("bad".into()))));
+    let bad = nodes.len();
+    nodes.push(node(Value::InvalidText(vec![0xd800])));
+    let root = nodes.len();
+    nodes.push(node(Value::Mapping(vec![(0, wide), (bad_key, bad)])));
+    assert_eq!(
+        check_unicode(&nodes, root),
+        Err(DecodeFailure::InvalidText(vec![UnicodeIssue {
+            path: "$.bad".into(),
+            code_point: 0xd800,
+            offset: 0,
+        }]))
+    );
+}
+
+#[test]
+fn unicode_decoder_retains_every_raw_finding_before_the_public_issue_sink() {
+    // Start at the repaired source tree so this control measures the Unicode
+    // walker independently of the unchanged scanner's recovery work.
+    let position = SourcePosition {
+        offset: 0,
+        line: 1,
+        column: 1,
+    };
+    let mut nodes: Vec<_> = (0..10_001)
+        .map(|_| Node {
+            value: Value::InvalidText(vec![0xd800]),
+            start: position,
+            merge: false,
+        })
+        .collect();
+    let root = nodes.len();
+    nodes.push(Node {
+        value: Value::Sequence((0..10_001).collect()),
+        start: position,
+        merge: false,
+    });
+    let DecodeFailure::InvalidText(issues) = check_unicode(&nodes, root).unwrap_err() else {
+        panic!("expected complete Unicode admission findings");
+    };
+    assert_eq!(issues.len(), 10_001);
+    for (index, issue) in issues.iter().enumerate() {
+        assert_eq!(issue.path, format!("$[{index}]"));
+        assert_eq!(issue.code_point, 0xd800);
+        assert_eq!(issue.offset, 0);
+    }
+}

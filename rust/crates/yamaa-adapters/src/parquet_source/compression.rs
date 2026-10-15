@@ -11,7 +11,7 @@ pub(super) enum Error {
 }
 
 fn exact_stream(mut reader: impl Read, expected: usize) -> Result<Vec<u8>, Error> {
-    let mut result = Vec::with_capacity(expected);
+    let mut result = Vec::new();
     let mut buffer = [0u8; 8192];
     loop {
         let remaining = expected - result.len();
@@ -31,12 +31,25 @@ fn exact_stream(mut reader: impl Read, expected: usize) -> Result<Vec<u8>, Error
         if read > remaining {
             return Err(Error::Malformed);
         }
+        result.try_reserve(read).map_err(|_| Error::Malformed)?;
         result.extend_from_slice(&buffer[..read]);
     }
 }
 
 fn fixed_codec(codec: i64, mut input: &[u8], expected: usize) -> Result<Vec<u8>, Error> {
-    let mut output = vec![0; expected];
+    // A Snappy copy tag emits at most 64 bytes. LZ4 length-extension bytes
+    // contribute at most 255 bytes each; 256 also covers its token/base length.
+    // Neither format can justify a giant output from only a tiny header. Check
+    // this before reserving the non-streaming decoder's destination buffer.
+    let expansion = if codec == 1 { 64 } else { 256 };
+    if expected > input.len().saturating_mul(expansion) {
+        return Err(Error::Malformed);
+    }
+    let mut output = Vec::new();
+    output
+        .try_reserve_exact(expected)
+        .map_err(|_| Error::Malformed)?;
+    output.resize(expected, 0);
     let written = match codec {
         1 => snap::raw::Decoder::new()
             .decompress(input, &mut output)
@@ -104,13 +117,8 @@ fn brotli_window(input: &[u8]) -> Result<(), Error> {
 }
 
 fn zstd(input: &[u8], expected: usize) -> Result<Vec<u8>, Error> {
-    let mut result = vec![0; expected];
-    let written =
-        zstd::bulk::decompress_to_buffer(input, &mut result).map_err(|_| Error::Malformed)?;
-    if written != expected {
-        return Err(Error::Malformed);
-    }
-    Ok(result)
+    let decoder = zstd::stream::read::Decoder::new(input).map_err(|_| Error::Malformed)?;
+    exact_stream(decoder, expected)
 }
 
 /// Validate every actual byte of expansion using the same immutable page body.
@@ -123,6 +131,13 @@ fn verify(page: &Page<'_>) -> Result<(), Error> {
 
 /// Decode the exact page size before validating its encoded values.
 pub(super) fn decode(page: &Page<'_>) -> Result<Vec<u8>, Error> {
+    // Parquet stores uncompressed_page_size as i32. The compact parser's wider
+    // integer representation must not turn an invalid header into an allocation.
+    if page.decoded_bytes > i32::MAX as usize
+        || page.decoded_bytes > yamaa_core::limits::Limits::SOURCE_BYTES
+    {
+        return Err(Error::Malformed);
+    }
     let prefix = page.uncompressed_prefix;
     if prefix > page.decoded_bytes || prefix > page.body.len() {
         return Err(Error::Malformed);
@@ -152,7 +167,10 @@ pub(super) fn decode(page: &Page<'_>) -> Result<Vec<u8>, Error> {
         _ => Err(Error::Malformed),
     }?;
     if prefix != 0 {
-        let mut with_prefix = Vec::with_capacity(page.decoded_bytes);
+        let mut with_prefix = Vec::new();
+        with_prefix
+            .try_reserve_exact(page.decoded_bytes)
+            .map_err(|_| Error::Malformed)?;
         with_prefix.extend_from_slice(&page.body[..prefix]);
         with_prefix.append(&mut decoded);
         return Ok(with_prefix);
@@ -211,6 +229,52 @@ mod tests {
         assert_eq!(verify(&page(&data, 6, 0)), Ok(()));
         assert_eq!(verify(&page(&[0], 6, 0)), Err(Error::Malformed));
         assert_eq!(verify(&page(&[], 3, 0)), Err(Error::Unavailable(3)));
+    }
+    #[test]
+    fn hostile_page_lengths_do_not_allocate_the_claimed_output() {
+        // A structurally impossible i64 page size is refused before any codec
+        // can reserve it. The wire field itself only permits signed 32 bits.
+        for codec in 0..=7 {
+            assert_eq!(
+                verify(&page(&[], codec, i32::MAX as usize + 1)),
+                Err(Error::Malformed)
+            );
+        }
+        // These lengths fit the wire field but cannot follow from the tiny
+        // payload. Stream decoders discover their actual end; block decoders
+        // reject impossible format expansion before reserving the destination.
+        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gzip.write_all(b"x").unwrap();
+        let gzip = gzip.finish().unwrap();
+        let mut brotli = Vec::new();
+        {
+            let mut writer = brotli::CompressorWriter::new(&mut brotli, 4096, 3, 22);
+            writer.write_all(b"x").unwrap();
+        }
+        let zstd = zstd::stream::encode_all(&b"x"[..], 1).unwrap();
+        for (bytes, codec) in [
+            (&b"\xff\xff\xff\xff\x07"[..], 1),
+            (&gzip, 2),
+            (&brotli, 4),
+            (&b"\0"[..], 5),
+            (&zstd, 6),
+            (&b"\0"[..], 7),
+        ] {
+            assert_eq!(
+                verify(&page(bytes, codec, i32::MAX as usize)),
+                Err(Error::Malformed)
+            );
+        }
+    }
+    #[test]
+    fn format_expansion_checks_keep_valid_high_ratio_block_streams() {
+        let plain = vec![b'x'; 512 * 1024];
+        let snappy = snap::raw::Encoder::new().compress_vec(&plain).unwrap();
+        let lz4 = lz4_flex::block::compress(&plain);
+        assert!(lz4.len() * 200 < plain.len());
+        for (bytes, codec) in [(&snappy, 1), (&lz4, 7), (&lz4, 5)] {
+            assert_eq!(decode(&page(bytes, codec, plain.len())).unwrap(), plain);
+        }
     }
     #[test]
     fn fixed_output_and_legacy_lz4_do_not_silently_narrow_codec_support() {

@@ -137,7 +137,10 @@ impl PreparedSpecification {
             }
             Ok(())
         };
-        collect(&mut findings).map_err(|_| PrepareError::Internal)?;
+        collect(&mut findings).map_err(|error| match error {
+            BindError::PredicatePolicy(error) => PrepareError::predicate(error, None),
+            _ => PrepareError::Internal,
+        })?;
         for finding in findings {
             let diagnostics = finding
                 .diagnostics(self.source())

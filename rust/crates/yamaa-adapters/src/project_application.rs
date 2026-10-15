@@ -191,7 +191,9 @@ pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Lan
                     .map(file_application::preparation_failure)
                     .unwrap_or_else(|_| refused("prepare"))
             }
-            crate::file_preparation::Error::Inventory(_) => refused("inventory"),
+            crate::file_preparation::Error::Inventory(_) => {
+                file_application::rejected("prepare", "inventory")
+            }
             crate::file_preparation::Error::Compile(error) => {
                 file_application::preparation_failure(crate::specification_diagnostics::failure(
                     error, None,
@@ -249,7 +251,7 @@ fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
                 error, None,
             )),
             G::Document(D::Compile(_)) => refused("prepare"),
-            G::Document(D::Inventory(_)) => refused("inventory"),
+            G::Document(D::Inventory(_)) => file_application::rejected("prepare", "inventory"),
             G::Graph(crate::producer_graph::Error::Graph(
                 yamaa_core::producer_graph::Error::Compilation {
                     error: error @ (PrepareError::Limit(_) | PrepareError::Numeric { .. }),

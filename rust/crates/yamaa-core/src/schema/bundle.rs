@@ -14,10 +14,11 @@ pub struct SchemaModule {
     pub document: Document,
 }
 
-/// Fixed semantic recursion guard, independent of input storage.
+/// Fixed semantic shape boundaries, independent of input storage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BundleResource {
     Depth,
+    ExpandedFields,
 }
 
 /// Structured schema defects retain provenance; host adapters render existing diagnostics.
@@ -293,6 +294,15 @@ impl Builder {
         }
         Ok(fields)
     }
+    fn expanded_shape(actual: Option<usize>) -> Result<(), BundleError> {
+        if actual.is_some_and(|actual| actual <= crate::limits::Limits::SCHEMA_FIELDS) {
+            return Ok(());
+        }
+        Err(BundleError::Limit {
+            resource: BundleResource::ExpandedFields,
+            limit: crate::limits::Limits::SCHEMA_FIELDS,
+        })
+    }
     /// Expand inherited immutable field occurrences in their declaring order.
     fn expand(
         &mut self,
@@ -312,6 +322,7 @@ impl Builder {
             ));
         }
         if let Some(fields) = &expanded[index] {
+            Self::expanded_shape(Some(fields.len()))?;
             return Ok(fields.clone());
         }
         if active.len() >= crate::limits::Limits::SEMANTIC_DEPTH {
@@ -351,8 +362,10 @@ impl Builder {
                     ));
                 };
                 let copied = self.expand(target, classes, names, expanded, active)?;
+                Self::expanded_shape(result.len().checked_add(copied.len()))?;
                 result.extend(copied);
             } else {
+                Self::expanded_shape(result.len().checked_add(1))?;
                 result.push(item);
             }
         }
