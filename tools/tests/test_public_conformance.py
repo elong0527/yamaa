@@ -139,6 +139,7 @@ class PublicConformance(unittest.TestCase):
                 self.assertEqual(os.readlink(tree / "input" / name), target)
             self.assertEqual((tree / "input/target.csv").read_bytes(), b"ID\n1\n")
             self.assertFalse((tree / "expected").exists())
+            self.assertFalse((tree / "benchmark.yaml").exists())
             self.assertFalse((tree / "run.py").exists())
             self.assertFalse((tree / "run.R").exists())
             self.assertEqual(

@@ -265,7 +265,7 @@ def stage_r_inputs(fixtures, output, payload):
             fixtures / example["name"],
             output / example["name"],
             symlinks=True,
-            ignore=shutil.ignore_patterns("expected", "README.md"),
+            ignore=shutil.ignore_patterns("expected", "README.md", "benchmark.yaml"),
         )
 
 
