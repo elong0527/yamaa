@@ -187,3 +187,59 @@ fn invalid_boundaries_and_label_counts_are_planning_findings() {
         ));
     }
 }
+
+#[test]
+fn empty_source_or_path_is_a_shape_error_for_both_declarations() {
+    for (source, path) in [("", "mapping"), ("SRC.V", ""), ("", "")] {
+        assert_eq!(
+            Mapping::new(source.into(), path.into(), vec![], true, None, None),
+            Err(AdmissionError::Shape)
+        );
+        assert_eq!(
+            Cut::new(
+                source.into(),
+                path.into(),
+                vec![18.0],
+                vec!["child".into(), "adult".into()],
+                false,
+                None
+            ),
+            Err(AdmissionError::Shape)
+        );
+    }
+}
+
+#[test]
+fn large_mapping_results_and_cut_labels_preserve_the_declared_text() {
+    let size = 8 * 1024 * 1024;
+    let mapping = Mapping::new(
+        "SRC.V".into(),
+        "mapping".into(),
+        vec![("Y".into(), Value::Str("z".repeat(size)))],
+        true,
+        None,
+        None,
+    )
+    .unwrap();
+    let SelectedValue::Literal(Value::Str(selected)) =
+        mapping.select(ValueRef::Str("Y")).unwrap().value
+    else {
+        panic!("declared string literal");
+    };
+    assert_eq!(selected.len(), size);
+    assert!(selected.bytes().all(|byte| byte == b'z'));
+    let cut = Cut::new(
+        "AGE".into(),
+        "cut".into(),
+        vec![18.0],
+        vec!["z".repeat(size), "adult".into()],
+        false,
+        None,
+    )
+    .unwrap();
+    let SelectedValue::Label(selected) = cut.select(ValueRef::Int(17)).unwrap().value else {
+        panic!("declared string label");
+    };
+    assert_eq!(selected.len(), size);
+    assert!(selected.bytes().all(|byte| byte == b'z'));
+}
