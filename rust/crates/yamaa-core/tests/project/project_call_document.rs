@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 use yamaa_core::{
-    project_call_document::{decode, BindingFinding, Error, Input, Limits},
+    project_call_document::{decode, BindingFinding, Input},
     project_function::{CallFinding, Case, Definition, Function, Language, Parameter},
     project_function_document::{Finding, Kind},
-    schema::{Document, DocumentLimits, DocumentNode as N},
+    schema::{Document, DocumentNode as N},
     value::{ColumnType, Value, ValueType},
 };
 
@@ -42,7 +42,7 @@ fn call_tree(name: &str, args: Vec<(&str, Tree)>) -> Tree {
 fn document(tree: Tree) -> Document {
     let mut nodes = vec![];
     let root = tree.append(&mut nodes);
-    Document::new(nodes, root, DocumentLimits::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 fn integer_function() -> Function {
     Function::admit(
@@ -110,7 +110,7 @@ fn references_and_explicit_literals_retain_exact_kinds_order_and_origins() {
             ),
         ],
     ));
-    let c = decode(&d, d.root(), "columns.VALUE.function", Limits::default()).unwrap();
+    let c = decode(&d, d.root(), "columns.VALUE.function").unwrap();
     assert_eq!(c.name, "id");
     assert_eq!(c.name_node, d.field(d.root(), "name").unwrap());
     assert_eq!(c.node, d.root());
@@ -173,7 +173,7 @@ fn original_tagged_temporal_literals_keep_kind_and_calendar_admission() {
             "id",
             vec![("x", Tree::map(vec![(tag, Tree::text(text))]))],
         ));
-        let actual = decode(&d, d.root(), "call", Limits::default());
+        let actual = decode(&d, d.root(), "call");
         if let Some(expected_kind) = expected_kind {
             let call = actual.unwrap();
             let Input::Literal(value) = &call.arguments[0].input else {
@@ -184,7 +184,7 @@ fn original_tagged_temporal_literals_keep_kind_and_calendar_admission() {
             let argument = d.field(d.field(d.root(), "args").unwrap(), "x").unwrap();
             assert_eq!(
                 actual,
-                Err(Error::Findings(vec![Finding {
+                Err(vec![Finding {
                     path: "call.args.x".into(),
                     node: argument,
                     kind: if tag == "date" {
@@ -192,7 +192,7 @@ fn original_tagged_temporal_literals_keep_kind_and_calendar_admission() {
                     } else {
                         Kind::InvalidDateTime
                     },
-                }])),
+                }]),
                 "{tag}: {text}"
             );
         }
@@ -220,8 +220,8 @@ fn independent_invalid_scalars_keep_all_authored_nodes_without_partial_calls() {
     let date = d.field(args, "date").unwrap();
     let datetime = d.field(args, "datetime").unwrap();
     assert_eq!(
-        decode(&d, d.root(), "call", Limits::default()),
-        Err(Error::Findings(vec![
+        decode(&d, d.root(), "call"),
+        Err(vec![
             Finding {
                 path: "call.args.wide".into(),
                 node: wide,
@@ -242,7 +242,7 @@ fn independent_invalid_scalars_keep_all_authored_nodes_without_partial_calls() {
                 node: datetime,
                 kind: Kind::InvalidDateTime
             },
-        ]))
+        ])
     );
 }
 
@@ -255,7 +255,7 @@ fn metadata_checks_all_reference_types_after_explicit_missing() {
             ("other", Tree::text("UNKNOWN")),
         ],
     ));
-    let c = decode(&d, d.root(), "call", Limits::default()).unwrap();
+    let c = decode(&d, d.root(), "call").unwrap();
     assert_eq!(
         c.validate(&integer_function(), &BTreeMap::new()),
         vec![
@@ -264,7 +264,7 @@ fn metadata_checks_all_reference_types_after_explicit_missing() {
         ]
     );
     let d = document(call_tree("id", vec![("x", Tree::text("SRC.X"))]));
-    let c = decode(&d, d.root(), "call", Limits::default()).unwrap();
+    let c = decode(&d, d.root(), "call").unwrap();
     let mut refs = BTreeMap::from([("SRC.X".into(), ValueType::Float)]);
     assert_eq!(
         c.validate(&integer_function(), &refs),
@@ -278,72 +278,10 @@ fn metadata_checks_all_reference_types_after_explicit_missing() {
     assert!(c.validate(&integer_function(), &refs).is_empty());
     let d = document(call_tree("other", vec![]));
     assert_eq!(
-        decode(&d, d.root(), "call", Limits::default())
+        decode(&d, d.root(), "call")
             .unwrap()
             .validate(&integer_function(), &refs),
         vec![BindingFinding::FunctionNameMismatch]
-    );
-}
-
-#[test]
-fn call_local_text_budget_ignores_unrelated_document_payload() {
-    let d = document(Tree::map(vec![
-        ("call", call_tree("id", vec![("x", Tree::text("X"))])),
-        ("unrelated", Tree::text(&"q".repeat(100_000))),
-    ]));
-    let root = d.field(d.root(), "call").unwrap();
-    assert!(decode(
-        &d,
-        root,
-        "p",
-        Limits {
-            arguments: 1,
-            text_bytes: 83
-        }
-    )
-    .is_ok());
-    assert_eq!(
-        decode(
-            &d,
-            root,
-            "p",
-            Limits {
-                arguments: 1,
-                text_bytes: 82
-            }
-        ),
-        Err(Error::Limit("text"))
-    );
-    assert_eq!(
-        decode(
-            &d,
-            root,
-            "p",
-            Limits {
-                arguments: 0,
-                text_bytes: usize::MAX
-            }
-        ),
-        Err(Error::Limit("arguments"))
-    );
-}
-
-#[test]
-fn repeated_long_diagnostic_paths_are_bounded_before_scalar_decoding() {
-    let names = (0..32).map(|i| format!("arg{i}")).collect::<Vec<_>>();
-    let args = names
-        .iter()
-        .map(|n| {
-            (
-                n.as_str(),
-                Tree::Scalar(N::Integer("9223372036854775808".into())),
-            )
-        })
-        .collect();
-    let d = document(call_tree("id", args));
-    assert_eq!(
-        decode(&d, d.root(), &"p".repeat(10_000), Limits::default()),
-        Err(Error::Limit("text"))
     );
 }
 
@@ -363,8 +301,8 @@ fn retired_call_fields_and_non_text_literal_wrappers_never_enter_the_model() {
     let args = d.field(d.root(), "args").unwrap();
     let x = d.field(args, "x").unwrap();
     assert_eq!(
-        decode(&d, d.root(), "call", Limits::default()),
-        Err(Error::Findings(vec![
+        decode(&d, d.root(), "call"),
+        Err(vec![
             Finding {
                 path: "call".into(),
                 node: d.root(),
@@ -375,7 +313,7 @@ fn retired_call_fields_and_non_text_literal_wrappers_never_enter_the_model() {
                 node: d.field(x, "literal").unwrap(),
                 kind: Kind::NormalizedShape
             },
-        ]))
+        ])
     );
     let d = document(call_tree(
         "id",
@@ -389,30 +327,11 @@ fn retired_call_fields_and_non_text_literal_wrappers_never_enter_the_model() {
     ));
     let x = d.field(d.field(d.root(), "args").unwrap(), "x").unwrap();
     assert_eq!(
-        decode(&d, d.root(), "call", Limits::default()),
-        Err(Error::Findings(vec![Finding {
+        decode(&d, d.root(), "call"),
+        Err(vec![Finding {
             path: "call.args.x".into(),
             node: x,
             kind: Kind::NormalizedShape
-        },]))
-    );
-}
-
-#[test]
-fn diagnostic_context_copies_of_a_long_function_name_are_preflighted() {
-    let names = (0..32).map(|i| format!("arg{i}")).collect::<Vec<_>>();
-    let args = names
-        .iter()
-        .map(|n| {
-            (
-                n.as_str(),
-                Tree::Scalar(N::Integer("9223372036854775808".into())),
-            )
-        })
-        .collect();
-    let d = document(call_tree(&"f".repeat(16_384), args));
-    assert_eq!(
-        decode(&d, d.root(), "call", Limits::default()),
-        Err(Error::Limit("text"))
+        },])
     );
 }

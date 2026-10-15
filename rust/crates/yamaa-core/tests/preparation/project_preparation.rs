@@ -1,10 +1,10 @@
 //! Independent application truth over native captures and normalized document fixtures.
 use yamaa_core::{
+    limits::Limits,
     project_environment::{Finding, LockKind},
     project_function::Language,
     project_function_document::Kind as ScalarKind,
-    project_limits::{AdmissionError, Resource},
-    schema::{Document, DocumentLimits, DocumentNode as N},
+    schema::{Document, DocumentNode as N},
     value::Value,
 };
 use yamaa_core::{project_preparation::*, test_support::*};
@@ -42,7 +42,7 @@ impl Tree {
     fn document(self) -> Document {
         let mut nodes = vec![];
         let root = self.append(&mut nodes);
-        Document::new(nodes, root, DocumentLimits::default()).unwrap()
+        Document::new(nodes, root).unwrap()
     }
 }
 fn function(result: &str) -> Tree {
@@ -124,7 +124,6 @@ struct Fixture {
     log: EventLog,
     port: ScriptedMetadata<Opaque>,
     decoder: ScriptedMetadataDecoder<Opaque>,
-    limits: Limits,
 }
 impl Fixture {
     fn new() -> Self {
@@ -135,13 +134,6 @@ impl Fixture {
             port: ScriptedMetadata::new(log.clone()),
             decoder: ScriptedMetadataDecoder::new(log.clone()),
             log,
-            limits: Limits {
-                sources: 8,
-                bytes: 256,
-                identity_bytes: 256,
-                nodes: 1024,
-                ..Limits::default()
-            },
         }
     }
     fn script(
@@ -157,8 +149,6 @@ impl Fixture {
             outcome: Ok(self.root.clone()),
         });
         self.port.interrupt_if = |error| error.0.as_ref() == "interrupt";
-        let mut bytes = self.source.bytes.len();
-        let mut identities = self.source.identity.len();
         let mut payloads = vec![];
         for (index, (kind, written, identity, raw)) in [
             (Kind::Lock, "lockfile", "/held/uv.lock", b"uv".as_slice()),
@@ -193,8 +183,6 @@ impl Fixture {
                 Err(error)
             } else {
                 let captured = source(identity, raw);
-                bytes += raw.len();
-                identities += identity.len();
                 Ok(if (kind == Kind::Lock) != (malformed == Some(index)) {
                     Reply::Lock {
                         source: captured,
@@ -204,15 +192,10 @@ impl Fixture {
                     Reply::Document(captured)
                 })
             };
-            // The scripted request is the allowance before this capture.
-            let reply_bytes = if failed { 0 } else { raw.len() };
-            let reply_identity = if failed { 0 } else { identity.len() };
             self.port.steps.push_back(MetadataCaptureStep {
                 kind,
                 declaring_source: self.source.identity.clone(),
                 written: written.into(),
-                remaining_bytes: self.limits.bytes - bytes + reply_bytes,
-                remaining_identity_bytes: self.limits.identity_bytes - identities + reply_identity,
                 outcome,
             });
             if kind != Kind::Lock && !failed && malformed != Some(index) {
@@ -247,10 +230,9 @@ impl Fixture {
             source,
             mut decoder,
             mut port,
-            limits,
             ..
         } = self;
-        prepare(&mut decoder, source, Language::Python, &mut port, limits)
+        prepare(&mut decoder, source, Language::Python, &mut port)
     }
 }
 fn effects(log: &EventLog) -> Vec<String> {
@@ -354,21 +336,6 @@ fn engine_owns_complete_order_semantics_and_original_allocations_on_every_prepar
 }
 
 #[test]
-fn root_capture_quotas_refuse_before_decoder_or_dependency_authority() {
-    for resource in ["sources", "bytes", "identity_bytes"] {
-        let mut fixture = Fixture::new();
-        match resource {
-            "sources" => fixture.limits.sources = 0,
-            "bytes" => fixture.limits.bytes = fixture.source.bytes.len() - 1,
-            _ => fixture.limits.identity_bytes = fixture.source.identity.len() - 1,
-        }
-        let log = fixture.log.clone();
-        assert!(matches!(fixture.run(), Err(Failure::RootLimit(code)) if code == resource));
-        assert!(effects(&log).is_empty());
-    }
-}
-
-#[test]
 fn root_decoder_error_keeps_original_opaque_payload_before_dependencies() {
     let mut fixture = Fixture::new();
     let error = Opaque("root decoding".into());
@@ -383,17 +350,6 @@ fn root_decoder_error_keeps_original_opaque_payload_before_dependencies() {
         panic!()
     };
     assert_eq!(error.0.as_ptr(), address);
-    assert_eq!(effects(&log), ["decode Environment /author/env.yaml"]);
-}
-
-#[test]
-fn root_node_quota_is_after_structural_decode_and_before_scalar_lowering() {
-    let mut fixture = Fixture::new();
-    fixture.root = environment(Tree::boolean(true), "7").document();
-    fixture.limits.nodes = fixture.root.nodes().len() - 1;
-    fixture.script(&[], None, None, None);
-    let log = fixture.log.clone();
-    assert!(matches!(fixture.run(), Err(Failure::RootLimit("nodes"))));
     assert_eq!(effects(&log), ["decode Environment /author/env.yaml"]);
 }
 
@@ -441,36 +397,6 @@ fn invalid_inline_function_scalar_precedes_every_capture() {
         root.document.nodes()[findings[0].node],
         N::Integer("9223372036854775808".into())
     );
-    assert_eq!(effects(&log), ["decode Environment /author/env.yaml"]);
-}
-
-#[test]
-fn root_diagnostic_storage_refusal_has_no_partial_findings_or_dependency_effects() {
-    for (resource, expected) in [
-        ("count", "environment_diagnostic_count"),
-        ("text", "environment_diagnostic_text"),
-    ] {
-        let mut fixture = Fixture::new();
-        fixture.root = environment(Tree::boolean(true), "7").document();
-        if resource == "count" {
-            fixture.limits.semantic.findings = 0;
-        } else {
-            fixture.limits.semantic.text_bytes = 0;
-        }
-        fixture.script(&[], None, None, None);
-        let log = fixture.log.clone();
-        assert!(matches!(fixture.run(), Err(Failure::RootLimit(code)) if code == expected));
-        assert_eq!(effects(&log), ["decode Environment /author/env.yaml"]);
-    }
-}
-
-#[test]
-fn total_declared_capture_attempts_are_bounded_before_even_failed_first_capture() {
-    let mut fixture = Fixture::new();
-    fixture.limits.sources = 4; // root + lock + two external functions + external codelist requires five.
-    fixture.script(&[0, 1, 2, 3], None, None, None);
-    let log = fixture.log.clone();
-    assert!(matches!(fixture.run(), Err(Failure::RootLimit("sources"))));
     assert_eq!(effects(&log), ["decode Environment /author/env.yaml"]);
 }
 
@@ -646,84 +572,6 @@ fn native_reply_kind_refusals_collect_without_decoding_the_wrong_kind() {
 }
 
 #[test]
-fn oversized_capture_bytes_and_identity_are_refused_before_decoder_and_retention() {
-    for resource in ["bytes", "identity_bytes"] {
-        let mut fixture = Fixture::new();
-        fixture.script(&[], None, None, None);
-        let Reply::Document(source) = fixture.port.steps[3].outcome.as_mut().unwrap() else {
-            panic!()
-        };
-        if resource == "bytes" {
-            source.bytes = vec![b'x'; 256];
-        } else {
-            source.identity = "x".repeat(256);
-        }
-        let log = fixture.log.clone();
-        let Err(Failure::Rejected(rejected)) = fixture.run() else {
-            panic!()
-        };
-        assert!(
-            matches!(rejected.sources[0].error, CaptureFailure::Limit(code) if code == resource)
-        );
-        assert_eq!(rejected.captures.len(), 2);
-        assert_eq!(rejected.origins.codelists, [0]);
-        assert_eq!(effects(&log), full_effects()[..7]);
-        assert!(rejected.admission.is_none());
-    }
-}
-
-#[test]
-fn cumulative_document_node_limit_never_retains_partial_definitions() {
-    let mut fixture = Fixture::new();
-    fixture.limits.nodes = fixture.root.nodes().len() + function("7").document().nodes().len() - 1;
-    fixture.script(&[], None, None, None);
-    let log = fixture.log.clone();
-    let Err(Failure::Rejected(rejected)) = fixture.run() else {
-        panic!()
-    };
-    assert_eq!(effects(&log), full_effects());
-    assert_eq!(rejected.sources.len(), 2);
-    assert!(rejected
-        .sources
-        .iter()
-        .all(|f| matches!(f.error, CaptureFailure::Limit("nodes"))));
-    assert_eq!(rejected.origins.functions, ["inline"]);
-    assert_eq!(rejected.origins.codelists, [0, 1]);
-    assert_eq!(rejected.captures.len(), 1);
-    assert!(rejected.admission.is_none());
-}
-
-#[test]
-fn semantic_quotas_preserve_the_existing_complete_metadata_capture_checkpoint() {
-    for resource in [
-        Resource::Nodes,
-        Resource::TextBytes,
-        Resource::Work,
-        Resource::Findings,
-    ] {
-        let mut fixture = Fixture::new();
-        match resource {
-            Resource::Nodes => fixture.limits.semantic.nodes = 0,
-            Resource::TextBytes => fixture.limits.semantic.text_bytes = 0,
-            Resource::Work => fixture.limits.semantic.work = 0,
-            Resource::Findings => fixture.limits.semantic.findings = 0,
-        }
-        fixture.script(&[], None, None, None);
-        let log = fixture.log.clone();
-        let Err(Failure::Rejected(rejected)) = fixture.run() else {
-            panic!()
-        };
-        assert_eq!(effects(&log), full_effects());
-        assert!(rejected.sources.is_empty());
-        assert!(
-            matches!(rejected.admission, Some(AdmissionError::Limit(limit)) if limit.resource == resource)
-        );
-        assert_eq!(rejected.captures.len(), 3);
-        assert_eq!(rejected.draft.functions.as_ref().unwrap().len(), 3);
-    }
-}
-
-#[test]
 fn language_and_lock_kind_findings_are_core_owned_after_capture_without_code_authority() {
     let mut fixture = Fixture::new();
     fixture.root = environment(Tree::text("r"), "7").document();
@@ -733,7 +581,7 @@ fn language_and_lock_kind_findings_are_core_owned_after_capture_without_code_aut
         panic!()
     };
     assert_eq!(effects(&log), full_effects());
-    let Some(AdmissionError::Findings(findings)) = rejected.admission else {
+    let Some(findings) = rejected.admission else {
         panic!()
     };
     assert!(matches!(
@@ -763,14 +611,7 @@ fn empty_environment_has_only_root_decode_and_no_dependency_or_activation_author
         outcome: Ok(Tree::Map(vec![]).document()),
     });
     let mut port = ScriptedMetadata::<Opaque>::new(log.clone());
-    let prepared = prepare(
-        &mut decoder,
-        root,
-        Language::Python,
-        &mut port,
-        Limits::default(),
-    )
-    .unwrap();
+    let prepared = prepare(&mut decoder, root, Language::Python, &mut port).unwrap();
     assert_eq!(effects(&log), ["decode Environment empty.yaml"]);
     assert!(prepared.environment.draft().functions.is_none());
     assert!(prepared.captures.is_empty());
@@ -788,22 +629,64 @@ fn explicitly_empty_functions_keep_presence_and_original_independent_root_findin
         outcome: Ok(Tree::Map(vec![("functions", Tree::Map(vec![]))]).document()),
     });
     let mut port = ScriptedMetadata::<Opaque>::new(log.clone());
-    let Err(Failure::Rejected(rejected)) = prepare(
-        &mut decoder,
-        root,
-        Language::Python,
-        &mut port,
-        Limits::default(),
-    ) else {
+    let Err(Failure::Rejected(rejected)) = prepare(&mut decoder, root, Language::Python, &mut port)
+    else {
         panic!()
     };
     assert_eq!(effects(&log), ["decode Environment empty.yaml"]);
     assert_eq!(rejected.draft.functions, Some(vec![]));
     assert_eq!(
         rejected.admission,
-        Some(AdmissionError::Findings(vec![
-            Finding::MissingLanguage,
-            Finding::MissingLock
-        ]))
+        Some(vec![Finding::MissingLanguage, Finding::MissingLock])
     );
+}
+
+#[test]
+fn metadata_files_each_admit_the_fixed_size_edge_without_a_cumulative_allowance() {
+    for length in [Limits::SPEC_BYTES - 1, Limits::SPEC_BYTES] {
+        let mut fixture = Fixture::new();
+        fixture.source.bytes.resize(length, b' ');
+        fixture.script(&[], None, None, None);
+        let log = fixture.log.clone();
+        assert!(fixture.run().is_ok());
+        assert_eq!(effects(&log), full_effects());
+    }
+}
+
+#[test]
+fn oversized_metadata_file_refuses_before_decoder_and_dependency_authority() {
+    let mut fixture = Fixture::new();
+    fixture.source.bytes.resize(Limits::SPEC_BYTES + 1, b' ');
+    let log = fixture.log.clone();
+    let Err(Failure::RootLimit(limit)) = fixture.run() else {
+        panic!("oversized root metadata must refuse before decode")
+    };
+    assert_eq!(limit.resource, "spec_bytes");
+    assert_eq!(limit.limit, Limits::SPEC_BYTES);
+    assert_eq!(limit.actual, Some(Limits::SPEC_BYTES + 1));
+    assert!(effects(&log).is_empty());
+}
+
+#[test]
+fn oversized_captured_metadata_refuses_before_retention_and_preserves_later_capture_order() {
+    let mut fixture = Fixture::new();
+    fixture.script(&[], None, None, None);
+    fixture.port.steps[0].outcome = Ok(Reply::Lock {
+        source: source("/held/uv.lock", &vec![b' '; Limits::SPEC_BYTES + 1]),
+        kind: LockKind::Uv,
+    });
+    let log = fixture.log.clone();
+    let Err(Failure::Rejected(rejected)) = fixture.run() else {
+        panic!("oversized dependency must reject the environment")
+    };
+    assert_eq!(effects(&log), full_effects());
+    assert!(rejected.lock.is_none());
+    assert_eq!(rejected.sources.len(), 1);
+    let CaptureFailure::Limit(limit) = &rejected.sources[0].error else {
+        panic!("the dependency failure must retain the fixed size boundary")
+    };
+    assert_eq!(limit.resource, "spec_bytes");
+    assert_eq!(limit.limit, Limits::SPEC_BYTES);
+    assert_eq!(limit.actual, Some(Limits::SPEC_BYTES + 1));
+    assert!(rejected.admission.is_none());
 }

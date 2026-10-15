@@ -13,8 +13,6 @@ pub struct MetadataCaptureStep<E> {
     pub kind: metadata::Kind,
     pub declaring_source: String,
     pub written: String,
-    pub remaining_bytes: usize,
-    pub remaining_identity_bytes: usize,
     pub outcome: Result<metadata::Reply, E>,
 }
 pub struct ScriptedMetadata<E> {
@@ -41,8 +39,6 @@ impl<E> metadata::CapturePort for ScriptedMetadata<E> {
             kind: request.kind,
             declaring_source: request.declaring_source.into(),
             written: request.written.into(),
-            remaining_bytes: request.remaining_bytes,
-            remaining_identity_bytes: request.remaining_identity_bytes,
         });
         let step = self.steps.pop_front().expect("unexpected metadata capture");
         assert_eq!(step.kind, request.kind, "metadata kind");
@@ -51,14 +47,6 @@ impl<E> metadata::CapturePort for ScriptedMetadata<E> {
             "declaring source"
         );
         assert_eq!(step.written, request.written, "authored path");
-        assert_eq!(
-            step.remaining_bytes, request.remaining_bytes,
-            "metadata bytes"
-        );
-        assert_eq!(
-            step.remaining_identity_bytes, request.remaining_identity_bytes,
-            "metadata identity"
-        );
         step.outcome
     }
 }

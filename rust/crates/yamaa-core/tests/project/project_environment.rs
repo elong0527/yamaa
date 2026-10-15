@@ -154,17 +154,14 @@ fn execution_conversion_moves_exact_definitions_and_preserves_absent_or_empty_fu
 }
 
 #[test]
-fn rejected_admission_retains_exact_draft_ownership_for_findings_and_limits() {
-    use yamaa_core::project_limits::{AdmissionError, Limit, Limits, Resource};
+fn rejected_admission_retains_exact_draft_ownership_and_all_findings() {
     let mut input = draft();
     input.functions = Some(vec![definition(), definition()]);
     input.submissions = vec![Submission::Adam];
     let expected = input.clone();
     let functions = input.functions.as_ref().unwrap().as_ptr();
     let cases = input.functions.as_ref().unwrap()[0].tests.as_ptr();
-    let rejected =
-        Environment::admit_retained_with_limits(Language::Python, input, Limits::default())
-            .unwrap_err();
+    let rejected = Environment::admit_retained(Language::Python, input).unwrap_err();
     assert_eq!(*rejected.draft, expected);
     assert_eq!(
         rejected.draft.functions.as_ref().unwrap().as_ptr(),
@@ -176,36 +173,11 @@ fn rejected_admission_retains_exact_draft_ownership_for_findings_and_limits() {
     );
     assert_eq!(
         rejected.error,
-        AdmissionError::Findings(vec![
+        vec![
             Finding::MissingLanguage,
             Finding::MissingLock,
             Finding::DuplicateFunction { function: 1 },
             Finding::MissingStudy
-        ])
-    );
-    let input = *rejected.draft;
-    let rejected = Environment::admit_retained_with_limits(
-        Language::Python,
-        input,
-        Limits {
-            text_bytes: 0,
-            ..Limits::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(*rejected.draft, expected);
-    assert_eq!(
-        rejected.draft.functions.as_ref().unwrap().as_ptr(),
-        functions
-    );
-    assert_eq!(
-        rejected.draft.functions.as_ref().unwrap()[0].tests.as_ptr(),
-        cases
-    );
-    assert_eq!(
-        rejected.error,
-        AdmissionError::Limit(Limit {
-            resource: Resource::TextBytes
-        })
+        ]
     );
 }

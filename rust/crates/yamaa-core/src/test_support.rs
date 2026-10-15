@@ -39,8 +39,6 @@ pub enum Event {
         kind: metadata::Kind,
         declaring_source: String,
         written: String,
-        remaining_bytes: usize,
-        remaining_identity_bytes: usize,
     },
     MetadataDecode {
         target: metadata::DecodeTarget,
@@ -102,17 +100,13 @@ impl PartialEq for Event {
                     kind: a,
                     declaring_source: b,
                     written: c,
-                    remaining_bytes: d,
-                    remaining_identity_bytes: e,
                 },
                 Self::MetadataCapture {
                     kind: v,
                     declaring_source: w,
                     written: x,
-                    remaining_bytes: y,
-                    remaining_identity_bytes: z,
                 },
-            ) => a == v && b == w && c == x && d == y && e == z,
+            ) => a == v && b == w && c == x,
             (
                 Self::MetadataDecode {
                     target: a,

@@ -1,8 +1,7 @@
 use serde_json::Value as JsonValue;
 use yamaa_core::{
     dataset::Check,
-    project_codelist_binding::{bind, AllowedValues, Binding, Cause, Error},
-    project_limits::{Limits, Resource},
+    project_codelist_binding::{bind, AllowedValues, Binding, Cause},
     project_terminology::{Catalogue, Codelist, DataType, External, Item, Source},
     value::{ColumnType, Value},
 };
@@ -66,13 +65,12 @@ fn complete_static_findings_preserve_all_bindings_both_sets_and_original_paths()
         path: "columns.VALUE.verifications[0].allowed_values",
         values: &values,
     }];
-    let Err(Error::Findings(findings)) = bind(
+    let Err(findings) = bind(
         &cat,
         &[
             binding("UNKNOWN", ColumnType::Str, &[]),
             binding("CODE", ColumnType::Int, &allowed),
         ],
-        Limits::default(),
     ) else {
         panic!("complete rejection")
     };
@@ -133,12 +131,7 @@ fn fixed_binding_keeps_numeric_authorship_and_compares_sets_exactly() {
         path: "allowed",
         values: &matching,
     }];
-    let checks = bind(
-        &cat,
-        &[binding("CODE", ColumnType::Float, &allowed)],
-        Limits::default(),
-    )
-    .unwrap();
+    let checks = bind(&cat, &[binding("CODE", ColumnType::Float, &allowed)]).unwrap();
     assert_eq!(checks.len(), 1);
     assert_eq!(checks[0].column, 1);
     let Check::Codelist { id, values } = &checks[0].verification.check else {
@@ -156,7 +149,7 @@ fn fixed_binding_keeps_numeric_authorship_and_compares_sets_exactly() {
         values: &rounded,
     }];
     assert!(
-        matches!(bind(&cat, &[binding("CODE", ColumnType::Float, &different)], Limits::default()), Err(Error::Findings(f)) if f.len()==1)
+        matches!(bind(&cat, &[binding("CODE", ColumnType::Float, &different)]), Err(f) if f.len()==1)
     );
 }
 #[test]
@@ -173,47 +166,11 @@ fn extensible_and_external_bindings_leave_explicit_verifications_independent() {
             path: "allowed",
             values: &values,
         }];
-        assert!(bind(
-            &cat,
-            &[binding("CODE", ColumnType::Str, &allowed)],
-            Limits::default()
-        )
-        .unwrap()
-        .is_empty());
+        assert!(bind(&cat, &[binding("CODE", ColumnType::Str, &allowed)])
+            .unwrap()
+            .is_empty());
         assert!(
-            matches!(bind(&cat, &[binding("CODE", ColumnType::Int, &allowed)], Limits::default()), Err(Error::Findings(f)) if f.len()==1)
+            matches!(bind(&cat, &[binding("CODE", ColumnType::Int, &allowed)]), Err(f) if f.len()==1)
         );
     }
-}
-#[test]
-fn binding_quotas_are_aggregate_and_do_not_return_a_partial_prefix() {
-    let cat = catalogue(
-        DataType::Text,
-        vec![Value::Str("x".repeat(20))],
-        false,
-        false,
-    );
-    let request = binding("CODE", ColumnType::Str, &[]);
-    let minimum_text = (0..1000)
-        .find(|&text_bytes| {
-            bind(
-                &cat,
-                &[request],
-                Limits {
-                    text_bytes,
-                    ..Default::default()
-                },
-            )
-            .is_ok()
-        })
-        .unwrap();
-    assert!(
-        matches!(bind(&cat, &[request,request], Limits { text_bytes: minimum_text, ..Default::default() }), Err(Error::Limit(l)) if l.resource==Resource::TextBytes)
-    );
-    assert!(
-        matches!(bind(&cat, &[request], Limits { findings: 1, ..Default::default() }), Err(Error::Limit(l)) if l.resource==Resource::Findings)
-    );
-    assert!(
-        matches!(bind(&cat, &[request], Limits { work: 1, ..Default::default() }), Err(Error::Limit(l)) if l.resource==Resource::Work)
-    );
 }

@@ -1,6 +1,6 @@
 use yamaa_core::{
     project_call_document::{Argument, Call, Input},
-    project_calls::{Error, Finding, Kind, Limits, LocatedCall, ProjectCalls},
+    project_calls::{Error, Finding, Kind, LocatedCall, ProjectCalls},
     project_function::{CallFinding, Case, Definition, Function, Language, Parameter},
     value::{ColumnType, Value, ValueType},
 };
@@ -73,7 +73,7 @@ fn slots_follow_environment_order_and_occurrences_keep_their_authored_order() {
     let functions = vec![function("alpha"), function("beta"), function("unused")];
     let calls = vec![ordinary("beta"), ordinary("alpha"), ordinary("beta")];
     let expected = calls.clone();
-    let compiled = ProjectCalls::admit(&functions, calls, Limits::default()).unwrap();
+    let compiled = ProjectCalls::admit(&functions, calls).unwrap();
     assert_eq!(compiled.selected(), [0, 1]);
     assert_eq!(
         compiled
@@ -115,8 +115,7 @@ fn all_unknown_name_and_independent_argument_faults_are_retained() {
         call("id", vec![("x", Input::Literal(Value::float(7.0)))]),
         call("id", vec![("other", Input::Reference("SRC.X".into()))]),
     ];
-    let Err(Error::Findings(findings)) = ProjectCalls::admit(&functions, calls, Limits::default())
-    else {
+    let Err(Error::Findings(findings)) = ProjectCalls::admit(&functions, calls) else {
         panic!("complete static findings")
     };
     assert_eq!(
@@ -151,8 +150,7 @@ fn missing_literals_and_unbound_reference_types_do_not_invent_type_faults() {
     let functions = vec![function("id")];
     let missing = call("id", vec![("x", Input::Literal(Value::Missing))]);
     let reference = call("id", vec![("x", Input::Reference("SRC.X".into()))]);
-    let compiled =
-        ProjectCalls::admit(&functions, vec![missing, reference], Limits::default()).unwrap();
+    let compiled = ProjectCalls::admit(&functions, vec![missing, reference]).unwrap();
     assert_eq!(compiled.selected(), [0]);
     assert!(matches!(
         compiled.calls()[0].located.call.arguments[0].input,
@@ -165,75 +163,18 @@ fn missing_literals_and_unbound_reference_types_do_not_invent_type_faults() {
 }
 
 #[test]
-fn repeated_calls_charge_future_bound_plan_parameters_and_cumulative_work() {
-    let functions = vec![function("id")];
-    let limits = Limits {
-        parameters: 3,
-        work: 456,
-        ..Limits::default()
-    };
-    assert!(ProjectCalls::admit(&functions, vec![ordinary("id"), ordinary("id")], limits).is_ok());
-    for (limits, resource) in [
-        (
-            Limits {
-                parameters: 2,
-                ..limits
-            },
-            "parameters",
-        ),
-        (
-            Limits {
-                work: 455,
-                ..limits
-            },
-            "work",
-        ),
-        (
-            Limits {
-                arguments: 1,
-                ..limits
-            },
-            "arguments",
-        ),
-        (Limits { calls: 1, ..limits }, "calls"),
-    ] {
-        assert!(
-            matches!(ProjectCalls::admit(&functions, vec![ordinary("id"), ordinary("id")], limits), Err(Error::Limit(r)) if r == resource)
-        );
-    }
-}
-
-#[test]
-fn inherited_calls_reserve_every_bound_signature_before_plan_ownership() {
+fn inherited_calls_keep_the_original_activation_slot() {
     let functions = vec![function("id")];
     let types = std::collections::BTreeMap::new();
-    let limits = Limits {
-        parameters: 17,
-        ..Limits::default()
-    };
     let admitted = ProjectCalls::admit_with_reference_types_and_uses(
         &functions,
         vec![ordinary("id")],
         &types,
         &[16],
-        limits,
     )
     .unwrap();
     assert_eq!(admitted.selected(), [0]);
     assert_eq!(admitted.calls()[0].slot(), Some(0));
-    assert!(matches!(
-        ProjectCalls::admit_with_reference_types_and_uses(
-            &functions,
-            vec![ordinary("id")],
-            &types,
-            &[16],
-            Limits {
-                parameters: 16,
-                ..limits
-            },
-        ),
-        Err(Error::Limit("parameters"))
-    ));
 }
 
 #[test]
@@ -245,10 +186,6 @@ fn fully_overridden_calls_are_validated_once_without_activation_or_binding() {
         vec![ordinary("id")],
         &types,
         &[0],
-        Limits {
-            parameters: 0,
-            ..Limits::default()
-        },
     )
     .unwrap();
     assert!(admitted.selected().is_empty());
@@ -272,16 +209,14 @@ fn fully_overridden_calls_are_validated_once_without_activation_or_binding() {
         yamaa_core::project_call_binding::bind(&admitted, 0, &catalog, context),
         Err(yamaa_core::project_call_binding::Error::InactiveCall)
     ));
-    assert!(matches!(ProjectCalls::admit_with_reference_types_and_uses(
-        &functions, vec![call("id", vec![("x", Input::Literal(Value::float(7.0)))])],
-        &types, &[0], Limits::default(),
-    ), Err(Error::Findings(findings)) if findings.len() == 1));
+    assert!(
+        matches!(ProjectCalls::admit_with_reference_types_and_uses(&functions, vec![call("id", vec![("x", Input::Literal(Value::float(7.0)))])], &types, &[0]), Err(Error::Findings(findings)) if findings.len() == 1)
+    );
     let mixed = ProjectCalls::admit_with_reference_types_and_uses(
         &functions,
         vec![ordinary("id"), ordinary("id")],
         &types,
         &[0, 1],
-        Limits::default(),
     )
     .unwrap();
     assert_eq!(
@@ -291,7 +226,7 @@ fn fully_overridden_calls_are_validated_once_without_activation_or_binding() {
 }
 
 #[test]
-fn effective_call_counts_and_invalid_use_metadata_fail_closed() {
+fn invalid_use_metadata_fails_closed() {
     let functions = vec![function("id")];
     let types = std::collections::BTreeMap::new();
     assert!(matches!(
@@ -299,82 +234,22 @@ fn effective_call_counts_and_invalid_use_metadata_fail_closed() {
             &functions,
             vec![ordinary("id")],
             &types,
-            &[],
-            Limits::default(),
+            &[]
         ),
         Err(Error::InvalidCallUses)
-    ));
-    for uses in [1025, usize::MAX] {
-        assert!(matches!(
-            ProjectCalls::admit_with_reference_types_and_uses(
-                &functions,
-                vec![ordinary("id")],
-                &types,
-                &[uses],
-                Limits::default(),
-            ),
-            Err(Error::Limit("bound_calls"))
-        ));
-    }
-    assert!(matches!(
-        ProjectCalls::admit_with_reference_types_and_uses(
-            &functions,
-            vec![ordinary("id")],
-            &types,
-            &[usize::MAX],
-            Limits {
-                calls: usize::MAX,
-                ..Limits::default()
-            },
-        ),
-        Err(Error::Limit("bound_calls"))
-    ));
-    assert!(matches!(
-        ProjectCalls::admit_with_reference_types_and_uses(
-            &functions,
-            vec![ordinary("id"), ordinary("id")],
-            &types,
-            &[512, 513],
-            Limits::default(),
-        ),
-        Err(Error::Limit("bound_calls"))
     ));
 }
 
 #[test]
 fn empty_calls_select_no_functions_and_duplicate_definitions_never_ambiguously_bind() {
     let f = function("id");
-    let compiled = ProjectCalls::admit(
-        std::slice::from_ref(&f),
-        vec![],
-        Limits {
-            parameters: 0,
-            work: 64,
-            ..Limits::default()
-        },
-    )
-    .unwrap();
+    let compiled = ProjectCalls::admit(std::slice::from_ref(&f), vec![]).unwrap();
     assert!(
         compiled.selected().is_empty()
             && compiled.plans().is_empty()
             && compiled.calls().is_empty()
     );
     assert!(
-        matches!(ProjectCalls::admit(&[f.clone(), f.clone(), f], vec![ordinary("id")], Limits::default()), Err(Error::DuplicateDefinitions(indices)) if indices == [1, 2])
+        matches!(ProjectCalls::admit(&[f.clone(), f.clone(), f], vec![ordinary("id")]), Err(Error::DuplicateDefinitions(indices)) if indices == [1, 2])
     );
-}
-
-#[test]
-fn future_diagnostics_cannot_duplicate_long_logical_names_without_a_text_budget() {
-    let name = "f".repeat(16_384);
-    let functions = vec![function(&name)];
-    let names = (0..1024).map(|i| format!("unknown{i}")).collect::<Vec<_>>();
-    let args = names
-        .iter()
-        .map(|name| (name.as_str(), Input::Literal(Value::Int(7))))
-        .collect();
-    assert!(matches!(
-        ProjectCalls::admit(&functions, vec![call(&name, args)], Limits::default()),
-        Err(Error::Limit("text"))
-    ));
 }

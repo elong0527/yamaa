@@ -153,7 +153,7 @@ fn successful_activation_handles_feed_versionless_dataset_without_rebinding_or_r
     use yamaa_core::bound_expression::Read;
     use yamaa_core::dataset::{
         Assignment, BoundProjectFunction, DatasetPlan, Expression, FunctionArgument, FunctionInput,
-        Limits, RowMode, RowTemplate,
+        RowMode, RowTemplate,
     };
     use yamaa_core::table::{CellError, Column, TableAccess, TableSchema};
     struct Table {
@@ -213,23 +213,12 @@ fn successful_activation_handles_feed_versionless_dataset_without_rebinding_or_r
         vec![],
     )
     .unwrap();
-    let limits = Limits {
-        source_rows: 10,
-        output_rows: 10,
-        output_cells: 10,
-        key_cells: 10,
-        work_cells: 100,
-        scalar_text_bytes: 100,
-        output_text_bytes: 100,
-        identity_cells: 100,
-        identity_text_bytes: 100,
-    };
     let mut port = Port::new();
     for _ in 0..2 {
         let activated = activate(Language::Python, &lock(), &functions, &mut port).unwrap();
         let mut bindings = yamaa_core::project_activation::Bindings::new(&activated, &mut port);
         let result = plan
-            .execute_observed_functions(&source, &[], &mut bindings, limits)
+            .execute(&source, &[], &mut bindings, None)
             .result
             .unwrap();
         assert_eq!(result.dataset.cell(0, 0).unwrap(), ValueRef::Int(7));
@@ -511,186 +500,6 @@ fn language_and_lock_kind_cannot_escape_static_admission_before_any_port() {
 }
 
 #[test]
-fn selected_function_and_case_limits_precede_every_host_port() {
-    use yamaa_core::project_activation::{activate_with_limits, Limits, Resource};
-    let functions = [function("identity")];
-    for (limits, resource) in [
-        (
-            Limits {
-                functions: 0,
-                ..Limits::default()
-            },
-            Resource::Functions,
-        ),
-        (
-            Limits {
-                cases: 2,
-                ..Limits::default()
-            },
-            Resource::Cases,
-        ),
-        (
-            Limits {
-                parameters: 0,
-                ..Limits::default()
-            },
-            Resource::Parameters,
-        ),
-        (
-            Limits {
-                metadata_text_bytes: 49,
-                ..Limits::default()
-            },
-            Resource::MetadataText,
-        ),
-    ] {
-        let mut port = Port::new();
-        assert!(
-            matches!(activate_with_limits(Language::Python, &lock(), &functions, &mut port, limits), Err(Failure::Limit(actual)) if actual == resource)
-        );
-        assert!(port.trace.is_empty());
-    }
-}
-
-#[test]
-fn aggregate_signature_copies_are_bounded_before_lock_and_include_utf8_defaults() {
-    use yamaa_core::project_activation::{activate_with_limits, Limits, Resource};
-    let mut definition = function("identity").definition().clone();
-    definition.params.push(Parameter {
-        name: "label".into(),
-        kind: ValueType::Str,
-        required: false,
-        default: Some(Value::Str("e\u{301}\0\u{1f600}".into())),
-        accepts_missing: false,
-    });
-    definition.tests[0].covers.push("default:label".into());
-    definition.tests.push(Case {
-        id: "missing-label".into(),
-        covers: vec!["short-circuit-missing:label".into()],
-        args: vec![
-            ("x".into(), Value::Int(7)),
-            ("label".into(), Value::Missing),
-        ],
-        result: Value::Missing,
-    });
-    let function_with_default = Function::admit(Language::Python, definition).unwrap();
-    // Two copies each of identity/program.identity: 48; logical/host x: 2;
-    // logical/host label: 10; default e+combining accent+NUL+emoji: 8.
-    for (functions, bytes) in [
-        (vec![function("identity")], 50),
-        (vec![function_with_default], 68),
-    ] {
-        for (maximum, admitted) in [(bytes - 1, false), (bytes, true)] {
-            let mut port = Port::new();
-            port.lock_failure = true;
-            let result = activate_with_limits(
-                Language::Python,
-                &lock(),
-                &functions,
-                &mut port,
-                Limits {
-                    metadata_text_bytes: maximum,
-                    ..Limits::default()
-                },
-            );
-            if admitted {
-                assert!(matches!(
-                    result,
-                    Err(Failure::Lock(Payload("version-mismatch")))
-                ));
-                assert_eq!(port.trace, vec!["lock:yamaa+called-packages"]);
-            } else {
-                assert!(matches!(
-                    result,
-                    Err(Failure::Limit(Resource::MetadataText))
-                ));
-                assert!(port.trace.is_empty());
-            }
-        }
-    }
-    let functions = [function("first"), function("second")];
-    let mut port = Port::new();
-    assert!(matches!(
-        activate_with_limits(
-            Language::Python,
-            &lock(),
-            &functions,
-            &mut port,
-            Limits {
-                parameters: 1,
-                ..Limits::default()
-            }
-        ),
-        Err(Failure::Limit(Resource::Parameters))
-    ));
-    assert!(port.trace.is_empty());
-}
-#[test]
-fn retained_case_text_has_an_exact_cumulative_limit_and_never_grants_partial_activation() {
-    use yamaa_core::project_activation::{activate_with_limits, Limits, Resource};
-    let mut definition = function("identity").definition().clone();
-    definition.returns = ColumnType::Str;
-    for case in &mut definition.tests[..2] {
-        case.result = Value::Str("abcdefghi".into());
-    }
-    let functions = [Function::admit(Language::Python, definition).unwrap()];
-    // Two nine-byte results + six/eight/nine-byte case IDs = 41 UTF-8 bytes.
-    for (maximum, accepted) in [(41, true), (40, false), (15, false)] {
-        let mut port = Port::new();
-        port.text_result = Some("abcdefghi".into());
-        let result = activate_with_limits(
-            Language::Python,
-            &lock(),
-            &functions,
-            &mut port,
-            Limits {
-                retained_text_bytes: maximum,
-                ..Limits::default()
-            },
-        );
-        if accepted {
-            assert_eq!(result.unwrap()[0].cases.len(), 3);
-        } else {
-            assert!(matches!(
-                result,
-                Err(Failure::Limit(Resource::RetainedText))
-            ));
-        }
-        assert!(!port.trace.iter().any(|event| event == "study.read"));
-    }
-}
-#[test]
-fn repeated_owned_failure_identities_are_charged_and_whole_exhaustion_has_no_partial_findings() {
-    use yamaa_core::project_activation::{activate_with_limits, Limits, Resource};
-    let functions = [function("identity")];
-    // identity/program.identity = 8+16 bytes for each of two failed invocations;
-    // the successful short-circuit retains its nine-byte case ID: total 57.
-    for (maximum, exhausted) in [(56, true), (57, false)] {
-        let mut port = Port::new();
-        port.raised = true;
-        let result = activate_with_limits(
-            Language::Python,
-            &lock(),
-            &functions,
-            &mut port,
-            Limits {
-                retained_text_bytes: maximum,
-                ..Limits::default()
-            },
-        );
-        if exhausted {
-            assert!(matches!(
-                result,
-                Err(Failure::Limit(Resource::RetainedText))
-            ));
-        } else {
-            assert!(matches!(result, Err(Failure::Tests(failures)) if failures.len()==2));
-        }
-        assert!(!port.trace.iter().any(|event| event == "study.read"));
-    }
-}
-
-#[test]
 fn borrowed_compiler_selection_activates_only_held_definitions_and_repeats_cases() {
     use yamaa_core::project_activation::activate_references;
     let environment = [
@@ -750,10 +559,8 @@ fn borrowed_compiler_selection_activates_only_held_definitions_and_repeats_cases
 }
 
 #[test]
-fn borrowed_selection_keeps_empty_duplicate_and_quota_gates_before_ports() {
-    use yamaa_core::project_activation::{
-        activate_references, activate_references_with_limits, Limits, Resource,
-    };
+fn borrowed_selection_keeps_empty_and_duplicate_gates_before_ports() {
+    use yamaa_core::project_activation::activate_references;
     let environment = [function("first"), function("second")];
     let mut port = Port::new();
     port.lock_failure = true;
@@ -774,58 +581,13 @@ fn borrowed_selection_keeps_empty_duplicate_and_quota_gates_before_ports() {
         Failure::DuplicateSelection { function: 1 }
     );
     assert!(port.trace.is_empty());
-    assert_eq!(
-        activate_references_with_limits(
-            Language::Python,
-            &lock(),
-            &[&environment[0], &environment[1]],
-            &mut port,
-            Limits {
-                functions: 1,
-                ..Limits::default()
-            }
-        )
-        .unwrap_err(),
-        Failure::Limit(Resource::Functions)
-    );
-    assert!(port.trace.is_empty());
-    assert_eq!(
-        activate_references_with_limits(
-            Language::Python,
-            &lock(),
-            &[&environment[1]],
-            &mut port,
-            Limits {
-                cases: 2,
-                ..Limits::default()
-            }
-        )
-        .unwrap_err(),
-        Failure::Limit(Resource::Cases)
-    );
-    assert!(port.trace.is_empty());
-    assert_eq!(
-        activate_references_with_limits(
-            Language::Python,
-            &lock(),
-            &[&environment[1]],
-            &mut port,
-            Limits {
-                metadata_text_bytes: 0,
-                ..Limits::default()
-            }
-        )
-        .unwrap_err(),
-        Failure::Limit(Resource::MetadataText)
-    );
-    assert!(port.trace.is_empty());
 }
 
 mod observed {
     use super::*;
     use yamaa_core::project_activation::{
-        activate_references_observed, BindingObservation, BindingOutcome, Limits, LockObservation,
-        Observations, Resource, TestObservation, TestOutcome,
+        activate_references_observed, BindingObservation, BindingOutcome, LockObservation,
+        Observations, TestObservation, TestOutcome,
     };
     struct ObservedPort {
         inner: Port,
@@ -892,7 +654,6 @@ mod observed {
     fn run(
         functions: &[Function],
         port: &mut ObservedPort,
-        limits: Limits,
         observations: &mut Observations,
     ) -> Result<Vec<ActivatedFunction<Handle>>, Failure<Payload>> {
         activate_references_observed(
@@ -900,7 +661,6 @@ mod observed {
             &lock(),
             &functions.iter().collect::<Vec<_>>(),
             port,
-            limits,
             observations,
         )
     }
@@ -911,7 +671,7 @@ mod observed {
         port.late_failure = 1;
         let mut observations = Observations::default();
         assert_eq!(
-            run(&functions, &mut port, Limits::default(), &mut observations).unwrap_err(),
+            run(&functions, &mut port, &mut observations).unwrap_err(),
             Failure::Tests(vec![TestFailure::Result {
                 function: 1,
                 case: 1,
@@ -965,7 +725,7 @@ mod observed {
         port.inner.bind_failure = Some("second".into());
         let mut observations = Observations::default();
         assert!(matches!(
-            run(&functions, &mut port, Limits::default(), &mut observations),
+            run(&functions, &mut port, &mut observations),
             Err(Failure::Bindings(_))
         ));
         assert_eq!(
@@ -993,7 +753,7 @@ mod observed {
             function: 1,
             case: 0,
             error,
-        }) = run(&functions, &mut port, Limits::default(), &mut observations)
+        }) = run(&functions, &mut port, &mut observations)
         else {
             panic!("original interrupt");
         };
@@ -1023,7 +783,7 @@ mod observed {
         port.inner.raised = true;
         let mut observations = Observations::default();
         assert!(matches!(
-            run(&functions, &mut port, Limits::default(), &mut observations),
+            run(&functions, &mut port, &mut observations),
             Err(Failure::Tests(_))
         ));
         assert_eq!(
@@ -1046,8 +806,7 @@ mod observed {
             let mut port = ObservedPort::new();
             port.late_failure = mode;
             let mut observations = Observations::default();
-            let failure =
-                run(&functions, &mut port, Limits::default(), &mut observations).unwrap_err();
+            let failure = run(&functions, &mut port, &mut observations).unwrap_err();
             if mode == 4 {
                 assert_eq!(failure, Failure::Lock(Payload("user interrupt")));
                 assert_eq!(observations.lock, LockObservation::Interrupted);
@@ -1088,7 +847,6 @@ mod observed {
             assert!(catch_unwind(AssertUnwindSafe(|| run(
                 &functions,
                 &mut port,
-                Limits::default(),
                 &mut observations
             )))
             .is_err());
@@ -1120,76 +878,16 @@ mod observed {
             }
         }
     }
+
     #[test]
-    fn observed_text_copies_share_the_exact_cumulative_utf8_budget() {
-        let mut definition = function("first").definition().clone();
-        definition.returns = ColumnType::Str;
-        for case in &mut definition.tests[..2] {
-            case.result = Value::Str("é".into());
-        }
-        let functions = [Function::admit(Language::Python, definition).unwrap()];
-        // IDs: 6 + 8 + 9 bytes. Two UTF-8 results, each retained in activation
-        // and observations: 2 * 2 * 2 bytes. No copies of opaque host errors.
-        let mut port = ObservedPort::new();
-        port.inner.text_result = Some("é".into());
-        let mut observations = Observations::default();
-        assert!(run(
-            &functions,
-            &mut port,
-            Limits {
-                retained_text_bytes: 31,
-                ..Limits::default()
-            },
-            &mut observations
-        )
-        .is_ok());
-        assert_eq!(observations.tests.len(), 3);
-        assert_eq!(
-            run(
-                &functions,
-                &mut port,
-                Limits {
-                    retained_text_bytes: 30,
-                    ..Limits::default()
-                },
-                &mut observations
-            )
-            .unwrap_err(),
-            Failure::Limit(Resource::RetainedText)
-        );
-        assert_eq!(
-            run(
-                &functions,
-                &mut port,
-                Limits {
-                    retained_text_bytes: 1,
-                    ..Limits::default()
-                },
-                &mut observations
-            )
-            .unwrap_err(),
-            Failure::Limit(Resource::RetainedText)
-        );
-        assert_eq!(
-            observations.tests,
-            [TestObservation {
-                function: 0,
-                case: 0,
-                outcome: TestOutcome::Passed,
-                invoked: true,
-                actual: None
-            }]
-        );
-    }
-    #[test]
-    fn repeated_lock_refusal_empty_selection_and_static_limit_clear_previous_evidence() {
+    fn repeated_lock_refusal_and_empty_selection_clear_previous_evidence() {
         let functions = [function("first")];
         let mut port = ObservedPort::new();
         let mut observations = Observations::default();
-        run(&functions, &mut port, Limits::default(), &mut observations).unwrap();
+        run(&functions, &mut port, &mut observations).unwrap();
         port.inner.lock_failure = true;
         assert!(matches!(
-            run(&functions, &mut port, Limits::default(), &mut observations),
+            run(&functions, &mut port, &mut observations),
             Err(Failure::Lock(_))
         ));
         assert_eq!(
@@ -1200,23 +898,7 @@ mod observed {
             }
         );
         let before = port.inner.trace.len();
-        assert!(run(&[], &mut port, Limits::default(), &mut observations)
-            .unwrap()
-            .is_empty());
-        assert_eq!(observations, Observations::default());
-        assert_eq!(port.inner.trace.len(), before);
-        assert!(matches!(
-            run(
-                &functions,
-                &mut port,
-                Limits {
-                    cases: 0,
-                    ..Limits::default()
-                },
-                &mut observations
-            ),
-            Err(Failure::Limit(Resource::Cases))
-        ));
+        assert!(run(&[], &mut port, &mut observations).unwrap().is_empty());
         assert_eq!(observations, Observations::default());
         assert_eq!(port.inner.trace.len(), before);
     }
