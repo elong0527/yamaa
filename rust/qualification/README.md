@@ -20,7 +20,7 @@ compares logical fields, types, nulls, rows and values.
 ## Benchmark conformance
 
 `tools/public_conformance.py` discovers benchmark specifications and explicit
-runner arguments. Its shared plan accounts for 318 authored cases, 316 active
+runner arguments. Its shared plan accounts for 322 authored cases, 320 active
 cases and two reviewed exclusions. Runnable entries describe host metadata;
 qualification requires each installed host's actual passing inventory.
 The installed Python and R runners stage execution inputs

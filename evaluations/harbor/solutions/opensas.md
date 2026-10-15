@@ -1,13 +1,13 @@
 # opensas reference solutions
 
-The `result.sas` programs prepare all 137 prompted derivation benchmarks for
+The `result.sas` programs prepare all 141 prompted derivation benchmarks for
 execution with the existing [opensas v0.6.6 release](https://github.com/kirha-ai/opensas/releases/tag/v0.6.6).
 Each program reads `/app/input` and writes the CSV files requested by its full
 prompt to `/app/output`. The race/ethnicity solution writes both DM and SUPPDM.
 Identifiers are read as character values to preserve leading zeros; numeric
 measurements and sequence variables use explicit numeric input.
 
-The Harbor opensas track executes the 134 confident native CSV cases with the
+The Harbor opensas track executes the 138 confident native CSV cases with the
 existing opensas v0.6.6 release. The image installs an unmodified release
 executable; these programs do not implement or modify an execution engine. Benchmarks
 without derivation prompts, including yamaa specification rejection cases,

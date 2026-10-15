@@ -22,8 +22,9 @@ parameters are:
 Each mean is taken over the ECGs of the time point that have a value for
 that parameter: a test that was not done has no value, and an ECG without
 both a QT and an RR result has no QTcF value while its other result still
-counts in its own mean. A time point with a single ECG still has its
-records. A parameter with no value at a time point has no record there.
+counts in its own mean. An ECG with zero RR also has no QTcF value. A time
+point with a single ECG still has its records. A parameter with no value
+at a time point has no record there.
 AVAL is not rounded.
 
 Read the source datasets from /app/input and save the completed dataset as

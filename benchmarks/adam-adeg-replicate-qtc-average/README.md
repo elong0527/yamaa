@@ -26,8 +26,9 @@ that was not done has `EGSTAT` `NOT DONE` and no result.
   parameter, of that value, not rounded. For `QTCF` the value of one ECG
   is its own QT divided by the cube root of its own RR in seconds, so
   the average is the mean of the per-ECG corrected values, not the
-  correction of the mean QT and RR; an ECG without both results has no
-  corrected value. A single ECG gives a record of its own values.
+  correction of the mean QT and RR; an ECG without both results, or with
+  zero RR, has no corrected value. A single ECG gives a record of its own
+  values.
 
 **Note:** the QT and RR results of one ECG share its replicate number
 (`EGREPNUM`) within the time point, even when two ECGs carry the same
