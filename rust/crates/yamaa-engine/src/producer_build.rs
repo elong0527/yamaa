@@ -198,7 +198,7 @@ pub enum Failure<E> {
     Binding { node: usize, slot: usize },
     Node { node: usize },
 }
-pub type OutputFailure<R, C> = output::CompleteError<R, C, Infallible>;
+pub(crate) type OutputFailure<R, C> = output::CompleteError<R, C, Infallible>;
 type PreparedNode<R, C> = Result<
     PreparedOutput<<R as OutputReport>::Report>,
     OutputFailure<<R as OutputReport>::Error, <C as CodecPort>::Error>,

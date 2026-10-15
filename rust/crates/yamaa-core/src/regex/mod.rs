@@ -14,7 +14,6 @@ pub(crate) use widths::Budget as CompileBudget;
 pub const IDENTIFIER_UNICODE_VERSION: &str = "18.0.0";
 
 /// The repository's portable pattern contract, not a host library dialect.
-pub const CONTRACT_VERSION: &str = "2.0.0";
 
 /// Caller-selected compilation budgets; recursive pattern nesting is capped at 64.
 #[derive(Clone, Copy, Debug)]

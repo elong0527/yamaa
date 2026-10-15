@@ -264,7 +264,7 @@ impl Declaration {
     }
     /// Scope checks precede source field resolution. Every occurrence is admitted,
     /// including identifiers behind a short-circuiting predicate branch.
-    pub fn bind_filter(
+    pub(crate) fn bind_filter(
         &self,
         path: &str,
         source: &SourceDeclaration,

@@ -5,7 +5,6 @@ pub const SOURCE_ROWS: usize = 10_000_000;
 pub const SOURCE_CELLS: usize = 640_000_000;
 pub const SOURCE_BYTES: usize = 1024 * 1024 * 1024;
 pub const EXECUTION_WORK: usize = 2_000_000_000;
-pub const GRAPH_OUTPUT_CELLS: usize = 640_000_000;
 pub const OUTPUT_ROWS: usize = 10_000_000;
 pub const OUTPUT_CELLS: usize = 640_000_000;
 pub const KEY_CELLS: usize = 640_000_000;

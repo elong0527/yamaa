@@ -19,7 +19,7 @@ use yamaa_core::{
     value::Value,
 };
 
-pub const MAX_ARTIFACT_BYTES: usize = 67_108_864;
+pub(crate) const MAX_ARTIFACT_BYTES: usize = 67_108_864;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MetadataLimits {
     pub bytes: usize,

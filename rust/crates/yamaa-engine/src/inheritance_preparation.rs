@@ -110,7 +110,6 @@ pub struct PreparedInheritance {
     provenance: Vec<LayerProvenance>,
     normalization_input: Document,
     origins: Vec<SchemaOrigin>,
-    expanded_before_pruning: Vec<WindowReference>,
     windows: Vec<WindowReference>,
 }
 impl PreparedInheritance {
@@ -131,10 +130,6 @@ impl PreparedInheritance {
     }
     pub fn windows(&self) -> &[WindowReference] {
         &self.windows
-    }
-    /// Expansion history can include declarations subsequently removed by pruning.
-    pub fn expanded_before_pruning(&self) -> &[WindowReference] {
-        &self.expanded_before_pruning
     }
 }
 
@@ -226,7 +221,6 @@ pub fn prepare<P: PathPort>(
                 &layers,
             ))
         })?;
-    let expanded_before_pruning = expanded.references.clone();
     let pruned = schema
         .resolve_inheritance_dependencies(&expanded.document, normalization)
         .map_err(|error| {
@@ -271,7 +265,6 @@ pub fn prepare<P: PathPort>(
         provenance: composed.provenance,
         normalization_input: pruned.document,
         origins,
-        expanded_before_pruning,
         windows: expanded.references,
     })
 }

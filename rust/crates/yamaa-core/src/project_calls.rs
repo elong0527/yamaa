@@ -114,17 +114,6 @@ impl ProjectCalls {
     pub fn into_located_calls(self) -> Vec<LocatedCall> {
         self.calls.into_iter().map(|call| call.located).collect()
     }
-    /// Known declared reference kinds participate in the same complete argument
-    /// pass. Unknown bare outputs are static faults; stored fields may remain
-    /// unknown until the compiler binds captured source metadata.
-    pub fn admit_with_reference_types(
-        functions: &[Function],
-        calls: Vec<LocatedCall>,
-        reference_types: &BTreeMap<&str, crate::value::ValueType>,
-        limits: Limits,
-    ) -> Result<Self, Error> {
-        Self::admit_implementation(functions, calls, Some(reference_types), None, None, limits)
-    }
     /// Admit each authored call once while reserving all effective row-template
     /// copies. Zero uses still receives complete static validation, but does not
     /// select a function for activation. Uses are compiler-selected metadata.

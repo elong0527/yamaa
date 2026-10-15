@@ -853,60 +853,6 @@ impl SchemaStructure {
             },
         )
     }
-    /// Select a projected union member, including an empty union after cycle filtering.
-    pub fn matching_types<'a>(
-        &self,
-        types: &'a [TypeExpression],
-        input: &Document,
-        value: usize,
-        fragment: bool,
-        budget: &mut ValidationBudget,
-    ) -> Result<Option<&'a str>, ValidationError> {
-        if value >= input.nodes().len() {
-            return Err(ValidationError::InvalidDescriptor);
-        }
-        for member in types {
-            if matches_member(
-                self,
-                input,
-                (member, member.root()),
-                value,
-                fragment,
-                &[],
-                budget,
-            )? {
-                return Ok(member.node_text(member.root()));
-            }
-        }
-        Ok(None)
-    }
-    /// Return the first matching written type for an admitted descriptor, without expansion.
-    pub fn matching_member<'a>(
-        &'a self,
-        descriptor: usize,
-        input: &Document,
-        value: usize,
-        fragment: bool,
-        budget: &mut ValidationBudget,
-    ) -> Result<Option<&'a str>, ValidationError> {
-        if descriptor >= self.descriptors().len() || value >= input.nodes().len() {
-            return Err(ValidationError::InvalidDescriptor);
-        }
-        for member in self.descriptors()[descriptor].descriptor.members() {
-            if matches_member(
-                self,
-                input,
-                (member, member.root()),
-                value,
-                fragment,
-                &[],
-                budget,
-            )? {
-                return Ok(member.node_text(member.root()));
-            }
-        }
-        Ok(None)
-    }
     /// Validate a raw document, checking its version before every other authored field.
     pub fn validate_document(
         &self,
