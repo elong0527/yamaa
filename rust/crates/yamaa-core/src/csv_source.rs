@@ -90,6 +90,13 @@ fn failure(cause: ProfileCause, record: usize, field: usize) -> Error {
         field: Field::Index(field),
     }
 }
+fn limit_failure(error: crate::limits::LimitExceeded) -> Error {
+    Error::Limit {
+        resource: error.resource,
+        limit: error.limit,
+        actual: error.actual,
+    }
+}
 
 /// Every value is collected text or missing; no numeric, NA-token or locale inference.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -131,14 +138,10 @@ fn coordinates(prefix: &[u8]) -> (usize, usize) {
     (record, field)
 }
 
-/// Decode completely, then scan all syntax, then validate header and row widths.
-/// A source byte boundary precedes decoding; table geometry follows validation.
+/// Decode completely, then scan all syntax before header and row-width findings.
+/// File and table boundaries precede retaining the corresponding bytes or shape.
 pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
-    crate::limits::Limits::source_bytes(content.len()).map_err(|error| Error::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        actual: error.actual,
-    })?;
+    crate::limits::Limits::source_bytes(content.len()).map_err(limit_failure)?;
     let text = std::str::from_utf8(content).map_err(|error| {
         let (record, field) = coordinates(&content[..error.valid_up_to()]);
         failure(ProfileCause::InvalidText, record, field)
@@ -149,7 +152,10 @@ pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
     if text.is_empty() {
         return Err(failure(ProfileCause::HeaderAbsent, 1, 1));
     }
-    let records = scan(text)?;
+    let Scanned {
+        records,
+        width_failure,
+    } = scan(text)?;
     let mut records = records.into_iter();
     let header = records.next().expect("nonempty text produces a record");
     let mut names = Vec::with_capacity(header.len());
@@ -167,6 +173,9 @@ pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
         }
         names.push(name);
     }
+    if let Some(error) = width_failure {
+        return Err(error);
+    }
     let mut rows = Vec::new();
     for (index, record) in records.enumerate() {
         if record.len() != names.len() {
@@ -178,25 +187,54 @@ pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
         }
         rows.push(record);
     }
-    crate::limits::Limits::table(rows.len(), names.len()).map_err(|error| Error::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        actual: error.actual,
-    })?;
+    crate::limits::Limits::table(rows.len(), names.len()).map_err(limit_failure)?;
     Ok(CsvSource {
         names,
         records: rows,
     })
 }
 
-fn scan(text: &str) -> Result<Vec<Vec<Option<String>>>, Error> {
+struct Scanned {
+    records: Vec<Vec<Option<String>>>,
+    width_failure: Option<Error>,
+}
+/// The previous physical record count includes the header; adding a data record
+/// gives exactly that many data rows. The header itself has zero data rows.
+fn admit_record(previous_records: usize, columns: usize) -> Result<(), Error> {
+    crate::limits::Limits::table(previous_records, columns).map_err(limit_failure)
+}
+impl Scanned {
+    fn push(&mut self, record: Vec<Option<String>>, number: usize) -> Result<(), Error> {
+        let width = self.records.first().map_or(record.len(), Vec::len);
+        admit_record(number - 1, width)?;
+        if number > 1 && record.len() != width && self.width_failure.is_none() {
+            self.width_failure = Some(failure(
+                ProfileCause::RecordWidth,
+                number,
+                record.len().min(width) + 1,
+            ));
+        }
+        // A malformed record cannot form a table. Keep its first finding and
+        // finish lexical scanning, while retaining only the valid prefix.
+        if self.width_failure.is_none() {
+            self.records.push(record);
+        }
+        Ok(())
+    }
+}
+
+fn scan(text: &str) -> Result<Scanned, Error> {
     let bytes = text.as_bytes();
-    let mut records = Vec::new();
+    let mut records = Scanned {
+        records: Vec::new(),
+        width_failure: None,
+    };
     let mut record = Vec::new();
     let mut index = 0;
+    let mut number = 1;
     loop {
-        let number = records.len() + 1;
         let column = record.len() + 1;
+        crate::limits::Limits::columns(column).map_err(limit_failure)?;
         let field = if bytes.get(index) == Some(&b'"') {
             index += 1;
             let mut start = index;
@@ -243,7 +281,7 @@ fn scan(text: &str) -> Result<Vec<Vec<Option<String>>>, Error> {
         record.push(if field.is_empty() { None } else { Some(field) });
         match bytes.get(index) {
             None => {
-                records.push(record);
+                records.push(record, number)?;
                 break;
             }
             Some(b',') => {
@@ -259,11 +297,41 @@ fn scan(text: &str) -> Result<Vec<Vec<Option<String>>>, Error> {
             Some(b'\n') => index += 1,
             _ => unreachable!("scanned field stops at a delimiter"),
         }
-        records.push(record);
+        records.push(record, number)?;
         record = Vec::new();
+        number += 1;
         if index >= bytes.len() {
             break;
         }
     }
     Ok(records)
+}
+
+#[cfg(test)]
+mod boundary_tests {
+    use super::*;
+    use crate::limits::Limits;
+
+    #[test]
+    fn record_geometry_excludes_the_header_without_allocating_rows_or_cells() {
+        assert_eq!(admit_record(0, Limits::COLUMNS), Ok(()));
+        assert_eq!(admit_record(Limits::TABLE_ROWS, 64), Ok(()));
+        assert_eq!(
+            admit_record(Limits::TABLE_ROWS + 1, 1),
+            Err(Error::Limit {
+                resource: "table_rows",
+                limit: Limits::TABLE_ROWS,
+                actual: Some(Limits::TABLE_ROWS + 1),
+            })
+        );
+        assert_eq!(admit_record(3_575_418, 179), Ok(()));
+        assert_eq!(
+            admit_record(3_575_419, 179),
+            Err(Error::Limit {
+                resource: "table_cells",
+                limit: Limits::TABLE_CELLS,
+                actual: Some(Limits::TABLE_CELLS + 1),
+            })
+        );
+    }
 }
