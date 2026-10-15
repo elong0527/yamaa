@@ -67,8 +67,8 @@ impl<E> SourceDecoder for Decoder<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{csv_source::TextTableError, specification_source::Source};
-    use yamaa_core::producer_build::{DecodeError, DecodeLimits, DecodePort};
+    use crate::specification_source::Source;
+    use yamaa_core::specification::SourceInterpretation;
     use yamaa_core::{specification::SourceProfile, value::ColumnType};
 
     fn csv_source() -> SourceDeclaration {
@@ -84,114 +84,55 @@ mod tests {
     }
 
     #[test]
-    fn native_csv_receipt_is_admitted_charge_and_resets_after_every_attempt() {
+    fn native_csv_values_and_retry_after_malformed_input_use_the_same_decoder() {
         let mut decoder = Decoder::<std::convert::Infallible>::default();
-        let limits = DecodeLimits {
-            rows: 1,
-            cells: 1,
-            storage_bytes: 179,
-            work_bytes: 4,
-        };
         let table = decoder
-            .decode_bounded(&csv_source(), b"A\nx\n", None, limits)
+            .decode(
+                &csv_source(),
+                b"A\nx\n",
+                SourceInterpretation::Ordinary,
+                None,
+            )
             .unwrap();
         assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str("x"));
-        let usage = decoder.usage().unwrap();
-        assert_eq!((usage.storage_bytes, usage.work_bytes), (179, 4));
-        assert!(matches!(
-            decoder.decode_bounded(
-                &csv_source(),
-                b"A\nx\n",
-                None,
-                DecodeLimits {
-                    storage_bytes: 178,
-                    ..limits
-                }
-            ),
-            Err(DecodeError::Codec(Error::Source(TextTableError::Table(
-                crate::arrow_table::TableError::Limit {
-                    resource: "storage_bytes",
-                    limit: 178,
-                    required: Some(179),
-                }
-            ))))
-        ));
-        assert_eq!(decoder.usage().unwrap().storage_bytes, 178);
         assert!(decoder
-            .decode_bounded(&csv_source(), b"A\n\"x", None, limits)
-            .is_err());
-        assert_eq!(decoder.usage().unwrap().storage_bytes, 113);
-        assert_eq!(decoder.usage().unwrap().work_bytes, 4);
-        assert!(decoder
-            .decode_bounded(
-                &csv_source(),
-                b"A\nx\n",
-                None,
-                DecodeLimits {
-                    work_bytes: 3,
-                    ..limits
-                }
-            )
-            .is_err());
-        assert_eq!(decoder.usage().unwrap().work_bytes, 0);
-        assert_eq!(decoder.usage().unwrap().storage_bytes, 4);
-        decoder.decode(&csv_source(), b"A\nx\n").unwrap();
-        assert!(decoder.usage().is_none());
-        decoder
-            .decode_bounded(&csv_source(), b"A\nx\n", None, limits)
-            .unwrap();
-        assert!(decoder
-            .decode_with_interpretation(
+            .decode(
                 &csv_source(),
                 b"A\n\"x",
-                yamaa_core::specification::SourceInterpretation::Ordinary
+                SourceInterpretation::Ordinary,
+                None
             )
             .is_err());
-        assert!(decoder.usage().is_none());
+        let repeated = decoder
+            .decode(
+                &csv_source(),
+                b"A\nx\n",
+                SourceInterpretation::Ordinary,
+                None,
+            )
+            .unwrap();
+        assert_eq!(repeated.cell(0, 0).unwrap(), ValueRef::Str("x"));
     }
 
     #[test]
-    fn native_csv_row_guard_stops_before_next_record_ownership_and_ordinal_is_charged() {
+    fn native_csv_records_and_generated_ordinal_preserve_source_order() {
         let mut decoder = Decoder::<std::convert::Infallible>::default();
         let mut source = csv_source();
-        let limits = DecodeLimits {
-            rows: 1,
-            cells: 2,
-            storage_bytes: 211,
-            work_bytes: 6,
-        };
-        assert!(decoder
-            .decode_bounded(&source, b"A\nx\ny\n", None, limits)
-            .is_err());
-        assert_eq!(decoder.usage().unwrap().storage_bytes, 114);
+        let table = decoder
+            .decode(&source, b"A\nx\ny\n", SourceInterpretation::Ordinary, None)
+            .unwrap();
+        assert_eq!(table.row_count(), 2);
+        assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str("x"));
+        assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Str("y"));
         source.ordinal = Some("POSITION".into());
         let table = decoder
-            .decode_bounded(&source, b"A\nx\n", None, limits)
+            .decode(&source, b"A\nx\n", SourceInterpretation::Ordinary, None)
             .unwrap();
         assert_eq!(table.cell(0, 1).unwrap(), ValueRef::Int(1));
-        assert_eq!(decoder.usage().unwrap().storage_bytes, 211);
-        assert!(matches!(
-            decoder.decode_bounded(
-                &source,
-                b"A\nx\n",
-                None,
-                DecodeLimits {
-                    storage_bytes: 210,
-                    ..limits
-                }
-            ),
-            Err(DecodeError::Codec(Error::Source(TextTableError::Table(
-                crate::arrow_table::TableError::Limit {
-                    resource: "storage_bytes",
-                    limit: 210,
-                    required: Some(211),
-                }
-            ))))
-        ));
     }
 
     #[test]
-    fn native_parquet_receipts_enforce_independent_stage_byte_fences() {
+    fn native_parquet_retains_all_sixty_four_records() {
         use arrow_array::{Int64Array, RecordBatch};
         use arrow_schema::{DataType, Field, Schema};
         use parquet::{arrow::ArrowWriter, file::properties::WriterProperties};
@@ -213,54 +154,16 @@ mod tests {
         let mut source = csv_source();
         source.profile = SourceProfile::Parquet;
         source.path = "raw.parquet".into();
-        let limits = DecodeLimits {
-            rows: 64,
-            cells: 64,
-            storage_bytes: 2_048,
-            work_bytes: 2_048,
-        };
         let mut decoder = Decoder::<std::convert::Infallible>::default();
         let table = decoder
-            .decode_bounded(&source, &bytes, None, limits)
+            .decode(&source, &bytes, SourceInterpretation::Ordinary, None)
             .unwrap();
         assert_eq!(table.row_count(), 64);
         assert_eq!(table.cell(63, 0).unwrap(), ValueRef::Int(64));
-        let usage = decoder.usage().unwrap();
-        assert_eq!((usage.storage_bytes, usage.work_bytes), (2_048, 2_048));
-        assert!(decoder
-            .decode_bounded(
-                &source,
-                &bytes,
-                None,
-                DecodeLimits {
-                    storage_bytes: 2_047,
-                    ..limits
-                }
-            )
-            .is_err());
-        assert_eq!(decoder.usage().unwrap().storage_bytes, 2_016);
-        assert!(decoder
-            .decode_bounded(
-                &source,
-                &bytes,
-                None,
-                DecodeLimits {
-                    work_bytes: 2_047,
-                    ..limits
-                }
-            )
-            .is_err());
-        assert!(decoder.usage().unwrap().work_bytes <= 2_047);
-        assert_eq!(decoder.usage().unwrap().storage_bytes, bytes.len());
-        assert!(decoder
-            .decode_bounded(&source, &bytes, None, DecodeLimits { rows: 63, ..limits })
-            .is_err());
-        assert_eq!(decoder.usage().unwrap().work_bytes, 0);
-        assert_eq!(decoder.usage().unwrap().storage_bytes, bytes.len());
     }
 
     #[test]
-    fn both_supported_odm_routes_return_bounded_receipts_at_their_exact_charge() {
+    fn both_supported_odm_routes_preserve_all_eleven_fields() {
         use arrow_array::{ArrayRef, RecordBatch, StringArray};
         use arrow_schema::{DataType, Field, Schema};
         use parquet::arrow::ArrowWriter;
@@ -286,44 +189,19 @@ mod tests {
             let mut source = csv_source();
             source.profile = profile;
             let mut decoder = Decoder::<std::convert::Infallible>::default();
-            let limits = DecodeLimits {
-                rows: 1,
-                cells: 11,
-                storage_bytes: 65_536,
-                work_bytes: 65_536,
-            };
             let table = decoder
-                .decode_bounded_interpreted(
-                    &source,
-                    &bytes,
-                    None,
-                    limits,
-                    SourceInterpretation::Odm,
-                )
+                .decode(&source, &bytes, SourceInterpretation::Odm, None)
                 .unwrap();
             assert_eq!(table.row_count(), 1);
             assert_eq!(table.schema().columns().len(), 11);
             for column in 0..11 {
                 assert_eq!(table.cell(0, column).unwrap(), ValueRef::Str("a"));
             }
-            let usage = decoder
-                .usage()
-                .expect("successful supported interpretation is accounted");
-            assert!(usage.storage_bytes > 0 && usage.work_bytes > 0);
-            let exact = DecodeLimits {
-                storage_bytes: usage.storage_bytes,
-                work_bytes: usage.work_bytes,
-                ..limits
-            };
-            decoder
-                .decode_bounded_interpreted(&source, &bytes, None, exact, SourceInterpretation::Odm)
-                .unwrap();
-            assert_eq!(decoder.usage().unwrap(), usage);
         }
     }
 
     #[test]
-    fn both_sas_source_profiles_use_receipts_and_preserve_exact_caller_caps() {
+    fn both_sas_source_profiles_preserve_rows_across_repeated_decoding() {
         for (profile, bytes) in [
             (
                 SourceProfile::Xport,
@@ -337,41 +215,15 @@ mod tests {
             let mut source = csv_source();
             source.profile = profile;
             source.encoding = Some("windows-1252".into());
-            let limits = DecodeLimits {
-                rows: 1000,
-                cells: 100_000,
-                storage_bytes: 4_194_304,
-                work_bytes: 4_194_304,
-            };
             let mut decoder = Decoder::<std::convert::Infallible>::default();
             let table = decoder
-                .decode_bounded(&source, bytes, None, limits)
+                .decode(&source, bytes, SourceInterpretation::Ordinary, None)
                 .unwrap();
             assert!(table.row_count() > 0);
-            let usage = decoder
-                .usage()
-                .expect("successful supported SAS profile is accounted");
-            assert!(usage.storage_bytes > 0 && usage.work_bytes > 0);
-            let exact = DecodeLimits {
-                storage_bytes: usage.storage_bytes,
-                work_bytes: usage.work_bytes,
-                ..limits
-            };
-            let repeated = decoder.decode_bounded(&source, bytes, None, exact).unwrap();
+            let repeated = decoder
+                .decode(&source, bytes, SourceInterpretation::Ordinary, None)
+                .unwrap();
             assert_eq!(repeated.row_count(), table.row_count());
-            assert_eq!(decoder.usage().unwrap(), usage);
-            assert!(decoder
-                .decode_bounded(
-                    &source,
-                    bytes,
-                    None,
-                    DecodeLimits {
-                        storage_bytes: usage.storage_bytes - 1,
-                        ..exact
-                    }
-                )
-                .is_err());
-            assert!(decoder.usage().unwrap().storage_bytes < usage.storage_bytes);
         }
     }
 
@@ -384,8 +236,7 @@ mod tests {
                 bytes: b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: int, label: Value, derivation: RAW.VALUE}\noutput: {path: produced.csv, columns: [ID, VALUE]}\n".to_vec(),
             })
             .unwrap();
-        let contract =
-            yamaa_core::producer_contract::prepare(document.model(), Default::default()).unwrap();
+        let contract = yamaa_core::producer_contract::prepare(document.model()).unwrap();
         let mut source = SourceDeclaration {
             name: "P".into(),
             path: "produced.csv".into(),
@@ -403,63 +254,29 @@ mod tests {
             use std::fmt::Write;
             writeln!(bytes, "{row},1").unwrap();
         }
-        let limits = DecodeLimits {
-            rows: 100_000,
-            cells: 200_000,
-            storage_bytes: 16_777_216,
-            work_bytes: 16_777_216,
-        };
         let table = Decoder::<std::convert::Infallible>::default()
-            .decode_bounded(&source, bytes.as_bytes(), Some(&contract), limits)
+            .decode(
+                &source,
+                bytes.as_bytes(),
+                SourceInterpretation::Ordinary,
+                Some(&contract),
+            )
             .unwrap();
         assert_eq!(table.row_count(), 100_000);
         for row in 0..100_000 {
             assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Int(row as i64 + 1));
             assert_eq!(table.cell(row, 1).unwrap(), ValueRef::Int(1));
         }
-        assert!(matches!(
-            Decoder::<std::convert::Infallible>::default().decode_bounded(
-                &source,
-                bytes.as_bytes(),
-                Some(&contract),
-                DecodeLimits {
-                    cells: 199_999,
-                    ..limits
-                }
-            ),
-            Err(DecodeError::Codec(Error::Source(TextTableError::Table(
-                crate::arrow_table::TableError::Limit {
-                    resource: "cells",
-                    limit: 199_999,
-                    required: Some(200_000)
-                }
-            ))))
-        ));
         source.ordinal = Some("POSITION".into());
         let table = Decoder::<std::convert::Infallible>::default()
-            .decode_bounded(
+            .decode(
                 &source,
                 bytes.as_bytes(),
+                SourceInterpretation::Ordinary,
                 Some(&contract),
-                DecodeLimits {
-                    cells: 300_000,
-                    ..limits
-                },
             )
             .unwrap();
         assert_eq!(table.schema().columns()[2].name, "POSITION");
         assert_eq!(table.cell(99_999, 2).unwrap(), ValueRef::Int(100_000));
-        assert!(matches!(
-            Decoder::<std::convert::Infallible>::default().decode_bounded(
-                &source,
-                bytes.as_bytes(),
-                Some(&contract),
-                DecodeLimits {
-                    cells: 299_999,
-                    ..limits
-                }
-            ),
-            Err(DecodeError::Codec(Error::ResourceLimit(refusal))) if refusal.resource == "cells" && refusal.limit == 299_999 && refusal.actual == Some(300_000) && refusal.spec_paths == ["input.P"]
-        ));
     }
 }
