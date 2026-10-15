@@ -584,6 +584,7 @@ enum Pattern {
 /// Unicode scalar full matching with O(pattern) storage.
 /// All tokens are checked before matching, including a trailing escaped character.
 fn like(value: &str, pattern: &str, escape: Option<char>) -> Result<Truth, Condition> {
+    // The per-match step boundary belongs to regex; LIKE has no separate work quota.
     let mut tokens = Vec::new();
     let mut escaped = false;
     for character in pattern.chars() {

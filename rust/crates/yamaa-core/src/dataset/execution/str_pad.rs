@@ -34,6 +34,7 @@ pub(super) fn render<E>(
             row,
         )
     })?;
+    // This can be intermediate text; the saved-file byte boundary belongs to the writer.
     prepared
         .render()
         .map_err(|_| Box::new(ExecutionError::Allocation))
