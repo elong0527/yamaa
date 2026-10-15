@@ -507,6 +507,54 @@ mod tests {
     }
 
     #[test]
+    fn fixed_header_geometry_is_checked_before_retaining_any_columns_or_rows() {
+        let source = source();
+        for (rows, columns, expected) in [
+            (9_999_999, 1, None),
+            (10_000_001, 1, Some(("table_rows", 10_000_001))),
+            (1, 1023, None),
+            (1, 1025, Some(("columns", 1025))),
+            (3_575_418, 179, None),
+            (3_575_419, 179, Some(("table_cells", 640_000_001))),
+        ] {
+            let mut context = Context {
+                source: &source,
+                columns: Vec::new(),
+                rows: Vec::new(),
+                declared_rows: None,
+                declared_columns: 0,
+                error: None,
+            };
+            let status = unsafe {
+                metadata(
+                    rows,
+                    columns,
+                    5,
+                    std::ptr::null(),
+                    (&mut context as *mut Context<'_>).cast(),
+                )
+            };
+            match (context.error, expected) {
+                (None, None) => assert_eq!(status, 0),
+                (
+                    Some(Error::Limit {
+                        resource,
+                        actual: Some(actual),
+                        ..
+                    }),
+                    Some(expected),
+                ) => {
+                    assert_eq!(status, 1);
+                    assert_eq!((resource, actual), expected);
+                }
+                (other, _) => panic!("unexpected source header admission: {other:?}"),
+            }
+            assert!(context.columns.is_empty());
+            assert!(context.rows.is_empty());
+        }
+    }
+
+    #[test]
     fn native_xport_decodes_more_than_a_million_small_records() {
         // Independently authored v5 layout: 880 header/descriptor bytes then
         // repeated exact IBM cells for 1.5. Counting callbacks exercise the

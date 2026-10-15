@@ -308,6 +308,69 @@ fn invalid_projection_and_cell_types_produce_no_artifact() {
 }
 
 #[test]
+fn fixed_geometry_is_admitted_before_output_cell_access() {
+    use yamaa_adapters::csv_artifact::{self, Error as CsvError};
+    struct Geometry {
+        schema: TableSchema,
+        rows: usize,
+    }
+    impl TableAccess for Geometry {
+        type Error = &'static str;
+        fn schema(&self) -> &TableSchema {
+            &self.schema
+        }
+        fn row_count(&self) -> usize {
+            self.rows
+        }
+        fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<Self::Error>> {
+            Err(CellError::Access("admitted table"))
+        }
+    }
+    for (rows, columns, resource, actual, exceeds) in [
+        (9_999_999, 1, "table_rows", 9_999_999, false),
+        (10_000_001, 1, "table_rows", 10_000_001, true),
+        (1, 1023, "columns", 1023, false),
+        (1, 1025, "columns", 1025, true),
+        (3_575_418, 179, "table_cells", 639_999_822, false),
+        (3_575_419, 179, "table_cells", 640_000_001, true),
+    ] {
+        let schema = TableSchema::new(
+            (0..columns)
+                .map(|column| Column {
+                    name: format!("F{column}"),
+                    kind: ColumnType::Int,
+                })
+                .collect(),
+        )
+        .unwrap();
+        let table = Geometry { schema, rows };
+        let projection = (0..columns).collect::<Vec<_>>();
+        macro_rules! check {
+            ($result:expr, $error:ident) => {
+                match ($result, exceeds) {
+                    (
+                        Err($error::Limit {
+                            resource: observed,
+                            actual: Some(required),
+                            ..
+                        }),
+                        true,
+                    ) => assert_eq!((observed, required), (resource, actual)),
+                    (Err($error::Cell(CellError::Access("admitted table"))), false) => {}
+                    (other, _) => panic!("unexpected {resource} admission: {other:?}"),
+                }
+            };
+        }
+        check!(csv_artifact::render(&table, &projection, None), CsvError);
+        check!(render(&table, &projection), Error);
+        check!(
+            yamaa_adapters::parquet_artifact::records(&table, &projection),
+            Error
+        );
+    }
+}
+
+#[test]
 fn artifacts_keep_complete_temporal_fields_and_drop_collected_precision() {
     use yamaa_core::temporal::{Date, DatePrecision, DateTime, DateTimePrecision};
     // REQ-0570: precision is internal provenance. Even imputed values carry
