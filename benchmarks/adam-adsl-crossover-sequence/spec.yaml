@@ -1,0 +1,107 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  TA: {path: input/ta.csv, types: {TAETORD: int}}
+  TE: input/te.csv
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRT01P, TRT02P, TRTSEQP]
+
+# Treatment elements are those in an epoch whose name begins with
+# TREATMENT; screening, washout and follow-up elements are not numbered.
+# Within each arm the treatment elements are numbered in planned order.
+windows:
+  TREATMENT_ORDER:
+    group_by: [TA.STUDYID, TA.ARMCD]
+    order_by: [TA.TAETORD]
+    filter: "TA.EPOCH LIKE 'TREATMENT%'"
+
+# Each element's name comes from its one trial-elements record. Each period
+# reads the planned arm's element of that number; a subject with no planned
+# arm code matches nothing and gets an empty treatment.
+intermediates:
+  - id: ELEMENTS
+    dataset: TE
+    key: {STUDYID: TA.STUDYID, ETCD: TA.ETCD}
+    verifications:
+      - unique: [STUDYID, ETCD]
+
+  - id: PERIOD01
+    dataset: TA
+    key: {STUDYID: DM.STUDYID, ARMCD: DM.ARMCD}
+    filter: "TA.TRTNUM = 1"
+    no_match: null
+    derivations:
+      TRTNUM:
+        row_number:
+          window: TREATMENT_ORDER
+      ELEMENT: ELEMENTS.ELEMENT
+    verifications:
+      - unique: [STUDYID, ARMCD]
+
+  - id: PERIOD02
+    dataset: TA
+    key: {STUDYID: DM.STUDYID, ARMCD: DM.ARMCD}
+    filter: "TA.TRTNUM = 2"
+    no_match: null
+    derivations:
+      TRTNUM:
+        row_number:
+          window: TREATMENT_ORDER
+      ELEMENT: ELEMENTS.ELEMENT
+    verifications:
+      - unique: [STUDYID, ARMCD]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: TRT01P
+    type: str
+    label: Planned Treatment for Period 01
+    derivation: PERIOD01.ELEMENT
+    verifications:
+      allowed_values:
+        values: [Vitamin D3, Placebo]
+
+  - name: TRT02P
+    type: str
+    label: Planned Treatment for Period 02
+    derivation: PERIOD02.ELEMENT
+    verifications:
+      allowed_values:
+        values: [Vitamin D3, Placebo]
+
+  # The period treatments in period order; empty when they are.
+  - name: TRTSEQP
+    type: str
+    label: Planned Sequence of Treatments
+    derivation:
+      str_template:
+        template: "{TRT01P}/{TRT02P}"
+        missing: null
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 4
+      max: 4
+  - all_or_none:
+      id: planned-periods-complete
+      columns: [TRT01P, TRT02P, TRTSEQP]
+  - assert:
+      id: crossover-changes-treatment
+      when: "TRT02P IS NOT NULL"
+      require: "TRT02P <> TRT01P"
