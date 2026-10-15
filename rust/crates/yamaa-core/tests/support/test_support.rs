@@ -4,15 +4,15 @@
 //! These ports consume scripted outcomes once, log before each effect, and panic
 //! on an unexpected request. They perform no I/O, codec work, activation or retry.
 //! Owned errors are moved intact and need neither Clone nor Send nor Sync.
-use yamaa_core::{
-    specification::SourceDeclaration,
-    table::{CellError, TableAccess, TableSchema, ValueRef},
-    value::Value,
-};
 use std::rc::Rc;
 use std::{
     cell::{Ref, RefCell},
     marker::PhantomData,
+};
+use yamaa_core::{
+    specification::SourceDeclaration,
+    table::{CellError, TableAccess, TableSchema, ValueRef},
+    value::Value,
 };
 
 use yamaa_core::{
@@ -233,4 +233,3 @@ impl<E> TableAccess for FixtureTable<E> {
             .ok_or(CellError::OutOfBounds { row, column })
     }
 }
-

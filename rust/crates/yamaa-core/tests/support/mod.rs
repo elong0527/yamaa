@@ -6,11 +6,11 @@ use yamaa_core::{
 
 pub mod diagnostic;
 pub mod producer;
-pub mod test_support;
 pub mod producer_graph;
 pub mod project_call_compiler;
 pub mod project_codelist_compiler;
 pub mod project_environment;
+pub mod test_support;
 
 /// Construct an ordered schema independently of plan compilation.
 pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {

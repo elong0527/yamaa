@@ -86,4 +86,3 @@ pub fn reached() -> std::collections::BTreeSet<C> {
     );
     reached
 }
-

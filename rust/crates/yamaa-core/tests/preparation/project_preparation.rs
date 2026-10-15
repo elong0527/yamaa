@@ -1,4 +1,6 @@
 //! Independent application truth over native captures and normalized document fixtures.
+use crate::support::test_support::*;
+use yamaa_core::project_preparation::*;
 use yamaa_core::{
     project_environment::{Finding, LockKind},
     project_function::Language,
@@ -7,8 +9,6 @@ use yamaa_core::{
     schema::{Document, DocumentLimits, DocumentNode as N},
     value::Value,
 };
-use crate::support::test_support::*;
-use yamaa_core::project_preparation::*;
 
 enum Tree {
     Scalar(N),

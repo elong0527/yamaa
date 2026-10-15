@@ -1,13 +1,13 @@
 //! Single-consumption scripted outcomes for the actual application port traits.
 use super::*;
-use yamaa_core::function_signature::InvocationPlan;
-use yamaa_core::function_signature::ProjectInvocationPlan;
 use function_invocation::Argument;
 use function_invocation::FunctionPort;
 use function_invocation::HostError;
 use output::{ArtifactEncoder, ArtifactPort};
 use run::{SourceDecoder, SourcePort};
 use std::{collections::VecDeque, sync::Arc};
+use yamaa_core::function_signature::InvocationPlan;
+use yamaa_core::function_signature::ProjectInvocationPlan;
 
 pub struct MetadataCaptureStep<E> {
     pub kind: metadata::Kind,

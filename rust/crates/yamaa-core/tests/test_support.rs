@@ -100,13 +100,21 @@ fn shared_metadata_decoder_fake_retains_source_and_document_and_moves_nonclone_e
 
 // The fake ports' own application-boundary evidence, formerly unit tests
 // of the gated `yamaa_core::test_support` module.
-use yamaa_core::{dataset, function_invocation, specification_output as output, specification_run as run};
+use std::{collections::BTreeMap, rc::Rc, sync::Arc, vec};
+use yamaa_core::function_invocation::FailureKind;
+use yamaa_core::function_invocation::FunctionPort;
+use yamaa_core::function_invocation::HostError;
 use yamaa_core::function_signature::FunctionIdentity;
 use yamaa_core::function_signature::InvocationPlan;
 use yamaa_core::function_signature::Parameter;
 use yamaa_core::function_signature::Presence;
 use yamaa_core::function_signature::ProjectFunctionIdentity;
 use yamaa_core::function_signature::ProjectInvocationPlan;
+use yamaa_core::specification_output::{OutputReport, SaveError};
+use yamaa_core::specification_run::{CapturedAttempt, PortError, RunError};
+use yamaa_core::{
+    dataset, function_invocation, specification_output as output, specification_run as run,
+};
 use yamaa_core::{
     schema::{
         Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
@@ -115,12 +123,6 @@ use yamaa_core::{
     table::{CellError, Column, TableAccess, TableSchema},
     value::{ColumnType, Value, ValueType},
 };
-use yamaa_core::function_invocation::FailureKind;
-use yamaa_core::function_invocation::FunctionPort;
-use yamaa_core::function_invocation::HostError;
-use yamaa_core::specification_output::{OutputReport, SaveError};
-use yamaa_core::specification_run::{CapturedAttempt, PortError, RunError};
-use std::{collections::BTreeMap, rc::Rc, sync::Arc, vec};
 
 /// Deliberately neither Clone nor Send/Sync. Its allocated token pins identity.
 #[derive(Debug)]

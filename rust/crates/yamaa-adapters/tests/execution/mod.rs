@@ -40,6 +40,8 @@ mod row_intermediate_operands;
 mod row_join_keys;
 mod scoped_windows_checks;
 mod specification_run;
+mod specification_run_fixtures;
+mod specification_run_reports;
 mod temporal_arithmetic;
 mod typed_intermediate_derivations;
 
