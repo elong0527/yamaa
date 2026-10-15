@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 use yamaa_core::schema::{
-    BundleLimits, Document, DocumentNode as N, NormalizationError, SchemaModule, SchemaStructure,
+    Document, DocumentNode as N, NormalizationError, SchemaModule, SchemaStructure,
 };
 use yamaa_core::{
     inheritance as graph, inheritance_capture as app, inheritance_preparation as lifecycle,
@@ -39,7 +39,7 @@ fn document(tree: Tree) -> Document {
     }
     let mut nodes = vec![];
     let root = push(tree, &mut nodes);
-    Document::new(nodes, root, Default::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 fn field(name: &'static str, kind: &str) -> Tree {
     map(vec![(name, map(vec![("type", text(kind))]))])
@@ -97,7 +97,6 @@ fn schema() -> SchemaStructure {
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap()
 }
@@ -149,9 +148,9 @@ struct Raw {
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Event {
     Resolve(String, String),
-    Capture(String, usize),
+    Capture(String),
     Decode(String, Vec<u8>),
-    Rebase(String, String, String, usize),
+    Rebase(String, String, String),
 }
 type Log = Rc<RefCell<Vec<Event>>>;
 struct Host {
@@ -196,15 +195,11 @@ impl app::CapturePort for Host {
             display_path: format!("display/{written}"),
         })
     }
-    fn capture(
-        &mut self,
-        source: &graph::Source,
-        maximum: usize,
-    ) -> Result<Vec<u8>, graph::SourceError<Payload>> {
+    fn capture(&mut self, source: &graph::Source) -> Result<Vec<u8>, graph::SourceError<Payload>> {
         let index = self.log.borrow().len();
         self.log
             .borrow_mut()
-            .push(Event::Capture(source.identity.clone(), maximum));
+            .push(Event::Capture(source.identity.clone()));
         if let Some(error) = self.failure(index) {
             return Err(graph::SourceError::Raised(error));
         }
@@ -221,14 +216,12 @@ impl app::CapturePort for Host {
         layer: &graph::Source,
         entry: &graph::Source,
         written: &str,
-        maximum: usize,
     ) -> Result<String, Payload> {
         let index = self.log.borrow().len();
         self.log.borrow_mut().push(Event::Rebase(
             layer.identity.clone(),
             entry.identity.clone(),
             written.into(),
-            maximum,
         ));
         if let Some(error) = self.failure(index) {
             return Err(error);
@@ -238,7 +231,6 @@ impl app::CapturePort for Host {
 }
 enum CodecFailure {
     Original(Payload),
-    Limit(app::CaptureResource),
 }
 struct Decoder {
     log: Log,
@@ -262,9 +254,6 @@ impl app::DecodePort for Decoder {
     }
     fn document(raw: &Raw) -> &Document {
         &raw.document
-    }
-    fn limit_error(resource: app::CaptureResource) -> CodecFailure {
-        CodecFailure::Limit(resource)
     }
 }
 fn fixture() -> (Source, Raw, Host, Decoder) {
@@ -317,7 +306,6 @@ fn run(
     raw: &Raw,
     host: &mut Host,
     decoder: &mut Decoder,
-    limits: app::Limits,
 ) -> app::PreparationResult<Payload, CodecFailure, Raw> {
     app::prepare(
         &schema(),
@@ -326,23 +314,21 @@ fn run(
         raw,
         host,
         decoder,
-        limits,
     )
 }
 fn expected_effects() -> Vec<Event> {
     let mut events = vec![
         Event::Resolve("entry".into(), "a".into()),
-        Event::Capture("a".into(), 16_777_214),
+        Event::Capture("a".into()),
         Event::Decode("a".into(), vec![1, 2]),
         Event::Resolve("a".into(), "common".into()),
-        Event::Capture("common".into(), 16_777_212),
+        Event::Capture("common".into()),
         Event::Decode("common".into(), vec![3]),
         Event::Resolve("entry".into(), "b".into()),
-        Event::Capture("b".into(), 16_777_211),
+        Event::Capture("b".into()),
         Event::Decode("b".into(), vec![4, 5, 6]),
         Event::Resolve("b".into(), "alias".into()),
     ];
-    let mut remaining = 1_048_576;
     for (layer, paths) in [
         ("common", vec!["common.csv", "common-source.yaml"]),
         ("a", vec!["a.csv", "a-source.yaml"]),
@@ -359,13 +345,7 @@ fn expected_effects() -> Vec<Event> {
         ),
     ] {
         for path in paths {
-            events.push(Event::Rebase(
-                layer.into(),
-                "entry".into(),
-                path.into(),
-                remaining,
-            ));
-            remaining -= path.len();
+            events.push(Event::Rebase(layer.into(), "entry".into(), path.into()));
         }
     }
     events
@@ -386,7 +366,7 @@ fn complete_effects_catalog_allocations_defaults_and_distinct_orders_are_engine_
                 )
             })
             .collect();
-        let prepared = match run(&source, &raw, &mut host, &mut decoder, Default::default()) {
+        let prepared = match run(&source, &raw, &mut host, &mut decoder) {
             Ok(p) => p,
             Err(app::Error::Preparation { error, .. }) => match *error {
                 lifecycle::Error::Traversal(graph::Error::Layer { error, .. }) => {
@@ -394,7 +374,6 @@ fn complete_effects_catalog_allocations_defaults_and_distinct_orders_are_engine_
                 }
                 _ => panic!("fixture later phase"),
             },
-            Err(_) => panic!("fixture entry"),
         };
         assert_eq!(*host.log.borrow(), expected_effects());
         assert_eq!(
@@ -437,69 +416,7 @@ fn complete_effects_catalog_allocations_defaults_and_distinct_orders_are_engine_
         assert_eq!(*raw.marker, 71);
     }
 }
-#[test]
-fn raw_capture_boundaries_have_exact_equality_and_no_disallowed_decoder_effects() {
-    for (bytes, identities, expected_capture, expected_decode, resource) in [
-        (1, 65_536, 0, 0, app::CaptureResource::CapturedBytes),
-        (8, 4, 0, 0, app::CaptureResource::IdentityBytes),
-        (8, 5, 0, 0, app::CaptureResource::IdentityBytes),
-        (3, 65_536, 1, 0, app::CaptureResource::CapturedBytes),
-        (8, 12, 2, 2, app::CaptureResource::IdentityBytes),
-    ] {
-        let (source, raw, mut host, mut decoder) = fixture();
-        let result = run(
-            &source,
-            &raw,
-            &mut host,
-            &mut decoder,
-            app::Limits {
-                captured_bytes: bytes,
-                identity_bytes: identities,
-                ..Default::default()
-            },
-        );
-        let actual = match result {
-            Err(app::Error::Entry(CodecFailure::Limit(r))) => r,
-            Err(app::Error::Preparation { error, .. }) => match *error {
-                lifecycle::Error::Traversal(graph::Error::Host(app::SourceFailure::Admission(
-                    CodecFailure::Limit(r),
-                ))) => r,
-                _ => panic!("expected capture limit"),
-            },
-            _ => panic!("expected refusal"),
-        };
-        assert_eq!(actual, resource);
-        let events = host.log.borrow();
-        assert_eq!(
-            events
-                .iter()
-                .filter(|e| matches!(e, Event::Capture(..)))
-                .count(),
-            expected_capture
-        );
-        assert_eq!(
-            events
-                .iter()
-                .filter(|e| matches!(e, Event::Decode(..)))
-                .count(),
-            expected_decode
-        );
-        assert!(!events.iter().any(|e| matches!(e, Event::Rebase(..))));
-    }
-    let (source, raw, mut host, mut decoder) = fixture();
-    assert!(run(
-        &source,
-        &raw,
-        &mut host,
-        &mut decoder,
-        app::Limits {
-            captured_bytes: 8,
-            identity_bytes: 13,
-            ..Default::default()
-        }
-    )
-    .is_ok());
-}
+
 #[test]
 fn every_opaque_effect_error_keeps_original_allocation_and_exact_completed_catalog_prefix() {
     for index in [0, 1, 3, 4, 6, 7, 9, 10, 20] {
@@ -517,7 +434,7 @@ fn every_opaque_effect_error_keeps_original_allocation_and_exact_completed_catal
         let Err(app::Error::Preparation {
             error,
             captured_parents,
-        }) = run(&source, &raw, &mut host, &mut decoder, Default::default())
+        }) = run(&source, &raw, &mut host, &mut decoder)
         else {
             panic!()
         };
@@ -549,7 +466,7 @@ fn original_decoder_failure_and_unavailable_roles_stop_before_later_authority() 
     let Err(app::Error::Preparation {
         error,
         captured_parents,
-    }) = run(&source, &raw, &mut host, &mut decoder, Default::default())
+    }) = run(&source, &raw, &mut host, &mut decoder)
     else {
         panic!()
     };
@@ -569,7 +486,7 @@ fn original_decoder_failure_and_unavailable_roles_stop_before_later_authority() 
         let Err(app::Error::Preparation {
             error,
             captured_parents,
-        }) = run(&source, &raw, &mut host, &mut decoder, Default::default())
+        }) = run(&source, &raw, &mut host, &mut decoder)
         else {
             panic!()
         };
@@ -596,7 +513,7 @@ fn admitted_parent_raw_is_retained_when_later_normalization_fails_before_descend
     let Err(app::Error::Preparation {
         error,
         captured_parents,
-    }) = run(&source, &raw, &mut host, &mut decoder, Default::default())
+    }) = run(&source, &raw, &mut host, &mut decoder)
     else {
         panic!()
     };
@@ -615,67 +532,4 @@ fn admitted_parent_raw_is_retained_when_later_normalization_fails_before_descend
     assert_eq!(captured_parents.len(), 1);
     assert_eq!(captured_parents[0].raw().document.nodes().as_ptr(), nodes);
     assert_eq!(&*host.log.borrow(), &expected_effects()[..3]);
-}
-#[test]
-fn traversal_and_rebase_budgets_remain_separate_from_raw_capture_policies() {
-    let (source, raw, mut host, mut decoder) = fixture();
-    let Err(app::Error::Preparation {
-        error,
-        captured_parents,
-    }) = run(
-        &source,
-        &raw,
-        &mut host,
-        &mut decoder,
-        app::Limits {
-            preparation: lifecycle::Limits {
-                traversal: graph::Limits {
-                    layers: 1,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    )
-    else {
-        panic!()
-    };
-    assert!(matches!(
-        *error,
-        lifecycle::Error::Traversal(graph::Error::Resource(graph::Exhausted {
-            resource: graph::Resource::Layers,
-            limit: 1
-        }))
-    ));
-    assert!(captured_parents.is_empty());
-    assert_eq!(&*host.log.borrow(), &expected_effects()[..1]);
-    let (source, raw, mut host, mut decoder) = fixture();
-    let Err(app::Error::Preparation {
-        error,
-        captured_parents,
-    }) = run(
-        &source,
-        &raw,
-        &mut host,
-        &mut decoder,
-        app::Limits {
-            preparation: lifecycle::Limits {
-                rebased_bytes: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    )
-    else {
-        panic!()
-    };
-    assert!(matches!(*error, lifecycle::Error::PathBytes));
-    assert_eq!(captured_parents.len(), 3);
-    let events = host.log.borrow();
-    assert_eq!(&events[..10], &expected_effects()[..10]);
-    assert_eq!(
-        events[10],
-        Event::Rebase("common".into(), "entry".into(), "common.csv".into(), 0)
-    );
 }

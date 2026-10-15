@@ -1,8 +1,6 @@
 use yamaa_core::{
     producer_admission::{Candidate, WrittenPath},
-    schema::{
-        Document, DocumentLimits, DocumentNode as N, SpecificationDocument, ValidationBudget,
-    },
+    schema::{Document, DocumentNode as N, SpecificationDocument},
 };
 pub enum Tree<'a> {
     Text(&'a str),
@@ -86,12 +84,9 @@ pub fn document(
     }
     let mut nodes = Vec::new();
     let root = Map(fields).append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, DocumentLimits::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 pub fn producer() -> SpecificationDocument {
     use Tree::*;

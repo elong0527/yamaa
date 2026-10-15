@@ -1,9 +1,7 @@
 //! Independent logical documents exercise the complete standalone application.
 use yamaa_core::schema::{
-    BundleLimits, Document, DocumentLimits, DocumentNode as N, NormalizationBudget,
-    NormalizationError, NormalizationLimits, NormalizationResource, SchemaContext as C,
-    SchemaDiagnostic, SchemaModule, SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
-    ValidationLimits, WindowReference,
+    Document, DocumentNode as N, NormalizationError, SchemaContext as C, SchemaDiagnostic,
+    SchemaModule, SchemaOrigin, SchemaSource, SchemaStructure, WindowReference,
 };
 use yamaa_core::standalone_preparation::{prepare, Error};
 
@@ -36,7 +34,7 @@ fn document(value: V) -> Document {
     }
     let mut nodes = Vec::new();
     let root = push(value, &mut nodes);
-    Document::new(nodes, root, DocumentLimits::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 #[derive(Debug, PartialEq)]
 enum Logical {
@@ -143,7 +141,6 @@ fn schema(default_domain: bool, loose_domain: bool) -> SchemaStructure {
         }],
         0,
         "root",
-        BundleLimits::default(),
     )
     .unwrap()
 }
@@ -163,12 +160,7 @@ fn basic_fields() -> Vec<(&'static str, V)> {
         ("columns", List(vec![])),
     ]
 }
-fn basic() -> Document {
-    document(Map(basic_fields()))
-}
-fn budget() -> NormalizationBudget {
-    NormalizationBudget::new(NormalizationLimits::default())
-}
+
 fn column(name: &'static str, window: V) -> V {
     Map(vec![
         ("name", Text(name)),
@@ -228,7 +220,7 @@ fn success_moves_raw_arena_and_retains_complete_default_and_window_provenance() 
     let raw_pointer = raw.nodes().as_ptr();
     let raw_expected = raw.clone();
     let schema = schema(true, false);
-    let prepared = prepare(&schema, raw, &mut budget()).unwrap();
+    let prepared = prepare(&schema, raw).unwrap();
     assert_eq!(prepared.raw().nodes().as_ptr(), raw_pointer);
     assert_eq!(prepared.raw(), &raw_expected);
     let mut expected = basic_fields();
@@ -404,7 +396,7 @@ fn success_moves_raw_arena_and_retains_complete_default_and_window_provenance() 
 }
 
 #[test]
-fn parents_presence_beats_all_semantic_and_budget_failures_without_charges() {
+fn parents_presence_selects_inheritance_before_standalone_semantic_checks() {
     let schema = schema(false, false);
     for parents in [Null, List(vec![]), List(vec![Text("parent.yaml")])] {
         let raw = document(Map(vec![
@@ -412,24 +404,11 @@ fn parents_presence_beats_all_semantic_and_budget_failures_without_charges() {
             ("parents", parents),
             ("domain", Int("8")),
         ]));
-        let mut budget = NormalizationBudget::new(NormalizationLimits {
-            validation: ValidationLimits {
-                work: 0,
-                diagnostics: 0,
-                ..Default::default()
-            },
-            storage: DocumentLimits {
-                nodes: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        });
+
         assert!(matches!(
-            prepare(&schema, raw, &mut budget),
+            prepare(&schema, raw),
             Err(Error::InheritanceRequired)
         ));
-        assert_eq!(budget.storage_used(), (0, 0, 0));
-        assert_eq!(budget.work_used(), 0);
     }
 }
 
@@ -443,7 +422,7 @@ fn normalization_findings_keep_original_raw_allocation_and_full_version_preceden
     let pointer = raw.nodes().as_ptr();
     let expected = raw.clone();
     let actual_node = field_id(&raw, &["schema_version"]);
-    let Err(Error::Normalize(failure)) = prepare(&schema(false, false), raw, &mut budget()) else {
+    let Err(Error::Normalize(failure)) = prepare(&schema(false, false), raw) else {
         panic!()
     };
     let held = failure.input.unwrap();
@@ -470,8 +449,7 @@ fn strict_windows_preserve_complete_order_and_precede_model_findings() {
         column("Z", Text("SECOND")),
         column("A", Text("FIRST")),
     ]);
-    let Err(Error::Normalize(failure)) =
-        prepare(&schema(false, false), document(Map(fields)), &mut budget())
+    let Err(Error::Normalize(failure)) = prepare(&schema(false, false), document(Map(fields)))
     else {
         panic!()
     };
@@ -487,9 +465,7 @@ fn model_findings_remain_complete_and_have_no_document_value_references() {
     let mut fields = basic_fields();
     fields[1].1 = Int("7");
     fields[4].1 = Map(vec![]);
-    let Err(Error::Model(findings)) =
-        prepare(&schema(false, true), document(Map(fields)), &mut budget())
-    else {
+    let Err(Error::Model(findings)) = prepare(&schema(false, true), document(Map(fields))) else {
         panic!()
     };
     let finding = |path: &str, reason: &str| SchemaDiagnostic {
@@ -509,166 +485,4 @@ fn model_findings_remain_complete_and_have_no_document_value_references() {
             finding("output.columns", "Field required")
         ]
     );
-}
-
-#[test]
-fn storage_boundaries_are_inclusive_cumulative_and_failed_attempts_keep_charges() {
-    let schema = schema(false, false);
-    let raw = basic();
-    assert_eq!(raw.nodes().len(), 17);
-    // The unchanged 17-node normalization plus 17-node window-copy checkpoint
-    // share storage. They cannot each receive a fresh 33-node allowance.
-    for nodes in [17, 33] {
-        let mut budget = NormalizationBudget::new(NormalizationLimits {
-            storage: DocumentLimits {
-                nodes,
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-        let Err(Error::Normalize(failure)) = prepare(&schema, raw.clone(), &mut budget) else {
-            panic!()
-        };
-        assert_eq!(
-            failure.error,
-            NormalizationError::Limit {
-                resource: NormalizationResource::Nodes,
-                limit: nodes
-            }
-        );
-        assert!(failure.input.is_none());
-        assert_eq!(budget.storage_used().0, nodes);
-        assert!(prepare(&schema, raw.clone(), &mut budget).is_err());
-        assert_eq!(budget.storage_used().0, nodes);
-    }
-    let mut budget = NormalizationBudget::new(NormalizationLimits {
-        storage: DocumentLimits {
-            nodes: 34,
-            ..Default::default()
-        },
-        ..Default::default()
-    });
-    prepare(&schema, raw, &mut budget).unwrap();
-    assert_eq!(budget.storage_used().0, 34);
-}
-
-#[test]
-fn shared_work_and_diagnostic_policy_failures_never_become_authored_findings() {
-    let schema = schema(false, false);
-    let mut unlimited = budget();
-    prepare(&schema, basic(), &mut unlimited).unwrap();
-    let work = unlimited.work_used();
-    let mut exact = NormalizationBudget::new(NormalizationLimits {
-        validation: ValidationLimits {
-            work,
-            ..Default::default()
-        },
-        ..Default::default()
-    });
-    prepare(&schema, basic(), &mut exact).unwrap();
-    assert_eq!(exact.work_used(), work);
-    assert!(prepare(&schema, basic(), &mut exact).is_err());
-    let mut short = NormalizationBudget::new(NormalizationLimits {
-        validation: ValidationLimits {
-            work: work - 1,
-            ..Default::default()
-        },
-        ..Default::default()
-    });
-    assert!(matches!(
-        prepare(&schema, basic(), &mut short),
-        Err(Error::Validation(ValidationError::Constraint(_)))
-    ));
-    let mut fields = basic_fields();
-    fields.last_mut().unwrap().1 = List(vec![
-        column("Z", Text("SECOND")),
-        column("A", Text("FIRST")),
-    ]);
-    let mut budget = NormalizationBudget::new(NormalizationLimits {
-        validation: ValidationLimits {
-            diagnostics: 1,
-            ..Default::default()
-        },
-        ..Default::default()
-    });
-    let Err(Error::Normalize(failure)) = prepare(&schema, document(Map(fields)), &mut budget)
-    else {
-        panic!()
-    };
-    assert_eq!(
-        failure.error,
-        NormalizationError::Validation(ValidationError::Diagnostics { limit: 1 })
-    );
-    assert!(failure.input.is_none());
-    assert_eq!(budget.validation_scope().diagnostics_used(), 1);
-    let mut fields = basic_fields();
-    fields[4].1 = Map(vec![]);
-    let mut budget = NormalizationBudget::new(NormalizationLimits {
-        validation: ValidationLimits {
-            diagnostics: 0,
-            ..Default::default()
-        },
-        ..Default::default()
-    });
-    assert!(matches!(
-        prepare(&schema, document(Map(fields)), &mut budget),
-        Err(Error::Validation(ValidationError::Diagnostics { limit: 0 }))
-    ));
-}
-
-#[test]
-fn byte_and_edge_limits_keep_the_existing_shared_copy_boundary() {
-    let raw = basic();
-    let bytes = 2 * raw
-        .nodes()
-        .iter()
-        .map(|node| match node {
-            N::Text(text) | N::Integer(text) => text.len(),
-            _ => 0,
-        })
-        .sum::<usize>();
-    let edges = 2 * raw
-        .nodes()
-        .iter()
-        .map(|node| match node {
-            N::Mapping(items) => 2 * items.len(),
-            N::Sequence(items) => items.len(),
-            _ => 0,
-        })
-        .sum::<usize>();
-    for (resource, exact) in [
-        (NormalizationResource::TextBytes, bytes),
-        (NormalizationResource::Edges, edges),
-    ] {
-        for allowance in [exact - 1, exact] {
-            let mut limits = NormalizationLimits::default();
-            match resource {
-                NormalizationResource::TextBytes => limits.storage.text_bytes = allowance,
-                NormalizationResource::Edges => limits.storage.edges = allowance,
-                _ => unreachable!(),
-            }
-            let mut budget = NormalizationBudget::new(limits);
-            let result = prepare(&schema(false, false), raw.clone(), &mut budget);
-            if allowance == exact {
-                result.unwrap();
-                assert_eq!(budget.storage_used(), (34, bytes, edges));
-            } else {
-                let Err(Error::Normalize(failure)) = result else {
-                    panic!()
-                };
-                assert_eq!(
-                    failure.error,
-                    NormalizationError::Limit {
-                        resource,
-                        limit: allowance
-                    }
-                );
-                assert!(failure.input.is_none());
-                assert!(
-                    budget.storage_used().0 > 17,
-                    "failure must occur in the second shared pass"
-                );
-            }
-        }
-    }
 }

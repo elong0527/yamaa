@@ -1,14 +1,12 @@
 //! Independent logical truth and physical codec effects for live metadata preparation.
 use std::rc::Rc;
 use yamaa_core::schema::{
-    BundleLimits, ConstraintError, Document, DocumentLimits, DocumentNode as N,
-    NormalizationBudget, NormalizationError, NormalizationLimits, NormalizationResource,
-    SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaOrigin, SchemaSource,
-    SchemaStructure, ValidationError, ValidationLimits,
+    Document, DocumentNode as N, NormalizationError, SchemaContext as C, SchemaDiagnostic,
+    SchemaModule, SchemaOrigin, SchemaSource, SchemaStructure,
 };
 use yamaa_core::{
     project_preparation::Source,
-    structural_preparation::{self as application, DecodePort, Decoded, Error, Limits, Selection},
+    structural_preparation::{self as application, DecodePort, Decoded, Error, Selection},
 };
 
 #[derive(Clone)]
@@ -40,7 +38,7 @@ fn document(value: V) -> Document {
     }
     let mut nodes = Vec::new();
     let root = push(value, &mut nodes);
-    Document::new(nodes, root, DocumentLimits::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 #[derive(Debug, PartialEq)]
 enum Logical {
@@ -113,7 +111,6 @@ fn schema(bad_default: bool) -> SchemaStructure {
         }],
         0,
         "environment_class",
-        BundleLimits::default(),
     )
     .unwrap()
 }
@@ -182,55 +179,21 @@ fn unknown(path: &str, name: &str, class: &str) -> SchemaDiagnostic {
 }
 
 #[test]
-fn named_guards_precede_decode_source_admission_defaults_and_every_work_charge() {
+fn named_authority_guards_precede_decode_and_defaults() {
     let schema = schema(true);
-    let limits = Limits {
-        class_name_bytes: 32,
-        normalization: NormalizationLimits {
-            validation: ValidationLimits {
-                work: 0,
-                diagnostics: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    };
+
     for name in ["missing", "str", "function_alias", ""] {
         let mut codec = Codec::success(function());
-        let error = application::prepare(
-            &schema,
-            source(),
-            Selection::NamedClass(name),
-            limits,
-            &mut codec,
-        );
+        let error =
+            application::prepare(&schema, source(), Selection::NamedClass(name), &mut codec);
         assert!(matches!(error,Err(Error::UnknownClass(actual)) if actual==name));
         assert!(codec.calls.is_empty());
         assert!(codec.reply.is_some());
     }
-    let mut codec = Codec::success(function());
-    let wide = "X".repeat(33);
-    assert!(matches!(
-        application::prepare(
-            &schema,
-            source(),
-            Selection::NamedClass(&wide),
-            limits,
-            &mut codec
-        ),
-        Err(Error::ClassNameLimit)
-    ));
-    assert!(codec.calls.is_empty());
     for name in ["environment_class", "versioned_other"] {
         let mut codec = Codec::success(function());
         assert!(matches!(
-            application::prepare(
-                &schema,
-                source(),
-                Selection::NamedClass(name),
-                limits,
-                &mut codec
-            ),
+            application::prepare(&schema, source(), Selection::NamedClass(name), &mut codec),
             Err(Error::VersionedRootRequired)
         ));
         assert!(codec.calls.is_empty());
@@ -253,18 +216,9 @@ fn physical_codec_runs_once_and_original_opaque_error_precedes_query_and_default
         let bytes = entry.bytes.as_ptr() as usize;
         let identity = entry.identity.as_ptr() as usize;
         let mut codec = Codec::raised(value);
-        let limits = Limits {
-            normalization: NormalizationLimits {
-                validation: ValidationLimits {
-                    work: 0,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            ..Default::default()
-        };
+
         let Err(Error::Decode(original)) =
-            application::prepare(&schema, entry, selection, limits, &mut codec)
+            application::prepare(&schema, entry, selection, &mut codec)
         else {
             panic!()
         };
@@ -298,7 +252,6 @@ fn success_moves_every_original_allocation_and_complete_default_origin_vector() 
         &schema,
         entry,
         Selection::NamedClass("function_definition_class"),
-        Limits::default(),
         &mut codec,
     ));
     assert_eq!(result.source().bytes.as_ptr(), bytes);
@@ -420,7 +373,7 @@ fn semantic_failures_move_raw_arena_and_full_ordered_findings_without_partial_ou
         let identity = entry.identity.as_ptr();
         let mut codec = Codec::success(raw);
         let Err(Error::Findings(held)) =
-            application::prepare(&schema, entry, selection, Limits::default(), &mut codec)
+            application::prepare(&schema, entry, selection, &mut codec)
         else {
             panic!()
         };
@@ -451,10 +404,6 @@ fn structural_root_has_no_named_name_guard_and_never_admits_a_model_or_window() 
         &schema,
         source(),
         Selection::StructuralRoot,
-        Limits {
-            class_name_bytes: 0,
-            ..Default::default()
-        },
         &mut codec,
     ));
     assert_eq!(result.raw().nodes().as_ptr(), pointer);
@@ -479,83 +428,6 @@ fn structural_root_has_no_named_name_guard_and_never_admits_a_model_or_window() 
 }
 
 #[test]
-fn query_work_and_normalization_share_one_scope_and_keep_failure_categories() {
-    let schema = schema(false);
-    let class = "function_definition_class";
-    // Independent closed single-name query has one type, one parsed node and
-    // two scans of the 25-byte class name: 1+(len+1)+1+len = 53.
-    let query_work = 2 * class.len() + 3;
-    assert_eq!(query_work, 53);
-    for work in [query_work - 1, query_work] {
-        let mut codec = Codec::success(function());
-        let limits = Limits {
-            normalization: NormalizationLimits {
-                validation: ValidationLimits {
-                    work,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let error = application::prepare(
-            &schema,
-            source(),
-            Selection::NamedClass(class),
-            limits,
-            &mut codec,
-        );
-        if work < query_work {
-            assert!(
-                matches!(error,Err(Error::Validation(ValidationError::Constraint(ConstraintError::Work{limit})) ) if limit==work)
-            );
-        } else {
-            assert!(
-                matches!(error,Err(Error::Normalize(NormalizationError::Validation(ValidationError::Constraint(ConstraintError::Work{limit})))) if limit==work)
-            );
-        }
-        assert_eq!(codec.calls.len(), 1);
-    }
-    let mut admitted = NormalizationBudget::new(NormalizationLimits::default());
-    let types = schema
-        .parse_query_types(&[class.into()], admitted.validation_scope())
-        .unwrap();
-    schema
-        .normalize_types(&types, &function(), function().root(), false, &mut admitted)
-        .unwrap();
-    let exact = admitted.work_used();
-    // The preceding independently counted query boundary establishes phase
-    // precedence; this measured inclusive total pins current policy compatibility.
-    for work in [exact - 1, exact] {
-        let mut codec = Codec::success(function());
-        let limits = Limits {
-            normalization: NormalizationLimits {
-                validation: ValidationLimits {
-                    work,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let result = application::prepare(
-            &schema,
-            source(),
-            Selection::NamedClass(class),
-            limits,
-            &mut codec,
-        );
-        if work == exact {
-            unwrap(result);
-        } else {
-            assert!(
-                matches!(result,Err(Error::Normalize(NormalizationError::Validation(ValidationError::Constraint(ConstraintError::Work{limit})))) if limit==work)
-            );
-        }
-    }
-}
-
-#[test]
 fn defaults_keep_their_post_decode_post_query_checkpoint_and_original_typed_payload() {
     let schema = schema(true);
     for selection in [
@@ -565,7 +437,7 @@ fn defaults_keep_their_post_decode_post_query_checkpoint_and_original_typed_payl
         let raw = document(Map(vec![("schema_version", Text("99.0"))]));
         let mut codec = Codec::success(raw);
         let Err(Error::Normalize(NormalizationError::Defaults(defaults))) =
-            application::prepare(&schema, source(), selection, Limits::default(), &mut codec)
+            application::prepare(&schema, source(), selection, &mut codec)
         else {
             panic!()
         };
@@ -586,164 +458,4 @@ fn defaults_keep_their_post_decode_post_query_checkpoint_and_original_typed_payl
         );
         assert_eq!(codec.calls.len(), 1);
     }
-    let mut codec = Codec::success(function());
-    let limits = Limits {
-        normalization: NormalizationLimits {
-            validation: ValidationLimits {
-                work: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    assert!(matches!(
-        application::prepare(
-            &schema,
-            source(),
-            Selection::NamedClass("function_definition_class"),
-            limits,
-            &mut codec
-        ),
-        Err(Error::Validation(ValidationError::Constraint(
-            ConstraintError::Work { limit: 0 }
-        )))
-    ));
-}
-
-#[test]
-fn storage_and_late_whole_finding_limits_remain_explicit_refusals() {
-    let schema = schema(false);
-    let exact = document(Map(vec![
-        ("function", Text("program.constant")),
-        ("returns", Text("int")),
-        ("flag", Bool(false)),
-    ]));
-    let bytes = exact
-        .nodes()
-        .iter()
-        .map(|n| match n {
-            N::Text(v) => v.len(),
-            _ => 0,
-        })
-        .sum::<usize>();
-    let edges = 6;
-    for (resource, maximum) in [
-        (NormalizationResource::Nodes, 7),
-        (NormalizationResource::TextBytes, bytes),
-        (NormalizationResource::Edges, edges),
-    ] {
-        for allowance in [maximum - 1, maximum] {
-            let mut limits = Limits::default();
-            match resource {
-                NormalizationResource::Nodes => limits.normalization.storage.nodes = allowance,
-                NormalizationResource::TextBytes => {
-                    limits.normalization.storage.text_bytes = allowance
-                }
-                NormalizationResource::Edges => limits.normalization.storage.edges = allowance,
-                _ => unreachable!(),
-            };
-            let mut codec = Codec::success(function());
-            let result = application::prepare(
-                &schema,
-                source(),
-                Selection::NamedClass("function_definition_class"),
-                limits,
-                &mut codec,
-            );
-            if allowance == maximum {
-                unwrap(result);
-            } else {
-                assert!(
-                    matches!(result,Err(Error::Normalize(NormalizationError::Limit{resource:actual,limit})) if actual==resource && limit==allowance)
-                );
-            }
-            assert_eq!(codec.calls.len(), 1);
-        }
-    }
-    let raw = document(Map(vec![
-        ("schema_version", Text("1.0")),
-        ("first", Text("extra")),
-        ("second", Text("extra")),
-    ]));
-    let mut codec = Codec::success(raw);
-    let limits = Limits {
-        normalization: NormalizationLimits {
-            validation: ValidationLimits {
-                diagnostics: 1,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    assert!(matches!(
-        application::prepare(
-            &schema,
-            source(),
-            Selection::StructuralRoot,
-            limits,
-            &mut codec
-        ),
-        Err(Error::Normalize(NormalizationError::Validation(
-            ValidationError::Diagnostics { limit: 1 }
-        )))
-    ));
-    assert_eq!(codec.calls.len(), 1);
-}
-
-#[test]
-fn late_diagnostic_text_refusal_keeps_the_complete_failed_report_unavailable() {
-    let schema = schema(false);
-    let limits = Limits {
-        normalization: NormalizationLimits {
-            validation: ValidationLimits {
-                diagnostic_text_bytes: 512,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    let first = document(Map(vec![
-        ("schema_version", Text("1.0")),
-        ("first", Text("extra")),
-    ]));
-    let mut codec = Codec::success(first);
-    let Err(Error::Findings(failure)) = application::prepare(
-        &schema,
-        source(),
-        Selection::StructuralRoot,
-        limits,
-        &mut codec,
-    ) else {
-        panic!("the first complete finding fits")
-    };
-    assert_eq!(
-        failure.findings(),
-        &[unknown("first", "first", "environment_class")]
-    );
-    assert_eq!(codec.calls.len(), 1);
-    // The later authored key alone exceeds the entire existing text allowance.
-    // The first finding is fully admitted; the second refuses the whole report.
-    let wide: &'static str = Box::leak("second".repeat(100).into_boxed_str());
-    let both = document(Map(vec![
-        ("schema_version", Text("1.0")),
-        ("first", Text("extra")),
-        (wide, Text("extra")),
-    ]));
-    let mut codec = Codec::success(both);
-    assert!(matches!(
-        application::prepare(
-            &schema,
-            source(),
-            Selection::StructuralRoot,
-            limits,
-            &mut codec
-        ),
-        Err(Error::Normalize(NormalizationError::Validation(
-            ValidationError::DiagnosticText { limit: 512 }
-        )))
-    ));
-    assert_eq!(codec.calls.len(), 1);
 }

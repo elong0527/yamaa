@@ -9,14 +9,13 @@ use yamaa_core::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Event {
     Resolve(Option<String>, String),
-    Entry(Option<String>, String, usize),
+    Entry(Option<String>, String),
     Service,
     Canonical(String, String),
-    Text(usize),
-    Parent(String, String, usize),
-    Alias(String, String, usize),
+    Parent(String, String),
+    Alias(String, String),
     Base(String),
-    Rebase(String, String, String, usize),
+    Rebase(String, String, String),
 }
 type Log = Rc<RefCell<Vec<Event>>>;
 // These payloads deliberately have no Debug/Clone and are neither Send nor Sync.
@@ -37,10 +36,6 @@ struct Native {
     entry: Option<Vec<u8>>,
     parents: BTreeMap<String, Vec<u8>>,
     fault: Option<(usize, Fault)>,
-    text: usize,
-    work: usize,
-    text_limit: usize,
-    work_limit: usize,
     identity_pointer: Option<*const u8>,
     display_pointer: Option<*const u8>,
 }
@@ -60,17 +55,8 @@ impl app::NativePort for Native {
         self.event(Event::Resolve(declaring.map(Into::into), written.into()))?;
         Ok("/study/entry".into())
     }
-    fn capture_entry(
-        &mut self,
-        declaring: Option<&str>,
-        written: &str,
-        maximum: usize,
-    ) -> Result<Vec<u8>, Fault> {
-        self.event(Event::Entry(
-            declaring.map(Into::into),
-            written.into(),
-            maximum,
-        ))?;
+    fn capture_entry(&mut self, declaring: Option<&str>, written: &str) -> Result<Vec<u8>, Fault> {
+        self.event(Event::Entry(declaring.map(Into::into), written.into()))?;
         Ok(self.entry.take().unwrap())
     }
     fn canonicalize(
@@ -89,26 +75,13 @@ impl app::NativePort for Native {
             display_path,
         })
     }
-    fn admit_alias_text(&mut self, bytes: usize) -> Result<(), SourceError<Fault>> {
-        self.event(Event::Text(bytes))
-            .map_err(SourceError::Raised)?;
-        if bytes > self.text_limit.saturating_sub(self.text) {
-            return Err(SourceError::Raised(Fault::new()));
-        }
-        self.text += bytes;
-        if bytes > self.work_limit.saturating_sub(self.work) {
-            return Err(SourceError::Raised(Fault::new()));
-        }
-        self.work += bytes;
-        Ok(())
-    }
+
     fn capture_parent(
         &mut self,
         declaring: &str,
         written: &str,
-        maximum: usize,
     ) -> Result<Vec<u8>, SourceError<Fault>> {
-        self.event(Event::Parent(declaring.into(), written.into(), maximum))
+        self.event(Event::Parent(declaring.into(), written.into()))
             .map_err(SourceError::Raised)?;
         let key = if written.starts_with('b') { "B" } else { "A" };
         Ok(self.parents.remove(key).unwrap())
@@ -118,23 +91,16 @@ impl app::NativePort for Native {
         layer: &Identity,
         entry: &Identity,
         written: &str,
-        maximum: usize,
     ) -> Result<String, Fault> {
         self.event(Event::Rebase(
             layer.identity.clone(),
             entry.identity.clone(),
             written.into(),
-            maximum,
         ))?;
         Ok(written.into())
     }
-    fn accept_alias(
-        &mut self,
-        declaring: &str,
-        written: &str,
-        maximum: usize,
-    ) -> Result<(), Fault> {
-        self.event(Event::Alias(declaring.into(), written.into(), maximum))
+    fn accept_alias(&mut self, declaring: &str, written: &str) -> Result<(), Fault> {
+        self.event(Event::Alias(declaring.into(), written.into()))
     }
     fn select_entry_base(&mut self, identity: &str) -> Result<(), Fault> {
         self.event(Event::Base(identity.into()))
@@ -169,8 +135,6 @@ struct Documents {
     source_pointer: Option<*const u8>,
     display_pointer: Option<*const u8>,
     parent_pointer: Option<*const u8>,
-    continuation_probe: bool,
-    missing_after_refusal: bool,
 }
 impl app::DocumentPort<Fault> for Documents {
     type Prepared = Prepared;
@@ -189,18 +153,6 @@ impl app::DocumentPort<Fault> for Documents {
             let identity = match port.canonicalize(&source.identity, written) {
                 Ok(source) => source,
                 Err(SourceError::Raised(error)) => {
-                    if self.continuation_probe {
-                        self.missing_after_refusal = matches!(
-                            port.capture(
-                                &Identity {
-                                    identity: "A".into(),
-                                    display_path: "held".into()
-                                },
-                                17
-                            ),
-                            Err(SourceError::Raised(_))
-                        );
-                    }
                     return Err(Failure::Parent(error));
                 }
                 Err(SourceError::Unavailable) => return Err(Failure::Unavailable),
@@ -212,7 +164,7 @@ impl app::DocumentPort<Fault> for Documents {
             {
                 continue;
             }
-            let bytes = port.capture(&identity, 17).map_err(|error| match error {
+            let bytes = port.capture(&identity).map_err(|error| match error {
                 SourceError::Raised(error) => Failure::Parent(error),
                 SourceError::Unavailable => Failure::Unavailable,
             })?;
@@ -245,10 +197,6 @@ fn setup(written: &[&str]) -> (Native, Documents, Log) {
                 ("B".into(), b"b".to_vec()),
             ]),
             fault: None,
-            text: 0,
-            work: 0,
-            text_limit: usize::MAX,
-            work_limit: usize::MAX,
             identity_pointer: None,
             display_pointer: None,
         },
@@ -260,8 +208,6 @@ fn setup(written: &[&str]) -> (Native, Documents, Log) {
             source_pointer: None,
             display_pointer: None,
             parent_pointer: None,
-            continuation_probe: false,
-            missing_after_refusal: false,
         },
         log,
     )
@@ -270,7 +216,7 @@ fn run(
     native: &mut Native,
     documents: &mut Documents,
 ) -> Result<Prepared, app::Error<Fault, Failure>> {
-    app::prepare(native, documents, None, "root.yaml", 16_777_216)
+    app::prepare(native, documents, None, "root.yaml")
 }
 #[test]
 fn exact_effect_tape_preserves_duplicates_first_capture_and_success_aliases_before_base() {
@@ -297,28 +243,20 @@ fn exact_effect_tape_preserves_duplicates_first_capture_and_success_aliases_befo
         *log.borrow(),
         vec![
             Event::Resolve(None, "root.yaml".into()),
-            Event::Entry(None, "root.yaml".into(), 16_777_216),
+            Event::Entry(None, "root.yaml".into()),
             Event::Service,
             Event::Canonical("/study/entry".into(), "a".into()),
-            Event::Text(15),
-            Event::Text(14),
-            Event::Parent("/study/entry".into(), "a".into(), 17),
+            Event::Parent("/study/entry".into(), "a".into()),
             Event::Canonical("/study/entry".into(), "./a".into()),
-            Event::Text(17),
-            Event::Text(16),
             Event::Canonical("/study/entry".into(), "a".into()),
-            Event::Text(15),
             Event::Canonical("/study/entry".into(), "b".into()),
-            Event::Text(15),
-            Event::Text(14),
-            Event::Parent("/study/entry".into(), "b".into(), 17),
-            Event::Alias("/study/entry".into(), "a".into(), 10),
-            Event::Alias("/study/entry".into(), "./a".into(), 10),
-            Event::Alias("/study/entry".into(), "b".into(), 1),
+            Event::Parent("/study/entry".into(), "b".into()),
+            Event::Alias("/study/entry".into(), "a".into()),
+            Event::Alias("/study/entry".into(), "./a".into()),
+            Event::Alias("/study/entry".into(), "b".into()),
             Event::Base("/study/entry".into()),
         ]
     );
-    assert_eq!((native.text, native.work), (106, 106));
 }
 #[test]
 fn declaring_entry_keeps_authored_spelling_and_service_waits_for_entry_capture() {
@@ -327,19 +265,14 @@ fn declaring_entry_keeps_authored_spelling_and_service_waits_for_entry_capture()
         &mut native,
         &mut documents,
         Some("/meta/original"),
-        "../study/root.yaml",
-        3
+        "../study/root.yaml"
     )
     .is_ok());
     assert_eq!(
         *log.borrow(),
         vec![
             Event::Resolve(Some("/meta/original".into()), "../study/root.yaml".into()),
-            Event::Entry(
-                Some("/meta/original".into()),
-                "../study/root.yaml".into(),
-                3
-            ),
+            Event::Entry(Some("/meta/original".into()), "../study/root.yaml".into()),
             Event::Service,
             Event::Base("/study/entry".into())
         ]
@@ -385,59 +318,13 @@ fn semantic_rejection_preserves_original_error_and_grants_no_alias_or_base_autho
         .iter()
         .any(|e| matches!(e, Event::Alias(..) | Event::Base(..))));
 }
-#[test]
-fn alias_metadata_exact_and_one_short_limits_keep_failed_text_without_inserting_ledger() {
-    for (text_limit, work_limit, success, text, work) in [
-        (29, 29, true, 29, 29),
-        (28, 29, false, 15, 15),
-        (29, 28, false, 29, 15),
-    ] {
-        let (mut native, mut documents, log) = setup(&["a"]);
-        native.text_limit = text_limit;
-        native.work_limit = work_limit;
-        documents.continuation_probe = true;
-        assert_eq!(run(&mut native, &mut documents).is_ok(), success);
-        assert_eq!((native.text, native.work), (text, work));
-        if !success {
-            assert!(documents.missing_after_refusal);
-            assert!(!log
-                .borrow()
-                .iter()
-                .any(|e| matches!(e, Event::Parent(..) | Event::Alias(..) | Event::Base(..))));
-        }
-    }
-}
-#[test]
-fn late_distinct_alias_refusal_keeps_first_admitted_capture_and_no_success_replay() {
-    let (mut native, mut documents, log) = setup(&["a", "./a"]);
-    native.work_limit = 61;
-    assert!(run(&mut native, &mut documents).is_err());
-    assert_eq!((native.text, native.work), (62, 46));
-    assert_eq!(
-        log.borrow()
-            .iter()
-            .filter(|e| matches!(e, Event::Parent(..)))
-            .count(),
-        1
-    );
-    assert!(!log
-        .borrow()
-        .iter()
-        .any(|e| matches!(e, Event::Alias(..) | Event::Base(..))));
-}
+
 #[test]
 fn existing_policy_accepts_two_hundred_independent_aliases_without_new_count_ceiling() {
     let aliases = (0..200).map(|i| format!("a{i}")).collect::<Vec<_>>();
     let written = aliases.iter().map(String::as_str).collect::<Vec<_>>();
     let (mut native, mut documents, log) = setup(&written);
-    let expected = aliases
-        .iter()
-        .map(|a| 1 + 12 + 1 + a.len() + 12 + a.len() + 1)
-        .sum::<usize>();
-    native.text_limit = expected;
-    native.work_limit = expected;
     assert!(run(&mut native, &mut documents).is_ok());
-    assert_eq!((native.text, native.work), (expected, expected));
     assert_eq!(
         log.borrow()
             .iter()
@@ -465,7 +352,7 @@ fn unknown_retained_catalog_identity_refuses_before_any_later_base_effect() {
         *log.borrow(),
         vec![
             Event::Resolve(None, "root.yaml".into()),
-            Event::Entry(None, "root.yaml".into(), 16_777_216),
+            Event::Entry(None, "root.yaml".into()),
             Event::Service
         ]
     );

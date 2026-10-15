@@ -1,9 +1,8 @@
 //! Independent raw logical arenas and opaque payloads qualify the dispatch service.
 use std::{collections::BTreeMap, rc::Rc};
 use yamaa_core::schema::{
-    BundleLimits, Document, DocumentLimits, DocumentNode as N, NormalizationError,
-    NormalizationLimits, SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaOrigin,
-    SchemaSource, SchemaStructure,
+    Document, DocumentNode as N, NormalizationError, SchemaContext as C, SchemaDiagnostic,
+    SchemaModule, SchemaOrigin, SchemaSource, SchemaStructure,
 };
 use yamaa_core::{
     document_preparation as app, inheritance as graph, inheritance_capture as capture,
@@ -42,7 +41,7 @@ fn document(tree: Tree) -> Document {
     }
     let mut nodes = vec![];
     let root = push(tree, &mut nodes);
-    Document::new(nodes, root, Default::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 fn field(name: &'static str, kind: &str) -> Tree {
     map(vec![(name, map(vec![("type", text(kind))]))])
@@ -100,7 +99,6 @@ fn schema() -> SchemaStructure {
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap()
 }
@@ -151,7 +149,6 @@ struct Raw {
 }
 enum Failure {
     Original(Payload),
-    Limit(capture::CaptureResource),
 }
 struct Entry {
     raw: Option<Raw>,
@@ -163,15 +160,11 @@ impl app::EntryCodec for Entry {
     type Locations = Box<u32>;
     type Error = Failure;
     fn decode(&mut self, source: &Source) -> Result<Raw, Failure> {
+        assert_eq!(source.identity, "entry");
+        assert_eq!(source.bytes, b"held root");
         self.calls += 1;
         if let Some(error) = self.error.take() {
             return Err(Failure::Original(error));
-        }
-        if source.bytes.len() > 16 {
-            return Err(Failure::Limit(capture::CaptureResource::CapturedBytes));
-        }
-        if source.identity.len() > 64 {
-            return Err(Failure::Limit(capture::CaptureResource::IdentityBytes));
         }
         Ok(self.raw.take().unwrap())
     }
@@ -196,9 +189,6 @@ impl capture::DecodePort for Parents {
     fn document(raw: &Raw) -> &Document {
         &raw.document
     }
-    fn limit_error(resource: capture::CaptureResource) -> Failure {
-        Failure::Limit(resource)
-    }
 }
 struct Host {
     calls: Vec<String>,
@@ -221,13 +211,8 @@ impl capture::CapturePort for Host {
             display_path: format!("display/{written}"),
         })
     }
-    fn capture(
-        &mut self,
-        source: &graph::Source,
-        maximum: usize,
-    ) -> Result<Vec<u8>, graph::SourceError<Payload>> {
-        self.calls
-            .push(format!("capture:{}:{maximum}", source.identity));
+    fn capture(&mut self, source: &graph::Source) -> Result<Vec<u8>, graph::SourceError<Payload>> {
+        self.calls.push(format!("capture:{}", source.identity));
         Ok(self.bytes.remove(&source.identity).unwrap())
     }
     fn rebase(
@@ -235,7 +220,6 @@ impl capture::CapturePort for Host {
         _: &graph::Source,
         _: &graph::Source,
         written: &str,
-        _: usize,
     ) -> Result<String, Payload> {
         self.calls.push(format!("rebase:{written}"));
         Ok(written.into())
@@ -272,7 +256,6 @@ fn run(
     entry: &mut Entry,
     parents: &mut Parents,
     host: &mut Host,
-    limits: capture::Limits,
 ) -> app::PreparationResult<Payload, Failure, Raw, Box<u32>> {
     app::prepare(
         &schema(),
@@ -281,7 +264,6 @@ fn run(
         entry,
         parents,
         host,
-        limits,
     )
 }
 fn standalone() -> Document {
@@ -342,7 +324,6 @@ fn standalone_success_moves_source_raw_and_opaque_locations_without_parent_effec
         &mut entry,
         &mut parents,
         &mut host,
-        Default::default(),
     );
     let Ok(prepared) = result else {
         panic!("standalone success")
@@ -483,7 +464,7 @@ fn inherited_success_keeps_entry_parent_allocations_and_distinct_catalog_order()
         );
         host.bytes.insert(name.into(), bytes);
     }
-    let Ok(prepared) = run(&mut entry, &mut parents, &mut host, Default::default()) else {
+    let Ok(prepared) = run(&mut entry, &mut parents, &mut host) else {
         panic!()
     };
     let app::Content::Inherited {
@@ -529,8 +510,8 @@ fn raw_presence_selects_inheritance_even_with_null_scalar_or_empty_list() {
         let mut nodes = document.nodes().to_vec();
         nodes[parent] = value.clone();
         let (mut entry, mut parents, mut host) =
-            ports(Document::new(nodes, document.root(), Default::default()).unwrap());
-        let result = run(&mut entry, &mut parents, &mut host, Default::default());
+            ports(Document::new(nodes, document.root()).unwrap());
+        let result = run(&mut entry, &mut parents, &mut host);
         if matches!(value, N::Sequence(_)) {
             assert!(matches!(result, Ok(app::Prepared { .. })));
         } else {
@@ -558,10 +539,10 @@ fn independent_full_version_findings_distinguish_route_checkpoints_and_hold_raw_
         let version = document.field(document.root(), "schema_version").unwrap();
         let mut nodes = document.nodes().to_vec();
         nodes[version] = N::Text("99.0".into());
-        let raw = Document::new(nodes, document.root(), Default::default()).unwrap();
+        let raw = Document::new(nodes, document.root()).unwrap();
         let pointer = raw.nodes().as_ptr();
         let (mut entry, mut parents, mut host) = ports(raw);
-        match run(&mut entry, &mut parents, &mut host, Default::default()) {
+        match run(&mut entry, &mut parents, &mut host) {
             Err(app::Error::Standalone {
                 error: yamaa_core::standalone_preparation::Error::Normalize(failure),
                 ..
@@ -613,7 +594,7 @@ fn independent_full_version_findings_distinguish_route_checkpoints_and_hold_raw_
     }
 }
 #[test]
-fn entry_opaque_failure_precedes_zero_semantic_budget_and_moves_original_allocation() {
+fn entry_opaque_failure_moves_original_allocation_before_semantic_work() {
     let (mut entry, mut parents, mut host) = ports(standalone());
     let payload = Payload {
         allocation: Box::new(99),
@@ -622,18 +603,8 @@ fn entry_opaque_failure_precedes_zero_semantic_budget_and_moves_original_allocat
     let pointer = &*payload.allocation as *const u32;
     let marker = Rc::as_ptr(&payload.marker);
     entry.error = Some(payload);
-    let limits = capture::Limits {
-        normalization: NormalizationLimits {
-            storage: DocumentLimits {
-                nodes: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    let Err(app::Error::Entry(Failure::Original(error))) =
-        run(&mut entry, &mut parents, &mut host, limits)
+
+    let Err(app::Error::Entry(Failure::Original(error))) = run(&mut entry, &mut parents, &mut host)
     else {
         panic!()
     };
@@ -642,56 +613,6 @@ fn entry_opaque_failure_precedes_zero_semantic_budget_and_moves_original_allocat
     assert_eq!(entry.calls, 1);
     assert!(host.calls.is_empty());
     assert!(entry.raw.is_some());
-}
-#[test]
-fn entry_capture_limit_precedes_identity_and_never_touches_raw_or_parents() {
-    let (mut entry, mut parents, mut host) = ports(standalone());
-    let source = Source {
-        identity: "x".repeat(65),
-        bytes: vec![0; 17],
-    };
-    let Err(app::Error::Entry(Failure::Limit(capture::CaptureResource::CapturedBytes))) =
-        app::prepare(
-            &schema(),
-            source,
-            "x".into(),
-            &mut entry,
-            &mut parents,
-            &mut host,
-            Default::default(),
-        )
-    else {
-        panic!()
-    };
-    assert!(entry.raw.is_some());
-    assert_eq!(entry.calls, 1);
-    assert!(host.calls.is_empty());
-}
-#[test]
-fn standalone_storage_keeps_the_existing_shared_normalization_and_copy_boundary() {
-    let raw = standalone();
-    let required = 2 * (raw.nodes().len() + 2);
-    for nodes in [required - 1, required] {
-        let (mut entry, mut parents, mut host) = ports(raw.clone());
-        let result = run(
-            &mut entry,
-            &mut parents,
-            &mut host,
-            capture::Limits {
-                normalization: NormalizationLimits {
-                    storage: DocumentLimits {
-                        nodes,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-        );
-        assert_eq!(result.is_ok(), nodes == required);
-        assert_eq!(entry.calls, 1);
-        assert!(host.calls.is_empty());
-    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -751,13 +672,13 @@ fn assert_model(actual: &Document) {
 
 #[test]
 fn nonmapping_raw_root_remains_a_standalone_raw_arena_finding_without_capture() {
-    let raw = Document::new(vec![N::Integer("7".into())], 0, Default::default()).unwrap();
+    let raw = Document::new(vec![N::Integer("7".into())], 0).unwrap();
     let pointer = raw.nodes().as_ptr();
     let (mut entry, mut parents, mut host) = ports(raw);
     let Err(app::Error::Standalone {
         error: yamaa_core::standalone_preparation::Error::Normalize(failure),
         ..
-    }) = run(&mut entry, &mut parents, &mut host, Default::default())
+    }) = run(&mut entry, &mut parents, &mut host)
     else {
         panic!()
     };

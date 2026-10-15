@@ -182,12 +182,9 @@ fn document_mode(
         ));
     }
     let root = T::map(fields).append(&mut nodes);
-    SpecificationDocument::admit(
-        Document::new(nodes, root, Default::default()).unwrap(),
-        &mut ValidationBudget::new(Default::default()),
-    )
-    .unwrap()
-    .unwrap()
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
 }
 pub fn candidate<'a>(
     consumer: &'a str,

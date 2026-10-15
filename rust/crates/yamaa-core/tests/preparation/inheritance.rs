@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
 use yamaa_core::inheritance::*;
 use yamaa_core::schema::{
-    BundleLimits, Document, DocumentLimits, DocumentNode as N, NormalizationBudget,
-    NormalizationError, NormalizationLimits, SchemaModule, SchemaStructure,
+    Document, DocumentNode as N, NormalizationError, SchemaModule, SchemaStructure,
 };
 
 enum V {
@@ -32,7 +31,7 @@ fn document(value: V) -> Document {
     }
     let mut nodes = vec![];
     let root = push(value, &mut nodes);
-    Document::new(nodes, root, DocumentLimits::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 fn field(name: &'static str, types: V) -> V {
     Map(vec![(name, Map(vec![("type", types)]))])
@@ -55,7 +54,6 @@ fn schema() -> SchemaStructure {
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap()
 }
@@ -118,14 +116,7 @@ impl SourcePort for Port {
     }
 }
 fn run(input: Document, port: &mut Port) -> Result<Vec<Layer>, Error<(&'static str, u32)>> {
-    traverse(
-        &schema(),
-        source("entry"),
-        input,
-        port,
-        &mut NormalizationBudget::new(NormalizationLimits::default()),
-        &mut Budget::new(Limits::default()),
-    )
+    traverse(&schema(), source("entry"), input, port)
 }
 
 #[test]
@@ -354,86 +345,6 @@ fn source_failure_retains_written_spelling_and_stops_later_access() {
 }
 
 #[test]
-fn graph_limits_fail_before_disallowed_port_effects() {
-    for (limits, resource, calls) in [
-        (
-            Limits {
-                layers: 1,
-                ..Limits::default()
-            },
-            Resource::Layers,
-            vec!["resolve:entry:a"],
-        ),
-        (
-            Limits {
-                depth: 1,
-                ..Limits::default()
-            },
-            Resource::Depth,
-            vec!["resolve:entry:a"],
-        ),
-        (
-            Limits {
-                parent_visits: 0,
-                ..Limits::default()
-            },
-            Resource::ParentVisits,
-            vec![],
-        ),
-    ] {
-        let mut port = Port::default().with("a", &[]);
-        let error = traverse(
-            &schema(),
-            source("entry"),
-            layer("1.0", &["a"]),
-            &mut port,
-            &mut NormalizationBudget::new(NormalizationLimits::default()),
-            &mut Budget::new(limits),
-        )
-        .unwrap_err();
-        assert!(matches!(error,Error::Resource(e) if e.resource==resource));
-        assert_eq!(port.calls, calls);
-    }
-}
-
-#[test]
-fn failed_attempts_retain_charges_and_fresh_requests_recover() {
-    let mut port = Port::default();
-    let mut budget = Budget::new(Limits {
-        layers: 1,
-        ..Limits::default()
-    });
-    let mut normalization = NormalizationBudget::new(NormalizationLimits::default());
-    assert!(matches!(
-        traverse(
-            &schema(),
-            source("entry"),
-            layer("0", &[]),
-            &mut port,
-            &mut normalization,
-            &mut budget
-        ),
-        Err(Error::Version { .. })
-    ));
-    assert!(matches!(
-        traverse(
-            &schema(),
-            source("entry"),
-            layer("1.0", &[]),
-            &mut port,
-            &mut normalization,
-            &mut budget
-        ),
-        Err(Error::Resource(Exhausted {
-            resource: Resource::Layers,
-            ..
-        }))
-    ));
-    assert_eq!(budget.used(Resource::Layers), 2);
-    assert!(run(layer("1.0", &[]), &mut port).is_ok());
-}
-
-#[test]
 fn real_traversal_failures_project_canonical_causes_and_original_provenance() {
     use serde_json::Value as C;
     use yamaa_core::value::Value as S;
@@ -444,7 +355,7 @@ fn real_traversal_failures_project_canonical_causes_and_original_provenance() {
         path: &str,
         fields: &[(&str, &str)],
     ) {
-        let diagnostic = error.diagnostic().unwrap();
+        let diagnostic = error.diagnostic().unwrap().unwrap();
         let definition = diagnostic.definition();
         assert_eq!(
             (
@@ -515,7 +426,7 @@ fn real_traversal_failures_project_canonical_causes_and_original_provenance() {
             vec!["a", "b", "a"]
         };
         assert_eq!(
-            error.diagnostic().unwrap().context["cycle"],
+            error.diagnostic().unwrap().unwrap().context["cycle"],
             C::Array(
                 expected
                     .into_iter()
@@ -573,7 +484,7 @@ fn unclassified_failures_and_contradictory_cycles_have_no_semantic_projection() 
     let payload = Box::new(73);
     let address = &*payload as *const u8;
     let error = Error::Host(Opaque(payload));
-    assert!(error.diagnostic().is_none());
+    assert!(error.diagnostic().unwrap().is_none());
     let yamaa_core::inheritance_outcome::Outcome::Original(Error::Host(Opaque(payload))) =
         yamaa_core::inheritance_outcome::traversal_outcome(error).unwrap()
     else {
@@ -586,68 +497,77 @@ fn unclassified_failures_and_contradictory_cycles_have_no_semantic_projection() 
             returns_to_entry: true
         }
         .diagnostic()
-        .is_none());
+        .is_err());
     }
-    assert!(Error::<()>::Resource(Exhausted {
-        resource: Resource::Layers,
-        limit: 0
-    })
-    .diagnostic()
-    .is_none());
-    assert!(Error::<()>::InvalidIdentity.diagnostic().is_none());
+    assert!(Error::<()>::InvalidIdentity.diagnostic().unwrap().is_none());
 }
 
 #[test]
-fn whole_traversal_projection_budget_precedes_context_copy_and_retains_error() {
-    use yamaa_core::diagnostic::ProjectionError;
+fn long_source_failure_and_closed_cycle_keep_complete_context_and_original_error() {
     let error = Error::<()>::Unavailable {
         declaring: "entry".into(),
         path: "p".repeat(512),
     };
     for _ in 0..2 {
+        let diagnostic = error.diagnostic().unwrap().unwrap();
         assert_eq!(
-            error.diagnostic_with_limit(2048),
-            Err(ProjectionError::Limit)
+            diagnostic.context["path"],
+            serde_json::json!("p".repeat(512))
         );
     }
     let Error::Unavailable { declaring, path } = &error else {
-        panic!("retained error replaced")
+        panic!()
     };
     assert_eq!(declaring, "entry");
     assert_eq!(path.len(), 512);
-    assert!(error.diagnostic_with_limit(4096).unwrap().is_some());
     let cycle = Error::<()>::Cycle {
         path: vec!["entry".into(), "base".into(), "entry".into()],
         returns_to_entry: true,
     };
     assert_eq!(
-        cycle.diagnostic_with_limit(256),
-        Err(ProjectionError::Limit)
+        cycle.diagnostic().unwrap().unwrap().context["cycle"],
+        serde_json::json!(["entry", "base", "entry"])
     );
-    assert!(cycle.diagnostic_with_limit(2048).unwrap().is_some());
 }
 
 #[test]
-fn cumulative_input_budget_includes_all_unique_layers() {
-    let first = layer("1.0", &["a"]);
-    let mut port = Port::default().with("a", &[]);
-    let mut budget = Budget::new(Limits {
-        input_nodes: first.nodes().len(),
-        ..Limits::default()
-    });
-    assert!(matches!(
-        traverse(
-            &schema(),
-            source("entry"),
-            first,
-            &mut port,
-            &mut NormalizationBudget::new(NormalizationLimits::default()),
-            &mut budget
-        ),
-        Err(Error::Resource(Exhausted {
-            resource: Resource::InputNodes,
-            ..
-        }))
-    ));
-    assert_eq!(port.calls, ["resolve:entry:a", "read:a"]);
+fn fixed_parent_occurrence_boundary_counts_aliases_before_entering_the_next_port() {
+    use yamaa_core::limits::{LimitExceeded, Limits};
+    for count in [
+        Limits::PARENT_OCCURRENCES - 1,
+        Limits::PARENT_OCCURRENCES,
+        Limits::PARENT_OCCURRENCES + 1,
+    ] {
+        let mut port = Port::default().with("a", &[]);
+        let parents = vec!["a"; count];
+        let result = run(layer("1.0", &parents), &mut port);
+        if count <= Limits::PARENT_OCCURRENCES {
+            let layers = result.unwrap();
+            assert_eq!(
+                layers
+                    .iter()
+                    .map(|layer| layer.source.identity.as_str())
+                    .collect::<Vec<_>>(),
+                ["a", "entry"]
+            );
+        } else {
+            assert!(matches!(result, Err(Error::Resource(LimitExceeded {
+                resource: "parent_occurrences", limit: Limits::PARENT_OCCURRENCES, actual: Some(actual)
+            })) if actual == count));
+        }
+        assert_eq!(
+            port.calls
+                .iter()
+                .filter(|event| event.starts_with("resolve:"))
+                .count(),
+            count.min(Limits::PARENT_OCCURRENCES)
+        );
+        assert_eq!(
+            port.calls
+                .iter()
+                .filter(|event| event.starts_with("read:"))
+                .count(),
+            1
+        );
+    }
 }

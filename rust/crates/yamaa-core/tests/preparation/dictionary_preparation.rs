@@ -2,13 +2,12 @@
 use std::rc::Rc;
 use yamaa_core::resource::ResourceFailure;
 use yamaa_core::schema::{
-    BundleLimits, Document, DocumentLimits, DocumentNode as N, SchemaModule, SchemaStructure,
-    SpecificationDocument, ValidationBudget, ValidationLimits,
+    Document, DocumentNode as N, SchemaModule, SchemaStructure, SpecificationDocument,
 };
 use yamaa_core::{
     dictionary_preparation as app,
     inheritance::{Source as Identity, SourceError},
-    inheritance_capture::{CapturePort, CaptureResource, DecodePort},
+    inheritance_capture::{CapturePort, DecodePort},
     project_preparation::Source,
 };
 #[derive(Clone)]
@@ -40,7 +39,7 @@ fn document(value: V) -> Document {
     }
     let mut nodes = Vec::new();
     let root = push(value, &mut nodes);
-    Document::new(nodes, root, DocumentLimits::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 fn field(name: &'static str, kind: &'static str) -> V {
     Map(vec![(name, Map(vec![("type", Text(kind))]))])
@@ -132,7 +131,6 @@ fn schema() -> SchemaStructure {
         }],
         0,
         "root_class",
-        BundleLimits::default(),
     )
     .unwrap()
 }
@@ -197,7 +195,7 @@ impl CapturePort for Port {
     fn canonicalize(&mut self, _: &str, _: &str) -> Result<Identity, SourceError<Host>> {
         panic!("parent route entered")
     }
-    fn capture(&mut self, _: &Identity, _: usize) -> Result<Vec<u8>, SourceError<Host>> {
+    fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<Host>> {
         panic!("parent route entered")
     }
     fn canonicalize_resource(
@@ -222,13 +220,8 @@ impl CapturePort for Port {
             display_path: written.into(),
         })
     }
-    fn capture_resource(
-        &mut self,
-        source: &Identity,
-        maximum: usize,
-    ) -> Result<Vec<u8>, SourceError<Host>> {
-        self.events
-            .push(format!("capture:{}:{maximum}", source.identity));
+    fn capture_resource(&mut self, source: &Identity) -> Result<Vec<u8>, SourceError<Host>> {
+        self.events.push(format!("capture:{}", source.identity));
         Ok(vec![if source.identity == "later" { 2 } else { 1 }])
     }
     fn resource_failure(&self, error: &Host) -> Option<ResourceFailure> {
@@ -238,13 +231,12 @@ impl CapturePort for Port {
             _ => None,
         }
     }
-    fn rebase(&mut self, _: &Identity, _: &Identity, _: &str, _: usize) -> Result<String, Host> {
+    fn rebase(&mut self, _: &Identity, _: &Identity, _: &str) -> Result<String, Host> {
         panic!("rebase entered")
     }
 }
 #[derive(Debug, PartialEq)]
 enum DecodeError {
-    Limit(CaptureResource),
     Invalid,
 }
 struct Decoder {
@@ -276,9 +268,6 @@ impl DecodePort for Decoder {
     fn document(raw: &Document) -> &Document {
         raw
     }
-    fn limit_error(resource: CaptureResource) -> DecodeError {
-        DecodeError::Limit(resource)
-    }
 }
 fn model(paths: &[&'static str]) -> SpecificationDocument {
     let doc = document(input(
@@ -289,9 +278,7 @@ fn model(paths: &[&'static str]) -> SpecificationDocument {
             .collect(),
         vec![],
     ));
-    SpecificationDocument::admit(doc, &mut ValidationBudget::new(ValidationLimits::default()))
-        .unwrap()
-        .unwrap()
+    SpecificationDocument::admit(doc).unwrap().unwrap()
 }
 #[test]
 fn aliases_resolve_in_use_order_but_capture_and_parse_once_without_mutating_original() {
@@ -307,7 +294,6 @@ fn aliases_resolve_in_use_order_but_capture_and_parse_once_without_mutating_orig
         &[],
         &mut port,
         &mut decoder,
-        app::Limits::default(),
     )
     .unwrap()
     .unwrap();
@@ -315,7 +301,7 @@ fn aliases_resolve_in_use_order_but_capture_and_parse_once_without_mutating_orig
         port.events,
         vec![
             "resolve:parent/base.yaml:dict.yaml",
-            "capture:dictionary:16777216",
+            "capture:dictionary",
             "resolve:parent/base.yaml:./dict.yaml"
         ]
     );
@@ -346,7 +332,6 @@ fn already_decoded_seed_identity_is_reused_without_capture_or_decode() {
         }],
         &mut port,
         &mut decoder,
-        app::Limits::default(),
     )
     .unwrap()
     .unwrap();
@@ -371,7 +356,6 @@ fn classified_and_opaque_resource_errors_keep_original_payload_and_stop_without_
             &[],
             &mut port,
             &mut decoder,
-            app::Limits::default(),
         )
         .unwrap_err();
         let app::Cause::Capture {
@@ -403,7 +387,6 @@ fn dictionary_contract_failure_retains_exact_first_capture_prefix_and_arena() {
         &[],
         &mut port,
         &mut decoder,
-        app::Limits::default(),
     )
     .unwrap_err();
     let app::Cause::Admission {
@@ -434,7 +417,6 @@ fn decode_failure_retains_entered_bytes_without_clone_and_no_later_capture() {
         &[],
         &mut port,
         &mut decoder,
-        app::Limits::default(),
     )
     .unwrap_err();
     let app::Cause::Decode {
@@ -448,39 +430,4 @@ fn decode_failure_retains_entered_bytes_without_clone_and_no_later_capture() {
     assert_eq!(source.bytes, [1]);
     assert!(rejected.captures.is_empty());
     assert_eq!(decoder.events, ["dictionary:[1]"]);
-}
-#[test]
-fn cumulative_entry_and_dictionary_bytes_refuse_without_materialized_authority() {
-    let mut port = Port::new();
-    let mut decoder = Decoder::new();
-    let source = Source {
-        identity: "entry".into(),
-        bytes: vec![0, 0],
-    };
-    let raw = document(Map(vec![]));
-    let rejected = app::prepare(
-        &schema(),
-        &model(&["dict.yaml"]),
-        app::Origins::Standalone("entry"),
-        &[app::Seed {
-            source: &source,
-            raw: &raw,
-        }],
-        &mut port,
-        &mut decoder,
-        app::Limits {
-            captured_bytes: 2,
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    assert!(matches!(
-        rejected.cause,
-        app::Cause::Limit(DecodeError::Limit(CaptureResource::CapturedBytes))
-    ));
-    assert!(decoder.events.is_empty());
-    assert_eq!(
-        port.events,
-        ["resolve:entry:dict.yaml", "capture:dictionary:0"]
-    );
 }

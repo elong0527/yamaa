@@ -4,14 +4,12 @@ use std::{
     rc::Rc,
 };
 use yamaa_core::schema::{
-    BundleError, BundleIssue, BundleIssueKind, BundleLimits, Document, DocumentLimits,
-    DocumentNode as N, NormalizationBudget, NormalizationError, SchemaOrigin, SchemaSource,
+    BundleError, BundleIssue, BundleIssueKind, Document, DocumentNode as N, NormalizationError,
+    SchemaOrigin, SchemaSource,
 };
 use yamaa_core::{
     project_preparation::Source,
-    schema_capture::{
-        self, CapturedClosure, DecodePort, DecodedModule, Error, Limits, Resource, RootSelection,
-    },
+    schema_capture::{self, CapturedClosure, DecodePort, DecodedModule, Error, RootSelection},
 };
 
 enum Tree {
@@ -44,7 +42,7 @@ fn document(tree: Tree) -> Document {
     }
     let mut nodes = vec![];
     let root = push(tree, &mut nodes);
-    Document::new(nodes, root, DocumentLimits::default()).unwrap()
+    Document::new(nodes, root).unwrap()
 }
 fn module(declarations: Vec<(&str, Tree)>, includes: &[&str]) -> Document {
     let mut fields = vec![
@@ -184,7 +182,6 @@ fn complete_source_decode_order_allocations_descriptor_defaults_and_origins_surv
             sources,
             1,
             RootSelection::Default,
-            Limits::default(),
             &mut decoder,
         ));
         assert_eq!(
@@ -234,9 +231,7 @@ fn complete_source_decode_order_allocations_descriptor_defaults_and_origins_surv
             ("schema_version", text("1.0")),
             ("id", text("ID01")),
         ]));
-        let normalized = schema
-            .normalize_document(&input, &mut NormalizationBudget::new(Default::default()))
-            .unwrap();
+        let normalized = schema.normalize_document(&input).unwrap();
         let value = normalized
             .document
             .field(normalized.document.root(), "label")
@@ -262,124 +257,7 @@ fn complete_source_decode_order_allocations_descriptor_defaults_and_origins_surv
         assert_eq!(structure.modules()[0].document.nodes().as_ptr(), arenas[0]);
     }
 }
-#[test]
-fn whole_closure_quota_admission_precedes_every_codec_with_exact_equality() {
-    let (sources, mut decoder) = fixtures();
-    accepted(schema_capture::admit(
-        sources,
-        1,
-        RootSelection::Default,
-        Limits {
-            captured_bytes: 3,
-            identity_bytes: 14,
-            ..Default::default()
-        },
-        &mut decoder,
-    ));
-    assert_eq!(decoder.trace.borrow().len(), 2);
-    for (limits, root, resource) in [
-        (
-            Limits {
-                captured_bytes: 0,
-                identity_bytes: 0,
-                bundle: BundleLimits {
-                    modules: 0,
-                    ..Default::default()
-                },
-            },
-            RootSelection::Named("long"),
-            Resource::RootClass,
-        ),
-        (
-            Limits {
-                captured_bytes: 0,
-                identity_bytes: 0,
-                bundle: BundleLimits {
-                    modules: 1,
-                    ..Default::default()
-                },
-            },
-            RootSelection::Default,
-            Resource::SchemaModules,
-        ),
-        (
-            Limits {
-                captured_bytes: 1,
-                identity_bytes: 0,
-                ..Default::default()
-            },
-            RootSelection::Default,
-            Resource::CapturedBytes,
-        ),
-        (
-            Limits {
-                captured_bytes: 3,
-                identity_bytes: 0,
-                ..Default::default()
-            },
-            RootSelection::Default,
-            Resource::IdentityBytes,
-        ),
-        (
-            Limits {
-                captured_bytes: 2,
-                identity_bytes: 13,
-                ..Default::default()
-            },
-            RootSelection::Default,
-            Resource::CapturedBytes,
-        ),
-        (
-            Limits {
-                captured_bytes: 3,
-                identity_bytes: 13,
-                ..Default::default()
-            },
-            RootSelection::Default,
-            Resource::IdentityBytes,
-        ),
-    ] {
-        let (sources, mut decoder) = fixtures();
-        let result = schema_capture::admit(sources, 1, root, limits, &mut decoder);
-        assert!(matches!(result,Err(Error::Limit(actual)) if actual==resource));
-        assert!(decoder.trace.borrow().is_empty());
-        assert_eq!(decoder.documents.len(), 2);
-    }
-}
-#[test]
-fn default_root_skips_named_charge_and_named_text_is_separate_and_inclusive() {
-    for (root, limit, success) in [
-        (RootSelection::Default, 1, true),
-        (RootSelection::Named("root_class"), 1, false),
-        (RootSelection::Named("root_class"), 10, true),
-    ] {
-        let sources = vec![source("r", vec![1])];
-        let mut decoder = Decoder::new(vec![module(
-            vec![(
-                "root_class",
-                Tree::List(vec![map(vec![("value", descriptor("str"))])]),
-            )],
-            &[],
-        )]);
-        let result = schema_capture::admit(
-            sources,
-            0,
-            root,
-            Limits {
-                identity_bytes: limit,
-                ..Default::default()
-            },
-            &mut decoder,
-        );
-        if success {
-            accepted(result);
-            assert_eq!(decoder.trace.borrow().len(), 1);
-        } else {
-            assert!(matches!(result, Err(Error::Limit(Resource::RootClass))));
-            assert!(decoder.trace.borrow().is_empty());
-        }
-    }
-}
+
 #[test]
 fn late_original_opaque_codec_failure_precedes_bundle_entry_or_duplicate_defects() {
     for entry in [0, usize::MAX] {
@@ -400,13 +278,7 @@ fn late_original_opaque_codec_failure_precedes_bundle_entry_or_duplicate_defects
             source("schema_s.yaml", vec![2]),
             source("late", vec![3]),
         ];
-        let result = schema_capture::admit(
-            sources,
-            entry,
-            RootSelection::Default,
-            Limits::default(),
-            &mut decoder,
-        );
+        let result = schema_capture::admit(sources, entry, RootSelection::Default, &mut decoder);
         let Err(Error::Decode { identity, error }) = result else {
             panic!("original second codec error expected")
         };
@@ -439,7 +311,6 @@ fn all_codecs_complete_before_exact_ordered_bundle_reports_and_entry_errors() {
         vec![source("r", vec![1])],
         0,
         RootSelection::Default,
-        Limits::default(),
         &mut decoder,
     );
     let Err(Error::Bundle(error)) = result else {
@@ -464,13 +335,7 @@ fn all_codecs_complete_before_exact_ordered_bundle_reports_and_entry_errors() {
     for entry in [0, usize::MAX] {
         let (mut sources, mut decoder) = fixtures();
         sources[1].identity = "schema_s.yaml".into();
-        let result = schema_capture::admit(
-            sources,
-            entry,
-            RootSelection::Default,
-            Limits::default(),
-            &mut decoder,
-        );
+        let result = schema_capture::admit(sources, entry, RootSelection::Default, &mut decoder);
         let Err(Error::Bundle(error)) = result else {
             panic!("bundle defect expected after both codecs")
         };
@@ -511,21 +376,18 @@ fn invalid_defaults_remain_a_later_normalization_gate() {
         vec![source("r", vec![1])],
         0,
         RootSelection::Default,
-        Limits::default(),
         &mut decoder,
     ));
     let input = document(map(vec![]));
     assert!(matches!(
-        captured
-            .structure()
-            .normalize_document(&input, &mut NormalizationBudget::new(Default::default())),
+        captured.structure().normalize_document(&input),
         Err(NormalizationError::Defaults(_))
     ));
     assert_eq!(decoder.trace.borrow().len(), 1);
 }
 #[test]
-fn configured_large_closure_keeps_its_existing_capacity_without_a_new_source_ceiling() {
-    for maximum in [128, 201] {
+fn large_closed_schema_keeps_every_original_source_and_decode() {
+    {
         let names = (0..200)
             .map(|i| format!("schema_m{i}.yaml"))
             .collect::<Vec<_>>();
@@ -546,27 +408,10 @@ fn configured_large_closure_keeps_its_existing_capacity_without_a_new_source_cei
             &names.iter().map(String::as_str).collect::<Vec<_>>(),
         ));
         let mut decoder = Decoder::new(documents);
-        let result = schema_capture::admit(
-            sources,
-            200,
-            RootSelection::Default,
-            Limits {
-                bundle: BundleLimits {
-                    modules: maximum,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            &mut decoder,
-        );
-        if maximum == 128 {
-            assert!(matches!(result, Err(Error::Limit(Resource::SchemaModules))));
-            assert!(decoder.trace.borrow().is_empty());
-        } else {
-            let captured = accepted(result);
-            assert_eq!(captured.sources().len(), 201);
-            assert_eq!(captured.structure().modules().len(), 201);
-            assert_eq!(decoder.trace.borrow().len(), 201);
-        }
+        let result = schema_capture::admit(sources, 200, RootSelection::Default, &mut decoder);
+        let captured = accepted(result);
+        assert_eq!(captured.sources().len(), 201);
+        assert_eq!(captured.structure().modules().len(), 201);
+        assert_eq!(decoder.trace.borrow().len(), 201);
     }
 }
