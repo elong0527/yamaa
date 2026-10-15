@@ -242,9 +242,9 @@ mod file {
         fn project_functions_build_without_any_adjacent_packaging_lock() {
             let study = Study::new();
             study.write(
-                "env/environment.yaml",
-                "schema_version: '1.0'\nlanguage: python\nfunctions: {id: id.yaml}\ncodelists: [ct.yaml]\n",
-            );
+        "env/environment.yaml",
+        "schema_version: '1.0'\nlanguage: python\nfunctions: {id: id.yaml}\ncodelists: [ct.yaml]\n",
+    );
             fs::remove_file(study.0.join("uv.lock")).unwrap();
             study.write("entry/input.csv", "ID\n1\n");
             let mut project = study.prepare(&study.text(""), &[]).unwrap();
@@ -1684,9 +1684,9 @@ mod file {
         fn metadata_failures_name_each_written_dependency_and_cause_before_study_reads() {
             let study = Study::new();
             study.write(
-                "environment.yaml",
-                "schema_version: '1.0'\nlanguage: python\nlock: missing.lock\nfunctions: {id: absent-function.yaml}\ncodelists: [absent-codelists.yaml]\n",
-            );
+        "environment.yaml",
+        "schema_version: '1.0'\nlanguage: python\nlock: missing.lock\nfunctions: {id: absent-function.yaml}\ncodelists: [absent-codelists.yaml]\n",
+    );
             let entry = study.path("root.yaml");
             let environment = study.path("environment.yaml");
             let file_workflow::SelectionError::Preparation(error) =
@@ -1935,6 +1935,107 @@ mod file {
                         application_owner.root.source().bytes,
                         environment.as_bytes(),
                     );
+                }
+            }
+        }
+
+        #[test]
+        fn root_decoder_failures_keep_native_facts_across_public_views_without_rereads() {
+            use yamaa_adapters::{
+                file_project, issue_rows::Issue, project_application, project_source::Failure,
+                specification_source::Error as SourceError, yaml_decode::DecodeFailure,
+            };
+            use yamaa_core::limits::Limits;
+
+            for limited in [false, true] {
+                let study = Study::new();
+                let raw = if limited {
+                    format!(
+                        "{}0{}",
+                        "[".repeat(Limits::YAML_DEPTH + 1),
+                        "]".repeat(Limits::YAML_DEPTH + 1),
+                    )
+                } else {
+                    "schema_version: '1.0'\nfunctions: [\n".to_owned()
+                };
+                study.write("environment.yaml", &raw);
+                let entry = study.path("root.yaml");
+                let environment = study.path("environment.yaml");
+                let selection = file_workflow::select(&entry, &environment, Language::Python)
+                    .err()
+                    .unwrap();
+                let file_workflow::SelectionError::Preparation(Error::Environment(owner)) =
+                    &selection
+                else {
+                    panic!("root decoder failure precedes entry reads")
+                };
+                let file_project::Error::Environment(Failure::Root(SourceError::Decode {
+                    identity,
+                    error,
+                })) = owner.error()
+                else {
+                    panic!("native decoder cause remains owned")
+                };
+                assert_eq!(identity, &environment);
+                let expected = match error {
+                    DecodeFailure::Limit(bound) if limited => {
+                        assert_eq!(
+                            bound,
+                            &Limits::yaml_depth(Limits::YAML_DEPTH + 1).unwrap_err()
+                        );
+                        Issue {
+                            phase: "engine".into(),
+                            condition: "engine_rejected".into(),
+                            requirement: None,
+                            spec_paths: vec!["$".into()],
+                            context: yamaa_core::json::json!({
+                                "stage":"environment", "code":"resource_limit",
+                                "resource":"yaml_depth", "limit":Limits::YAML_DEPTH,
+                                "actual":Limits::YAML_DEPTH + 1,
+                            })
+                            .to_string(),
+                        }
+                    }
+                    DecodeFailure::InvalidYaml { position, reason } if !limited => Issue {
+                        phase: "validation".into(),
+                        condition: "invalid_yaml".into(),
+                        requirement: Some("REQ-0280".into()),
+                        spec_paths: vec!["$".into()],
+                        context: yamaa_core::json::json!({
+                            "line":position.line, "column":position.column, "reason":reason,
+                            "path":environment, "entry":environment, "environment_path":"$",
+                        })
+                        .to_string(),
+                    },
+                    cause => panic!("expected retained decoder cause: {cause:?}"),
+                };
+                assert_eq!(owner.capture_reads(), 1);
+                let (_, bytes) = owner.captured_sources().next().unwrap();
+                assert_eq!(bytes, raw.as_bytes());
+                let held_bytes = bytes.as_ptr();
+                let application_error =
+                    project_application::prepare(&entry, &environment, Language::Python)
+                        .err()
+                        .unwrap();
+                assert_eq!(
+                    project_application::check(&entry, &environment, Language::Python),
+                    [expected.clone()]
+                );
+                assert!(!study.0.join("root.yaml").exists());
+                fs::remove_dir_all(&study.0).unwrap();
+                for _ in 0..2 {
+                    assert_eq!(
+                        project_application::selection_failure(&selection, Language::Python),
+                        [expected.clone()]
+                    );
+                    assert_eq!(
+                        project_application::failure(&application_error, Language::Python),
+                        [expected.clone()]
+                    );
+                    assert_eq!(owner.capture_reads(), 1);
+                    let (_, bytes) = owner.captured_sources().next().unwrap();
+                    assert_eq!(bytes.as_ptr(), held_bytes);
+                    assert_eq!(bytes, raw.as_bytes());
                 }
             }
         }
@@ -2313,9 +2414,9 @@ mod file {
                 .any(|row| row.requirement.as_deref() == Some("REQ-0534")
                     && row.condition == "invalid_producer_contract"));
             study.write(
-                "environment.yaml",
-                "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {id: broken.yaml}\n",
-            );
+        "environment.yaml",
+        "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {id: broken.yaml}\n",
+    );
             study.write("uv.lock", "version = 1\npackage = []\n");
             let malformed = "function: [\n";
             study.write("broken.yaml", malformed);

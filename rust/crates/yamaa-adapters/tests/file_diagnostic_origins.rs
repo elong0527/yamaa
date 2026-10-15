@@ -749,11 +749,11 @@ mod file {
                         );
                     }
                     "group_keys" => body.push_str(&format!(
-                        "rows:\n  - {{id: r, dataset: SRC, group_by: [{}], derivations: {{ID: SRC.ID}}}}\n",
+                        "rows:\n  - {{id: r, dataset: SRC, filter: 'ID >', group_by: [{}], derivations: {{ID: SRC.ID}}}}\n",
                         vec!["ID"; actual].join(", ")
                     )),
                     "row_columns" => body.push_str(&format!(
-                        "rows:\n  - {{id: r, dataset: SRC, derivations: {{{}}}}}\n",
+                        "rows:\n  - {{id: r, dataset: SRC, filter: 'ID >', derivations: {{{}}}}}\n",
                         (0..actual)
                             .map(|i| format!("C{i}: SRC.ID"))
                             .collect::<Vec<_>>()
@@ -824,6 +824,94 @@ mod file {
                     assert!(domain.save().unwrap());
                     assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
                 }
+            }
+        }
+
+        #[test]
+        fn row_shape_boundaries_are_per_template_and_preserve_authored_preflight_precedence() {
+            use yamaa_core::{json::json, limits::Limits};
+            let study = Study::new();
+            let spec = study.text("spec.yaml");
+            let environment = study.text("environment.yaml");
+            fs::write(
+                study.0.join("environment.yaml"),
+                "schema_version: '1.0'\nlanguage: python\n",
+            )
+            .unwrap();
+            // At the cardinality boundary ordinary group validation still wins
+            // over the deferred invalid filter; one more group is refused above.
+            fs::write(
+                study.0.join("spec.yaml"),
+                format!(
+                    "{VALID}rows:\n  - {{id: r, dataset: SRC, filter: 'ID >', group_by: [{}], derivations: {{ID: SRC.ID}}}}\n",
+                    vec!["ID"; Limits::KEYS].join(", "),
+                ),
+            )
+            .unwrap();
+            for environment in [None, Some(environment.as_str())] {
+                let request = || Request {
+                    specification: &spec,
+                    environment,
+                };
+                for issues in [
+                    file_application::check(request(), identity(&spec)),
+                    file_application::domain(request(), identity(&spec))
+                        .err()
+                        .unwrap(),
+                ] {
+                    assert_eq!(issues.len(), 1);
+                    assert_eq!(issues[0].phase, "validation");
+                    assert_eq!(issues[0].condition, "invalid_field_type");
+                    assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0065"));
+                    assert_eq!(issues[0].spec_paths, ["rows[0].group_by"]);
+                    assert_eq!(
+                        serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context)
+                            .unwrap(),
+                        json!({"row":"r", "group_by":vec!["ID"; Limits::KEYS]}),
+                    );
+                }
+            }
+            assert!(!study.0.join("input.csv").exists());
+            assert!(!study.0.join("output.csv").exists());
+
+            let groups = (0..Limits::KEYS)
+                .map(|i| format!("SRC.G{i}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let mut body = String::from("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int}\n");
+            for i in 1..Limits::COLUMNS {
+                body.push_str(&format!("  - {{name: C{i}, type: int}}\n"));
+            }
+            body.push_str("rows:\n");
+            for row in 1..=2 {
+                let derivations = std::iter::once(format!("ID: {{literal: {row}}}"))
+                    .chain((1..Limits::COLUMNS).map(|i| format!("C{i}: {{literal: 1}}")))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                body.push_str(&format!("  - {{id: r{row}, dataset: SRC, group_by: [{groups}], derivations: {{{derivations}}}}}\n"));
+            }
+            fs::write(study.0.join("spec.yaml"), body).unwrap();
+            let header = (0..Limits::KEYS)
+                .map(|i| format!("G{i}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            fs::write(
+                study.0.join("input.csv"),
+                format!("{header}\n{}\n", vec!["0"; Limits::KEYS].join(",")),
+            )
+            .unwrap();
+            // Both templates independently reach 64 group keys and 1024 row
+            // derivations. Their combined counts are not planner quotas.
+            for environment in [None, Some(environment.as_str())] {
+                let request = || Request {
+                    specification: &spec,
+                    environment,
+                };
+                assert!(file_application::check(request(), identity(&spec)).is_empty());
+                let mut domain = file_application::domain(request(), identity(&spec)).unwrap();
+                assert!(domain.issues().is_empty());
+                assert!(domain.save().unwrap());
+                assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n2\n");
             }
         }
 
@@ -948,7 +1036,7 @@ mod file {
             assert!(!study.0.join("output.csv").exists());
         }
         #[test]
-        fn data_driven_like_refusal_is_typed_and_blocks_publication() {
+        fn data_driven_like_preserves_false_and_unicode_truth_at_publication() {
             let study = Study::new();
             fs::write(
                 study.0.join("spec.yaml"),
@@ -964,21 +1052,12 @@ mod file {
             )
             .unwrap();
             let mut result = study.build();
-            assert!(result.output().is_none());
-            assert!(result.save().is_err());
-            let findings = result.issues();
-            assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].condition, "engine_rejected");
-            assert_eq!(findings[0].phase, "engine");
-            let context: yamaa_core::json::Value =
-                serde_json::from_str(&findings[0].context).unwrap();
-            assert_eq!(
-                context,
-                yamaa_core::json::json!({"code":"execution_limit","stage":"execute","resource":"regex_steps","limit":1_000_000})
-            );
-            assert!(!study.0.join("output.csv").exists());
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.output().is_some());
+            assert!(result.save().unwrap());
+            assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n");
 
-            // A new build gets a fresh counter and retains ordinary full-match truth.
+            // A fresh build retains ordinary Unicode full-match truth.
             fs::write(study.0.join("input.csv"), "ID,A,B\n1,😀,_\n2,a,b\n").unwrap();
             let mut result = study.build();
             assert!(result.issues().is_empty());

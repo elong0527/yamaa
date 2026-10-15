@@ -264,6 +264,173 @@ pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
 mod tests {
     use super::*;
 
+    fn unsigned(mut value: usize, output: &mut Vec<u8>) {
+        while value >= 128 {
+            output.push(value as u8 | 128);
+            value >>= 7;
+        }
+        output.push(value as u8);
+    }
+
+    #[test]
+    fn known_schema_and_group_lists_borrow_empty_elements_before_admission() {
+        let mut bytes = vec![0x29, 0xfc]; // schema: a wide struct list
+        unsigned(65_536, &mut bytes);
+        let schema_start = bytes.len();
+        bytes.resize(bytes.len() + 65_536, 0);
+        bytes.extend([0x29, 0xfc]); // row_groups: another wide struct list
+        unsigned(65_536, &mut bytes);
+        let groups_start = bytes.len();
+        bytes.resize(bytes.len() + 65_536, 0);
+        bytes.push(0);
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len());
+        for (id, start) in [(2, schema_start), (4, groups_start)] {
+            let Some(Value::Sequence(values)) = root.field(id).unwrap() else {
+                panic!()
+            };
+            assert_eq!(values.len(), 65_536);
+            assert_eq!(values.bytes.as_ptr(), bytes[start..].as_ptr());
+            assert_eq!(values.bytes.len(), 65_536);
+        }
+    }
+
+    #[test]
+    fn mixed_nested_unknown_fanout_stays_borrowed_and_keeps_later_fields() {
+        // Unknown field 15 contains structs with a bool list and byte->struct
+        // map. An explicit duplicate of the row field follows the collection.
+        let mut bytes = vec![0x36, 14, 0xc9, 0xfc];
+        unsigned(65_536, &mut bytes);
+        let elements = bytes.len();
+        for _ in 0..65_536 {
+            bytes.extend([0x19, 0x21, 1, 2, 0x1b, 1, 0x3c, 0xff, 0, 0]);
+        }
+        bytes.extend([0x06, 6, 18, 0]);
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len());
+        assert_eq!(root.field(3).unwrap(), Some(Value::Integer(9)));
+        let Some(Value::Sequence(values)) = root.field(15).unwrap() else {
+            panic!()
+        };
+        assert_eq!(values.bytes.as_ptr(), bytes[elements..].as_ptr());
+        assert_eq!(values.len(), 65_536);
+    }
+
+    #[test]
+    fn duplicates_keep_the_last_value_even_when_its_wire_shape_changes() {
+        let bytes = [0x39, 0x31, 1, 2, 1, 0x06, 6, 18, 0];
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len());
+        assert_eq!(root.field(3).unwrap(), Some(Value::Integer(9)));
+
+        let bytes = [0x36, 18, 0x09, 6, 0x31, 1, 2, 1, 0];
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len());
+        let Some(Value::Sequence(values)) = root.field(3).unwrap() else {
+            panic!()
+        };
+        assert_eq!(
+            values.into_iter().collect::<Result<Vec<_>, _>>().unwrap(),
+            [Value::Bool(true), Value::Bool(false), Value::Bool(true)]
+        );
+        // A child with an unexpected shape can be superseded together with its
+        // ancestor. Invalid wire data must still fail before that replacement.
+        let bytes = [0x29, 0x1c, 0x59, 0x11, 1, 0, 0x09, 4, 0x0c, 0];
+        let (root, _) = parse(&bytes).unwrap();
+        let Some(Value::Sequence(values)) = root.field(2).unwrap() else {
+            panic!()
+        };
+        assert_eq!(values.len(), 0);
+        assert_eq!(
+            parse(&[0x39, 0x11, 3, 0x06, 6, 18, 0]),
+            Err(Error::Malformed)
+        );
+    }
+
+    #[test]
+    fn ignored_fields_still_validate_lengths_scalars_bool_elements_and_depth() {
+        for bytes in [
+            vec![0x98, 5, 1],                            // truncated binary
+            vec![0x99, 0x21, 1, 3, 0],                   // invalid bool list element
+            vec![0x9b, 1, 0x11, 1, 3, 0],                // invalid bool map value
+            vec![0x9b, 1, 0x2c, 1, 0],                   // invalid map key kind
+            vec![0x9c, 0x15],                            // truncated nested integer
+            vec![0x99, 0xf3, 0x80, 0x80, 1, 0],          // impossible collection count
+            vec![0x95, 0x80, 0x80, 0x80, 0x80, 0x10, 0], // i32 overflow
+        ] {
+            assert_eq!(parse(&bytes), Err(Error::Malformed), "{bytes:?}");
+        }
+        for (depth, accepted) in [
+            (yamaa_core::limits::Limits::SEMANTIC_DEPTH, true),
+            (yamaa_core::limits::Limits::SEMANTIC_DEPTH + 1, false),
+        ] {
+            let mut bytes = vec![0x9c]; // unknown field 9, nested struct
+            bytes.extend(vec![0x1c; depth - 1]);
+            bytes.extend(vec![0; depth + 1]);
+            assert_eq!(parse(&bytes).is_ok(), accepted);
+        }
+    }
+
+    #[test]
+    fn ordinary_footer_and_page_fields_keep_metadata_and_exact_body_extent() {
+        let footer = [
+            0x15, 2, 0x19, 0x2c, 0x48, 1, b's', 0x15, 2, 0, 0x15, 4, 0x25, 0, 0x18, 1, b'X', 0,
+            0x16, 2, 0x19, 0x1c, 0x19, 0x1c, 0x3c, 0x15, 4, 0x35, 0, 0x36, 8, 0x26, 8, 0x26, 8, 0,
+            0, 0x26, 2, 0, 0,
+        ];
+        let (root, used) = parse(&footer).unwrap();
+        assert_eq!(used, footer.len());
+        assert_eq!(root.field(1).unwrap(), Some(Value::Integer(1)));
+        assert_eq!(root.field(3).unwrap(), Some(Value::Integer(1)));
+        let Some(Value::Sequence(schema)) = root.field(2).unwrap() else {
+            panic!()
+        };
+        let mut schema = schema.into_iter();
+        assert_eq!(
+            schema.next().unwrap().unwrap().field(5).unwrap(),
+            Some(Value::Integer(1))
+        );
+        assert_eq!(
+            schema.next().unwrap().unwrap().field(1).unwrap(),
+            Some(Value::Integer(2))
+        );
+        let Some(Value::Sequence(groups)) = root.field(4).unwrap() else {
+            panic!()
+        };
+        let group = groups.into_iter().next().unwrap().unwrap();
+        assert_eq!(group.field(3).unwrap(), Some(Value::Integer(1)));
+        let Some(Value::Sequence(chunks)) = group.field(1).unwrap() else {
+            panic!()
+        };
+        let chunk = chunks
+            .into_iter()
+            .next()
+            .unwrap()
+            .unwrap()
+            .field(3)
+            .unwrap()
+            .unwrap();
+        for (id, expected) in [(4, 0), (7, 4), (9, 4), (11, 4)] {
+            assert_eq!(chunk.field(id).unwrap(), Some(Value::Integer(expected)));
+        }
+
+        let bytes = [
+            0x15, 0, 0x15, 8, 0x15, 8, 0x2c, 0x15, 2, 0x15, 0, 0x15, 6, 0x15, 6, 0x1c, 0, 0, 0x4b,
+            0, 0, 0xaa, 0xbb, 0xcc, 0xdd,
+        ];
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len() - 4);
+        assert_eq!(root.field(1).unwrap(), Some(Value::Integer(0)));
+        assert_eq!(root.field(2).unwrap(), Some(Value::Integer(4)));
+        assert_eq!(root.field(3).unwrap(), Some(Value::Integer(4)));
+        assert!(matches!(root.field(9).unwrap(), Some(Value::Map(_))));
+        let detail = root.field(5).unwrap().unwrap();
+        for (id, expected) in [(1, 1), (2, 0), (3, 3), (4, 3)] {
+            assert_eq!(detail.field(id).unwrap(), Some(Value::Integer(expected)));
+        }
+        assert!(matches!(detail.field(5).unwrap(), Some(Value::Struct(_))));
+    }
+
     #[test]
     fn authored_fields_boolean_elements_and_borrowed_binary() {
         // i32 field 1 = 150; binary field 5 = ff 00 61; field 6 = false;

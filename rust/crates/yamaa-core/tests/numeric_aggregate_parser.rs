@@ -1502,7 +1502,7 @@ mod numeric {
             assert_eq!(port.trace, ["a", "b"]);
         }
         #[test]
-        fn data_driven_like_uses_the_actual_match_guard_and_preserves_fresh_retry() {
+        fn data_driven_like_keeps_scalar_truth_and_eager_resolution() {
             let expression = "a LIKE b AND c = 1";
             let plan = predicate_compiler::compile(expression, "flag.condition").unwrap();
             let mut port = owned(&[
@@ -1510,18 +1510,8 @@ mod numeric {
                 ("b", Value::Str("%a".repeat(100) + "b")),
                 ("c", Value::Int(1)),
             ]);
-            let error = plan.evaluate(&mut port).unwrap_err();
-            assert_eq!(error.spec_path, "flag.condition");
-            assert_eq!(error.expression, expression);
-            assert_eq!(error.route, [yamaa_core::predicate::Route::Left]);
-            assert!(matches!(
-                error.kind,
-                ErrorKind::Regex(yamaa_core::regex::MatchError {
-                    resource: yamaa_core::regex::Resource::Work,
-                    limit: 1_000_000
-                })
-            ));
-            assert_eq!(port.trace, ["a", "b"]);
+            assert_eq!(plan.evaluate(&mut port).unwrap(), Truth::False);
+            assert_eq!(port.trace, ["a", "b", "c"]);
             port.values.insert("a".into(), Value::Str("\n😀".into()));
             port.values.insert("b".into(), Value::Str("_%".into()));
             port.trace.clear();

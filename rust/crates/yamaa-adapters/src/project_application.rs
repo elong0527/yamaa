@@ -307,6 +307,57 @@ fn preparation_boundary(
 #[cfg(test)]
 mod resource_tests {
     use super::*;
+
+    #[test]
+    fn retained_root_resource_and_semantic_limits_keep_their_public_boundary_facts() {
+        use yamaa_core::{
+            limits::Limits,
+            schema::{NormalizationError, NormalizationResource},
+        };
+        let byte_limit = Limits::spec_bytes(Limits::SPEC_BYTES + 1).unwrap_err();
+        for (cause, resource, limit, actual) in [
+            (
+                SourceError::Limit(byte_limit),
+                "spec_bytes",
+                Limits::SPEC_BYTES,
+                Some(Limits::SPEC_BYTES + 1),
+            ),
+            (
+                SourceError::Normalize(NormalizationError::Limit {
+                    resource: NormalizationResource::Depth,
+                    limit: Limits::SEMANTIC_DEPTH,
+                }),
+                "semantic_depth",
+                Limits::SEMANTIC_DEPTH,
+                None,
+            ),
+        ] {
+            let error = Error::Project(file_project::Error::Environment(EnvironmentFailure::Root(
+                cause,
+            )));
+            let mut context = yamaa_core::json::json!({
+                "stage":"environment", "code":"resource_limit", "resource":resource, "limit":limit,
+            });
+            if let Some(actual) = actual {
+                context["actual"] = actual.into();
+            }
+            for host in [Language::Python, Language::R] {
+                let rows = failure(&error, host);
+                assert_eq!(rows.len(), 1);
+                assert_eq!(rows[0].phase, "engine");
+                assert_eq!(
+                    rows[0].condition,
+                    yamaa_core::diagnostic::ConditionCode::ApplicationRejected
+                        .definition()
+                        .condition
+                );
+                assert_eq!(rows[0].requirement, None);
+                assert_eq!(rows[0].spec_paths, ["$"]);
+                assert_eq!(rows[0].context, context.to_string());
+            }
+        }
+    }
+
     #[test]
     fn inventory_rejection_retains_the_preparation_stage_and_inventory_cause() {
         let inventory = || {

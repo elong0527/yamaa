@@ -133,14 +133,6 @@ struct Node {
     captures: std::ops::Range<usize>,
 }
 
-/// Predicate LIKE has already validated its escape syntax before arena construction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum LikeToken {
-    Any,
-    One,
-    Literal(char),
-}
-
 /// Immutable postorder arena. Compilation never resolves fields or calls a host.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pattern {
@@ -152,62 +144,6 @@ impl Pattern {
     /// Parse the closed grammar before any subject is read.
     pub fn compile(source: &str) -> Result<Self, CompileError> {
         parser::compile(source)
-    }
-    /// Lower validated LIKE tokens without interpreting them as regex syntax.
-    /// The wildcard class includes every scalar, including all line terminators.
-    pub(crate) fn from_like_tokens(tokens: &[LikeToken]) -> Self {
-        let mut nodes = Vec::new();
-        let mut children = Vec::with_capacity(tokens.len());
-        let mut variable = false;
-        for token in tokens {
-            let kind = match token {
-                LikeToken::Literal(character) => Kind::Literal(*character as u32),
-                LikeToken::Any | LikeToken::One => Kind::Class {
-                    items: vec![SetItem::Range(0, char::MAX as u32)],
-                    negative: false,
-                },
-            };
-            let child = nodes.len();
-            nodes.push(Node {
-                kind,
-                byte: 0,
-                width: Width::Fixed(1),
-                captures: 1..1,
-            });
-            if matches!(token, LikeToken::Any) {
-                variable = true;
-                children.push(nodes.len());
-                nodes.push(Node {
-                    kind: Kind::Repeat {
-                        child,
-                        min: 0,
-                        max: None,
-                        greedy: true,
-                    },
-                    byte: 0,
-                    width: Width::Variable,
-                    captures: 1..1,
-                });
-            } else {
-                children.push(child);
-            }
-        }
-        let root = nodes.len();
-        nodes.push(Node {
-            kind: Kind::Sequence(children),
-            byte: 0,
-            width: if variable {
-                Width::Variable
-            } else {
-                Width::Fixed(tokens.len())
-            },
-            captures: 1..1,
-        });
-        Self {
-            nodes,
-            root,
-            groups: 0,
-        }
     }
     /// Count numbered captures; the whole match is group zero in returned results.
     pub fn group_count(&self) -> usize {

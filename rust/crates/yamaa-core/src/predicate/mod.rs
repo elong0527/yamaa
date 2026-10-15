@@ -5,6 +5,7 @@
 //! subject. A future compiler owns grammar, binding and literal validation.
 
 use std::cmp::Ordering;
+use std::vec;
 
 use crate::limits::{LimitExceeded, Limits};
 use crate::regex;
@@ -524,12 +525,8 @@ impl Plan {
                 {
                     Truth::Unknown
                 } else if let (Value::Str(value), Value::Str(pattern)) = (&value, &pattern) {
-                    let pattern = like_pattern(pattern, *escape)
-                        .map_err(|e| self.error(ErrorKind::Condition(e), route))?;
-                    let matched = pattern
-                        .full_match(value)
-                        .map_err(|e| self.error(ErrorKind::Regex(e), route))?;
-                    Truth::from_bool(matched.is_some())
+                    like(value, pattern, *escape)
+                        .map_err(|e| self.error(ErrorKind::Condition(e), route))?
                 } else {
                     let actual = if !matches!(value, Value::Str(_)) {
                         value.value_type()
@@ -577,32 +574,54 @@ fn compare(operator: Comparison, left: &Value, right: &Value) -> Result<Truth, C
     }))
 }
 
-/// Check the entire escape spelling before starting the guarded scalar matcher.
-fn like_pattern(pattern: &str, escape: Option<char>) -> Result<regex::Pattern, Condition> {
-    use regex::LikeToken;
+#[derive(Clone, Copy)]
+enum Pattern {
+    Any,
+    One,
+    Literal(char),
+}
+
+/// Unicode scalar full matching with O(pattern) storage.
+/// All tokens are checked before matching, including a trailing escaped character.
+fn like(value: &str, pattern: &str, escape: Option<char>) -> Result<Truth, Condition> {
+    // The per-match step boundary belongs to regex; LIKE has no separate work quota.
     let mut tokens = Vec::new();
     let mut escaped = false;
     for character in pattern.chars() {
         if escaped {
-            tokens.push(LikeToken::Literal(character));
+            tokens.push(Pattern::Literal(character));
             escaped = false;
         } else if Some(character) == escape {
             escaped = true;
         } else {
-            let token = match character {
-                '%' => LikeToken::Any,
-                '_' => LikeToken::One,
-                _ => LikeToken::Literal(character),
-            };
-            if token != LikeToken::Any || tokens.last() != Some(&LikeToken::Any) {
-                tokens.push(token);
-            }
+            tokens.push(match character {
+                '%' => Pattern::Any,
+                '_' => Pattern::One,
+                _ => Pattern::Literal(character),
+            });
         }
     }
     if escaped {
         return Err(Condition::DanglingEscape);
     }
-    Ok(regex::Pattern::from_like_tokens(&tokens))
+    let mut previous = vec![false; tokens.len() + 1];
+    let mut next = vec![false; tokens.len() + 1];
+    previous[0] = true;
+    for (index, token) in tokens.iter().enumerate() {
+        previous[index + 1] = matches!(token, Pattern::Any) && previous[index];
+    }
+    for character in value.chars() {
+        next[0] = false;
+        for (index, token) in tokens.iter().enumerate() {
+            next[index + 1] = match token {
+                Pattern::Any => next[index] || previous[index + 1],
+                Pattern::One => previous[index],
+                Pattern::Literal(literal) => *literal == character && previous[index],
+            };
+        }
+        std::mem::swap(&mut previous, &mut next);
+    }
+    Ok(Truth::from_bool(previous[tokens.len()]))
 }
 
 mod type_facts;

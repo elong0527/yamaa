@@ -109,7 +109,10 @@ fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
             .transpose()?;
         // A zero child count can describe either a primitive (some writers
         // emit it explicitly) or an empty group. Only primitives have a type.
-        if index != 0 && children.is_none_or(|count| count == 0) && element.field(1)?.is_some() {
+        if index != 0
+            && children.is_none_or(|count| count == 0)
+            && matches!(element.field(1)?, Some(Value::Integer(_)))
+        {
             leaves += 1;
         }
         if let Some(children) = children {
@@ -309,6 +312,168 @@ mod tests {
             0x15, 0, 0x15, 8, 0x15, 8, 0x2c, 0x15, 2, 0x15, 0, 0x15, 6, 0x15, 6, 0, 0, 0, 0, 0, 0,
         ]
     }
+
+    // Independently encoded, zero-row-group footer. Each INT64 leaf is either
+    // at the root or inside its own required group; no page values are needed
+    // to exercise geometry declared by the schema and file metadata.
+    fn geometry_container(rows: usize, leaves: usize, wrapped: bool) -> Vec<u8> {
+        fn unsigned(mut value: usize, output: &mut Vec<u8>) {
+            while value >= 128 {
+                output.push(value as u8 | 128);
+                value >>= 7;
+            }
+            output.push(value as u8);
+        }
+        fn name(value: &str, output: &mut Vec<u8>) {
+            unsigned(value.len(), output);
+            output.extend(value.as_bytes());
+        }
+        let mut footer = vec![0x15, 2, 0x19, 0xfc]; // version=1; schema list
+        unsigned(1 + leaves * if wrapped { 2 } else { 1 }, &mut footer);
+        footer.push(0x48); // root name, then num_children
+        name("schema", &mut footer);
+        footer.push(0x15);
+        unsigned(leaves * 2, &mut footer);
+        footer.push(0);
+        for index in 0..leaves {
+            if wrapped {
+                footer.extend([0x35, 0, 0x18]); // REQUIRED group with one child
+                name(&format!("G{index}"), &mut footer);
+                footer.extend([0x15, 2, 0]);
+            }
+            footer.extend([0x15, 4, 0x25, 0, 0x18]); // INT64; REQUIRED; name
+            name(&format!("V{index}"), &mut footer);
+            if index % 2 == 0 {
+                footer.extend([0x15, 0]); // explicit zero children is also valid
+            }
+            footer.push(0);
+        }
+        footer.push(0x16); // file num_rows
+        unsigned(rows * 2, &mut footer);
+        footer.extend([0x19, 0x0c, 0]); // empty row_groups; STOP
+        let mut bytes = b"PAR1".to_vec();
+        bytes.extend(&footer);
+        bytes.extend((footer.len() as u32).to_le_bytes());
+        bytes.extend(b"PAR1");
+        bytes
+    }
+
+    #[test]
+    fn column_boundary_counts_leaves_instead_of_group_nodes() {
+        for wrapped in [false, true] {
+            for leaves in [1023, 1024, 1025] {
+                let bytes = geometry_container(0, leaves, wrapped);
+                if leaves <= 1024 {
+                    admit(&bytes).unwrap();
+                } else {
+                    assert!(matches!(
+                        admit(&bytes),
+                        Err(Error::ResourceLimit {
+                            resource: "columns",
+                            limit: 1024,
+                            actual: Some(1025),
+                        })
+                    ));
+                }
+            }
+        }
+        // Neither the message root nor an empty group supplies a physical leaf.
+        let bytes = [0x19, 0x3c, 0x55, 4, 0, 0x55, 0, 0, 0x15, 4, 0, 0];
+        let (root, _) = compact::parse(&bytes).unwrap();
+        let schema = sequence(root.field(1).unwrap()).unwrap();
+        assert_eq!(admit_schema(schema).unwrap(), 1);
+    }
+
+    #[test]
+    fn malformed_physical_types_do_not_become_a_column_limit_refusal() {
+        let mut footer = vec![0x15, 2, 0x19, 0xfc]; // version=1; schema list
+        unsigned(&mut footer, 1026);
+        footer.extend([0x48, 6]);
+        footer.extend(b"schema");
+        footer.push(0x15);
+        unsigned(&mut footer, 2050); // 1025 children
+        footer.push(0);
+        for _ in 0..1025 {
+            // Physical type field 1 is a bool, not the required enum integer.
+            footer.extend([0x11, 0x25, 0, 0x18, 1, b'X', 0]);
+        }
+        footer.extend([0x16, 0, 0x19, 0x0c, 0]); // rows=0; row_groups=[]
+        let mut bytes = b"PAR1".to_vec();
+        bytes.extend(&footer);
+        bytes.extend((footer.len() as u32).to_le_bytes());
+        bytes.extend(b"PAR1");
+        assert!(matches!(
+            crate::parquet_source::reader::read(&bytes),
+            Err(crate::parquet_source::reader::Error::Malformed)
+        ));
+    }
+
+    #[test]
+    fn declared_cell_boundary_uses_physical_leaf_columns() {
+        let at = geometry_container(10_000_000, 64, true);
+        admit(&at).unwrap(); // 640,000,000 cells despite the 64 extra group nodes
+        let above = geometry_container(10_000_000, 65, true);
+        assert!(matches!(
+            admit(&above),
+            Err(Error::ResourceLimit {
+                resource: "table_cells",
+                limit: 640_000_000,
+                actual: Some(650_000_000),
+            })
+        ));
+    }
+
+    #[test]
+    fn nested_schema_at_leaf_boundary_reaches_unsupported_profile_finding() {
+        let bytes = geometry_container(0, 1024, true);
+        assert!(matches!(
+            crate::parquet_source::reader::read(&bytes),
+            Err(crate::parquet_source::reader::Error::Profile(
+                crate::parquet_source::profile::Error::Unsupported { field, .. }
+            )) if field == "G0"
+        ));
+    }
+
+    #[test]
+    fn unknown_footer_fanout_keeps_a_valid_empty_table_decodable() {
+        let mut bytes = geometry_container(0, 1, false);
+        // Remove root STOP and trailer. Unknown field 15 follows field 4: a
+        // 65,536-element byte list, valid for both Compact decoders.
+        bytes.truncate(bytes.len() - 9);
+        bytes.extend([0xb9, 0xf3, 0x80, 0x80, 4]);
+        for _ in 0..32_768 {
+            bytes.extend([1, 2]);
+        }
+        bytes.push(0);
+        let footer_length = (bytes.len() - 4) as u32;
+        bytes.extend(footer_length.to_le_bytes());
+        bytes.extend(b"PAR1");
+        let decoded = crate::parquet_source::reader::read(&bytes).unwrap();
+        assert_eq!(decoded.schema.columns()[0].name, "V0");
+        assert_eq!(decoded.batches[0].num_rows(), 0);
+    }
+
+    #[test]
+    fn wrong_schema_and_row_group_container_shapes_are_malformed() {
+        for footer in [
+            // schema is a bool list, rows=0, row_groups=[]
+            &[0x15, 2, 0x19, 0x31, 1, 2, 1, 0x16, 0, 0x19, 0x0c, 0][..],
+            // schema=[{num_children:0}], rows=0, row_groups is a bool list
+            &[
+                0x15, 2, 0x19, 0x1c, 0x55, 0, 0, 0x16, 0, 0x19, 0x31, 1, 2, 1, 0,
+            ][..],
+        ] {
+            let mut bytes = b"PAR1".to_vec();
+            bytes.extend(footer);
+            bytes.extend((footer.len() as u32).to_le_bytes());
+            bytes.extend(b"PAR1");
+            assert!(matches!(
+                crate::parquet_source::reader::read(&bytes),
+                Err(crate::parquet_source::reader::Error::Malformed)
+            ));
+        }
+    }
+
     #[test]
     fn schema_integer_claims_and_flattened_tree_recursion_are_checked() {
         fn admit_children(children: &[i64]) -> Result<usize, Error> {
@@ -340,125 +505,6 @@ mod tests {
         let mut flat = vec![100];
         flat.extend([0; 100]);
         assert_eq!(admit_children(&flat).unwrap(), 100);
-    }
-
-    #[test]
-    fn nested_group_nodes_do_not_replace_the_supported_profile_finding() {
-        use parquet::{file::writer::SerializedFileWriter, schema::types::Type};
-        use std::sync::Arc;
-        let fields = (0..yamaa_core::limits::Limits::COLUMNS)
-            .map(|index| {
-                Arc::new(
-                    Type::group_type_builder(&format!("G{index}"))
-                        .with_repetition(parquet::basic::Repetition::OPTIONAL)
-                        .with_fields(vec![Arc::new(
-                            Type::primitive_type_builder("ID", parquet::basic::Type::INT64)
-                                .build()
-                                .unwrap(),
-                        )])
-                        .build()
-                        .unwrap(),
-                )
-            })
-            .collect();
-        let schema = Arc::new(
-            Type::group_type_builder("schema")
-                .with_fields(fields)
-                .build()
-                .unwrap(),
-        );
-        let mut bytes = Vec::new();
-        SerializedFileWriter::new(&mut bytes, schema, Default::default())
-            .unwrap()
-            .close()
-            .unwrap();
-        let result = super::super::parse(&bytes);
-        assert!(
-            matches!(&result, Err(super::super::Error::Unsupported { .. })),
-            "1024 physical leaves remain within geometry; got {:?}",
-            result.as_ref().err()
-        );
-    }
-
-    #[test]
-    fn unknown_footer_collections_preserve_independent_cells_and_reject_bad_children() {
-        use yamaa_core::table::{TableAccess, ValueRef};
-        let fixture = include_bytes!("../../tests/fixtures/pq/none-1-0.parquet");
-        let footer = fixture.len() - 8;
-        let old_length =
-            u32::from_le_bytes(fixture[footer..footer + 4].try_into().unwrap()) as usize;
-        let start = footer - old_length;
-        assert_eq!(
-            compact::parse(&fixture[start..footer]).unwrap().1,
-            old_length
-        );
-        assert_eq!(fixture[footer - 1], 0); // FileMetaData STOP
-        let mut bytes = fixture[..footer - 1].to_vec();
-        bytes.push(0x09); // explicit unknown field 30000: empty-struct list
-        unsigned(&mut bytes, 60000);
-        bytes.push(0xfc);
-        unsigned(&mut bytes, 65536);
-        let elements = bytes.len();
-        bytes.resize(elements + 65536, 0);
-        bytes.push(0);
-        let length = bytes.len() - start;
-        bytes.extend((length as u32).to_le_bytes());
-        bytes.extend(b"PAR1");
-        let table = super::super::parse(&bytes).unwrap();
-        assert_eq!(table.row_count(), 3);
-        assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str(""));
-        assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Str("β\0z"));
-        assert_eq!(table.cell(0, 1).unwrap(), ValueRef::Int(i64::MIN));
-        assert_eq!(table.cell(2, 1).unwrap(), ValueRef::Int(i64::MAX));
-        for column in 0..5 {
-            assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing);
-        }
-        for (row, bits) in [(0, (-0.0f64).to_bits()), (2, 1)] {
-            let ValueRef::Float(value) = table.cell(row, 2).unwrap() else {
-                panic!();
-            };
-            assert_eq!(value.get().to_bits(), bits);
-        }
-        bytes[elements + 65535] = 0x1e;
-        assert!(matches!(
-            super::super::parse(&bytes),
-            Err(super::super::Error::Malformed)
-        ));
-    }
-
-    #[test]
-    fn declared_cells_use_physical_leaves_instead_of_group_nodes() {
-        const LEAVES: usize = 1024;
-        for rows in [625000, 625001] {
-            let mut footer = vec![0x29, 0xfc]; // schema: root + group/leaf pairs
-            unsigned(&mut footer, (1 + 2 * LEAVES) as u64);
-            footer.push(0x55);
-            unsigned(&mut footer, (2 * LEAVES) as u64);
-            footer.push(0);
-            for _ in 0..LEAVES {
-                footer.extend([0x55, 2, 0]); // one-child group
-                footer.extend([0x15, 4, 0]); // INT64 primitive, no child count
-            }
-            footer.push(0x16); // declared num_rows
-            unsigned(&mut footer, 2 * rows);
-            footer.extend([0x19, 0, 0]); // no row groups; metadata STOP
-            let mut bytes = b"PAR1".to_vec();
-            bytes.extend(&footer);
-            bytes.extend((footer.len() as u32).to_le_bytes());
-            bytes.extend(b"PAR1");
-            if rows == 625000 {
-                admit(&bytes).unwrap();
-            } else {
-                assert!(matches!(
-                    admit(&bytes),
-                    Err(Error::ResourceLimit {
-                        resource: "table_cells",
-                        actual: Some(640001024),
-                        ..
-                    })
-                ));
-            }
-        }
     }
 
     #[test]
@@ -528,6 +574,115 @@ mod tests {
                 assert!(
                     matches!(admit(&bytes), Err(Error::ResourceLimit { resource: "table_rows", actual: Some(actual), .. }) if actual == rows)
                 );
+            }
+        }
+    }
+    #[test]
+    fn nested_group_nodes_do_not_replace_the_supported_profile_finding() {
+        use parquet::{file::writer::SerializedFileWriter, schema::types::Type};
+        use std::sync::Arc;
+        let fields = (0..yamaa_core::limits::Limits::COLUMNS)
+            .map(|index| {
+                Arc::new(
+                    Type::group_type_builder(&format!("G{index}"))
+                        .with_repetition(parquet::basic::Repetition::OPTIONAL)
+                        .with_fields(vec![Arc::new(
+                            Type::primitive_type_builder("ID", parquet::basic::Type::INT64)
+                                .build()
+                                .unwrap(),
+                        )])
+                        .build()
+                        .unwrap(),
+                )
+            })
+            .collect();
+        let schema = Arc::new(
+            Type::group_type_builder("schema")
+                .with_fields(fields)
+                .build()
+                .unwrap(),
+        );
+        let mut bytes = Vec::new();
+        SerializedFileWriter::new(&mut bytes, schema, Default::default())
+            .unwrap()
+            .close()
+            .unwrap();
+        let result = super::super::parse(&bytes);
+        assert!(
+            matches!(&result, Err(super::super::Error::Unsupported { .. })),
+            "1024 physical leaves remain within geometry; got {:?}",
+            result.as_ref().err()
+        );
+    }
+
+    #[test]
+    fn unknown_footer_collections_preserve_independent_cells_and_reject_bad_children() {
+        use yamaa_core::table::{TableAccess, ValueRef};
+        fn unsigned(bytes: &mut Vec<u8>, mut value: u64) {
+            while value >= 128 {
+                bytes.push(value as u8 | 128);
+                value >>= 7;
+            }
+            bytes.push(value as u8);
+        }
+        let fixture = include_bytes!("../../tests/fixtures/pq/none-1-0.parquet");
+        let footer = fixture.len() - 8;
+        let old_length =
+            u32::from_le_bytes(fixture[footer..footer + 4].try_into().unwrap()) as usize;
+        let start = footer - old_length;
+        assert_eq!(
+            compact::parse(&fixture[start..footer]).unwrap().1,
+            old_length
+        );
+        assert_eq!(fixture[footer - 1], 0); // FileMetaData STOP
+        let mut bytes = fixture[..footer - 1].to_vec();
+        bytes.push(0x09); // explicit unknown field 30000: empty-struct list
+        unsigned(&mut bytes, 60000);
+        bytes.push(0xfc);
+        unsigned(&mut bytes, 65536);
+        let elements = bytes.len();
+        bytes.resize(elements + 65536, 0);
+        bytes.push(0);
+        let length = bytes.len() - start;
+        bytes.extend((length as u32).to_le_bytes());
+        bytes.extend(b"PAR1");
+        let table = super::super::parse(&bytes).unwrap();
+        assert_eq!(table.row_count(), 3);
+        assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str(""));
+        assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Str("β\0z"));
+        assert_eq!(table.cell(0, 1).unwrap(), ValueRef::Int(i64::MIN));
+        assert_eq!(table.cell(2, 1).unwrap(), ValueRef::Int(i64::MAX));
+        for column in 0..5 {
+            assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing);
+        }
+        for (row, bits) in [(0, (-0.0f64).to_bits()), (2, 1)] {
+            let ValueRef::Float(value) = table.cell(row, 2).unwrap() else {
+                panic!();
+            };
+            assert_eq!(value.get().to_bits(), bits);
+        }
+        bytes[elements + 65535] = 0x1e;
+        assert!(matches!(
+            super::super::parse(&bytes),
+            Err(super::super::Error::Malformed)
+        ));
+    }
+
+    #[test]
+    fn leaf_column_cell_boundary_keeps_the_one_row_edge() {
+        for rows in [625_000, 625_001] {
+            let bytes = geometry_container(rows, 1024, true);
+            if rows == 625_000 {
+                admit(&bytes).unwrap();
+            } else {
+                assert!(matches!(
+                    admit(&bytes),
+                    Err(Error::ResourceLimit {
+                        resource: "table_cells",
+                        limit: 640_000_000,
+                        actual: Some(640_001_024),
+                    })
+                ));
             }
         }
     }
