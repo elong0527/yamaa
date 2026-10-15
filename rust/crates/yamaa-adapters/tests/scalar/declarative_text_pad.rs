@@ -42,7 +42,6 @@ impl Drop for Fixture {
 fn golden(fixture: &Fixture) -> serde_json::Value {
     let expected = yamaa_adapters::yaml_decode::decode_yaml(
         &fs::read(fixture.0.join("expected/error.yaml")).unwrap(),
-        Default::default(),
     )
     .unwrap()
     .document;

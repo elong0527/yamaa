@@ -61,7 +61,6 @@ impl Drop for Fixture {
 fn golden(fixture: &Fixture) -> serde_json::Value {
     let expected = yamaa_adapters::yaml_decode::decode_yaml(
         &fs::read(fixture.0.join("expected/error.yaml")).unwrap(),
-        Default::default(),
     )
     .unwrap()
     .document;
@@ -230,10 +229,9 @@ fn original_grammar_and_complete_reference_parser_parts_qualify() {
     use yamaa_core::text_template::{Part, StringTemplate};
     let source =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../yaml/grammar/string-template.yaml");
-    let grammar =
-        yamaa_adapters::yaml_decode::decode_yaml(&fs::read(source).unwrap(), Default::default())
-            .unwrap()
-            .document;
+    let grammar = yamaa_adapters::yaml_decode::decode_yaml(&fs::read(source).unwrap())
+        .unwrap()
+        .document;
     // Pin the actual authority's full case count independently of the retained capture.
     let id = grammar.field(grammar.root(), "cases").unwrap();
     let yamaa_core::schema::DocumentNode::Sequence(cases) = &grammar.nodes()[id] else {
@@ -340,8 +338,8 @@ fn original_grammar_and_complete_reference_parser_parts_qualify() {
     }
 }
 #[test]
-fn zero_row_whole_metadata_and_effective_row_default_copies_precede_parser_findings() {
-    fn admission(spec: serde_json::Value, expected: &'static str) {
+fn complete_template_findings_precede_zero_rows_and_inherited_row_defaults() {
+    fn admission(spec: serde_json::Value, paths: Vec<String>) {
         let schema = yamaa_adapters::shipped_schema::capture().unwrap();
         let document = schema
             .prepare_standalone(yamaa_adapters::specification_source::Source {
@@ -349,32 +347,38 @@ fn zero_row_whole_metadata_and_effective_row_default_copies_precede_parser_findi
                 bytes: spec.to_string().into_bytes(),
             })
             .unwrap();
-        assert!(
-            matches!(yamaa_adapters::specification_run::PreparedRun::prepare(document),Err(yamaa_adapters::specification_run::Error::Prepare(yamaa_core::specification::PrepareError::Limit(resource))) if resource.resource ==expected)
-        );
-        let fixture = bespoke(&spec.to_string(), b"ID,A,B,N\n");
-        let Err(issues) = attempt(&fixture) else {
-            panic!("whole quota before study")
+        let Err(yamaa_adapters::specification_run::Error::Prepare(
+            yamaa_core::specification::PrepareError::Invalid(findings),
+        )) = yamaa_adapters::specification_run::PreparedRun::prepare(document)
+        else {
+            panic!("all malformed templates must retain their language findings")
         };
-        assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].phase, "engine");
-        assert_eq!(issues[0].condition, "engine_rejected");
-        let context = serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap();
-        assert_eq!(context["code"], "compiler_limit");
-        assert_eq!(context["stage"], "prepare");
-        assert_eq!(context["resource"], expected);
-        assert_eq!(context["limit"], 16_777_216);
-        assert_eq!(issues[0].spec_paths.len(), 1);
-        assert!(issues[0].spec_paths[0].ends_with(".derivation.str_template"));
-        assert!(!fixture.0.join("output.csv").exists());
+        assert_eq!(findings.len(), paths.len());
+        let expected = paths.iter().map(|path| serde_json::json!({
+            "phase":"validation", "condition":"invalid_string_template", "requirement":"REQ-0461",
+            "spec_paths":[path], "context":{"reason":"unmatched_brace"}
+        })).collect::<Vec<_>>();
+        let fixture = bespoke(&spec.to_string(), b"ID,A,B,N\n");
+        for missing in [false, true] {
+            if missing {
+                fs::remove_file(fixture.0.join("input.csv")).unwrap();
+            }
+            let Err(issues) = attempt(&fixture) else {
+                panic!("invalid declarations must precede study access")
+            };
+            assert_eq!(issues.iter().map(issue_json).collect::<Vec<_>>(), expected);
+            assert!(!fixture.0.join("output.csv").exists());
+        }
     }
     let mut spec = reference()["literal-only"]["specification"].clone();
     let columns = spec["columns"].as_array_mut().unwrap();
     columns[4]["derivation"] = serde_json::json!({"str_template":format!("{{{}","a".repeat(1600))});
+    let mut paths = vec!["columns.RESULT.derivation.str_template".to_owned()];
     for index in 0..55 {
         columns.push(serde_json::json!({"name":format!("V{index}"),"type":"str","derivation":{"str_template":format!("{{{}","a".repeat(1600))}}));
+        paths.push(format!("columns.V{index}.derivation.str_template"));
     }
-    admission(spec, "str_template_metadata");
+    admission(spec, paths);
     let mut spec = reference()["row-template"]["specification"].clone();
     spec["columns"][4]["derivation"] =
         serde_json::json!({"str_template":format!("{{{}","a".repeat(4000))});
@@ -387,13 +391,11 @@ fn zero_row_whole_metadata_and_effective_row_default_copies_precede_parser_findi
             row
         })
         .collect();
-    admission(spec, "str_template_metadata");
+    admission(spec, vec!["columns.RESULT.derivation.str_template".into()]);
 }
 #[test]
-fn cumulative_template_query_work_is_admitted_before_all_parser_arenas() {
+fn cumulative_template_queries_admit_and_compute_every_projected_value() {
     let mut spec = reference()["literal-only"]["specification"].clone();
-    // A short operation path keeps the independent metadata bound below its
-    // limit while total conservative scope/query work exceeds its own bound.
     let columns = spec["columns"].as_array_mut().unwrap();
     columns.truncate(1);
     for index in 0..20 {
@@ -407,16 +409,33 @@ fn cumulative_template_query_work_is_admitted_before_all_parser_arenas() {
             bytes: spec.to_string().into_bytes(),
         })
         .unwrap();
-    let Err(yamaa_adapters::specification_run::Error::Prepare(
-        yamaa_core::specification::PrepareError::Limit(refusal),
-    )) = yamaa_adapters::specification_run::PreparedRun::prepare(document)
-    else {
-        panic!("template query work must be refused before allocation")
-    };
-    assert_eq!(refusal.resource, "str_template_work");
-    assert_eq!(refusal.limit, 100_000_000);
-    assert!(refusal.actual.unwrap() > refusal.limit);
-    assert_eq!(refusal.spec_paths.len(), 1);
-    assert!(refusal.spec_paths[0].starts_with("columns.X"));
-    assert!(refusal.spec_paths[0].ends_with(".derivation.str_template"));
+    assert!(yamaa_adapters::specification_run::PreparedRun::prepare(document).is_ok());
+    let fixture = bespoke(&spec.to_string(), b"ID,A,B,N\n");
+    let mut result = attempt(&fixture).unwrap();
+    assert!(result.issues().is_empty());
+    assert!(result.output().is_some());
+    assert!(!fixture.0.join("output.csv").exists());
+    assert!(result.save().unwrap());
+    assert_eq!(fs::read(fixture.0.join("output.csv")).unwrap(), b"ID\n");
+
+    let names = std::iter::once("ID".to_owned())
+        .chain((0..20).map(|index| format!("X{index}")))
+        .collect::<Vec<_>>();
+    spec["output"]["columns"] = serde_json::json!(names);
+    let fixture = bespoke(&spec.to_string(), b"ID,A,B,N\nrow1,alpha,beta,7\n");
+    let mut result = attempt(&fixture).unwrap();
+    assert!(result.issues().is_empty());
+    let mut expected = names.join(",") + "\nrow1";
+    for _ in 0..20 {
+        expected.push(',');
+        expected.push_str(&"row1".repeat(400));
+    }
+    expected.push('\n');
+    assert!(result.output().is_some());
+    assert!(!fixture.0.join("output.csv").exists());
+    assert!(result.save().unwrap());
+    assert_eq!(
+        fs::read(fixture.0.join("output.csv")).unwrap(),
+        expected.as_bytes()
+    );
 }

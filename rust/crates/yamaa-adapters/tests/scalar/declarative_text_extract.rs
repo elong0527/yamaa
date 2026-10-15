@@ -61,7 +61,6 @@ impl Drop for Fixture {
 fn golden(fixture: &Fixture) -> serde_json::Value {
     let expected = yamaa_adapters::yaml_decode::decode_yaml(
         &fs::read(fixture.0.join("expected/error.yaml")).unwrap(),
-        Default::default(),
     )
     .unwrap()
     .document;
@@ -248,14 +247,13 @@ fn native_integer_group_preserves_the_independent_pure_expression_truth() {
     assert!(!fixture.0.join("output.csv").exists());
 }
 #[test]
-fn whole_declaration_admission_precedes_parser_rejections_even_with_zero_rows() {
+fn all_invalid_patterns_keep_complete_findings_before_zero_row_execution() {
     let mut columns = vec![
         serde_json::json!({"name":"ID","type":"str","derivation":"SRC.ID"}),
         serde_json::json!({"name":"TEXT","type":"str","derivation":"SRC.TEXT"}),
     ];
     let mut names = vec!["ID".to_owned(), "TEXT".to_owned()];
-    // Stay below the independent 64-column ceiling, so this must reach the
-    // extraction scope's aggregate retained-parser admission.
+    // Each declared pattern remains a separate finding within fixed width limits.
     for index in 0..60 {
         let name = format!("V{index}");
         names.push(name.clone());
@@ -269,27 +267,27 @@ fn whole_declaration_admission_precedes_parser_rejections_even_with_zero_rows() 
             bytes: spec.to_string().into_bytes(),
         })
         .unwrap();
-    assert!(matches!(
-        yamaa_adapters::specification_run::PreparedRun::prepare(document),
-        Err(yamaa_adapters::specification_run::Error::Prepare(
-            yamaa_core::specification::PrepareError::Limit(
-                yamaa_core::specification::CompilerLimit {
-                    resource: "str_extract_metadata",
-                    ..
-                }
-            )
-        ))
-    ));
-    let fixture = bespoke(&spec.to_string(), b"ID,TEXT\n");
-    let Err(issues) = attempt(&fixture) else {
-        panic!("whole request quota")
+    let Err(yamaa_adapters::specification_run::Error::Prepare(
+        yamaa_core::specification::PrepareError::Invalid(findings),
+    )) = yamaa_adapters::specification_run::PreparedRun::prepare(document)
+    else {
+        panic!("all malformed patterns must retain their language findings")
     };
-    assert_eq!(issues.len(), 1);
-    assert_eq!(issues[0].condition, "engine_rejected");
-    assert_eq!(issues[0].phase, "engine");
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&issues[0].context).unwrap(),
-        serde_json::json!({"code":"compiler_limit","stage":"prepare","resource":"str_extract_metadata","limit":16_777_216,"incomplete_checks_from":"specification"})
-    );
-    assert!(!fixture.0.join("output.csv").exists());
+    assert_eq!(findings.len(), 60);
+    let expected = (0..60).map(|index| serde_json::json!({
+        "phase":"validation", "condition":"invalid_regex", "requirement":"REQ-0827",
+        "spec_paths":[format!("columns.V{index}.derivation.str_extract.pattern")],
+        "context":{"pattern":format!("[{}", "a".repeat(600)), "reason":"a character class is never closed"}
+    })).collect::<Vec<_>>();
+    let fixture = bespoke(&spec.to_string(), b"ID,TEXT\n");
+    for missing in [false, true] {
+        if missing {
+            fs::remove_file(fixture.0.join("input.csv")).unwrap();
+        }
+        let Err(issues) = attempt(&fixture) else {
+            panic!("invalid declarations must precede study access")
+        };
+        assert_eq!(issues.iter().map(issue_json).collect::<Vec<_>>(), expected);
+        assert!(!fixture.0.join("output.csv").exists());
+    }
 }

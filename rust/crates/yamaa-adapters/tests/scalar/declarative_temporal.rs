@@ -159,7 +159,7 @@ fn expected_yaml(bytes: &[u8]) -> serde_json::Value {
             other => panic!("unexpected independent diagnostic scalar: {other:?}"),
         }
     }
-    let decoded = yamaa_adapters::yaml_decode::decode_yaml(bytes, Default::default()).unwrap();
+    let decoded = yamaa_adapters::yaml_decode::decode_yaml(bytes).unwrap();
     node(&decoded.document, decoded.document.root())
 }
 
