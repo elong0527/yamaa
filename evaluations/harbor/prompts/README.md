@@ -123,7 +123,7 @@ own.
 
 ## Checks
 
-`tests/test_harbor_evaluation.py` checks that:
+`evaluations/harbor/tests/test_harbor_evaluation.py` checks that:
 
 - every `sdtm-*` and `adam-*` benchmark has a folder here, holding
   `full.md` and `conventions.md`, and no prompt is left under

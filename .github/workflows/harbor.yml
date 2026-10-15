@@ -45,6 +45,7 @@ jobs:
           evaluations/harbor/tests/test_harbor_opensas.py
           evaluations/harbor/tests/test_harbor_reference_edges.py
       - name: Reject literal R golden writers
+        if: always()
         run: >-
           uv run --project python --no-sync python -m evaluations.harbor.check_pkqt_r_golden_copy
           --out "${RUNNER_TEMP}/pkqt-r-golden-copy"
