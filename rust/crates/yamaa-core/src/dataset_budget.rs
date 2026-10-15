@@ -1,0 +1,293 @@
+//! Run-local cumulative accounting for installed dataset boundary policies.
+use crate::dataset::{ExecutionError, Limits, Resource};
+use crate::{predicate, table::ValueRef, value::Value};
+use alloc::boxed::Box;
+
+/// These counters bound retained data and logical work, not allocator overhead or CPU time.
+pub(crate) struct Budget {
+    limits: Limits,
+    work_limit: usize,
+    output_text: usize,
+    identity_cells: usize,
+    identity_text: usize,
+    runtime: predicate::Budget,
+}
+impl Budget {
+    pub(crate) fn work_cell_limit(&self) -> usize {
+        self.work_limit
+    }
+    pub(crate) fn limits(&self) -> Limits {
+        self.limits
+    }
+    /// Borrow the installed capacity policy without charging or changing counters.
+    pub(crate) fn scalar_text_limit(&self) -> usize {
+        self.limits.scalar_text_bytes
+    }
+    /// Start a fresh accounting scope; reuse of a plan never reuses counters.
+    pub(crate) fn new(limits: Limits) -> Self {
+        Self::with_work(limits, limits.work_cells, 0)
+    }
+    /// Seed only the cumulative WorkCells counter. Predicate resolutions,
+    /// regex, retained text and identities retain their existing local limits.
+    pub(crate) fn with_work(limits: Limits, work_limit: usize, prior: usize) -> Self {
+        let mut budget = Self {
+            limits,
+            work_limit,
+            output_text: 0,
+            identity_cells: 0,
+            identity_text: 0,
+            runtime: predicate::Budget::new(predicate::Usage {
+                work: work_limit,
+                resolutions: limits.work_cells,
+                text_bytes: limits.scalar_text_bytes,
+                like_work: limits.work_cells,
+                regex: crate::regex::MatchUsage {
+                    subject_bytes: limits.scalar_text_bytes,
+                    work: limits.work_cells,
+                    state_cells: limits.work_cells,
+                },
+            }),
+        };
+        assert!(budget.runtime.work(prior).is_ok());
+        budget
+    }
+    pub(crate) fn used_work(&self) -> usize {
+        self.runtime.used().work
+    }
+    /// A caller may tighten a node policy after earlier graph effects. Refuse
+    /// against those already admitted counters before entering a new reservation.
+    pub(crate) fn admit_prefix<E>(
+        limits: Limits,
+        prior: crate::execution_work::Usage,
+    ) -> Result<(), Box<ExecutionError<E>>> {
+        for (resource, limit, required) in [
+            (Resource::WorkCells, limits.work_cells, prior.runtime.work),
+            (
+                Resource::PredicateResolutions,
+                limits.work_cells,
+                prior.runtime.resolutions,
+            ),
+            (
+                Resource::ScalarTextBytes,
+                limits.scalar_text_bytes,
+                prior.runtime.text_bytes,
+            ),
+            (
+                Resource::PredicateLikeWork,
+                limits.work_cells,
+                prior.runtime.like_work,
+            ),
+            (
+                Resource::PredicateRegexSubjectBytes,
+                limits.scalar_text_bytes,
+                prior.runtime.regex.subject_bytes,
+            ),
+            (
+                Resource::PredicateRegexWork,
+                limits.work_cells,
+                prior.runtime.regex.work,
+            ),
+            (
+                Resource::PredicateRegexStateCells,
+                limits.work_cells,
+                prior.runtime.regex.state_cells,
+            ),
+            (
+                Resource::OutputTextBytes,
+                limits.output_text_bytes,
+                prior.output_text_bytes,
+            ),
+            (
+                Resource::IdentityCells,
+                limits.identity_cells,
+                prior.identity_cells,
+            ),
+            (
+                Resource::IdentityTextBytes,
+                limits.identity_text_bytes,
+                prior.identity_text_bytes,
+            ),
+        ] {
+            if required > limit {
+                return Err(Box::new(ExecutionError::Limit {
+                    resource,
+                    limit,
+                    required: Some(required),
+                }));
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn pooled(limits: Limits, prior: crate::execution_work::Usage) -> Self {
+        let mut budget = Self::new(limits);
+        let quotas = predicate::Usage {
+            work: limits.work_cells,
+            resolutions: limits.work_cells,
+            text_bytes: limits.scalar_text_bytes,
+            like_work: limits.work_cells,
+            regex: crate::regex::MatchUsage {
+                subject_bytes: limits.scalar_text_bytes,
+                work: limits.work_cells,
+                state_cells: limits.work_cells,
+            },
+        };
+        budget.runtime = predicate::Budget::with_usage(quotas, prior.runtime);
+        budget.output_text = prior.output_text_bytes;
+        budget.identity_cells = prior.identity_cells;
+        budget.identity_text = prior.identity_text_bytes;
+        budget
+    }
+    pub(crate) fn usage(&self) -> crate::execution_work::Usage {
+        crate::execution_work::Usage {
+            runtime: self.runtime.used(),
+            output_text_bytes: self.output_text,
+            identity_cells: self.identity_cells,
+            identity_text_bytes: self.identity_text,
+            ..Default::default()
+        }
+    }
+
+    /// Charge logical table visits before reads, folds or verification scans begin.
+    pub(crate) fn work<E>(
+        &mut self,
+        rows: usize,
+        columns: usize,
+    ) -> Result<(), Box<ExecutionError<E>>> {
+        let amount = rows.checked_mul(columns);
+        let required = amount.and_then(|amount| self.runtime.used().work.checked_add(amount));
+        if let Some(amount) = amount {
+            if self.runtime.work(amount).is_ok() {
+                return Ok(());
+            }
+        }
+        Err(Box::new(ExecutionError::Limit {
+            resource: Resource::WorkCells,
+            limit: self.work_limit,
+            required,
+        }))
+    }
+
+    /// Bound repeated string cloning/parsing even when conversion yields tiny values.
+    pub(crate) fn scalar_text<E>(&mut self, bytes: usize) -> Result<(), Box<ExecutionError<E>>> {
+        let required = self.runtime.used().text_bytes.checked_add(bytes);
+        self.runtime.text(bytes).map_err(|_| {
+            Box::new(ExecutionError::Limit {
+                resource: Resource::ScalarTextBytes,
+                limit: self.limits.scalar_text_bytes,
+                required,
+            })
+        })
+    }
+
+    /// Predicates share cumulative work/text with ordinary dataset evaluation.
+    pub(crate) fn predicate(&mut self) -> &mut predicate::Budget {
+        &mut self.runtime
+    }
+
+    /// The predicate context admits its operand against both local and attempt counters.
+    pub(crate) fn predicate_operand_text(
+        &mut self,
+        local: &mut predicate::Budget,
+        bytes: usize,
+    ) -> Result<(), predicate::LimitError> {
+        self.runtime.operand_text(local, bytes)
+    }
+
+    /// A filtered candidate releases retained text, but never refunds evaluated work.
+    pub(crate) fn discard_candidate(&mut self, values: &[Value]) {
+        let bytes: usize = values.iter().map(text_bytes).sum();
+        self.output_text -= bytes;
+    }
+
+    /// Check a known final text result before allocating it, without spending a
+    /// second counter. Ordinary final conversion/value admission still owns retention.
+    pub(crate) fn admit_output_text<E>(&self, bytes: usize) -> Result<(), Box<ExecutionError<E>>> {
+        let required = self.output_text.checked_add(bytes);
+        if required.is_some_and(|n| n <= self.limits.output_text_bytes) {
+            Ok(())
+        } else {
+            Err(Box::new(ExecutionError::Limit {
+                resource: Resource::OutputTextBytes,
+                limit: self.limits.output_text_bytes,
+                required,
+            }))
+        }
+    }
+
+    /// Each admitted assignment fills a new slot, so retained text grows monotonically.
+    pub(crate) fn value<E>(&mut self, value: &Value) -> Result<(), Box<ExecutionError<E>>> {
+        charge(
+            &mut self.output_text,
+            Some(text_bytes(value)),
+            self.limits.output_text_bytes,
+            Resource::OutputTextBytes,
+        )
+    }
+
+    /// Admit a complete identity before cloning any of its cells or text.
+    pub(crate) fn identity<'a, E>(
+        &mut self,
+        values: impl Iterator<Item = &'a Value>,
+    ) -> Result<(), Box<ExecutionError<E>>> {
+        self.identity_refs(values.map(ValueRef::from))
+    }
+
+    /// Admit borrowed source or output keys before copying any diagnostic payload.
+    pub(crate) fn identity_refs<'a, E>(
+        &mut self,
+        values: impl Iterator<Item = ValueRef<'a>>,
+    ) -> Result<(), Box<ExecutionError<E>>> {
+        let mut cells = Some(0_usize);
+        let mut text = Some(0_usize);
+        for value in values {
+            cells = cells.and_then(|cells| cells.checked_add(1));
+            text = text.and_then(|text| {
+                text.checked_add(match value {
+                    ValueRef::Str(text) => text.len(),
+                    _ => 0,
+                })
+            });
+        }
+        charge(
+            &mut self.identity_cells,
+            cells,
+            self.limits.identity_cells,
+            Resource::IdentityCells,
+        )?;
+        charge(
+            &mut self.identity_text,
+            text,
+            self.limits.identity_text_bytes,
+            Resource::IdentityTextBytes,
+        )
+    }
+}
+
+/// Runtime strings are UTF-8; other fixed-size value variants contribute no text payload.
+fn text_bytes(value: &Value) -> usize {
+    match value {
+        Value::Str(text) => text.len(),
+        _ => 0,
+    }
+}
+
+/// Checked counters fail without wrapping, saturation or accepting partial data.
+fn charge<E>(
+    used: &mut usize,
+    amount: Option<usize>,
+    limit: usize,
+    resource: Resource,
+) -> Result<(), Box<ExecutionError<E>>> {
+    let required = amount.and_then(|amount| used.checked_add(amount));
+    match required {
+        Some(required) if required <= limit => {
+            *used = required;
+            Ok(())
+        }
+        _ => Err(Box::new(ExecutionError::Limit {
+            resource,
+            limit,
+            required,
+        })),
+    }
+}
