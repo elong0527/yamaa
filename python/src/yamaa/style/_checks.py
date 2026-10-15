@@ -233,7 +233,7 @@ def _blank_lines(document: Document) -> Iterator[Departure]:
                 "$",
                 "remove the blank line after the key that opens this block",
             )
-    if document.text and not document.text.endswith("\n"):
+    if document.text and not document.text.endswith(("\r", "\n")):
         yield Departure(
             "blank_lines",
             len(lines) - 1,

@@ -31,6 +31,7 @@ fn exact_stream(mut reader: impl Read, expected: usize) -> Result<Vec<u8>, Error
         if read > remaining {
             return Err(Error::Malformed);
         }
+        result.try_reserve(read).map_err(|_| Error::Malformed)?;
         result.extend_from_slice(&buffer[..read]);
     }
 }
@@ -166,7 +167,11 @@ fn fixed_length(codec: i64, mut input: &[u8], expected: usize) -> Result<(), Err
 
 fn fixed_codec(codec: i64, mut input: &[u8], expected: usize) -> Result<Vec<u8>, Error> {
     fixed_length(codec, input, expected)?;
-    let mut output = vec![0; expected];
+    let mut output = Vec::new();
+    output
+        .try_reserve_exact(expected)
+        .map_err(|_| Error::Malformed)?;
+    output.resize(expected, 0);
     let written = match codec {
         1 => snap::raw::Decoder::new()
             .decompress(input, &mut output)
@@ -281,7 +286,10 @@ pub(super) fn decode(page: &Page<'_>) -> Result<Vec<u8>, Error> {
         _ => Err(Error::Malformed),
     }?;
     if prefix != 0 {
-        let mut with_prefix = Vec::with_capacity(page.decoded_bytes);
+        let mut with_prefix = Vec::new();
+        with_prefix
+            .try_reserve_exact(page.decoded_bytes)
+            .map_err(|_| Error::Malformed)?;
         with_prefix.extend_from_slice(&page.body[..prefix]);
         with_prefix.append(&mut decoded);
         return Ok(with_prefix);
@@ -472,5 +480,52 @@ mod tests {
         let mut data = page(plain, 2, 4);
         data.compressed = false;
         assert_eq!(verify(&data), Ok(()));
+    }
+    #[test]
+    fn hostile_page_lengths_do_not_allocate_the_claimed_output() {
+        // A structurally impossible i64 page size is refused before any codec
+        // can reserve it. The wire field itself only permits signed 32 bits.
+        for codec in 0..=7 {
+            assert_eq!(
+                verify(&page(&[], codec, i32::MAX as usize + 1)),
+                Err(Error::Malformed)
+            );
+        }
+        // These lengths fit the wire field but cannot follow from the tiny
+        // payload. Stream decoders discover their actual end; block decoders
+        // reject impossible format expansion before reserving the destination.
+        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gzip.write_all(b"x").unwrap();
+        let gzip = gzip.finish().unwrap();
+        let mut brotli = Vec::new();
+        {
+            let mut writer = brotli::CompressorWriter::new(&mut brotli, 4096, 3, 22);
+            writer.write_all(b"x").unwrap();
+        }
+        let zstd = zstd::stream::encode_all(&b"x"[..], 1).unwrap();
+        for (bytes, codec) in [
+            (&b"\xff\xff\xff\xff\x07"[..], 1),
+            (&gzip, 2),
+            (&brotli, 4),
+            (&b"\0"[..], 5),
+            (&zstd, 6),
+            (&b"\0"[..], 7),
+        ] {
+            assert_eq!(
+                verify(&page(bytes, codec, i32::MAX as usize)),
+                Err(Error::Malformed)
+            );
+        }
+    }
+
+    #[test]
+    fn format_expansion_checks_keep_valid_high_ratio_block_streams() {
+        let plain = vec![b'x'; 512 * 1024];
+        let snappy = snap::raw::Encoder::new().compress_vec(&plain).unwrap();
+        let lz4 = lz4_flex::block::compress(&plain);
+        assert!(lz4.len() * 200 < plain.len());
+        for (bytes, codec) in [(&snappy, 1), (&lz4, 7), (&lz4, 5)] {
+            assert_eq!(decode(&page(bytes, codec, plain.len())).unwrap(), plain);
+        }
     }
 }

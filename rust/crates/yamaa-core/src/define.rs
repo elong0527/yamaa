@@ -788,6 +788,43 @@ mod projection_tests {
     }
 
     #[test]
+    fn published_resource_and_csv_limits_retain_artifact_owner_and_size_facts() {
+        let error = crate::limits::LimitExceeded {
+            resource: "columns",
+            limit: Limits::COLUMNS,
+            actual: Some(Limits::COLUMNS + 1),
+        };
+        let failures: [Failure<(), ()>; 3] = [
+            published_boundary_failure(error, "DM", "dm.csv"),
+            published_csv_failure(
+                &crate::csv_source::Error::Limit {
+                    resource: error.resource,
+                    limit: error.limit,
+                    actual: error.actual,
+                },
+                "DM",
+                "dm.csv",
+            ),
+            published_typed_csv_failure(&crate::typed_csv::Error::Limit(error), "DM", "dm.csv"),
+        ];
+        for failure in failures {
+            let Failure::Diagnostic(findings) = failure else {
+                panic!("resource boundary must retain structured facts");
+            };
+            assert_eq!(findings.len(), 1);
+            let finding = &findings[0];
+            assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+            assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
+            assert_eq!(finding.context["path"], "dm.csv");
+            assert_eq!(finding.context["stage"], "define");
+            assert_eq!(finding.context["code"], "resource_limit");
+            assert_eq!(finding.context["resource"], "columns");
+            assert_eq!(finding.context["limit"], Limits::COLUMNS);
+            assert_eq!(finding.context["actual"], Limits::COLUMNS + 1);
+        }
+    }
+
+    #[test]
     fn published_csv_failure_preserves_the_complete_value_and_its_language_owner() {
         use crate::diagnostic::SourceFinding;
         let value = "x".repeat(1_048_577);
