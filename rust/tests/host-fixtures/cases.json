@@ -1225,6 +1225,116 @@
             }
           ],
           "csv": null
+        },
+        {
+          "name": "original_unknown_column_case",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\",\"DTHFL2\":\"str\"}}},\"base\":\"SRC\",\"keys\":[\"K\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"K\",\"DTHFL\"]},\"columns\":[{\"name\":\"K\",\"type\":\"str\",\"derivation\":{\"source\":\"SRC.X\"}},{\"name\":\"DTHFL\",\"type\":\"str\",\"derivation\":{\"case\":[{\"when\":\"NOPE = 'Y'\",\"then\":{\"literal\":\"Y\"}},{\"otherwise\":{\"literal\":\"N\"}}]}}]}",
+          "inputs": {
+            "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0189",
+              "spec_paths": [
+                "columns.DTHFL.derivation.case[0].when"
+              ],
+              "context": {
+                "identifier": "NOPE"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "unknown_qualified_column_case",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\",\"DTHFL2\":\"str\"}}},\"base\":\"SRC\",\"keys\":[\"K\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"K\",\"DTHFL\"]},\"columns\":[{\"name\":\"K\",\"type\":\"str\",\"derivation\":{\"source\":\"SRC.X\"}},{\"name\":\"DTHFL\",\"type\":\"str\",\"derivation\":{\"case\":[{\"when\":\"SRC.NOPE = 'Y'\",\"then\":{\"literal\":\"Y\"}},{\"otherwise\":{\"literal\":\"N\"}}]}}]}",
+          "inputs": {
+            "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0189",
+              "spec_paths": [
+                "columns.DTHFL.derivation.case[0].when"
+              ],
+              "context": {
+                "identifier": "SRC.NOPE"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "unknown_source_keeps_binding_owner",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\",\"DTHFL2\":\"str\"}}},\"base\":\"SRC\",\"keys\":[\"K\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"K\",\"DTHFL\"]},\"columns\":[{\"name\":\"K\",\"type\":\"str\",\"derivation\":{\"source\":\"SRC.X\"}},{\"name\":\"DTHFL\",\"type\":\"str\",\"derivation\":{\"source\":\"SRC.NOPE\"}}]}",
+          "inputs": {
+            "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "columns.DTHFL.derivation.source"
+              ],
+              "context": {
+                "identifier": "SRC.NOPE"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "unknown_row_output_keeps_binding_owner",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\",\"DTHFL2\":\"str\"}}},\"base\":\"SRC\",\"keys\":[\"K\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"K\",\"DTHFL\"]},\"columns\":[{\"name\":\"K\",\"type\":\"str\"},{\"name\":\"DTHFL\",\"type\":\"str\"}],\"rows\":[{\"id\":\"row\",\"derivations\":{\"K\":{\"source\":\"SRC.X\"},\"DTHFL\":{\"source\":\"NOPE\"}}}]}",
+          "inputs": {
+            "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0106",
+              "spec_paths": [
+                "rows[0].derivations.DTHFL.source"
+              ],
+              "context": {
+                "identifier": "NOPE"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "unknown_qualified_row_case",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\",\"DTHFL2\":\"str\"}}},\"base\":\"SRC\",\"keys\":[\"K\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"K\",\"DTHFL\"]},\"columns\":[{\"name\":\"K\",\"type\":\"str\"},{\"name\":\"DTHFL\",\"type\":\"str\"}],\"rows\":[{\"id\":\"row\",\"derivations\":{\"K\":{\"source\":\"SRC.X\"},\"DTHFL\":{\"case\":[{\"when\":\"SRC.NOPE = 'Y'\",\"then\":{\"literal\":\"Y\"}},{\"otherwise\":{\"literal\":\"N\"}}]}}}]}",
+          "inputs": {
+            "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0189",
+              "spec_paths": [
+                "rows[0].derivations.DTHFL.case[0].when"
+              ],
+              "context": {
+                "identifier": "SRC.NOPE"
+              }
+            }
+          ],
+          "csv": null
         }
       ],
       "intermediate_dependencies": [

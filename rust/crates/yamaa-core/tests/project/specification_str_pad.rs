@@ -87,6 +87,7 @@ fn width_checkpoint_precedes_case_predicate_reference_binding_without_duplicatio
     )]);
     let actual = findings(&spec);
     assert_eq!(actual[0].0, ConditionCode::StrPadWidth);
+    assert_eq!(actual[1].0, ConditionCode::PredicateUnknownField);
     assert_eq!(
         actual.into_iter().map(|(_, path)| path).collect::<Vec<_>>(),
         widths_and_sources(&[
@@ -95,8 +96,7 @@ fn width_checkpoint_precedes_case_predicate_reference_binding_without_duplicatio
             "columns.A.derivation.case[0].then.str_pad.source",
         ])
     );
-    // The existing case predicate reference projection still uses REQ-0103;
-    // reference Python uses REQ-0189. This test qualifies order, not that debt.
+    // Predicate ownership is retained without moving the earlier width failure.
 }
 
 #[test]
