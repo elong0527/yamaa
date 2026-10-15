@@ -6,9 +6,7 @@ use std::{
 use yamaa_adapters::{
     file_resources::Resources,
     file_workflow::{self, Error},
-    producer_check,
-    producer_graph::Limits,
-    shipped_schema,
+    producer_check, shipped_schema,
 };
 use yamaa_core::project_function::Language;
 
@@ -113,7 +111,7 @@ impl Study {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     }
-    fn prepare(&self, limits: Limits) -> Result<yamaa_adapters::file_graph::FileGraph, Error> {
+    fn prepare(&self) -> Result<yamaa_adapters::file_graph::FileGraph, Error> {
         file_workflow::prepare_with_resources(
             Resources::new(&self.path(""), &self.path(""), &[]).unwrap(),
             "root.yaml",
@@ -121,11 +119,10 @@ impl Study {
             Language::Python,
             shipped_schema::capture().unwrap(),
             shipped_schema::capture_environment().unwrap(),
-            limits,
         )
     }
-    fn rejected(&self, limits: Limits) -> Error {
-        match self.prepare(limits) {
+    fn rejected(&self) -> Error {
+        match self.prepare() {
             Err(error) => error,
             Ok(_) => panic!("expected rejection"),
         }
@@ -152,7 +149,7 @@ fn original_decode_diagnostics_remain_bounded_and_owned() {
     use yamaa_adapters::issue_rows::Issue;
     let study = Study::new();
     study.write("root.yaml", "\u{e9}\n");
-    let owner = study.rejected(Limits::default());
+    let owner = study.rejected();
     let expected = vec![Issue {
         phase: "validation".into(),
         condition: "non_ascii_source".into(),
@@ -235,7 +232,7 @@ fn complete_original_diamond_checks_each_canonical_node_once_without_data() {
         ),
     );
     study.write("root.yaml", &yaml("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}", "L", "root.csv", true));
-    let graph = study.prepare(Default::default()).unwrap();
+    let graph = study.prepare().unwrap();
     assert_eq!(graph.capture_reads(), 5); // one environment + four canonical nodes
     assert_eq!(graph.graph().metadata().order(), [3, 1, 2, 0]);
     let expected = ["root.yaml", "left.yaml", "leaf.yaml"].map(|name| yamaa_adapters::issue_rows::Issue {
@@ -307,7 +304,7 @@ fn producer_typed_rejections_keep_complete_authored_rows_and_original_owners() {
             &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
         );
         study.write("root.yaml", &yaml(input, "P", "root.csv", false));
-        let error = study.rejected(Default::default());
+        let error = study.rejected();
         let rows = producer_check::rejected(&error, Language::Python).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].condition, condition);
@@ -367,7 +364,7 @@ fn actual_compilation_failure_and_cycle_are_projected_without_recompilation() {
                 .replace("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}")
         };
         study.write("leaf.yaml", &leaf);
-        let error = study.rejected(Default::default());
+        let error = study.rejected();
         let rows = producer_check::rejected(&error, Language::Python).unwrap();
         assert!(!rows.is_empty());
         assert_eq!(
@@ -396,35 +393,15 @@ fn actual_compilation_failure_and_cycle_are_projected_without_recompilation() {
 }
 
 #[test]
-fn environment_budget_and_raw_rejections_precede_the_first_graph_read() {
+fn raw_environment_rejection_precedes_the_first_graph_read() {
     let study = Study::new();
     study.write(
         "root.yaml",
         &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false),
     );
-    for (bytes, reads, captures) in [(0, 0, 0), (22, 1, 1), (44, 1, 1)] {
-        let error = study.rejected(Limits {
-            captured_bytes: bytes,
-            ..Default::default()
-        });
-        assert!(
-            matches!(producer_check::rejected(&error, Language::Python), Err(producer_check::Error::Original(original)) if std::ptr::eq(original, &error))
-        );
-        match &error {
-            Error::Environment(environment) => {
-                assert_eq!(environment.capture_reads(), reads);
-                assert_eq!(environment.captured_sources().count(), captures);
-            }
-            Error::Graph(graph) => {
-                assert_eq!(graph.capture_reads(), reads);
-                assert_eq!(graph.captured_sources().count(), captures);
-            }
-            _ => panic!("owned rejection"),
-        }
-    }
     let raw = "schema_version: '1.0'\nfunctions: [\n";
     study.write("environment.yaml", raw);
-    let error = study.rejected(Default::default());
+    let error = study.rejected();
     let Error::Environment(environment) = &error else {
         panic!("early environment");
     };
@@ -452,7 +429,7 @@ fn supported_environment_and_original_inherited_schema_causes_are_complete() {
         "root.yaml",
         &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false),
     );
-    let error = study.rejected(Default::default());
+    let error = study.rejected();
     let rows = producer_check::rejected(&error, Language::Python).unwrap();
     assert!(rows
         .iter()
@@ -475,7 +452,7 @@ fn supported_environment_and_original_inherited_schema_causes_are_complete() {
         "root.yaml",
         "schema_version: '1.0'\nparents: [parent/base.yaml]\ndomain: CHILD\n",
     );
-    let error = study.rejected(Default::default());
+    let error = study.rejected();
     let rows = producer_check::rejected(&error, Language::Python).unwrap();
     assert!(!rows.is_empty());
     assert!(rows.iter().any(
@@ -509,7 +486,7 @@ fn inherited_graph_findings_retain_the_actual_declaring_layer_after_owner_files_
         "root.yaml",
         "schema_version: '1.0'\nparents: [parents/base.yaml]\ndomain: ROOT\n",
     );
-    let graph = study.prepare(Default::default()).unwrap();
+    let graph = study.prepare().unwrap();
     assert_eq!(graph.capture_reads(), 5);
     let nodes = graph.graph().nodes();
     assert!(std::sync::Arc::ptr_eq(
@@ -549,7 +526,7 @@ fn unsupported_native_capture_keeps_exact_refusal_and_declaring_request() {
             false,
         ),
     );
-    let error = study.rejected(Default::default());
+    let error = study.rejected();
     let Error::Graph(graph) = &error else {
         panic!("graph");
     };
@@ -582,7 +559,7 @@ fn invalid_producer_contract_and_environment_child_failures_keep_original_metada
     let original = yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false)
         .replace("    label: Reported value\n", "");
     study.write("leaf.yaml", &original);
-    let error = study.rejected(Default::default());
+    let error = study.rejected();
     let rows = producer_check::rejected(&error, Language::Python).unwrap();
     assert!(rows
         .iter()
@@ -599,7 +576,7 @@ fn invalid_producer_contract_and_environment_child_failures_keep_original_metada
     study.write("uv.lock", "version = 1\npackage = []\n");
     let malformed = "function: [\n";
     study.write("broken.yaml", malformed);
-    let failure = study.rejected(Default::default());
+    let failure = study.rejected();
     let Error::Environment(environment) = &failure else {
         panic!("original environment");
     };
@@ -655,7 +632,7 @@ fn shared_native_workflow_keeps_literal_backslash_in_canonical_roots() {
             false,
         ),
     );
-    let graph = study.prepare(Default::default()).unwrap();
+    let graph = study.prepare().unwrap();
     assert!(producer_check::prepared(&graph).unwrap().is_empty());
     assert_eq!(
         graph.graph().nodes()[0].producers[0].schema_identity,
@@ -671,7 +648,7 @@ fn ordinary_original_input_facts_survive_files_without_study_authority() {
         "root.yaml",
         &yaml("{RAW: never-read.csv}", "RAW", "never-written.csv", false),
     );
-    let graph = study.prepare(Default::default()).unwrap();
+    let graph = study.prepare().unwrap();
     assert_eq!(graph.capture_reads(), 2);
     assert_eq!(graph.graph().nodes().len(), 1);
     assert!(graph.graph().nodes()[0].producers.is_empty());
@@ -709,7 +686,7 @@ fn inherited_original_producer_facts_use_the_contributing_input_layer() {
         "root.yaml",
         "schema_version: '1.0'\nparents: [base.yaml]\ndomain: TEST\n",
     );
-    let graph = study.prepare(Default::default()).unwrap();
+    let graph = study.prepare().unwrap();
     assert_eq!(graph.capture_reads(), 4);
     assert_eq!(graph.graph().nodes().len(), 2);
     assert_eq!(graph.graph().nodes()[0].producers.len(), 1);
@@ -747,14 +724,14 @@ fn rejected_null_schema_keeps_the_original_shipped_schema_cause_and_raw_entry() 
         false,
     );
     study.write("root.yaml", &original);
-    let rejection = study.rejected(Default::default());
+    let rejection = study.rejected();
     let Error::Graph(graph) = &rejection else {
         panic!("the original root rejection must remain owned");
     };
     assert_eq!(graph.capture_reads(), 2);
     assert!(graph.documents().is_empty());
     drop(study);
-    let retained = graph.retained_sources(16, 65536).unwrap();
+    let retained = graph.retained_sources();
     assert_eq!(retained.len(), 2);
     assert!(
         retained
@@ -772,10 +749,7 @@ fn rejected_null_schema_keeps_the_original_shipped_schema_cause_and_raw_entry() 
 }
 
 impl Study {
-    fn select(
-        &self,
-        limits: Limits,
-    ) -> Result<file_workflow::Selected, file_workflow::SelectionError> {
+    fn select(&self) -> Result<file_workflow::Selected, file_workflow::SelectionError> {
         file_workflow::select_with_resources(
             Resources::new(&self.path(""), &self.path(""), &[]).unwrap(),
             "root.yaml",
@@ -783,11 +757,10 @@ impl Study {
             Language::Python,
             shipped_schema::capture().unwrap(),
             shipped_schema::capture_environment().unwrap(),
-            limits,
         )
     }
-    fn selection_rejection(&self, limits: Limits) -> file_workflow::SelectionError {
-        match self.select(limits) {
+    fn selection_rejection(&self) -> file_workflow::SelectionError {
+        match self.select() {
             Err(error) => error,
             Ok(_) => panic!("expected selected preparation rejection"),
         }
@@ -840,23 +813,13 @@ fn selected_ordinary_keeps_complete_report_and_explicit_held_byte_save() {
         "root.yaml",
         &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false),
     );
-    let Selected::Ordinary(mut selected) = study
-        .select(Limits {
-            captured_bytes: 2
-                * (b"schema_version: '1.0'\n".len()
-                    + yaml("{RAW: never-read.csv}", "RAW", "root.csv", false).len()),
-            snapshots: 2,
-            ..Default::default()
-        })
-        .unwrap()
-    else {
+    let Selected::Ordinary(mut selected) = study.select().unwrap() else {
         panic!("ordinary capability");
     };
     assert_eq!(selected.capture_reads(), 2);
     assert!(!study.0.join("never-read.csv").exists());
     assert!(!study.0.join("root.csv").exists());
-    // Metadata scope ends only after complete preparation. An independent study
-    // source is first created and read afterwards under ordinary build admission.
+    // An independent study source is first created and read after preparation.
     study.write("never-read.csv", "ID,VALUE\n1,alpha\n2,beta\n");
     let mut ordinary = yamaa_adapters::file_project::FileProject::prepare(
         Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
@@ -976,7 +939,7 @@ fn selected_inherited_producer_seeds_original_closure_with_shared_aliases_and_di
     study.write("parents/base.yaml", &parent);
     let entry = "schema_version: '1.0'\nparents: [parents/base.yaml]\ndomain: ROOT\n";
     study.write("root.yaml", entry);
-    let Selected::Producer(graph) = study.select(Default::default()).unwrap() else {
+    let Selected::Producer(graph) = study.select().unwrap() else {
         panic!("inherited producer capability");
     };
     assert_eq!(graph.capture_reads(), 6); // environment, root, parent, left/right/leaf
@@ -1017,7 +980,7 @@ fn selected_ordinary_compile_failure_keeps_original_run_environment_and_raw_reso
     let raw = yaml("{RAW: never-read.csv}", "RAW", "root.csv", false)
         .replace("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}");
     study.write("root.yaml", &raw);
-    let SelectionError::Ordinary(rejected) = study.selection_rejection(Default::default()) else {
+    let SelectionError::Ordinary(rejected) = study.selection_rejection() else {
         panic!("original ordinary compiler rejection");
     };
     assert_eq!(rejected.capture_reads(), 2);
@@ -1025,9 +988,8 @@ fn selected_ordinary_compile_failure_keeps_original_run_environment_and_raw_reso
     let rows = yamaa_adapters::project_check::rejected(rejected.run()).unwrap();
     assert_eq!(rows[0].condition, "unknown_project_function");
     assert_eq!(rows[0].requirement.as_deref(), Some("REQ-0698"));
-    assert!(rejected.retained_sources(1, 65536).is_err());
     fs::remove_dir_all(&study.0).unwrap();
-    let held = rejected.retained_sources(16, 65536).unwrap();
+    let held = rejected.retained_sources();
     assert_eq!(held.len(), 2);
     assert!(held.iter().any(
         |(identity, bytes)| identity.ends_with("root.yaml") && bytes.as_ref() == raw.as_bytes()
@@ -1059,8 +1021,7 @@ fn selected_invalid_original_declarations_never_fall_back_to_ordinary_compilatio
             "leaf.yaml",
             &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
         );
-        let SelectionError::Preparation(error @ Error::Graph(_)) =
-            study.selection_rejection(Default::default())
+        let SelectionError::Preparation(error @ Error::Graph(_)) = study.selection_rejection()
         else {
             panic!("owned original metadata/graph rejection");
         };
@@ -1085,69 +1046,28 @@ fn selected_invalid_original_declarations_never_fall_back_to_ordinary_compilatio
 }
 
 #[test]
-fn selected_early_environment_root_and_metadata_quota_failures_keep_exact_prefixes() {
+fn selected_raw_environment_and_root_failures_keep_exact_capture_prefixes() {
     use file_workflow::SelectionError;
     let study = Study::new();
     study.write(
         "root.yaml",
         &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false),
     );
-    for (limits, reads) in [
-        (
-            Limits {
-                captured_bytes: 0,
-                ..Default::default()
-            },
-            0,
-        ),
-        (
-            Limits {
-                captured_bytes: 44,
-                ..Default::default()
-            },
-            1,
-        ),
-        (
-            Limits {
-                snapshots: 1,
-                ..Default::default()
-            },
-            1,
-        ),
-    ] {
-        let SelectionError::Preparation(error) = study.selection_rejection(limits) else {
-            panic!("preparation quota");
-        };
-        match &error {
-            Error::Environment(owner) => {
-                assert_eq!(owner.capture_reads(), reads);
-                assert!(owner.retained_sources(16, 65536).unwrap().len() <= 1);
-            }
-            Error::Graph(owner) => {
-                assert_eq!(owner.capture_reads(), reads);
-                assert_eq!(owner.retained_sources(16, 65536).unwrap().len(), 1);
-            }
-            _ => panic!("owned bounded prefix"),
-        }
-    }
     study.write("environment.yaml", "schema_version: '1.0'\nfunctions: [\n");
-    let SelectionError::Preparation(Error::Environment(environment)) =
-        study.selection_rejection(Default::default())
+    let SelectionError::Preparation(Error::Environment(environment)) = study.selection_rejection()
     else {
         panic!("raw environment rejection");
     };
     assert_eq!(environment.capture_reads(), 1);
     study.write("environment.yaml", "schema_version: '1.0'\n");
     study.write("root.yaml", "[");
-    let SelectionError::Preparation(root @ Error::Graph(_)) =
-        study.selection_rejection(Default::default())
-    else {
+    let SelectionError::Preparation(root @ Error::Graph(_)) = study.selection_rejection() else {
         panic!("raw root rejection");
     };
     let rows = producer_check::rejected(&root, Language::Python).unwrap();
     assert_eq!(rows[0].condition, "invalid_yaml");
     fs::remove_dir_all(&study.0).unwrap();
-    assert_eq!(environment.retained_sources(16, 65536).unwrap().len(), 1);
+    assert_eq!(environment.retained_sources().len(), 1);
     assert_eq!(
         producer_check::rejected(&root, Language::Python).unwrap(),
         rows
@@ -1182,8 +1102,7 @@ fn selected_producer_cycle_missing_labels_and_compiler_failures_keep_typed_whole
                 .replace("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}"),
         };
         study.write("leaf.yaml", &leaf);
-        let SelectionError::Preparation(error @ Error::Graph(_)) =
-            study.selection_rejection(Default::default())
+        let SelectionError::Preparation(error @ Error::Graph(_)) = study.selection_rejection()
         else {
             panic!("whole producer rejection");
         };
@@ -1205,67 +1124,6 @@ fn selected_producer_cycle_missing_labels_and_compiler_failures_keep_typed_whole
             rows
         );
     }
-}
-
-#[test]
-fn selected_recursive_graph_quotas_continue_environment_and_entry_scope_before_growth() {
-    use file_workflow::SelectionError;
-    let study = Study::new();
-    study.write(
-        "root.yaml",
-        &yaml(
-            "{P: {path: leaf.csv, schema: leaf.yaml}}",
-            "P",
-            "root.csv",
-            false,
-        ),
-    );
-    study.write(
-        "leaf.yaml",
-        &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
-    );
-    for limits in [
-        Limits {
-            snapshots: 2,
-            ..Default::default()
-        },
-        Limits {
-            graph: yamaa_core::producer_graph::Limits {
-                edges: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        Limits {
-            graph: yamaa_core::producer_graph::Limits {
-                nodes: 1,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    ] {
-        let SelectionError::Preparation(Error::Graph(owner)) = study.selection_rejection(limits)
-        else {
-            panic!("cumulative producer quota");
-        };
-        assert_eq!(owner.capture_reads(), 2);
-        assert_eq!(owner.documents().len(), 1);
-        assert!(matches!(
-            owner.error(),
-            yamaa_adapters::file_graph::Error::Resource(
-                yamaa_adapters::file_resources::Error::Limit
-            ) | yamaa_adapters::file_graph::Error::Document(
-                yamaa_adapters::file_preparation::Error::Resource(
-                    yamaa_adapters::file_resources::Error::Limit
-                )
-            ) | yamaa_adapters::file_graph::Error::Limit(_)
-        ));
-        assert_eq!(owner.retained_sources(16, 65536).unwrap().len(), 2);
-        assert_eq!(owner.origin().unwrap().dataset, "P");
-    }
-    assert!(!study.0.join("never-read.csv").exists());
-    assert!(!study.0.join("leaf.csv").exists());
-    assert!(!study.0.join("root.csv").exists());
 }
 
 #[test]
@@ -1299,190 +1157,11 @@ fn selected_entry_paths_keep_absolute_environment_policy_and_early_owned_refusal
         )
     ));
     fs::remove_dir_all(&study.0).unwrap();
-    assert_eq!(owner.retained_sources(16, 65536).unwrap().len(), 0);
+    assert_eq!(owner.retained_sources().len(), 0);
     assert_eq!(
         project.run().captured_environment().root().source().bytes,
         b"schema_version: '1.0'\n"
     );
-}
-
-#[test]
-fn known_entry_limits_refuse_before_the_first_environment_read_in_both_routes() {
-    use file_workflow::SelectionError;
-    use std::sync::Arc;
-    use yamaa_adapters::file_graph::Error as G;
-    let study = Study::new();
-    // A malformed environment would produce a raw decode refusal if entered.
-    study.write("environment.yaml", "[");
-    let schema = shipped_schema::capture().unwrap();
-    let environment_schema = shipped_schema::capture_environment().unwrap();
-    let oversized = "x".repeat(65_537);
-    for (entry, limits, expected) in [
-        (
-            "root.yaml",
-            Limits {
-                graph: yamaa_core::producer_graph::Limits {
-                    nodes: 0,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            "producer_graph_nodes",
-        ),
-        (
-            "root.yaml",
-            Limits {
-                schema_modules: 0,
-                ..Default::default()
-            },
-            "producer_graph_schema_modules",
-        ),
-        (
-            "root.yaml",
-            Limits {
-                schema_bytes: 0,
-                ..Default::default()
-            },
-            "producer_graph_schema_bytes",
-        ),
-        (
-            oversized.as_str(),
-            Limits::default(),
-            "producer_graph_identity_bytes",
-        ),
-        // First request spellings fit exactly; the sealed entry spelling does
-        // not. This refusal must precede even the environment root inspection.
-        (
-            "root.yaml",
-            Limits {
-                graph: yamaa_core::producer_graph::Limits {
-                    text_bytes: "root.yaml".len() + "environment.yaml".len(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            "resource_limit",
-        ),
-        (
-            "root.yaml",
-            Limits {
-                graph: yamaa_core::producer_graph::Limits {
-                    work: "root.yaml".len() + "environment.yaml".len(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            "resource_limit",
-        ),
-    ] {
-        for selection in [false, true] {
-            let resources = Resources::new(&study.path(""), &study.path(""), &[]).unwrap();
-            let error = if selection {
-                match file_workflow::select_with_resources(
-                    resources,
-                    entry,
-                    "environment.yaml",
-                    Language::Python,
-                    Arc::clone(&schema),
-                    Arc::clone(&environment_schema),
-                    limits,
-                ) {
-                    Err(SelectionError::Preparation(error)) => error,
-                    _ => panic!("selection must refuse the known entry limit"),
-                }
-            } else {
-                match file_workflow::prepare_with_resources(
-                    resources,
-                    entry,
-                    "environment.yaml",
-                    Language::Python,
-                    Arc::clone(&schema),
-                    Arc::clone(&environment_schema),
-                    limits,
-                ) {
-                    Err(error) => error,
-                    Ok(_) => panic!("static preparation must refuse the known entry limit"),
-                }
-            };
-            let Error::Admission(owner) = &error else {
-                panic!("original pre-capture admission owner: {error:?}")
-            };
-            match owner.error() {
-                G::Limit(name) => assert_eq!(*name, expected),
-                G::Resource(yamaa_adapters::file_resources::Error::Limit) => {
-                    assert_eq!(expected, "resource_limit")
-                }
-                other => panic!("original typed cause: {other:?}"),
-            }
-            assert_eq!(owner.capture_reads(), 0);
-            assert_eq!(owner.entry(), Some(entry));
-            assert_eq!(owner.environment(), Some("environment.yaml"));
-            assert!(Arc::ptr_eq(owner.specification_schema(), &schema));
-            assert!(Arc::ptr_eq(owner.environment_schema(), &environment_schema));
-            assert!(owner.retained_sources(16, 131072).unwrap().is_empty());
-            assert!(
-                matches!(producer_check::rejected(&error, Language::Python), Err(producer_check::Error::Original(original)) if std::ptr::eq(original, &error))
-            );
-        }
-    }
-}
-
-#[test]
-fn known_entry_refusal_keeps_preexisting_raw_captures_and_both_schemas_after_files_drop() {
-    use file_workflow::SelectionError;
-    use std::sync::Arc;
-    let study = Study::new();
-    let original = b"version: '1.0'\ndata_roots: []\n";
-    study.write(
-        "captured-config.yaml",
-        std::str::from_utf8(original).unwrap(),
-    );
-    let mut resources = Resources::new(&study.path(""), &study.path(""), &[]).unwrap();
-    let (held, _) = resources.capture("captured-config.yaml", 65536).unwrap();
-    let schema = shipped_schema::capture().unwrap();
-    let environment_schema = shipped_schema::capture_environment().unwrap();
-    let rejection = file_workflow::select_with_resources(
-        resources,
-        "root.yaml",
-        "environment.yaml",
-        Language::Python,
-        Arc::clone(&schema),
-        Arc::clone(&environment_schema),
-        Limits {
-            graph: yamaa_core::producer_graph::Limits {
-                nodes: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    );
-    let Err(SelectionError::Preparation(error @ Error::Admission(_))) = rejection else {
-        panic!("owned known entry refusal")
-    };
-    let Error::Admission(owner) = &error else {
-        unreachable!()
-    };
-    assert_eq!(owner.capture_reads(), 1); // existing config only, no new read
-    assert!(Arc::ptr_eq(owner.specification_schema(), &schema));
-    assert!(Arc::ptr_eq(owner.environment_schema(), &environment_schema));
-    assert!(owner.retained_sources(0, 0).is_err());
-    let path = study.path("captured-config.yaml");
-    drop(schema);
-    drop(environment_schema);
-    drop(study);
-    let sources = owner.retained_sources(16, 65536).unwrap();
-    assert_eq!(sources.len(), 1);
-    assert_eq!(sources[0].0, path);
-    assert_eq!(sources[0].1.as_ref(), original);
-    assert!(Arc::ptr_eq(&sources[0].1, &held));
-    assert!(matches!(
-        owner.error(),
-        yamaa_adapters::file_graph::Error::Limit("producer_graph_nodes")
-    ));
-    assert!(
-        matches!(producer_check::rejected(&error, Language::Python), Err(producer_check::Error::Original(original)) if std::ptr::eq(original, &error))
-    );
-    assert_eq!(owner.capture_reads(), 1);
 }
 
 #[test]
@@ -1601,7 +1280,7 @@ fn plain_workflow_profile_inspection_keeps_physical_kind_before_study_capture() 
             );
             assert_eq!(issue.context["dataset"], JsonValue::String("SRC".into()));
         }
-        let sources = owner.retained_sources(16, 16_777_216).unwrap();
+        let sources = owner.retained_sources();
         assert_eq!(sources.len(), 2);
         assert!(sources
             .iter()

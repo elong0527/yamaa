@@ -461,7 +461,6 @@ mod declaring_origin_tests {
 #[cfg(test)]
 mod dispatch_policy_tests {
     use super::*;
-    use crate::file_resources::MetadataLimits;
     use std::{
         fs,
         path::PathBuf,
@@ -496,25 +495,14 @@ mod dispatch_policy_tests {
         }
     }
     #[test]
-    fn native_success_replay_spends_no_additional_preparation_bytes_and_continues_policy() {
+    fn native_success_replays_aliases_from_the_same_retained_snapshots() {
         let study = Study::new(ROOT);
         let mut resources = study.resources();
-        let limits = MetadataLimits {
-            bytes: 2 * (ROOT.len() + PARENT.len()),
-            snapshots: 8,
-            text: 1_000_000,
-            work: 1_000_000,
-        };
-        resources.ensure_metadata_budget(limits).unwrap();
         let document =
             prepare_document_from(&mut resources, None, "entry/root.yaml", None).unwrap();
         assert_eq!(document.parents().len(), 1);
         assert_eq!(resources.snapshot_count(), 2);
         assert_eq!(resources.capture_reads(), 2);
-        let usage = resources.metadata_usage();
-        assert_eq!(usage.0, 2 * (ROOT.len() + PARENT.len()));
-        resources.ensure_metadata_budget(limits).unwrap();
-        assert_eq!(resources.metadata_usage(), usage);
         assert_eq!(
             resources.resolve("root.yaml").unwrap(),
             document.source().identity
@@ -522,13 +510,12 @@ mod dispatch_policy_tests {
         let parent = document.parents()[0].source().identity.clone();
         assert_eq!(
             resources
-                .capture_from(&parent, "./base.yaml", PARENT.len())
+                .capture_metadata_from(&parent, "./base.yaml")
                 .unwrap()
                 .0
                 .as_ref(),
             PARENT.as_bytes()
         );
-        assert_eq!(resources.metadata_usage().0, usage.0);
         assert_eq!(resources.capture_reads(), 2);
     }
     #[test]
@@ -568,7 +555,7 @@ mod dispatch_policy_tests {
         let study = Study::new(ROOT);
         let mut resources = study.resources();
         let original_base = resources.resolve("root.yaml").unwrap();
-        let original = resources.capture("entry/root.yaml", ROOT.len()).unwrap().0;
+        let original = resources.capture_metadata("entry/root.yaml").unwrap().0;
         fs::write(study.0.join("entry/root.yaml"), b"invalid replacement").unwrap();
         let Err(Error::ResourceFinding { error, diagnostic }) =
             prepare_document_from(&mut resources, None, "entry/root.yaml", None)
@@ -588,7 +575,7 @@ mod dispatch_policy_tests {
         let original_base = resources.resolve("root.yaml").unwrap();
         let entry = resources.resolve("entry/root.yaml").unwrap();
         let original = resources
-            .capture_from(&entry, "../parent/base.yaml", PARENT.len())
+            .capture_metadata_from(&entry, "../parent/base.yaml")
             .unwrap()
             .0;
         fs::write(study.0.join("parent/base.yaml"), b"invalid replacement").unwrap();
@@ -615,7 +602,10 @@ mod dispatch_policy_tests {
         fs::write(study.0.join("entry/dict.yaml"), b"A: answer\n").unwrap();
         let mut resources = study.resources();
         let entry = resources.resolve("entry/root.yaml").unwrap();
-        let original = resources.capture_from(&entry, "dict.yaml", 64).unwrap().0;
+        let original = resources
+            .capture_metadata_from(&entry, "dict.yaml")
+            .unwrap()
+            .0;
         fs::write(study.0.join("entry/dict.yaml"), b"B: replaced\n").unwrap();
         let Err(Error::Preparation(error)) =
             prepare_document_from(&mut resources, None, "entry/root.yaml", None)

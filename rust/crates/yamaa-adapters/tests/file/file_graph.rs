@@ -10,7 +10,7 @@ use std::{
 use yamaa_adapters::{
     file_graph::{Error, FileGraph, RejectedGraph},
     file_resources::{Error as ResourceError, Resources},
-    producer_graph::{Error as GraphError, Limits},
+    producer_graph::Error as GraphError,
     project_source::{self, CapturePort, OwnedEnvironment, Reply, Request},
     shipped_schema,
     specification_source::Source,
@@ -46,13 +46,12 @@ impl Study {
     fn resources(&self) -> Resources {
         Resources::new(&self.path(""), &self.path(""), &[]).unwrap()
     }
-    fn graph(&self, limits: Limits) -> Result<FileGraph, Box<RejectedGraph>> {
+    fn graph(&self) -> Result<FileGraph, Box<RejectedGraph>> {
         FileGraph::prepare(
             self.resources(),
             "root.yaml",
             environment(),
             shipped_schema::capture().unwrap(),
-            limits,
         )
     }
 }
@@ -120,7 +119,7 @@ fn native_diamond_aliases_own_one_canonical_document_and_no_artifact_authority()
     );
     let root = yaml("{RIGHT: {path: right.csv, schema: right.yaml}, LEFT: {path: left.csv, schema: left.yaml}, AGAIN: {path: left.csv, schema: './left.yaml'}}", "RIGHT", "root.csv");
     study.write("root.yaml", &root);
-    let graph = study.graph(Limits::default()).unwrap();
+    let graph = study.graph().unwrap();
     assert_eq!(graph.capture_reads(), 4);
     let nodes = graph.graph().nodes();
     assert_eq!(nodes.len(), 4);
@@ -178,7 +177,7 @@ fn inherited_schema_input_and_output_origins_resolve_independently() {
         "root.yaml",
         "schema_version: '1.0'\nparents: [origins/schema.yaml, origins/path.yaml]\ndomain: ROOT\n",
     );
-    let graph = study.graph(Limits::default()).unwrap();
+    let graph = study.graph().unwrap();
     let p = &graph.graph().nodes()[0].producers[0];
     let declaration = &graph.graph().metadata().nodes()[0].producers()[0];
     assert_eq!(p.schema_identity, study.path("producer/p.yaml"));
@@ -211,7 +210,7 @@ fn mismatch_preserves_portable_req_0534_and_original_metadata_after_files_disapp
         "root.csv",
     );
     study.write("root.yaml", &root);
-    let failure = rejected(study.graph(Limits::default()));
+    let failure = rejected(study.graph());
     match failure.error() {
         Error::Graph(GraphError::Graph(CoreError::Admission {
             node: 0,
@@ -265,7 +264,7 @@ fn cycle_captures_each_node_once_and_retains_full_authored_route() {
             "next.csv",
         ),
     );
-    let failure = rejected(study.graph(Limits::default()));
+    let failure = rejected(study.graph());
     match failure.error() {
         Error::Graph(GraphError::Graph(CoreError::Cycle {
             node: 1,
@@ -297,7 +296,7 @@ fn missing_producer_keeps_captured_consumer_and_original_declaration() {
             "root.csv",
         ),
     );
-    let failure = rejected(study.graph(Limits::default()));
+    let failure = rejected(study.graph());
     assert!(matches!(
         failure.error(),
         Error::Resource(ResourceError::Missing)
@@ -321,7 +320,7 @@ fn malformed_entry_and_failed_parent_raw_bytes_survive_without_a_prepared_node()
                 "schema_version: '1.0'\nparents: [broken.yaml]\ndomain: ROOT\n",
             );
         }
-        let failure = rejected(study.graph(Limits::default()));
+        let failure = rejected(study.graph());
         assert!(matches!(failure.error(), Error::Document(_)));
         assert_eq!(failure.entry(), Some("root.yaml"));
         assert!(failure.documents().is_empty());
@@ -338,99 +337,6 @@ fn malformed_entry_and_failed_parent_raw_bytes_survive_without_a_prepared_node()
             malformed.as_bytes()
         );
     }
-}
-
-#[test]
-fn graph_limits_stop_before_next_capture_or_owned_preparation_copy() {
-    let study = Study::new();
-    leaf(&study);
-    let root = yaml("{P: {path: leaf.csv, schema: leaf.yaml}}", "P", "root.csv");
-    study.write("root.yaml", &root);
-    for limits in [
-        Limits {
-            graph: yamaa_core::producer_graph::Limits {
-                nodes: 1,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        Limits {
-            graph: yamaa_core::producer_graph::Limits {
-                edges: 0,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        Limits {
-            snapshots: 1,
-            ..Default::default()
-        },
-    ] {
-        let failure = rejected(study.graph(limits));
-        assert_eq!(failure.capture_reads(), 1);
-        assert_eq!(failure.documents().len(), 1);
-        assert_eq!(failure.origin().unwrap().dataset, "P");
-    }
-    study.write(
-        "root.yaml",
-        &yaml(
-            "{P: {path: leaf.csv, schema: leaf.yaml}, Q: {path: leaf.csv, schema: './leaf.yaml'}}",
-            "P",
-            "root.csv",
-        ),
-    );
-    for limits in [
-        Limits {
-            graph: yamaa_core::producer_graph::Limits {
-                edges: 1,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        Limits {
-            graph: yamaa_core::producer_graph::Limits {
-                metadata: yamaa_core::producer_admission::Limits {
-                    candidates: 1,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-    ] {
-        let failure = rejected(study.graph(limits));
-        assert_eq!(failure.origin().unwrap().dataset, "Q");
-        assert_eq!(failure.capture_reads(), 2);
-        assert_eq!(failure.documents().len(), 2);
-    }
-    study.write("root.yaml", &root);
-    // Capture itself fits, but its owned preparation copy does not. Raw bytes
-    // stay held; no prepared document is admitted under the exhausted budget.
-    let failure = rejected(study.graph(Limits {
-        captured_bytes: root.len(),
-        ..Default::default()
-    }));
-    assert!(matches!(
-        failure.error(),
-        Error::Document(yamaa_adapters::file_preparation::Error::Resource(
-            ResourceError::Limit
-        ))
-    ));
-    assert_eq!(failure.capture_reads(), 1);
-    assert!(failure.documents().is_empty());
-    assert_eq!(
-        failure.captured_sources().next().unwrap().1,
-        root.as_bytes()
-    );
-    let failure = rejected(study.graph(Limits {
-        graph: yamaa_core::producer_graph::Limits {
-            work: 0,
-            ..Default::default()
-        },
-        ..Default::default()
-    }));
-    assert_eq!(failure.capture_reads(), 0);
-    assert!(failure.captured_sources().next().is_none());
 }
 
 #[test]
@@ -459,7 +365,6 @@ fn metadata_fallback_does_not_redirect_declared_artifact_locations() {
         "root.yaml",
         environment(),
         shipped_schema::capture().unwrap(),
-        Limits::default(),
     )
     .unwrap();
     assert_eq!(
@@ -487,7 +392,6 @@ fn already_captured_changed_metadata_keeps_original_snapshot_and_native_failure(
         "root.yaml",
         environment(),
         shipped_schema::capture().unwrap(),
-        Limits::default(),
     ));
     let Error::Document(yamaa_adapters::file_preparation::Error::ResourceFinding {
         error,
@@ -529,7 +433,7 @@ fn producer_and_consumer_compilation_failures_keep_the_complete_raw_graph() {
             "{function: {name: missing, args: {x: 1}}}",
         );
         study.write(path, &bad);
-        let failure = rejected(study.graph(Limits::default()));
+        let failure = rejected(study.graph());
         assert!(matches!(
             failure.error(),
             Error::Graph(GraphError::Graph(CoreError::Compilation { .. }))
@@ -566,7 +470,7 @@ fn original_redundant_types_keep_req_0523_after_native_closure_capture() {
             "root.csv",
         ),
     );
-    let failure = rejected(study.graph(Limits::default()));
+    let failure = rejected(study.graph());
     let Error::Graph(GraphError::Graph(CoreError::Admission {
         error: yamaa_core::producer_admission::Error::Invalid(findings),
         ..
@@ -599,7 +503,7 @@ fn symlink_and_escape_schema_failures_are_terminal_and_artifact_symlinks_are_not
                 "root.csv",
             ),
         );
-        let failure = rejected(study.graph(Limits::default()));
+        let failure = rejected(study.graph());
         assert!(matches!(failure.error(), Error::Resource(actual) if actual == &error));
         assert_eq!(failure.capture_reads(), 1);
     }
@@ -609,7 +513,7 @@ fn symlink_and_escape_schema_failures_are_terminal_and_artifact_symlinks_are_not
         "root.yaml",
         &yaml("{P: {path: leaf.csv, schema: leaf.yaml}}", "P", "root.csv"),
     );
-    let graph = study.graph(Limits::default()).unwrap();
+    let graph = study.graph().unwrap();
     assert_eq!(graph.capture_reads(), 2);
     assert!(fs::symlink_metadata(study.0.join("leaf.csv"))
         .unwrap()
@@ -633,7 +537,7 @@ fn canonical_unix_root_with_literal_backslash_remains_an_identity() {
             "root.csv",
         ),
     );
-    let graph = study.graph(Limits::default()).unwrap();
+    let graph = study.graph().unwrap();
     assert_eq!(
         graph.graph().nodes()[0].producers[0].schema_identity,
         root.join("leaf.yaml").to_str().unwrap()

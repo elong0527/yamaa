@@ -381,10 +381,7 @@ mod root_read_tests {
             issues[0].context,
             serde_json::json!({"cause":"unreadable", "path":path}).to_string()
         );
-        assert!(matches!(
-            crate::producer_check::rejected_with_limit(&rejection, Language::Python, 1),
-            Err(crate::producer_check::Error::Projection(_))
-        ));
+
         assert_eq!(owner.error() as *const file_project::Error, original);
         assert_eq!(owner.capture_reads(), 0);
         assert_eq!(owner.captured_sources().count(), 0);
