@@ -246,6 +246,7 @@ fn unify_exact(mut items: impl Iterator<Item = Option<ColumnType>>) -> Option<Co
     }
     Some(kind)
 }
+
 impl Kind {
     fn missing_only(&self) -> bool {
         match self {
@@ -313,6 +314,8 @@ impl Kind {
                                 | F::Trunc,
                             ..
                         } => Some(ColumnType::Float),
+                        // A missing float does not promote a present integer,
+                        // so mixed operand kinds cannot promise a float result.
                         K::Call {
                             function: F::NullIf,
                             arguments,
@@ -1251,4 +1254,84 @@ fn rebase(
         }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod inference_tests {
+    use super::*;
+    use crate::{evaluation::NumericResolver, numeric::Number, value::Selection};
+    use std::convert::Infallible;
+
+    struct Inputs {
+        integer: Value,
+        float: Value,
+    }
+    impl NumericResolver for Inputs {
+        type Error = Infallible;
+        fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
+            Ok(Selection::Present(match name {
+                "INT_COL" => self.integer.clone(),
+                "FLOAT_COL" => self.float.clone(),
+                _ => panic!("unexpected numeric operand"),
+            }))
+        }
+    }
+
+    #[test]
+    fn mixed_numeric_selection_kinds_remain_unknown_when_missing_floats_preserve_integers() {
+        for (expression, promoted) in [
+            ("NULLIF(INT_COL, FLOAT_COL)", Number::float(7.0)),
+            ("GREATEST(INT_COL, FLOAT_COL)", Number::float(7.0)),
+            ("LEAST(INT_COL, FLOAT_COL)", Number::float(2.5)),
+            ("COALESCE(INT_COL, FLOAT_COL)", Number::float(7.0)),
+        ] {
+            let parsed = crate::numeric_parser::parse_numeric(expression).unwrap();
+            assert_eq!(
+                Kind::Numeric(parsed).infer(&|name| match name {
+                    "INT_COL" => Some(ColumnType::Int),
+                    "FLOAT_COL" => Some(ColumnType::Float),
+                    _ => None,
+                }),
+                None,
+                "{expression}: a possibly missing float cannot promise a float result",
+            );
+            let plan =
+                crate::numeric_compiler::compile_numeric(expression, "donor.compute").unwrap();
+            for (integer, float, expected) in [
+                (Value::Int(7), Value::Missing, Number::Int(7)),
+                (Value::Int(7), Value::float(2.5), promoted),
+                (Value::Missing, Value::Missing, Number::Missing),
+            ] {
+                assert_eq!(
+                    plan.evaluate(&mut Inputs { integer, float }).unwrap(),
+                    expected,
+                    "{expression}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn coalesce_float_with_an_integer_fallback_keeps_the_fallbacks_runtime_kind() {
+        let expression = "COALESCE(FLOAT_COL, 0)";
+        let parsed = crate::numeric_parser::parse_numeric(expression).unwrap();
+        assert_eq!(
+            Kind::Numeric(parsed).infer(&|_| Some(ColumnType::Float)),
+            None,
+        );
+        let plan = crate::numeric_compiler::compile_numeric(expression, "donor.compute").unwrap();
+        for (float, expected) in [
+            (Value::Missing, Number::Int(0)),
+            (Value::float(2.5), Number::float(2.5)),
+        ] {
+            assert_eq!(
+                plan.evaluate(&mut Inputs {
+                    integer: Value::Missing,
+                    float
+                })
+                .unwrap(),
+                expected,
+            );
+        }
+    }
 }

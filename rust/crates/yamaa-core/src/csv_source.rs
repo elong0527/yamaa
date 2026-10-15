@@ -335,3 +335,46 @@ mod boundary_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod field_boundary_tests {
+    use super::*;
+
+    #[test]
+    fn field_admission_covers_empty_leading_and_post_line_ending_fields() {
+        for prefix in ["", "A\n", "A\r\n", "\n", "\r\n"] {
+            let source = format!("{prefix}{}", ",".repeat(crate::limits::Limits::COLUMNS));
+            assert_eq!(
+                scan(&source).err(),
+                Some(Error::Limit {
+                    resource: "columns",
+                    limit: crate::limits::Limits::COLUMNS,
+                    actual: Some(crate::limits::Limits::COLUMNS + 1),
+                }),
+                "{prefix:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn exact_column_boundary_is_accepted_and_next_field_stops_before_decoding() {
+        let header = (0..crate::limits::Limits::COLUMNS)
+            .map(|index| format!("C{index}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let admitted = parse(header.as_bytes()).unwrap();
+        assert_eq!(admitted.names.len(), crate::limits::Limits::COLUMNS);
+        assert!(admitted.records.is_empty());
+        // The next field is not scanned or allocated, even if its quoted
+        // spelling would otherwise fail only at the end of a long payload.
+        let oversized = format!("{header},\"");
+        assert_eq!(
+            parse(oversized.as_bytes()),
+            Err(Error::Limit {
+                resource: "columns",
+                limit: crate::limits::Limits::COLUMNS,
+                actual: Some(crate::limits::Limits::COLUMNS + 1),
+            })
+        );
+    }
+}

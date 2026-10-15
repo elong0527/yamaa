@@ -1,6 +1,7 @@
-//! Verify actual page expansion before the ordinary codec sees the same held bytes.
-//! Stream codecs write into a fixed scratch buffer; advertised lengths never
-//! authorize unchecked read_to_end growth. This is not a total-RSS guarantee.
+//! Bound page expansion before allocation from an advertised decoded length.
+//! Streaming codecs grow through fixed scratch buffers; raw codecs preflight
+//! borrowed tags, and Zstandard grows only after destination-size errors.
+//! This is not a total-RSS guarantee.
 use super::framing::Page;
 use std::io::Read;
 
@@ -239,8 +240,29 @@ fn brotli_window(input: &[u8]) -> Result<(), Error> {
 }
 
 fn zstd(input: &[u8], expected: usize) -> Result<Vec<u8>, Error> {
-    let reader = zstd::stream::read::Decoder::new(input).map_err(|_| Error::Malformed)?;
-    exact_stream(reader, expected)
+    // The bulk decoder uses the destination as history, so a valid frame's
+    // large window does not cause a separate history allocation. Its typed
+    // destination error follows block expansion, not the advertised frame
+    // content size. Retry geometrically instead of reserving `expected`.
+    let too_small = (zstd::zstd_safe::zstd_sys::ZSTD_ErrorCode::ZSTD_error_dstSize_tooSmall
+        as usize)
+        .wrapping_neg();
+    let mut decoder = zstd::zstd_safe::DCtx::try_create().ok_or(Error::Malformed)?;
+    let mut result = Vec::new();
+    let mut length = expected.min(8192);
+    loop {
+        result
+            .try_reserve_exact(length - result.len())
+            .map_err(|_| Error::Malformed)?;
+        result.resize(length, 0);
+        match decoder.decompress(&mut result[..], input) {
+            Ok(written) if written == expected => return Ok(result),
+            Err(error) if error == too_small && length < expected => {
+                length = length.saturating_mul(2).max(1).min(expected);
+            }
+            _ => return Err(Error::Malformed),
+        }
+    }
 }
 
 /// Validate every actual byte of expansion using the same immutable page body.
@@ -382,6 +404,45 @@ mod tests {
     }
 
     #[test]
+    fn zstd_frame_and_page_claims_do_not_size_the_destination() {
+        // This much stored input passes a format-wide expansion-ratio bound,
+        // but invalid magic still must not allocate the claimed 2 GiB page.
+        let stored = vec![0; 49_152];
+        assert_eq!(
+            decode(&page(&stored, 6, i32::MAX as usize)),
+            Err(Error::Malformed)
+        );
+
+        // A valid empty frame followed by a large skippable frame also has
+        // ample input for that bound, but produces no decoded output.
+        let mut empty_and_skippable = vec![0x28, 0xb5, 0x2f, 0xfd, 0, 0xa8, 1, 0, 0];
+        empty_and_skippable.extend([0x50, 0x2a, 0x4d, 0x18]);
+        empty_and_skippable.extend((stored.len() as u32).to_le_bytes());
+        empty_and_skippable.extend(&stored);
+        assert_eq!(decode(&page(&empty_and_skippable, 6, 0)), Ok(Vec::new()));
+        assert_eq!(
+            decode(&page(&empty_and_skippable, 6, i32::MAX as usize)),
+            Err(Error::Malformed)
+        );
+
+        // A single-segment frame advertises a 2 GiB content size but ends with
+        // an empty raw block. Its own false content size must not size output.
+        let frame_size_lie = [
+            0x28, 0xb5, 0x2f, 0xfd, 0xa0, 0xff, 0xff, 0xff, 0x7f, 1, 0, 0,
+        ];
+        assert_eq!(
+            decode(&page(&frame_size_lie, 6, i32::MAX as usize)),
+            Err(Error::Malformed)
+        );
+
+        // The same large history window remains valid with actual raw output.
+        let raw = [
+            0x28, 0xb5, 0x2f, 0xfd, 0, 0xa8, 33, 0, 0, b'd', b'a', b't', b'a',
+        ];
+        assert_eq!(decode(&page(&raw, 6, 4)).unwrap(), b"data");
+    }
+
+    #[test]
     fn raw_codec_preflight_handles_copy_forms_extended_lengths_and_invalid_offsets() {
         // One literal x, followed by an overlapping four-byte copy. The three
         // independently authored streams exercise each Snappy copy tag.
@@ -433,11 +494,61 @@ mod tests {
     #[test]
     fn malformed_compression_is_distinct_from_unavailable_codecs() {
         assert_eq!(verify(&page(&[0x91, 30], 4, 1)), Err(Error::Malformed));
-        // A valid empty Zstandard frame may declare a large history window.
-        let data = [0x28, 0xb5, 0x2f, 0xfd, 0, 0x78, 1, 0, 0];
-        assert_eq!(verify(&page(&data, 6, 0)), Ok(()));
+        // Valid empty Zstandard frames may declare 32 MiB or 2 GiB history
+        // windows without requiring any decoded bytes or history allocation.
+        for window in [0x78, 0xa8] {
+            let data = [0x28, 0xb5, 0x2f, 0xfd, 0, window, 1, 0, 0];
+            assert_eq!(verify(&page(&data, 6, 0)), Ok(()));
+        }
         assert_eq!(verify(&page(&[0], 6, 0)), Err(Error::Malformed));
         assert_eq!(verify(&page(&[], 3, 0)), Err(Error::Unavailable(3)));
+    }
+    #[test]
+    fn hostile_page_lengths_do_not_allocate_the_claimed_output() {
+        // A structurally impossible i64 page size is refused before any codec
+        // can reserve it. The wire field itself only permits signed 32 bits.
+        for codec in 0..=7 {
+            assert_eq!(
+                verify(&page(&[], codec, i32::MAX as usize + 1)),
+                Err(Error::Malformed)
+            );
+        }
+        // These lengths fit the wire field but cannot follow from the tiny
+        // payload. Stream decoders discover their actual end; block decoders
+        // reject impossible format expansion before reserving the destination.
+        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gzip.write_all(b"x").unwrap();
+        let gzip = gzip.finish().unwrap();
+        let mut brotli = Vec::new();
+        {
+            let mut writer = brotli::CompressorWriter::new(&mut brotli, 4096, 3, 22);
+            writer.write_all(b"x").unwrap();
+        }
+        let zstd = zstd::stream::encode_all(&b"x"[..], 1).unwrap();
+        for (bytes, codec) in [
+            (&b"\xff\xff\xff\xff\x07"[..], 1),
+            (&gzip, 2),
+            (&brotli, 4),
+            (&b"\0"[..], 5),
+            (&zstd, 6),
+            (&b"\0"[..], 7),
+        ] {
+            assert_eq!(
+                verify(&page(bytes, codec, i32::MAX as usize)),
+                Err(Error::Malformed)
+            );
+        }
+    }
+    #[test]
+    fn format_expansion_checks_keep_valid_high_ratio_block_streams() {
+        let plain = vec![b'x'; 512 * 1024];
+        let snappy = snap::raw::Encoder::new().compress_vec(&plain).unwrap();
+        let lz4 = lz4_flex::block::compress(&plain);
+        assert!(lz4.len() * 200 < plain.len());
+        let zstd = zstd::stream::encode_all(&plain[..], 1).unwrap();
+        for (bytes, codec) in [(&snappy, 1), (&lz4, 7), (&lz4, 5), (&zstd, 6)] {
+            assert_eq!(decode(&page(bytes, codec, plain.len())).unwrap(), plain);
+        }
     }
     #[test]
     fn fixed_output_and_legacy_lz4_do_not_silently_narrow_codec_support() {
@@ -480,52 +591,5 @@ mod tests {
         let mut data = page(plain, 2, 4);
         data.compressed = false;
         assert_eq!(verify(&data), Ok(()));
-    }
-    #[test]
-    fn hostile_page_lengths_do_not_allocate_the_claimed_output() {
-        // A structurally impossible i64 page size is refused before any codec
-        // can reserve it. The wire field itself only permits signed 32 bits.
-        for codec in 0..=7 {
-            assert_eq!(
-                verify(&page(&[], codec, i32::MAX as usize + 1)),
-                Err(Error::Malformed)
-            );
-        }
-        // These lengths fit the wire field but cannot follow from the tiny
-        // payload. Stream decoders discover their actual end; block decoders
-        // reject impossible format expansion before reserving the destination.
-        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-        gzip.write_all(b"x").unwrap();
-        let gzip = gzip.finish().unwrap();
-        let mut brotli = Vec::new();
-        {
-            let mut writer = brotli::CompressorWriter::new(&mut brotli, 4096, 3, 22);
-            writer.write_all(b"x").unwrap();
-        }
-        let zstd = zstd::stream::encode_all(&b"x"[..], 1).unwrap();
-        for (bytes, codec) in [
-            (&b"\xff\xff\xff\xff\x07"[..], 1),
-            (&gzip, 2),
-            (&brotli, 4),
-            (&b"\0"[..], 5),
-            (&zstd, 6),
-            (&b"\0"[..], 7),
-        ] {
-            assert_eq!(
-                verify(&page(bytes, codec, i32::MAX as usize)),
-                Err(Error::Malformed)
-            );
-        }
-    }
-
-    #[test]
-    fn format_expansion_checks_keep_valid_high_ratio_block_streams() {
-        let plain = vec![b'x'; 512 * 1024];
-        let snappy = snap::raw::Encoder::new().compress_vec(&plain).unwrap();
-        let lz4 = lz4_flex::block::compress(&plain);
-        assert!(lz4.len() * 200 < plain.len());
-        for (bytes, codec) in [(&snappy, 1), (&lz4, 7), (&lz4, 5)] {
-            assert_eq!(decode(&page(bytes, codec, plain.len())).unwrap(), plain);
-        }
     }
 }

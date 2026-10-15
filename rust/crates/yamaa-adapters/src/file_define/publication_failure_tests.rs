@@ -259,3 +259,60 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     );
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn define_caps_only_the_public_issue_prefix_and_retains_every_original_finding() {
+    use yamaa_core::diagnostic::ConditionCode;
+    for host in [Language::Python, Language::R] {
+        for diagnostic in [false, true] {
+            let missing = std::env::temp_dir().join(format!(
+                "yamaa-missing-define-environment-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed),
+            ));
+            let missing = file_resources::caller_path(&missing).unwrap();
+            let mut result = Define::prepare(&missing, "sdtm", None, "0.4.0", host);
+            let failure = if diagnostic {
+                Failure::Diagnostic(
+                    (0..10_001)
+                        .map(|index| {
+                            service::resource_diagnostic(
+                                &format!("findings[{index}]"),
+                                "missing.csv",
+                                service::ResourceObservation::Missing,
+                            )
+                        })
+                        .collect(),
+                )
+            } else {
+                Failure::Metadata(
+                    (0..10_001)
+                        .map(|index| {
+                            Finding::cause(
+                                ConditionCode::ApplicationRejected,
+                                &format!("findings[{index}]"),
+                                "authored metadata refusal",
+                            )
+                        })
+                        .collect(),
+                )
+            };
+            result.refuse(failure);
+            assert_eq!(result.issues().len(), 10_000);
+            for (index, issue) in result.issues().iter().enumerate() {
+                assert_eq!(issue.spec_paths, [format!("findings[{index}]")]);
+            }
+            match result.failure().unwrap() {
+                Failure::Metadata(findings) => {
+                    assert_eq!(findings.len(), 10_001);
+                    assert_eq!(findings.last().unwrap().path, "findings[10000]");
+                }
+                Failure::Diagnostic(findings) => {
+                    assert_eq!(findings.len(), 10_001);
+                    assert_eq!(findings.last().unwrap().spec_paths, ["findings[10000]"]);
+                }
+                other => panic!("original finding owner was replaced: {other:?}"),
+            }
+        }
+    }
+}

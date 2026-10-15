@@ -305,6 +305,7 @@ mod service {
                     ),
                 );
                 assert!(attempt.sources[0].read.captured);
+                assert!(attempt.sources[0].table.is_some());
                 assert_eq!(
                     attempt.sources[0].snapshot.as_deref(),
                     Some(b"held snapshot".as_slice())
