@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver, Operand};
 use yamaa_core::numeric::{power, ArithmeticErrorKind, Number};
-use yamaa_core::numeric_compiler::{compile_numeric, CompileError, CompileLimits};
+use yamaa_core::numeric_compiler::compile_numeric;
 use yamaa_core::value::{Selection, Value};
 
 /// Record each resolution to verify compiler preflight and failure ordering.
@@ -24,28 +24,19 @@ impl NumericResolver for Resolver {
 #[test]
 fn current_numeric_vocabulary_compiles_directly() {
     for text in ["EXP(A)", "LN(A)", "POWER(A, A)"] {
-        let plan = compile_numeric(text, "spec", CompileLimits::default()).unwrap();
+        let plan = compile_numeric(text, "spec").unwrap();
         let mut resolver = Resolver::default();
         assert!(matches!(plan.evaluate(&mut resolver), Ok(Number::Float(_))));
-        assert_eq!(resolver.0.len(), plan.resolution_count());
-        assert!(matches!(
-            compile_numeric(
-                text,
-                "spec",
-                CompileLimits {
-                    resolutions: 0,
-                    ..CompileLimits::default()
-                }
-            ),
-            Err(CompileError::ResolutionLimit { .. })
-        ));
+        assert_eq!(
+            resolver.0,
+            if text.starts_with("POWER") {
+                vec!["A", "A"]
+            } else {
+                vec!["A"]
+            }
+        );
     }
-    assert!(compile_numeric(
-        "EXP(A) + ROUND_HALF_AWAY_FROM_ZERO(A, 2)",
-        "spec",
-        CompileLimits::default()
-    )
-    .is_ok());
+    assert!(compile_numeric("EXP(A) + ROUND_HALF_AWAY_FROM_ZERO(A, 2)", "spec").is_ok());
 }
 
 /// Domain failures belong to calls; operand failures retain their exact inner span.
@@ -68,7 +59,7 @@ fn math_failure_spans_and_order_are_preserved() {
         ),
         ("LN(0) + UNKNOWN", "LN(0)", vec![Operand::Left], vec![]),
     ] {
-        let plan = compile_numeric(text, "spec", CompileLimits::default()).unwrap();
+        let plan = compile_numeric(text, "spec").unwrap();
         let mut resolver = Resolver::default();
         let error = plan.evaluate(&mut resolver).unwrap_err();
         assert_eq!(&text[error.source_span.start..error.source_span.end], span);
@@ -93,7 +84,7 @@ fn invalid_power_retains_exact_promoted_diagnostic_arguments() {
             }
         );
     }
-    let plan = compile_numeric("POWER(-0.0, -1)", "spec", CompileLimits::default()).unwrap();
+    let plan = compile_numeric("POWER(-0.0, -1)", "spec").unwrap();
     let error = plan.evaluate(&mut Resolver::default()).unwrap_err();
     assert_eq!(
         error.evaluation.kind,
@@ -121,7 +112,7 @@ fn portable_math_retains_opaque_resolver_failures() {
         }
     }
     for text in ["EXP(BROKEN)", "LN(BROKEN)", "POWER(NULL, BROKEN)"] {
-        let plan = compile_numeric(text, "spec", CompileLimits::default()).unwrap();
+        let plan = compile_numeric(text, "spec").unwrap();
         let error = plan.evaluate(&mut FailedResolver).unwrap_err();
         assert_eq!(
             &text[error.source_span.start..error.source_span.end],

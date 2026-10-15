@@ -1,10 +1,10 @@
 use yamaa_core::aggregate_parser::{
-    parse_aggregate, GrammarFailure, ParseError, ParseLimits, ParseResource, ParsedKind, Reducer,
+    parse_aggregate, GrammarFailure, ParseError, ParseResource, ParsedKind, Reducer,
 };
 
 /// Read the structured grammar outcome without relying on diagnostic prose.
 fn failure(text: &str) -> (usize, usize, GrammarFailure) {
-    match parse_aggregate(text, ParseLimits::default()).unwrap_err() {
+    match parse_aggregate(text).unwrap_err() {
         ParseError::Grammar { position, failure } => (position.byte, position.character, failure),
         error => panic!("unexpected limit: {error:?}"),
     }
@@ -14,7 +14,7 @@ fn failure(text: &str) -> (usize, usize, GrammarFailure) {
 #[test]
 fn references_and_spans_preserve_written_context() {
     let text = "\u{2003}COALESCE(sUm( D.A + D.B ), COUNT(D.*)) + D.A + X + COUNT(E.*) + X";
-    let parsed = parse_aggregate(text, ParseLimits::default()).unwrap();
+    let parsed = parse_aggregate(text).unwrap();
     assert_eq!(parsed.expression(), text);
     assert_eq!(
         parsed.identifiers().collect::<Vec<_>>(),
@@ -137,13 +137,10 @@ fn literal_spelling_and_identifier_vocabulary_are_not_evaluated() {
         "SUM(A.NULL)",
         "ONLY(NULL)",
     ] {
-        assert!(
-            parse_aggregate(text, ParseLimits::default()).is_ok(),
-            "{text}"
-        );
+        assert!(parse_aggregate(text).is_ok(), "{text}");
     }
     let text = format!("SUM({})", "9".repeat(5000));
-    let parsed = parse_aggregate(&text, ParseLimits::default()).unwrap();
+    let parsed = parse_aggregate(&text).unwrap();
     let literal = &parsed.nodes()[0];
     assert_eq!(literal.kind, ParsedKind::Number { fractional: false });
     assert_eq!(
@@ -152,70 +149,43 @@ fn literal_spelling_and_identifier_vocabulary_are_not_evaluated() {
     );
 }
 
-/// Independent limits bound source, token allocations, arena size and recursion.
+/// Fixed depth protects recursive descent and retained expression trees.
 #[test]
-fn resource_limits_and_adversarial_inputs_are_bounded() {
-    let defaults = ParseLimits::default();
-    for (limits, resource, limit) in [
-        (
-            ParseLimits {
-                bytes: 3,
-                ..defaults
-            },
-            ParseResource::Bytes,
-            3,
-        ),
-        (
-            ParseLimits {
-                tokens: 3,
-                ..defaults
-            },
-            ParseResource::Tokens,
-            3,
-        ),
-        (
-            ParseLimits {
-                nodes: 1,
-                ..defaults
-            },
-            ParseResource::Nodes,
-            1,
-        ),
-        (
-            ParseLimits {
-                depth: 1,
-                ..defaults
-            },
-            ParseResource::Depth,
-            1,
-        ),
+fn fixed_semantic_depth_guards_aggregate_trees_without_a_breadth_counter() {
+    use yamaa_core::limits::Limits;
+    for depth in [
+        Limits::SEMANTIC_DEPTH - 1,
+        Limits::SEMANTIC_DEPTH,
+        Limits::SEMANTIC_DEPTH + 1,
     ] {
-        assert!(
-            matches!(parse_aggregate("SUM(A)",limits),Err(ParseError::Limit {resource:r,limit:l,..}) if r==resource && l==limit)
-        );
+        let text = vec!["SUM(A)"; depth - 1].join("+");
+        let result = parse_aggregate(&text);
+        if depth <= Limits::SEMANTIC_DEPTH {
+            assert!(result.is_ok());
+        } else {
+            assert!(matches!(
+                result,
+                Err(ParseError::Limit {
+                    resource: ParseResource::Depth,
+                    limit: Limits::SEMANTIC_DEPTH,
+                    ..
+                })
+            ));
+        }
     }
-    for text in [
-        format!("{}A{}", "SUM(".repeat(10000), ")".repeat(10000)),
-        "A+".repeat(10000),
-        format!("COALESCE({})", vec!["SUM(A)"; 3000].join(",")),
-    ] {
-        assert!(matches!(
-            parse_aggregate(&text, defaults),
-            Err(ParseError::Limit { .. })
-        ));
-    }
-    let text = format!("{}A{}", "(".repeat(65), ")".repeat(65));
+    let text = format!("COALESCE({})", vec!["SUM(A)"; 3000].join(","));
+    let parsed = parse_aggregate(&text).unwrap();
+    assert_eq!(parsed.identifiers().collect::<Vec<_>>(), ["A"]);
+    let ParsedKind::Call { arguments, .. } = &parsed.nodes()[parsed.root()].kind else {
+        panic!()
+    };
+    assert_eq!(arguments.len(), 3000);
+    assert_eq!(parsed.nodes().len(), 6001);
+    let text = format!("{}A{}", "(".repeat(10000), ")".repeat(10000));
     assert!(matches!(
-        parse_aggregate(
-            &text,
-            ParseLimits {
-                depth: usize::MAX,
-                ..defaults
-            }
-        ),
+        parse_aggregate(&text),
         Err(ParseError::Limit {
             resource: ParseResource::Depth,
-            limit: 64,
             ..
         })
     ));

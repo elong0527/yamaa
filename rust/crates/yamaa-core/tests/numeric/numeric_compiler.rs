@@ -2,18 +2,13 @@ use std::convert::Infallible;
 
 use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver, Operand};
 use yamaa_core::numeric::Number;
-use yamaa_core::numeric_compiler::{compile_numeric, CompileError, CompileLimits, CompiledNumeric};
-use yamaa_core::numeric_parser::{GrammarFailure, ParseError, ParseResource};
+use yamaa_core::numeric_compiler::{compile_numeric, CompiledNumeric};
+use yamaa_core::numeric_parser::{GrammarFailure, ParseError};
 use yamaa_core::value::{Selection, Value};
 
 /// Compile a test expression through the public source-to-plan entry point.
 fn compile(text: &str) -> CompiledNumeric {
-    compile_numeric(
-        text,
-        "columns.RESULT.derivation.compute",
-        CompileLimits::default(),
-    )
-    .unwrap()
+    compile_numeric(text, "columns.RESULT.derivation.compute").unwrap()
 }
 
 /// Record calls while changing A's value so plan reuse cannot hide memoization.
@@ -148,63 +143,23 @@ fn source_spans_identify_the_failed_node() {
 fn prohibited_functions_are_rejected_before_resolution() {
     for text in ["SQRT(A) + ROUND(B)", "A + ROUND(B)"] {
         assert!(matches!(
-            compile_numeric(text, "spec", CompileLimits::default()),
-            Err(CompileError::Parse(ParseError::Grammar {
+            compile_numeric(text, "spec"),
+            Err(ParseError::Grammar {
                 failure: GrammarFailure::ProhibitedFunction { .. },
                 ..
-            }))
+            })
         ));
     }
 }
 
-/// Static budgets count occurrences, protect deep execution/drop and reset per run.
+/// Plan reuse resolves each original occurrence again.
 #[test]
-fn compilation_and_reuse_obey_resource_budgets() {
-    let mut limits = CompileLimits {
-        resolutions: 1,
-        ..CompileLimits::default()
-    };
-    assert_eq!(
-        compile_numeric("A + A", "spec", limits),
-        Err(CompileError::ResolutionLimit {
-            limit: 1,
-            required: 2
-        })
-    );
-    assert_eq!(
-        compile_numeric("1 / 0 + A + A", "spec", limits),
-        Err(CompileError::ResolutionLimit {
-            limit: 1,
-            required: 2
-        })
-    );
-    limits.resolutions = 2;
-    let plan = compile_numeric("A + A", "spec", limits).unwrap();
-    assert_eq!(plan.resolution_count(), 2);
+fn plan_reuse_resolves_every_occurrence_again() {
+    let plan = compile_numeric("A + A", "spec").unwrap();
     let mut resolver = Resolver::default();
     assert_eq!(plan.evaluate(&mut resolver).unwrap(), Number::Int(3));
     assert_eq!(plan.evaluate(&mut resolver).unwrap(), Number::Int(7));
     assert_eq!(resolver.trace, ["A", "A", "A", "A"]);
-    limits.resolutions = 0;
-    assert!(compile_numeric("ABS(-3)", "spec", limits).is_ok());
-    limits.parse.depth = usize::MAX;
-    assert!(matches!(
-        compile_numeric(&vec!["1"; 65].join("+"), "spec", limits),
-        Err(CompileError::Parse(ParseError::Limit {
-            resource: ParseResource::Depth,
-            limit: 64,
-            ..
-        }))
-    ));
-    for text in [
-        vec!["1"; 64].join("+"),
-        format!("{}1{}", "ABS(".repeat(63), ")".repeat(63)),
-    ] {
-        assert!(compile_numeric(&text, "spec", limits)
-            .unwrap()
-            .evaluate(&mut resolver)
-            .is_ok());
-    }
 }
 
 /// The compiled wrapper does not clone, stringify or reclassify resolver failures.
@@ -246,7 +201,7 @@ fn opaque_non_clone_resolution_failure_keeps_span_and_payload() {
 
 /// Variadic calls retain nested argument spans and count every resolver occurrence.
 #[test]
-fn selection_arguments_preserve_spans_and_resolution_budgets() {
+fn selection_arguments_preserve_spans_and_resolution_order() {
     for (text, route) in [
         ("COALESCE(1, (UNKNOWN))", vec![Operand::Argument(1)]),
         (
@@ -269,31 +224,9 @@ fn selection_arguments_preserve_spans_and_resolution_budgets() {
     }
     for name in ["GREATEST", "LEAST", "COALESCE"] {
         let text = format!("{name}({})", vec!["A"; 100].join(","));
-        assert_eq!(
-            compile_numeric(
-                &text,
-                "spec",
-                CompileLimits {
-                    resolutions: 99,
-                    ..CompileLimits::default()
-                }
-            ),
-            Err(CompileError::ResolutionLimit {
-                limit: 99,
-                required: 100
-            })
-        );
-        let plan = compile_numeric(
-            &text,
-            "spec",
-            CompileLimits {
-                resolutions: 100,
-                ..CompileLimits::default()
-            },
-        )
-        .unwrap();
+
+        let plan = compile_numeric(&text, "spec").unwrap();
         let mut resolver = Resolver::default();
-        assert_eq!(plan.resolution_count(), 100);
         assert_eq!(
             plan.evaluate(&mut resolver).unwrap(),
             Number::Int(if name == "GREATEST" { 100 } else { 1 })
@@ -304,25 +237,11 @@ fn selection_arguments_preserve_spans_and_resolution_budgets() {
 
 /// Unary function calls count identifier occurrences and resolve anew on every execution.
 #[test]
-fn unary_functions_obey_resolution_budgets_and_reuse() {
+fn unary_functions_resolve_again_when_plans_are_reused() {
     for name in ["CEIL", "FLOOR", "TRUNC", "SQRT"] {
         let text = format!("{name}(A)");
-        assert_eq!(
-            compile_numeric(
-                &text,
-                "spec",
-                CompileLimits {
-                    resolutions: 0,
-                    ..CompileLimits::default()
-                }
-            ),
-            Err(CompileError::ResolutionLimit {
-                limit: 0,
-                required: 1
-            })
-        );
+
         let plan = compile(&text);
-        assert_eq!(plan.resolution_count(), 1);
         let mut resolver = Resolver::default();
         assert_eq!(plan.evaluate(&mut resolver), Ok(Number::float(1.0)));
         assert_eq!(
