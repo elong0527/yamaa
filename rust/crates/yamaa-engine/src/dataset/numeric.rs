@@ -95,6 +95,7 @@ impl<T: TableAccess + ?Sized> NumericResolver for Resolver<'_, '_, T> {
         let value = match self.bound.bindings()[index].read {
             Read::Joined(ref read) => {
                 return joined::read(
+                    self.table,
                     read,
                     self.assignment,
                     self.candidate,

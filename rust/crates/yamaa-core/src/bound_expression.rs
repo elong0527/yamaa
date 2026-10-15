@@ -86,10 +86,11 @@ fn validate_scope(
                 return Err(ScopeError::UnavailableColumn)
             }
             Read::Joined(ref read)
-                if read
-                    .keys
-                    .iter()
-                    .any(|key| !available.get(key.output_column).copied().unwrap_or(false)) =>
+                if read.record_keys.is_none()
+                    && read
+                        .keys
+                        .iter()
+                        .any(|key| !available.get(key.output_column).copied().unwrap_or(false)) =>
             {
                 return Err(ScopeError::UnavailableColumn)
             }
