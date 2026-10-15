@@ -46,16 +46,13 @@ ENV PATH=/opt/yamaa-eval/venv/bin:${PATH} UV_NO_CACHE=1
 
 FROM rocker/r-ver:${R_VERSION} AS r-runtime
 ARG R_VERSION=4.6.1
-ARG CRAN_SNAPSHOT=2026-09-27
 COPY image-common.sh /tmp/image-common.sh
 RUN bash /tmp/image-common.sh && rm /tmp/image-common.sh \
     && apt-get update && apt-get install -y --no-install-recommends \
         libxml2-dev zlib1g-dev libicu-dev \
     && rm -rf /var/lib/apt/lists/*
-RUN R -q -e "options(repos = c(CRAN = 'https://p3m.dev/cran/__linux__/noble/${CRAN_SNAPSHOT}')); \
-    pkgs <- c('dplyr', 'tidyr', 'readr', 'stringr', 'lubridate', 'purrr', 'haven', 'xml2', 'nanoparquet'); \
-    install.packages(pkgs, Ncpus = 4); \
-    stopifnot(all(vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)))"
+COPY install-r-packages.R /opt/yamaa-eval/install-r-packages.R
+RUN Rscript --vanilla /opt/yamaa-eval/install-r-packages.R
 ENV LANG=en_US.UTF-8
 WORKDIR /app
 

@@ -84,7 +84,7 @@ def inventory_command(language: str, role: str) -> str:
         checks += ["python3 -c 'import numpy, pandas, polars, pyarrow, lxml'"]
     else:
         checks += [
-            'Rscript -e \'stopifnot(all(vapply(c("dplyr", "tidyr", "readr", "stringr", "lubridate", "purrr", "haven", "xml2", "nanoparquet"), requireNamespace, logical(1), quietly=TRUE)))\''
+            "Rscript --vanilla /opt/yamaa-eval/install-r-packages.R --check"
         ]
         if role == "verifier":
             checks += ["python3 -c 'import pyarrow'"]

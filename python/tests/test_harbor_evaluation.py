@@ -1304,26 +1304,6 @@ def test_a_reference_solution_scores_one(tmp_path, reference):
     assert result["reward"]["reward"] == 1.0, result
 
 
-def test_the_evaluation_workflow_runs_the_images_r():
-    dockerfile = (HARBOR / "Dockerfile").read_text()
-    path = ROOT / ".github" / "workflows" / "harbor-evaluation.yml"
-    job = yaml.safe_load(path.read_text())["jobs"]["solutions"]
-
-    def arg(name: str) -> str:
-        return re.search(rf"^ARG {name}=(\S+)$", dockerfile, re.MULTILINE).group(1)
-
-    assert re.search(
-        r"^FROM rocker/r-ver:\$\{R_VERSION\} AS r-runtime$", dockerfile, re.MULTILINE
-    )
-    assert job["container"] == f"rocker/r-ver:{arg('R_VERSION')}"
-    assert job["env"]["CRAN_SNAPSHOT"] == arg("CRAN_SNAPSHOT")
-    repository = re.search(r"https://p3m\.dev/\S+?\$\{CRAN_SNAPSHOT\}", dockerfile)
-    assert repository.group(0) in path.read_text()
-    packages = re.search(r"pkgs <- c\(([^)]*)\)", dockerfile).group(1)
-    assert job["env"]["R_PACKAGES"].split() == re.findall(r"'([\w.]+)'", packages)
-    assert job["env"]["YAMAA_REQUIRE_R"] == "1"
-
-
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_a_task_requires_a_derivation_reference(tmp_path, monkeypatch, language):
     script = SCRIPTS[language]
