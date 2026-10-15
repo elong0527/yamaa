@@ -792,6 +792,7 @@ mod execution {
                 [2, 1, 1],
                 [2, 1, 1],
             ];
+            assert_eq!(result.dataset.rows().len(), expected.len());
             for (row, numbers) in result.dataset.rows().iter().zip(expected) {
                 assert_eq!(&row[3..], numbers.map(Value::Int));
             }
@@ -835,6 +836,7 @@ mod execution {
                 .result
                 .unwrap();
             let expected = [[2, 2, 2], [1, 1, 1], [3, 2, 2], [4, 4, 3]];
+            assert_eq!(result.dataset.rows().len(), expected.len());
             for (row, numbers) in result.dataset.rows().iter().zip(expected) {
                 assert_eq!(&row[3..], numbers.map(Value::Int));
             }
@@ -1053,6 +1055,7 @@ mod execution {
                 Some([2, 1, 1]),
                 Some([3, 3, 2]),
             ];
+            assert_eq!(result.dataset.rows().len(), expected.len());
             for (row, numbers) in result.dataset.rows().iter().zip(expected) {
                 let expected = numbers.map_or(vec![Value::Missing; 3], |numbers| {
                     numbers.map(Value::Int).to_vec()
