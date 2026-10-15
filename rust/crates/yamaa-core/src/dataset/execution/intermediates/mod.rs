@@ -713,7 +713,24 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                     let source_row = state.intermediates.eligible[&index][position];
                     let mut matches = true;
                     for (column, expected) in &keys {
+                        // A false equality cannot hide a later dynamic type refusal.
+                        // Known compatible pairs need no further reads once this row differs.
+                        if !matches
+                            && item
+                                .source_kind(plan.secondary(), *column)
+                                .is_some_and(|kind| {
+                                    expected.value_type().is_some_and(|expected| {
+                                        crate::value::comparable_types(expected, kind.into())
+                                    })
+                                })
+                        {
+                            continue;
+                        }
                         let value = cell(table, item, source_row, *column)?;
+                        if let (ValueRef::Bool(left), Value::Bool(right)) = (value, expected) {
+                            matches &= left == *right;
+                            continue;
+                        }
                         match crate::value::compare_present_refs(value, ValueRef::from(expected)) {
                             Ok(std::cmp::Ordering::Equal) => (),
                             Err(crate::value::ComparisonError::IncompatibleTypes) => {
@@ -742,7 +759,6 @@ fn read_with_observations<T: TableAccess + ?Sized>(
                             }
                             _ => {
                                 matches = false;
-                                break;
                             }
                         }
                     }

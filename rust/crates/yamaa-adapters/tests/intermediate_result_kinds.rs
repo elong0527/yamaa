@@ -508,7 +508,7 @@ columns:
 "
 }
 
-fn assert_nested_lookup_date(specification: &str) {
+fn assert_nested_lookup_output(specification: &str, input: &str, expected: &[u8]) {
     let study = Study::new(specification);
     let path = study.specification();
     let request = || Request {
@@ -519,16 +519,13 @@ fn assert_nested_lookup_date(specification: &str) {
     assert!(checked.is_empty(), "{checked:?}");
     fs::write(
         study.0.join("ex.csv"),
-        "USUBJID,EXSTDTC,EXENDTC\nS01,2024-01-01,2024-01-01\n",
+        format!("USUBJID,EXSTDTC,EXENDTC\n{input}"),
     )
     .unwrap();
     let mut result = file_application::domain(request(), identity(&path)).unwrap();
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     assert!(result.save().unwrap());
-    assert_eq!(
-        fs::read(study.0.join("out.csv")).unwrap(),
-        b"USUBJID,SELECTED\nS01,2024-01-01\n"
-    );
+    assert_eq!(fs::read(study.0.join("out.csv")).unwrap(), expected);
 }
 
 #[test]
@@ -538,8 +535,10 @@ fn nested_lookup_keys_retain_unknown_current_kinds() {
         "EX.CHOICE",
         "{greatest: {sources: [EX.CHOICE]}}",
     ] {
-        assert_nested_lookup_date(
+        assert_nested_lookup_output(
             &nested_lookup_specification().replace("{source: EX.CHOICE}", expression),
+            "S01,2024-01-01,2024-01-01\n",
+            b"USUBJID,SELECTED\nS01,2024-01-01\n",
         );
     }
 }
@@ -597,5 +596,57 @@ fn nested_lookup_keys_report_actual_incompatible_types_instead_of_no_match() {
             source,
             path,
         );
+    }
+}
+
+#[test]
+fn unknown_keys_keep_no_match_when_missing_or_filtered_donors_cannot_compare() {
+    for (specification, input) in [
+        (nested_lookup_specification().to_owned(), "S01,,\n"),
+        (
+            nested_lookup_specification().replace(
+                "    key: {DATE:",
+                "    filter: \"EX.USUBJID = 'S02'\"\n    key: {DATE:",
+            ),
+            "S01,,2024-01-01\n",
+        ),
+    ] {
+        assert_nested_lookup_no_match(&specification, input);
+    }
+}
+
+fn assert_nested_lookup_no_match(specification: &str, input: &str) {
+    assert_nested_lookup_output(specification, input, b"USUBJID,SELECTED\nS01,\n");
+}
+
+#[test]
+fn raw_boolean_key_values_use_equality_without_requiring_an_order() {
+    for (missing, expected) in [
+        ("true", b"USUBJID,SELECTED\nS01,S01\n".as_slice()),
+        ("false", b"USUBJID,SELECTED\nS01,\n".as_slice()),
+    ] {
+        let specification = nested_lookup_specification()
+            .replace("{to_date: {source: EXENDTC}}", "{literal: true}")
+            .replace("missing: 17", &format!("missing: {missing}"))
+            .replace("{source: DATES.DATE}", "{source: DATES.USUBJID}")
+            .replace(
+                "type: date, derivation: RESULT.SELECTED",
+                "type: str, derivation: RESULT.SELECTED",
+            );
+        assert_nested_lookup_output(&specification, "S01,,\n", expected);
+    }
+}
+
+#[test]
+fn incompatible_raw_key_pairs_fail_independently_of_another_pairs_order_or_value() {
+    for pairs in [
+        "USUBJID: {literal: S02}, DATE: {source: EX.CHOICE}",
+        "DATE: {source: EX.CHOICE}, USUBJID: {literal: S02}",
+    ] {
+        let specification =
+            nested_lookup_specification().replace("DATE: {source: EX.CHOICE}", pairs);
+        assert_nested_lookup_type_error(&specification, "key[DATE]", "intermediates[0].key.DATE");
+        assert_nested_lookup_no_match(&specification, "S01,,\n");
+        assert_nested_lookup_no_match(&specification, "S01,2024-01-01,2024-01-02\n");
     }
 }
