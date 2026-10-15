@@ -1,8 +1,9 @@
 """Characterize candidate libm functions; a successful run never means parity.
 
 Exact mismatches are reported, not tolerated or promoted into expected fixtures.
-The public compiler uses the approved PortableLibmV1 policy. This finite sample
-reports observations of that implementation without establishing complete accuracy.
+The public compiler uses the approved PortableLibmV1 policy. Its private
+ReferenceSubset policy keeps EXP/LN/POWER unsupported; a passing sample never
+enables those functions in that policy.
 Only finite EXP inputs, positive LN inputs and positive POWER bases are sampled;
 domain diagnostics, decimal rounding and completed-result formatting need separate
 qualification. Python math calls mirror the numeric reference's promoted inputs.
@@ -120,6 +121,7 @@ def assess(lines):
             "python": platform.python_version(),
         },
         "qualification": "blocked-by-mismatches" if mismatches else "not-qualified",
+        "default_functions_remain_unsupported": list(FUNCTIONS),
         "counts": counts,
         "mismatches": mismatches,
     }
@@ -152,7 +154,9 @@ def main():
         print(f"{name}: {count}")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(f"Qualification: {report['qualification']}")
+    print(
+        f"Qualification: {report['qualification']}; private ReferenceSubset functions remain unsupported; public compiler uses the approved policy"
+    )
     print(f"Assessment report: {args.output}")
 
 

@@ -1,5 +1,4 @@
 //! Finite factories and observers owned by the yamaa-adapters integration suite.
-use yamaa_core::schema as document_schema;
 use yamaa_core::{
     table::{Column, TableSchema},
     value::ColumnType,
@@ -30,7 +29,3 @@ pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {
     )
     .unwrap()
 }
-
-pub mod document;
-
-pub mod specification_run;
