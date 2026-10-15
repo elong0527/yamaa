@@ -22,26 +22,21 @@ mod windows;
 
 pub use bundle::safe_include as schema_include_name;
 pub use bundle::{
-    BundleError, BundleIssue, BundleIssueKind, BundleLimits, BundleResource, LocatedDescriptor,
-    SchemaAlias, SchemaAliasKind, SchemaClass, SchemaField, SchemaModule, SchemaRegistry,
-    SchemaRegistryEntry, SchemaShape, SchemaStructure,
+    BundleError, BundleIssue, BundleIssueKind, BundleResource, LocatedDescriptor, SchemaAlias,
+    SchemaAliasKind, SchemaClass, SchemaField, SchemaModule, SchemaRegistry, SchemaRegistryEntry,
+    SchemaShape, SchemaStructure,
 };
 pub use composition::{ComposedValue, CompositionOrigin};
-pub use constraints::{ConstraintBudget, ConstraintError, ConstraintUsage, ConstraintViolation};
-pub use descriptor::{
-    Descriptor, DescriptorBudget, DescriptorError, DescriptorIssue, DescriptorLimits,
-    DescriptorReport, DescriptorResource, DescriptorUsage,
-};
+pub use constraints::{ConstraintError, ConstraintViolation};
+pub use descriptor::{Descriptor, DescriptorError, DescriptorIssue, DescriptorReport};
 pub use diagnostic_projection::{
     admit_schema_diagnostics, schema_diagnostic_kind_label, ResolvedSchemaDiagnostic,
-    SchemaDiagnosticBudget, SchemaDiagnosticContext, SchemaDiagnosticError, SchemaDiagnosticReport,
-    SchemaDiagnosticValue, MAX_SCHEMA_DIAGNOSTIC_BYTES,
+    SchemaDiagnosticContext, SchemaDiagnosticError, SchemaDiagnosticReport, SchemaDiagnosticValue,
 };
 pub use dictionary_resources::{AdmittedMappingDictionary, MappingDictionaryReference};
 pub(crate) use document::canonical_integer;
 pub use document::{
-    Document, DocumentError, DocumentKind, DocumentLimits, DocumentNode, DocumentResource,
-    ScalarKey,
+    Document, DocumentError, DocumentKind, DocumentNode, DocumentResource, ScalarKey,
 };
 pub use inheritance_dependencies::{InheritanceDependencyError, InheritanceDependencyIssue};
 pub use inheritance_references::{
@@ -51,16 +46,12 @@ pub use layer_materialization::LayerCompositionError;
 pub use layers::{ComposedLayers, LayerProvenance};
 pub use model::SpecificationDocument;
 pub use normalization::{
-    NormalizationBudget, NormalizationError, NormalizationLimits, NormalizationResource,
-    NormalizedDocument, SchemaOrigin, SchemaSource,
+    NormalizationError, NormalizationResource, NormalizedDocument, SchemaOrigin, SchemaSource,
 };
 pub use path_render::{
     quoted_diagnostic_text, scalar_diagnostic_label, DIAGNOSTIC_UNICODE_VERSION,
 };
-pub use type_expression::{TypeError, TypeExpression, TypeLimits, TypeNode, TypeResource};
-pub use validation::{
-    DefaultDiagnostics, SchemaContext, SchemaDiagnostic, ValidationBudget, ValidationError,
-    ValidationLimits,
-};
+pub use type_expression::{TypeError, TypeExpression, TypeNode, TypeResource};
+pub use validation::{DefaultDiagnostics, SchemaContext, SchemaDiagnostic, ValidationError};
 
 pub use windows::{ExpandedWindows, WindowReference};

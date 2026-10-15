@@ -1,11 +1,9 @@
-//! Bounded check/build use cases over an admitted, normalized specification.
+//! Check/build use cases over an admitted, normalized specification.
 //!
 //! Source capture, YAML preparation and schema selection precede this boundary.
-//! Environment activation and the public host result contract are not implemented
-//! here yet. Unsupported vocabulary is rejected before any study-data authority
-//! is invoked. A successful check is not evidence that ingestion or execution
-//! will succeed: actual source schemas and values are available only at build.
-use crate::specification_run::{self, CapturedAttempt, Limits, SourceDecoder, SourcePort};
+//! Project activation is the project boundary's authority. A successful check
+//! admits declarations; actual source schemas and values are observed at build.
+use crate::specification_run::{self, CapturedAttempt, SourceDecoder, SourcePort};
 use crate::{
     schema::SpecificationDocument,
     specification::{PrepareError, PreparedSpecification},
@@ -50,50 +48,19 @@ pub fn check_with_environment(
 }
 
 impl CheckedSpecification {
-    /// Execute with caller-held activated handles; metadata admission precedes
-    /// every study inspection, capture and decode in the shared service.
-    pub fn build_with_functions_into<P: SourcePort, D: SourceDecoder>(
+    /// Execute with explicit activated handles and caller-held observations.
+    /// Metadata admission precedes every source inspection, capture and decode.
+    pub fn build_into<P: SourcePort, D: SourceDecoder>(
         &self,
         port: &mut P,
         decoder: &mut D,
         functions: &mut dyn crate::function_invocation::FunctionPort<
             Error = <D::Table as crate::table::TableAccess>::Error,
         >,
-        limits: Limits,
-        attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
-    ) {
-        specification_run::execute_with_functions_into(
-            &self.compiled,
-            port,
-            decoder,
-            functions,
-            limits,
-            attempt,
-        );
-    }
-
-    /// The observer receives stage transitions and actual calls only; immutable
-    /// checked metadata and the original attempt remain the semantic authority.
-    pub fn build_with_observer_into<P: SourcePort, D: SourceDecoder>(
-        &self,
-        port: &mut P,
-        decoder: &mut D,
-        functions: &mut dyn crate::function_invocation::FunctionPort<
-            Error = <D::Table as crate::table::TableAccess>::Error,
-        >,
-        limits: Limits,
         attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
         scope: crate::application_observer::Scope<'_>,
     ) {
-        specification_run::execute_with_observer_into(
-            &self.compiled,
-            port,
-            decoder,
-            functions,
-            limits,
-            attempt,
-            scope,
-        );
+        specification_run::execute_into(&self.compiled, port, decoder, functions, attempt, scope);
     }
 
     /// Borrow the core-owned plan for provenance/reporting and explicit probes.
@@ -112,18 +79,6 @@ impl CheckedSpecification {
     ) -> std::vec::Vec<crate::diagnostic::Diagnostic> {
         self.compiled.verification_declaration_diagnostics()
     }
-
-    /// Execute into caller-held observations so a host panic fence can retain
-    /// partial evidence. No host is entered during the preceding check operation.
-    pub fn build_into<P: SourcePort, D: SourceDecoder>(
-        &self,
-        port: &mut P,
-        decoder: &mut D,
-        limits: Limits,
-        attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
-    ) {
-        specification_run::execute_with_port_into(&self.compiled, port, decoder, limits, attempt);
-    }
 }
 
 /// Check and build in one engine operation. Preparation failures return before
@@ -132,10 +87,15 @@ pub fn build<P: SourcePort, D: SourceDecoder>(
     document: &SpecificationDocument,
     port: &mut P,
     decoder: &mut D,
-    limits: Limits,
 ) -> BuildResult<P::Error, D::Error, D::Table> {
     let checked = check(document)?;
     let mut attempt = CapturedAttempt::new(checked.compiled().source());
-    checked.build_into(port, decoder, limits, &mut attempt);
+    checked.build_into(
+        port,
+        decoder,
+        &mut crate::function_invocation::NoFunctions::new(),
+        &mut attempt,
+        crate::application_observer::Scope::new(&crate::application_observer::Noop),
+    );
     Ok(attempt)
 }

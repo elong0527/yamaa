@@ -76,32 +76,10 @@ impl Call {
         findings
     }
 }
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub arguments: usize,
-    pub text_bytes: usize,
-}
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            arguments: 1024,
-            text_bytes: 1_048_576,
-        }
-    }
-}
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum Error {
-    #[error("project call document limit: {0:?}")]
-    Limit(&'static str),
-    #[error("project call document findings: {0:?}")]
-    Findings(Vec<Finding>),
-}
-
 /// Admit only name/args and the closed literal/date/datetime wrappers.
 /// Retain every independent invalid scalar leaf; no partial
-/// call is admitted. Preflight bounds ownership before the first string copy.
-pub fn decode(document: &Document, root: usize, path: &str, limits: Limits) -> Result<Call, Error> {
-    text_cost(document, root, path, limits)?;
+/// call is admitted.
+pub fn decode(document: &Document, root: usize, path: &str) -> Result<Call, Vec<Finding>> {
     let argument_nodes =
         document
             .field(root, "args")
@@ -159,110 +137,6 @@ pub fn decode(document: &Document, root: usize, path: &str, limits: Limits) -> R
             arguments,
         })
     } else {
-        Err(Error::Findings(findings))
+        Err(findings)
     }
-}
-
-/// Conservative bytes for ownership and complete diagnostics. A surrounding
-/// compiler can charge all calls before decoding the first call.
-pub fn text_cost(
-    document: &Document,
-    root: usize,
-    path: &str,
-    limits: Limits,
-) -> Result<usize, Error> {
-    let argument_nodes =
-        document
-            .field(root, "args")
-            .and_then(|node| match document.nodes().get(node) {
-                Some(N::Mapping(items)) => Some(items.as_slice()),
-                _ => None,
-            });
-    if argument_nodes.is_some_and(|items| items.len() > limits.arguments) {
-        return Err(Error::Limit("arguments"));
-    }
-    // Charge only this call's fixed-depth leaves. Repeated calls must not scan
-    // or charge unrelated document nodes. Include conservative space for each
-    // temporary diagnostic path and every possible retained Reader finding.
-    let mut text = 0;
-    charge_text(&mut text, path.len(), limits)?;
-    charge_paths(&mut text, path.len(), 5, 4, limits)?;
-    if let Some(node) = document.field(root, "name") {
-        charge_leaf(document, node, &mut text, limits)?;
-    }
-    let name_length = document
-        .field(root, "name")
-        .and_then(|node| match document.nodes().get(node) {
-            Some(N::Text(name)) => Some(name.len()),
-            _ => None,
-        })
-        .unwrap_or(0);
-    // The compiler's issue context repeats the function name for each scalar
-    // fault. Charge that projection before returning any decode findings.
-    let copies = argument_nodes
-        .map_or(0, <[_]>::len)
-        .checked_mul(2)
-        .and_then(|n| n.checked_add(1))
-        .ok_or(Error::Limit("text"))?;
-    charge_text(
-        &mut text,
-        name_length
-            .checked_mul(copies)
-            .ok_or(Error::Limit("text"))?,
-        limits,
-    )?;
-    charge_paths(&mut text, path.len(), 5, 2, limits)?;
-    if let Some(items) = argument_nodes {
-        for &(name_node, node) in items {
-            let name_length = match document.nodes().get(name_node) {
-                Some(N::Text(name)) => name.len(),
-                _ => 0,
-            };
-            charge_leaf(document, name_node, &mut text, limits)?;
-            charge_paths(&mut text, path.len(), 5, 2, limits)?;
-            let suffix = name_length.checked_add(6).ok_or(Error::Limit("text"))?;
-            charge_paths(&mut text, path.len(), suffix, 3, limits)?;
-            let scalar = document.field(node, "literal").unwrap_or(node);
-            charge_leaf(document, scalar, &mut text, limits)?;
-            if let Some(value) = document
-                .field(scalar, "date")
-                .or_else(|| document.field(scalar, "datetime"))
-            {
-                charge_leaf(document, value, &mut text, limits)?;
-            }
-        }
-    }
-    Ok(text)
-}
-
-fn charge_text(used: &mut usize, amount: usize, limits: Limits) -> Result<(), Error> {
-    *used = used
-        .checked_add(amount)
-        .filter(|&n| n <= limits.text_bytes)
-        .ok_or(Error::Limit("text"))?;
-    Ok(())
-}
-fn charge_paths(
-    used: &mut usize,
-    prefix: usize,
-    suffix: usize,
-    copies: usize,
-    limits: Limits,
-) -> Result<(), Error> {
-    let amount = prefix
-        .checked_add(suffix)
-        .and_then(|n| n.checked_mul(copies))
-        .ok_or(Error::Limit("text"))?;
-    charge_text(used, amount, limits)
-}
-fn charge_leaf(
-    document: &Document,
-    node: usize,
-    used: &mut usize,
-    limits: Limits,
-) -> Result<(), Error> {
-    if let Some(N::Text(value) | N::Integer(value)) = document.nodes().get(node) {
-        charge_text(used, value.len(), limits)?;
-    }
-    Ok(())
 }

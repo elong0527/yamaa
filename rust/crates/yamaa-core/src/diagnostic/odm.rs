@@ -1,7 +1,5 @@
 //! Typed ODM causes preserve fixed-schema metadata and complete row scope.
-use super::{
-    ConditionCode as C, Diagnostic, ProjectionBudget, ProjectionError, MAX_PROJECTION_BYTES,
-};
+use super::{ConditionCode as C, Diagnostic};
 use crate::{
     dataset::AggregatePhase,
     value::{ColumnType, Value},
@@ -97,12 +95,6 @@ fn type_name(kind: Option<ColumnType>) -> &'static str {
         None => "unsupported",
     }
 }
-fn value_budget(value: &Value, budget: &mut ProjectionBudget) -> Result<(), ProjectionError> {
-    match value {
-        Value::Str(value) => budget.text(value),
-        _ => budget.charge(64),
-    }
-}
 impl OdmFinding<'_> {
     pub(crate) fn code(self) -> C {
         match self {
@@ -122,121 +114,7 @@ impl OdmFinding<'_> {
             Self::NotUnique { .. } => C::OdmNotUnique,
         }
     }
-    pub(crate) fn admit(self, budget: &mut ProjectionBudget) -> Result<(), ProjectionError> {
-        budget.charge(256)?;
-        match self {
-            Self::Declared { dataset, declared } => {
-                budget.text("input.")?;
-                budget.text(dataset)?;
-                budget.text(declared.name())?;
-                budget.field("dataset", dataset)?;
-                budget.field("declared", declared.name())?;
-            }
-            Self::MissingFields { dataset, fields } => {
-                budget.text("input.")?;
-                budget.text(dataset)?;
-                budget.text(".path")?;
-                budget.field("dataset", dataset)?;
-                budget.text("fields")?;
-                for field in fields {
-                    budget.text(field)?;
-                    budget.charge(2)?;
-                }
-            }
-            Self::AmbiguousField {
-                dataset,
-                field,
-                stored,
-            } => {
-                budget.text("input.")?;
-                budget.text(dataset)?;
-                budget.text(".path")?;
-                budget.field("dataset", dataset)?;
-                budget.field("field", field)?;
-                budget.text("stored")?;
-                for name in stored {
-                    budget.text(name)?;
-                    budget.charge(2)?;
-                }
-            }
-            Self::FieldType {
-                dataset,
-                field,
-                stored_field,
-                kind,
-            } => {
-                budget.text("input.")?;
-                budget.text(dataset)?;
-                budget.text(".path")?;
-                budget.field("dataset", dataset)?;
-                budget.field("field", field)?;
-                budget.field("stored_field", stored_field)?;
-                budget.field("stored_type", type_name(kind))?;
-            }
-            Self::MissingValues { dataset, field, .. } => {
-                budget.text("input.")?;
-                budget.text(dataset)?;
-                budget.text(".path")?;
-                budget.field("dataset", dataset)?;
-                budget.field("field", field)?;
-                budget.text("record")?;
-                budget.text("records")?;
-                budget.charge(40)?;
-            }
-            Self::InvalidContext {
-                path,
-                dataset,
-                location,
-            } => {
-                budget.text(path)?;
-                budget.field("dataset", dataset)?;
-                budget.field("location", location.name())?;
-            }
-            Self::NotUnique {
-                path,
-                item,
-                row,
-                scope,
-                differ,
-                ..
-            } => {
-                budget.text(path)?;
-                budget.field("item", item)?;
-                budget.text("row")?;
-                if let Some(row) = row {
-                    budget.text(row)?;
-                }
-                budget.text("scope")?;
-                budget.text("records")?;
-                budget.charge(20)?;
-                for (name, value) in scope {
-                    budget.text(name)?;
-                    value_budget(value, budget)?;
-                    budget.charge(2)?;
-                }
-                budget.text("differ")?;
-                for (name, values) in differ {
-                    budget.text(name)?;
-                    for value in values {
-                        value_budget(value, budget)?;
-                        budget.charge(2)?;
-                    }
-                }
-                budget.text("repeated")?;
-                budget.charge(5)?;
-            }
-        }
-        Ok(())
-    }
-    pub fn diagnostic(self) -> Result<Diagnostic, ProjectionError> {
-        self.diagnostic_with_limit(MAX_PROJECTION_BYTES)
-    }
-    pub fn diagnostic_with_limit(self, maximum: usize) -> Result<Diagnostic, ProjectionError> {
-        let mut budget = ProjectionBudget::new(maximum)?;
-        self.admit(&mut budget)?;
-        Ok(self.owned())
-    }
-    pub(crate) fn owned(self) -> Diagnostic {
+    pub fn diagnostic(self) -> Diagnostic {
         let (path, context) = match self {
             Self::Declared { dataset, declared } => (
                 format!("input.{dataset}.{}", declared.name()),
