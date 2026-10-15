@@ -47,6 +47,7 @@ harbor = ["harbor==0.23.0"]
 locked = true
 include = [{path = "yamaa_build_backend.py", format = "sdist"}]
 bindings = "pyo3"
+features = ["extension-module"]
 module-name = "yamaa._native"
 manifest-path = "../rust/crates/yamaa-python/Cargo.toml"
 python-source = "src"
