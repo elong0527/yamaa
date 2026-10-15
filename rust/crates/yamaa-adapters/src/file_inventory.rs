@@ -44,9 +44,7 @@ fn capture(
     )
     .map_err(|error| match error {
         service::Error::Port { error, .. } => error,
-        service::Error::Metadata(_) => {
-            file_preparation::Error::Resource(crate::file_resources::Error::Limit)
-        }
+        service::Error::Metadata(error) => file_preparation::Error::Inventory(error),
     })
 }
 pub(crate) fn prepare(

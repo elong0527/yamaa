@@ -10,6 +10,7 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub enum Error {
     Resource(ResourceError),
+    Inventory(yamaa_core::submission_inventory::MetadataError),
     Preparation(InheritanceError<ResourceError>),
     ResourceFinding {
         error: ResourceError,
@@ -51,6 +52,11 @@ impl Error {
     pub fn into_message(self) -> String {
         match self {
             Self::Resource(error) => error.message().into(),
+            Self::Inventory(_) => serde_json::json!({
+                "protocol": "specification/prototype",
+                "outcome": { "status": "rejected", "stage": "prepare", "code": "inventory" },
+            })
+            .to_string(),
             Self::Preparation(error) => {
                 crate::specification_diagnostics::inheritance_failure(error)
                     .unwrap_or_else(|error| error.message().into())
