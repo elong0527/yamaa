@@ -586,6 +586,8 @@ impl Expressions {
     fn check_arithmetic(&mut self) -> Result<(), CompileError> {
         // Ordinary finite prefixes are proved safe by constant-space bounds;
         // only potentially overflowing operations need a symbolic query.
+        // When different contexts overflow at different operations, report the
+        // first constructed operation, independently of concrete path expansion.
         let checks = self.checks.clone();
         for (expression, byte) in checks {
             self.extent(expression, byte)?;
@@ -1571,6 +1573,27 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn capability_overflow_ownership_uses_deterministic_operation_order() {
+        for prefix in ["", "λ", "λ*"] {
+            let body = format!(
+                r"(?:(a)(bb)|(aa)(b))(?:\3{{{maximum}}}\2{{{maximum}}})",
+                maximum = usize::MAX,
+            );
+            for consumed in [body.clone(), format!("(?:{body}){{0}}")] {
+                let source = format!(r"{prefix}{consumed}(?<=\1)");
+                assert_eq!(
+                    Pattern::compile(&source),
+                    Err(CompileError::Unsupported {
+                        byte: source.find(r"\3").unwrap(),
+                        feature: "pattern width exceeds addressable range",
+                    }),
+                    "{source}",
+                );
+            }
+        }
     }
 
     #[test]
