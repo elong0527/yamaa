@@ -150,6 +150,22 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ),
         (
             Finding::InvalidContext {
+                path: "aggregate.group_by",
+                expression: "SUM(D.N)",
+                cause: Cause::QualifiedGroupNotOutputKey,
+            },
+            "invalid_aggregate_context",
+            "REQ-0470",
+            vec![
+                ("expr", text("SUM(D.N)")),
+                (
+                    "reason",
+                    text("a qualified aggregate group_by column must also be an output key"),
+                ),
+            ],
+        ),
+        (
+            Finding::InvalidContext {
                 path: "aggregate.key",
                 expression: "SUM(D.N)",
                 cause: Cause::RowNoKeys,

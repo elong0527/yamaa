@@ -81,6 +81,7 @@ pub enum AggregateContextCause {
     OutputNeedsGroups,
     OutputGroupsQualified,
     OutputBetween,
+    QualifiedGroupNotOutputKey,
 }
 impl AggregateContextCause {
     fn reason(self) -> &'static str {
@@ -96,12 +97,16 @@ impl AggregateContextCause {
                 "an output-row reduction groups on current-output columns"
             }
             Self::OutputBetween => "between narrows a qualified right side only",
+            Self::QualifiedGroupNotOutputKey => {
+                "a qualified aggregate group_by column must also be an output key"
+            }
         }
     }
     fn code(self) -> C {
         match self {
             Self::RowNoKeys => C::AggregateOwnGroupKeys,
             Self::OutputNeedsGroups => C::AggregateOutputGroups,
+            Self::QualifiedGroupNotOutputKey => C::AggregateGroupNotOutputKey,
             _ => C::AggregateDriverScope,
         }
     }
