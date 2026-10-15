@@ -1,9 +1,9 @@
 //! Raw scalar extremes and concatenation validation, before output conversion.
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
     value::{compare_present, ColumnType, ComparisonError, Value},
 };
-use serde_json::Value as JsonValue;
 use std::cmp::Ordering;
 use std::vec;
 /// Missing operands are skipped; equality keeps the first authored value.

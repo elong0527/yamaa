@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 pub mod application_issue;
+pub mod json;
 
 pub mod aggregate_compiler;
 pub mod aggregate_parser;
@@ -78,8 +79,6 @@ pub mod project_function_document;
 
 pub mod project_function_result;
 
-pub mod project_limits;
-
 pub mod project_terminology;
 
 pub mod project_terminology_document;
@@ -107,11 +106,7 @@ pub mod specification_run;
 
 pub mod project_preparation;
 
-pub mod capacity;
-
 pub mod dictionary_preparation;
-
-mod dataset_budget;
 
 pub mod document_preparation;
 
@@ -129,21 +124,13 @@ pub mod project_domain;
 
 pub mod inheritance_preparation;
 
-pub mod execution_work;
-
 pub mod build;
-
-pub mod source_metadata;
 
 pub mod table_grouping;
 
 pub mod producer_build;
 
 pub mod standalone_preparation;
-
-pub mod style_values;
-
-pub mod source_header;
 
 pub mod numeric_lifecycle;
 
@@ -159,9 +146,13 @@ pub mod project_activation;
 
 pub mod inheritance_capture;
 
-#[cfg(any(test, feature = "test-support"))]
-pub mod test_support;
-
 pub mod source_profile_inspection;
 
 pub mod producer_publication;
+
+#[cfg(test)]
+use crate::schema as document_schema;
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../tests/support/document.rs"]
+mod test_document;

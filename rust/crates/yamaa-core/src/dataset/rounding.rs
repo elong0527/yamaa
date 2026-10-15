@@ -1,11 +1,11 @@
 //! Declarative rounding retains the source field rather than inventing formula text.
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
     numeric::{self, Number},
     table::ValueRef,
     value::Value,
 };
-use serde_json::Value as JsonValue;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InvalidDigits;

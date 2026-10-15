@@ -84,7 +84,7 @@ pub fn bind(
         let input = match &item.input {
             Input::Literal(value) => Some(FunctionInput::Literal(value.clone())),
             Input::Reference(name) => {
-                if let Some(read) = catalog.selected_read(name).map_err(Error::Reference)? {
+                if let Some(read) = catalog.selected_read(name) {
                     match read {
                         Err(finding) => findings.push(Finding {
                             argument,
@@ -98,7 +98,9 @@ pub fn bind(
                                 .iter()
                                 .find(|p| p.name == item.name)
                                 .ok_or(Error::InvalidAdmittedCall)?;
-                            if kind(actual) != parameter.kind {
+                            if let Some(actual) =
+                                actual.filter(|actual| kind(*actual) != parameter.kind)
+                            {
                                 findings.push(Finding {
                                     argument,
                                     kind: Kind::ArgumentType {
@@ -152,19 +154,13 @@ pub fn bind(
                 let start = findings.len();
                 if name.contains('.') {
                     findings.extend(
-                        reference_scope::validate(
-                            catalog,
-                            name,
-                            None,
-                            context.scope,
-                            Default::default(),
-                        )
-                        .map_err(Error::Reference)?
-                        .into_iter()
-                        .map(|finding| Finding {
-                            argument,
-                            kind: Kind::Scope(finding),
-                        }),
+                        reference_scope::validate(catalog, name, None, context.scope)
+                            .map_err(Error::Reference)?
+                            .into_iter()
+                            .map(|finding| Finding {
+                                argument,
+                                kind: Kind::Scope(finding),
+                            }),
                     );
                 } else if let Some(finding) = catalog
                     .validate_output(
@@ -180,7 +176,7 @@ pub fn bind(
                         kind: Kind::Output(finding),
                     });
                 }
-                let binding = catalog.bind(name).map_err(Error::Reference)?;
+                let binding = catalog.bind(name);
                 // Driver/existence/output-phase failures retain their established
                 // precedence; grouping failures still admit a separate type fault.
                 let terminal = findings[start..].iter().any(|f| {
@@ -195,23 +191,14 @@ pub fn bind(
                 });
                 match binding {
                     Some(binding) if !terminal => {
-                        let (input, actual) = match binding {
-                            Binding::Output {
-                                column,
-                                column_type,
-                            } => {
+                        let actual = catalog.type_of(name).map(kind);
+                        let input = match binding {
+                            Binding::Output { column, .. } => {
                                 dependencies.push(column);
-                                (
-                                    Some(FunctionInput::Read(Read::Column(column))),
-                                    kind(column_type),
-                                )
+                                Some(FunctionInput::Read(Read::Column(column)))
                             }
-                            Binding::Dataset {
-                                dataset,
-                                field,
-                                column_type,
-                            } => {
-                                let input = if dataset != context.source_dataset {
+                            Binding::Dataset { dataset, field, .. } => {
+                                if dataset != context.source_dataset {
                                     findings.push(Finding {
                                         argument,
                                         kind: Kind::UnsupportedRelation { dataset },
@@ -227,8 +214,7 @@ pub fn bind(
                                             identifier: name.clone(),
                                         },
                                     })
-                                };
-                                (input, kind(column_type))
+                                }
                             }
                         };
                         let parameter = plan
@@ -237,7 +223,7 @@ pub fn bind(
                             .iter()
                             .find(|p| p.name == item.name)
                             .ok_or(Error::InvalidAdmittedCall)?;
-                        if actual != parameter.kind {
+                        if let Some(actual) = actual.filter(|actual| *actual != parameter.kind) {
                             findings.push(Finding {
                                 argument,
                                 kind: Kind::ArgumentType {

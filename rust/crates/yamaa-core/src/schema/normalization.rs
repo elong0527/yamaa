@@ -1,9 +1,9 @@
 //! Validated schema normalization with request-wide storage and traversal policies.
 
 use super::{
-    validation::matches_member, DefaultDiagnostics, Document, DocumentError, DocumentLimits,
-    DocumentNode as N, SchemaAliasKind, SchemaDiagnostic, SchemaField, SchemaShape,
-    SchemaStructure, TypeExpression, TypeNode, ValidationBudget, ValidationError, ValidationLimits,
+    validation::matches_member, DefaultDiagnostics, Document, DocumentError, DocumentNode as N,
+    SchemaAliasKind, SchemaDiagnostic, SchemaField, SchemaShape, SchemaStructure, TypeExpression,
+    TypeNode, ValidationError,
 };
 use std::vec;
 
@@ -29,30 +29,8 @@ pub struct NormalizedDocument {
     pub origins: Vec<SchemaOrigin>,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct NormalizationLimits {
-    pub validation: ValidationLimits,
-    /// Per-arena storage; the budget separately accounts cumulative construction,
-    /// including temporary derivation shorthand and inherited planning arenas.
-    pub storage: DocumentLimits,
-    /// Bounds interpretation independently of the resulting document depth.
-    pub depth: usize,
-}
-impl Default for NormalizationLimits {
-    fn default() -> Self {
-        Self {
-            validation: ValidationLimits::default(),
-            storage: DocumentLimits::default(),
-            depth: 128,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NormalizationResource {
-    Nodes,
-    TextBytes,
-    Edges,
     Depth,
 }
 
@@ -75,182 +53,6 @@ pub enum NormalizationError {
 impl From<ValidationError> for NormalizationError {
     fn from(error: ValidationError) -> Self {
         Self::Validation(error)
-    }
-}
-
-/// Reuse across related fragment/document operations; failed attempts keep their charges.
-pub struct NormalizationBudget {
-    pub(super) limits: NormalizationLimits,
-    pub(super) validation: ValidationBudget,
-    nodes: usize,
-    bytes: usize,
-    edges: usize,
-    input_nodes: usize,
-    input_bytes: usize,
-    work_multiplier: usize,
-    cumulative_storage: DocumentLimits,
-    application: bool,
-}
-impl NormalizationBudget {
-    pub fn new(limits: NormalizationLimits) -> Self {
-        Self {
-            validation: ValidationBudget::new(limits.validation),
-            limits,
-            nodes: 0,
-            bytes: 0,
-            edges: 0,
-            input_nodes: 0,
-            input_bytes: 0,
-            work_multiplier: 1,
-            cumulative_storage: limits.storage,
-            application: false,
-        }
-    }
-    /// Top-level host preparation applies finite input-size allowances. Explicit
-    /// component budgets created with new retain their exact caller-selected caps.
-    pub fn for_application(limits: NormalizationLimits) -> Self {
-        let mut budget = Self::new(limits);
-        budget.application = true;
-        budget
-    }
-    /// Layer admission, composition/dependencies, final normalization and model
-    /// admission share four flat allowances. Individual arenas keep their
-    /// original storage limits. Counters remain cumulative across
-    /// retries and all unique inputs; no successful or failed charge is refunded.
-    pub fn begin_inheritance(&mut self) {
-        if !self.application {
-            return;
-        }
-        self.work_multiplier = 4;
-        // Descriptor output/import, composition and the four final planning
-        // arenas require separate construction shares, including temporary
-        // vectors. These counters count allocations across the entire request;
-        // each actual document still uses limits.storage unchanged.
-        self.cumulative_storage.nodes = self.limits.storage.nodes.saturating_mul(8);
-        self.cumulative_storage.text_bytes = self.limits.storage.text_bytes.saturating_mul(8);
-        self.cumulative_storage.edges = self.limits.storage.edges.saturating_mul(8);
-        self.update_work_limit();
-    }
-    /// Size work and attempted-diagnostic allowances using original decoded inputs, before any
-    /// expansion. Per-input and traversal admission still enforce their own
-    /// bounds. Clamping the cumulative size keeps this request finite even if a
-    /// caller supplies repeated inputs or larger trusted traversal limits.
-    pub fn admit_input(&mut self, input: &Document) {
-        if !self.application {
-            return;
-        }
-        self.input_nodes = self
-            .input_nodes
-            .saturating_add(input.nodes().len())
-            .min(self.limits.storage.nodes);
-        for node in input.nodes() {
-            if let N::Text(text) | N::Integer(text) = node {
-                self.input_bytes = self
-                    .input_bytes
-                    .saturating_add(text.len())
-                    .min(self.limits.storage.text_bytes);
-            }
-        }
-        self.update_work_limit();
-    }
-    fn update_work_limit(&mut self) {
-        let size = self.input_nodes.saturating_add(self.input_bytes);
-        // Reference reachability and ordering also revisit descriptor patterns.
-        let matcher_multiplier = if self.work_multiplier == 4 { 8 } else { 1 };
-        self.validation.application_limits(
-            self.limits
-                .validation
-                .work
-                .saturating_add(size.min(self.limits.validation.work))
-                .saturating_mul(self.work_multiplier),
-            self.limits
-                .validation
-                .diagnostics
-                .saturating_add(self.input_nodes.saturating_mul(2))
-                .saturating_mul(self.work_multiplier),
-            self.limits
-                .validation
-                .diagnostic_text_bytes
-                .saturating_add(self.input_nodes.saturating_mul(128))
-                .saturating_add(self.input_bytes)
-                .saturating_mul(self.work_multiplier),
-            crate::regex::MatchLimits {
-                subject_bytes: self
-                    .limits
-                    .validation
-                    .regex
-                    .subject_bytes
-                    .saturating_add(size.min(self.limits.validation.regex.subject_bytes))
-                    .saturating_mul(matcher_multiplier),
-                work: self
-                    .limits
-                    .validation
-                    .regex
-                    .work
-                    .saturating_add(size.min(self.limits.validation.regex.work))
-                    .saturating_mul(matcher_multiplier),
-                state_cells: self
-                    .limits
-                    .validation
-                    .regex
-                    .state_cells
-                    .saturating_add(size.min(self.limits.validation.regex.state_cells))
-                    .saturating_mul(matcher_multiplier),
-            },
-        );
-    }
-    pub fn storage_used(&self) -> (usize, usize, usize) {
-        (self.nodes, self.bytes, self.edges)
-    }
-    pub fn work_used(&self) -> usize {
-        self.validation.work_used()
-    }
-    /// Mixed validation/normalization batches retain one request's validation accounting.
-    pub fn validation_scope(&mut self) -> &mut ValidationBudget {
-        &mut self.validation
-    }
-    /// Admit application-service overhead into this same request work scope.
-    pub fn work(&mut self, amount: usize) -> Result<(), NormalizationError> {
-        self.validation.work(amount).map_err(Into::into)
-    }
-    /// Admit retained planning metadata before copying it outside the arena.
-    pub fn text(&mut self, amount: usize) -> Result<(), NormalizationError> {
-        self.validation.text(amount).map_err(Into::into)
-    }
-    fn charge(
-        used: &mut usize,
-        amount: usize,
-        limit: usize,
-        resource: NormalizationResource,
-    ) -> Result<(), NormalizationError> {
-        *used = used
-            .checked_add(amount)
-            .filter(|n| *n <= limit)
-            .ok_or(NormalizationError::Limit { resource, limit })?;
-        Ok(())
-    }
-    pub(super) fn reserve(&mut self, bytes: usize, edges: usize) -> Result<(), NormalizationError> {
-        Self::charge(
-            &mut self.nodes,
-            1,
-            self.cumulative_storage.nodes,
-            NormalizationResource::Nodes,
-        )?;
-        Self::charge(
-            &mut self.bytes,
-            bytes,
-            self.cumulative_storage.text_bytes,
-            NormalizationResource::TextBytes,
-        )?;
-        self.edges(edges)
-    }
-    fn edges(&mut self, count: usize) -> Result<(), NormalizationError> {
-        Self::charge(
-            &mut self.edges,
-            count,
-            self.cumulative_storage.edges,
-            NormalizationResource::Edges,
-        )
     }
 }
 
@@ -316,24 +118,23 @@ impl<'a> Member<'a> {
     }
 }
 
-struct Run<'a, 'b> {
+struct Run<'a> {
     schema: &'a SchemaStructure,
-    budget: &'b mut NormalizationBudget,
     nodes: Vec<N>,
     origins: Vec<SchemaOrigin>,
     active: Vec<(usize, usize, usize)>,
     next_scope: usize,
 }
-impl Run<'_, '_> {
+impl Run<'_> {
     fn step(&mut self, site: Site<'_>) -> Result<(), NormalizationError> {
-        let limit = self.budget.limits.depth.min(128);
+        let limit = crate::limits::Limits::SEMANTIC_DEPTH;
         if site.depth > limit {
             return Err(NormalizationError::Limit {
                 resource: NormalizationResource::Depth,
                 limit,
             });
         }
-        self.budget.work(1)
+        Ok(())
     }
     fn emit(&mut self, node: N, origin: SchemaOrigin) -> usize {
         let id = self.nodes.len();
@@ -342,19 +143,10 @@ impl Run<'_, '_> {
         id
     }
     fn scope(&mut self) -> Result<usize, NormalizationError> {
-        self.budget.work(1)?;
-        self.next_scope = self
-            .next_scope
-            .checked_add(1)
-            .ok_or(NormalizationError::Limit {
-                resource: NormalizationResource::Nodes,
-                limit: self.budget.limits.storage.nodes,
-            })?;
+        self.next_scope += 1;
         Ok(self.next_scope)
     }
     fn key(&mut self, name: &str, origin: SchemaOrigin) -> Result<usize, NormalizationError> {
-        self.budget.work(name.len())?;
-        self.budget.reserve(name.len(), 0)?;
         Ok(self.emit(
             N::Text(name.into()),
             SchemaOrigin {
@@ -366,13 +158,8 @@ impl Run<'_, '_> {
     fn copy(&mut self, site: Site<'_>) -> Result<usize, NormalizationError> {
         self.step(site)?;
         let node = match &site.input.nodes()[site.value] {
-            N::Text(text) | N::Integer(text) => {
-                self.budget.work(text.len())?;
-                self.budget.reserve(text.len(), 0)?;
-                site.input.nodes()[site.value].clone()
-            }
+            N::Text(_) | N::Integer(_) => site.input.nodes()[site.value].clone(),
             N::Sequence(items) => {
-                self.budget.reserve(0, items.len())?;
                 let mut result = Vec::with_capacity(items.len());
                 for &value in items {
                     result.push(self.copy(site.child(value))?);
@@ -380,23 +167,18 @@ impl Run<'_, '_> {
                 N::Sequence(result)
             }
             N::Mapping(items) => {
-                self.budget.reserve(0, items.len().saturating_mul(2))?;
                 let mut result = Vec::with_capacity(items.len());
                 for &(key, value) in items {
                     result.push((self.copy(site.child(key))?, self.copy(site.child(value))?));
                 }
                 N::Mapping(result)
             }
-            node => {
-                self.budget.reserve(0, 0)?;
-                node.clone()
-            }
+            node => node.clone(),
         };
         Ok(self.emit(node, site.origin()))
     }
     fn matches(&mut self, member: Member<'_>, site: Site<'_>) -> Result<bool, NormalizationError> {
         self.step(site)?;
-        self.budget.work(self.active.len())?;
         let active: Vec<_> = self
             .active
             .iter()
@@ -410,7 +192,6 @@ impl Run<'_, '_> {
             site.value,
             site.fragment,
             &active,
-            &mut self.budget.validation,
         )?)
     }
     fn descriptor(
@@ -420,7 +201,6 @@ impl Run<'_, '_> {
     ) -> Result<usize, NormalizationError> {
         self.step(site)?;
         let members = self.schema.descriptors()[descriptor].descriptor.members();
-        self.budget.work(members.len())?;
         self.members(
             &members.iter().map(Member::root).collect::<Vec<_>>(),
             site.deeper(),
@@ -457,17 +237,10 @@ impl Run<'_, '_> {
         let N::Mapping(items) = &site.input.nodes()[site.value] else {
             return self.copy(site);
         };
-        self.budget.reserve(0, 0)?;
         let mut result = Vec::new();
         for field in fields {
-            self.budget.work(
-                items
-                    .len()
-                    .saturating_mul(field.name.len().saturating_add(1)),
-            )?;
             let present = items.iter().find(|(key, _)| matches!(&site.input.nodes()[*key], N::Text(name) if *name == field.name));
             if let Some(&(key, value)) = present {
-                self.budget.edges(2)?;
                 let key = self.copy(site.child(key))?;
                 let value = self.descriptor(field.descriptor, site.child(value))?;
                 result.push((key, value));
@@ -477,7 +250,6 @@ impl Run<'_, '_> {
                     .default_node()
                     .is_some()
             {
-                self.budget.edges(2)?;
                 let value = self.default(field.descriptor, site.deeper())?;
                 let key = self.key(&field.name, self.origins[value])?;
                 result.push((key, value));
@@ -497,8 +269,6 @@ impl Run<'_, '_> {
                     continue;
                 };
                 let inner = member.child(inner);
-                self.budget
-                    .work(members.iter().map(|m| m.text().len()).sum())?;
                 if !members.iter().any(|m| m.text() == inner.text()) {
                     continue;
                 }
@@ -506,7 +276,6 @@ impl Run<'_, '_> {
                     return self.single(*member, site.deeper());
                 }
                 if self.matches(inner, site)? {
-                    self.budget.reserve(0, 1)?;
                     let value = self.members(&[inner], site.deeper())?;
                     return Ok(self.emit(
                         N::Sequence(vec![value]),
@@ -522,7 +291,6 @@ impl Run<'_, '_> {
                 let Some(class) = schema.class_named(class_member.text()) else {
                     continue;
                 };
-                self.budget.work(class.fields.len())?;
                 let mut required = class
                     .fields
                     .iter()
@@ -547,12 +315,10 @@ impl Run<'_, '_> {
                     if !self.matches(*member, site)? {
                         continue;
                     }
-                    self.budget.reserve(0, 2)?;
                     let key = self.key(&field.name, site.origin())?;
                     let value = self.descriptor(field.descriptor, site.deeper())?;
                     let mut result = vec![(key, value)];
                     for other in &class.fields {
-                        self.budget.work(1)?;
                         if other.name != field.name
                             && !site.fragment
                             && schema.descriptors()[other.descriptor]
@@ -560,7 +326,6 @@ impl Run<'_, '_> {
                                 .default_node()
                                 .is_some()
                         {
-                            self.budget.edges(2)?;
                             let value = self.default(other.descriptor, site.deeper())?;
                             let key = self.key(&other.name, self.origins[value])?;
                             result.push((key, value));
@@ -590,7 +355,6 @@ impl Run<'_, '_> {
                 let N::Sequence(items) = &site.input.nodes()[site.value] else {
                     return self.copy(site);
                 };
-                self.budget.reserve(0, items.len())?;
                 let mut result = Vec::with_capacity(items.len());
                 for &value in items {
                     result.push(self.members(&[member.child(*inner)], site.child(value))?);
@@ -601,7 +365,6 @@ impl Run<'_, '_> {
                 let N::Mapping(items) = &site.input.nodes()[site.value] else {
                     return self.copy(site);
                 };
-                self.budget.reserve(0, items.len().saturating_mul(2))?;
                 let mut result = Vec::with_capacity(items.len());
                 for &(k, v) in items {
                     let k = self.members(
@@ -646,7 +409,6 @@ impl Run<'_, '_> {
         match kind {
             SchemaAliasKind::Descriptor(descriptor) => {
                 let members = schema.descriptors()[descriptor].descriptor.members();
-                self.budget.work(members.len())?;
                 if matches!(
                     name,
                     "derivation" | "untyped_intermediate_derivation" | "case_result"
@@ -687,16 +449,9 @@ impl Run<'_, '_> {
                     return self.copy(site);
                 };
                 let registry = &schema.registries()[registry];
-                self.budget.work(
-                    registry
-                        .entries
-                        .len()
-                        .saturating_mul(operation.len().saturating_add(1)),
-                )?;
                 let Some(entry) = registry.entries.iter().find(|e| e.name == *operation) else {
                     return self.copy(site);
                 };
-                self.budget.reserve(0, 2)?;
                 let key = self.copy(site.child(key))?;
                 let value = match &entry.shape {
                     SchemaShape::Class(fields) => self.class(fields, site.child(payload))?,
@@ -709,7 +464,6 @@ impl Run<'_, '_> {
         }
     }
     fn derivation(&mut self, text: &str, calls: bool) -> Result<Document, NormalizationError> {
-        self.budget.work(text.len())?;
         let trimmed =
             text.trim_matches(|c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c));
         let call = if calls {
@@ -733,28 +487,22 @@ impl Run<'_, '_> {
             None
         };
         let argument = call.map_or(text, |(_, argument)| argument);
-        self.budget.reserve(6, 0)?;
-        self.budget.reserve(argument.len(), 0)?;
-        self.budget.reserve(0, 2)?;
         let mut nodes = vec![
             N::Text("source".into()),
             N::Text(argument.into()),
             N::Mapping(vec![(0, 1)]),
         ];
         let root = if let Some((operation, _)) = call {
-            self.budget.reserve(operation.len(), 0)?;
-            self.budget.reserve(0, 2)?;
             nodes.push(N::Text(operation.into()));
             nodes.push(N::Mapping(vec![(3, 2)]));
             4
         } else {
             2
         };
-        Document::new(nodes, root, self.budget.limits.storage).map_err(NormalizationError::Document)
+        Document::new(nodes, root).map_err(NormalizationError::Document)
     }
     fn finish(self, root: usize) -> Result<NormalizedDocument, NormalizationError> {
-        let document = Document::new(self.nodes, root, self.budget.limits.storage)
-            .map_err(NormalizationError::Document)?;
+        let document = Document::new(self.nodes, root).map_err(NormalizationError::Document)?;
         Ok(NormalizedDocument {
             document,
             origins: self.origins,
@@ -770,21 +518,12 @@ impl SchemaStructure {
         input: &Document,
         value: usize,
         fragment: bool,
-        budget: &mut NormalizationBudget,
     ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalization_defaults(budget)?;
-        let findings = self.validate_types(
-            types,
-            input,
-            value,
-            "<normalization>",
-            fragment,
-            &mut budget.validation,
-        )?;
+        self.normalization_defaults()?;
+        let findings = self.validate_types(types, input, value, "<normalization>", fragment)?;
         if !findings.is_empty() {
             return Err(NormalizationError::Invalid(findings));
         }
-        budget.work(types.len())?;
         let site = Site {
             input,
             value,
@@ -795,7 +534,6 @@ impl SchemaStructure {
         };
         let mut run = Run {
             schema: self,
-            budget,
             nodes: Vec::new(),
             origins: Vec::new(),
             active: Vec::new(),
@@ -804,14 +542,11 @@ impl SchemaStructure {
         let root = run.members(&types.iter().map(Member::root).collect::<Vec<_>>(), site)?;
         run.finish(root)
     }
-    fn normalization_defaults(
-        &self,
-        budget: &mut NormalizationBudget,
-    ) -> Result<(), NormalizationError> {
+    fn normalization_defaults(&self) -> Result<(), NormalizationError> {
         if self.defaults_validated {
             return Ok(());
         }
-        let defaults = self.validate_defaults(&mut budget.validation)?;
+        let defaults = self.validate_defaults()?;
         if defaults.is_empty() {
             Ok(())
         } else {
@@ -822,29 +557,26 @@ impl SchemaStructure {
     pub fn normalize_document(
         &self,
         input: &Document,
-        budget: &mut NormalizationBudget,
     ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalize_document_mode(input, budget, false)
+        self.normalize_document_mode(input, false)
     }
     /// Normalize the final composed specification with resolved-output citation ownership.
     pub fn normalize_resolved_document(
         &self,
         input: &Document,
-        budget: &mut NormalizationBudget,
     ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalize_document_mode(input, budget, true)
+        self.normalize_document_mode(input, true)
     }
     fn normalize_document_mode(
         &self,
         input: &Document,
-        budget: &mut NormalizationBudget,
         resolved_output: bool,
     ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalization_defaults(budget)?;
+        self.normalization_defaults()?;
         let findings = if resolved_output {
-            self.validate_resolved_document(input, &mut budget.validation)?
+            self.validate_resolved_document(input)?
         } else {
-            self.validate_document(input, &mut budget.validation)?
+            self.validate_document(input)?
         };
         if !findings.is_empty() {
             return Err(NormalizationError::Invalid(findings));
@@ -859,7 +591,6 @@ impl SchemaStructure {
         };
         let mut run = Run {
             schema: self,
-            budget,
             nodes: Vec::new(),
             origins: Vec::new(),
             active: Vec::new(),
@@ -875,17 +606,10 @@ impl SchemaStructure {
         input: &Document,
         value: usize,
         fragment: bool,
-        budget: &mut NormalizationBudget,
     ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalization_defaults(budget)?;
-        let findings = self.validate_descriptor(
-            descriptor,
-            input,
-            value,
-            "<normalization>",
-            fragment,
-            &mut budget.validation,
-        )?;
+        self.normalization_defaults()?;
+        let findings =
+            self.validate_descriptor(descriptor, input, value, "<normalization>", fragment)?;
         if !findings.is_empty() {
             return Err(NormalizationError::Invalid(findings));
         }
@@ -899,7 +623,6 @@ impl SchemaStructure {
         };
         let mut run = Run {
             schema: self,
-            budget,
             nodes: Vec::new(),
             origins: Vec::new(),
             active: Vec::new(),
@@ -907,132 +630,5 @@ impl SchemaStructure {
         };
         let root = run.descriptor(descriptor, site)?;
         run.finish(root)
-    }
-}
-
-#[cfg(test)]
-mod application_work_tests {
-    use super::*;
-    use crate::schema::ConstraintError;
-
-    fn input(text: &str) -> Document {
-        Document::new(vec![N::Text(text.into())], 0, DocumentLimits::default()).unwrap()
-    }
-
-    #[test]
-    fn admitted_input_grows_flat_and_layered_work_without_refunding_charges() {
-        let limits = NormalizationLimits {
-            validation: ValidationLimits {
-                work: 100,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let mut flat = NormalizationBudget::for_application(limits);
-        flat.admit_input(&input("abc"));
-        assert!(flat.work(104).is_ok());
-        assert_eq!(
-            flat.work(1),
-            Err(NormalizationError::Validation(ValidationError::Constraint(
-                ConstraintError::Work { limit: 104 }
-            )))
-        );
-
-        let mut layered = NormalizationBudget::for_application(limits);
-        layered.work(10).unwrap();
-        layered.begin_inheritance();
-        layered.admit_input(&input("abc"));
-        layered.work(406).unwrap();
-        assert_eq!(layered.work_used(), 416);
-        assert!(layered.work(1).is_err());
-        layered.admit_input(&input("de"));
-        layered.work(12).unwrap();
-        assert_eq!(layered.work_used(), 428);
-        assert!(layered.work(1).is_err());
-    }
-
-    #[test]
-    fn repeated_input_admission_stops_increasing_the_finite_request_bound() {
-        let mut budget = NormalizationBudget::for_application(NormalizationLimits {
-            validation: ValidationLimits {
-                work: 100,
-                ..Default::default()
-            },
-            storage: DocumentLimits {
-                nodes: 3,
-                text_bytes: 5,
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-        budget.begin_inheritance();
-        for _ in 0..100 {
-            budget.admit_input(&input("abc"));
-        }
-        budget.work(432).unwrap();
-        assert_eq!(
-            budget.work(1),
-            Err(NormalizationError::Validation(ValidationError::Constraint(
-                ConstraintError::Work { limit: 432 }
-            )))
-        );
-    }
-
-    #[test]
-    fn diagnostic_and_text_charges_survive_application_size_admission() {
-        let mut budget = NormalizationBudget::for_application(NormalizationLimits {
-            validation: ValidationLimits {
-                diagnostics: 2,
-                diagnostic_text_bytes: 10,
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-        budget.admit_input(&input("abc"));
-        budget.validation.reserve_diagnostic(140).unwrap();
-        assert_eq!(
-            budget.validation.reserve_diagnostic(2),
-            Err(ValidationError::DiagnosticText { limit: 141 })
-        );
-        budget.begin_inheritance();
-        budget.validation.reserve_diagnostic(424).unwrap();
-        assert_eq!(budget.validation.diagnostics_used(), 3);
-        assert_eq!(
-            budget.validation.reserve_diagnostic(1),
-            Err(ValidationError::DiagnosticText { limit: 564 })
-        );
-        assert_eq!(budget.validation.diagnostics_used(), 4);
-    }
-
-    #[test]
-    fn aggregate_matching_admission_keeps_charges_and_single_subject_limits() {
-        use crate::regex::{MatchBudget, MatchError, MatchLimits, Pattern, Resource};
-        let pattern = Pattern::compile(".", Default::default()).unwrap();
-        let local = MatchLimits {
-            subject_bytes: 1,
-            ..Default::default()
-        };
-        let mut aggregate = MatchBudget::new(local);
-        assert!(pattern
-            .full_match_with_budget("a", local, &mut aggregate)
-            .unwrap()
-            .is_some());
-        aggregate.application_limits(MatchLimits {
-            subject_bytes: 8,
-            ..local
-        });
-        assert!(pattern
-            .full_match_with_budget("b", local, &mut aggregate)
-            .unwrap()
-            .is_some());
-        assert_eq!(aggregate.used().subject_bytes, 2);
-        assert_eq!(
-            pattern.full_match_with_budget("ab", local, &mut aggregate),
-            Err(MatchError {
-                resource: Resource::SubjectBytes,
-                limit: 1,
-            })
-        );
-        assert_eq!(aggregate.used().subject_bytes, 2);
     }
 }

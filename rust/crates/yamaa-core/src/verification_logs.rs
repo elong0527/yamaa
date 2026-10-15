@@ -2,6 +2,7 @@
 use crate::{
     conversion::float_text,
     dataset::VerificationSeverity,
+    limits::{LimitExceeded, Limits},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, FiniteFloat, Value},
 };
@@ -11,7 +12,7 @@ use std::{
     vec,
 };
 
-use serde_json::Value as Json;
+use crate::json::Value as Json;
 
 #[derive(Clone, Debug)]
 pub struct Failure {
@@ -31,29 +32,12 @@ pub struct Record {
     pub evaluated: usize,
     pub failure: Option<Failure>,
 }
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub records: usize,
-    pub cells: usize,
-    pub text: usize,
-    pub json_nodes: usize,
-}
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            records: 4096,
-            cells: 65_536,
-            text: 8_388_608,
-            json_nodes: 1_048_576,
-        }
-    }
-}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     #[error("verification logs invalid record")]
     InvalidRecord,
-    #[error("verification logs limit")]
-    Limit,
+    #[error("verification logs: {0}")]
+    Limit(#[from] LimitExceeded),
 }
 
 pub(crate) const VERIFICATION_COLUMNS: &[&str] = &[
@@ -109,87 +93,58 @@ pub struct Logs {
     pub warning: Option<LogTable>,
 }
 
-// JSON integers may be wider than binary64. Only authored fractional/exponent
-// numbers use the runtime float formatter; integer digits remain exact.
-fn float_number(number: &serde_json::Number) -> bool {
-    number
-        .as_str()
-        .bytes()
-        .any(|byte| matches!(byte, b'.' | b'e' | b'E'))
-}
-
-struct Budget {
-    text: usize,
-    nodes: usize,
-}
-impl Budget {
-    fn text(&mut self, value: &str) -> Result<(), Error> {
-        self.text = self.text.checked_sub(value.len()).ok_or(Error::Limit)?;
-        Ok(())
-    }
-    fn json(&mut self, value: &Json, depth: usize) -> Result<(), Error> {
-        if depth > 64 {
-            return Err(Error::Limit);
+fn validate_json(value: &Json, depth: usize) -> Result<(), Error> {
+    Limits::semantic_depth(depth)?;
+    match value {
+        Json::Number(number) => {
+            let text = number.as_str();
+            if !number.is_integer() {
+                if number.as_f64().is_none() {
+                    return Err(Error::InvalidRecord);
+                }
+            } else if text == "-0" {
+                return Err(Error::InvalidRecord);
+            }
         }
-        self.nodes = self.nodes.checked_sub(1).ok_or(Error::Limit)?;
-        match value {
-            Json::String(text) => self.text(text)?,
-            Json::Number(number) => {
-                let text = number.as_str();
-                if float_number(number) {
-                    if number.as_f64().is_none() {
-                        return Err(Error::InvalidRecord);
-                    }
-                } else {
-                    if text == "-0" {
-                        return Err(Error::InvalidRecord);
-                    }
-                    self.text(text)?;
-                }
+        Json::Array(values) => {
+            for value in values {
+                validate_json(value, depth + 1)?;
             }
-            Json::Array(values) => {
-                for value in values {
-                    self.json(value, depth + 1)?;
-                }
-            }
-            Json::Object(values) => {
-                for (name, value) in values {
-                    self.text(name)?;
-                    self.json(value, depth + 1)?;
-                }
-            }
-            _ => (),
         }
-        Ok(())
+        Json::Object(values) => {
+            for value in values.values() {
+                validate_json(value, depth + 1)?;
+            }
+        }
+        _ => (),
     }
+    Ok(())
 }
+#[derive(Default)]
 struct Writer {
     output: String,
-    remaining: usize,
 }
 impl Writer {
-    fn write(&mut self, text: &str) -> Result<(), Error> {
-        self.remaining = self.remaining.checked_sub(text.len()).ok_or(Error::Limit)?;
+    fn write(&mut self, text: &str) {
         self.output.push_str(text);
-        Ok(())
     }
-    fn string(&mut self, text: &str) -> Result<(), Error> {
-        self.write("\"")?;
+    fn string(&mut self, text: &str) {
+        self.write("\"");
         for character in text.chars() {
             match character {
-                '"' => self.write("\\\"")?,
-                '\\' => self.write("\\\\")?,
-                '\u{8}' => self.write("\\b")?,
-                '\u{c}' => self.write("\\f")?,
-                '\n' => self.write("\\n")?,
-                '\r' => self.write("\\r")?,
-                '\t' => self.write("\\t")?,
+                '"' => self.write("\\\""),
+                '\\' => self.write("\\\\"),
+                '\u{8}' => self.write("\\b"),
+                '\u{c}' => self.write("\\f"),
+                '\n' => self.write("\\n"),
+                '\r' => self.write("\\r"),
+                '\t' => self.write("\\t"),
                 c if (' '..='~').contains(&c) => {
-                    self.write(std::str::from_utf8(&[c as u8]).expect("ASCII"))?
+                    self.write(std::str::from_utf8(&[c as u8]).expect("ASCII"))
                 }
                 c => {
                     for unit in c.encode_utf16(&mut [0; 2]) {
-                        self.write(&std::format!("\\u{unit:04x}"))?;
+                        self.write(&std::format!("\\u{unit:04x}"));
                     }
                 }
             }
@@ -201,7 +156,7 @@ impl Writer {
             Json::Null => self.write("null"),
             Json::Bool(value) => self.write(if *value { "true" } else { "false" }),
             Json::String(value) => self.string(value),
-            Json::Number(number) if float_number(number) => {
+            Json::Number(number) if !number.is_integer() => {
                 let value = number
                     .as_f64()
                     .and_then(FiniteFloat::new)
@@ -209,46 +164,42 @@ impl Writer {
                 self.write(&float_text(value))
             }
             Json::Number(number) => self.write(number.as_str()),
-            Json::Array(values) => self.sequence(values),
-            Json::Object(values) => self.object(values),
+            Json::Array(values) => return self.sequence(values),
+            Json::Object(values) => return self.object(values),
         }
+        Ok(())
     }
     fn sequence(&mut self, values: &[Json]) -> Result<(), Error> {
-        self.write("[")?;
+        self.write("[");
         for (index, value) in values.iter().enumerate() {
             if index > 0 {
-                self.write(",")?;
+                self.write(",");
             }
             self.json(value)?;
         }
-        self.write("]")
+        self.write("]");
+        Ok(())
     }
     fn object<'a>(
         &mut self,
         values: impl IntoIterator<Item = (&'a String, &'a Json)>,
     ) -> Result<(), Error> {
-        self.write("{")?;
+        self.write("{");
         for (index, (name, value)) in values.into_iter().enumerate() {
             if index > 0 {
-                self.write(",")?;
+                self.write(",");
             }
-            self.string(name)?;
-            self.write(":")?;
+            self.string(name);
+            self.write(":");
             self.json(value)?;
         }
-        self.write("}")
+        self.write("}");
+        Ok(())
     }
 }
-fn encoded(
-    budget: &mut Budget,
-    write: impl FnOnce(&mut Writer) -> Result<(), Error>,
-) -> Result<String, Error> {
-    let mut writer = Writer {
-        output: String::new(),
-        remaining: budget.text,
-    };
+fn encoded(write: impl FnOnce(&mut Writer) -> Result<(), Error>) -> Result<String, Error> {
+    let mut writer = Writer::default();
     write(&mut writer)?;
-    budget.text = writer.remaining;
     Ok(writer.output)
 }
 fn table(names: &[&str], integers: &[usize], rows: Vec<Vec<Value>>) -> LogTable {
@@ -280,7 +231,7 @@ fn optional(value: Option<&str>) -> Value {
 fn count(value: usize) -> Result<Value, Error> {
     i64::try_from(value)
         .map(Value::Int)
-        .map_err(|_| Error::Limit)
+        .map_err(|_| Error::InvalidRecord)
 }
 
 /// Validate the complete record set before allocating row copies. Failed runs
@@ -291,35 +242,19 @@ pub fn build(
     verification: bool,
     warning: bool,
     success: bool,
-    limits: Limits,
 ) -> Result<Logs, Error> {
-    if records.len() > limits.records {
-        return Err(Error::Limit);
-    }
     let warnings = records
         .iter()
         .filter(|record| {
             record.severity == VerificationSeverity::Warning && record.failure.is_some()
         })
         .count();
-    let cells = if verification {
-        records.len().checked_mul(13).ok_or(Error::Limit)?
-    } else {
-        0
+    if verification {
+        Limits::table(records.len(), VERIFICATION_COLUMNS.len())?;
     }
-    .checked_add(if warning && success {
-        warnings.checked_mul(10).ok_or(Error::Limit)?
-    } else {
-        0
-    })
-    .ok_or(Error::Limit)?;
-    if cells > limits.cells {
-        return Err(Error::Limit);
+    if warning && success {
+        Limits::table(warnings, WARNING_COLUMNS.len())?;
     }
-    let mut budget = Budget {
-        text: limits.text,
-        nodes: limits.json_nodes,
-    };
     let mut paths = BTreeSet::new();
     for record in records {
         if record.path.is_empty()
@@ -337,19 +272,6 @@ pub fn build(
             return Err(Error::InvalidRecord);
         }
         count(record.evaluated)?;
-        for value in [
-            Some(artifact),
-            Some(record.path.as_str()),
-            record.id.as_deref(),
-            Some(record.check.as_str()),
-            record.target.as_deref(),
-            Some(record.requirement.as_str()),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            budget.text(value)?;
-        }
         if let Some(failure) = &record.failure {
             if failure.condition.is_empty()
                 || failure.count == 0
@@ -358,19 +280,17 @@ pub fn build(
                 return Err(Error::InvalidRecord);
             }
             count(failure.count)?;
-            budget.text(&failure.condition)?;
             for key in &failure.keys {
                 if !matches!(key, Json::Object(_)) {
                     return Err(Error::InvalidRecord);
                 }
-                budget.json(key, 0)?;
+                validate_json(key, 0)?;
             }
             for (key, value) in &failure.details {
                 if matches!(key.as_str(), "failure_count" | "keys" | "verification_id") {
                     return Err(Error::InvalidRecord);
                 }
-                budget.text(key)?;
-                budget.json(value, 0)?;
+                validate_json(value, 0)?;
             }
         }
     }
@@ -388,33 +308,11 @@ pub fn build(
             Some(failure) => (
                 Some(failure.condition.as_str()),
                 failure.count,
-                encoded(&mut budget, |writer| writer.object(&failure.details))?,
+                encoded(|writer| writer.object(&failure.details))?,
             ),
             None => (None, 0, "{}".into()),
         };
         if verification {
-            for value in [
-                Some("1.0"),
-                Some(artifact),
-                Some(record.path.as_str()),
-                record.id.as_deref(),
-                Some(record.check.as_str()),
-                record.target.as_deref(),
-                Some(record.requirement.as_str()),
-                Some(record.severity.name()),
-                Some(if condition.is_some() {
-                    "violated"
-                } else {
-                    "held"
-                }),
-                condition,
-                Some(details.as_str()),
-            ]
-            .into_iter()
-            .flatten()
-            {
-                budget.text(value)?;
-            }
             verification_rows.push(vec![
                 text("1.0"),
                 text(artifact),
@@ -437,23 +335,7 @@ pub fn build(
         }
         if emits_warning {
             if let Some(failure) = &record.failure {
-                let keys = encoded(&mut budget, |writer| writer.sequence(&failure.keys))?;
-                for value in [
-                    Some("1.0"),
-                    Some(artifact),
-                    Some("warning"),
-                    Some(failure.condition.as_str()),
-                    Some(record.requirement.as_str()),
-                    Some(record.path.as_str()),
-                    record.id.as_deref(),
-                    Some(keys.as_str()),
-                    Some(details.as_str()),
-                ]
-                .into_iter()
-                .flatten()
-                {
-                    budget.text(value)?;
-                }
+                let keys = encoded(|writer| writer.sequence(&failure.keys))?;
                 warning_rows.push(vec![
                     text("1.0"),
                     text(artifact),

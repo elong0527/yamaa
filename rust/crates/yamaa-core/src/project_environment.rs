@@ -1,5 +1,4 @@
 //! Typed static environment admission without code, lock-version or study ports.
-use crate::project_limits::{AdmissionError, Budget, Limits};
 use crate::{
     project_function::{self, Definition, Language},
     project_terminology::{self, Source},
@@ -38,7 +37,6 @@ pub struct Draft {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Finding {
     MissingLanguage,
-    MissingLock,
     LanguageMismatch {
         declared: Language,
         host: Language,
@@ -63,7 +61,7 @@ pub enum Finding {
 #[derive(Debug)]
 pub struct RejectedDraft {
     pub draft: Box<Draft>,
-    pub error: AdmissionError<Finding>,
+    pub error: Vec<Finding>,
 }
 
 /// The immutable snapshot remains a static result; it grants no activation.
@@ -119,47 +117,19 @@ impl ExecutionEnvironment {
     }
 }
 impl Environment {
-    pub fn admit(host: Language, draft: Draft) -> Result<Self, AdmissionError<Finding>> {
-        Self::admit_with_limits(host, draft, Limits::default())
-    }
-    pub fn admit_with_limits(
-        host: Language,
-        draft: Draft,
-        limits: Limits,
-    ) -> Result<Self, AdmissionError<Finding>> {
-        Self::admit_retained_with_limits(host, draft, limits).map_err(|rejected| rejected.error)
+    pub fn admit(host: Language, draft: Draft) -> Result<Self, Vec<Finding>> {
+        Self::admit_retained(host, draft).map_err(|rejected| rejected.error)
     }
     /// Admit once while retaining the original typed ownership on either outcome.
-    pub fn admit_retained_with_limits(
-        host: Language,
-        draft: Draft,
-        limits: Limits,
-    ) -> Result<Self, RejectedDraft> {
-        let admission = (|| {
-            let mut budget = Budget::new(limits);
-            budget.findings(6).map_err(AdmissionError::Limit)?;
-            if let Some(lock) = &draft.lock {
-                budget.text(&lock.written).map_err(AdmissionError::Limit)?;
-            }
-            if let Some(functions) = &draft.functions {
-                budget.functions(functions).map_err(AdmissionError::Limit)?;
-            }
-            budget
-                .sources(&draft.codelists)
-                .map_err(AdmissionError::Limit)?;
-            let findings = validate(host, &draft);
-            if findings.is_empty() {
-                Ok(())
-            } else {
-                Err(AdmissionError::Findings(findings))
-            }
-        })();
-        match admission {
-            Ok(()) => Ok(Self { host, draft }),
-            Err(error) => Err(RejectedDraft {
+    pub fn admit_retained(host: Language, draft: Draft) -> Result<Self, RejectedDraft> {
+        let findings = validate(host, &draft);
+        if findings.is_empty() {
+            Ok(Self { host, draft })
+        } else {
+            Err(RejectedDraft {
                 draft: Box::new(draft),
-                error,
-            }),
+                error: findings,
+            })
         }
     }
     /// Keep admitted typed data when another source prevents aggregate success.
@@ -203,13 +173,8 @@ impl Environment {
 
 pub fn validate(host: Language, draft: &Draft) -> Vec<Finding> {
     let mut findings = Vec::new();
-    if draft.functions.is_some() {
-        if draft.language.is_none() {
-            findings.push(Finding::MissingLanguage);
-        }
-        if draft.lock.is_none() {
-            findings.push(Finding::MissingLock);
-        }
+    if draft.functions.is_some() && draft.language.is_none() {
+        findings.push(Finding::MissingLanguage);
     }
     if let Some(language) = draft.language {
         if language != host {

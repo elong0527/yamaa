@@ -1,12 +1,12 @@
 //! Typed civil arithmetic and duration conversion share the existing temporal binder.
 use super::temporal::{ordinal, ElapsedUnit, Temporal, TemporalKind};
+use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
     temporal::{Date, DateTime, DateTimePrecision},
     value::{ColumnType, Value},
 };
-use serde_json::Value as JsonValue;
 use std::vec;
 
 #[derive(Debug, PartialEq)]
@@ -26,24 +26,6 @@ impl Temporal {
     pub fn with_invalid(mut self, value: Value) -> Result<Self, super::InvalidTemporal> {
         if !matches!(self.kind, TemporalKind::DurationValue { .. }) {
             return Err(super::InvalidTemporal::Shape);
-        }
-        let bytes = self
-            .sources
-            .iter()
-            .try_fold(self.path.len(), |total, source| {
-                total.checked_add(source.len())
-            })
-            .and_then(|bytes| {
-                bytes.checked_add(if let Value::Str(text) = &value {
-                    text.len()
-                } else {
-                    0
-                })
-            })
-            .and_then(|bytes| bytes.checked_mul(6))
-            .and_then(|bytes| bytes.checked_add(1024));
-        if bytes.is_none_or(|bytes| bytes > crate::diagnostic::MAX_PROJECTION_BYTES) {
-            return Err(super::InvalidTemporal::Limit);
         }
         self.invalid = Some(value);
         Ok(self)

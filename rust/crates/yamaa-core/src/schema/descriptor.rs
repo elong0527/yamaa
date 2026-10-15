@@ -1,6 +1,6 @@
 //! Structural descriptor admission precedes name resolution and default validation.
 
-use super::{Document, DocumentNode, TypeError, TypeExpression, TypeLimits};
+use super::{Document, DocumentNode, TypeError, TypeExpression};
 use crate::regex;
 use std::vec;
 
@@ -35,142 +35,15 @@ pub enum DescriptorIssue {
     ValuesTextSequence,
 }
 
-/// Aggregate descriptor limits apply across a complete schema admission attempt.
-#[derive(Clone, Copy, Debug)]
-pub struct DescriptorLimits {
-    pub descriptors: usize,
-    pub input_nodes: usize,
-    pub input_text_bytes: usize,
-    pub type_bytes: usize,
-    pub pattern_bytes: usize,
-    pub regex: regex::CompileLimits,
-}
-impl Default for DescriptorLimits {
-    /// Bound amplification across individually legal descriptors and pattern literals.
-    fn default() -> Self {
-        Self {
-            descriptors: 16_384,
-            input_nodes: 262_144,
-            input_text_bytes: 8_388_608,
-            type_bytes: 1_048_576,
-            pattern_bytes: 1_048_576,
-            regex: regex::CompileLimits::default(),
-        }
-    }
-}
-
-/// Successful charge prefixes survive malformed descriptors and compiler refusals.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct DescriptorUsage {
-    pub descriptors: usize,
-    pub input_nodes: usize,
-    pub input_text_bytes: usize,
-    pub type_bytes: usize,
-    pub pattern_bytes: usize,
-}
-
-/// Name the request-level counter independently of local parser/compiler limits.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DescriptorResource {
-    Descriptors,
-    InputNodes,
-    InputTextBytes,
-    TypeBytes,
-    PatternBytes,
-}
-
 /// Policy and unsupported-language outcomes are never structural schema diagnostics.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum DescriptorError {
     #[error("schema descriptor invalid node")]
     InvalidNode,
-    #[error("schema descriptor limit: resource={resource:?}, limit={limit:?}")]
-    Limit {
-        resource: DescriptorResource,
-        limit: usize,
-    },
     #[error("schema descriptor type limit: {0:?}")]
     TypeLimit(TypeError),
     #[error("schema descriptor regex: {0:?}")]
     Regex(regex::CompileError),
-}
-
-/// One caller-owned compilation scope reused by all descriptors in a bundle.
-pub struct DescriptorBudget {
-    limits: DescriptorLimits,
-    used: DescriptorUsage,
-    regex: regex::CompileBudget,
-}
-impl DescriptorBudget {
-    /// Create a fresh admission attempt; no descriptor creates or resets this scope.
-    pub fn new(limits: DescriptorLimits) -> Self {
-        Self {
-            limits,
-            used: DescriptorUsage::default(),
-            regex: regex::CompileBudget::new(limits.regex),
-        }
-    }
-    /// Observe charged prefixes without exposing mutable counters.
-    pub fn used(&self) -> DescriptorUsage {
-        self.used
-    }
-    /// Charge before scanning, cloning, or compiling the corresponding input.
-    fn charge(
-        &mut self,
-        resource: DescriptorResource,
-        amount: usize,
-    ) -> Result<(), DescriptorError> {
-        let (used, limit) = match resource {
-            DescriptorResource::Descriptors => {
-                (&mut self.used.descriptors, self.limits.descriptors)
-            }
-            DescriptorResource::InputNodes => (&mut self.used.input_nodes, self.limits.input_nodes),
-            DescriptorResource::InputTextBytes => (
-                &mut self.used.input_text_bytes,
-                self.limits.input_text_bytes,
-            ),
-            DescriptorResource::TypeBytes => (&mut self.used.type_bytes, self.limits.type_bytes),
-            DescriptorResource::PatternBytes => {
-                (&mut self.used.pattern_bytes, self.limits.pattern_bytes)
-            }
-        };
-        *used = used
-            .checked_add(amount)
-            .filter(|n| *n <= limit)
-            .ok_or(DescriptorError::Limit { resource, limit })?;
-        Ok(())
-    }
-
-    /// Bound all metadata, including empty choices, defaults and long descriptions,
-    /// before cloning or rescanning it during semantic admission.
-    fn visit(&mut self, document: &Document, root: usize) -> Result<(), DescriptorError> {
-        self.charge(DescriptorResource::InputNodes, 1)?;
-        let mut pending = vec![root];
-        while let Some(id) = pending.pop() {
-            match &document.nodes()[id] {
-                DocumentNode::Text(text) | DocumentNode::Integer(text) => {
-                    self.charge(DescriptorResource::InputTextBytes, text.len())?
-                }
-                DocumentNode::Sequence(items) => {
-                    self.charge(DescriptorResource::InputNodes, items.len())?;
-                    pending.extend(items.iter().rev().copied());
-                }
-                DocumentNode::Mapping(items) => {
-                    let count = items.len().checked_mul(2).ok_or(DescriptorError::Limit {
-                        resource: DescriptorResource::InputNodes,
-                        limit: self.limits.input_nodes,
-                    })?;
-                    self.charge(DescriptorResource::InputNodes, count)?;
-                    for &(key, value) in items.iter().rev() {
-                        pending.push(value);
-                        pending.push(key);
-                    }
-                }
-                _ => {}
-            }
-        }
-        Ok(())
-    }
 }
 
 /// Admitted structure; references and any default still require the complete bundle.
@@ -218,12 +91,9 @@ impl Descriptor {
         document: &Document,
         node: usize,
         class_field: bool,
-        budget: &mut DescriptorBudget,
     ) -> Result<DescriptorReport, DescriptorError> {
-        budget.charge(DescriptorResource::Descriptors, 1)?;
         let nodes = document.nodes();
         let value = nodes.get(node).ok_or(DescriptorError::InvalidNode)?;
-        budget.visit(document, node)?;
         let DocumentNode::Mapping(entries) = value else {
             return Ok(DescriptorReport {
                 issues: vec![DescriptorIssue::ExpectedMapping],
@@ -285,8 +155,7 @@ impl Descriptor {
         let mut members = Vec::new();
         let mut references = Vec::new();
         for spelling in &spellings {
-            budget.charge(DescriptorResource::TypeBytes, spelling.len())?;
-            match TypeExpression::parse(spelling, TypeLimits::default()) {
+            match TypeExpression::parse(spelling) {
                 Ok(parsed) => {
                     references.extend(parsed.names().map(String::from));
                     members.push(parsed);
@@ -327,24 +196,17 @@ impl Descriptor {
                 issues.push(DescriptorIssue::PatternRequiresString);
             }
             match &nodes[id] {
-                DocumentNode::Text(text) => {
-                    budget.charge(DescriptorResource::PatternBytes, text.len())?;
-                    match regex::Pattern::compile_with_budget(
-                        text,
-                        budget.limits.regex,
-                        &mut budget.regex,
-                    ) {
-                        Ok(compiled) => pattern = Some((text.clone(), compiled)),
-                        Err(regex::CompileError::Invalid { byte, reason }) => {
-                            issues.push(DescriptorIssue::InvalidPattern {
-                                pattern: text.clone(),
-                                byte,
-                                reason,
-                            })
-                        }
-                        Err(error) => return Err(DescriptorError::Regex(error)),
+                DocumentNode::Text(text) => match regex::Pattern::compile(text) {
+                    Ok(compiled) => pattern = Some((text.clone(), compiled)),
+                    Err(regex::CompileError::Invalid { byte, reason }) => {
+                        issues.push(DescriptorIssue::InvalidPattern {
+                            pattern: text.clone(),
+                            byte,
+                            reason,
+                        })
                     }
-                }
+                    Err(error) => return Err(DescriptorError::Regex(error)),
+                },
                 _ => issues.push(DescriptorIssue::PatternText),
             }
         }

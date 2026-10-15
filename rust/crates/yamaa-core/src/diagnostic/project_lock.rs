@@ -1,13 +1,7 @@
 //! Classified host packaging facts projected without metadata or version effects.
 use super::Diagnostic;
 use crate::application_issue;
-use serde_json::Value as JsonValue;
-
-pub const MAX_LOCK_DIAGNOSTIC_BYTES: usize = 16_777_216;
-const MAX_FINDINGS: usize = 2_049;
-const MAX_VERSIONS: usize = 65_536;
-const MAX_FIELD_BYTES: usize = 2_048;
-const MAX_ORIGIN_BYTES: usize = 65_536;
+use crate::json::Value as JsonValue;
 
 /// These tokens are already classified by a host packaging tool. They are not
 /// exception text, and core never decides which installed version is equivalent.
@@ -66,25 +60,6 @@ pub struct LockOrigins<'a> {
 pub enum LockDiagnosticError {
     #[error("diagnostic project lock invalid context")]
     InvalidContext,
-    #[error("diagnostic project lock limit")]
-    Limit,
-}
-struct Budget(usize);
-impl Budget {
-    fn text(&mut self, text: &str) -> Result<(), LockDiagnosticError> {
-        // Two JSON escaping layers cost at most twelve bytes per source byte.
-        // Per-fact overhead covers every fixed context key and diagnostic field.
-        let charge = text
-            .len()
-            .checked_mul(12)
-            .and_then(|n| n.checked_add(128))
-            .ok_or(LockDiagnosticError::Limit)?;
-        self.0 = self
-            .0
-            .checked_sub(charge)
-            .ok_or(LockDiagnosticError::Limit)?;
-        Ok(())
-    }
 }
 fn shape(finding: &LockFinding) -> bool {
     match finding.reason {
@@ -98,68 +73,19 @@ fn shape(finding: &LockFinding) -> bool {
         LockReason::VersionMismatch => finding.expected.len() == 1 && finding.actual.is_some(),
     }
 }
+/// Validate every retained finding before materializing the ordered report.
 pub fn lock_diagnostics(
     origins: Option<LockOrigins<'_>>,
     findings: &[LockFinding],
 ) -> Result<Vec<Diagnostic>, LockDiagnosticError> {
-    lock_diagnostics_with_limit(origins, findings, MAX_LOCK_DIAGNOSTIC_BYTES)
-}
-/// Admit the entire ordered report before copying the first authored fact. A
-/// late malformed finding or quota failure returns no partial diagnostic list.
-pub fn lock_diagnostics_with_limit(
-    origins: Option<LockOrigins<'_>>,
-    findings: &[LockFinding],
-    maximum: usize,
-) -> Result<Vec<Diagnostic>, LockDiagnosticError> {
-    use LockDiagnosticError::{InvalidContext, Limit};
+    use LockDiagnosticError::InvalidContext;
     if findings.is_empty() {
         return Ok(Vec::new());
     }
-    if findings.len() > MAX_FINDINGS {
-        return Err(Limit);
-    }
     let origins = origins.ok_or(InvalidContext)?;
-    let mut budget = Budget(maximum);
-    let mut versions = 0usize;
     for finding in findings {
         if finding.package.is_empty() || finding.package.contains('\0') || !shape(finding) {
             return Err(InvalidContext);
-        }
-        if finding.package.len() > MAX_FIELD_BYTES {
-            return Err(Limit);
-        }
-        versions = versions
-            .checked_add(finding.expected.len())
-            .filter(|&count| count <= MAX_VERSIONS)
-            .ok_or(Limit)?;
-        for text in [
-            origins.source,
-            origins.source,
-            origins.lock_source,
-            origins.written,
-            "lock",
-            &finding.package,
-            finding.reason.as_str(),
-        ]
-        .into_iter()
-        .chain(finding.expected.iter().map(String::as_str))
-        .chain(finding.actual.as_deref())
-        {
-            if text.len() > MAX_ORIGIN_BYTES {
-                return Err(Limit);
-            }
-            budget.text(text)?;
-        }
-        if finding
-            .expected
-            .iter()
-            .any(|text| text.len() > MAX_FIELD_BYTES)
-            || finding
-                .actual
-                .as_ref()
-                .is_some_and(|text| text.len() > MAX_FIELD_BYTES)
-        {
-            return Err(Limit);
         }
     }
     let scalar = |text: &str| JsonValue::String(text.into());
