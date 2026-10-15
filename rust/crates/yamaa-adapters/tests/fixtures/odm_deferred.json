@@ -1,0 +1,2088 @@
+[
+  {
+    "case": "record",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, SEQ, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: SEQ, type: int, label: Sequence, derivation: {row_number: {window: {order_by: [STUDYID, USUBJID]}}}}\n  - name: VAL\n    type: str\n    label: Value\n    derivation:\n      case:\n        - when: 'SEQ > 0'\n          then: {odm: SRC.IT.TEST.OID}\nrows:\n  - id: occurrence\n    dataset: SRC\n    filter: \"SRC.ItemOID = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n",
+    "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,first\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 36,
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL"
+          ],
+          "content": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,first\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "STUDYID,USUBJID,SEQ,VAL",
+            "S,P,1,first"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "odm-deferred-record",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "StudyOID",
+            "MetaDataVersionOID",
+            "SubjectKey",
+            "StudyEventOID",
+            "StudyEventRepeatKey",
+            "FormOID",
+            "FormRepeatKey",
+            "ItemGroupOID",
+            "ItemGroupRepeatKey",
+            "ItemOID",
+            "Value"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.ANCHOR"
+              },
+              {
+                "type": "str",
+                "value": "anchor"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.TEST.OID"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,first\n"
+  },
+  {
+    "case": "record_occurrences",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID, SEQ]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, SEQ, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: SEQ, type: int, label: Sequence, derivation: {row_number: {window: {order_by: [STUDYID, USUBJID]}}}}\n  - name: VAL\n    type: str\n    label: Value\n    derivation:\n      case:\n        - when: 'SEQ > 0'\n          then: {odm: SRC.IT.TEST.OID}\nrows:\n  - id: occurrence\n    dataset: SRC\n    filter: \"SRC.ItemOID = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n",
+    "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,first\nS,M,P,E,,F,2,G,,IT.ANCHOR,anchor2\nS,M,P,E,,F,2,G,,IT.TEST.OID,second\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 49,
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL"
+          ],
+          "content": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,first\nS,P,2,second\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "STUDYID,USUBJID,SEQ,VAL",
+            "S,P,1,first",
+            "S,P,2,second"
+          ],
+          "row_count": 2,
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "odm-deferred-record_occurrences",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "StudyOID",
+            "MetaDataVersionOID",
+            "SubjectKey",
+            "StudyEventOID",
+            "StudyEventRepeatKey",
+            "FormOID",
+            "FormRepeatKey",
+            "ItemGroupOID",
+            "ItemGroupRepeatKey",
+            "ItemOID",
+            "Value"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.ANCHOR"
+              },
+              {
+                "type": "str",
+                "value": "anchor"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.TEST.OID"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "str",
+                "value": "2"
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.ANCHOR"
+              },
+              {
+                "type": "str",
+                "value": "anchor2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "str",
+                "value": "2"
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.TEST.OID"
+              },
+              {
+                "type": "str",
+                "value": "second"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              },
+              {
+                "type": "str",
+                "value": "second"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,first\nS,P,2,second\n"
+  },
+  {
+    "case": "record_missing",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, SEQ, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: SEQ, type: int, label: Sequence, derivation: {row_number: {window: {order_by: [STUDYID, USUBJID]}}}}\n  - name: VAL\n    type: str\n    label: Value\n    derivation:\n      case:\n        - when: 'SEQ > 0'\n          then: {odm: SRC.IT.ABSENT}\nrows:\n  - id: occurrence\n    dataset: SRC\n    filter: \"SRC.ItemOID = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n",
+    "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,first\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 31,
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL"
+          ],
+          "content": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "STUDYID,USUBJID,SEQ,VAL",
+            "S,P,1,"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "odm-deferred-record_missing",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "StudyOID",
+            "MetaDataVersionOID",
+            "SubjectKey",
+            "StudyEventOID",
+            "StudyEventRepeatKey",
+            "FormOID",
+            "FormRepeatKey",
+            "ItemGroupOID",
+            "ItemGroupRepeatKey",
+            "ItemOID",
+            "Value"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.ANCHOR"
+              },
+              {
+                "type": "str",
+                "value": "anchor"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.TEST.OID"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,\n"
+  },
+  {
+    "case": "group",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, SEQ, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: SEQ, type: int, label: Sequence, derivation: {row_number: {window: {order_by: [STUDYID, USUBJID]}}}}\n  - name: VAL\n    type: str\n    label: Value\n    derivation:\n      case:\n        - when: 'SEQ > 0'\n          then: {odm: SRC.IT.TEST.OID}\n  - {name: ITEM, type: str, label: Item, derivation: SRC.ItemOID}\nrows:\n  - id: subjects\n    dataset: SRC\n    group_by: [SRC.StudyOID, SRC.SubjectKey, SRC.ItemOID]\n    filter: \"ITEM = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n",
+    "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,first\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 36,
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL"
+          ],
+          "content": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,first\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "STUDYID,USUBJID,SEQ,VAL",
+            "S,P,1,first"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "odm-deferred-group",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "StudyOID",
+            "MetaDataVersionOID",
+            "SubjectKey",
+            "StudyEventOID",
+            "StudyEventRepeatKey",
+            "FormOID",
+            "FormRepeatKey",
+            "ItemGroupOID",
+            "ItemGroupRepeatKey",
+            "ItemOID",
+            "Value"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.ANCHOR"
+              },
+              {
+                "type": "str",
+                "value": "anchor"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.TEST.OID"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL",
+            "ITEM"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              },
+              {
+                "type": "str",
+                "value": "IT.ANCHOR"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,first\n"
+  },
+  {
+    "case": "group_selectors_and_filter",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, SEQ, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: SEQ, type: int, label: Sequence, derivation: {row_number: {window: {order_by: [STUDYID, USUBJID]}}}}\n  - name: VAL\n    type: str\n    label: Value\n    derivation:\n      case:\n        - when: 'SEQ > 0'\n          then: {odm: {item: SRC.IT.TEST.OID, event: E, form: F, item_group: G, filter: \"SRC.Value = 'second'\"}}\n  - {name: ITEM, type: str, label: Item, derivation: SRC.ItemOID}\nrows:\n  - id: subjects\n    dataset: SRC\n    group_by: [SRC.StudyOID, SRC.SubjectKey, SRC.ItemOID]\n    filter: \"ITEM = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n",
+    "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,first\nS,M,P,E,,F,2,G,,IT.TEST.OID,second\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 37,
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL"
+          ],
+          "content": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,second\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "STUDYID,USUBJID,SEQ,VAL",
+            "S,P,1,second"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "odm-deferred-group_selectors_and_filter",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "StudyOID",
+            "MetaDataVersionOID",
+            "SubjectKey",
+            "StudyEventOID",
+            "StudyEventRepeatKey",
+            "FormOID",
+            "FormRepeatKey",
+            "ItemGroupOID",
+            "ItemGroupRepeatKey",
+            "ItemOID",
+            "Value"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.ANCHOR"
+              },
+              {
+                "type": "str",
+                "value": "anchor"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.TEST.OID"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "str",
+                "value": "2"
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.TEST.OID"
+              },
+              {
+                "type": "str",
+                "value": "second"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL",
+            "ITEM"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "str",
+                "value": "second"
+              },
+              {
+                "type": "str",
+                "value": "IT.ANCHOR"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,second\n"
+  },
+  {
+    "case": "unselected_branch",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, SEQ, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: SEQ, type: int, label: Sequence, derivation: {row_number: {window: {order_by: [STUDYID, USUBJID]}}}}\n  - name: VAL\n    type: str\n    label: Value\n    derivation:\n      case:\n        - when: 'SEQ < 0'\n          then: {odm: SRC.IT.TEST.OID}\nrows:\n  - id: occurrence\n    dataset: SRC\n    filter: \"SRC.ItemOID = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n",
+    "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,first\nS,M,P,E,,F,,G,,IT.TEST.OID,first\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 31,
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL"
+          ],
+          "content": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "STUDYID,USUBJID,SEQ,VAL",
+            "S,P,1,"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "odm-deferred-unselected_branch",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "StudyOID",
+            "MetaDataVersionOID",
+            "SubjectKey",
+            "StudyEventOID",
+            "StudyEventRepeatKey",
+            "FormOID",
+            "FormRepeatKey",
+            "ItemGroupOID",
+            "ItemGroupRepeatKey",
+            "ItemOID",
+            "Value"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.ANCHOR"
+              },
+              {
+                "type": "str",
+                "value": "anchor"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.TEST.OID"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.TEST.OID"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,\n"
+  },
+  {
+    "case": "nested_operand",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, SEQ, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: SEQ, type: int, label: Sequence, derivation: {row_number: {window: {order_by: [STUDYID, USUBJID]}}}}\n  - name: VAL\n    type: str\n    label: Value\n    derivation:\n      case:\n        - when: 'SEQ > 0'\n          then: {str_concat: {sources: [{literal: X}, {odm: SRC.IT.TEST.OID}]}}\nrows:\n  - id: occurrence\n    dataset: SRC\n    filter: \"SRC.ItemOID = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n",
+    "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,first\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 37,
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL"
+          ],
+          "content": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,Xfirst\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "STUDYID,USUBJID,SEQ,VAL",
+            "S,P,1,Xfirst"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "odm-deferred-nested_operand",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "StudyOID",
+            "MetaDataVersionOID",
+            "SubjectKey",
+            "StudyEventOID",
+            "StudyEventRepeatKey",
+            "FormOID",
+            "FormRepeatKey",
+            "ItemGroupOID",
+            "ItemGroupRepeatKey",
+            "ItemOID",
+            "Value"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.ANCHOR"
+              },
+              {
+                "type": "str",
+                "value": "anchor"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.TEST.OID"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "STUDYID",
+            "USUBJID",
+            "SEQ",
+            "VAL"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "str",
+                "value": "Xfirst"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "STUDYID,USUBJID,SEQ,VAL\nS,P,1,Xfirst\n"
+  },
+  {
+    "case": "group_not_unique",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, SEQ, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: SEQ, type: int, label: Sequence, derivation: {row_number: {window: {order_by: [STUDYID, USUBJID]}}}}\n  - name: VAL\n    type: str\n    label: Value\n    derivation:\n      case:\n        - when: 'SEQ > 0'\n          then: {odm: SRC.IT.TEST.OID}\n  - {name: ITEM, type: str, label: Item, derivation: SRC.ItemOID}\nrows:\n  - id: subjects\n    dataset: SRC\n    group_by: [SRC.StudyOID, SRC.SubjectKey, SRC.ItemOID]\n    filter: \"ITEM = 'IT.ANCHOR'\"\n    derivations:\n      STUDYID: SRC.StudyOID\n      USUBJID: SRC.SubjectKey\n",
+    "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,first\nS,M2,P,E,,F,,G,,IT.TEST.OID,first\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "odm_not_unique",
+          "context": {
+            "differ": {
+              "MetaDataVersionOID": [
+                "M",
+                "M2"
+              ]
+            },
+            "item": "SRC.IT.TEST.OID",
+            "keys": [
+              {
+                "STUDYID": "S",
+                "USUBJID": "P"
+              }
+            ],
+            "records": 2,
+            "repeated": false,
+            "row": "subjects",
+            "scope": {
+              "StudyOID": "S",
+              "SubjectKey": "P"
+            }
+          },
+          "phase": "derivation",
+          "requirement": "REQ-1278",
+          "spec_paths": [
+            "columns.VAL.derivation.case[0].then.odm"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "odm-deferred-group_not_unique",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "odm_not_unique",
+              "context": {
+                "differ": {
+                  "MetaDataVersionOID": [
+                    "M",
+                    "M2"
+                  ]
+                },
+                "item": "SRC.IT.TEST.OID",
+                "keys": [
+                  {
+                    "STUDYID": "S",
+                    "USUBJID": "P"
+                  }
+                ],
+                "records": 2,
+                "repeated": false,
+                "row": "subjects",
+                "scope": {
+                  "StudyOID": "S",
+                  "SubjectKey": "P"
+                }
+              },
+              "phase": "derivation",
+              "requirement": "REQ-1278",
+              "spec_paths": [
+                "columns.VAL.derivation.case[0].then.odm"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "StudyOID",
+            "MetaDataVersionOID",
+            "SubjectKey",
+            "StudyEventOID",
+            "StudyEventRepeatKey",
+            "FormOID",
+            "FormRepeatKey",
+            "ItemGroupOID",
+            "ItemGroupRepeatKey",
+            "ItemOID",
+            "Value"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.ANCHOR"
+              },
+              {
+                "type": "str",
+                "value": "anchor"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.TEST.OID"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "S"
+              },
+              {
+                "type": "str",
+                "value": "M2"
+              },
+              {
+                "type": "str",
+                "value": "P"
+              },
+              {
+                "type": "str",
+                "value": "E"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "F"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "G"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "IT.TEST.OID"
+              },
+              {
+                "type": "str",
+                "value": "first"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  }
+]

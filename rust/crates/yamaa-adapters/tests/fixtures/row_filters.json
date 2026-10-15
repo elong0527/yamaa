@@ -1,0 +1,3602 @@
+[
+  {
+    "case": "greater",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V > 2\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\nb,3,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "b,3,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-greater",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\nb,3,2\n"
+  },
+  {
+    "case": "reverse",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"2 < V\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\nb,3,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "b,3,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-reverse",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\nb,3,2\n"
+  },
+  {
+    "case": "unknown_dropped",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V = 1\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,1,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,1,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-unknown_dropped",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\na,1,2\n"
+  },
+  {
+    "case": "missing_kept",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V IS NULL\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 16,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\nc,,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "c,,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-missing_kept",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\nc,,2\n"
+  },
+  {
+    "case": "present_kept",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V IS NOT NULL\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 23,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,1,2\nb,3,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,1,2",
+            "b,3,2"
+          ],
+          "row_count": 2,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-present_kept",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\na,1,2\nb,3,2\n"
+  },
+  {
+    "case": "true",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"TRUE\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 28,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,1,2\nb,3,2\nc,,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,1,2",
+            "b,3,2",
+            "c,,2"
+          ],
+          "row_count": 3,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-true",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\na,1,2\nb,3,2\nc,,2\n"
+  },
+  {
+    "case": "false",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"FALSE\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 11,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER"
+          ],
+          "row_count": 0,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-false",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\n"
+  },
+  {
+    "case": "not",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"NOT (V > 2)\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,1,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,1,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-not",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\na,1,2\n"
+  },
+  {
+    "case": "and",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V > 2 AND ID = 'b'\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\nb,3,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "b,3,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-and",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\nb,3,2\n"
+  },
+  {
+    "case": "or",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V > 2 OR ID = 'c'\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 22,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\nb,3,2\nc,,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "b,3,2",
+            "c,,2"
+          ],
+          "row_count": 2,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-or",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\nb,3,2\nc,,2\n"
+  },
+  {
+    "case": "between",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V BETWEEN 1 AND 2\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,1,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,1,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-between",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\na,1,2\n"
+  },
+  {
+    "case": "in",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V IN (1, 3)\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 23,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,1,2\nb,3,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,1,2",
+            "b,3,2"
+          ],
+          "row_count": 2,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-in",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\na,1,2\nb,3,2\n"
+  },
+  {
+    "case": "empty",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V > 2\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 11,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER"
+          ],
+          "row_count": 0,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-empty",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\n"
+  },
+  {
+    "case": "unicode",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: str}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: str, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V = '\\U0001f642'\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,é\nb,🙂\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 20,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\nb,🙂,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "b,🙂,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-unicode",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "é"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "🙂"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "🙂"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\nb,🙂,2\n"
+  },
+  {
+    "case": "converted",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: str}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V = 3\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,03\nb,4\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,3,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,3,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-converted",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "03"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "4"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\na,3,2\n"
+  },
+  {
+    "case": "source_record",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: str}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"SRC.V = '03'\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,03\nb,4\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,3,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,3,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-source_record",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "03"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "4"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\na,3,2\n"
+  },
+  {
+    "case": "multiple_templates",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V > 2\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n  - id: records1\n    filter: \"V <= 2\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 23,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\nb,3,2\na,1,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "b,3,2",
+            "a,1,2"
+          ],
+          "row_count": 2,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-multiple_templates",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\nb,3,2\na,1,2\n"
+  },
+  {
+    "case": "checks_after_filter",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V, verifications: [{not_missing: {id: present}}]}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"V IS NOT NULL\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 23,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,1,2\nb,3,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,1,2",
+            "b,3,2"
+          ],
+          "row_count": 2,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-checks_after_filter",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.V.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "V",
+          "verification_id": "present"
+        }
+      ]
+    },
+    "artifact": "ID,V,LATER\na,1,2\nb,3,2\n"
+  },
+  {
+    "case": "mean_after_reduction",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: float, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"V > 2\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: {expr: \"MEAN(SRC.V)\"}}\n",
+    "input": "ID,V\na,2\na,4\nb,1\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,3,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,3,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "float",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-mean_after_reduction",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "4"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "float",
+                "value": "4008000000000000"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "float",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\na,3,2\n"
+  },
+  {
+    "case": "count_after_reduction",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: str}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V, verifications: [{not_missing: {id: present}}]}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"V = 0\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: {expr: \"COUNT(SRC.V)\"}}\n",
+    "input": "ID,V\na,\nb,x\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,0,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,0,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-count_after_reduction",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "x"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "0"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "not_missing",
+          "evaluated_count": 1,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.V.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "V",
+          "verification_id": "present"
+        }
+      ]
+    },
+    "artifact": "ID,V,LATER\na,0,2\n"
+  },
+  {
+    "case": "grouped_source_phase",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"SRC.V > 2\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: {expr: \"COUNT(SRC.V)\"}}\n",
+    "input": "ID,V\na,1\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "phase_boundary",
+          "context": {
+            "available_phase": "row_construction",
+            "identifier": "SRC.V",
+            "required_phase": "grouped_row_filter",
+            "row": "grouped"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0068",
+          "spec_paths": [
+            "rows[0].filter"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-grouped_source_phase",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "phase_boundary",
+              "context": {
+                "available_phase": "row_construction",
+                "identifier": "SRC.V",
+                "required_phase": "grouped_row_filter",
+                "row": "grouped"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0068",
+              "spec_paths": [
+                "rows[0].filter"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "grouped_inherited_default",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"LATER > 1\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: {expr: \"COUNT(SRC.V)\"}}\n",
+    "input": "ID,V\na,1\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 17,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,1,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,1,2"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-grouped_inherited_default",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,V,LATER\na,1,2\n"
+  },
+  {
+    "case": "grouped_unknown_phase",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"UNKNOWN > 1\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: {expr: \"COUNT(SRC.V)\"}}\n",
+    "input": "ID,V\na,1\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "phase_boundary",
+          "context": {
+            "available_phase": "column_derivation",
+            "identifier": "UNKNOWN",
+            "required_phase": "grouped_row_filter",
+            "row": "grouped"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0068",
+          "spec_paths": [
+            "rows[0].filter"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-grouped_unknown_phase",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "phase_boundary",
+              "context": {
+                "available_phase": "column_derivation",
+                "identifier": "UNKNOWN",
+                "required_phase": "grouped_row_filter",
+                "row": "grouped"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0068",
+              "spec_paths": [
+                "rows[0].filter"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "record_unknown_phase",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"UNKNOWN > 1\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "phase_boundary",
+          "context": {
+            "available_phase": "column_derivation",
+            "identifier": "UNKNOWN",
+            "required_phase": "row_filter",
+            "row": "records0"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0068",
+          "spec_paths": [
+            "rows[0].filter"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-record_unknown_phase",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "phase_boundary",
+              "context": {
+                "available_phase": "column_derivation",
+                "identifier": "UNKNOWN",
+                "required_phase": "row_filter",
+                "row": "records0"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0068",
+              "spec_paths": [
+                "rows[0].filter"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "grammar",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"ID >\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "invalid_predicate",
+          "context": {
+            "position": 4,
+            "predicate": "ID >"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0188",
+          "spec_paths": [
+            "rows[0].filter"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-grammar",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "invalid_predicate",
+              "context": {
+                "position": 4,
+                "predicate": "ID >"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0188",
+              "spec_paths": [
+                "rows[0].filter"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "group_and_filter_order",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.MISSING]\n    filter: \"SRC.V > 2\"\n    derivations:\n      ID: {literal: a}\n      V: {aggregate: {expr: \"COUNT(SRC.V)\"}}\n",
+    "input": "ID,V\na,1\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "unknown_field",
+          "context": {
+            "identifier": "SRC.MISSING"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0103",
+          "spec_paths": [
+            "rows[0].group_by[0]"
+          ]
+        },
+        {
+          "condition": "phase_boundary",
+          "context": {
+            "available_phase": "row_construction",
+            "identifier": "SRC.V",
+            "required_phase": "grouped_row_filter",
+            "row": "grouped"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0068",
+          "spec_paths": [
+            "rows[0].filter"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-group_and_filter_order",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "unknown_field",
+              "context": {
+                "identifier": "SRC.MISSING"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "rows[0].group_by[0]"
+              ]
+            },
+            {
+              "condition": "phase_boundary",
+              "context": {
+                "available_phase": "row_construction",
+                "identifier": "SRC.V",
+                "required_phase": "grouped_row_filter",
+                "row": "grouped"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0068",
+              "spec_paths": [
+                "rows[0].filter"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "source_unknown",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"SRC.MISSING > 1\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\nb,3\nc,\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "unknown_field",
+          "context": {
+            "identifier": "SRC.MISSING"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0103",
+          "spec_paths": [
+            "rows[0].filter"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "row-filter-source_unknown",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "unknown_field",
+              "context": {
+                "identifier": "SRC.MISSING"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0103",
+              "spec_paths": [
+                "rows[0].filter"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  }
+]

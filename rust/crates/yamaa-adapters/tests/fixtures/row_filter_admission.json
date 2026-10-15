@@ -1,0 +1,188 @@
+[
+  {
+    "case": "wide_false",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"FALSE AND V = 9223372036854775808\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "integer_overflow",
+          "context": {
+            "position": 14,
+            "predicate": "FALSE AND V = 9223372036854775808"
+          },
+          "phase": "parse",
+          "requirement": "REQ-0014",
+          "spec_paths": [
+            "rows[0].filter"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "predicate-carrier-wide_false",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "integer_overflow",
+              "context": {
+                "position": 14,
+                "predicate": "FALSE AND V = 9223372036854775808"
+              },
+              "phase": "parse",
+              "requirement": "REQ-0014",
+              "spec_paths": [
+                "rows[0].filter"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "wide_true",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: records0\n    filter: \"TRUE OR V = -9223372036854775809\"\n    derivations:\n      ID: SRC.ID\n      V: SRC.V\n",
+    "input": "ID,V\na,1\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "integer_overflow",
+          "context": {
+            "position": 12,
+            "predicate": "TRUE OR V = -9223372036854775809"
+          },
+          "phase": "parse",
+          "requirement": "REQ-0014",
+          "spec_paths": [
+            "rows[0].filter"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "predicate-carrier-wide_true",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "integer_overflow",
+              "context": {
+                "position": 12,
+                "predicate": "TRUE OR V = -9223372036854775809"
+              },
+              "phase": "parse",
+              "requirement": "REQ-0014",
+              "spec_paths": [
+                "rows[0].filter"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  }
+]

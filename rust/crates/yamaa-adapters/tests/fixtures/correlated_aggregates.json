@@ -1,0 +1,2075 @@
+[
+  {
+    "case": "three_contexts",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, R, Q, M]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: R, type: int, label: R}\n  - {name: Q, type: int, label: Q, derivation: {aggregate: 'COUNT(SRC.*)'}}\n  - {name: M, type: float, label: M, derivation: {aggregate: {expr: 'MEAN(R)', group_by: [G]}}}\nrows:\n  - id: total\n    group_by: [SRC.ID, SRC.G]\n    derivations:\n      ID: SRC.ID\n      G: SRC.G\n      R: {aggregate: 'SUM(SRC.V * 2) + MAX(SRC.V)'}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\nb,g,4\nc,h,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 47,
+          "columns": [
+            "ID",
+            "G",
+            "R",
+            "Q",
+            "M"
+          ],
+          "content": "ID,G,R,Q,M\na,g,13,2,12.5\nb,g,12,1,12.5\nc,h,,1,\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,G,R,Q,M",
+            "a,g,13,2,12.5",
+            "b,g,12,1,12.5",
+            "c,h,,1,"
+          ],
+          "row_count": 3,
+          "types": [
+            "str",
+            "str",
+            "int",
+            "int",
+            "float"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-three_contexts",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "4"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "h"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "G",
+            "R",
+            "Q",
+            "M"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "13"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              },
+              {
+                "type": "float",
+                "value": "4029000000000000"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "12"
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "float",
+                "value": "4029000000000000"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "c"
+              },
+              {
+                "type": "str",
+                "value": "h"
+              },
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "int",
+                "value": "1"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int",
+            "int",
+            "float"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,G,R,Q,M\na,g,13,2,12.5\nb,g,12,1,12.5\nc,h,,1,\n"
+  },
+  {
+    "case": "exact_extreme",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'MAX(SRC.V)'}\n",
+    "input": "ID,G,V\na,g,9007199254740992\na,g,9007199254740993\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 28,
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "content": "ID,G,V\na,g,9007199254740993\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,G,V",
+            "a,g,9007199254740993"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-exact_extreme",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "9007199254740992"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "9007199254740993"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "9007199254740993"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,G,V\na,g,9007199254740993\n"
+  },
+  {
+    "case": "all_missing_count",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'COUNT(SRC.V)'}\n",
+    "input": "ID,G,V\na,g,\na,g,\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 13,
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "content": "ID,G,V\na,g,0\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,G,V",
+            "a,g,0"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-all_missing_count",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "0"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,G,V\na,g,0\n"
+  },
+  {
+    "case": "mixed_relations",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'SUM(SRC.V) + ID'}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "mixed_relations",
+          "context": {
+            "expr": "SUM(SRC.V) + ID",
+            "relations": [
+              "SRC",
+              "<output>"
+            ]
+          },
+          "phase": "validation",
+          "requirement": "REQ-0504",
+          "spec_paths": [
+            "columns.V.derivation.aggregate"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-mixed_relations",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "mixed_relations",
+              "context": {
+                "expr": "SUM(SRC.V) + ID",
+                "relations": [
+                  "SRC",
+                  "<output>"
+                ]
+              },
+              "phase": "validation",
+              "requirement": "REQ-0504",
+              "spec_paths": [
+                "columns.V.derivation.aggregate"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "ungrouped_identifier",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'SRC.V + SUM(SRC.V)'}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "aggregate_identifier_not_grouped",
+          "context": {
+            "dataset": "SRC",
+            "expr": "SRC.V + SUM(SRC.V)",
+            "identifier": "SRC.V"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0503",
+          "spec_paths": [
+            "columns.V.derivation.aggregate"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-ungrouped_identifier",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "aggregate_identifier_not_grouped",
+              "context": {
+                "dataset": "SRC",
+                "expr": "SRC.V + SUM(SRC.V)",
+                "identifier": "SRC.V"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0503",
+              "spec_paths": [
+                "columns.V.derivation.aggregate"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "output_requires_groups",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: 'SUM(V)'}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "invalid_aggregate_context",
+          "context": {
+            "expr": "SUM(V)",
+            "reason": "an output-row reduction declares group_by"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0507",
+          "spec_paths": [
+            "columns.V.derivation.aggregate"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-output_requires_groups",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "invalid_aggregate_context",
+              "context": {
+                "expr": "SUM(V)",
+                "reason": "an output-row reduction declares group_by"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0507",
+              "spec_paths": [
+                "columns.V.derivation.aggregate"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "qualified_group_scope",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', group_by: [G]}}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "invalid_aggregate_context",
+          "context": {
+            "expr": "SUM(SRC.V)",
+            "reason": "a qualified reduction groups on columns of 'SRC'"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0329",
+          "spec_paths": [
+            "columns.V.derivation.aggregate.group_by"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-qualified_group_scope",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "invalid_aggregate_context",
+              "context": {
+                "expr": "SUM(SRC.V)",
+                "reason": "a qualified reduction groups on columns of 'SRC'"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0329",
+              "spec_paths": [
+                "columns.V.derivation.aggregate.group_by"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "key_field_missing",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {ABSENT: ID}}}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "unknown_field",
+          "context": {
+            "identifier": "SRC.ABSENT"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0141",
+          "spec_paths": [
+            "columns.V.derivation.aggregate.expr"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-key_field_missing",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "unknown_field",
+              "context": {
+                "identifier": "SRC.ABSENT"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0141",
+              "spec_paths": [
+                "columns.V.derivation.aggregate.expr"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "key_variable_missing",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {ID: ABSENT}}}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "unknown_field",
+          "context": {
+            "identifier": "ABSENT"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0141",
+          "spec_paths": [
+            "columns.V.derivation.aggregate.expr"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-key_variable_missing",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "unknown_field",
+              "context": {
+                "identifier": "ABSENT"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0141",
+              "spec_paths": [
+                "columns.V.derivation.aggregate.expr"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "key_type",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {V: ID}}}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "incompatible_input_type",
+          "context": {
+            "actual": "int",
+            "expected": "str",
+            "source": "ID"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0004",
+          "spec_paths": [
+            "columns.V.derivation.aggregate.expr"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-key_type",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "incompatible_input_type",
+              "context": {
+                "actual": "int",
+                "expected": "str",
+                "source": "ID"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0004",
+              "spec_paths": [
+                "columns.V.derivation.aggregate.expr"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "empty_key_mapping",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {}}}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "missing_aggregate_keys",
+          "context": {
+            "dataset": "SRC",
+            "key": {}
+          },
+          "phase": "validation",
+          "requirement": "REQ-0140",
+          "spec_paths": [
+            "columns.V.derivation.aggregate"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-empty_key_mapping",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "missing_aggregate_keys",
+              "context": {
+                "dataset": "SRC",
+                "key": {}
+              },
+              "phase": "validation",
+              "requirement": "REQ-0140",
+              "spec_paths": [
+                "columns.V.derivation.aggregate"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "empty_key_list",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: []}}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "missing_aggregate_keys",
+          "context": {
+            "dataset": "SRC",
+            "key": []
+          },
+          "phase": "validation",
+          "requirement": "REQ-0140",
+          "spec_paths": [
+            "columns.V.derivation.aggregate"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-empty_key_list",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "missing_aggregate_keys",
+              "context": {
+                "dataset": "SRC",
+                "key": []
+              },
+              "phase": "validation",
+              "requirement": "REQ-0140",
+              "spec_paths": [
+                "columns.V.derivation.aggregate"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "scalar_key",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: ID}}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 13,
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "content": "ID,G,V\na,g,5\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,G,V",
+            "a,g,5"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-scalar_key",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "5"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,G,V\na,g,5\n"
+  },
+  {
+    "case": "list_key",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: [ID, ID]}}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 13,
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "content": "ID,G,V\na,g,5\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,G,V",
+            "a,g,5"
+          ],
+          "row_count": 1,
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-list_key",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "5"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": "ID,G,V\na,g,5\n"
+  },
+  {
+    "case": "eager_row_only",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, R, Q, M]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: R, type: int, label: R}\n  - {name: Q, type: int, label: Q, derivation: {aggregate: 'COUNT(SRC.*)'}}\n  - {name: M, type: float, label: M, derivation: {aggregate: {expr: 'MEAN(R)', group_by: [G]}}}\nrows:\n  - id: total\n    group_by: [SRC.ID, SRC.G]\n    derivations:\n      ID: SRC.ID\n      G: SRC.G\n      R: {aggregate: 'COALESCE(1, ONLY(SRC.V))'}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "aggregate_multiple_records",
+          "context": {
+            "expr": "COALESCE(1, ONLY(SRC.V))",
+            "group": {
+              "G": "g",
+              "ID": "a"
+            },
+            "record_count": 2,
+            "reducer": "ONLY",
+            "row": "total"
+          },
+          "phase": "row_construction",
+          "requirement": "REQ-0501",
+          "spec_paths": [
+            "rows[0].derivations.R.aggregate"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-eager_row_only",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "aggregate_multiple_records",
+              "context": {
+                "expr": "COALESCE(1, ONLY(SRC.V))",
+                "group": {
+                  "G": "g",
+                  "ID": "a"
+                },
+                "record_count": 2,
+                "reducer": "ONLY",
+                "row": "total"
+              },
+              "phase": "row_construction",
+              "requirement": "REQ-0501",
+              "spec_paths": [
+                "rows[0].derivations.R.aggregate"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  },
+  {
+    "case": "column_only_group_context",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, R, Q, M]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: R, type: int, label: R}\n  - {name: Q, type: int, label: Q, derivation: {aggregate: 'ONLY(SRC.V)'}}\n  - {name: M, type: float, label: M, derivation: {aggregate: {expr: 'MEAN(R)', group_by: [G]}}}\nrows:\n  - id: total\n    group_by: [SRC.ID, SRC.G]\n    derivations:\n      ID: SRC.ID\n      G: SRC.G\n      R: {aggregate: 'SUM(SRC.V * 2) + MAX(SRC.V)'}\n",
+    "input": "ID,G,V\na,g,2\na,g,3\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "aggregate_multiple_records",
+          "context": {
+            "expr": "ONLY(SRC.V)",
+            "group": {
+              "G": "g",
+              "ID": "a"
+            },
+            "keys": [
+              {
+                "ID": "a"
+              }
+            ],
+            "record_count": 2,
+            "reducer": "ONLY",
+            "row": "total"
+          },
+          "phase": "derivation",
+          "requirement": "REQ-0501",
+          "spec_paths": [
+            "columns.Q.derivation.aggregate"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "correlated-aggregate-column_only_group_context",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "aggregate_multiple_records",
+              "context": {
+                "expr": "ONLY(SRC.V)",
+                "group": {
+                  "G": "g",
+                  "ID": "a"
+                },
+                "keys": [
+                  {
+                    "ID": "a"
+                  }
+                ],
+                "record_count": 2,
+                "reducer": "ONLY",
+                "row": "total"
+              },
+              "phase": "derivation",
+              "requirement": "REQ-0501",
+              "spec_paths": [
+                "columns.Q.derivation.aggregate"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "G",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "g"
+              },
+              {
+                "type": "int",
+                "value": "3"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": []
+    },
+    "artifact": ""
+  }
+]

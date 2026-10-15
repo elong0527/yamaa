@@ -202,12 +202,11 @@ fn source_failures_preserve_independent_decoder_findings_before_any_host_effect(
     use serde_json::{json, Value};
     use yamaa_adapters::specification_diagnostics::inheritance_failure;
     let mut count = 0;
-    for line in include_str!("../fixtures/yaml_transport.tsv")
-        .lines()
-        .skip(1)
+    for row in serde_json::from_str::<Vec<Value>>(include_str!("../fixtures/yaml_transport.json"))
+        .unwrap()
+        .iter()
     {
-        let fields = line.split('\t').collect::<Vec<_>>();
-        let mut expected: Value = serde_json::from_str(fields[2]).unwrap();
+        let mut expected: Value = row["expected"].clone();
         if expected["outcome"]["status"] != "invalid" {
             continue;
         }
@@ -224,11 +223,15 @@ fn source_failures_preserve_independent_decoder_findings_before_any_host_effect(
                 finding["context"]["path"] = json!("source.yaml");
             }
         }
-        let bytes = fields[1]
-            .as_bytes()
-            .chunks_exact(2)
-            .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
-            .collect();
+        let bytes: Vec<u8> = if let Some(text) = row["source"].as_str() {
+            text.as_bytes().to_vec()
+        } else {
+            let hex = row["source"]["hex"].as_str().unwrap();
+            hex.as_bytes()
+                .chunks_exact(2)
+                .map(|p| u8::from_str_radix(std::str::from_utf8(p).unwrap(), 16).unwrap())
+                .collect()
+        };
         let error = shipped_schema::prepare(
             Source {
                 identity: "source.yaml".into(),
@@ -239,7 +242,7 @@ fn source_failures_preserve_independent_decoder_findings_before_any_host_effect(
         )
         .unwrap_err();
         let actual: Value = serde_json::from_str(&inheritance_failure(error).unwrap()).unwrap();
-        assert_eq!(actual, expected, "{}", fields[0]);
+        assert_eq!(actual, expected, "{}", row["id"].as_str().unwrap());
         count += 1;
     }
     assert_eq!(count, 8);

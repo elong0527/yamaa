@@ -46,10 +46,6 @@ def stage(runtime, destination):
                 ROOT / "python/tests/odm/_odm_documents.py",
                 destination / "odm_documents.py",
             ),
-            (
-                ROOT / "rust/tools/private_schema_requirements.py",
-                destination / "private_schema_requirements.py",
-            ),
         ]
         directories += [
             destination / name

@@ -89,14 +89,20 @@ fn assert_complete(error: &Error, source: &SourceDeclaration, expected: &Value) 
 fn all_independent_csv_profile_reports_survive_bounded_original_projection() {
     let declaration = source("SRC", "source.csv");
     let mut count = 0;
-    for line in include_str!("../fixtures/csv_profile_diagnostics.tsv")
-        .lines()
-        .skip(1)
+    for row in serde_json::from_str::<Vec<Value>>(include_str!(
+        "../fixtures/csv_profile_diagnostics.json"
+    ))
+    .unwrap()
+    .iter()
     {
-        let fields: Vec<_> = line.split('\t').collect();
-        let expected: Value = serde_json::from_str(fields[2]).unwrap();
+        let expected: Value = row["expected"].clone();
+        let source_bytes: Vec<u8> = if let Some(text) = row["source_bytes"].as_str() {
+            text.as_bytes().to_vec()
+        } else {
+            bytes(row["source_bytes"]["hex"].as_str().unwrap())
+        };
         let error = Error::Source(TextTableError::Csv(
-            csv_source::parse(&bytes(fields[3]), Default::default()).unwrap_err(),
+            csv_source::parse(&source_bytes, Default::default()).unwrap_err(),
         ));
         assert_complete(&error, &declaration, &expected["diagnostics"]);
         count += 1;
@@ -108,13 +114,12 @@ fn all_independent_csv_profile_reports_survive_bounded_original_projection() {
 fn all_independent_typing_reports_keep_original_first_bad_field_and_value() {
     let declaration = source("SRC", "source.csv");
     let mut count = 0;
-    for line in include_str!("../fixtures/source_typing.tsv")
-        .lines()
-        .skip(1)
+    for row in serde_json::from_str::<Vec<Value>>(include_str!("../fixtures/source_typing.json"))
+        .unwrap()
+        .iter()
     {
-        let fields: Vec<_> = line.split('\t').collect();
-        let expected: Value = serde_json::from_str(fields[2]).unwrap();
-        let types = match fields[0] {
+        let expected: Value = row["expected"].clone();
+        let types = match row["case"].as_str().unwrap() {
             "unknown-field" => vec![
                 ("ID".into(), ColumnType::Int),
                 ("ABSENT".into(), ColumnType::Int),
@@ -127,9 +132,14 @@ fn all_independent_typing_reports_keep_original_first_bad_field_and_value() {
             "invalid-temporal" => vec![("V".into(), ColumnType::Date)],
             _ => panic!("unknown independent fixture"),
         };
+        let source_bytes: Vec<u8> = if let Some(text) = row["source_bytes"].as_str() {
+            text.as_bytes().to_vec()
+        } else {
+            bytes(row["source_bytes"]["hex"].as_str().unwrap())
+        };
         let error = Error::TypedSource(
             typed_csv::parse(
-                &bytes(fields[3]),
+                &source_bytes,
                 &types,
                 Default::default(),
                 table_limits(),
@@ -410,8 +420,11 @@ fn default_projection_refuses_full_oversized_value_without_truncation_or_partial
         failure,
         json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"ingest","code":"diagnostic_context_limit"}})
     );
+    // The specification-level projection with an explicit unbounded limit
+    // still collects both findings; only the bounded source projection
+    // above refuses the oversized context.
     assert_eq!(
-        projection::findings_with_limit(&error, None, MAX_PROJECTION_BYTES)
+        projection::findings_with_limit(&error, None, usize::MAX)
             .unwrap()
             .unwrap()
             .len(),

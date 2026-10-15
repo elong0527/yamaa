@@ -1,0 +1,1704 @@
+[
+  {
+    "case": "held",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{\"unique\": {\"columns\": [\"ID\"]}}]\n",
+    "input": "ID,V\na,10\nb,20\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 25,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,10,2\nb,20,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,10,2",
+            "b,20,2"
+          ],
+          "row_count": 2,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "column-check-held",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "20"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "10"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "20"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.ID.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "ID",
+          "verification_id": "id-present"
+        },
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.V.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "V",
+          "verification_id": "v-present"
+        },
+        {
+          "check": "unique",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        }
+      ]
+    },
+    "artifact": "ID,V,LATER\na,10,2\nb,20,2\n"
+  },
+  {
+    "case": "namespace_scope",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{\"unique\": {\"columns\": [\"ID\"], \"id\": \"id-present\"}}]\n",
+    "input": "ID,V\na,10\nb,20\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 25,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,10,2\nb,20,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,10,2",
+            "b,20,2"
+          ],
+          "row_count": 2,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "column-check-namespace_scope",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "20"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "10"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "20"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.ID.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "ID",
+          "verification_id": "id-present"
+        },
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.V.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "V",
+          "verification_id": "id-present"
+        },
+        {
+          "check": "unique",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": "id-present"
+        }
+      ]
+    },
+    "artifact": "ID,V,LATER\na,10,2\nb,20,2\n"
+  },
+  {
+    "case": "key_declared_later",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{\"unique\": {\"columns\": [\"ID\"]}}]\n",
+    "input": "ID,V\na,10\nb,20\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 25,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\na,10,2\nb,20,2\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER",
+            "a,10,2",
+            "b,20,2"
+          ],
+          "row_count": 2,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "column-check-key_declared_later",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "20"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "V",
+            "ID",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [
+            [
+              {
+                "type": "int",
+                "value": "10"
+              },
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ],
+            [
+              {
+                "type": "int",
+                "value": "20"
+              },
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "int",
+                "value": "2"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "int",
+            "str",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.V.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "V",
+          "verification_id": "v-present"
+        },
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.ID.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "ID",
+          "verification_id": "id-present"
+        },
+        {
+          "check": "unique",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        }
+      ]
+    },
+    "artifact": "ID,V,LATER\na,10,2\nb,20,2\n"
+  },
+  {
+    "case": "failed",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{\"unique\": {\"columns\": [\"ID\"]}}]\n",
+    "input": "ID,V\na,10\nb,\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "not_missing_failed",
+          "context": {
+            "column": "V",
+            "failure_count": 1,
+            "keys": [
+              {
+                "ID": "b"
+              }
+            ],
+            "verification_id": "v-present"
+          },
+          "phase": "verification",
+          "requirement": "REQ-0375",
+          "spec_paths": [
+            "columns.V.verifications[0].not_missing"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "column-check-failed",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "not_missing_failed",
+              "context": {
+                "column": "V",
+                "failure_count": 1,
+                "keys": [
+                  {
+                    "ID": "b"
+                  }
+                ],
+                "verification_id": "v-present"
+              },
+              "phase": "verification",
+              "requirement": "REQ-0375",
+              "spec_paths": [
+                "columns.V.verifications[0].not_missing"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.ID.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "ID",
+          "verification_id": "id-present"
+        },
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": {
+            "condition": "not_missing_failed",
+            "context": {
+              "column": "V",
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "b"
+                }
+              ],
+              "verification_id": "v-present"
+            },
+            "log_context": {
+              "column": "V",
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "b"
+                }
+              ],
+              "verification_id": "v-present"
+            },
+            "offending_keys": [
+              {
+                "ID": "b"
+              }
+            ],
+            "phase": "verification",
+            "requirement": "REQ-0375",
+            "severity": "error",
+            "spec_paths": [
+              "columns.V.verifications[0].not_missing"
+            ]
+          },
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.V.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "V",
+          "verification_id": "v-present"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "empty",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{\"unique\": {\"columns\": [\"ID\"]}}]\n",
+    "input": "ID,V\n",
+    "expected": {
+      "artifacts": [
+        {
+          "byte_length": 11,
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "content": "ID,V,LATER\n",
+          "name": "result",
+          "profile": "csv",
+          "records": [
+            "ID,V,LATER"
+          ],
+          "row_count": 0,
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "column-check-empty",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [],
+          "handler_counts": [],
+          "outcome": "success",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "success",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        },
+        {
+          "columns": [
+            "ID",
+            "V",
+            "LATER"
+          ],
+          "name": "output",
+          "rows": [],
+          "specification": "spec.yaml",
+          "stage": "derived",
+          "types": [
+            "str",
+            "int",
+            "int"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "not_missing",
+          "evaluated_count": 0,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.ID.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "ID",
+          "verification_id": "id-present"
+        },
+        {
+          "check": "not_missing",
+          "evaluated_count": 0,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.V.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "V",
+          "verification_id": "v-present"
+        },
+        {
+          "check": "unique",
+          "evaluated_count": 0,
+          "failure": null,
+          "requirement": "REQ-0381",
+          "severity": "error",
+          "spec_path": "verifications[0].unique",
+          "specification": "spec.yaml",
+          "target": null,
+          "verification_id": null
+        }
+      ]
+    },
+    "artifact": "ID,V,LATER\n"
+  },
+  {
+    "case": "failed_before_later_conversion",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": \"bad\"}}]\nverifications: [{\"unique\": {\"columns\": [\"ID\"]}}]\n",
+    "input": "ID,V\na,10\nb,\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "not_missing_failed",
+          "context": {
+            "column": "V",
+            "failure_count": 1,
+            "keys": [
+              {
+                "ID": "b"
+              }
+            ],
+            "verification_id": "v-present"
+          },
+          "phase": "verification",
+          "requirement": "REQ-0375",
+          "spec_paths": [
+            "columns.V.verifications[0].not_missing"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "column-check-failed_before_later_conversion",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "not_missing_failed",
+              "context": {
+                "column": "V",
+                "failure_count": 1,
+                "keys": [
+                  {
+                    "ID": "b"
+                  }
+                ],
+                "verification_id": "v-present"
+              },
+              "phase": "verification",
+              "requirement": "REQ-0375",
+              "spec_paths": [
+                "columns.V.verifications[0].not_missing"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.ID.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "ID",
+          "verification_id": "id-present"
+        },
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": {
+            "condition": "not_missing_failed",
+            "context": {
+              "column": "V",
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "b"
+                }
+              ],
+              "verification_id": "v-present"
+            },
+            "log_context": {
+              "column": "V",
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "b"
+                }
+              ],
+              "verification_id": "v-present"
+            },
+            "offending_keys": [
+              {
+                "ID": "b"
+              }
+            ],
+            "phase": "verification",
+            "requirement": "REQ-0375",
+            "severity": "error",
+            "spec_paths": [
+              "columns.V.verifications[0].not_missing"
+            ]
+          },
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.V.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "V",
+          "verification_id": "v-present"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "held_before_later_conversion",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": \"bad\"}}]\nverifications: [{\"unique\": {\"columns\": [\"ID\"]}}]\n",
+    "input": "ID,V\na,10\nb,20\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "conversion_failed",
+          "context": {
+            "from": "str",
+            "keys": [
+              {
+                "ID": "a"
+              }
+            ],
+            "to": "int",
+            "value": "bad"
+          },
+          "phase": "convert",
+          "requirement": "REQ-0013",
+          "spec_paths": [
+            "columns.LATER"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "column-check-held_before_later_conversion",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "conversion_failed",
+              "context": {
+                "from": "str",
+                "keys": [
+                  {
+                    "ID": "a"
+                  }
+                ],
+                "to": "int",
+                "value": "bad"
+              },
+              "phase": "convert",
+              "requirement": "REQ-0013",
+              "spec_paths": [
+                "columns.LATER"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "str",
+                "value": "20"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.ID.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "ID",
+          "verification_id": "id-present"
+        },
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.V.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "V",
+          "verification_id": "v-present"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "missing_key_check_first",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"v-present\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{\"unique\": {\"columns\": [\"ID\"]}}]\n",
+    "input": "ID,V\n,10\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "not_missing_failed",
+          "context": {
+            "column": "ID",
+            "failure_count": 1,
+            "keys": [
+              {
+                "ID": null
+              }
+            ],
+            "verification_id": "id-present"
+          },
+          "phase": "verification",
+          "requirement": "REQ-0375",
+          "spec_paths": [
+            "columns.ID.verifications[0].not_missing"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "column-check-missing_key_check_first",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "not_missing_failed",
+              "context": {
+                "column": "ID",
+                "failure_count": 1,
+                "keys": [
+                  {
+                    "ID": null
+                  }
+                ],
+                "verification_id": "id-present"
+              },
+              "phase": "verification",
+              "requirement": "REQ-0375",
+              "spec_paths": [
+                "columns.ID.verifications[0].not_missing"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "missing",
+                "value": null
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "not_missing",
+          "evaluated_count": 1,
+          "failure": {
+            "condition": "not_missing_failed",
+            "context": {
+              "column": "ID",
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": null
+                }
+              ],
+              "verification_id": "id-present"
+            },
+            "log_context": {
+              "column": "ID",
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": null
+                }
+              ],
+              "verification_id": "id-present"
+            },
+            "offending_keys": [
+              {
+                "ID": null
+              }
+            ],
+            "phase": "verification",
+            "requirement": "REQ-0375",
+            "severity": "error",
+            "spec_paths": [
+              "columns.ID.verifications[0].not_missing"
+            ]
+          },
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.ID.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "ID",
+          "verification_id": "id-present"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "duplicate_id",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"same\"}}, {\"not_missing\": {\"id\": \"same\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{\"unique\": {\"columns\": [\"ID\"]}}]\n",
+    "input": "ID,V\na,10\nb,\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "duplicate_identifier",
+          "context": {
+            "reason": "verification id 'same' repeats columns.V.verifications[0].not_missing"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0398",
+          "spec_paths": [
+            "columns.V.verifications[1].not_missing"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "column-check-duplicate_id",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "duplicate_identifier",
+              "context": {
+                "reason": "verification id 'same' repeats columns.V.verifications[0].not_missing"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0398",
+              "spec_paths": [
+                "columns.V.verifications[1].not_missing"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.ID.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "ID",
+          "verification_id": "id-present"
+        },
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": {
+            "condition": "not_missing_failed",
+            "context": {
+              "column": "V",
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "b"
+                }
+              ],
+              "verification_id": "same"
+            },
+            "log_context": {
+              "column": "V",
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "b"
+                }
+              ],
+              "verification_id": "same"
+            },
+            "offending_keys": [
+              {
+                "ID": "b"
+              }
+            ],
+            "phase": "verification",
+            "requirement": "REQ-0375",
+            "severity": "error",
+            "spec_paths": [
+              "columns.V.verifications[0].not_missing"
+            ]
+          },
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.V.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "V",
+          "verification_id": "same"
+        }
+      ]
+    },
+    "artifact": ""
+  },
+  {
+    "case": "both_checks_failed",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"id-present\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"not_missing\": {\"id\": \"one\"}}, {\"not_missing\": {\"id\": \"two\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{\"unique\": {\"columns\": [\"ID\"]}}]\n",
+    "input": "ID,V\na,10\nb,\n",
+    "expected": {
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
+        {
+          "condition": "not_missing_failed",
+          "context": {
+            "column": "V",
+            "failure_count": 1,
+            "keys": [
+              {
+                "ID": "b"
+              }
+            ],
+            "verification_id": "one"
+          },
+          "phase": "verification",
+          "requirement": "REQ-0375",
+          "spec_paths": [
+            "columns.V.verifications[0].not_missing"
+          ]
+        },
+        {
+          "condition": "not_missing_failed",
+          "context": {
+            "column": "V",
+            "failure_count": 1,
+            "keys": [
+              {
+                "ID": "b"
+              }
+            ],
+            "verification_id": "two"
+          },
+          "phase": "verification",
+          "requirement": "REQ-0375",
+          "spec_paths": [
+            "columns.V.verifications[1].not_missing"
+          ]
+        }
+      ],
+      "engine_version": "fixture-engine",
+      "error": null,
+      "example": "column-check-both_checks_failed",
+      "handler_counts": [],
+      "nodes": [
+        {
+          "diagnostics": [
+            {
+              "condition": "not_missing_failed",
+              "context": {
+                "column": "V",
+                "failure_count": 1,
+                "keys": [
+                  {
+                    "ID": "b"
+                  }
+                ],
+                "verification_id": "one"
+              },
+              "phase": "verification",
+              "requirement": "REQ-0375",
+              "spec_paths": [
+                "columns.V.verifications[0].not_missing"
+              ]
+            },
+            {
+              "condition": "not_missing_failed",
+              "context": {
+                "column": "V",
+                "failure_count": 1,
+                "keys": [
+                  {
+                    "ID": "b"
+                  }
+                ],
+                "verification_id": "two"
+              },
+              "phase": "verification",
+              "requirement": "REQ-0375",
+              "spec_paths": [
+                "columns.V.verifications[1].not_missing"
+              ]
+            }
+          ],
+          "handler_counts": [],
+          "outcome": "failure",
+          "specification": "spec.yaml",
+          "unsupported": []
+        }
+      ],
+      "outcome": "failure",
+      "report_version": "0.3.0-draft",
+      "runtime": "python",
+      "runtime_version": "fixture-runtime",
+      "source_reads": [
+        {
+          "base_directory": ".",
+          "condition": null,
+          "outcome": "captured",
+          "path": "source.csv",
+          "snapshots_created": 1
+        }
+      ],
+      "tables": [
+        {
+          "columns": [
+            "ID",
+            "V"
+          ],
+          "name": "SRC",
+          "rows": [
+            [
+              {
+                "type": "str",
+                "value": "a"
+              },
+              {
+                "type": "str",
+                "value": "10"
+              }
+            ],
+            [
+              {
+                "type": "str",
+                "value": "b"
+              },
+              {
+                "type": "missing",
+                "value": null
+              }
+            ]
+          ],
+          "specification": "spec.yaml",
+          "stage": "source",
+          "types": [
+            "str",
+            "str"
+          ]
+        }
+      ],
+      "unsupported": [],
+      "verifications": [
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": null,
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.ID.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "ID",
+          "verification_id": "id-present"
+        },
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": {
+            "condition": "not_missing_failed",
+            "context": {
+              "column": "V",
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "b"
+                }
+              ],
+              "verification_id": "one"
+            },
+            "log_context": {
+              "column": "V",
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "b"
+                }
+              ],
+              "verification_id": "one"
+            },
+            "offending_keys": [
+              {
+                "ID": "b"
+              }
+            ],
+            "phase": "verification",
+            "requirement": "REQ-0375",
+            "severity": "error",
+            "spec_paths": [
+              "columns.V.verifications[0].not_missing"
+            ]
+          },
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.V.verifications[0].not_missing",
+          "specification": "spec.yaml",
+          "target": "V",
+          "verification_id": "one"
+        },
+        {
+          "check": "not_missing",
+          "evaluated_count": 2,
+          "failure": {
+            "condition": "not_missing_failed",
+            "context": {
+              "column": "V",
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "b"
+                }
+              ],
+              "verification_id": "two"
+            },
+            "log_context": {
+              "column": "V",
+              "failure_count": 1,
+              "keys": [
+                {
+                  "ID": "b"
+                }
+              ],
+              "verification_id": "two"
+            },
+            "offending_keys": [
+              {
+                "ID": "b"
+              }
+            ],
+            "phase": "verification",
+            "requirement": "REQ-0375",
+            "severity": "error",
+            "spec_paths": [
+              "columns.V.verifications[1].not_missing"
+            ]
+          },
+          "requirement": "REQ-0375",
+          "severity": "error",
+          "spec_path": "columns.V.verifications[1].not_missing",
+          "specification": "spec.yaml",
+          "target": "V",
+          "verification_id": "two"
+        }
+      ]
+    },
+    "artifact": ""
+  }
+]

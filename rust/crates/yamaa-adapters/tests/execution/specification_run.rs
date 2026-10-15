@@ -16,6 +16,25 @@ use yamaa_engine::dataset::DatasetExecution;
 use yamaa_engine::dataset::{self, DatasetPlan};
 
 
+
+/// Rows of a converted readable JSON fixture (formerly hex-encoded TSV).
+fn fixture_rows(truth: &str) -> Vec<serde_json::Value> {
+    serde_json::from_str(truth).unwrap()
+}
+
+/// Exact bytes of a fixture text cell; the two non-UTF-8 cells in the whole
+/// fixture set are tagged as {"hex": "..."} objects instead of strings.
+fn fixture_bytes(value: &serde_json::Value) -> Vec<u8> {
+    if let Some(text) = value.as_str() {
+        return text.as_bytes().to_vec();
+    }
+    let hex = value["hex"].as_str().unwrap();
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+        .collect()
+}
+
 fn spec_findings(
     error: &yamaa_adapters::specification_run::Error,
     source: Option<&yamaa_engine::specification::SourceDeclaration>,
@@ -687,7 +706,7 @@ fn core_binding_matches_independent_complete_failed_reports() {
 #[test]
 fn core_csv_profile_matches_independent_complete_failed_reports() {
     independent_failed_reports(
-        include_str!("../fixtures/csv_profile_diagnostics.tsv"),
+        include_str!("../fixtures/csv_profile_diagnostics.json"),
         "csv",
         (13, 13),
         b"",
@@ -717,7 +736,7 @@ fn core_predicate_matches_independent_complete_failed_report() {
 #[test]
 fn core_source_typing_matches_independent_complete_failed_reports() {
     independent_failed_reports(
-        include_str!("../fixtures/source_typing.tsv"),
+        include_str!("../fixtures/source_typing.json"),
         "typing",
         (4, 4),
         b"",
@@ -758,23 +777,44 @@ fn independent_failed_reports(
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut cases = 0;
     let mut findings = 0;
-    for row in fixture.lines().skip(1) {
-        let fields = row.split('\t').collect::<Vec<_>>();
-        assert!(matches!(fields.len(), 3 | 4));
-        let run = PreparedRun::prepare(prepare(&schema, fields[1].as_bytes())).unwrap();
-        let owned;
-        let content = if fields.len() == 4 {
-            owned = (0..fields[3].len())
-                .step_by(2)
-                .map(|i| u8::from_str_radix(&fields[3][i..i + 2], 16).unwrap())
-                .collect::<Vec<_>>();
-            owned.as_slice()
-        } else {
-            content
-        };
+    // Converted fixtures are JSON rows; the remaining readable TSV fixtures
+    // keep their original three/four-column shape. Both normalize to
+    // (case, source, expected, optional exact source bytes).
+    let rows: Vec<(String, String, Value, Option<Vec<u8>>)> = if fixture.starts_with('[') {
+        fixture_rows(fixture)
+            .iter()
+            .map(|row| {
+                (
+                    row["case"].as_str().unwrap().to_owned(),
+                    row["source"].as_str().unwrap().to_owned(),
+                    row["expected"].clone(),
+                    row.get("source_bytes").map(fixture_bytes),
+                )
+            })
+            .collect()
+    } else {
+        fixture
+            .lines()
+            .skip(1)
+            .map(|line| {
+                let fields = line.split('\t').collect::<Vec<_>>();
+                assert!(matches!(fields.len(), 3 | 4));
+                (
+                    fields[0].to_owned(),
+                    fields[1].to_owned(),
+                    serde_json::from_str(fields[2]).unwrap(),
+                    (fields.len() == 4)
+                        .then(|| fixture_bytes(&serde_json::json!({"hex": fields[3]}))),
+                )
+            })
+            .collect()
+    };
+    for (case, source, expected, source_bytes) in &rows {
+        let run = PreparedRun::prepare(prepare(&schema, source.as_bytes())).unwrap();
+        let content = source_bytes.as_deref().unwrap_or(content);
         let mut port = Port(0, Arc::from(content));
         let attempt = run.execute_with_port(&mut port);
-        let example = format!("{prefix}-{}", fields[0]);
+        let example = format!("{prefix}-{}", case);
         let result = specification_report::build_result(
             &run,
             &attempt,
@@ -790,15 +830,14 @@ fn independent_failed_reports(
         .unwrap();
         drop(run);
         drop(attempt);
-        let expected: Value = serde_json::from_str(fields[2]).unwrap();
-        assert_eq!(result.observations(), expected, "{}", fields[0]);
+        assert_eq!(result.observations(), *expected, "{}", case);
         assert!(result.output().is_none());
         for _ in 0..2 {
             assert!(matches!(
                 result.save(&mut port),
                 Err(yamaa_engine::specification_output::SaveError::FailedBuild)
             ));
-            assert_eq!(result.observations(), expected);
+            assert_eq!(result.observations(), *expected);
         }
         assert_eq!(port.0, expected["source_reads"].as_array().unwrap().len());
         findings += expected["diagnostics"].as_array().unwrap().len();
@@ -3185,7 +3224,7 @@ fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
 #[test]
 fn original_column_literals_match_complete_reference_reports_and_csv() {
     independent_scalar_reports(
-        include_str!("../fixtures/column_literals.tsv"),
+        include_str!("../fixtures/column_literals.json"),
         "literal",
         4,
     );
@@ -3194,7 +3233,7 @@ fn original_column_literals_match_complete_reference_reports_and_csv() {
 #[test]
 fn original_conversion_handlers_match_complete_reference_reports_and_csv() {
     independent_scalar_reports(
-        include_str!("../fixtures/original_conversion_handlers.tsv"),
+        include_str!("../fixtures/original_conversion_handlers.json"),
         "handler",
         5,
     );
@@ -3203,7 +3242,7 @@ fn original_conversion_handlers_match_complete_reference_reports_and_csv() {
 #[test]
 fn original_row_conversion_handlers_match_complete_reference_reports_and_csv() {
     independent_scalar_reports(
-        include_str!("../fixtures/original_row_conversion_handlers.tsv"),
+        include_str!("../fixtures/original_row_conversion_handlers.json"),
         "row-handler",
         8,
     );
@@ -3244,21 +3283,15 @@ fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize
     }
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut cases = 0;
-    for row in fixture.lines().skip(1) {
-        let fields = row.split('\t').collect::<Vec<_>>();
-        assert_eq!(fields.len(), 4);
-        let bytes = (0..fields[3].len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&fields[3][i..i + 2], 16).unwrap())
-            .collect();
+    for row in fixture_rows(fixture) {
         let mut port = Port {
             reads: 0,
             saves: 0,
-            expected: bytes,
+            expected: fixture_bytes(&row["output"]),
         };
-        let run = PreparedRun::prepare(prepare(&schema, fields[1].as_bytes())).unwrap();
+        let run = PreparedRun::prepare(prepare(&schema, row["source"].as_str().unwrap().as_bytes())).unwrap();
         let attempt = run.execute_with_port(&mut port);
-        let example = format!("{prefix}-{}", fields[0]);
+        let example = format!("{prefix}-{}", row["case"].as_str().unwrap());
         let result = specification_report::build_result(
             &run,
             &attempt,
@@ -3274,10 +3307,10 @@ fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize
         .unwrap();
         drop(run);
         drop(attempt);
-        let expected: serde_json::Value = serde_json::from_str(fields[2]).unwrap();
+        let expected: serde_json::Value = row["expected"].clone();
         let mut unsaved = expected.clone();
         unsaved["artifacts"] = serde_json::json!([]);
-        assert_eq!(result.observations(), unsaved, "{}", fields[0]);
+        assert_eq!(result.observations(), unsaved, "{}", row["case"].as_str().unwrap());
         if port.expected.is_empty() {
             assert!(result.output().is_none());
             for _ in 0..2 {
@@ -3416,7 +3449,7 @@ fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
 #[test]
 fn original_source_filters_match_complete_reports_and_exact_csv() {
     replay_source_selection_truth(
-        include_str!("../fixtures/source_filters.tsv"),
+        include_str!("../fixtures/source_filters.json"),
         "source-filter",
         13,
     );
@@ -3424,7 +3457,7 @@ fn original_source_filters_match_complete_reports_and_exact_csv() {
 #[test]
 fn original_first_available_matches_complete_reports_and_exact_csv() {
     replay_source_selection_truth(
-        include_str!("../fixtures/first_available.tsv"),
+        include_str!("../fixtures/first_available.json"),
         "first-available",
         11,
     );
@@ -3432,7 +3465,7 @@ fn original_first_available_matches_complete_reports_and_exact_csv() {
 #[test]
 fn original_assertions_match_complete_reports_and_exact_csv() {
     replay_source_selection_truth(
-        include_str!("../fixtures/original_assertions.tsv"),
+        include_str!("../fixtures/original_assertions.json"),
         "assert",
         17,
     );
@@ -3440,7 +3473,7 @@ fn original_assertions_match_complete_reports_and_exact_csv() {
 #[test]
 fn original_all_or_none_matches_complete_reports_and_exact_csv() {
     replay_source_selection_truth(
-        include_str!("../fixtures/original_all_or_none.tsv"),
+        include_str!("../fixtures/original_all_or_none.json"),
         "all-or-none",
         11,
     );
@@ -3448,7 +3481,7 @@ fn original_all_or_none_matches_complete_reports_and_exact_csv() {
 #[test]
 fn original_column_not_missing_matches_complete_reports_and_exact_csv() {
     replay_source_selection_truth(
-        include_str!("../fixtures/original_not_missing.tsv"),
+        include_str!("../fixtures/original_not_missing.json"),
         "column-check",
         10,
     );
@@ -3456,7 +3489,7 @@ fn original_column_not_missing_matches_complete_reports_and_exact_csv() {
 #[test]
 fn row_filter_carrier_failures_match_complete_normative_reports() {
     replay_source_selection_truth(
-        include_str!("../fixtures/row_filter_admission.tsv"),
+        include_str!("../fixtures/row_filter_admission.json"),
         "predicate-carrier",
         2,
     );
@@ -3540,7 +3573,7 @@ fn exact_wide_count_bounds_preserve_empty_counts_and_completed_check_prefix() {
 #[test]
 fn row_filters_match_complete_independent_reports_and_exact_csv() {
     replay_source_selection_truth(
-        include_str!("../fixtures/row_filters.tsv"),
+        include_str!("../fixtures/row_filters.json"),
         "row-filter",
         27,
     );
@@ -3548,7 +3581,7 @@ fn row_filters_match_complete_independent_reports_and_exact_csv() {
 #[test]
 fn row_reductions_match_complete_independent_reports_and_exact_csv() {
     replay_source_selection_truth(
-        include_str!("../fixtures/row_reductions.tsv"),
+        include_str!("../fixtures/row_reductions.json"),
         "row-reduction",
         25,
     );
@@ -3556,20 +3589,20 @@ fn row_reductions_match_complete_independent_reports_and_exact_csv() {
 #[test]
 fn aggregate_relations_match_complete_independent_reports_and_exact_csv() {
     replay_source_selection_truth(
-        include_str!("../fixtures/correlated_aggregates.tsv"),
+        include_str!("../fixtures/correlated_aggregates.json"),
         "correlated-aggregate",
         16,
     );
 }
 #[test]
 fn odm_reads_match_complete_independent_reports_and_exact_csv() {
-    replay_source_selection_truth(include_str!("../fixtures/odm_reads.tsv"), "odm", 14);
+    replay_source_selection_truth(include_str!("../fixtures/odm_reads.json"), "odm", 14);
 }
 
 #[test]
 fn deferred_odm_defaults_match_complete_independent_reports_and_exact_csv() {
     replay_source_selection_truth(
-        include_str!("../fixtures/odm_deferred.tsv"),
+        include_str!("../fixtures/odm_deferred.json"),
         "odm-deferred",
         8,
     );
@@ -3579,24 +3612,16 @@ fn deferred_odm_defaults_match_complete_independent_reports_and_exact_csv() {
 fn odm_preflight_matches_complete_independent_findings_before_source_authority() {
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut count = 0;
-    for row in include_str!("../fixtures/odm_preflight.tsv")
-        .lines()
-        .skip(1)
-    {
-        let fields = row.split('\t').collect::<Vec<_>>();
-        assert_eq!(fields.len(), 3);
-        let raw = (0..fields[1].len())
-            .step_by(2)
-            .map(|index| u8::from_str_radix(&fields[1][index..index + 2], 16).unwrap())
-            .collect::<Vec<_>>();
+    for row in fixture_rows(include_str!("../fixtures/odm_preflight.json")) {
+        let raw = fixture_bytes(&row["source"]);
         let error = yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &raw))
             .unwrap_err();
         let actual: serde_json::Value = serde_json::from_str(
             &yamaa_adapters::specification_diagnostics::failure(&error, None),
         )
         .unwrap();
-        let expected: serde_json::Value = serde_json::from_str(fields[2]).unwrap();
-        assert_eq!(actual, expected, "{}", fields[0]);
+        let expected: serde_json::Value = row["expected"].clone();
+        assert_eq!(actual, expected, "{}", row["case"].as_str().unwrap());
         count += 1;
     }
     assert_eq!(count, 8);
@@ -3604,7 +3629,7 @@ fn odm_preflight_matches_complete_independent_findings_before_source_authority()
 #[test]
 fn row_column_checks_match_complete_independent_reports_and_exact_csv() {
     replay_source_selection_truth(
-        include_str!("../fixtures/row_column_checks.tsv"),
+        include_str!("../fixtures/row_column_checks.json"),
         "row-column",
         48,
     );
@@ -3612,7 +3637,7 @@ fn row_column_checks_match_complete_independent_reports_and_exact_csv() {
 #[test]
 fn original_column_values_match_complete_reports_and_exact_csv() {
     replay_source_selection_truth(
-        include_str!("../fixtures/original_column_values.tsv"),
+        include_str!("../fixtures/original_column_values.json"),
         "column-value",
         20,
     );
@@ -3620,7 +3645,7 @@ fn original_column_values_match_complete_reports_and_exact_csv() {
 #[test]
 fn original_column_matches_match_complete_reports_and_exact_csv() {
     replay_source_selection_truth(
-        include_str!("../fixtures/original_column_matches.tsv"),
+        include_str!("../fixtures/original_column_matches.json"),
         "column-matches",
         16,
     );
@@ -3673,29 +3698,22 @@ fn deferred_column_findings_stop_later_payload_compilation_but_keep_vocabulary_a
 #[test]
 fn static_verification_checks_match_complete_issues_without_study_authority() {
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
-    let truth = include_str!("../fixtures/static_verification_checks.tsv");
-    assert_eq!(truth.lines().count(), 16);
-    for line in truth.lines().skip(1) {
-        let fields = line.split('\t').collect::<Vec<_>>();
-        assert_eq!(fields.len(), 3);
-        let source = fields[1]
-            .as_bytes()
-            .chunks_exact(2)
-            .map(|pair| u8::from_str_radix(core::str::from_utf8(pair).unwrap(), 16).unwrap())
-            .collect();
+    let rows = fixture_rows(include_str!("../fixtures/static_verification_checks.json"));
+    assert_eq!(rows.len(), 15);
+    for row in &rows {
         let document = schema
             .prepare_standalone(Source {
                 identity: "spec.yaml".into(),
-                bytes: source,
+                bytes: fixture_bytes(&row["source"]),
             })
             .unwrap();
         let run = yamaa_adapters::specification_run::PreparedRun::prepare(document).unwrap();
         for _ in 0..2 {
             assert_eq!(
                 yamaa_adapters::specification_check::issues(&run).unwrap(),
-                fields[2],
+                serde_json::to_string(&row["expected"]).unwrap(),
                 "{}",
-                fields[0]
+                row["case"].as_str().unwrap()
             );
         }
     }
@@ -3734,27 +3752,20 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
             Ok(())
         }
     }
-    fn bytes(hex: &str) -> Vec<u8> {
-        (0..hex.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
-            .collect()
-    }
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut count = 0;
-    for line in truth.lines().skip(1) {
-        let fields = line.split('\t').collect::<Vec<_>>();
-        assert_eq!(fields.len(), 5);
-        let raw = bytes(fields[1]);
+    for row in fixture_rows(truth) {
+        let case = row["case"].as_str().unwrap();
+        let raw = fixture_bytes(&row["source"]);
         let run = PreparedRun::prepare(prepare(&schema, &raw)).unwrap();
         let mut port = Port {
-            content: bytes(fields[2]).into(),
+            content: fixture_bytes(&row["input"]).into(),
             reads: 0,
-            expected: bytes(fields[4]),
+            expected: fixture_bytes(&row["artifact"]),
             saves: 0,
         };
         let attempt = run.execute_with_port(&mut port);
-        let example = format!("{prefix}-{}", fields[0]);
+        let example = format!("{prefix}-{}", case);
         let result = specification_report::build_result(
             &run,
             &attempt,
@@ -3770,7 +3781,7 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
         .unwrap_or_else(|error| {
             panic!(
                 "{}: {error:?}; execution: {:?}; outcome: {:?}",
-                fields[0],
+                case,
                 attempt.result.as_ref().err(),
                 attempt
                     .result
@@ -3779,11 +3790,11 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
                     .map(|response| &response.outcome)
             )
         });
-        let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
+        let expected: serde_json::Value = row["expected"].clone();
         // Require the captured row-filter citations without changing any finding.
         if prefix == "row-filter"
             && matches!(
-                fields[0],
+                case,
                 "grouped_source_phase"
                     | "grouped_unknown_phase"
                     | "record_unknown_phase"
@@ -3809,7 +3820,7 @@ fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
         }
         let mut unsaved = expected.clone();
         unsaved["artifacts"] = serde_json::json!([]);
-        assert_eq!(result.observations(), unsaved, "{}", fields[0]);
+        assert_eq!(result.observations(), unsaved, "{}", case);
         if port.expected.is_empty() {
             assert!(result.output().is_none());
             assert!(matches!(
@@ -3840,12 +3851,6 @@ fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
         specification_run::{PreparedRun, SourcePort},
     };
     use yamaa_engine::specification::SourceDeclaration;
-    fn bytes(hex: &str) -> Vec<u8> {
-        (0..hex.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
-            .collect()
-    }
     struct Port {
         inputs: BTreeMap<String, Arc<[u8]>>,
         calls: Vec<String>,
@@ -3877,28 +3882,24 @@ fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
     }
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut count = 0;
-    for line in include_str!("../fixtures/original_source_bindings.tsv")
-        .lines()
-        .skip(1)
-    {
-        let fields = line.split('\t').collect::<Vec<_>>();
-        assert_eq!(fields.len(), 5);
-        let run = PreparedRun::prepare(prepare(&schema, &bytes(fields[1]))).unwrap();
-        let inputs: BTreeMap<String, String> = serde_json::from_str(fields[2]).unwrap();
-        let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
+    for row in fixture_rows(include_str!("../fixtures/original_source_bindings.json")) {
+        let case = row["case"].as_str().unwrap();
+        let run = PreparedRun::prepare(prepare(&schema, &fixture_bytes(&row["source"]))).unwrap();
+        let inputs: BTreeMap<String, String> = serde_json::from_value(row["inputs"].clone()).unwrap();
+        let expected: serde_json::Value = row["expected"].clone();
         // A second attempt must neither inherit choices nor accumulate handler counts.
         for _ in 0..2 {
             let mut port = Port {
                 inputs: inputs
                     .iter()
-                    .map(|(n, h)| (n.clone(), bytes(h).into()))
+                    .map(|(n, h)| (n.clone(), h.as_bytes().into()))
                     .collect(),
                 calls: vec![],
-                expected: bytes(fields[4]),
+                expected: fixture_bytes(&row["artifact"]),
                 saves: 0,
             };
             let attempt = run.execute_with_port(&mut port);
-            let example = format!("source-binding-{}", fields[0]);
+            let example = format!("source-binding-{}", case);
             let result = specification_report::build_result(
                 &run,
                 &attempt,
@@ -3914,7 +3915,7 @@ fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
             .unwrap();
             let mut unsaved = expected.clone();
             unsaved["artifacts"] = serde_json::json!([]);
-            assert_eq!(result.observations(), unsaved, "{}", fields[0]);
+            assert_eq!(result.observations(), unsaved, "{}", case);
             if port.expected.is_empty() {
                 assert!(result.output().is_none());
                 assert!(matches!(
@@ -3927,7 +3928,7 @@ fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
                         result.save(&mut port).unwrap().observations_value(false),
                         expected,
                         "{}",
-                        fields[0]
+                        case
                     );
                 }
                 assert_eq!(port.saves, 2);
@@ -3954,12 +3955,6 @@ fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
         specification_run::{PreparedRun, SourcePort},
     };
     use yamaa_engine::specification::SourceDeclaration;
-    fn bytes(hex: &str) -> Vec<u8> {
-        (0..hex.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
-            .collect()
-    }
     struct Port {
         inputs: BTreeMap<String, Arc<[u8]>>,
         calls: Vec<String>,
@@ -3991,32 +3986,28 @@ fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
     }
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut count = 0;
-    for line in include_str!("../fixtures/original_mapping_cut.tsv")
-        .lines()
-        .skip(1)
-    {
-        let fields = line.split('\t').collect::<Vec<_>>();
-        assert_eq!(fields.len(), 6);
+    for row in fixture_rows(include_str!("../fixtures/original_mapping_cut.json")) {
+        let case = row["case"].as_str().unwrap();
         assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(&bytes(fields[5])).unwrap(),
-            serde_json::from_str::<serde_json::Value>(fields[3]).unwrap()
+            serde_json::from_slice::<serde_json::Value>(&fixture_bytes(&row["expected_wire"])).unwrap(),
+            row["expected"]
         );
-        let run = PreparedRun::prepare(prepare(&schema, &bytes(fields[1]))).unwrap();
-        let inputs: BTreeMap<String, String> = serde_json::from_str(fields[2]).unwrap();
-        let expected: serde_json::Value = serde_json::from_str(fields[3]).unwrap();
+        let run = PreparedRun::prepare(prepare(&schema, &fixture_bytes(&row["source"]))).unwrap();
+        let inputs: BTreeMap<String, String> = serde_json::from_value(row["inputs"].clone()).unwrap();
+        let expected: serde_json::Value = row["expected"].clone();
         // A second attempt must neither inherit choices nor accumulate handler counts.
         for _ in 0..2 {
             let mut port = Port {
                 inputs: inputs
                     .iter()
-                    .map(|(n, h)| (n.clone(), bytes(h).into()))
+                    .map(|(n, h)| (n.clone(), h.as_bytes().into()))
                     .collect(),
                 calls: vec![],
-                expected: bytes(fields[4]),
+                expected: fixture_bytes(&row["artifact"]),
                 saves: 0,
             };
             let attempt = run.execute_with_port(&mut port);
-            let example = format!("mapping-cut-{}", fields[0]);
+            let example = format!("mapping-cut-{}", case);
             let result = specification_report::build_result(
                 &run,
                 &attempt,
@@ -4032,7 +4023,7 @@ fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
             .unwrap();
             let mut unsaved = expected.clone();
             unsaved["artifacts"] = serde_json::json!([]);
-            assert_eq!(result.observations(), unsaved, "{}", fields[0]);
+            assert_eq!(result.observations(), unsaved, "{}", case);
             if port.expected.is_empty() {
                 assert!(result.output().is_none());
                 assert!(matches!(
@@ -4045,7 +4036,7 @@ fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
                         result.save(&mut port).unwrap().observations_value(false),
                         expected,
                         "{}",
-                        fields[0]
+                        case
                     );
                 }
                 assert_eq!(port.saves, 2);
@@ -4091,19 +4082,12 @@ fn source_condition_stays_unknown_under_the_normative_grammar() {
 #[test]
 fn original_mapping_cut_admission_has_complete_findings_before_study_ports() {
     let schema = yamaa_adapters::shipped_schema::capture().unwrap();
-    for line in include_str!("../fixtures/mapping_cut_admission.tsv")
-        .lines()
-        .skip(1)
-    {
-        let fields = line.split('\t').collect::<Vec<_>>();
-        let bytes = (0..fields[1].len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&fields[1][i..i + 2], 16).unwrap())
-            .collect::<Vec<_>>();
+    for row in fixture_rows(include_str!("../fixtures/mapping_cut_admission.json")) {
+        let bytes = fixture_bytes(&row["source"]);
         let error =
             yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &bytes))
                 .unwrap_err();
-        let expected: serde_json::Value = serde_json::from_str(fields[2]).unwrap();
+        let expected: serde_json::Value = row["expected"].clone();
         assert_eq!(
             spec_findings(&error, None).unwrap(),
             expected["outcome"]["diagnostics"]
@@ -4111,7 +4095,7 @@ fn original_mapping_cut_admission_has_complete_findings_before_study_ports() {
                 .unwrap()
                 .clone(),
             "{}",
-            fields[0]
+            row["case"].as_str().unwrap()
         );
     }
 }

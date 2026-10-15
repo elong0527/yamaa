@@ -9,11 +9,6 @@ import importlib.util
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-_requirement_spec = importlib.util.spec_from_file_location(
-    "private_schema_requirements", Path(__file__).with_name("private_schema_requirements.py"))
-_requirement_module = importlib.util.module_from_spec(_requirement_spec)
-_requirement_spec.loader.exec_module(_requirement_module)
-reconciled_schema_requirements = _requirement_module.reconciled_schema_requirements
 CASES = ("negative-zero-division", "negative-integer-overflow", "adam-adlb-ordered-sum", "schema-window-functions", "schema-inheritance", "schema-lookup", "negative-formula-flag", "negative-row-aggregate", "negative-row-no-prior", "negative-source-missing-field", "negative-source-trivial-filter", "negative-paired-dates", "negative-not-missing-age", "negative-implausible-age", "negative-invalid-sex", "negative-sex-code", "negative-matches-bad-pattern")
 CASE_PREDICATE_CASES = ("adam-adae-protocol-review", "adam-adfa-fever", "adam-adtte-pfs", "schema-expressions", "schema-predicates", "sdtm-ae-seriousness", "sdtm-mh-ongoing-conditions", "sdtm-tr-tumor-measurements", "sdtm-tu-tumor-identification", "sdtm-ds-reasons")
 ROUNDING_CASES = ("schema-round-half-away-from-zero-ties", "negative-round-half-away-from-zero-non-numeric-source")
@@ -52,6 +47,81 @@ SCHEMA_MODULES = (
     "schema_expression_odm.yaml",
 )
 
+
+
+FIXTURES = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures"
+# Original TSV column order for the fixtures converted to readable JSON in
+# #2416. Staging re-encodes the exact legacy TSV bytes the installed hosts
+# replay, so the staged tree is unchanged by the conversion.
+FIXTURE_TSV_HEADERS = {
+    "column_literals": ["case", "source", "expected", "output_hex"],
+    "correlated_aggregates": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "csv_profile_diagnostics": ["case", "source", "expected", "source_hex"],
+    "first_available": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "mapping_cut_admission": ["case", "source_hex", "expected"],
+    "odm_deferred": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "odm_preflight": ["case", "source_hex", "expected"],
+    "odm_reads": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "original_all_or_none": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "original_assertions": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "original_column_matches": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "original_column_values": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "original_conversion_handlers": ["case", "source", "expected", "output_hex"],
+    "original_mapping_cut": ["case", "source_hex", "inputs_json", "expected", "artifact_hex", "expected_wire_hex"],
+    "original_not_missing": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "original_row_conversion_handlers": ["case", "source", "expected", "output_hex"],
+    "original_source_bindings": ["case", "source_hex", "inputs_json", "expected", "artifact_hex"],
+    "row_column_checks": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "row_filter_admission": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "row_filters": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "row_reductions": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "source_filters": ["case", "source_hex", "input_hex", "expected", "artifact_hex"],
+    "source_typing": ["case", "source", "expected", "source_hex"],
+    "static_verification_checks": ["case", "source_hex", "expected"],
+    "yaml_transport": ["id", "source_hex", "expected"],
+}
+FIXTURE_TSV_KEY = {
+    "source_hex": "source", "input_hex": "input", "artifact_hex": "artifact",
+    "output_hex": "output", "expected_wire_hex": "expected_wire",
+}
+# These fixtures also carry a plain `source` column, so their hex column keeps
+# a distinct JSON key.
+FIXTURE_TSV_HEX_KEY = {"csv_profile_diagnostics": "source_bytes", "source_typing": "source_bytes"}
+
+
+def fixture_rows(name):
+    return json.loads((FIXTURES / (name + ".json")).read_text(encoding="utf-8"))
+
+
+def fixture_hex(value):
+    if isinstance(value, dict):
+        return value["hex"]
+    return value.encode("utf-8").hex()
+
+
+def fixture_tsv_bytes(name):
+    headers = FIXTURE_TSV_HEADERS[name]
+    lines = ["\t".join(headers)]
+    for row in fixture_rows(name):
+        cells = []
+        for header in headers:
+            if header == "expected":
+                cells.append(json.dumps(row["expected"], sort_keys=True, separators=(",", ":"),
+                                        ensure_ascii=name == "original_mapping_cut"))
+            elif header == "inputs_json":
+                cells.append(json.dumps({key: fixture_hex(value) for key, value in row["inputs"].items()},
+                                        separators=(",", ":")))
+            elif header.endswith("_hex"):
+                json_key = FIXTURE_TSV_HEX_KEY[name] if header == "source_hex" and name in FIXTURE_TSV_HEX_KEY else FIXTURE_TSV_KEY[header]
+                cells.append(fixture_hex(row[json_key]))
+            else:
+                cells.append(row[header])
+        lines.append("\t".join(cells))
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+def stage_fixture_tsv(destination: Path, name: str, staged_name: str):
+    (destination / staged_name).write_bytes(fixture_tsv_bytes(name))
 
 def stage_text_extract_truth(destination: Path):
     """Stage originals and separately captured complete reference extraction cases."""
@@ -409,14 +479,15 @@ def stage_inheritance_replay(destination: Path):
 
 def stage_decode_replay(destination: Path):
     """Add the run envelope to existing independent decoder failure truth."""
-    fixture = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.tsv"
-    with fixture.open(encoding="utf-8") as stream:
-        records = list(csv.DictReader(stream, delimiter="\t"))
+    records = [
+        {"id": row["id"], "source_hex": fixture_hex(row["source"]), "expected": row["expected"]}
+        for row in fixture_rows("yaml_transport")
+    ]
     with (destination / "decode-replay.tsv").open("w", newline="", encoding="ascii") as stream:
         writer = csv.DictWriter(stream, fieldnames=["id", "source_hex", "expected"], delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE, quotechar=None)
         writer.writeheader()
         for record in records:
-            expected = json.loads(record["expected"])
+            expected = record["expected"]
             if expected["outcome"]["status"] != "invalid":
                 continue
             expected["protocol"] = "specification/prototype"
@@ -635,7 +706,7 @@ def stage(destination: Path):
     stage_source_selection_truth(destination, "source_filter_scope", "source-filter-scope")
     stage_source_selection_truth(destination, "source_filter_mixed", "source-filter-mixed")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv", destination / "inheritance-preparation.tsv")
-    # Preserve historical reports and stage only approved citation dispositions separately.
+    # Preserve historical reports exactly; requirement citations are baked into the fixture.
     with (destination / "inheritance-preparation.tsv").open(encoding="ascii", newline="") as stream:
         reader = csv.DictReader(stream, delimiter="\t")
         fields, rows = reader.fieldnames, list(reader)
@@ -644,8 +715,7 @@ def stage(destination: Path):
                                 quoting=csv.QUOTE_NONE, quotechar=None)
         writer.writeheader()
         for row in rows:
-            row["expected"] = json.dumps(reconciled_schema_requirements(
-                json.loads(row["expected"]), resolved_output=True), sort_keys=True,
+            row["expected"] = json.dumps(json.loads(row["expected"]), sort_keys=True,
                 separators=(",", ":"), ensure_ascii=True)
             writer.writerow(row)
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv", destination / "preflight.tsv")
@@ -654,11 +724,10 @@ def stage(destination: Path):
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv", destination / "binding-diagnostics.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/window_diagnostics.tsv", destination / "window-diagnostics.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/predicate_diagnostics.tsv", destination / "predicate-diagnostics.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_typing.tsv", destination / "source-typing.tsv")
+    stage_fixture_tsv(destination, "source_typing", "source-typing.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_capture.tsv", destination / "source-capture.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_inspection.tsv", destination / "source-inspection.tsv")
-    source_truth = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.tsv"
-    shutil.copy2(source_truth, destination / "original-source-bindings.tsv")
+    stage_fixture_tsv(destination, "original_source_bindings", "original-source-bindings.tsv")
     shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/case_predicates.json", destination / "case-predicate-truth.json")
     truth = json.loads((destination / "case-predicate-truth.json").read_text())
     dispositions_path = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/case_predicate_dispositions.json"
@@ -691,44 +760,41 @@ def stage(destination: Path):
                 writer.writerow((name, finding["phase"], finding["condition"], finding["requirement"], finding["spec_paths"][0], json.dumps(finding["context"], sort_keys=True, separators=(",", ":"))))
     source_cases = destination / "source-binding-cases"
     source_cases.mkdir()
-    with source_truth.open(encoding="ascii") as stream:
-        for row in csv.DictReader(stream, delimiter="\t"):
-            case = source_cases / row["case"]
-            case.mkdir()
-            for name, content in json.loads(row["inputs_json"]).items():
-                (case / (name.lower() + ".csv")).write_bytes(bytes.fromhex(content))
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/mapping_cut_admission.tsv", destination / "mapping-cut-admission.tsv")
-    source_truth = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.tsv"
-    shutil.copy2(source_truth, destination / "original-mapping-cut.tsv")
+    for row in fixture_rows("original_source_bindings"):
+        case = source_cases / row["case"]
+        case.mkdir()
+        for name, content in row["inputs"].items():
+            (case / (name.lower() + ".csv")).write_bytes(content.encode("utf-8"))
+    stage_fixture_tsv(destination, "mapping_cut_admission", "mapping-cut-admission.tsv")
+    stage_fixture_tsv(destination, "original_mapping_cut", "original-mapping-cut.tsv")
     source_cases = destination / "mapping-cut-cases"
     source_cases.mkdir()
-    with source_truth.open(encoding="ascii") as stream:
-        for row in csv.DictReader(stream, delimiter="\t"):
-            # R CMD build removes directories ending in old, including ascii_fold.
-            case = source_cases / (row["case"] + "-fixture")
-            case.mkdir()
-            for name, content in json.loads(row["inputs_json"]).items():
-                (case / (name.lower() + ".csv")).write_bytes(bytes.fromhex(content))
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_filters.tsv", destination / "source-filters.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/first_available.tsv", destination / "first-available.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_assertions.tsv", destination / "original-assertions.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_all_or_none.tsv", destination / "original-all-or-none.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.tsv", destination / "original-not-missing.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_filters.tsv", destination / "row-filters.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_filter_admission.tsv", destination / "row-filter-admission.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_reductions.tsv", destination / "row-reductions.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.tsv", destination / "correlated-aggregates.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/odm_reads.tsv", destination / "odm-reads.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/odm_deferred.tsv", destination / "odm-deferred.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/odm_preflight.tsv", destination / "odm-preflight.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/row_column_checks.tsv", destination / "row-column-checks.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_column_values.tsv", destination / "original-column-values.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_column_matches.tsv", destination / "original-column-matches.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.tsv", destination / "static-verification-checks.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.tsv", destination / "csv-profile-diagnostics.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/column_literals.tsv", destination / "column-literals.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_conversion_handlers.tsv", destination / "original-conversion-handlers.tsv")
-    shutil.copy2(REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.tsv", destination / "original-row-conversion-handlers.tsv")
+    for row in fixture_rows("original_mapping_cut"):
+        # R CMD build removes directories ending in old, including ascii_fold.
+        case = source_cases / (row["case"] + "-fixture")
+        case.mkdir()
+        for name, content in row["inputs"].items():
+            (case / (name.lower() + ".csv")).write_bytes(content.encode("utf-8"))
+    stage_fixture_tsv(destination, "source_filters", "source-filters.tsv")
+    stage_fixture_tsv(destination, "first_available", "first-available.tsv")
+    stage_fixture_tsv(destination, "original_assertions", "original-assertions.tsv")
+    stage_fixture_tsv(destination, "original_all_or_none", "original-all-or-none.tsv")
+    stage_fixture_tsv(destination, "original_not_missing", "original-not-missing.tsv")
+    stage_fixture_tsv(destination, "row_filters", "row-filters.tsv")
+    stage_fixture_tsv(destination, "row_filter_admission", "row-filter-admission.tsv")
+    stage_fixture_tsv(destination, "row_reductions", "row-reductions.tsv")
+    stage_fixture_tsv(destination, "correlated_aggregates", "correlated-aggregates.tsv")
+    stage_fixture_tsv(destination, "odm_reads", "odm-reads.tsv")
+    stage_fixture_tsv(destination, "odm_deferred", "odm-deferred.tsv")
+    stage_fixture_tsv(destination, "odm_preflight", "odm-preflight.tsv")
+    stage_fixture_tsv(destination, "row_column_checks", "row-column-checks.tsv")
+    stage_fixture_tsv(destination, "original_column_values", "original-column-values.tsv")
+    stage_fixture_tsv(destination, "original_column_matches", "original-column-matches.tsv")
+    stage_fixture_tsv(destination, "static_verification_checks", "static-verification-checks.tsv")
+    stage_fixture_tsv(destination, "csv_profile_diagnostics", "csv-profile-diagnostics.tsv")
+    stage_fixture_tsv(destination, "column_literals", "column-literals.tsv")
+    stage_fixture_tsv(destination, "original_conversion_handlers", "original-conversion-handlers.tsv")
+    stage_fixture_tsv(destination, "original_row_conversion_handlers", "original-row-conversion-handlers.tsv")
     for name in SCHEMA_MODULES:
         shutil.copy2(REPOSITORY / "yaml" / name, destination / "schema" / name)
     for name in (*CASES, *CASE_PREDICATE_CASES, *ROUNDING_CASES, *TEMPORAL_CASES, *IMPUTATION_CASES, *TEXT_CASES, *PAD_CASES, *EXTRACTION_CASES, *TEMPLATE_CASES, *FLAG_POSITIVE_CASES, *FLAG_NEGATIVE_CASES, "schema-verification-log"):

@@ -201,12 +201,11 @@ fn physical_decode_precedes_invalid_entry_and_earlier_bundle_semantics() {
 #[test]
 fn complete_original_codec_reports_survive_schema_closure_admission() {
     let mut count = 0;
-    for line in include_str!("../fixtures/yaml_transport.tsv")
-        .lines()
-        .skip(1)
+    for row in serde_json::from_str::<Vec<Value>>(include_str!("../fixtures/yaml_transport.json"))
+        .unwrap()
+        .iter()
     {
-        let fields = line.split('\t').collect::<Vec<_>>();
-        let mut expected: Value = serde_json::from_str(fields[2]).unwrap();
+        let mut expected: Value = row["expected"].clone();
         if expected["outcome"]["status"] != "invalid" {
             continue;
         }
@@ -223,11 +222,15 @@ fn complete_original_codec_reports_survive_schema_closure_admission() {
                 finding["context"]["path"] = json!("source.yaml");
             }
         }
-        let bytes = fields[1]
-            .as_bytes()
-            .chunks_exact(2)
-            .map(|p| u8::from_str_radix(std::str::from_utf8(p).unwrap(), 16).unwrap())
-            .collect();
+        let bytes: Vec<u8> = if let Some(text) = row["source"].as_str() {
+            text.as_bytes().to_vec()
+        } else {
+            let hex = row["source"]["hex"].as_str().unwrap();
+            hex.as_bytes()
+                .chunks_exact(2)
+                .map(|p| u8::from_str_radix(std::str::from_utf8(p).unwrap(), 16).unwrap())
+                .collect()
+        };
         let error = CapturedSchema::admit(
             vec![Source {
                 identity: "source.yaml".into(),
@@ -238,7 +241,7 @@ fn complete_original_codec_reports_survive_schema_closure_admission() {
         )
         .unwrap_err();
         let actual: Value = serde_json::from_str(&capture_failure(&error)).unwrap();
-        assert_eq!(actual, expected, "{}", fields[0]);
+        assert_eq!(actual, expected, "{}", row["id"].as_str().unwrap());
         count += 1;
     }
     assert_eq!(count, 8);
