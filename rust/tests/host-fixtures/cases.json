@@ -906,6 +906,428 @@
           "csv": null,
           "no_match_count": 0
         }
+      ],
+      "baseline_window_types": [
+        {
+          "name": "original_integer_date",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"int\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"int\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"date\",\"derivation\":{\"to_date\":{\"source\":\"TEXT\"}}},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL\n1,5\n"
+          },
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.date"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "date or datetime",
+                "operation": "baseline_flag",
+                "source": "AVAL"
+              }
+            }
+          ],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.date"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "date or datetime",
+                "operation": "baseline_flag",
+                "source": "AVAL"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "empty_output_integer_date",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"int\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"int\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"date\",\"derivation\":{\"to_date\":{\"source\":\"TEXT\"}}},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL\n"
+          },
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.date"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "date or datetime",
+                "operation": "baseline_flag",
+                "source": "AVAL"
+              }
+            }
+          ],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.date"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "date or datetime",
+                "operation": "baseline_flag",
+                "source": "AVAL"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "integer_reference",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"date\",\"REF\":\"int\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"date\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"int\",\"derivation\":\"SRC.REF\"},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL,REF\n1,2025-01-09,5\n"
+          },
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.reference_date"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "date",
+                "operation": "baseline_flag",
+                "source": "REF"
+              }
+            }
+          ],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.reference_date"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "date",
+                "operation": "baseline_flag",
+                "source": "REF"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "date_datetime_pair",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"date\",\"REF\":\"datetime\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"date\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"datetime\",\"derivation\":\"SRC.REF\"},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL,REF\n1,2025-01-09,2025-01-10T00:00:00\n"
+          },
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.reference_date"
+              ],
+              "context": {
+                "actual": "datetime",
+                "expected": "date",
+                "operation": "baseline_flag",
+                "source": "REF"
+              }
+            }
+          ],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.reference_date"
+              ],
+              "context": {
+                "actual": "datetime",
+                "expected": "date",
+                "operation": "baseline_flag",
+                "source": "REF"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "datetime_date_pair",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"datetime\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"datetime\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"date\",\"derivation\":{\"to_date\":{\"source\":\"TEXT\"}}},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL\n1,2025-01-09T00:00:00\n"
+          },
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.reference_date"
+              ],
+              "context": {
+                "actual": "date",
+                "expected": "datetime",
+                "operation": "baseline_flag",
+                "source": "REF"
+              }
+            }
+          ],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.reference_date"
+              ],
+              "context": {
+                "actual": "date",
+                "expected": "datetime",
+                "operation": "baseline_flag",
+                "source": "REF"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "same_integer_carriers",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"int\",\"REF\":\"int\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"int\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"int\",\"derivation\":\"SRC.REF\"},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL,REF\n1,5,10\n"
+          },
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.date"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "date or datetime",
+                "operation": "baseline_flag",
+                "source": "AVAL"
+              }
+            }
+          ],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.date"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "date or datetime",
+                "operation": "baseline_flag",
+                "source": "AVAL"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "qualified_driver_integer",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"int\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"int\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"date\",\"derivation\":{\"to_date\":{\"source\":\"TEXT\"}}},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"SRC.AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL\n1,5\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.date"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "date or datetime",
+                "operation": "baseline_flag",
+                "source": "SRC.AVAL"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "row_template_integer_date",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"int\",\"REF\":\"date\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\"},{\"name\":\"AVAL\",\"type\":\"int\"},{\"name\":\"REF\",\"type\":\"date\"},{\"name\":\"RESULT\",\"type\":\"str\"}],\"rows\":[{\"id\":\"driver\",\"dataset\":\"SRC\",\"derivations\":{\"ID\":\"SRC.ID\",\"AVAL\":\"SRC.AVAL\",\"REF\":\"SRC.REF\",\"RESULT\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL,REF\n1,5,2025-01-10\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0323",
+              "spec_paths": [
+                "rows[0].derivations.RESULT.baseline_flag.date"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "date or datetime",
+                "operation": "baseline_flag",
+                "source": "AVAL"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "valid_date_pair",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"date\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"date\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"date\",\"derivation\":{\"to_date\":{\"source\":\"TEXT\"}}},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL\n1,2025-01-09\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "ID,RESULT\n1,Y\n"
+        },
+        {
+          "name": "valid_datetime_pair",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"datetime\",\"REF\":\"datetime\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"datetime\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"datetime\",\"derivation\":\"SRC.REF\"},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL,REF\n1,2025-01-09T00:00:00,2025-01-10T00:00:00\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "ID,RESULT\n1,Y\n"
+        },
+        {
+          "name": "valid_missing_temporal",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"date\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"date\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"date\",\"derivation\":{\"to_date\":{\"source\":\"TEXT\"}}},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL\n1,\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "ID,RESULT\n1,\n"
+        },
+        {
+          "name": "unknown_date_precedes_type",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"int\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"int\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"date\",\"derivation\":{\"to_date\":{\"source\":\"TEXT\"}}},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"MISSING\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL\n1,5\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0106",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.date"
+              ],
+              "context": {
+                "identifier": "MISSING"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "unknown_reference_date_precedes_type",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"int\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"int\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"date\",\"derivation\":{\"to_date\":{\"source\":\"TEXT\"}}},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"MISSING\",\"window\":{\"group_by\":[],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL\n1,5\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0106",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.reference_date"
+              ],
+              "context": {
+                "identifier": "MISSING"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "forbidden_order_precedes_type",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"int\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"int\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"date\",\"derivation\":{\"to_date\":{\"source\":\"TEXT\"}}},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[],\"order_by\":[\"ID\"]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL\n1,5\n"
+          },
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "window_order_by_forbidden",
+              "requirement": "REQ-0341",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.window.order_by"
+              ],
+              "context": {
+                "operation": "baseline_flag"
+              }
+            }
+          ],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "window_order_by_forbidden",
+              "requirement": "REQ-0341",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.window.order_by"
+              ],
+              "context": {
+                "operation": "baseline_flag"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "unknown_group_precedes_type",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"keys\":[\"ID\"],\"input\":{\"SRC\":{\"path\":\"input.csv\",\"types\":{\"ID\":\"int\",\"AVAL\":\"int\"}}},\"output\":{\"path\":\"out.csv\",\"columns\":[\"ID\",\"RESULT\"]},\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"AVAL\",\"type\":\"int\",\"derivation\":\"SRC.AVAL\"},{\"name\":\"TEXT\",\"type\":\"str\",\"derivation\":{\"literal\":\"2025-01-10\"}},{\"name\":\"REF\",\"type\":\"date\",\"derivation\":{\"to_date\":{\"source\":\"TEXT\"}}},{\"name\":\"RESULT\",\"type\":\"str\",\"derivation\":{\"baseline_flag\":{\"date\":\"AVAL\",\"reference_date\":\"REF\",\"window\":{\"group_by\":[\"MISSING\"],\"order_by\":[]}}}}]}",
+          "inputs": {
+            "input.csv": "ID,AVAL\n1,5\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0106",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.window.group_by[0]"
+              ],
+              "context": {
+                "identifier": "MISSING"
+              }
+            }
+          ],
+          "csv": null
+        }
       ]
     },
     "file-resources": {

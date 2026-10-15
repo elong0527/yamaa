@@ -475,6 +475,7 @@ conditions! {
     WindowZeroOffset => ("validation", "zero_offset", Some("REQ-0328")),
     WindowOrderRequired => ("validation", "window_order_by_required", Some("REQ-0340")),
     WindowOrderForbidden => ("validation", "window_order_by_forbidden", Some("REQ-0341")),
+    WindowBaselineInputType => ("validation", "incompatible_input_type", Some("REQ-0323")),
     LookupSelectionReference => ("validation", "unknown_field", Some("REQ-0120")),
     LookupDonorKeyReference => ("validation", "unknown_field", Some("REQ-0116")),
     LookupOutputKeyReference => ("validation", "unknown_field", Some("REQ-0117")),
