@@ -21,30 +21,52 @@ fn assert_variable(source: &str) {
     );
 }
 
+fn dense_reference_choices(count: usize) -> String {
+    let mut source = r"(?:(a)()|()(a))".repeat(count);
+    source.push_str("(?<=");
+    for left in 0..count {
+        for right in left + 1..count {
+            write!(
+                source,
+                r"(?:\{}\{}|\{}\{})",
+                4 * left + 1,
+                4 * right + 4,
+                4 * left + 4,
+                4 * right + 1,
+            )
+            .unwrap();
+        }
+    }
+    source.push(')');
+    source
+}
+
 #[test]
 fn dense_reference_alternatives_reject_witnessed_variation() {
     for count in [4, 8, 16] {
-        let mut source = r"(?:(a)()|()(a))".repeat(count);
-        source.push_str("(?<=");
-        for left in 0..count {
-            for right in left + 1..count {
-                write!(
-                    source,
-                    r"(?:\{}\{}|\{}\{})",
-                    4 * left + 1,
-                    4 * right + 4,
-                    4 * left + 4,
-                    4 * right + 1,
-                )
-                .unwrap();
-            }
-        }
-        source.push(')');
+        let source = dense_reference_choices(count);
         // Give two blocks opposite capture participation. The alternative
         // linking those blocks then consumes zero or two, proving variation
         // without requiring the exact extrema of every dense combination.
         assert_variable(&source);
     }
+}
+
+#[test]
+fn overflow_after_a_dense_assertion_checks_consumption_without_its_width() {
+    let mut source = dense_reference_choices(16);
+    let byte = source.len();
+    write!(source, r"\1{{{}}}", usize::MAX).unwrap();
+    // The prefix consumes sixteen scalars and the assertion consumes zero.
+    // When capture one participates, its maximum-count repetition adds
+    // usize::MAX, so addressability fails at that later operation.
+    assert_eq!(
+        Pattern::compile(&source),
+        Err(CompileError::Unsupported {
+            byte,
+            feature: "pattern width exceeds addressable range",
+        })
+    );
 }
 
 #[test]
