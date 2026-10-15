@@ -2801,5 +2801,41 @@ columns:
                             result.save()
                         self.assertFalse((destination / "result.csv").exists())
 
+class RowCountLookups(unittest.TestCase):
+    def test_original_row_count_predicates_resolve_typed_lookup_fields(self):
+        import yamaa
+
+        for case in TRUTH["row_count_lookups"]:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for name, content in case["inputs"].items():
+                    source = root / name
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_text(content, encoding="ascii")
+                entry = root / "spec.yaml"
+                entry.write_text(case["specification"], encoding="ascii")
+                for _ in range(2):
+                    checked = yamaa.check(entry)
+                    result = yamaa.domain(entry)
+                    for frame, expected in ((checked.issues, case["check_issues"]),
+                                            (result.issues, case["issues"])):
+                        rows = frame.to_dicts()
+                        for row in rows:
+                            row["context"] = json.loads(row["context"])
+                        self.assertEqual(rows, expected)
+                    report = json.loads(result._native.observations())
+                    expected = [{**record, "specification": str(entry)} for record in case["verifications"]]
+                    self.assertEqual(report["verifications"], expected)
+                    self.assertEqual(report["handler_counts"], case["handler_counts"])
+                    if case["csv"] is not None:
+                        self.assertTrue(result.save())
+                        self.assertEqual((root / "out.csv").read_bytes(), case["csv"].encode("ascii"))
+                    else:
+                        self.assertIsNone(result.output)
+                        with self.assertRaises(yamaa.DomainError):
+                            result.save()
+                        self.assertFalse((root / "out.csv").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

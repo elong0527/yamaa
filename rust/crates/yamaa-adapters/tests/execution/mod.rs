@@ -27,6 +27,7 @@ mod inherited_key_shorthand;
 mod integer_literal_overflow;
 mod nested_windows;
 mod probe_successors;
+mod row_count_lookups;
 mod row_derivations;
 mod row_filter_paths;
 mod row_intermediate_operands;

@@ -906,6 +906,298 @@
           "csv": null,
           "no_match_count": 0
         }
+      ],
+      "row_count_lookups": [
+        {
+          "name": "original_lookup_filter",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"base\":\"SRC\",\"keys\":[\"STUDYID\",\"USUBJID\"],\"input\":{\"SRC\":\"source.csv\",\"DONOR\":{\"path\":\"donor.csv\",\"types\":{\"ADT\":\"date\"}}},\"columns\":[{\"name\":\"STUDYID\",\"type\":\"str\",\"derivation\":\"SRC.STUDYID\"},{\"name\":\"USUBJID\",\"type\":\"str\",\"derivation\":\"SRC.USUBJID\"}],\"intermediates\":[{\"id\":\"VISIT\",\"dataset\":\"DONOR\",\"key\":[\"STUDYID\",\"USUBJID\"]}],\"output\":{\"path\":\"out.csv\",\"columns\":[\"STUDYID\",\"USUBJID\"]},\"verifications\":[{\"row_count\":{\"filter\":\"VISIT.KEEP = 'Y'\",\"min\":1,\"max\":1}}]}",
+          "inputs": {
+            "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+            "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\nS,S-2,N,2025-01-02\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+          "evaluated_count": 1,
+          "verifications": [
+            {
+              "check": "row_count",
+              "evaluated_count": 1,
+              "failure": null,
+              "requirement": "REQ-0385",
+              "severity": "error",
+              "spec_path": "verifications[0].row_count",
+              "specification": "__SPECIFICATION__",
+              "target": null,
+              "verification_id": null
+            }
+          ],
+          "handler_counts": []
+        },
+        {
+          "name": "typed_date_filter",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"base\":\"SRC\",\"keys\":[\"STUDYID\",\"USUBJID\"],\"input\":{\"SRC\":\"source.csv\",\"DONOR\":{\"path\":\"donor.csv\",\"types\":{\"ADT\":\"date\"}}},\"columns\":[{\"name\":\"STUDYID\",\"type\":\"str\",\"derivation\":\"SRC.STUDYID\"},{\"name\":\"USUBJID\",\"type\":\"str\",\"derivation\":\"SRC.USUBJID\"}],\"intermediates\":[{\"id\":\"VISIT\",\"dataset\":\"DONOR\",\"key\":[\"STUDYID\",\"USUBJID\"]}],\"output\":{\"path\":\"out.csv\",\"columns\":[\"STUDYID\",\"USUBJID\"]},\"verifications\":[{\"row_count\":{\"filter\":\"VISIT.ADT >= DATE '2025-01-01'\",\"min\":2,\"max\":2}}]}",
+          "inputs": {
+            "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+            "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\nS,S-2,N,2025-01-02\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+          "evaluated_count": 1,
+          "verifications": [
+            {
+              "check": "row_count",
+              "evaluated_count": 1,
+              "failure": null,
+              "requirement": "REQ-0385",
+              "severity": "error",
+              "spec_path": "verifications[0].row_count",
+              "specification": "__SPECIFICATION__",
+              "target": null,
+              "verification_id": null
+            }
+          ],
+          "handler_counts": []
+        },
+        {
+          "name": "lookup_filter_type_on_empty",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"base\":\"SRC\",\"keys\":[\"STUDYID\",\"USUBJID\"],\"input\":{\"SRC\":\"source.csv\",\"DONOR\":{\"path\":\"donor.csv\",\"types\":{\"ADT\":\"date\"}}},\"columns\":[{\"name\":\"STUDYID\",\"type\":\"str\",\"derivation\":\"SRC.STUDYID\"},{\"name\":\"USUBJID\",\"type\":\"str\",\"derivation\":\"SRC.USUBJID\"}],\"intermediates\":[{\"id\":\"VISIT\",\"dataset\":\"DONOR\",\"key\":[\"STUDYID\",\"USUBJID\"]}],\"output\":{\"path\":\"out.csv\",\"columns\":[\"STUDYID\",\"USUBJID\"]},\"verifications\":[{\"row_count\":{\"filter\":\"VISIT.KEEP > 1\",\"min\":0}}]}",
+          "inputs": {
+            "source.csv": "STUDYID,USUBJID\n",
+            "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\nS,S-2,N,2025-01-02\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0190",
+              "spec_paths": [
+                "verifications[0].row_count.filter"
+              ],
+              "context": {
+                "left_type": "str",
+                "right_type": "int"
+              }
+            }
+          ],
+          "csv": null,
+          "evaluated_count": 1,
+          "verifications": [],
+          "handler_counts": []
+        },
+        {
+          "name": "unknown_filter_field",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"base\":\"SRC\",\"keys\":[\"STUDYID\",\"USUBJID\"],\"input\":{\"SRC\":\"source.csv\",\"DONOR\":{\"path\":\"donor.csv\",\"types\":{\"ADT\":\"date\"}}},\"columns\":[{\"name\":\"STUDYID\",\"type\":\"str\",\"derivation\":\"SRC.STUDYID\"},{\"name\":\"USUBJID\",\"type\":\"str\",\"derivation\":\"SRC.USUBJID\"}],\"intermediates\":[{\"id\":\"VISIT\",\"dataset\":\"DONOR\",\"key\":[\"STUDYID\",\"USUBJID\"]}],\"output\":{\"path\":\"out.csv\",\"columns\":[\"STUDYID\",\"USUBJID\"]},\"verifications\":[{\"row_count\":{\"filter\":\"VISIT.ABSENT = 'Y'\",\"min\":0}}]}",
+          "inputs": {
+            "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+            "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\nS,S-2,N,2025-01-02\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0405",
+              "spec_paths": [
+                "verifications[0].row_count.filter"
+              ],
+              "context": {
+                "identifier": "VISIT.ABSENT"
+              }
+            }
+          ],
+          "csv": null,
+          "evaluated_count": 1,
+          "verifications": [],
+          "handler_counts": []
+        },
+        {
+          "name": "unknown_when_field",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"base\":\"SRC\",\"keys\":[\"STUDYID\",\"USUBJID\"],\"input\":{\"SRC\":\"source.csv\",\"DONOR\":{\"path\":\"donor.csv\",\"types\":{\"ADT\":\"date\"}}},\"columns\":[{\"name\":\"STUDYID\",\"type\":\"str\",\"derivation\":\"SRC.STUDYID\"},{\"name\":\"USUBJID\",\"type\":\"str\",\"derivation\":\"SRC.USUBJID\"}],\"intermediates\":[{\"id\":\"VISIT\",\"dataset\":\"DONOR\",\"key\":[\"STUDYID\",\"USUBJID\"]}],\"output\":{\"path\":\"out.csv\",\"columns\":[\"STUDYID\",\"USUBJID\"]},\"verifications\":[{\"row_count\":{\"filter\":\"VISIT.KEEP = 'Y'\",\"when\":\"VISIT.ABSENT = 'Y'\",\"min\":0}}]}",
+          "inputs": {
+            "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+            "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\nS,S-2,N,2025-01-02\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0405",
+              "spec_paths": [
+                "verifications[0].row_count.when"
+              ],
+              "context": {
+                "identifier": "VISIT.ABSENT"
+              }
+            }
+          ],
+          "csv": null,
+          "evaluated_count": 1,
+          "verifications": [],
+          "handler_counts": []
+        },
+        {
+          "name": "filter_type_precedes_unknown_when",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"base\":\"SRC\",\"keys\":[\"STUDYID\",\"USUBJID\"],\"input\":{\"SRC\":\"source.csv\",\"DONOR\":{\"path\":\"donor.csv\",\"types\":{\"ADT\":\"date\"}}},\"columns\":[{\"name\":\"STUDYID\",\"type\":\"str\",\"derivation\":\"SRC.STUDYID\"},{\"name\":\"USUBJID\",\"type\":\"str\",\"derivation\":\"SRC.USUBJID\"}],\"intermediates\":[{\"id\":\"VISIT\",\"dataset\":\"DONOR\",\"key\":[\"STUDYID\",\"USUBJID\"]}],\"output\":{\"path\":\"out.csv\",\"columns\":[\"STUDYID\",\"USUBJID\"]},\"verifications\":[{\"row_count\":{\"filter\":\"STUDYID = 1\",\"when\":\"VISIT.ABSENT = 'Y'\",\"min\":0}}]}",
+          "inputs": {
+            "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+            "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\nS,S-2,N,2025-01-02\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0190",
+              "spec_paths": [
+                "verifications[0].row_count.filter"
+              ],
+              "context": {
+                "left_type": "str",
+                "right_type": "int"
+              }
+            }
+          ],
+          "csv": null,
+          "evaluated_count": 1,
+          "verifications": [],
+          "handler_counts": []
+        },
+        {
+          "name": "unmatched_null_when",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"base\":\"SRC\",\"keys\":[\"STUDYID\",\"USUBJID\"],\"input\":{\"SRC\":\"source.csv\",\"DONOR\":{\"path\":\"donor.csv\",\"types\":{\"ADT\":\"date\"}}},\"columns\":[{\"name\":\"STUDYID\",\"type\":\"str\",\"derivation\":\"SRC.STUDYID\"},{\"name\":\"USUBJID\",\"type\":\"str\",\"derivation\":\"SRC.USUBJID\"}],\"intermediates\":[{\"id\":\"VISIT\",\"dataset\":\"DONOR\",\"key\":[\"STUDYID\",\"USUBJID\"],\"no_match\":null}],\"output\":{\"path\":\"out.csv\",\"columns\":[\"STUDYID\",\"USUBJID\"]},\"verifications\":[{\"row_count\":{\"filter\":\"VISIT.KEEP = 'Y'\",\"when\":\"VISIT.KEEP IS NULL\",\"min\":0,\"max\":0}}]}",
+          "inputs": {
+            "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+            "donor.csv": "STUDYID,USUBJID,KEEP,ADT\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+          "evaluated_count": 1,
+          "verifications": [
+            {
+              "check": "row_count",
+              "evaluated_count": 1,
+              "failure": null,
+              "requirement": "REQ-0385",
+              "severity": "error",
+              "spec_path": "verifications[0].row_count",
+              "specification": "__SPECIFICATION__",
+              "target": null,
+              "verification_id": null
+            }
+          ],
+          "handler_counts": []
+        },
+        {
+          "name": "lookup_when_full_group_denominator",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"base\":\"SRC\",\"keys\":[\"STUDYID\",\"USUBJID\"],\"input\":{\"SRC\":\"source.csv\",\"DONOR\":{\"path\":\"donor.csv\",\"types\":{\"ADT\":\"date\"}}},\"columns\":[{\"name\":\"STUDYID\",\"type\":\"str\",\"derivation\":\"SRC.STUDYID\"},{\"name\":\"USUBJID\",\"type\":\"str\",\"derivation\":\"SRC.USUBJID\"}],\"intermediates\":[{\"id\":\"VISIT\",\"dataset\":\"DONOR\",\"key\":[\"STUDYID\",\"USUBJID\"]}],\"output\":{\"path\":\"out.csv\",\"columns\":[\"STUDYID\",\"USUBJID\"]},\"verifications\":[{\"row_count\":{\"group_by\":[\"STUDYID\"],\"filter\":\"VISIT.KEEP = 'Y'\",\"when\":\"VISIT.KEEP = 'Y'\",\"min_fraction\":0.5,\"max_fraction\":0.5}}]}",
+          "inputs": {
+            "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+            "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\nS,S-2,N,2025-01-02\n"
+          },
+          "check_issues": [],
+          "issues": [],
+          "csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+          "evaluated_count": 1,
+          "verifications": [
+            {
+              "check": "row_count",
+              "evaluated_count": 1,
+              "failure": null,
+              "requirement": "REQ-0385",
+              "severity": "error",
+              "spec_path": "verifications[0].row_count",
+              "specification": "__SPECIFICATION__",
+              "target": null,
+              "verification_id": null
+            }
+          ],
+          "handler_counts": []
+        },
+        {
+          "name": "earlier_completed_check_survives_unknown_when",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"base\":\"SRC\",\"keys\":[\"STUDYID\",\"USUBJID\"],\"input\":{\"SRC\":\"source.csv\",\"DONOR\":{\"path\":\"donor.csv\",\"types\":{\"ADT\":\"date\"}}},\"columns\":[{\"name\":\"STUDYID\",\"type\":\"str\",\"derivation\":\"SRC.STUDYID\"},{\"name\":\"USUBJID\",\"type\":\"str\",\"derivation\":\"SRC.USUBJID\"}],\"intermediates\":[{\"id\":\"VISIT\",\"dataset\":\"DONOR\",\"key\":[\"STUDYID\",\"USUBJID\"]}],\"output\":{\"path\":\"out.csv\",\"columns\":[\"STUDYID\",\"USUBJID\"]},\"verifications\":[{\"row_count\":{\"min\":0}},{\"row_count\":{\"filter\":\"VISIT.KEEP = 'Y'\",\"when\":\"VISIT.ABSENT = 'Y'\",\"min\":0}}]}",
+          "inputs": {
+            "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+            "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\nS,S-2,N,2025-01-02\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "requirement": "REQ-0405",
+              "spec_paths": [
+                "verifications[1].row_count.when"
+              ],
+              "context": {
+                "identifier": "VISIT.ABSENT"
+              }
+            }
+          ],
+          "csv": null,
+          "evaluated_count": 1,
+          "verifications": [
+            {
+              "check": "row_count",
+              "evaluated_count": 1,
+              "failure": null,
+              "requirement": "REQ-0385",
+              "severity": "error",
+              "spec_path": "verifications[0].row_count",
+              "specification": "__SPECIFICATION__",
+              "target": null,
+              "verification_id": null
+            }
+          ],
+          "handler_counts": []
+        },
+        {
+          "name": "all_filters_precede_all_when",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"base\":\"SRC\",\"keys\":[\"STUDYID\",\"USUBJID\"],\"input\":{\"SRC\":\"source.csv\",\"DONOR\":{\"path\":\"donor.csv\",\"types\":{\"ADT\":\"date\"}},\"WHEN\":{\"path\":\"when.csv\"}},\"columns\":[{\"name\":\"STUDYID\",\"type\":\"str\",\"derivation\":\"SRC.STUDYID\"},{\"name\":\"USUBJID\",\"type\":\"str\",\"derivation\":\"SRC.USUBJID\"}],\"intermediates\":[{\"id\":\"VISIT\",\"dataset\":\"DONOR\",\"key\":[\"STUDYID\",\"USUBJID\"]},{\"id\":\"NOW\",\"dataset\":\"WHEN\",\"key\":[\"STUDYID\",\"USUBJID\"]}],\"output\":{\"path\":\"out.csv\",\"columns\":[\"STUDYID\",\"USUBJID\"]},\"verifications\":[{\"row_count\":{\"filter\":\"VISIT.KEEP = 'Y'\",\"min\":1,\"max\":1,\"when\":\"NOW.KEEP = 'Y'\"}}]}",
+          "inputs": {
+            "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+            "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\n",
+            "when.csv": "STUDYID,USUBJID,KEEP\nS,S-2,Y\n"
+          },
+          "check_issues": [],
+          "issues": [
+            {
+              "phase": "join",
+              "condition": "unmatched_key",
+              "requirement": "REQ-0124",
+              "spec_paths": [
+                "intermediates[0]"
+              ],
+              "context": {
+                "dataset": "DONOR",
+                "intermediate": "VISIT",
+                "intermediate_key": {
+                  "STUDYID": "S",
+                  "USUBJID": "S-2"
+                },
+                "key": [
+                  "STUDYID",
+                  "USUBJID"
+                ],
+                "keys": [
+                  {
+                    "STUDYID": "S",
+                    "USUBJID": "S-2"
+                  }
+                ]
+              }
+            }
+          ],
+          "csv": null,
+          "evaluated_count": 1,
+          "verifications": [],
+          "handler_counts": []
+        }
       ]
     },
     "file-resources": {

@@ -1,11 +1,11 @@
 //! Predicate declarations and row checks at the completed-dataset verification phase.
 use crate::{
     dataset::{self, Check, CheckRecord, ExecutionError, Verification},
-    dataset_budget::Budget,
     dataset_predicate::BoundPredicate,
 };
 use alloc::{boxed::Box, vec::Vec};
 use yamaa_core::{
+    bound_expression::{Binding, Read},
     predicate::{ErrorKind, Truth},
     table::TableAccess,
     temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
@@ -32,6 +32,111 @@ fn sample(kind: ColumnType) -> Value {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn validate_predicate<T: TableAccess + ?Sized>(
+    predicate: &BoundPredicate,
+    dataset: &CompletedRows<'_>,
+    plan: &dataset::DatasetPlan,
+    state: &mut dataset::EvaluationState<'_, T::Error>,
+    records: &mut Vec<CheckRecord>,
+) -> Result<(), Box<ExecutionError<T::Error>>> {
+    let mut samples = Vec::new();
+    let mut bindings = Vec::new();
+    for binding in predicate.bindings() {
+        let kind = match binding.read {
+            Read::Column(column) => plan.output().columns()[column].kind,
+            Read::Intermediate { index, column } => {
+                plan.intermediates()[index]
+                    .source_schema(plan.secondary())
+                    .expect("admitted donor schema")
+                    .columns()[column]
+                    .kind
+            }
+            _ => unreachable!(
+                "verification admission permits completed columns and declared lookups"
+            ),
+        };
+        bindings.push(Binding {
+            name: binding.name.clone(),
+            read: Read::Column(samples.len()),
+        });
+        samples.push(sample(kind));
+    }
+    let sample_predicate = BoundPredicate::new(predicate.plan().clone(), bindings)
+        .expect("admitted verification names");
+    crate::dataset_predicate::evaluate(
+        &sample_predicate,
+        dataset,
+        0,
+        &samples,
+        state.budget.predicate(),
+    )
+    .map_err(|error| {
+        Box::new(match error.kind {
+            ErrorKind::Limit(limit) => dataset::predicate_limit(limit),
+            _ => ExecutionError::VerificationPredicate {
+                error,
+                records: core::mem::take(records),
+            },
+        })
+    })?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn evaluate_predicate<T: TableAccess + ?Sized>(
+    predicate: &BoundPredicate,
+    dataset: &CompletedRows<'_>,
+    plan: &dataset::DatasetPlan,
+    primary: &T,
+    candidate: &dataset::Candidate,
+    position: usize,
+    assignment: &dataset::Assignment,
+    state: &mut dataset::EvaluationState<'_, T::Error>,
+    records: &mut Vec<CheckRecord>,
+) -> Result<Truth, Box<ExecutionError<T::Error>>> {
+    if !predicate
+        .bindings()
+        .iter()
+        .any(|binding| matches!(binding.read, Read::Intermediate { .. }))
+    {
+        return crate::dataset_predicate::evaluate(
+            predicate,
+            dataset,
+            0,
+            &candidate.values,
+            state.budget.predicate(),
+        )
+        .map_err(|error| {
+            Box::new(match error.kind {
+                ErrorKind::Limit(limit) => dataset::predicate_limit(limit),
+                _ => ExecutionError::VerificationPredicate {
+                    error,
+                    records: core::mem::take(records),
+                },
+            })
+        });
+    }
+    super::case_predicates::evaluate(
+        predicate, primary, candidate, plan, position, assignment, state,
+    )
+    .map_err(|error| match *error {
+        ExecutionError::Predicate { source_row, error } => match error.kind {
+            ErrorKind::Condition(condition) => Box::new(ExecutionError::VerificationPredicate {
+                error: yamaa_core::predicate::EvaluationError {
+                    spec_path: error.spec_path,
+                    expression: error.expression,
+                    route: error.route,
+                    kind: ErrorKind::Condition(condition),
+                },
+                records: core::mem::take(records),
+            }),
+            _ => Box::new(ExecutionError::Predicate { source_row, error }),
+        },
+        other => Box::new(other),
+    })
+}
+
 /// Validate declarations in order, then evaluate every row without a `when` short circuit.
 /// Semantic failures retain previously completed check records and never an output artifact.
 #[allow(clippy::too_many_arguments)]
@@ -44,7 +149,6 @@ pub(crate) fn predicate_check<T: TableAccess + ?Sized>(
     state: &mut dataset::EvaluationState<'_, T::Error>,
     records: &mut Vec<CheckRecord>,
 ) -> Result<Option<CheckRecord>, Box<ExecutionError<T::Error>>> {
-    use yamaa_core::bound_expression::{Binding, Read};
     let (when, require, metadata) = match &verification.check {
         Check::Assert { when, require } => (
             when.as_ref(),
@@ -57,46 +161,7 @@ pub(crate) fn predicate_check<T: TableAccess + ?Sized>(
     // Validate types from immutable schemas, including an empty output. These
     // synthetic operands never select donors, run handlers or read source cells.
     for predicate in when.into_iter().chain([require]) {
-        let mut samples = Vec::new();
-        let mut bindings = Vec::new();
-        for binding in predicate.bindings() {
-            let kind = match binding.read {
-                Read::Column(column) => plan.output().columns()[column].kind,
-                Read::Intermediate { index, column } => {
-                    plan.intermediates()[index]
-                        .source_schema(plan.secondary())
-                        .expect("admitted donor schema")
-                        .columns()[column]
-                        .kind
-                }
-                _ => unreachable!(
-                    "verification admission permits completed columns and declared lookups"
-                ),
-            };
-            bindings.push(Binding {
-                name: binding.name.clone(),
-                read: Read::Column(samples.len()),
-            });
-            samples.push(sample(kind));
-        }
-        let sample_predicate = BoundPredicate::new(predicate.plan().clone(), bindings)
-            .expect("admitted verification names");
-        crate::dataset_predicate::evaluate(
-            &sample_predicate,
-            dataset,
-            0,
-            &samples,
-            state.budget.predicate(),
-        )
-        .map_err(|error| {
-            Box::new(match error.kind {
-                ErrorKind::Limit(limit) => dataset::predicate_limit(limit),
-                _ => ExecutionError::VerificationPredicate {
-                    error,
-                    records: core::mem::take(records),
-                },
-            })
-        })?;
+        validate_predicate::<T>(predicate, dataset, plan, state, records)?;
     }
     let Some(code) = metadata else {
         return Ok(None);
@@ -109,54 +174,17 @@ pub(crate) fn predicate_check<T: TableAccess + ?Sized>(
     let mut offending = Vec::new();
     for (position, candidate) in candidates.iter().enumerate() {
         let mut evaluate = |predicate: &BoundPredicate| {
-            if !predicate
-                .bindings()
-                .iter()
-                .any(|binding| matches!(binding.read, Read::Intermediate { .. }))
-            {
-                return crate::dataset_predicate::evaluate(
-                    predicate,
-                    dataset,
-                    0,
-                    &candidate.values,
-                    state.budget.predicate(),
-                )
-                .map_err(|error| {
-                    Box::new(match error.kind {
-                        ErrorKind::Limit(limit) => dataset::predicate_limit(limit),
-                        _ => ExecutionError::VerificationPredicate {
-                            error,
-                            records: core::mem::take(records),
-                        },
-                    })
-                });
-            }
-            super::case_predicates::evaluate(
+            evaluate_predicate(
                 predicate,
+                dataset,
+                plan,
                 primary,
                 candidate,
-                plan,
                 position,
                 &assignment,
                 state,
+                records,
             )
-            .map_err(|error| match *error {
-                ExecutionError::Predicate { source_row, error } => match error.kind {
-                    ErrorKind::Condition(condition) => {
-                        Box::new(ExecutionError::VerificationPredicate {
-                            error: yamaa_core::predicate::EvaluationError {
-                                spec_path: error.spec_path,
-                                expression: error.expression,
-                                route: error.route,
-                                kind: ErrorKind::Condition(condition),
-                            },
-                            records: core::mem::take(records),
-                        })
-                    }
-                    _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                },
-                other => Box::new(other),
-            })
         };
         let binds = match when {
             Some(when) => evaluate(when)?,
@@ -181,59 +209,74 @@ pub(crate) fn predicate_check<T: TableAccess + ?Sized>(
 }
 
 /// Partition all artifact rows before applying predicates; a filtered-empty group remains visible.
-pub(crate) fn row_count_check<E>(
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn row_count_check<T: TableAccess + ?Sized>(
     verification: &Verification,
     check: &yamaa_core::dataset::RowCount,
     dataset: &CompletedRows<'_>,
+    plan: &dataset::DatasetPlan,
+    primary: &T,
+    candidates: &[dataset::Candidate],
     limits: dataset::Limits,
-    budget: &mut Budget,
+    state: &mut dataset::EvaluationState<'_, T::Error>,
     records: &mut Vec<CheckRecord>,
-) -> Result<CheckRecord, Box<ExecutionError<E>>> {
-    let samples: Vec<_> = dataset
-        .schema()
-        .columns()
-        .iter()
-        .map(|column| sample(column.kind))
-        .collect();
-    budget.work(dataset.rows().len(), 2)?;
-    let mut evaluate = |predicate: &BoundPredicate, values: &[Value]| {
-        crate::dataset_predicate::evaluate(predicate, dataset, 0, values, budget.predicate())
-            .map_err(|error| {
-                Box::new(match error.kind {
-                    ErrorKind::Limit(limit) => dataset::predicate_limit(limit),
-                    _ => ExecutionError::VerificationPredicate {
-                        error,
-                        records: core::mem::take(records),
-                    },
-                })
-            })
-    };
-    // Invalid comparison types are diagnosed even for an empty artifact.
+) -> Result<CheckRecord, Box<ExecutionError<T::Error>>> {
+    state.budget.work(dataset.rows().len(), 2)?;
+    // Type admission must not select a donor, even for empty or exempt groups.
     for predicate in check.filter.iter().chain(&check.when) {
-        evaluate(predicate, &samples)?;
+        validate_predicate::<T>(predicate, dataset, plan, state, records)?;
     }
+    let assignment = dataset::Assignment {
+        column: 0,
+        path: verification.path.clone(),
+        expression: dataset::Expression::Literal(Value::Missing),
+    };
     let mut admitted = Vec::with_capacity(dataset.rows().len());
     let mut bound = Vec::with_capacity(dataset.rows().len());
-    for values in dataset.rows() {
+    for (position, candidate) in candidates.iter().enumerate() {
         admitted.push(match &check.filter {
-            Some(filter) => evaluate(filter, values)? == Truth::True,
+            Some(filter) => {
+                evaluate_predicate(
+                    filter,
+                    dataset,
+                    plan,
+                    primary,
+                    candidate,
+                    position,
+                    &assignment,
+                    state,
+                    records,
+                )? == Truth::True
+            }
             None => true,
         });
     }
-    for values in dataset.rows() {
+    for (position, candidate) in candidates.iter().enumerate() {
         bound.push(match &check.when {
-            Some(when) => evaluate(when, values)? == Truth::True,
+            Some(when) => {
+                evaluate_predicate(
+                    when,
+                    dataset,
+                    plan,
+                    primary,
+                    candidate,
+                    position,
+                    &assignment,
+                    state,
+                    records,
+                )? == Truth::True
+            }
             None => true,
         });
     }
     let groups = if let Some(columns) = &check.group_by {
-        budget.work(dataset.rows().len(), columns.len())?;
+        state.budget.work(dataset.rows().len(), columns.len())?;
         crate::table_grouping::partition(dataset, columns, limits.output_rows, limits.key_cells)
             .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?
     } else {
         alloc::vec![(0..dataset.rows().len()).collect()]
     };
-    budget.work(groups.len(), check.bound_work())?;
+    state.budget.work(groups.len(), check.bound_work())?;
     let mut offenders = Vec::new();
     let mut counts = Vec::new();
     let mut denominators = Vec::new();
@@ -248,7 +291,7 @@ pub(crate) fn row_count_check<E>(
                 .iter()
                 .flatten()
                 .map(|&column| &dataset.rows()[members[0]][column]);
-            budget.identity(borrowed.clone())?;
+            state.budget.identity(borrowed.clone())?;
             let values = borrowed.cloned().collect();
             offenders.push(dataset::RowIdentity {
                 position: members.first().copied().unwrap_or(0),
