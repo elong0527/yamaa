@@ -419,10 +419,7 @@ def test_missing_censor_date_follows_dated_reason(tmp_path, language):
     assert row["ADT"] == "2026-03-12"
 
 
-# The opensas track is not parametrized here: #2426 scopes the fix to the
-# spec and the Python and R reference solutions, and result.sas still
-# selects scoreless rows (left for a follow-up).
-@pytest.fixture(params=["yamaa", "python", "r"])
+@pytest.fixture(params=["yamaa", "python", "r", "opensas"])
 def pro_deterioration_track(request):
     return request.param
 

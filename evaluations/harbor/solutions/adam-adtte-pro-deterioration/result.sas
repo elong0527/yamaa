@@ -25,15 +25,18 @@ data deteriorations;
   length BASEDT $10;
   retain BASEDT BASEVAL;
   set ordered; by STUDYID USUBJID;
-  if first.USUBJID then do; BASEDT=ADT; BASEVAL=AVAL; end;
-  if ADT>BASEDT and not missing(AVAL) and not missing(BASEVAL) and AVAL<=BASEVAL-10;
+  /* The baseline is the earliest dated assessment with a score; a scoreless
+     row cannot be the baseline. */
+  if first.USUBJID then do; BASEDT=''; BASEVAL=.; end;
+  if missing(BASEDT) and not missing(AVAL) then do; BASEDT=ADT; BASEVAL=AVAL; end;
+  if not missing(BASEDT) and ADT>BASEDT and not missing(AVAL) and AVAL<=BASEVAL-10;
 run;
 data deterioration; set deteriorations; by STUDYID USUBJID; if first.USUBJID; keep STUDYID USUBJID ADT QSSEQ; rename ADT=DETERDT QSSEQ=DETERSEQ; run;
 data ds_order; set ds; NODATE=missing(DSDTC); run;
 proc sort data=ds_order(where=(DSDECOD in ('DISEASE PROGRESSION','STUDY DISCONTINUATION','WITHDRAWAL OF CONSENT'))) out=reasons; by STUDYID USUBJID NODATE DSDTC DSSEQ; run;
 data reason; set reasons; by STUDYID USUBJID; if first.USUBJID; keep STUDYID USUBJID DSDTC DSDECOD; rename DSDTC=REASONDT DSDECOD=REASON; run;
 proc sql; create table assessment_reasons as select a.*,b.REASONDT from ordered as a left join reason as b on a.STUDYID=b.STUDYID and a.USUBJID=b.USUBJID; quit;
-data candidates; set assessment_reasons; if missing(REASONDT) or ADT<=REASONDT; run;
+data candidates; set assessment_reasons; if not missing(AVAL) and (missing(REASONDT) or ADT<=REASONDT); run;
 proc sort data=candidates; by STUDYID USUBJID descending ADT descending QSSEQ; run;
 data lastassessment; set candidates; by STUDYID USUBJID; if first.USUBJID; keep STUDYID USUBJID ADT QSSEQ; rename ADT=LASTDT QSSEQ=LASTSEQ; run;
 proc sql; create table joined as select a.*,b.DETERDT,b.DETERSEQ,c.REASONDT,c.REASON,d.LASTDT,d.LASTSEQ from adsl as a
