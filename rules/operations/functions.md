@@ -36,11 +36,11 @@ status: normative
 
 <a id="req-0666"></a>
 
-**REQ-0666.** `lock` names the packaging lock for the running environment: uv TOML for Python or renv JSON for R. It is optional, including when `functions` is present. Omission uses the installed callable without a package-version audit; yamaa does not search for a lock beside the environment file. An explicitly declared lock must exist and be valid. The packaging tool manages installation, code and transitive dependencies; yamaa neither vendors, resolves, pins nor caches project code. Captured bytes establish lock format independently of the filename.
+**REQ-0666.** `lock` names the packaging lock for the running environment: uv TOML for Python or renv JSON for R. It is required when `functions` is present. The packaging tool manages installation, code and transitive dependencies; yamaa neither vendors, resolves, pins nor caches project code. Captured bytes establish lock format independently of the filename.
 
 <a id="req-0667"></a>
 
-**REQ-0667.** Static checking rejects a host-language mismatch or a lock format incompatible with `language`, without importing project code or reading study data. On each build that calls a function with a declared lock, before any study read, the host verifies the installed version of yamaa and every called function package against the captured lock. Standard-library/base-package functions are exempt. This is a called-package check; a full environment audit belongs to uv or renv.
+**REQ-0667.** Static checking rejects a host-language mismatch or a lock format incompatible with `language`, without importing project code or reading study data. On each build that calls a function, before any study read, the host verifies the installed version of yamaa and every called function package against the captured lock. Standard-library/base-package functions are exempt. This is a called-package check; a full environment audit belongs to uv or renv.
 
 ### Function definitions
 
@@ -193,7 +193,7 @@ input is the contract semantic boundary. Activation checks the declared result.
 
 <a id="req-0691"></a>
 
-**REQ-0691.** Every build with called functions verifies the lock when declared, binds the called functions and runs every case of every called function before any study data is read. Ordinary independent failures collect; an original host interrupt aborts immediately. There is no activation cache. Empty selection performs no lock verification or code execution.
+**REQ-0691.** Every build with called functions verifies the lock, binds the called functions and runs every case of every called function before any study data is read. Ordinary independent failures collect; an original host interrupt aborts immediately. There is no activation cache. Empty selection performs no lock verification or code execution.
 
 ### Numeric conformance and rounding
 
@@ -260,7 +260,7 @@ binding, or result requirements: fail under [Project functions](functions.md).
 
 <a id="req-0695"></a>
 
-**REQ-0695.** An invalid environment, definition, test or duplicate logical declaration: `project_environment_invalid`. Static checking returns every independently inferable finding before activation. A missing or invalid declared metadata resource reports its written path, declaring environment field and concrete cause. Invalid YAML retains its line, column and parser reason.
+**REQ-0695.** An invalid environment, definition, test or duplicate logical declaration: `project_environment_invalid`. Static checking returns every independently inferable finding before activation.
 
 <a id="req-0696"></a>
 

@@ -1,7 +1,8 @@
 //! Ordered owned Arrow snapshots behind the storage-independent core port.
 //!
-//! The fixed table geometry is admitted before logical cell validation.
-//! Byte capture and file encoding remain the physical source/output boundaries.
+//! This is an internal in-process API, not an untrusted IPC decoder. Limits bound
+//! admitted shapes and scan work, not already allocated buffers or allocation
+//! failure inside Arrow. Host transports must impose their own byte/work policy.
 
 use crate::arrow_temporal::{date_days, date_from_days, datetime_from_seconds, datetime_seconds};
 use arrow_array::{
@@ -17,6 +18,15 @@ use yamaa_core::{
     temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
     value::{ColumnType, FiniteFloat},
 };
+
+/// Trusted caller policy, independent of language semantics. No implicit default.
+#[derive(Clone, Copy, Debug)]
+pub struct TableLimits {
+    pub max_rows: usize,
+    pub max_columns: usize,
+    pub max_batches: usize,
+    pub max_cells: usize,
+}
 
 #[derive(Debug)]
 pub enum TableError {
@@ -47,29 +57,6 @@ pub enum TemporalCellError {
     MissingChild,
     Precision,
     Range,
-}
-
-/// The canonical Arrow Utf8 array stores signed 32-bit byte offsets.
-pub(crate) const UTF8_OFFSETS: &str = "Arrow Utf8 signed 32-bit offsets";
-pub(crate) fn fits_utf8_offsets(lengths: impl IntoIterator<Item = usize>) -> bool {
-    lengths
-        .into_iter()
-        .try_fold(0usize, |total, length| {
-            total
-                .checked_add(length)
-                .filter(|&sum| i32::try_from(sum).is_ok())
-        })
-        .is_some()
-}
-/// Check physical offset representability before copying any visible string data.
-pub(crate) fn string_array<'a>(
-    values: impl IntoIterator<Item = Option<&'a str>>,
-) -> Result<StringArray, ArrowError> {
-    let values = values.into_iter().collect::<Vec<_>>();
-    if !fits_utf8_offsets(values.iter().flatten().map(|value| value.len())) {
-        return Err(ArrowError::CastError(UTF8_OFFSETS.into()));
-    }
-    Ok(StringArray::from(values))
 }
 
 /// Immutable arrays own/reference their buffers independently of input handles.
@@ -177,11 +164,19 @@ pub fn datetime_array(values: &[Option<DateTime>]) -> Result<StructArray, ArrowE
     )
 }
 
-fn boundary_error(error: yamaa_core::limits::LimitExceeded) -> TableError {
-    TableError::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        required: error.actual,
+/// Check a shape budget, retaining arithmetic overflow as an unknown requirement.
+fn limit(
+    resource: &'static str,
+    required: Option<usize>,
+    maximum: usize,
+) -> Result<usize, TableError> {
+    match required {
+        Some(value) if value <= maximum => Ok(value),
+        _ => Err(TableError::Limit {
+            resource,
+            limit: maximum,
+            required,
+        }),
     }
 }
 
@@ -189,9 +184,13 @@ impl ArrowTable {
     /// Validate the whole snapshot before it can reach any evaluator. Schemas
     /// must equal the canonical physical schema including order/nullability and
     /// metadata. Floats normalize nonfinite values to actual Arrow nulls. All
-    /// geometry checks precede schema and cell validation; no aggregate runs here.
-    pub fn try_new(schema: TableSchema, batches: Vec<RecordBatch>) -> Result<Self, TableError> {
-        Self::try_new_inner(schema, batches, None)
+    /// budget checks precede schema and cell validation; no aggregate runs here.
+    pub fn try_new(
+        schema: TableSchema,
+        batches: Vec<RecordBatch>,
+        limits: TableLimits,
+    ) -> Result<Self, TableError> {
+        Self::try_new_inner(schema, batches, limits, None)
     }
 
     /// The C Data adapter also admits large/view strings without copying their
@@ -199,31 +198,27 @@ impl ArrowTable {
     pub(crate) fn try_new_with_schema(
         schema: TableSchema,
         batches: Vec<RecordBatch>,
+        limits: TableLimits,
         expected: SchemaRef,
     ) -> Result<Self, TableError> {
-        Self::try_new_inner(schema, batches, Some(expected))
+        Self::try_new_inner(schema, batches, limits, Some(expected))
     }
 
     fn try_new_inner(
         schema: TableSchema,
         batches: Vec<RecordBatch>,
+        limits: TableLimits,
         expected: Option<SchemaRef>,
     ) -> Result<Self, TableError> {
-        let columns = schema.columns().len();
-        yamaa_core::limits::Limits::columns(columns).map_err(boundary_error)?;
+        let columns = limit("columns", Some(schema.columns().len()), limits.max_columns)?;
+        limit("batches", Some(batches.len()), limits.max_batches)?;
         let mut rows = 0_usize;
         let mut ends = Vec::with_capacity(batches.len());
         for batch in &batches {
-            rows = rows
-                .checked_add(batch.num_rows())
-                .ok_or(TableError::Limit {
-                    resource: "table_rows",
-                    limit: yamaa_core::limits::Limits::TABLE_ROWS,
-                    required: None,
-                })?;
+            rows = limit("rows", rows.checked_add(batch.num_rows()), limits.max_rows)?;
             ends.push(rows);
         }
-        yamaa_core::limits::Limits::table(rows, columns).map_err(boundary_error)?;
+        limit("cells", rows.checked_mul(columns), limits.max_cells)?;
         let expected = expected.unwrap_or_else(|| physical_schema(&schema));
         let mut normalized = Vec::with_capacity(batches.len());
         for (batch_index, batch) in batches.into_iter().enumerate() {
@@ -459,26 +454,5 @@ impl TableAccess for ArrowTable {
             )
             .expect("validated temporal cell"),
         })
-    }
-}
-
-#[cfg(test)]
-mod offset_tests {
-    use super::*;
-    #[test]
-    fn canonical_utf8_offsets_preserve_unicode_nulls_and_real_integer_boundaries() {
-        let maximum = i32::MAX as usize;
-        for lengths in [vec![], vec![maximum - 1], vec![maximum], vec![maximum, 0]] {
-            assert!(fits_utf8_offsets(lengths));
-        }
-        for lengths in [vec![maximum, 1], vec![usize::MAX], vec![usize::MAX, 1]] {
-            assert!(!fits_utf8_offsets(lengths));
-        }
-        let values = string_array([Some("é"), None, Some("🙂"), Some("")]).unwrap();
-        assert_eq!(
-            values.iter().collect::<Vec<_>>(),
-            [Some("é"), None, Some("🙂"), Some("")]
-        );
-        assert_eq!(values.value_offsets(), [0, 2, 2, 6, 6]);
     }
 }

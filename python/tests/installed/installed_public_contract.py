@@ -84,7 +84,6 @@ class PublicContract(unittest.TestCase):
             "_capture_schema_metadata",
             "_schema_include_names",
             "_SchemaMetadata",
-            "_ProducerReport",
             "_prepare_document",
             "_prepare_specification",
             "_prepare_inherited_specification",
@@ -385,70 +384,6 @@ class PublicContract(unittest.TestCase):
 
     def test_callback_exception_lives_exactly_as_long_as_its_public_result(self):
         self.assert_callback_exception_lifetime(False)
-
-    def test_callback_exception_keeps_its_complete_unicode_and_nul_message(self):
-        source, environment = self.function_study()
-        message = "\u00e9\x00" * 30_000 + "complete failure"
-        original = RuntimeError(message)
-        resolve = host.resolve_callable
-        calls = []
-
-        def binding(*arguments):
-            invoke = resolve(*arguments)
-
-            def callback(**arguments):
-                calls.append(arguments)
-                if len(calls) > 2:
-                    raise original
-                return invoke(**arguments)
-
-            return callback
-
-        with patch.object(host, "resolve_callable", side_effect=binding):
-            result = yamaa.domain(source, environment=environment)
-        self.assertEqual(len(calls), 3)
-        self.assertIsNone(result.output)
-        self.assertEqual(result.issues["condition"].to_list(), ["function_call_failed"])
-        context = json.loads(result.issues["context"][0])
-        self.assertEqual(context["host_error"], "RuntimeError")
-        self.assertEqual(context["host_message"], message)
-        self.assertNotIn("host_details_truncated", context)
-        self.assertIs(result._native.project_failures()[0][1], original)
-        with self.assertRaises(yamaa.DomainError):
-            result.save()
-
-    def test_callback_string_larger_than_one_mebibyte_is_owned_and_saved_exactly(self):
-        source, environment = self.function_study()
-        environment.write_text(
-            "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\n"
-            "functions:\n  text:\n    function: yamaa_benchmarks.project_value\n"
-            "    description: Return text unchanged.\n"
-            "    params: [{name: x, type: str}]\n    returns: str\n    tests:\n"
-            "      - {id: normal, covers: [normal], args: {x: short}, result: short}\n"
-            "      - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n"
-            "      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
-            encoding="utf-8",
-        )
-        source.write_text(
-            "schema_version: '1.0'\ndomain: TEXT\nkeys: [ID]\n"
-            "input: {SRC: {path: large.csv, types: {ID: int, V: str}}}\n"
-            "columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n"
-            "  - {name: V, type: str, derivation: {function: {name: text, args: {x: SRC.V}}}}\n"
-            "output: {path: held.csv, columns: [ID, V]}\n",
-            encoding="utf-8",
-        )
-        value = "\u00e9" * 524_289 + "complete"
-        expected = ("ID,V\n1," + value + "\n").encode("utf-8")
-        (source.parent / "large.csv").write_bytes(expected)
-        result = yamaa.domain(source, environment=environment)
-        self.assertTrue(result.issues.is_empty(), result.issues)
-        self.assertEqual(result.output["V"].to_list(), [value])
-        source.unlink()
-        environment.unlink()
-        (source.parent / "large.csv").unlink()
-        for _ in range(2):
-            self.assertTrue(result.save())
-            self.assertEqual((source.parent / "held.csv").read_bytes(), expected)
 
     def test_reentrant_exception_rendering_keeps_owned_failures_collectable(self):
         self.assert_callback_exception_lifetime(True)

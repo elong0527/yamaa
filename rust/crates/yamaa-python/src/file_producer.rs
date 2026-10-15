@@ -1,13 +1,16 @@
 //! Whole-graph carriers retain actual build evidence and ordered Save authority.
 use crate::project_activation::Error as HostError;
 use pyo3::{
-    exceptions::{PyException, PyRuntimeError},
+    exceptions::{PyException, PyRuntimeError, PyValueError},
     prelude::*,
     types::PyBytes,
 };
 use std::sync::{Arc, Mutex, MutexGuard};
 use yamaa_adapters::{
-    callback::details, file_producer_build::FileBuild, producer_report::ProjectionError,
+    callback::CallbackError,
+    file_producer_build::{FileBuild, Limits},
+    producer_report::{self, ProjectionError},
+    project_function_diagnostics::HostDetails,
     project_report::Classified,
 };
 
@@ -20,6 +23,7 @@ pub(crate) fn build_selected_with_observer(
     py: Python<'_>,
     build: &mut FileBuild,
     fields: Arc<Vec<String>>,
+    report_bytes: usize,
     scope: yamaa_core::application_observer::Scope<'_>,
 ) -> Attempt {
     let provenance = Arc::clone(build.provenance());
@@ -30,8 +34,14 @@ pub(crate) fn build_selected_with_observer(
             .lock()
             .map_or(&[], |lock| &lock.source.bytes),
     );
-    let inner =
-        build.build_owned_reported(&mut port, crate::report_fields::identity(&fields), scope);
+    let mut limits = Limits::default();
+    limits.engine.report_bytes = report_bytes;
+    let inner = build.build_owned_reported_with_observer(
+        &mut port,
+        crate::report_fields::identity(&fields),
+        limits,
+        scope,
+    );
     Attempt {
         inner: Arc::new(Mutex::new(inner)),
         fields,
@@ -53,27 +63,114 @@ impl Attempt {
             fields: Arc::clone(&self.fields),
         }
     }
-    pub(crate) fn formatted(&self, py: Python<'_>) -> PyResult<Report> {
+    pub(crate) fn formatted(
+        &self,
+        py: Python<'_>,
+        maximum: usize,
+        public: bool,
+    ) -> PyResult<Report> {
         let state = self.get()?;
-        let mut failures = Vec::new();
-        yamaa_adapters::producer_attempt::visit_host_failures(&state, |_, error| {
-            failures.push(error)
+        let mut count = 0usize;
+        yamaa_adapters::producer_attempt::visit_host_failures(&state, |_, _| {
+            count = count.saturating_add(1)
         });
-        let ordinary = failures
-            .iter()
-            .map(|error| match error {
-                HostError::Host(error) if error.is_instance_of::<PyException>(py) => {
-                    Some(crate::function_callback::exception(py, error.clone_ref(py)))
+        let projection_maximum = maximum.min(yamaa_adapters::host_limits::REPLY_BYTES);
+        let mut remaining = projection_maximum;
+        let admitted = count <= yamaa_adapters::host_limits::RECORDS
+            && count
+                .checked_mul(128)
+                .and_then(|size| remaining.checked_sub(size))
+                .is_some();
+        let mut refusal = if admitted { "" } else { "report_limit" };
+        let mut refusal_details = if admitted {
+            None
+        } else if count > yamaa_adapters::host_limits::RECORDS {
+            Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                "report_entries",
+                yamaa_adapters::host_limits::RECORDS,
+                Some(count),
+                Vec::new(),
+            ))
+        } else {
+            Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                "report_bytes",
+                projection_maximum,
+                count.checked_mul(128),
+                Vec::new(),
+            ))
+        };
+        let mut failures = Vec::new();
+        let mut ordinary = Vec::new();
+        if admitted {
+            remaining -= count * 128;
+            failures.reserve(count);
+            ordinary.reserve(count);
+            yamaa_adapters::producer_attempt::visit_host_failures(&state, |_, error| {
+                failures.push(error)
+            });
+            for error in &failures {
+                let mut limited = None;
+                let projection = match error {
+                    HostError::Host(error) if error.is_instance_of::<PyException>(py) => {
+                        ordinary_exception(
+                            py,
+                            error,
+                            &mut remaining,
+                            &mut limited,
+                            projection_maximum,
+                        )
+                    }
+                    _ => None,
+                };
+                if let Some(details) = limited {
+                    refusal_details = Some(details);
+                    refusal = "report_limit";
+                    break;
                 }
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let mut refusal = "";
-        let mut refusal_details = None;
+                if let Some(value) = projection.as_ref().or(match error {
+                    HostError::Result(value) => Some(value),
+                    _ => None,
+                }) {
+                    if let Some(details) = details(value) {
+                        let fields = match details {
+                            HostDetails::Exception { class, message, .. } => {
+                                [Some(class), Some(message)]
+                            }
+                            HostDetails::Rejected { reason, returned } => [Some(reason), returned],
+                        };
+                        for text in fields.into_iter().flatten() {
+                            let charge = text
+                                .len()
+                                .checked_mul(12)
+                                .and_then(|size| size.checked_add(128));
+                            if let Some(left) = charge.and_then(|size| remaining.checked_sub(size))
+                            {
+                                remaining = left;
+                            } else {
+                                refusal = "report_limit";
+                                refusal_details =
+                                    Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                                        "report_bytes",
+                                        projection_maximum,
+                                        charge.and_then(|charge| {
+                                            (projection_maximum - remaining).checked_add(charge)
+                                        }),
+                                        Vec::new(),
+                                    ));
+                            }
+                        }
+                    }
+                }
+                ordinary.push(projection);
+                if !refusal.is_empty() {
+                    break;
+                }
+            }
+        }
         let mut observations = None;
         let mut domain = None;
         let mut output_error = None;
-        {
+        if refusal.is_empty() {
             let facts = failures
                 .iter()
                 .zip(&ordinary)
@@ -95,42 +192,55 @@ impl Attempt {
                         }),
                 })
                 .collect::<Vec<_>>();
-            let projected = match yamaa_adapters::producer_result::prepare_owned_classified(
-                &state,
-                crate::report_fields::identity(&self.fields),
-                &facts,
-            ) {
-                Ok(value) => {
-                    domain = Some(Mutex::new(value));
-                    Ok(())
-                }
-                Err(yamaa_adapters::producer_result::Error::Report(error)) => Err(error),
-                Err(yamaa_adapters::producer_result::Error::Output {
-                    observations: value,
-                    error,
-                    ..
-                }) => {
-                    observations = Some(value.to_string());
-                    if let yamaa_adapters::ipc_table::TableError::Limit {
-                        resource,
-                        limit,
-                        required,
-                    } = error
-                    {
-                        refusal_details = Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+            let projected = if public {
+                match yamaa_adapters::producer_result::prepare_owned_classified(
+                    &state,
+                    crate::report_fields::identity(&self.fields),
+                    maximum,
+                    &facts,
+                ) {
+                    Ok(value) => {
+                        domain = Some(Mutex::new(value));
+                        Ok(None)
+                    }
+                    Err(yamaa_adapters::producer_result::Error::Report(error)) => Err(error),
+                    Err(yamaa_adapters::producer_result::Error::Output {
+                        observations: value,
+                        error,
+                        ..
+                    }) => {
+                        observations = Some(value.to_string());
+                        if let yamaa_adapters::ipc_table::TableError::Limit {
                             resource,
                             limit,
                             required,
-                            vec!["output.path".into()],
-                        ));
+                        } = error
+                        {
+                            refusal_details =
+                                Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                                    resource,
+                                    limit,
+                                    required,
+                                    vec!["output.path".into()],
+                                ));
+                        }
+                        output_error = Some(error);
+                        refusal = "output_projection";
+                        Ok(None)
                     }
-                    output_error = Some(error);
-                    refusal = "output_projection";
-                    Ok(())
                 }
+            } else {
+                producer_report::attempt_report_classified(
+                    &state,
+                    crate::report_fields::identity(&self.fields),
+                    maximum,
+                    &facts,
+                )
+                .map(Some)
             };
             match projected {
-                Ok(()) => {}
+                Ok(Some(value)) => observations = Some(value.to_string()),
+                Ok(None) => {}
                 Err(ProjectionError::Original {
                     observations: value,
                     ..
@@ -139,9 +249,12 @@ impl Attempt {
                     refusal = "original_boundary";
                 }
                 Err(ProjectionError::Report(
+                    yamaa_adapters::specification_report::Error::OutputLimit,
+                )) => refusal = "report_limit",
+                Err(ProjectionError::Report(
                     yamaa_adapters::specification_report::Error::ResourceLimit(details),
                 )) => {
-                    refusal = "output_limit";
+                    refusal = "report_limit";
                     refusal_details = Some(details);
                 }
                 Err(_) => refusal = "report_refusal",
@@ -166,9 +279,24 @@ impl Attempt {
         let state = self.get()?;
         Ok(state.graph.nodes.iter().map(|node| node.node).collect())
     }
+    #[pyo3(signature = (maximum=yamaa_adapters::host_limits::REPLY_BYTES))]
+    fn result(&self, py: Python<'_>, maximum: usize) -> PyResult<Report> {
+        self.formatted(py, maximum, false)
+    }
     pub(crate) fn host_failures(&self, py: Python<'_>) -> PyResult<Vec<(&'static str, Py<PyAny>)>> {
         let state = self.get()?;
-        let mut failures = Vec::new();
+        let mut count = 0usize;
+        yamaa_adapters::producer_attempt::visit_host_failures(&state, |_, error| {
+            if matches!(error, HostError::Host(_)) {
+                count = count.saturating_add(1);
+            }
+        });
+        if count > yamaa_adapters::host_limits::RECORDS {
+            return Err(PyValueError::new_err(
+                "host failure evidence limit; original attempt remains retained",
+            ));
+        }
+        let mut failures = Vec::with_capacity(count);
         yamaa_adapters::producer_attempt::visit_host_failures(&state, |stage, error| {
             if let HostError::Host(error) = error {
                 failures.push((stage, error.value(py).clone().into_any().unbind()));
@@ -193,7 +321,15 @@ impl Attempt {
         py: Python<'py>,
     ) -> PyResult<Vec<(String, Bound<'py, PyBytes>)>> {
         let state = self.get()?;
-        let sources = &state.resources;
+        let sources = match &state.resources {
+            Ok(sources) => sources,
+            Err(error) => &error.retained,
+        };
+        source_budget(
+            sources
+                .iter()
+                .map(|(name, bytes)| (name.as_str(), bytes.as_ref())),
+        )?;
         Ok(sources
             .iter()
             .map(|(name, bytes)| (name.clone(), PyBytes::new(py, bytes)))
@@ -216,6 +352,7 @@ impl Attempt {
     }
 }
 
+#[pyclass(frozen, module = "yamaa._native", name = "_ProducerReport")]
 pub struct Report {
     carrier: Attempt,
     observations: Option<String>,
@@ -325,4 +462,96 @@ impl Report {
     pub(crate) fn propagate_domain_interrupt(&self, py: Python<'_>) -> PyResult<()> {
         self.carrier.propagate_interrupt(py)
     }
+}
+
+#[pymethods]
+impl Report {
+    fn report_status(&self) -> &'static str {
+        if self.refusal.is_empty() {
+            "complete"
+        } else {
+            self.refusal
+        }
+    }
+    fn observations(&self) -> PyResult<String> {
+        self.observations.as_ref().cloned().ok_or_else(|| {
+            PyValueError::new_err("report refused; original attempt remains retained")
+        })
+    }
+    fn attempt(&self) -> Attempt {
+        self.carrier.retained()
+    }
+}
+fn details(error: &CallbackError) -> Option<HostDetails<'_>> {
+    match error {
+        CallbackError::Exception {
+            class,
+            message,
+            truncated,
+        } => Some(HostDetails::Exception {
+            class,
+            message,
+            truncated: *truncated,
+        }),
+        CallbackError::Rejected { reason, returned } => Some(HostDetails::Rejected {
+            reason,
+            returned: returned.as_deref(),
+        }),
+        CallbackError::Boundary(_) => None,
+    }
+}
+fn ordinary_exception(
+    py: Python<'_>,
+    error: &PyErr,
+    remaining: &mut usize,
+    limited: &mut Option<yamaa_adapters::resource_diagnostics::Refusal>,
+    projection_maximum: usize,
+) -> Option<CallbackError> {
+    let class = error.get_type(py).name().ok()?;
+    let class = class.to_str().ok()?;
+    let message = error.value(py).str().ok()?;
+    let message = message.to_str().ok()?;
+    if let Some(text) = [class, message]
+        .into_iter()
+        .find(|text| text.len() > yamaa_adapters::callback::MAX_ERROR_BYTES)
+    {
+        *limited = Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+            "host_error_bytes",
+            yamaa_adapters::callback::MAX_ERROR_BYTES,
+            Some(text.len()),
+            Vec::new(),
+        ));
+        return None;
+    }
+    // Admit both borrowed host texts before constructing native owned copies.
+    for text in [class, message] {
+        let next = text
+            .len()
+            .checked_mul(12)
+            .and_then(|size| size.checked_add(128))
+            .and_then(|size| remaining.checked_sub(size));
+        let Some(next) = next else {
+            *limited = Some(yamaa_adapters::resource_diagnostics::Refusal::new(
+                "report_bytes",
+                projection_maximum,
+                text.len()
+                    .checked_mul(12)
+                    .and_then(|size| size.checked_add(128))
+                    .and_then(|charge| (projection_maximum - *remaining).checked_add(charge)),
+                Vec::new(),
+            ));
+            return None;
+        };
+        *remaining = next;
+    }
+    Some(CallbackError::Exception {
+        class: class.into(),
+        message: message.into(),
+        truncated: false,
+    })
+}
+pub(crate) fn source_budget<'a>(
+    sources: impl Iterator<Item = (&'a str, &'a [u8])>,
+) -> PyResult<()> {
+    yamaa_adapters::host_limits::source_evidence(sources).map_err(PyValueError::new_err)
 }

@@ -13,7 +13,7 @@
 #include "readstat_xport.h"
 #include "ieee.h"
 
-extern int yamaa_readstat_admit(size_t, size_t);
+extern int yamaa_readstat_admit(size_t, size_t, size_t);
 extern void yamaa_readstat_number(const unsigned char *);
 
 #define LINE_LEN        80
@@ -251,7 +251,7 @@ static readstat_error_t xport_read_namestr_header_record(xport_ctx_t *ctx) {
     }
 
     ctx->var_count = xrecord.num2;
-    if (!yamaa_readstat_admit(0, ctx->var_count))
+    if (!yamaa_readstat_admit(0, ctx->var_count, ctx->var_count * sizeof(readstat_variable_t)))
         return READSTAT_ERROR_MALLOC;
     ctx->variables = readstat_calloc(ctx->var_count, sizeof(readstat_variable_t *));
     if (ctx->variables == NULL) {
@@ -478,6 +478,9 @@ static readstat_error_t xport_read_variables(xport_ctx_t *ctx) {
             retval = READSTAT_ERROR_PARSE; goto cleanup;
         }
         expected_offset += namestr.nlng;
+        if (!yamaa_readstat_admit(0, ctx->var_count, expected_offset)) {
+            retval = READSTAT_ERROR_MALLOC; goto cleanup;
+        }
 
         readstat_variable_t *variable = calloc(1, sizeof(readstat_variable_t));
         if (!variable) { retval = READSTAT_ERROR_MALLOC; goto cleanup; }
@@ -562,6 +565,9 @@ static readstat_error_t xport_read_variables(xport_ctx_t *ctx) {
         }
 
         ctx->row_length += variable->storage_width;
+        if (!yamaa_readstat_admit(0, ctx->var_count, ctx->row_length)) {
+            retval = READSTAT_ERROR_MALLOC; goto cleanup;
+        }
     }
 
 cleanup:

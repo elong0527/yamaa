@@ -6,13 +6,21 @@ use std::{
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
+const MAX_PATH_BYTES: usize = 65_536;
+const MAX_OUTPUT_BYTES: usize = yamaa_core::capacity::SOURCE_BYTES;
 static NEXT: AtomicU64 = AtomicU64::new(0);
+fn admit_output_bytes(length: usize) -> Result<(), Error> {
+    if length > MAX_OUTPUT_BYTES {
+        Err(Error::Limit)
+    } else {
+        Ok(())
+    }
+}
 #[derive(Debug)]
 pub enum Error {
     InvalidTarget,
     PathMismatch,
-    Limit(yamaa_core::limits::LimitExceeded),
-    StagingCollision,
+    Limit,
     Changed,
     Io(std::io::Error),
     Cleanup {
@@ -26,8 +34,7 @@ impl Error {
         match self {
             Self::InvalidTarget => "invalid explicit publication target",
             Self::PathMismatch => "publication path does not match explicit target",
-            Self::Limit(_) => "publication output byte limit",
-            Self::StagingCollision => "publication temporary names already exist",
+            Self::Limit => "publication byte or path limit",
             Self::Changed => "publication target changed",
             Self::Io(_) => "artifact publication failed",
             Self::Cleanup {
@@ -70,6 +77,9 @@ impl AnchoredTarget {
         }
     }
     pub(crate) fn publisher(&self, declared: &str) -> Result<Publisher, Error> {
+        if declared.len() > MAX_PATH_BYTES || self.target.len() > MAX_PATH_BYTES {
+            return Err(Error::Limit);
+        }
         if declared.is_empty() || declared.contains('\0') || self.remainder.is_empty() {
             return Err(Error::InvalidTarget);
         }
@@ -138,6 +148,9 @@ impl Publisher {
     }
     /// Explicit caller-selected target; authored declarations grant no write authority.
     pub fn new(declared: &str, target: &str) -> Result<Self, Error> {
+        if declared.len() > MAX_PATH_BYTES || target.len() > MAX_PATH_BYTES {
+            return Err(Error::Limit);
+        }
         if declared.is_empty()
             || declared.contains('\0')
             || target.contains('\0')
@@ -197,7 +210,7 @@ impl Publisher {
         if declared != self.declared {
             return Err(Error::PathMismatch);
         }
-        yamaa_core::limits::Limits::output_bytes(content.len()).map_err(Error::Limit)?;
+        admit_output_bytes(content.len())?;
         let _lock = DirectoryLock::acquire(&self.parent)?;
         self.check_target()?;
         let mut temporary = self.temporary()?;
@@ -270,7 +283,7 @@ impl Publisher {
             }
             return Ok(temporary);
         }
-        Err(Error::StagingCollision)
+        Err(Error::Limit)
     }
 }
 struct Pending<'a> {
@@ -394,16 +407,11 @@ mod tests {
             publisher.publish("different.csv", b"new"),
             Err(Error::PathMismatch)
         ));
-        let declared = "a".repeat(65_537);
-        Publisher::new(&declared, study.0.join("output.csv").to_str().unwrap())
-            .unwrap()
-            .publish(&declared, b"complete")
-            .unwrap();
-        assert_eq!(
-            std::fs::read(study.0.join("output.csv")).unwrap(),
-            b"complete"
-        );
-        std::fs::write(study.0.join("output.csv"), b"old").unwrap();
+        assert!(matches!(
+            admit_output_bytes(MAX_OUTPUT_BYTES + 1),
+            Err(Error::Limit)
+        ));
+        assert!(admit_output_bytes(MAX_OUTPUT_BYTES).is_ok());
         for target in [
             "output.csv/",
             "output.csv/.",
@@ -459,7 +467,7 @@ mod tests {
         let publisher = study.publisher(&name);
         assert!(matches!(
             publisher.temporary_with_numbers(|| 0),
-            Err(Error::StagingCollision)
+            Err(Error::Limit)
         ));
         assert!(study.names().is_empty());
     }

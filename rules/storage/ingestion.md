@@ -307,7 +307,7 @@ describe at all.
 
 | Field | Meaning |
 | --- | --- |
-| `dataset_class.path` | Source data path, relative to its `relative_to` base or absolute at its local location, with no missing-file fallback, under [Resource resolution](resources.md); [CSV profile](csv.md) selects the source profile from its extension. |
+| `dataset_class.path` | Source data path, relative to the specification that writes it or absolute at its local location, with no missing-file fallback, under [Resource resolution](resources.md); [CSV profile](csv.md) selects the source profile from its extension. |
 | `dataset_class.types` | Type each named field carries; [Source ingestion](ingestion.md) types the rest. |
 | `dataset_class.schema` | Producing specification whose output contract supplies the source fields and types; [Source ingestion](ingestion.md) defines the workflow edge. |
 | `dataset_class.ordinal` | Name of the generated source record ordinal under REQ-1291. |

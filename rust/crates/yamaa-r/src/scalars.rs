@@ -24,7 +24,7 @@ fn boundary(run: impl FnOnce() -> std::result::Result<ScalarBytes, String>) -> L
 fn scalar_bytes(tag: i32, payload: Raw) -> List {
     boundary(|| {
         scalar_bytes::decode(tag, payload.as_slice())
-            .map(scalar_bytes::encode)
+            .and_then(scalar_bytes::encode)
             .map_err(String::from)
     })
 }
@@ -34,7 +34,7 @@ fn scalar_bytes(tag: i32, payload: Raw) -> List {
 fn scalar_exact_double(tag: i32, payload: Raw) -> List {
     boundary(|| {
         let value = scalar_bytes::decode(tag, payload.as_slice())?;
-        Ok(scalar_bytes::encode(scalar_bytes::exact_float(&value)?))
+        scalar_bytes::encode(scalar_bytes::exact_float(&value)?).map_err(String::from)
     })
 }
 /// Apply a selected scalar operator to two independently admitted byte payloads.
@@ -65,11 +65,8 @@ fn scalar_operator(
         } else {
             Some(scalar_bytes::decode(right_tag, right.as_slice())?)
         };
-        Ok(scalar_bytes::encode(scalar_bytes::operate(
-            code,
-            &left,
-            right.as_ref(),
-        )?))
+        scalar_bytes::encode(scalar_bytes::operate(code, &left, right.as_ref())?)
+            .map_err(String::from)
     })
 }
 

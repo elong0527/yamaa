@@ -3,7 +3,7 @@
 use crate::{
     file_resources::{Error as ResourceError, Resources},
     project_source::{CapturePort, Kind, Reply, Request},
-    specification_source::Source,
+    specification_source::{Limits, Source},
 };
 use yamaa_core::inheritance::{Source as Identity, SourceError};
 
@@ -22,6 +22,9 @@ impl Reader<'_> {
         } else {
             format!("{}/{written}", directory(declaring)?)
         };
+        if display_path.len() > Limits::default().identity_bytes {
+            return Err(ResourceError::Limit);
+        }
         Ok(Identity {
             identity,
             display_path,
@@ -52,12 +55,13 @@ impl yamaa_core::file_preparation::NativePort for Reader<'_> {
         &mut self,
         declaring: Option<&str>,
         written: &str,
+        maximum: usize,
     ) -> Result<Vec<u8>, ResourceError> {
         let (bytes, _) = match declaring {
-            Some(declaring) => self.resources.capture_metadata_from(declaring, written),
-            None => self.resources.capture_metadata(written),
+            Some(declaring) => self.resources.capture_from(declaring, written, maximum),
+            None => self.resources.capture(written, maximum),
         }?;
-        Ok(bytes.to_vec())
+        self.resources.preparation_copy(&bytes)
     }
     fn canonicalize(
         &mut self,
@@ -79,10 +83,11 @@ impl yamaa_core::file_preparation::NativePort for Reader<'_> {
         &mut self,
         declaring: &str,
         written: &str,
+        maximum: usize,
     ) -> Result<Vec<u8>, SourceError<ResourceError>> {
         self.resources
-            .capture_metadata_from(declaring, written)
-            .map(|(bytes, _)| bytes.to_vec())
+            .capture_from(declaring, written, maximum)
+            .and_then(|(bytes, _)| self.resources.preparation_copy(&bytes))
             .map_err(SourceError::Raised)
     }
     fn resource_failure(
@@ -98,15 +103,20 @@ impl yamaa_core::file_preparation::NativePort for Reader<'_> {
             _ => None,
         }
     }
-
+    fn admit_alias_text(&mut self, bytes: usize) -> Result<(), SourceError<ResourceError>> {
+        self.resources
+            .charge_metadata_text(bytes)
+            .map_err(available)
+    }
     fn capture_parent(
         &mut self,
         declaring: &str,
         written: &str,
+        maximum: usize,
     ) -> Result<Vec<u8>, SourceError<ResourceError>> {
         self.resources
-            .capture_metadata_from(declaring, written)
-            .map(|(bytes, _)| bytes.to_vec())
+            .capture_from(declaring, written, maximum)
+            .and_then(|(bytes, _)| self.resources.preparation_copy(&bytes))
             .map_err(available)
     }
     fn rebase(
@@ -114,12 +124,18 @@ impl yamaa_core::file_preparation::NativePort for Reader<'_> {
         layer: &Identity,
         entry: &Identity,
         written: &str,
+        maximum: usize,
     ) -> Result<String, ResourceError> {
-        rebase(&layer.identity, &entry.identity, written)
+        rebase(&layer.identity, &entry.identity, written, maximum)
     }
-    fn accept_alias(&mut self, declaring: &str, written: &str) -> Result<(), ResourceError> {
+    fn accept_alias(
+        &mut self,
+        declaring: &str,
+        written: &str,
+        maximum: usize,
+    ) -> Result<(), ResourceError> {
         self.resources
-            .capture_metadata_from(declaring, written)
+            .capture_from(declaring, written, maximum)
             .map(|_| ())
     }
     fn select_entry_base(&mut self, identity: &str) -> Result<(), ResourceError> {
@@ -138,7 +154,15 @@ fn directory(identity: &str) -> Result<&str, ResourceError> {
         .ok_or(ResourceError::InvalidPath)
 }
 /// Lexical only: preparation never inspects or opens a study/output path.
-fn rebase(layer: &str, entry: &str, written: &str) -> Result<String, ResourceError> {
+fn rebase(
+    layer: &str,
+    entry: &str,
+    written: &str,
+    maximum: usize,
+) -> Result<String, ResourceError> {
+    if written.len() > maximum {
+        return Err(ResourceError::Limit);
+    }
     let layer = directory(layer)?;
     let entry = directory(entry)?;
     let drive_rooted = written
@@ -181,7 +205,11 @@ fn rebase(layer: &str, entry: &str, written: &str) -> Result<String, ResourceErr
     } else {
         result
     };
-    Ok(result)
+    if result.len() > maximum {
+        Err(ResourceError::Limit)
+    } else {
+        Ok(result)
+    }
 }
 
 impl CapturePort for Reader<'_> {
@@ -190,12 +218,17 @@ impl CapturePort for Reader<'_> {
         let identity = self
             .resources
             .resolve_from(request.declaring_source, request.written)?;
-        let (bytes, _) = self
-            .resources
-            .capture_metadata_from(request.declaring_source, request.written)?;
+        if identity.len() > request.remaining_identity_bytes {
+            return Err(ResourceError::Limit);
+        }
+        let (bytes, _) = self.resources.capture_from(
+            request.declaring_source,
+            request.written,
+            request.remaining_bytes,
+        )?;
         let source = Source {
             identity,
-            bytes: bytes.to_vec(),
+            bytes: self.resources.preparation_copy(&bytes)?,
         };
         Ok(match request.kind {
             Kind::Lock => Reply::Lock {
@@ -210,7 +243,9 @@ impl CapturePort for Reader<'_> {
 
 impl yamaa_core::build::MetadataAdmissionPort for Reader<'_> {
     type Error = ResourceError;
-
+    fn charge_work(&mut self, work: usize) -> Result<(), Self::Error> {
+        self.resources.charge_work(work)
+    }
     fn verify_metadata(&mut self) -> Result<(), (String, Self::Error)> {
         self.resources.verify_captured()
     }
