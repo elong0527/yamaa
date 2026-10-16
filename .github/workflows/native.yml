@@ -300,6 +300,9 @@ jobs:
         run: |
           python -m pip install --no-deps -r table-requirements.txt
           python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz project-dist/*.whl
+      - name: Install the minimum supported Python saved artifact readers
+        working-directory: ${{ runner.temp }}
+        run: python -m pip install polars==1.43.2 pyarrow==23.0.1 lxml==6.1.0
       - name: Report installed Python public benchmark conformance
         working-directory: ${{ runner.temp }}
         run: |
@@ -490,29 +493,12 @@ jobs:
           name: public-conformance-r-${{ matrix.os }}
           path: ${{ runner.temp }}/public-conformance
           if-no-files-found: error
-      - name: Install pinned R fixture JSON codec
+      - name: Install the minimum supported R saved artifact readers
         if: ${{ !cancelled() && steps.r_install.outcome == 'success' }}
         working-directory: ${{ runner.temp }}
         env:
           R_LIBS: ${{ runner.temp }}/native-r-library
-        run: |
-          Rscript --vanilla - <<'RS'
-          version <- "2.0.0"
-          archive <- paste0("jsonlite_", version, ".tar.gz")
-          urls <- c(paste0("https://cran.r-project.org/src/contrib/", archive),
-                    paste0("https://cran.r-project.org/src/contrib/Archive/jsonlite/", archive))
-          target <- tempfile(fileext = ".tar.gz")
-          downloaded <- FALSE
-          for (url in urls) {
-            downloaded <- tryCatch({
-              download.file(url, target, mode = "wb", quiet = TRUE) == 0L
-            }, error = function(error) FALSE)
-            if (downloaded) break
-          }
-          stopifnot(downloaded)
-          install.packages(target, repos = NULL, type = "source", lib = Sys.getenv("R_LIBS"))
-          stopifnot(as.character(utils::packageVersion("jsonlite")) == version)
-          RS
+        run: Rscript --vanilla "${GITHUB_WORKSPACE}/tools/ci/install_minimum_r_readers.R" "${GITHUB_WORKSPACE}/R/yamaa/DESCRIPTION"
       - name: Run installed R supplemental suites outside checkout
         if: ${{ !cancelled() && steps.r_install.outcome == 'success' }}
         working-directory: ${{ runner.temp }}

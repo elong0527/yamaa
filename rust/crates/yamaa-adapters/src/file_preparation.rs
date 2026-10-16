@@ -161,6 +161,12 @@ impl FileSpecification {
         self.resources.capture_reads()
     }
 
+    pub fn resolved_specification(
+        &self,
+    ) -> Result<crate::resolved_artifact::ResolvedArtifact, crate::resolved_artifact::Error> {
+        crate::resolved_artifact::single(self.run.document(), &self.resources, None)
+    }
+
     pub(crate) fn publication_target(
         &self,
     ) -> Result<crate::resource_publication::AnchoredTarget, ResourceError> {
@@ -178,14 +184,11 @@ impl FileSpecification {
         self.resources
             .publication_target_from(origin.base_source, origin.written)
     }
-    pub fn build(&mut self) -> CapturedAttempt<ResourceError> {
-        self.run.execute_with_port(&mut self.resources)
-    }
-    pub fn build_with_observer(
+    pub fn build(
         &mut self,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> CapturedAttempt<ResourceError> {
-        self.run.execute_with_observer(&mut self.resources, scope)
+        self.run.execute_with_port(&mut self.resources, scope)
     }
 }
 

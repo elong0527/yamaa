@@ -1,7 +1,12 @@
 Package: yamaa
 Title: Clinical Data Specifications with the Shared Rust Engine
 Version: 0.4.0
-Authors@R: person("Ming-Chun", "Chen", email = "hellomingchun@gmail.com", role = c("aut", "cre"))
+Authors@R: c(
+    person("Yilong", "Zhang", email = "elong0527@gmail.com", role = c("aut", "cre")),
+    person("Ming-Chun", "Chen", role = "ctb"),
+    person("Peng", "Zhang", role = "ctb"),
+    person("Bingjun", "Wang", role = "ctb"),
+    person("Jingwei", "Xiong", role = "ctb"))
 Description: Builds clinical data specifications, checks declarations, and
     renders submission metadata through the shared Rust engine. Returns owned
     data frames and structured diagnostics, with explicit publication of
@@ -9,6 +14,6 @@ Description: Builds clinical data specifications, checks declarations, and
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.6.1)
-Suggests: arrow, jsonlite, nanoarrow (>= 0.8.0)
+Suggests: arrow (>= 23.0.1), jsonlite (>= 2.0.0), nanoarrow (>= 0.8.0)
 SystemRequirements: Cargo, rustc (>= 1.90.0), GNU make
 NeedsCompilation: yes

@@ -103,6 +103,29 @@ JSON in specification order and XML last, stopping after an operational failure.
 A failed Define Save raises `yamaa_define_error`. See the
 [submission contracts](../../rules/README.md#submission).
 
+## Resolved specification inspection
+
+```r
+artifact <- yamaa_resolve_specification("study/spec.yaml")
+serialized <- as.character(artifact)
+facts <- jsonlite::fromJSON(serialized, simplifyVector = FALSE)
+restored <- yamaa_read_resolved_specification(serialized)
+```
+
+These APIs use the shared [resolved artifact format](../../rust/README.md#resolved-specification-artifact).
+The owned JSON records the complete composed normalized model, original field
+provenance, selected resource roots and producer-specific entry identities.
+The optional `environment` argument admits declared project metadata without
+invoking callbacks. Missing study data and nonexistent output locations can be
+inspected; missing required metadata signals `yamaa_resolved_specification_error`
+with an `issues` data frame.
+
+Loading validates the distinct format and version and replays inspection facts
+only. It never opens resources, rebinds paths or compiles an executable program.
+Facts remain available after source deletion or a working-directory change.
+The held JSON preserves integer tokens exactly; configure any optional JSON
+reader for lossless numeric conversion when inspecting large integers.
+
 ## Implementation limits
 
 The shared hosts use the same [resource policies](../../docs/release.md#resource-limits).

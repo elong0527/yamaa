@@ -3,7 +3,7 @@
 use super::{
     scalar_diagnostic_label, ComposedValue, CompositionOrigin, Document, DocumentNode as N,
     NormalizationError, NormalizationResource, SchemaContext, SchemaDiagnostic, SchemaField,
-    SchemaStructure, ValidationError,
+    SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
 };
 use crate::diagnostic::ConditionCode;
 use std::vec;
@@ -15,10 +15,36 @@ pub struct LayerProvenance {
     pub layer: usize,
 }
 
+/// An original normalization occurrence, kept separately from diagnostic paths.
+/// A layer identifies authored input; defaults identify a schema module instead.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LayerNodeOrigin {
+    pub layer: Option<usize>,
+    pub origin: SchemaOrigin,
+}
+impl LayerNodeOrigin {
+    /// Transport a normalization occurrence through the prior retained arena.
+    pub fn through(origin: SchemaOrigin, prior: &[Self]) -> Self {
+        match origin.source {
+            SchemaSource::Input => {
+                let mut original = prior[origin.node];
+                original.origin.generated |= origin.generated;
+                original
+            }
+            SchemaSource::Default { .. } => Self {
+                layer: None,
+                origin,
+            },
+        }
+    }
+}
+
 /// Composition precedes default materialization, pruning and complete-document validation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComposedLayers {
     pub document: Document,
+    /// Parallel to document nodes, including materialized defaults and shorthand.
+    pub node_origins: Vec<LayerNodeOrigin>,
     pub provenance: Vec<LayerProvenance>,
     pub diagnostics: Vec<SchemaDiagnostic>,
 }
@@ -625,6 +651,17 @@ impl SchemaStructure {
         let provenance = provenance(&document, &origins)?;
         Ok(ComposedLayers {
             document,
+            node_origins: origins
+                .into_iter()
+                .map(|origin| LayerNodeOrigin {
+                    layer: origin.map(|origin| origin.input),
+                    origin: SchemaOrigin {
+                        source: SchemaSource::Input,
+                        node: origin.map_or(0, |origin| origin.node),
+                        generated: origin.is_none(),
+                    },
+                })
+                .collect(),
             provenance,
             diagnostics,
         })

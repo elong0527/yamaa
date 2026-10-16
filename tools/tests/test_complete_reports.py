@@ -371,6 +371,26 @@ class CompletePublicTruth(unittest.TestCase):
             if isinstance(value, int):
                 self.assertIn("artifact.types", [finding.kind for finding in findings])
 
+    def test_held_parquet_truth_reader_finishes_before_process_shutdown(self):
+        program = """
+import pyarrow as pa
+import pyarrow.parquet as pq
+from tools.conformance.report_values import _expected_parquet
+buffer = pa.BufferOutputStream()
+pq.write_table(pa.table({"VALUE": [1, 2, None]}), buffer)
+observed, kinds = _expected_parquet(buffer.getvalue().to_pybytes())
+assert kinds == ("int",)
+assert observed.to_dict(as_series=False) == {"VALUE": [1, 2, None]}
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", program],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_wrong_truth_tuple_or_missing_actual_lane_is_refused(self):
         result = self.compare()
         for label, change in (

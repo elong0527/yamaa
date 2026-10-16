@@ -161,6 +161,7 @@ fn interrupted_stage_cleans_provisional_output_by_held_target_identity() {
             specification: "spec.yaml",
             base_directory: ".",
         },
+        yamaa_core::application_observer::Scope::default(),
     )
     .unwrap();
     assert!(!result.save().unwrap());

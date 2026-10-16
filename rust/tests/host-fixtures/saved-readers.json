@@ -1,0 +1,261 @@
+{
+  "version": "1",
+  "created": "2026-09-11T00:00:00",
+  "specification": {
+    "schema_version": "1.0",
+    "domain": "TEST",
+    "keys": [
+      "ID"
+    ],
+    "input": {
+      "SRC": {
+        "path": "input.csv",
+        "types": {
+          "ID": "str",
+          "S": "str",
+          "I": "int",
+          "F": "float",
+          "D": "date",
+          "T": "datetime"
+        }
+      }
+    },
+    "output": {
+      "path": "output.parquet",
+      "columns": [
+        "ID",
+        "S",
+        "I",
+        "F",
+        "D",
+        "T",
+        "EMPTY"
+      ]
+    },
+    "columns": [
+      {
+        "name": "ID",
+        "type": "str",
+        "label": "ID",
+        "submission": {
+          "core": "Req",
+          "role": "Identifier",
+          "origin": {
+            "type": "Assigned",
+            "source": "Sponsor"
+          },
+          "length": 100
+        },
+        "derivation": "SRC.ID"
+      },
+      {
+        "name": "S",
+        "type": "str",
+        "label": "S",
+        "submission": {
+          "core": "Perm",
+          "role": "Record Qualifier",
+          "origin": {
+            "type": "Assigned",
+            "source": "Sponsor"
+          },
+          "length": 100
+        },
+        "derivation": "SRC.S"
+      },
+      {
+        "name": "I",
+        "type": "int",
+        "label": "I",
+        "submission": {
+          "core": "Perm",
+          "role": "Record Qualifier",
+          "origin": {
+            "type": "Assigned",
+            "source": "Sponsor"
+          },
+          "length": 20
+        },
+        "derivation": "SRC.I"
+      },
+      {
+        "name": "F",
+        "type": "float",
+        "label": "F",
+        "submission": {
+          "core": "Perm",
+          "role": "Record Qualifier",
+          "origin": {
+            "type": "Assigned",
+            "source": "Sponsor"
+          },
+          "length": 8,
+          "significant_digits": 17
+        },
+        "derivation": "SRC.F"
+      },
+      {
+        "name": "D",
+        "type": "date",
+        "label": "D",
+        "submission": {
+          "core": "Perm",
+          "role": "Record Qualifier",
+          "origin": {
+            "type": "Assigned",
+            "source": "Sponsor"
+          }
+        },
+        "derivation": "SRC.D"
+      },
+      {
+        "name": "T",
+        "type": "datetime",
+        "label": "T",
+        "submission": {
+          "core": "Perm",
+          "role": "Record Qualifier",
+          "origin": {
+            "type": "Assigned",
+            "source": "Sponsor"
+          }
+        },
+        "derivation": "SRC.T"
+      },
+      {
+        "name": "EMPTY",
+        "type": "str",
+        "label": "EMPTY",
+        "submission": {
+          "core": "Perm",
+          "role": "Record Qualifier",
+          "origin": {
+            "type": "Assigned",
+            "source": "Sponsor"
+          },
+          "length": 100
+        }
+      }
+    ],
+    "submission": {
+      "label": "Reader controls",
+      "class": "SPECIAL PURPOSE",
+      "structure": "One record per identifier",
+      "repeating": false
+    },
+    "rows": [
+      {
+        "id": "all",
+        "derivations": {
+          "EMPTY": {
+            "literal": ""
+          }
+        }
+      }
+    ]
+  },
+  "environment": {
+    "schema_version": "1.0",
+    "study": {
+      "id": "READER01",
+      "name": "Reader controls",
+      "description": "Invented independent saved artifact controls",
+      "protocol_name": "READER01"
+    },
+    "sdtm": {
+      "standard": {
+        "name": "SDTMIG",
+        "version": "3.4",
+        "status": "Final"
+      },
+      "specs": [
+        "spec.yaml"
+      ],
+      "define": "define.xml",
+      "dataset_json": true,
+      "context": "Submission",
+      "xml_lang": "en",
+      "file_oid": "READERS.1",
+      "metadata_version": {
+        "id": "READERS.1",
+        "name": "Reader metadata"
+      }
+    }
+  },
+  "input": "ID,S,I,F,D,T\na,,-9223372036854775808,-0.0,0001-01-01,1969-12-31T23:59:59\nb,\u00e9\ud83d\ude42,9223372036854775807,5e-324,9999-12-31,9999-12-31T23:59:59\nc,\"a, \"\"quote\"\"\",9007199254740993,1.2345678901234567,,\nd,,,,,\n",
+  "csv": "ID,S,I,F,D,T,EMPTY\na,,-9223372036854775808,-0,0001-01-01,1969-12-31T23:59:59,\"\"\nb,\u00e9\ud83d\ude42,9223372036854775807,0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005,9999-12-31,9999-12-31T23:59:59,\"\"\nc,\"a, \"\"quote\"\"\",9007199254740993,1.2345678901234567,,,\"\"\nd,,,,,,\"\"\n",
+  "columns": [
+    "ID",
+    "S",
+    "I",
+    "F",
+    "D",
+    "T",
+    "EMPTY"
+  ],
+  "types": [
+    "str",
+    "str",
+    "int",
+    "float",
+    "date",
+    "datetime",
+    "str"
+  ],
+  "values": {
+    "ID": [
+      "a",
+      "b",
+      "c",
+      "d"
+    ],
+    "S": [
+      null,
+      "\u00e9\ud83d\ude42",
+      "a, \"quote\"",
+      null
+    ],
+    "I": [
+      "-9223372036854775808",
+      "9223372036854775807",
+      "9007199254740993",
+      null
+    ],
+    "F": [
+      "8000000000000000",
+      "0000000000000001",
+      "3ff3c0ca428c59fb",
+      null
+    ],
+    "D": [
+      "0001-01-01",
+      "9999-12-31",
+      null,
+      null
+    ],
+    "T": [
+      "1969-12-31T23:59:59",
+      "9999-12-31T23:59:59",
+      null,
+      null
+    ],
+    "EMPTY": [
+      "",
+      "",
+      "",
+      ""
+    ]
+  },
+  "date_days": [
+    -719162,
+    2932896,
+    null,
+    null
+  ],
+  "timestamp_us": [
+    "-1000000",
+    "253402300799000000",
+    null,
+    null
+  ]
+}

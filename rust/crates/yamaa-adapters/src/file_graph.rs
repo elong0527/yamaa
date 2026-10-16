@@ -123,6 +123,11 @@ impl CapturedEntry {
     }
 }
 impl FileGraph {
+    pub fn resolved_specification(
+        &self,
+    ) -> Result<crate::resolved_artifact::ResolvedArtifact, crate::resolved_artifact::Error> {
+        crate::resolved_artifact::graph(self, &self.resources)
+    }
     /// Capture a canonical closure iteratively through the approved reader,
     /// then compile the whole graph once against the admitted environment.
     /// No activation, data, runtime or publisher port is accepted or exposed.

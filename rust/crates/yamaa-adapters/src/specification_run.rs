@@ -102,13 +102,7 @@ impl PreparedRun {
 
     /// Delegate capture and execution order to the engine. Preserve observations
     /// outside the panic fence; reporting never captures or decodes a source again.
-    pub fn execute_with_port<P: SourcePort>(&self, port: &mut P) -> CapturedAttempt<P::Error> {
-        self.execute_with_observer(
-            port,
-            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
-        )
-    }
-    pub fn execute_with_observer<P: SourcePort>(
+    pub fn execute_with_port<P: SourcePort>(
         &self,
         port: &mut P,
         scope: yamaa_core::application_observer::Scope<'_>,

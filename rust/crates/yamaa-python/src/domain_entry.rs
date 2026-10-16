@@ -203,7 +203,7 @@ pub fn _domain_file(
         };
         let measurements =
             std::sync::Arc::new(yamaa_adapters::application_measurements::Measurements::new());
-        let returned = match yamaa_core::domain_entry::domain_with_observer(
+        let returned = match yamaa_core::domain_entry::domain(
             yamaa_core::domain_entry::Request {
                 specification,
                 environment,

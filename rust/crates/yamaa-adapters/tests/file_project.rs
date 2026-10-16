@@ -16,6 +16,7 @@ mod file {
             project_run::BoundaryFailure,
             project_source::{CaptureFailure, Failure as EnvironmentFailure, Origin},
         };
+        use yamaa_core::application_observer::Scope;
         use yamaa_core::{
             function_invocation::{Argument, HostError},
             project_activation::{ActivationPort, Failure, LockObservation},
@@ -196,7 +197,7 @@ mod file {
                 mismatch: true,
                 ..Default::default()
             };
-            let attempt = project.build(&mut activation);
+            let attempt = project.build(&mut activation, Scope::default());
             let run = project.retained_run();
             study.write("env/id.yaml", "changed after preparation");
             study.write("env/environment.yaml", "changed root after preparation");
@@ -255,7 +256,7 @@ mod file {
                 reject: true,
                 ..Default::default()
             };
-            let attempt = project.build(&mut activation);
+            let attempt = project.build(&mut activation, Scope::default());
             assert!(attempt.boundary.is_ok());
             assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
             assert_eq!(activation.trace, ["bind", "call", "call", "call"]);
@@ -290,7 +291,7 @@ mod file {
                     mismatch: true,
                     ..Default::default()
                 };
-                let attempt = project.build(&mut activation);
+                let attempt = project.build(&mut activation, Scope::default());
                 if reject_binding {
                     assert!(matches!(
                         attempt.boundary,
@@ -347,7 +348,7 @@ mod file {
             study.write("entry/domain.yaml", "[changed");
             study.write("entry/input.csv", "ID\n1\n");
             let mut activation = Activation::default();
-            let first = project.build(&mut activation);
+            let first = project.build(&mut activation, Scope::default());
             assert!(first.boundary.is_ok());
             assert_eq!(first.activation.lock, LockObservation::Verified);
             assert_eq!(project.capture_reads(), 6);
@@ -364,7 +365,7 @@ mod file {
                     .rows(),
                 &[vec![Value::Int(1), Value::Int(1)]]
             );
-            let second = project.build(&mut activation);
+            let second = project.build(&mut activation, Scope::default());
             assert!(second.boundary.is_ok());
             assert_eq!(project.capture_reads(), 6);
             assert_eq!(second.dataset.sources[0].read.snapshots_created, Some(0));
@@ -423,7 +424,7 @@ mod file {
                 reject: true,
                 ..Default::default()
             };
-            let attempt = project.build(&mut activation);
+            let attempt = project.build(&mut activation, Scope::default());
             assert!(matches!(
                 attempt.boundary,
                 Err(BoundaryFailure::Activation(Failure::Lock(
@@ -484,14 +485,17 @@ mod file {
             study.write("entry/input.csv", "ID\n1\n");
             let mut constructed = 0;
             for _ in 0..2 {
-                let attempt = project.build_with(|run| {
-                    constructed += 1;
-                    Borrowed {
-                        lock: &run.captured_environment().lock().unwrap().source.bytes,
-                        expected,
-                        inner: Activation::default(),
-                    }
-                });
+                let attempt = project.build_with(
+                    |run| {
+                        constructed += 1;
+                        Borrowed {
+                            lock: &run.captured_environment().lock().unwrap().source.bytes,
+                            expected,
+                            inner: Activation::default(),
+                        }
+                    },
+                    Scope::default(),
+                );
                 assert!(attempt.boundary.is_ok());
                 assert_eq!(attempt.activation.lock, LockObservation::Verified);
                 assert!(attempt.dataset.result.unwrap().result.is_ok());
@@ -514,7 +518,7 @@ mod file {
                 .prepare(&study.text("entry"), &[study.text("")])
                 .unwrap();
             study.write("input.csv", "ID\n1\n");
-            let attempt = project.build(&mut Activation::default());
+            let attempt = project.build(&mut Activation::default(), Scope::default());
             assert!(attempt.boundary.is_ok());
             assert!(attempt.dataset.result.unwrap().result.is_ok());
             assert!(attempt.dataset.sources[0].read.source.path == "input.csv");
@@ -552,7 +556,7 @@ mod file {
             assert_eq!(document.parents().len(), 1);
             assert_eq!(document.written_source_path("SRC"), Some("data.csv"));
             assert_eq!(project.run().compiled().source().path, "../parent/data.csv");
-            let attempt = project.build(&mut Activation::default());
+            let attempt = project.build(&mut Activation::default(), Scope::default());
             assert!(attempt.boundary.is_ok());
             assert!(attempt.dataset.result.unwrap().result.is_ok());
             assert_eq!(project.capture_reads(), 7);
@@ -586,14 +590,14 @@ mod file {
                 reject: true,
                 ..Default::default()
             };
-            let rejection = project.build(&mut failed);
+            let rejection = project.build(&mut failed, Scope::default());
             assert_eq!(failed.trace, ["lock"]);
             assert!(rejection.dataset.sources.is_empty());
             assert_eq!(project.capture_reads(), 6);
             study.write("parent/data.csv", "ID\n1\n");
             let mut host = Activation::default();
-            let first = project.build(&mut host);
-            let second = project.build(&mut host);
+            let first = project.build(&mut host, Scope::default());
+            let second = project.build(&mut host, Scope::default());
             assert!(first.boundary.is_ok() && second.boundary.is_ok());
             assert_eq!(
                 host.trace,
@@ -1403,6 +1407,7 @@ mod file {
             file_workflow::{self, Error},
             producer_check, shipped_schema,
         };
+        use yamaa_core::application_observer::Scope;
         use yamaa_core::project_function::Language;
 
         static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -2677,8 +2682,8 @@ mod file {
                 shipped_schema::capture_environment().unwrap(),
             )
             .unwrap();
-            let selected_attempt = selected.build(&mut NoActivation);
-            let ordinary_attempt = ordinary.build(&mut NoActivation);
+            let selected_attempt = selected.build(&mut NoActivation, Scope::default());
+            let ordinary_attempt = ordinary.build(&mut NoActivation, Scope::default());
             assert_eq!(selected.capture_reads(), 3);
             let selected_result = yamaa_adapters::project_report::build_result(
                 selected.run(),

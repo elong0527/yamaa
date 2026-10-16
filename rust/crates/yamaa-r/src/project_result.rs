@@ -6,14 +6,10 @@ pub(crate) mod platform {
     use std::rc::Rc;
     use yamaa_adapters::{
         callback::{details, CallbackError},
+        file_application::BuildRefusal,
         project_report::{self, Classified},
         specification_report::BuildResult,
     };
-    pub(crate) struct HeldResult {
-        pub(crate) formatted: Option<BuildResult>,
-        pub(crate) refusal: &'static str,
-        pub(crate) refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
-    }
     // The installed helper renders only explicitly ordinary conditions. A failed
     // secondary renderer cannot replace the original payload in HeldAttempt.
     pub(crate) fn ordinary(
@@ -44,14 +40,12 @@ pub(crate) mod platform {
         attempt: Rc<HeldAttempt>,
         fields: &[String],
         formatter: &Function,
-    ) -> HeldResult {
+    ) -> Result<BuildResult, BuildRefusal> {
         let mut failures = Vec::new();
         yamaa_adapters::project_attempt::visit_host_failures(&attempt.inner, |_, error| {
             failures.push(error)
         });
         let mut projections = Vec::new();
-        let mut refusal = "";
-        let mut refusal_details = None;
         for failure in &failures {
             let projection = match failure {
                 HostError::Host(condition) => ordinary(condition, formatter, false),
@@ -64,50 +58,23 @@ pub(crate) mod platform {
             };
             projections.push(projection);
         }
-        let formatted = {
-            let facts = failures
-                .iter()
-                .zip(&projections)
-                .filter_map(|(&failure, projection)| match failure {
-                    HostError::Lock(findings) => Some(Classified::Lock { failure, findings }),
-                    _ => projection
-                        .as_ref()
-                        .and_then(details)
-                        .map(|details| Classified::Host { failure, details }),
-                })
-                .collect::<Vec<_>>();
-            match project_report::build_result(
-                &attempt.run,
-                &attempt.inner,
-                crate::report_fields::identity(fields),
-                &facts,
-            ) {
-                Ok(result) => Some(result),
-                Err(error) => {
-                    if let project_report::Error::Report(
-                        yamaa_adapters::specification_report::Error::ResourceLimit(details),
-                    ) = &error
-                    {
-                        refusal_details = Some(details.clone());
-                    }
-                    refusal = match error {
-                        project_report::Error::Opaque(_) => "opaque_host",
-                        project_report::Error::Boundary(_) => "activation_boundary",
-                        project_report::Error::Source(_) => "source_boundary",
-                        project_report::Error::Execution(_) => "execution_boundary",
-                        project_report::Error::Report(
-                            yamaa_adapters::specification_report::Error::ResourceLimit(_),
-                        ) => "output_limit",
-                        project_report::Error::Report(_) => "report_refusal",
-                    };
-                    None
-                }
-            }
-        };
-        HeldResult {
-            formatted,
-            refusal,
-            refusal_details,
-        }
+        let facts = failures
+            .iter()
+            .zip(&projections)
+            .filter_map(|(&failure, projection)| match failure {
+                HostError::Lock(findings) => Some(Classified::Lock { failure, findings }),
+                _ => projection
+                    .as_ref()
+                    .and_then(details)
+                    .map(|details| Classified::Host { failure, details }),
+            })
+            .collect::<Vec<_>>();
+        project_report::build_result(
+            &attempt.run,
+            &attempt.inner,
+            crate::report_fields::identity(fields),
+            &facts,
+        )
+        .map_err(|error| error.refusal())
     }
 }

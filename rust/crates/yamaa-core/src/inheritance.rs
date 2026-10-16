@@ -36,6 +36,7 @@ pub trait SourcePort {
 pub struct Layer {
     pub source: Source,
     pub document: Document,
+    pub origins: Vec<crate::schema::SchemaOrigin>,
 }
 
 /// No partial contribution list escapes a traversal failure.
@@ -163,7 +164,7 @@ fn admit<E>(
     input: Document,
 ) -> Result<Frame, Error<E>> {
     let normalized = match schema.normalize_layer(&input) {
-        Ok(value) => value.document,
+        Ok(value) => value,
         Err(error) => {
             return Err(Error::Layer {
                 source: source.identity,
@@ -173,7 +174,7 @@ fn admit<E>(
             });
         }
     };
-    let Some(version) = text_field(&normalized, "schema_version") else {
+    let Some(version) = text_field(&normalized.document, "schema_version") else {
         return Err(Error::UnsupportedControlField {
             source: source.identity,
             field: "schema_version",
@@ -190,15 +191,18 @@ fn admit<E>(
         });
     }
     let mut parents = Vec::new();
-    if let Some(node) = normalized.field(normalized.root(), "parents") {
-        let N::Sequence(items) = &normalized.nodes()[node] else {
+    if let Some(node) = normalized
+        .document
+        .field(normalized.document.root(), "parents")
+    {
+        let N::Sequence(items) = &normalized.document.nodes()[node] else {
             return Err(Error::UnsupportedControlField {
                 source: source.identity,
                 field: "parents",
             });
         };
         for &child in items {
-            let N::Text(parent) = &normalized.nodes()[child] else {
+            let N::Text(parent) = &normalized.document.nodes()[child] else {
                 return Err(Error::UnsupportedControlField {
                     source: source.identity,
                     field: "parents",
@@ -210,7 +214,8 @@ fn admit<E>(
     Ok(Frame {
         layer: Layer {
             source,
-            document: normalized,
+            document: normalized.document,
+            origins: normalized.origins,
         },
         parents,
         next: 0,

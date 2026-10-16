@@ -1031,6 +1031,15 @@
       ]
     },
     {
+      "path": "rust/tests/host-fixtures/saved-readers.json",
+      "family": "saved-readers",
+      "level": "component",
+      "consumers": [
+        "python/tests/installed/installed_saved_readers.py",
+        "R/yamaa/tests/saved_readers.R"
+      ]
+    },
+    {
       "path": "rust/tests/host-fixtures/sas-cases.json",
       "family": "sas",
       "level": "component",
@@ -1057,13 +1066,13 @@
     "python/file-resources": "shared_run",
     "python/longitudinal-capacity": "shared_run",
     "python/original-specifications": "shared_run",
-    "python/parquet-readers": "shared_run",
     "python/producer-logs": "shared_run",
     "python/public-contract": "shared_run",
     "python/public-define": "shared_run",
     "python/public-environment": "shared_run",
     "python/public-grammar": "shared_run",
     "python/sas-sources": "shared_run",
+    "python/saved-readers": "shared_run",
     "python/verification-logs": "shared_run",
     "r/arrow-bridge": "shared_run",
     "r/column-ceilings": "shared_run",
@@ -1077,6 +1086,7 @@
     "r/public-file-resources": "shared_run",
     "r/public-grammar": "shared_run",
     "r/sas-sources": "shared_run",
+    "r/saved-readers": "shared_run",
     "r/verification-logs": "shared_run",
     "python/host-resources": "shared_run",
     "r/host-resources": "shared_run"

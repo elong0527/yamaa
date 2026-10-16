@@ -338,7 +338,7 @@ pub fn execute_into<P: SourcePort, D: SourceDecoder>(
 ) {
     scope.phase(crate::application_observer::Phase::Input);
     let input_finished = std::cell::Cell::new(false);
-    execute_inner_with_observer_into(
+    execute_inner_into(
         prepared,
         port,
         decoder,
@@ -356,7 +356,7 @@ pub fn execute_into<P: SourcePort, D: SourceDecoder>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
+fn execute_inner_into<P: SourcePort, D: SourceDecoder>(
     prepared: &PreparedSpecification,
     port: &mut P,
     decoder: &mut D,

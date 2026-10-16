@@ -5,6 +5,7 @@
 mod windows_file;
 
 pub mod application_measurements;
+pub mod arrow_batch;
 pub mod arrow_bridge;
 pub mod arrow_table;
 mod arrow_temporal;
@@ -63,6 +64,7 @@ pub mod file_publication;
 pub mod file_resources;
 pub mod file_workflow;
 pub mod host_resources;
+pub mod resolved_artifact;
 mod resource_publication;
 
 pub mod project_source;

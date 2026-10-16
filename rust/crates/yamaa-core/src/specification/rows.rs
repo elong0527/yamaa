@@ -1,4 +1,13 @@
 //! Closed row lowering with per-template defaults and shared group-scope validation.
+//!
+//! Preparation lowers each admitted column default once, keyed by its
+//! authored document node, and shares the immutable [`RowDeclaration`]
+//! across every row template that inherits it; authored row overrides keep
+//! their own lowered payloads. Sharing covers only the immutable prepared
+//! operation/literal/predicate payload: driver-specific admission still
+//! runs for each template, and binding still runs per template against its
+//! own driver, catalog, grouping phase and available outputs, so no bound
+//! assignment is ever cached by declaration identity alone.
 use super::*;
 use crate::dataset::Verification;
 use crate::{
@@ -32,12 +41,20 @@ struct RowDeclaration {
     path: String,
     operation: RowOperation,
 }
+/// One lowered declaration, shared immutably across templates by node.
+///
+/// The payload (operation, literal values, predicate arenas and compiled
+/// patterns, mapping/cut dictionaries) is authored once per document node;
+/// everything template-specific (driver/catalog bindings, grouping phase,
+/// available outputs, row diagnostics, conversion-handler occurrence
+/// ownership and per-run state) lives outside this declaration.
+type SharedDeclaration = std::sync::Arc<RowDeclaration>;
 #[derive(Debug)]
 struct Template {
     id: String,
     driver: String,
     groups: Option<Vec<String>>,
-    declarations: Vec<RowDeclaration>,
+    declarations: Vec<SharedDeclaration>,
     filter: Option<(
         String,
         Result<crate::predicate::Plan, predicate_compiler::Error>,
@@ -69,7 +86,7 @@ fn deferred_odm_contexts(
 #[derive(Debug)]
 pub(super) struct Rows {
     templates: Vec<Template>,
-    columns: Vec<RowDeclaration>,
+    columns: Vec<SharedDeclaration>,
 }
 fn unsupported(operation: &str, path: &str) -> PrepareError {
     PrepareError::Unsupported(vec![UnsupportedFeature {
@@ -147,6 +164,44 @@ fn declaration(
         path,
         operation,
     })
+}
+/// Lower an authored derivation node at most once per preparation.
+///
+/// The cache key is the authored document node itself: one node has one
+/// owning column and one authored path, so every caller that reaches the
+/// same node is asking for the same immutable declaration. Authored row
+/// overrides are distinct nodes and therefore retain distinct payloads.
+/// `declaration` ignores its grouped flag, so the shared lowering does not
+/// depend on any one template's grouping; grouping, driver admission and
+/// binding remain per-template work outside this cache.
+#[allow(clippy::too_many_arguments)]
+fn lower_shared(
+    cache: &mut BTreeMap<usize, SharedDeclaration>,
+    d: &Document,
+    id: usize,
+    column: usize,
+    prefix: String,
+    project: Option<&functions::Prepared>,
+    extraction: &str_extract::Prepared,
+    string_templates: &str_template::Prepared,
+    intermediates: &intermediates::Declarations,
+) -> Result<SharedDeclaration, PrepareError> {
+    if let Some(shared) = cache.get(&id) {
+        return Ok(shared.clone());
+    }
+    let shared = SharedDeclaration::new(declaration(
+        d,
+        id,
+        column,
+        prefix,
+        false,
+        project,
+        extraction,
+        string_templates,
+        intermediates,
+    )?);
+    cache.insert(id, shared.clone());
+    Ok(shared)
 }
 /// Inspect references in supported row-local defaults without reading source data.
 /// Literal text and qualified stored fields never promote an output declaration.
@@ -752,18 +807,22 @@ impl Rows {
             project,
             string_templates,
         )?;
+        // Admission lowers every selected default once and keeps it: the
+        // per-template pass below inherits these shared declarations
+        // instead of lowering the same authored default again per template.
+        let mut lowered: BTreeMap<usize, SharedDeclaration> = BTreeMap::new();
         for &column in &selected {
             let metadata = &output.columns()[column];
             if let Some(id) = d
                 .field(columns[column], "derivation")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
-                declaration(
+                lower_shared(
+                    &mut lowered,
                     d,
                     id,
                     column,
                     format!("columns.{}.derivation", metadata.name),
-                    false,
                     project,
                     extraction,
                     string_templates,
@@ -829,6 +888,8 @@ impl Rows {
                         format!("columns.{}.derivation", metadata.name),
                     )
                 };
+                // Driver-specific admission still runs for every template;
+                // only the immutable lowering is shared through the cache.
                 row_drivers::admit_reads(
                     d,
                     id,
@@ -838,12 +899,12 @@ impl Rows {
                     string_templates,
                     intermediates,
                 )?;
-                declarations.push(declaration(
+                declarations.push(lower_shared(
+                    &mut lowered,
                     d,
                     id,
                     column,
                     prefix,
-                    groups.is_some(),
                     project,
                     extraction,
                     string_templates,
@@ -904,12 +965,12 @@ impl Rows {
                         intermediates,
                     )?;
                 }
-                lowered_columns.push(declaration(
+                lowered_columns.push(lower_shared(
+                    &mut lowered,
                     d,
                     derivation,
                     column,
                     format!("{prefix}.derivation"),
-                    false,
                     project,
                     extraction,
                     string_templates,
@@ -1709,5 +1770,283 @@ impl Rows {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Minimal child-before-parent arena builder for row preparations.
+    struct Arena(Vec<N>);
+    impl Arena {
+        fn new() -> Self {
+            Self(Vec::new())
+        }
+        fn push(&mut self, node: N) -> usize {
+            let index = self.0.len();
+            self.0.push(node);
+            index
+        }
+        fn text(&mut self, value: &str) -> usize {
+            self.push(N::Text(value.into()))
+        }
+        fn map(&mut self, fields: Vec<(&str, usize)>) -> usize {
+            let fields = fields
+                .into_iter()
+                .map(|(name, value)| {
+                    let key = self.text(name);
+                    (key, value)
+                })
+                .collect::<Vec<_>>();
+            self.push(N::Mapping(fields))
+        }
+        fn seq(&mut self, items: Vec<usize>) -> usize {
+            self.push(N::Sequence(items))
+        }
+        fn literal_derivation(&mut self, value: &str) -> usize {
+            let payload = self.text(value);
+            let value = self.map(vec![("literal", payload)]);
+            self.map(vec![("value", value)])
+        }
+        fn source_derivation(&mut self, variable: &str) -> usize {
+            let variable = self.text(variable);
+            let payload = self.map(vec![("variable", variable)]);
+            let value = self.map(vec![("source", payload)]);
+            self.map(vec![("value", value)])
+        }
+        fn column(&mut self, name: &str, derivation: usize) -> usize {
+            let name = self.text(name);
+            self.map(vec![("name", name), ("derivation", derivation)])
+        }
+    }
+
+    struct RowSpec {
+        id: &'static str,
+        driver: Option<&'static str>,
+        groups: Option<Vec<&'static str>>,
+        derivations: Vec<(&'static str, usize)>,
+    }
+    fn row(arena: &mut Arena, spec: RowSpec) -> usize {
+        let id = arena.text(spec.id);
+        let mut fields = vec![("id", id)];
+        if let Some(driver) = spec.driver {
+            let driver = arena.text(driver);
+            fields.push(("dataset", driver));
+        }
+        if let Some(groups) = spec.groups {
+            let groups = groups
+                .into_iter()
+                .map(|group| arena.text(group))
+                .collect::<Vec<_>>();
+            let groups = arena.seq(groups);
+            fields.push(("group_by", groups));
+        }
+        let derivations = spec
+            .derivations
+            .into_iter()
+            .map(|(name, derivation)| {
+                let key = arena.text(name);
+                (key, derivation)
+            })
+            .collect::<Vec<_>>();
+        let derivations = arena.push(N::Mapping(derivations));
+        fields.push(("derivations", derivations));
+        arena.map(fields)
+    }
+
+    /// Columns: ID (source), BIG (large literal default with an
+    /// unconvertible handler), NOTE (literal default). Rows: a plain SRC
+    /// template overriding NOTE, an ALT-driver template overriding BIG, and
+    /// a grouped SRC template overriding neither.
+    fn shared_default_rows() -> Rows {
+        let large = "shared-authored-default ".repeat(256);
+        let mut arena = Arena::new();
+        let id_default = arena.source_derivation("SRC.ID");
+        let big_default = {
+            let payload = arena.text(&large);
+            let value = arena.map(vec![("literal", payload)]);
+            let handler = arena.text("unconvertible-big");
+            arena.map(vec![("value", value), ("unconvertible", handler)])
+        };
+        let note_default = arena.literal_derivation("note-default");
+        let id_column = arena.column("ID", id_default);
+        let big_column = arena.column("BIG", big_default);
+        let note_column = arena.column("NOTE", note_default);
+        let columns = arena.seq(vec![id_column, big_column, note_column]);
+
+        let a_id = arena.source_derivation("SRC.ID");
+        let a_note = arena.literal_derivation("note-a");
+        let row_a = row(
+            &mut arena,
+            RowSpec {
+                id: "records-a",
+                driver: None,
+                groups: None,
+                derivations: vec![("ID", a_id), ("NOTE", a_note)],
+            },
+        );
+        let b_id = arena.source_derivation("ALT.ID");
+        let b_big = arena.literal_derivation("big-override");
+        let row_b = row(
+            &mut arena,
+            RowSpec {
+                id: "records-b",
+                driver: Some("ALT"),
+                groups: None,
+                derivations: vec![("ID", b_id), ("BIG", b_big)],
+            },
+        );
+        let c_id = arena.source_derivation("SRC.ID");
+        let row_c = row(
+            &mut arena,
+            RowSpec {
+                id: "grouped",
+                driver: None,
+                groups: Some(vec!["ID"]),
+                derivations: vec![("ID", c_id)],
+            },
+        );
+        let rows = arena.seq(vec![row_a, row_b, row_c]);
+
+        let src_path = arena.text("src.csv");
+        let src = arena.map(vec![("path", src_path)]);
+        let alt_path = arena.text("alt.csv");
+        let alt = arena.map(vec![("path", alt_path)]);
+        let input = arena.map(vec![("SRC", src), ("ALT", alt)]);
+        let key = arena.text("ID");
+        let keys = arena.seq(vec![key]);
+        let root = arena.map(vec![
+            ("input", input),
+            ("keys", keys),
+            ("columns", columns),
+            ("rows", rows),
+        ]);
+        let document = Document::new(arena.0, root).unwrap();
+        let output = TableSchema::new(vec![
+            Column {
+                name: "ID".into(),
+                kind: ColumnType::Int,
+            },
+            Column {
+                name: "BIG".into(),
+                kind: ColumnType::Str,
+            },
+            Column {
+                name: "NOTE".into(),
+                kind: ColumnType::Str,
+            },
+        ])
+        .unwrap();
+        let mut findings = Vec::new();
+        let extraction = str_extract::Prepared::new(&document, &output, &mut findings).unwrap();
+        let string_templates =
+            str_template::Prepared::new(&document, &output, &mut findings).unwrap();
+        assert!(findings.is_empty());
+        let intermediates = intermediates::Declarations::default();
+        Rows::prepare(
+            &document,
+            &output,
+            "SRC",
+            None,
+            false,
+            &extraction,
+            &string_templates,
+            &intermediates,
+        )
+        .unwrap()
+    }
+
+    fn declaration(rows: &Rows, template: usize, column: usize) -> &SharedDeclaration {
+        rows.templates[template]
+            .declarations
+            .iter()
+            .find(|declaration| declaration.column == column)
+            .unwrap()
+    }
+    fn literal_payload(declaration: &RowDeclaration) -> &str {
+        let RowOperation::Shared(branch) = &declaration.operation else {
+            panic!("literal default lowers to a shared branch");
+        };
+        let Operation::Literal(crate::value::Value::Str(value)) = branch.operation.as_ref() else {
+            panic!("literal default payload");
+        };
+        value
+    }
+
+    #[test]
+    fn admitted_defaults_are_shared_once_across_templates() {
+        let rows = shared_default_rows();
+        assert_eq!(rows.templates.len(), 3);
+        // BIG (column 1): templates 0 and 2 inherit the authored default and
+        // hold the very same immutable declaration and literal payload.
+        let a_big = declaration(&rows, 0, 1);
+        let c_big = declaration(&rows, 2, 1);
+        assert!(std::sync::Arc::ptr_eq(a_big, c_big));
+        assert_eq!(a_big.path, "columns.BIG.derivation.literal");
+        assert!(std::ptr::eq(literal_payload(a_big), literal_payload(c_big)));
+        assert_eq!(literal_payload(a_big).len(), 6144);
+        // The conversion handler rides the shared declaration, not a copy.
+        let handler = a_big.handler.as_ref().unwrap();
+        assert_eq!(handler.spec_path, "columns.BIG.derivation.unconvertible");
+        assert!(std::ptr::eq(handler, c_big.handler.as_ref().unwrap()));
+        // NOTE (column 2): templates 1 and 2 share the default.
+        let b_note = declaration(&rows, 1, 2);
+        let c_note = declaration(&rows, 2, 2);
+        assert!(std::sync::Arc::ptr_eq(b_note, c_note));
+        assert_eq!(literal_payload(b_note), "note-default");
+    }
+
+    #[test]
+    fn authored_overrides_retain_their_own_payloads() {
+        let rows = shared_default_rows();
+        // Template 1 overrides BIG: its own declaration, path and payload.
+        let b_big = declaration(&rows, 1, 1);
+        assert!(!std::sync::Arc::ptr_eq(b_big, declaration(&rows, 0, 1)));
+        assert_eq!(b_big.path, "rows[1].derivations.BIG.literal");
+        assert_eq!(literal_payload(b_big), "big-override");
+        assert!(b_big.handler.is_none());
+        // Template 0 overrides NOTE likewise.
+        let a_note = declaration(&rows, 0, 2);
+        assert!(!std::sync::Arc::ptr_eq(a_note, declaration(&rows, 1, 2)));
+        assert_eq!(a_note.path, "rows[0].derivations.NOTE.literal");
+        assert_eq!(literal_payload(a_note), "note-a");
+        // Every template still carries every selected column exactly once.
+        for template in &rows.templates {
+            let mut columns = template
+                .declarations
+                .iter()
+                .map(|declaration| declaration.column)
+                .collect::<Vec<_>>();
+            columns.sort_unstable();
+            assert_eq!(columns, [0, 1, 2]);
+        }
+        assert_eq!(rows.self_columns(), [0, 1, 2]);
+    }
+
+    #[test]
+    fn template_scope_stays_outside_the_shared_declaration() {
+        let rows = shared_default_rows();
+        // Driver and grouping remain per-template state even where the
+        // declarations themselves are shared.
+        assert_eq!(rows.templates[0].driver, "SRC");
+        assert_eq!(rows.templates[1].driver, "ALT");
+        assert_eq!(rows.templates[2].driver, "SRC");
+        assert_eq!(rows.templates[0].groups, None);
+        assert_eq!(rows.templates[2].groups, Some(vec!["ID".to_string()]));
+        // A repeated preparation of the same document admits the same
+        // per-template structure (sharing is per-preparation, never a
+        // cross-run cache of bound or prepared state).
+        let repeated = shared_default_rows();
+        for (template, again) in rows.templates.iter().zip(&repeated.templates) {
+            assert_eq!(template.id, again.id);
+            assert_eq!(template.driver, again.driver);
+            assert_eq!(template.groups, again.groups);
+            for (declaration, again) in template.declarations.iter().zip(&again.declarations) {
+                assert_eq!(declaration.column, again.column);
+                assert_eq!(declaration.path, again.path);
+                assert!(!std::sync::Arc::ptr_eq(declaration, again));
+            }
+        }
     }
 }

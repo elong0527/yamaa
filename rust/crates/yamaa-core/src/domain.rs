@@ -95,7 +95,7 @@ pub fn build<P: SourcePort, D: SourceDecoder>(
         decoder,
         &mut crate::function_invocation::NoFunctions::new(),
         &mut attempt,
-        crate::application_observer::Scope::new(&crate::application_observer::Noop),
+        crate::application_observer::Scope::default(),
     );
     Ok(attempt)
 }

@@ -6,7 +6,7 @@ use yamaa_adapters::{
     file_application::{self, RuntimePort},
     specification_report::Identity,
 };
-use yamaa_core::application_observer::{Noop, Outcome, Phase, Scope};
+use yamaa_core::application_observer::{Outcome, Phase, Scope};
 pub struct Runtime<'py, 'request> {
     pub py: Python<'py>,
     pub specification: &'request str,
@@ -56,33 +56,17 @@ impl RuntimePort for Runtime<'_, '_> {
     fn plain(
         &mut self,
         prepared: yamaa_adapters::file_preparation::FileSpecification,
-    ) -> PyResult<Domain> {
-        self.plain_with_observer(prepared, Scope::new(&Noop))
-    }
-    fn plain_with_observer(
-        &mut self,
-        prepared: yamaa_adapters::file_preparation::FileSpecification,
         scope: Scope<'_>,
     ) -> PyResult<Domain> {
-        Ok(self.plain_result(file_application::plain_with_observer(
-            prepared,
-            self.identity(),
-            scope,
-        )))
+        Ok(self.plain_result(file_application::plain(prepared, self.identity(), scope)))
     }
     fn project(
-        &mut self,
-        project: Box<yamaa_adapters::file_project::FileProject>,
-    ) -> PyResult<Domain> {
-        self.project_with_observer(project, Scope::new(&Noop))
-    }
-    fn project_with_observer(
         &mut self,
         mut project: Box<yamaa_adapters::file_project::FileProject>,
         scope: Scope<'_>,
     ) -> PyResult<Domain> {
         let py = self.py;
-        let inner = project.build_with_observer(
+        let inner = project.build_with(
             |run| {
                 crate::project_activation::Port::new(
                     py,
@@ -126,10 +110,7 @@ impl RuntimePort for Runtime<'_, '_> {
         );
         converted
     }
-    fn producer(&mut self, graph: Box<yamaa_adapters::file_graph::FileGraph>) -> PyResult<Domain> {
-        self.producer_with_observer(graph, Scope::new(&Noop))
-    }
-    fn producer_with_observer(
+    fn producer(
         &mut self,
         graph: Box<yamaa_adapters::file_graph::FileGraph>,
         scope: Scope<'_>,
@@ -147,8 +128,7 @@ impl RuntimePort for Runtime<'_, '_> {
             ],
         )?;
         let fields = std::sync::Arc::new(crate::report_fields::fields(&metadata)?);
-        let attempt =
-            crate::file_producer::build_selected_with_observer(py, &mut build, fields, scope);
+        let attempt = crate::file_producer::build_selected(py, &mut build, fields, scope);
         scope.phase(Phase::Output);
         let converted = (|| {
             let producer = attempt.formatted(py)?;
