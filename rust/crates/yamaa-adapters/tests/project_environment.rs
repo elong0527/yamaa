@@ -6,6 +6,7 @@ mod project {
     mod project_environment_projection {
         //! Complete retained-attempt witnesses; expected reports are authored independently.
         use std::{cell::Cell, rc::Rc, sync::Arc};
+        use yamaa_adapters::json;
         use yamaa_adapters::{
             issue_rows::Issue,
             project_environment_diagnostics::{self as diagnostic, Error as ProjectionError},
@@ -14,7 +15,7 @@ mod project {
             },
             specification_source::{CapturedSchema, Source},
         };
-        use yamaa_core::json::{json, Value};
+        use yamaa_core::json::Value;
         use yamaa_core::{project_environment::LockKind, project_function::Language};
         // Deliberately neither Clone, Debug nor Send; the exact held error remains owned.
         struct Opaque {
@@ -137,7 +138,7 @@ mod project {
                 condition: condition.into(),
                 requirement: Some(requirement.into()),
                 spec_paths: vec![path.into()],
-                context: context.to_string(),
+                context: yamaa_adapters::json_wire::encode(&context),
             }
         }
         fn opaque(
@@ -191,7 +192,8 @@ mod project {
         fn complete_external_scalar_reports_preserve_unbounded_integers_and_non_debug_originals() {
             let (rejected, port, allocation, pointer) = rejected(true, false);
             assert_eq!(diagnostic::admission(&rejected).unwrap(), []);
-            let wide: Value = serde_json::from_str("123456789012345678901234567890").unwrap();
+            let wide: Value =
+                yamaa_adapters::json_wire::decode("123456789012345678901234567890").unwrap();
             let want = [
                 expected(
                     "project_environment_invalid",
@@ -333,12 +335,11 @@ mod project {
                         condition: "engine_rejected".into(),
                         requirement: None,
                         spec_paths: vec!["codelists[1]".into()],
-                        context: json!({
+                        context: yamaa_adapters::json_wire::encode(&json!({
                             "stage": "environment", "code": "resource_limit",
                             "resource": "spec_bytes", "limit": Limits::SPEC_BYTES,
                             "actual": Limits::SPEC_BYTES + 1,
-                        })
-                        .to_string(),
+                        })),
                     }],
                 );
                 assert_eq!(owner.root.source().bytes.as_ptr(), held_root);
@@ -370,7 +371,8 @@ mod project {
                 Err(Failure::RootScalar { root, findings }) => (root, findings),
                 _ => panic!("retained original root scalars"),
             };
-            let wide: Value = serde_json::from_str("123456789012345678901234567890").unwrap();
+            let wide: Value =
+                yamaa_adapters::json_wire::decode("123456789012345678901234567890").unwrap();
             let want = [
                 expected(
                     "runner_language_mismatch",
@@ -544,12 +546,12 @@ mod project {
                 assert_eq!(issue.requirement.as_deref(), Some(requirement));
                 assert_eq!(issue.spec_paths, ["rows[2].derivation.BMI.function"]);
                 let context: yamaa_core::json::Value =
-                    serde_json::from_str(&issue.context).unwrap();
+                    yamaa_adapters::json_wire::decode(&issue.context).unwrap();
                 assert_eq!(context["function"], "bmi");
                 assert_eq!(context["call"], "projectbmi.bmi");
                 assert_eq!(
                     context["keys"],
-                    yamaa_core::json::json!([{"MIN":i64::MIN,"MAX":i64::MAX,"TEXT":"é\0🙂"}])
+                    yamaa_adapters::json!([{"MIN":i64::MIN,"MAX":i64::MAX,"TEXT":"é\0🙂"}])
                 );
                 assert!(context.get("contract_version").is_none());
                 assert!(context.get("implementation_version").is_none());
@@ -581,7 +583,7 @@ mod project {
                 )
                 .unwrap();
                 let context: yamaa_core::json::Value =
-                    serde_json::from_str(&issue.context).unwrap();
+                    yamaa_adapters::json_wire::decode(&issue.context).unwrap();
                 assert_eq!(context["host_error"], "ValueError");
                 assert_eq!(context["host_message"], "é\0🙂");
                 assert!(context.get("host_details_truncated").is_none());
@@ -599,7 +601,7 @@ mod project {
                 )
                 .unwrap();
                 let context: yamaa_core::json::Value =
-                    serde_json::from_str(&issue.context).unwrap();
+                    yamaa_adapters::json_wire::decode(&issue.context).unwrap();
                 assert_eq!(context["reason"], oversized);
             }
             let failure = make_failure(FailureKind::InvalidHostResult(payload));
@@ -616,8 +618,7 @@ mod project {
             .unwrap();
             assert_eq!(issue.condition, "invalid_function_result");
             assert_eq!(
-                serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()
-                    ["returned"],
+                yamaa_adapters::json_wire::decode(&issue.context).unwrap()["returned"],
                 "list"
             );
         }
@@ -661,8 +662,9 @@ mod project {
             let failure = make_failure(FailureKind::UnknownArguments(vec![oversized.clone()]));
             let issue =
                 invocation("columns.BMI.derivation.function", &failure, None, &[], None).unwrap();
-            let context: yamaa_core::json::Value = serde_json::from_str(&issue.context).unwrap();
-            assert_eq!(context["unknown"], yamaa_core::json::json!([oversized]));
+            let context: yamaa_core::json::Value =
+                yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+            assert_eq!(context["unknown"], yamaa_adapters::json!([oversized]));
         }
 
         #[test]
@@ -955,38 +957,38 @@ mod project {
             let expected = [
                 (
                     "distribution_not_identified",
-                    yamaa_core::json::json!([]),
+                    yamaa_adapters::json!([]),
                     yamaa_core::json::Value::Null,
                 ),
                 (
                     "version_not_locked",
-                    yamaa_core::json::json!([]),
+                    yamaa_adapters::json!([]),
                     yamaa_core::json::Value::Null,
                 ),
                 (
                     "ambiguous_lock_version",
-                    yamaa_core::json::json!(["1.0", "2.0"]),
+                    yamaa_adapters::json!(["1.0", "2.0"]),
                     yamaa_core::json::Value::Null,
                 ),
                 (
                     "invalid_locked_version",
-                    yamaa_core::json::json!(["invalid\0é"]),
+                    yamaa_adapters::json!(["invalid\0é"]),
                     yamaa_core::json::Value::Null,
                 ),
                 (
                     "package_not_installed",
-                    yamaa_core::json::json!(["1.0"]),
+                    yamaa_adapters::json!(["1.0"]),
                     yamaa_core::json::Value::Null,
                 ),
                 (
                     "invalid_installed_version",
-                    yamaa_core::json::json!(["1.0"]),
-                    yamaa_core::json::json!("bad\0🙂"),
+                    yamaa_adapters::json!(["1.0"]),
+                    yamaa_adapters::json!("bad\0🙂"),
                 ),
                 (
                     "version_mismatch",
-                    yamaa_core::json::json!(["1.0"]),
-                    yamaa_core::json::json!("2.0"),
+                    yamaa_adapters::json!(["1.0"]),
+                    yamaa_adapters::json!("2.0"),
                 ),
             ];
             for (record, (reason, versions, actual)) in records.iter().zip(expected) {
@@ -995,8 +997,8 @@ mod project {
                 assert_eq!(record.requirement.as_deref(), Some("REQ-0697"));
                 assert_eq!(record.spec_paths, ["lock"]);
                 assert_eq!(
-                    serde_json::from_str::<yamaa_core::json::Value>(&record.context).unwrap(),
-                    yamaa_core::json::json!({"source":"study/environment.yaml", "entry":"study/environment.yaml",
+                    yamaa_adapters::json_wire::decode(&record.context).unwrap(),
+                    yamaa_adapters::json!({"source":"study/environment.yaml", "entry":"study/environment.yaml",
                 "lock_source":"held/uv.lock", "lock":"../uv.lock", "package":"program",
                 "reason":reason, "expected":versions, "actual":actual})
                 );
@@ -1018,8 +1020,8 @@ mod project {
             let records = issues(&environment, &facts).unwrap();
             assert_eq!(records.len(), 3);
             let context: yamaa_core::json::Value =
-                serde_json::from_str(&records[2].context).unwrap();
-            assert_eq!(context["expected"], yamaa_core::json::json!(["1.0"]));
+                yamaa_adapters::json_wire::decode(&records[2].context).unwrap();
+            assert_eq!(context["expected"], yamaa_adapters::json!(["1.0"]));
             assert_eq!(context["actual"], "1.0.0");
         }
 
@@ -1066,7 +1068,7 @@ mod project {
             )
             .unwrap();
             let context: yamaa_core::json::Value =
-                serde_json::from_str(&result[0].context).unwrap();
+                yamaa_adapters::json_wire::decode(&result[0].context).unwrap();
             assert_eq!(context["actual"], wide);
             let facts = (0..2_050)
                 .map(|_| finding(Reason::VersionNotLocked, &[], None))
@@ -1261,9 +1263,9 @@ mod project {
                         .unwrap()
                         .remove("activation")
                         .unwrap(),
-                    yamaa_core::json::json!({"lock":"not_requested","bindings":[],"tests":[]})
+                    yamaa_adapters::json!({"lock":"not_requested","bindings":[],"tests":[]})
                 );
-                let expected: yamaa_core::json::Value = serde_json::from_slice(
+                let expected: yamaa_core::json::Value = yamaa_adapters::json_wire::decode_slice(
                     &std::fs::read(truth.join(format!("{example}.json"))).unwrap(),
                 )
                 .unwrap();
@@ -1311,10 +1313,10 @@ mod project {
             assert_eq!(result.output(), None);
             assert_eq!(result.issues().len(), 1);
             let context: yamaa_core::json::Value =
-                serde_json::from_str(&result.issues()[0].context).unwrap();
+                yamaa_adapters::json_wire::decode(&result.issues()[0].context).unwrap();
             assert_eq!(
                 context,
-                yamaa_core::json::json!({"column":"CODE","codelist":"SEX","failure_count":2,"keys":[{"ID":i64::MAX},{"ID":i64::MIN}],"values":["X","Z"]})
+                yamaa_adapters::json!({"column":"CODE","codelist":"SEX","failure_count":2,"keys":[{"ID":i64::MAX},{"ID":i64::MIN}],"values":["X","Z"]})
             );
             let observed = result.observations();
             assert_eq!(observed["verifications"].as_array().unwrap().len(), 1);
@@ -1411,14 +1413,14 @@ mod project {
                         let report = result.observations();
                         assert_eq!(
                             report["diagnostics"],
-                            yamaa_core::json::json!([{"phase":"validation","condition":"resource_path_missing","requirement":"REQ-0785","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":"absent.csv"}}])
+                            yamaa_adapters::json!([{"phase":"validation","condition":"resource_path_missing","requirement":"REQ-0785","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":"absent.csv"}}])
                         );
                         assert_eq!(
                             report["source_reads"],
                             if inspect {
-                                yamaa_core::json::json!([])
+                                yamaa_adapters::json!([])
                             } else {
-                                yamaa_core::json::json!([{"base_directory":".","path":"absent.csv","outcome":"failure","condition":"resource_path_missing","snapshots_created":0}])
+                                yamaa_adapters::json!([{"base_directory":".","path":"absent.csv","outcome":"failure","condition":"resource_path_missing","snapshots_created":0}])
                             }
                         );
                         assert_eq!(result.output(), None);
@@ -1484,7 +1486,7 @@ mod project {
             );
             assert_eq!(
                 observed["diagnostics"],
-                yamaa_core::json::json!([{"phase":"validation","condition":"invalid_regex","requirement":"REQ-0827","spec_paths":["columns.LATE.verifications[0].matches.pattern"],"context":{"pattern":"("}}])
+                yamaa_adapters::json!([{"phase":"validation","condition":"invalid_regex","requirement":"REQ-0827","spec_paths":["columns.LATE.verifications[0].matches.pattern"],"context":{"pattern":"("}}])
             );
             assert_eq!(result.output(), None);
             let mut publisher = Publisher::default();
@@ -1794,15 +1796,15 @@ functions:
                 .unwrap();
                 assert_eq!(
                     observed["tests"][1]["args"]["x"],
-                    yamaa_core::json::json!({"int":"-9223372036854775808"})
+                    yamaa_adapters::json!({"int":"-9223372036854775808"})
                 );
                 assert_eq!(
                     observed["tests"][1]["actual"],
-                    yamaa_core::json::json!({"int":"-9223372036854775808"})
+                    yamaa_adapters::json!({"int":"-9223372036854775808"})
                 );
                 assert_eq!(
                     observed["tests"][2]["actual"],
-                    yamaa_core::json::json!({"missing":null})
+                    yamaa_adapters::json!({"missing":null})
                 );
                 assert_eq!(observed["tests"][2]["actual_retained"], true);
                 assert_eq!(observed["tests"][2]["invoked"], false);
@@ -2069,7 +2071,7 @@ functions:
             assert_eq!(observed["tests"].as_array().unwrap().len(), 2);
             assert_eq!(
                 observed["tests"][0]["actual"],
-                yamaa_core::json::json!({"int":"7"})
+                yamaa_adapters::json!({"int":"7"})
             );
             assert_eq!(observed["tests"][1]["outcome"], "attempted");
             assert_eq!(observed["tests"][1]["actual_retained"], false);
@@ -2256,15 +2258,15 @@ functions:
             .unwrap();
             let report = result.observations();
             assert_eq!(report["outcome"], "success");
-            assert_eq!(report["artifacts"], yamaa_core::json::json!([]));
-            assert_eq!(report["diagnostics"], yamaa_core::json::json!([]));
+            assert_eq!(report["artifacts"], yamaa_adapters::json!([]));
+            assert_eq!(report["diagnostics"], yamaa_adapters::json!([]));
             assert_eq!(
                 report["source_reads"],
-                yamaa_core::json::json!([{"base_directory":"study","path":"input.csv","outcome":"captured","condition":null,"snapshots_created":1}])
+                yamaa_adapters::json!([{"base_directory":"study","path":"input.csv","outcome":"captured","condition":null,"snapshots_created":1}])
             );
             assert_eq!(
                 report["tables"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"specification":"study/domain.yaml","stage":"source","name":"SRC","columns":["ID"],"types":["int"],"rows":[[{"type":"int","value":"1"}]]},
                     {"specification":"study/domain.yaml","stage":"derived","name":"output","columns":["ID","VALUE"],"types":["int","int"],"rows":[[{"type":"int","value":"1"},{"type":"int","value":"1"}]]}
                 ])
@@ -2273,7 +2275,7 @@ functions:
             assert_eq!(report["activation"]["tests"].as_array().unwrap().len(), 3);
             assert_eq!(
                 report["activation"]["tests"][2]["actual"],
-                yamaa_core::json::json!({"missing":null})
+                yamaa_adapters::json!({"missing":null})
             );
             assert!(result.output().is_some());
             assert!(result.issues().is_empty());
@@ -2359,7 +2361,7 @@ functions:
                     .unwrap();
                     let observed = result.observations();
                     assert_eq!(observed["outcome"], "failure");
-                    assert_eq!(observed["artifacts"], yamaa_core::json::json!([]));
+                    assert_eq!(observed["artifacts"], yamaa_adapters::json!([]));
                     assert_eq!(result.output(), None);
                     assert_eq!(result.issues().len(), 1);
                     let expected = if matches!(mode, Mode::BindFailure) {
@@ -2374,7 +2376,7 @@ functions:
                         assert_eq!(observed["source_reads"].as_array().unwrap().len(), 1);
                         assert_eq!(observed["activation"]["tests"].as_array().unwrap().len(), 3);
                     } else {
-                        assert_eq!(observed["source_reads"], yamaa_core::json::json!([]));
+                        assert_eq!(observed["source_reads"], yamaa_adapters::json!([]));
                     }
                     let mut publisher = Publication::default();
                     assert!(matches!(
@@ -2515,13 +2517,12 @@ functions:
             .unwrap();
             assert_eq!(result.issues()[0].condition, "runtime_artifact_mismatch");
             assert_eq!(
-                serde_json::from_str::<yamaa_core::json::Value>(&result.issues()[0].context)
-                    .unwrap(),
-                yamaa_core::json::json!({"source":"study/environment.yaml","entry":"study/environment.yaml","lock_source":"held/uv.lock","lock":"../uv.lock","package":"project","reason":"distribution_not_identified","expected":[],"actual":null})
+                yamaa_adapters::json_wire::decode(&result.issues()[0].context).unwrap(),
+                yamaa_adapters::json!({"source":"study/environment.yaml","entry":"study/environment.yaml","lock_source":"held/uv.lock","lock":"../uv.lock","package":"project","reason":"distribution_not_identified","expected":[],"actual":null})
             );
             assert_eq!(
                 result.observations()["source_reads"],
-                yamaa_core::json::json!([])
+                yamaa_adapters::json!([])
             );
             assert_eq!(result.observations()["activation"]["lock"], "rejected");
             assert_eq!(*activation.trace.borrow(), ["lock"]);
@@ -2552,7 +2553,7 @@ functions:
             assert_eq!(result.issues()[0].condition, "function_conformance_failed");
             assert_eq!(result.issues()[0].spec_paths, ["functions.id.tests[0]"]);
             let context: yamaa_core::json::Value =
-                serde_json::from_str(&result.issues()[0].context).unwrap();
+                yamaa_adapters::json_wire::decode(&result.issues()[0].context).unwrap();
             assert_eq!(context["expected"], 7);
             assert_eq!(context["actual"], 8);
             assert_eq!(

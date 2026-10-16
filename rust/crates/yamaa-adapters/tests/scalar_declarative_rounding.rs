@@ -9,11 +9,11 @@ mod scalar {
             path::PathBuf,
             sync::atomic::{AtomicUsize, Ordering},
         };
+        use yamaa_adapters::json;
         use yamaa_adapters::{
             file_application, public_table::Values, specification_report::Identity,
         };
         use yamaa_core::domain_entry::Request;
-        use yamaa_core::json::json;
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         const POSITIVE: &str =
             include_str!("../../../../benchmarks/schema-round-half-away-from-zero-ties/spec.yaml");
@@ -104,7 +104,7 @@ mod scalar {
                 ["columns.RNDVAL.derivation.round_half_away_from_zero.source"]
             );
             assert_eq!(
-                serde_json::from_str::<yamaa_core::json::Value>(&finding.context).unwrap(),
+                yamaa_adapters::json_wire::decode(&finding.context).unwrap(),
                 json!({"source":"SEX", "expected":"numeric", "actual":"str"})
             );
             assert_eq!(
@@ -267,7 +267,7 @@ mod scalar {
                 ["columns.RNDVAL.derivation.case[0].then.round_half_away_from_zero.source"]
             );
             assert_eq!(
-                serde_json::from_str::<yamaa_core::json::Value>(&findings[0].context).unwrap(),
+                yamaa_adapters::json_wire::decode(&findings[0].context).unwrap(),
                 json!({"source":"SEX","expected":"numeric","actual":"str"})
             );
             assert!(!study.0.join("input").exists());
@@ -399,7 +399,7 @@ mod scalar {
                 );
                 assert_eq!(findings.len(), 1, "{name}: {findings:?}");
                 let finding = &findings[0];
-                let actual = yamaa_core::json::json!({"phase":finding.phase, "condition":finding.condition, "requirement":finding.requirement, "spec_paths":finding.spec_paths, "context":serde_json::from_str::<yamaa_core::json::Value>(&finding.context).unwrap()});
+                let actual = yamaa_adapters::json!({"phase":finding.phase, "condition":finding.condition, "requirement":finding.requirement, "spec_paths":finding.spec_paths, "context":yamaa_adapters::json_wire::decode(&finding.context).unwrap()});
                 assert_eq!(actual, expected, "{name}");
                 let failed = file_application::domain(
                     Request {
@@ -420,7 +420,7 @@ mod scalar {
             use yamaa_core::schema::{Document, DocumentNode as N};
             fn node(document: &Document, index: usize) -> yamaa_core::json::Value {
                 match &document.nodes()[index] {
-                    N::Text(text) => yamaa_core::json::json!(text),
+                    N::Text(text) => yamaa_adapters::json!(text),
                     N::Null => yamaa_core::json::Value::Null,
                     N::Sequence(items) => items.iter().map(|id| node(document, *id)).collect(),
                     N::Mapping(entries) => entries
@@ -463,7 +463,7 @@ mod scalar {
         #[test]
         fn row_temporal_replay_independent_reference_preserves_defaults_and_post_capture_types() {
             // Complete independent captures, including absent-input/type-error double faults.
-            let reference: yamaa_core::json::Value = serde_json::from_str(r###"{
+            let reference: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(r###"{
   "bare-default-to_epoch_day": {
     "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      to_epoch_day:\n        source: D1\n",
     "inputs": {
@@ -691,16 +691,16 @@ mod scalar {
                     Err(issues) => (issues, None),
                 };
                 let actual: Vec<_> = issues
-            .iter()
-            .map(|finding| {
-                yamaa_core::json::json!({
-                    "phase": finding.phase, "condition": finding.condition,
-                    "requirement": finding.requirement, "spec_paths": finding.spec_paths,
-                    "context": serde_json::from_str::<yamaa_core::json::Value>(&finding.context).unwrap()
-                })
-            })
-            .collect();
-                assert_eq!(yamaa_core::json::json!(actual), truth["findings"], "{name}");
+                    .iter()
+                    .map(|finding| {
+                        yamaa_adapters::json!({
+                            "phase": finding.phase, "condition": finding.condition,
+                            "requirement": finding.requirement, "spec_paths": finding.spec_paths,
+                            "context": yamaa_adapters::json_wire::decode(&finding.context).unwrap()
+                        })
+                    })
+                    .collect();
+                assert_eq!(yamaa_adapters::json!(actual), truth["findings"], "{name}");
                 assert!(!study.0.join("result.csv").exists(), "{name}");
                 if let Some(csv) = truth["csv"].as_str() {
                     let result = success.as_mut().unwrap();
@@ -797,9 +797,9 @@ mod scalar {
                 use yamaa_core::schema::DocumentNode as N;
                 match &d.nodes()[id] {
                     N::Null => yamaa_core::json::Value::Null,
-                    N::Text(value) => yamaa_core::json::json!(value),
+                    N::Text(value) => yamaa_adapters::json!(value),
                     N::Integer(value) => value.parse::<i64>().unwrap().into(),
-                    N::Float(value) => yamaa_core::json::json!(value),
+                    N::Float(value) => yamaa_adapters::json!(value),
                     N::Boolean(value) => (*value).into(),
                     N::Sequence(items) => items.iter().map(|id| json(d, *id)).collect(),
                     N::Mapping(items) => items
@@ -872,12 +872,12 @@ mod scalar {
                     "{name}"
                 );
                 assert_eq!(
-                    yamaa_core::json::to_value(&actual.spec_paths).unwrap(),
+                    yamaa_adapters::json_wire::project(&actual.spec_paths).unwrap(),
                     expected["spec_paths"],
                     "{name}"
                 );
                 assert_eq!(
-                    serde_json::from_str::<yamaa_core::json::Value>(&actual.context).unwrap(),
+                    yamaa_adapters::json_wire::decode(&actual.context).unwrap(),
                     expected["context"],
                     "{name}"
                 );
@@ -889,9 +889,10 @@ mod scalar {
         /// independently captured reference finding, including additional operation facts.
         #[test]
         fn unchanged_partial_oracles_and_complete_captured_reference_facts_both_match() {
-            let reference: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/temporal_imputation_reference.json"))
-                    .unwrap();
+            let reference: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
+                include_str!("fixtures/temporal_imputation_reference.json"),
+            )
+            .unwrap();
             for name in [
                 "negative-impute-bad-source",
                 "negative-precision-bad-source",
@@ -903,7 +904,7 @@ mod scalar {
                 assert!(result.output().is_none());
                 assert_eq!(result.issues().len(), 1);
                 let issue = &result.issues()[0];
-                let actual = yamaa_core::json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()});
+                let actual = yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()});
                 assert_eq!(actual, reference[name][0], "{name}");
                 let expected = golden(&fixture);
                 for field in ["phase", "condition", "requirement", "spec_paths"] {
@@ -1071,9 +1072,9 @@ columns:
                 use yamaa_core::schema::DocumentNode as N;
                 match &d.nodes()[id] {
                     N::Null => yamaa_core::json::Value::Null,
-                    N::Text(value) => yamaa_core::json::json!(value),
+                    N::Text(value) => yamaa_adapters::json!(value),
                     N::Integer(value) => value.parse::<i64>().unwrap().into(),
-                    N::Float(value) => yamaa_core::json::json!(value),
+                    N::Float(value) => yamaa_adapters::json!(value),
                     N::Boolean(value) => (*value).into(),
                     N::Sequence(items) => items.iter().map(|id| json(d, *id)).collect(),
                     N::Mapping(items) => items
@@ -1091,7 +1092,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_core::json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
         }
         #[test]
         fn original_sentence_fixture_matches_its_ordered_artifact() {
@@ -1133,9 +1134,10 @@ columns:
                 };
                 assert_eq!(issues.len(), 1);
                 assert_eq!(issue_json(&issues[0]), golden(&fixture), "{name}");
-                let reference: yamaa_core::json::Value =
-                    serde_json::from_str(include_str!("fixtures/text_case_reference.json"))
-                        .unwrap();
+                let reference: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
+                    include_str!("fixtures/text_case_reference.json"),
+                )
+                .unwrap();
                 let mut shared = reference[name][0].clone();
                 if name == "negative-str-case-unknown" {
                     // The complete independent legacy capture retains loader provenance.
@@ -1193,8 +1195,10 @@ columns:
             let result = fixture.run();
             assert!(result.output().is_none());
             assert_eq!(result.issues().len(), 1);
-            let reference: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/text_case_reference.json")).unwrap();
+            let reference: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
+                include_str!("fixtures/text_case_reference.json"),
+            )
+            .unwrap();
             assert_eq!(issue_json(&result.issues()[0]), reference["missing"][0]);
         }
         #[test]
@@ -1287,7 +1291,7 @@ columns:
                 assert_eq!(
                     issues.iter().map(issue_json).collect::<Vec<_>>(),
                     [
-                        yamaa_core::json::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0308","spec_paths":["rows[0].derivations.TEXT.str_case.source"],"context":{"source":"SRC.TEXT","expected":"str","actual":kind}})
+                        yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0308","spec_paths":["rows[0].derivations.TEXT.str_case.source"],"context":{"source":"SRC.TEXT","expected":"str","actual":kind}})
                     ]
                 );
                 assert!(!fixture.0.join("output.csv").exists());
@@ -1365,9 +1369,9 @@ columns:
                 use yamaa_core::schema::DocumentNode as N;
                 match &d.nodes()[id] {
                     N::Null => yamaa_core::json::Value::Null,
-                    N::Text(value) => yamaa_core::json::json!(value),
+                    N::Text(value) => yamaa_adapters::json!(value),
                     N::Integer(value) => value.parse::<i64>().unwrap().into(),
-                    N::Float(value) => yamaa_core::json::json!(value),
+                    N::Float(value) => yamaa_adapters::json!(value),
                     N::Boolean(value) => (*value).into(),
                     N::Sequence(items) => items.iter().map(|id| json(d, *id)).collect(),
                     N::Mapping(items) => items
@@ -1385,7 +1389,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_core::json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adae-text-cleanup");
@@ -1394,7 +1398,8 @@ columns:
             fixture
         }
         fn reference() -> yamaa_core::json::Value {
-            serde_json::from_str(include_str!("fixtures/text_extract_reference.json")).unwrap()
+            yamaa_adapters::json_wire::decode(include_str!("fixtures/text_extract_reference.json"))
+                .unwrap()
         }
         fn attempt(
             fixture: &Fixture,
@@ -1484,7 +1489,7 @@ columns:
             ] {
                 let value = &truth[name];
                 let fixture = bespoke(
-                    &serde_json::to_string(&value["specification"]).unwrap(),
+                    &yamaa_adapters::json_wire::encode(&value["specification"]),
                     value["input"].as_str().unwrap().as_bytes(),
                 );
                 match attempt(&fixture) {
@@ -1535,7 +1540,7 @@ columns:
             assert_eq!(issues.len(), 1);
             assert_eq!(
                 issue_json(&issues[0]),
-                yamaa_core::json::json!({
+                yamaa_adapters::json!({
                     "phase":cause["phase"],"condition":cause["condition"],"requirement":cause["requirement"],
                     "spec_paths":["columns.RESULT.derivation.str_extract.group"],"context":cause["context"]
                 })
@@ -1547,22 +1552,22 @@ columns:
         #[test]
         fn all_invalid_patterns_keep_complete_findings_before_zero_row_execution() {
             let mut columns = vec![
-                yamaa_core::json::json!({"name":"ID","type":"str","derivation":"SRC.ID"}),
-                yamaa_core::json::json!({"name":"TEXT","type":"str","derivation":"SRC.TEXT"}),
+                yamaa_adapters::json!({"name":"ID","type":"str","derivation":"SRC.ID"}),
+                yamaa_adapters::json!({"name":"TEXT","type":"str","derivation":"SRC.TEXT"}),
             ];
             let mut names = vec!["ID".to_owned(), "TEXT".to_owned()];
             // Each declared pattern remains a separate finding within fixed width limits.
             for index in 0..60 {
                 let name = format!("V{index}");
                 names.push(name.clone());
-                columns.push(yamaa_core::json::json!({"name":name,"type":"str","derivation":{"str_extract":{"source":"TEXT","pattern":format!("[{}","a".repeat(600)),"group":0}}}));
+                columns.push(yamaa_adapters::json!({"name":name,"type":"str","derivation":{"str_extract":{"source":"TEXT","pattern":format!("[{}","a".repeat(600)),"group":0}}}));
             }
-            let spec = yamaa_core::json::json!({"schema_version":"1.0","domain":"TEST","keys":["ID"],"input":{"SRC":"input.csv"},"output":{"path":"output.csv","columns":names},"columns":columns});
+            let spec = yamaa_adapters::json!({"schema_version":"1.0","domain":"TEST","keys":["ID"],"input":{"SRC":"input.csv"},"output":{"path":"output.csv","columns":names},"columns":columns});
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let document = schema
                 .prepare_standalone(yamaa_adapters::specification_source::Source {
                     identity: "spec.yaml".into(),
-                    bytes: spec.to_string().into_bytes(),
+                    bytes: yamaa_adapters::json_wire::encode(&spec).into_bytes(),
                 })
                 .unwrap();
             let Err(yamaa_adapters::specification_run::Error::Prepare(
@@ -1572,12 +1577,12 @@ columns:
                 panic!("all malformed patterns must retain their language findings")
             };
             assert_eq!(findings.len(), 60);
-            let expected = (0..60).map(|index| yamaa_core::json::json!({
+            let expected = (0..60).map(|index| yamaa_adapters::json!({
         "phase":"validation", "condition":"invalid_regex", "requirement":"REQ-0827",
         "spec_paths":[format!("columns.V{index}.derivation.str_extract.pattern")],
         "context":{"pattern":format!("[{}", "a".repeat(600)), "reason":"a character class is never closed"}
     })).collect::<Vec<_>>();
-            let fixture = bespoke(&spec.to_string(), b"ID,TEXT\n");
+            let fixture = bespoke(&yamaa_adapters::json_wire::encode(&spec), b"ID,TEXT\n");
             for missing in [false, true] {
                 if missing {
                     fs::remove_file(fixture.0.join("input.csv")).unwrap();
@@ -1642,9 +1647,9 @@ columns:
                 use yamaa_core::schema::DocumentNode as N;
                 match &d.nodes()[id] {
                     N::Null => yamaa_core::json::Value::Null,
-                    N::Text(value) => yamaa_core::json::json!(value),
+                    N::Text(value) => yamaa_adapters::json!(value),
                     N::Integer(value) => value.parse::<i64>().unwrap().into(),
-                    N::Float(value) => yamaa_core::json::json!(value),
+                    N::Float(value) => yamaa_adapters::json!(value),
                     N::Boolean(value) => (*value).into(),
                     N::Sequence(items) => items.iter().map(|id| json(d, *id)).collect(),
                     N::Mapping(items) => items
@@ -1662,12 +1667,13 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_core::json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
         }
         #[test]
         fn independent_reference_captures_match_full_output_and_reached_findings() {
             let reference: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/text_pad_reference.json")).unwrap();
+                yamaa_adapters::json_wire::decode(include_str!("fixtures/text_pad_reference.json"))
+                    .unwrap();
             for (name, case) in reference.as_object().unwrap() {
                 let fixture = Fixture::new("negative-str-pad-width");
                 fs::write(
@@ -1832,9 +1838,9 @@ columns:
                 use yamaa_core::schema::DocumentNode as N;
                 match &d.nodes()[id] {
                     N::Null => yamaa_core::json::Value::Null,
-                    N::Text(value) => yamaa_core::json::json!(value),
+                    N::Text(value) => yamaa_adapters::json!(value),
                     N::Integer(value) => value.parse::<i64>().unwrap().into(),
-                    N::Float(value) => yamaa_core::json::json!(value),
+                    N::Float(value) => yamaa_adapters::json!(value),
                     N::Boolean(value) => (*value).into(),
                     N::Sequence(items) => items.iter().map(|id| json(d, *id)).collect(),
                     N::Mapping(items) => items
@@ -1852,7 +1858,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_core::json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adsl-site-parse");
@@ -1861,7 +1867,7 @@ columns:
             fixture
         }
         fn ascii_json(value: &yamaa_core::json::Value) -> String {
-            let raw = serde_json::to_string(value).unwrap();
+            let raw = yamaa_adapters::json_wire::encode(value);
             let mut out = String::new();
             for c in raw.chars() {
                 if c.is_ascii() {
@@ -1876,7 +1882,8 @@ columns:
             out
         }
         fn reference() -> yamaa_core::json::Value {
-            serde_json::from_str(include_str!("fixtures/text_template_reference.json")).unwrap()
+            yamaa_adapters::json_wire::decode(include_str!("fixtures/text_template_reference.json"))
+                .unwrap()
         }
         fn attempt(
             fixture: &Fixture,
@@ -2037,7 +2044,7 @@ columns:
                             let yamaa_core::json::Value::String(text) = value else {
                                 panic!("grammar scalar")
                             };
-                            (key.clone(), yamaa_core::json::json!(text))
+                            (key.clone(), yamaa_adapters::json!(text))
                         })
                         .collect();
                     assert_eq!(context, value["context"]);
@@ -2055,7 +2062,7 @@ columns:
                     for part in op.parts() {
                         if let Part::Placeholder(index) = part {
                             parts.push(
-                        yamaa_core::json::json!({"kind":"placeholder","name":op.identifiers()[*index]}),
+                        yamaa_adapters::json!({"kind":"placeholder","name":op.identifiers()[*index]}),
                     );
                         } else {
                             let text = op.literal(part).unwrap();
@@ -2065,7 +2072,7 @@ columns:
                                     format!("{}{}", previous["value"].as_str().unwrap(), text);
                                 previous["value"] = merged.into();
                             } else {
-                                parts.push(yamaa_core::json::json!({"kind":"text","value":text}));
+                                parts.push(yamaa_adapters::json!({"kind":"text","value":text}));
                             }
                         }
                     }
@@ -2120,7 +2127,7 @@ columns:
                 let document = schema
                     .prepare_standalone(yamaa_adapters::specification_source::Source {
                         identity: "spec.yaml".into(),
-                        bytes: spec.to_string().into_bytes(),
+                        bytes: yamaa_adapters::json_wire::encode(&spec).into_bytes(),
                     })
                     .unwrap();
                 let Err(yamaa_adapters::specification_run::Error::Prepare(
@@ -2130,11 +2137,11 @@ columns:
                     panic!("all malformed templates must retain their language findings")
                 };
                 assert_eq!(findings.len(), paths.len());
-                let expected = paths.iter().map(|path| yamaa_core::json::json!({
+                let expected = paths.iter().map(|path| yamaa_adapters::json!({
             "phase":"validation", "condition":"invalid_string_template", "requirement":"REQ-0461",
             "spec_paths":[path], "context":{"reason":"unmatched_brace"}
         })).collect::<Vec<_>>();
-                let fixture = bespoke(&spec.to_string(), b"ID,A,B,N\n");
+                let fixture = bespoke(&yamaa_adapters::json_wire::encode(&spec), b"ID,A,B,N\n");
                 for missing in [false, true] {
                     if missing {
                         fs::remove_file(fixture.0.join("input.csv")).unwrap();
@@ -2149,16 +2156,16 @@ columns:
             let mut spec = reference()["literal-only"]["specification"].clone();
             let columns = spec["columns"].as_array_mut().unwrap();
             columns[4]["derivation"] =
-                yamaa_core::json::json!({"str_template":format!("{{{}","a".repeat(1600))});
+                yamaa_adapters::json!({"str_template":format!("{{{}","a".repeat(1600))});
             let mut paths = vec!["columns.RESULT.derivation.str_template".to_owned()];
             for index in 0..55 {
-                columns.push(yamaa_core::json::json!({"name":format!("V{index}"),"type":"str","derivation":{"str_template":format!("{{{}","a".repeat(1600))}}));
+                columns.push(yamaa_adapters::json!({"name":format!("V{index}"),"type":"str","derivation":{"str_template":format!("{{{}","a".repeat(1600))}}));
                 paths.push(format!("columns.V{index}.derivation.str_template"));
             }
             admission(spec, paths);
             let mut spec = reference()["row-template"]["specification"].clone();
             spec["columns"][4]["derivation"] =
-                yamaa_core::json::json!({"str_template":format!("{{{}","a".repeat(4000))});
+                yamaa_adapters::json!({"str_template":format!("{{{}","a".repeat(4000))});
             let mut row = spec["rows"][0].clone();
             row["derivations"].as_object_mut().unwrap().remove("RESULT");
             spec["rows"] = (0..16)
@@ -2176,18 +2183,18 @@ columns:
             let columns = spec["columns"].as_array_mut().unwrap();
             columns.truncate(1);
             for index in 0..20 {
-                columns.push(yamaa_core::json::json!({"name":format!("X{index}"),"type":"str","derivation":{"str_template":"{ID}".repeat(400)}}));
+                columns.push(yamaa_adapters::json!({"name":format!("X{index}"),"type":"str","derivation":{"str_template":"{ID}".repeat(400)}}));
             }
-            spec["output"]["columns"] = yamaa_core::json::json!(["ID"]);
+            spec["output"]["columns"] = yamaa_adapters::json!(["ID"]);
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let document = schema
                 .prepare_standalone(yamaa_adapters::specification_source::Source {
                     identity: "spec.yaml".into(),
-                    bytes: spec.to_string().into_bytes(),
+                    bytes: yamaa_adapters::json_wire::encode(&spec).into_bytes(),
                 })
                 .unwrap();
             assert!(yamaa_adapters::specification_run::PreparedRun::prepare(document).is_ok());
-            let fixture = bespoke(&spec.to_string(), b"ID,A,B,N\n");
+            let fixture = bespoke(&yamaa_adapters::json_wire::encode(&spec), b"ID,A,B,N\n");
             let mut result = attempt(&fixture).unwrap();
             assert!(result.issues().is_empty());
             assert!(result.output().is_some());
@@ -2198,8 +2205,11 @@ columns:
             let names = std::iter::once("ID".to_owned())
                 .chain((0..20).map(|index| format!("X{index}")))
                 .collect::<Vec<_>>();
-            spec["output"]["columns"] = yamaa_core::json::json!(names);
-            let fixture = bespoke(&spec.to_string(), b"ID,A,B,N\nrow1,alpha,beta,7\n");
+            spec["output"]["columns"] = yamaa_adapters::json!(names);
+            let fixture = bespoke(
+                &yamaa_adapters::json_wire::encode(&spec),
+                b"ID,A,B,N\nrow1,alpha,beta,7\n",
+            );
             let mut result = attempt(&fixture).unwrap();
             assert!(result.issues().is_empty());
             let mut expected = names.join(",") + "\nrow1";

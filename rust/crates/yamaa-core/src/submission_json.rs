@@ -1,151 +1,72 @@
-//! Dataset-JSON byte writer over a held published table; never executes a spec.
+//! Dataset-JSON semantic admission and typed document composition over a held
+//! published table; never executes a spec. The byte encoding (quoted strings,
+//! streamed escaping, output-byte boundary) is owned by yamaa-adapters'
+//! `submission_json` writer, which encodes the typed document built here.
 use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::ConditionCode,
-    limits::{LimitExceeded, Limits},
+    limits::Limits,
     submission_composition::{Dataset, Finding, Study},
     table::{TableAccess, ValueRef},
     value::Value,
 };
-use std::{
-    collections::BTreeMap,
-    io::{self, Write},
-};
+use std::collections::BTreeMap;
 
-fn string(value: &str) -> String {
-    serde_json::to_string(value).expect("JSON strings serialize")
+/// One Dataset-JSON column declaration, composed semantically in core.
+/// `length` retains its admitted numeric token spelling; the adapter writer
+/// emits it unquoted exactly as composition produced it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DatasetJsonColumn {
+    pub item_oid: String,
+    pub name: String,
+    pub label: String,
+    pub data_type: String,
+    pub length: Option<String>,
+    pub display_format: Option<String>,
+    pub key_sequence: Option<usize>,
 }
-fn object(fields: Vec<(&str, String)>) -> String {
-    format!(
-        "{{{}}}",
-        fields
-            .into_iter()
-            .map(|(key, value)| format!("{}: {value}", string(key)))
-            .collect::<Vec<_>>()
-            .join(", ")
-    )
+
+/// The complete typed Dataset-JSON document header over one held table.
+/// Field selection, ordering and values are semantic composition; the
+/// adapter writer owns only their byte projection. Row cells are read by
+/// the writer directly from the held table after `admit` has passed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DatasetJsonDocument {
+    pub path: String,
+    pub created: String,
+    pub version: String,
+    pub file_oid: String,
+    pub originator: Option<String>,
+    pub source_name: String,
+    pub source_version: String,
+    pub study_oid: String,
+    pub metadata_version_oid: String,
+    pub metadata_ref: String,
+    pub item_group_oid: String,
+    pub name: String,
+    pub label: String,
+    pub columns: Vec<DatasetJsonColumn>,
 }
-/// One saved file, checked before every physical buffer extension. JSON strings
-/// stream through serde so escaping cannot allocate an oversized intermediate.
-struct Writer<'a> {
-    output: Vec<u8>,
-    path: &'a str,
-}
-impl Write for Writer<'_> {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        let required = self.output.len().checked_add(bytes.len());
-        let actual = required.ok_or_else(|| {
-            io::Error::other(LimitExceeded {
-                resource: "output_bytes",
-                limit: Limits::OUTPUT_BYTES,
-                actual: None,
-            })
-        })?;
-        Limits::output_bytes(actual).map_err(io::Error::other)?;
-        self.output.extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-impl Writer<'_> {
-    fn failure(&self, cause: impl std::fmt::Display) -> Finding {
-        Finding::cause(
-            ConditionCode::ApplicationRejected,
-            self.path,
-            &cause.to_string(),
-        )
-    }
-    fn text(&mut self, text: &str) -> Result<(), Finding> {
-        self.write_all(text.as_bytes())
-            .map_err(|error| self.failure(error))
-    }
-    fn string(&mut self, text: &str) -> Result<(), Finding> {
-        serde_json::to_writer(&mut *self, text).map_err(|error| self.failure(error))
-    }
-    fn cell(&mut self, value: ValueRef<'_>) -> Result<(), Finding> {
-        match value {
-            ValueRef::Missing => self.text("null"),
-            ValueRef::Str(value) => self.string(value),
-            ValueRef::Int(value) => self.text(&value.to_string()),
-            ValueRef::Float(value) => self.text(&crate::conversion::float_text(value)),
-            ValueRef::Date(value) => self.string(&value.to_string()),
-            ValueRef::DateTime(value) => self.string(&value.to_string()),
-            ValueRef::Bool(_) => Err(Finding::cause(
-                ConditionCode::SubmissionJsonInvalid,
-                "dataset_json",
-                "schema_violation: boolean cell",
-            )),
-        }
-    }
-}
-pub fn render<T: TableAccess>(
-    study: &Study,
-    dataset: &Dataset,
-    table: &T,
-    define_name: &str,
-) -> Result<Vec<u8>, Finding> {
-    let path = format!("datasets.{}.dataset_json", dataset.id);
-    let invalid = |detail| Finding::cause(ConditionCode::SubmissionJsonInvalid, &path, detail);
-    Limits::table(table.row_count(), dataset.columns.len()).map_err(|error| {
-        Finding::cause(
-            ConditionCode::ApplicationRejected,
-            &path,
-            &error.to_string(),
-        )
-    })?;
-    validate_artifact(study, dataset, table)?;
-    let mut fields = std::vec![
-        ("datasetJSONCreationDateTime", string(&study.created)),
-        ("datasetJSONVersion", string("1.1.0")),
-        (
-            "fileOID",
-            string(&format!("{}.{}", study.file_oid, dataset.id))
-        )
-    ];
-    if let Some(originator) = &study.section.originator {
-        fields.push(("originator", string(&originator.value)));
-    }
-    fields.extend([
-        (
-            "sourceSystem",
-            object(std::vec![
-                ("name", string("yamaa")),
-                ("version", string(&study.source_version))
-            ]),
-        ),
-        (
-            "studyOID",
-            string(&format!("STDY.{}", study.study.id.value)),
-        ),
-        (
-            "metaDataVersionOID",
-            string(&format!("MDV.{}", study.metadata_id)),
-        ),
-        ("metaDataRef", string(define_name)),
-        ("itemGroupOID", string(&format!("IG.{}", dataset.id))),
-        ("records", table.row_count().to_string()),
-        ("name", string(&dataset.id)),
-        ("label", string(&dataset.metadata.label.value)),
-    ]);
-    let mut columns = Vec::new();
-    for column in &dataset.columns {
-        let declaration = &column.declaration;
-        let meta = declaration.submission.as_ref().expect("composed column");
-        let mut values = std::vec![
-            (
-                "itemOID",
-                string(&format!("IT.{}.{}", dataset.id, declaration.name.value))
-            ),
-            ("name", string(&declaration.name.value)),
-            (
-                "label",
-                string(&declaration.label.as_ref().expect("composed label").value)
-            ),
-            (
-                "dataType",
-                string(match column.data_type {
+
+/// Compose the typed document for an admitted dataset. Callers must run
+/// `admit` over the same held table before encoding it.
+pub fn document(study: &Study, dataset: &Dataset, define_name: &str) -> DatasetJsonDocument {
+    let columns = dataset
+        .columns
+        .iter()
+        .map(|column| {
+            let declaration = &column.declaration;
+            let meta = declaration.submission.as_ref().expect("composed column");
+            DatasetJsonColumn {
+                item_oid: format!("IT.{}.{}", dataset.id, declaration.name.value),
+                name: declaration.name.value.clone(),
+                label: declaration
+                    .label
+                    .as_ref()
+                    .expect("composed label")
+                    .value
+                    .clone(),
+                data_type: match column.data_type {
                     crate::specification_submission_document::DataType::Text => "string",
                     crate::specification_submission_document::DataType::Integer => "integer",
                     crate::specification_submission_document::DataType::Float => "float",
@@ -154,57 +75,67 @@ pub fn render<T: TableAccess>(
                     crate::specification_submission_document::DataType::Time => "time",
                     crate::specification_submission_document::DataType::Uri => "URI",
                     _ => "string",
-                })
-            ),
-        ];
-        if let Some(length) = &column.length {
-            values.push(("length", length.clone()));
-        }
-        if let Some(display) = &meta.display_format {
-            values.push(("displayFormat", string(&display.value)));
-        }
-        if let Some(sequence) = column.key_sequence {
-            values.push(("keySequence", sequence.to_string()));
-        }
-        columns.push(object(values));
-    }
-    fields.push(("columns", list(&columns)));
-    let mut writer = Writer {
-        output: Vec::new(),
-        path: &path,
-    };
-    writer.text("{\n")?;
-    for (key, value) in fields {
-        writer.text("  ")?;
-        writer.string(key)?;
-        writer.text(": ")?;
-        writer.text(&value)?;
-        writer.text(",\n")?;
-    }
-    writer.text("  \"rows\": [")?;
-    if table.row_count() > 0 {
-        writer.text("\n")?;
-        for row in 0..table.row_count() {
-            if row > 0 {
-                writer.text(",\n")?;
-            }
-            writer.text("    [")?;
-            for column in 0..dataset.columns.len() {
-                if column > 0 {
-                    writer.text(", ")?;
                 }
-                writer.cell(
-                    table
-                        .cell(row, column)
-                        .map_err(|_| invalid("held table access"))?,
-                )?;
+                .into(),
+                length: column.length.clone(),
+                display_format: meta
+                    .display_format
+                    .as_ref()
+                    .map(|display| display.value.clone()),
+                key_sequence: column.key_sequence,
             }
-            writer.text("]")?;
-        }
-        writer.text("\n  ")?;
+        })
+        .collect();
+    DatasetJsonDocument {
+        path: format!("datasets.{}.dataset_json", dataset.id),
+        created: study.created.clone(),
+        version: "1.1.0".into(),
+        file_oid: format!("{}.{}", study.file_oid, dataset.id),
+        originator: study
+            .section
+            .originator
+            .as_ref()
+            .map(|originator| originator.value.clone()),
+        source_name: "yamaa".into(),
+        source_version: study.source_version.clone(),
+        study_oid: format!("STDY.{}", study.study.id.value),
+        metadata_version_oid: format!("MDV.{}", study.metadata_id),
+        metadata_ref: define_name.into(),
+        item_group_oid: format!("IG.{}", dataset.id),
+        name: dataset.id.clone(),
+        label: dataset.metadata.label.value.clone(),
+        columns,
     }
-    writer.text("]\n}\n")?;
-    Ok(writer.output)
+}
+
+/// Run every semantic admission the byte writer previously performed before
+/// encoding: table geometry, published-artifact field/codelist admission and
+/// the boolean-cell refusal. The adapter writer repeats no validation.
+pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Result<(), Finding> {
+    let path = format!("datasets.{}.dataset_json", dataset.id);
+    Limits::table(table.row_count(), dataset.columns.len()).map_err(|error| {
+        Finding::cause(
+            ConditionCode::ApplicationRejected,
+            &path,
+            &error.to_string(),
+        )
+    })?;
+    validate_artifact(study, dataset, table)?;
+    for row in 0..table.row_count() {
+        for column in 0..dataset.columns.len() {
+            let value = table
+                .cell(row, column)
+                .map_err(|_| artifact_mismatch(dataset, "held artifact access"))?;
+            if matches!(value, ValueRef::Bool(_)) {
+                return Err(Finding::cause(
+                    ConditionCode::SubmissionJsonInvalid,
+                    "dataset_json",
+                    "schema_violation: boolean cell",
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn artifact_mismatch(dataset: &Dataset, detail: &str) -> Finding {
@@ -416,51 +347,11 @@ fn owned(value: ValueRef<'_>) -> Value {
         ValueRef::DateTime(value) => Value::DateTime(value),
     }
 }
-fn list(values: &[String]) -> String {
-    if values.is_empty() {
-        return "[]".into();
-    }
-    format!(
-        "[\n{}\n  ]",
-        values
-            .iter()
-            .map(|s| format!("    {s}"))
-            .collect::<Vec<_>>()
-            .join(",\n")
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::value::FiniteFloat;
 
-    #[test]
-    fn streamed_cells_preserve_exact_json_and_full_width_scalar_spelling() {
-        let values = [
-            (Value::Missing, "null"),
-            (
-                Value::Str("\0\u{e9}\u{1f642}\"\\\n\t".into()),
-                "\"\\u0000\u{e9}\u{1f642}\\\"\\\\\\n\\t\"",
-            ),
-            (Value::Int(i64::MIN), "-9223372036854775808"),
-            (Value::Int(i64::MAX), "9223372036854775807"),
-            (Value::float(-0.0), "-0"),
-            (Value::Date("2024-02-01".parse().unwrap()), "\"2024-02-01\""),
-            (
-                Value::DateTime("2024-02-29T03:04:00".parse().unwrap()),
-                "\"2024-02-29T03:04:00\"",
-            ),
-        ];
-        for (value, expected) in values {
-            let mut writer = Writer {
-                output: Vec::new(),
-                path: "dataset_json",
-            };
-            writer.cell(ValueRef::from(&value)).unwrap();
-            assert_eq!(writer.output, expected.as_bytes());
-        }
-    }
     #[test]
     fn codelist_numeric_equality_preserves_integer_precision() {
         assert!(equal_value(

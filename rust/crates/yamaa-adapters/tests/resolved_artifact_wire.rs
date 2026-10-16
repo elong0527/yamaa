@@ -67,7 +67,7 @@ fn numeric_projection_preserves_admitted_values_and_malformed_documents_fail_adm
     let (value, mapping_order) = specification_value(&document).unwrap();
     assert!(mapping_order.is_empty());
     assert_eq!(
-        value.to_string(),
+        yamaa_adapters::json_wire::encode(&value),
         "[123456789012345678901234567890,-123456789012345678901234567890,1.7976931348623157e308,-1.7976931348623157e308,2.2250738585072014e-308,5e-324,-0.0]"
     );
 }

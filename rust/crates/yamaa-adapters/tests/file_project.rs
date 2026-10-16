@@ -219,7 +219,7 @@ mod file {
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].spec_paths, ["tests[0]"]);
             let context: yamaa_core::json::Value =
-                serde_json::from_str(&result.issues()[0].context).unwrap();
+                yamaa_adapters::json_wire::decode(&result.issues()[0].context).unwrap();
             assert_eq!(context["source"], identity("env/id.yaml"));
             assert_eq!(context["entry"], identity("env/environment.yaml"));
             assert_eq!(context["environment_path"], "functions.id");
@@ -227,7 +227,7 @@ mod file {
             assert_eq!(context["expected"], 7);
             assert_eq!(
                 result.observations()["source_reads"],
-                yamaa_core::json::json!([])
+                yamaa_adapters::json!([])
             );
             assert_eq!(activation.trace, ["lock", "bind", "call", "call"]);
             assert_eq!(reads, 5);
@@ -1444,7 +1444,9 @@ mod file {
                 assert_eq!(rows[0].spec_paths, ["environment"]);
                 assert_eq!(
                     rows[0].context,
-                    yamaa_core::json::json!({"cause":"missing", "path":environment}).to_string()
+                    yamaa_adapters::json_wire::encode(
+                        &yamaa_adapters::json!({"cause":"missing", "path":environment})
+                    )
                 );
                 let Error::Environment(owner) = &rejection else {
                     unreachable!()
@@ -1604,8 +1606,9 @@ mod file {
                         condition: "unknown_field".into(),
                         requirement: Some("REQ-0285".into()),
                         spec_paths: vec![name.clone()],
-                        context: yamaa_core::json::json!({"class":"root_class", "field":name})
-                            .to_string(),
+                        context: yamaa_adapters::json_wire::encode(
+                            &yamaa_adapters::json!({"class":"root_class", "field":name}),
+                        ),
                     },
                     "root field {index} keeps its complete finding in authored order"
                 );
@@ -1633,9 +1636,9 @@ mod file {
                 condition: "non_ascii_source".into(),
                 requirement: Some("REQ-0705".into()),
                 spec_paths: vec!["$".into()],
-                context:
-                    yamaa_core::json::json!({"line":1, "column":1, "path":study.path("root.yaml")})
-                        .to_string(),
+                context: yamaa_adapters::json_wire::encode(
+                    &yamaa_adapters::json!({"line":1, "column":1, "path":study.path("root.yaml")}),
+                ),
             }];
             assert_eq!(
                 producer_check::rejected(&owner, Language::Python).unwrap(),
@@ -1673,7 +1676,7 @@ mod file {
             assert_eq!(environment.len(), 1);
             assert_eq!(environment[0].condition, "invalid_yaml");
             let context: yamaa_core::json::Value =
-                serde_json::from_str(&environment[0].context).unwrap();
+                yamaa_adapters::json_wire::decode(&environment[0].context).unwrap();
             assert_eq!(context["path"], study.path("environment.yaml"));
             assert_eq!(context["environment_path"], "$");
             assert!(context["line"].as_u64().is_some());
@@ -1712,7 +1715,8 @@ mod file {
             for (row, (declaration, path)) in rows.iter().zip(expected) {
                 assert_eq!(row.condition, "project_environment_invalid");
                 assert_eq!(row.spec_paths, [declaration]);
-                let context: yamaa_core::json::Value = serde_json::from_str(&row.context).unwrap();
+                let context: yamaa_core::json::Value =
+                    yamaa_adapters::json_wire::decode(&row.context).unwrap();
                 assert_eq!(context["path"], path);
                 assert_eq!(context["cause"], "missing");
                 assert_eq!(context["environment_path"], declaration);
@@ -1733,14 +1737,16 @@ mod file {
             let rows =
                 yamaa_adapters::project_application::check(&entry, &environment, Language::Python);
             assert_eq!(rows.len(), 3);
-            let context: yamaa_core::json::Value = serde_json::from_str(&rows[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                yamaa_adapters::json_wire::decode(&rows[0].context).unwrap();
             assert_eq!(context["cause"], "invalid_packaging_lock");
             for (row, path) in rows[1..]
                 .iter()
                 .zip(["absent-function.yaml", "absent-codelists.yaml"])
             {
                 assert_eq!(row.condition, "invalid_yaml");
-                let context: yamaa_core::json::Value = serde_json::from_str(&row.context).unwrap();
+                let context: yamaa_core::json::Value =
+                    yamaa_adapters::json_wire::decode(&row.context).unwrap();
                 assert_eq!(context["path"], path);
                 assert!(context["reason"].as_str().is_some());
                 assert!(context["line"].as_u64().is_some());
@@ -1760,7 +1766,8 @@ mod file {
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].condition, "schema_version_mismatch");
             assert_eq!(rows[0].spec_paths, ["schema_version"]);
-            let context: yamaa_core::json::Value = serde_json::from_str(&rows[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                yamaa_adapters::json_wire::decode(&rows[0].context).unwrap();
             assert_eq!(context["actual"].as_number().unwrap().as_str(), DIGITS);
             assert_eq!(context["expected"], "1.0");
             assert!(rows[0].context.contains(&format!("\"actual\":{DIGITS}")));
@@ -1915,8 +1922,8 @@ mod file {
                     assert_eq!(rows[0].spec_paths, ["codelists[1]"]);
                     assert_eq!(rows, expected_rows);
                     assert_eq!(
-                        serde_json::from_str::<yamaa_core::json::Value>(&rows[0].context).unwrap(),
-                        yamaa_core::json::json!({
+                        yamaa_adapters::json_wire::decode(&rows[0].context).unwrap(),
+                        yamaa_adapters::json!({
                             "stage": "environment", "code": "resource_limit",
                             "resource": expected.resource, "limit": expected.limit,
                             "actual": expected.actual,
@@ -1994,12 +2001,11 @@ mod file {
                             condition: "engine_rejected".into(),
                             requirement: None,
                             spec_paths: vec!["$".into()],
-                            context: yamaa_core::json::json!({
+                            context: yamaa_adapters::json_wire::encode(&yamaa_adapters::json!({
                                 "stage":"environment", "code":"resource_limit",
                                 "resource":"yaml_depth", "limit":Limits::YAML_DEPTH,
                                 "actual":Limits::YAML_DEPTH + 1,
-                            })
-                            .to_string(),
+                            })),
                         }
                     }
                     DecodeFailure::InvalidYaml { position, reason } if !limited => Issue {
@@ -2007,11 +2013,10 @@ mod file {
                         condition: "invalid_yaml".into(),
                         requirement: Some("REQ-0280".into()),
                         spec_paths: vec!["$".into()],
-                        context: yamaa_core::json::json!({
+                        context: yamaa_adapters::json_wire::encode(&yamaa_adapters::json!({
                             "line":position.line, "column":position.column, "reason":reason,
                             "path":environment, "entry":environment, "environment_path":"$",
-                        })
-                        .to_string(),
+                        })),
                     },
                     cause => panic!("expected retained decoder cause: {cause:?}"),
                 };
@@ -2059,7 +2064,8 @@ mod file {
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].condition, "project_environment_invalid");
             assert_eq!(rows[0].spec_paths, ["environment"]);
-            let context: yamaa_core::json::Value = serde_json::from_str(&rows[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                yamaa_adapters::json_wire::decode(&rows[0].context).unwrap();
             assert_eq!(context["path"], path);
             assert_eq!(context["cause"], "not_regular_file");
         }
@@ -2096,7 +2102,7 @@ mod file {
             let expected = ["root.yaml", "left.yaml", "leaf.yaml"].map(|name| yamaa_adapters::issue_rows::Issue {
         phase: "validation".into(), condition: "invalid_regex".into(), requirement: Some("REQ-0827".into()),
         spec_paths: vec!["columns.VALUE.verifications[0].matches.pattern".into()],
-        context: yamaa_core::json::json!({"pattern":"é(", "source":study.path(name), "entry":study.path("root.yaml")}).to_string(),
+        context: yamaa_adapters::json_wire::encode(&yamaa_adapters::json!({"pattern":"é(", "source":study.path(name), "entry":study.path("root.yaml")})),
     });
             assert_eq!(producer_check::prepared(&graph).unwrap(), expected);
             assert_eq!(producer_check::prepared(&graph).unwrap(), expected);
@@ -2172,8 +2178,7 @@ mod file {
                     }
                 );
                 assert_eq!(
-                    serde_json::from_str::<yamaa_core::json::Value>(&rows[0].context).unwrap()
-                        ["source"],
+                    yamaa_adapters::json_wire::decode(&rows[0].context).unwrap()["source"],
                     study.path("root.yaml")
                 );
                 fs::remove_dir_all(&study.0).unwrap();
@@ -2264,7 +2269,8 @@ mod file {
             let rows = producer_check::rejected(&error, Language::Python).unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].condition, "invalid_yaml");
-            let context: yamaa_core::json::Value = serde_json::from_str(&rows[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                yamaa_adapters::json_wire::decode(&rows[0].context).unwrap();
             assert_eq!(context["path"], "environment.yaml");
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(
@@ -2306,8 +2312,7 @@ mod file {
             assert!(rows
                 .iter()
                 .any(
-                    |r| serde_json::from_str::<yamaa_core::json::Value>(&r.context).unwrap()
-                        ["source"]
+                    |r| yamaa_adapters::json_wire::decode(&r.context).unwrap()["source"]
                         == study.path("parent/base.yaml")
                 ));
             fs::remove_dir_all(&study.0).unwrap();
@@ -2344,10 +2349,10 @@ mod file {
                 &nodes[0].producers[0].document,
                 &nodes[0].producers[1].document
             ));
-            let expected =
-                yamaa_core::json::json!({"declaring_sources":[study.path("producer/base.yaml")],
-        "source":study.path("leaf.yaml"), "entry":study.path("root.yaml"), "pattern":"é("})
-                .to_string();
+            let expected = yamaa_adapters::json_wire::encode(
+                &yamaa_adapters::json!({"declaring_sources":[study.path("producer/base.yaml")],
+        "source":study.path("leaf.yaml"), "entry":study.path("root.yaml"), "pattern":"é("}),
+            );
             let rows = producer_check::prepared(&graph).unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].context, expected);
@@ -2443,7 +2448,7 @@ mod file {
             assert_eq!(failures.len(), 1);
             assert_eq!(failures[0].condition, "invalid_yaml");
             let context: yamaa_core::json::Value =
-                serde_json::from_str(&failures[0].context).unwrap();
+                yamaa_adapters::json_wire::decode(&failures[0].context).unwrap();
             assert_eq!(context["path"], "broken.yaml");
             assert_eq!(context["environment_path"], "functions.id");
             fs::remove_dir_all(&study.0).unwrap();
@@ -2815,10 +2820,11 @@ mod file {
             assert_eq!(graph.graph().metadata().order(), [3, 1, 2, 0]);
             let rows = producer_check::prepared(&graph).unwrap();
             assert_eq!(rows.len(), 1);
-            let context: yamaa_core::json::Value = serde_json::from_str(&rows[0].context).unwrap();
+            let context: yamaa_core::json::Value =
+                yamaa_adapters::json_wire::decode(&rows[0].context).unwrap();
             assert_eq!(
                 context["declaring_sources"],
-                yamaa_core::json::json!([study.path("parents/base.yaml")])
+                yamaa_adapters::json!([study.path("parents/base.yaml")])
             );
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(producer_check::prepared(&graph).unwrap(), rows);

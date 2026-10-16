@@ -1,9 +1,10 @@
 //! Authored YAML findings and complete retained report encoding.
+use crate::json;
 use crate::yaml_decode::DecodeFailure;
-use yamaa_core::json::{json, Value};
+use yamaa_core::json::Value;
 
 pub(crate) fn encode_outcome(protocol: &str, outcome: Value) -> String {
-    json!({"protocol":protocol,"outcome":outcome}).to_string()
+    crate::json_wire::encode(&json!({"protocol":protocol,"outcome":outcome}))
 }
 
 /// Semantic source findings are shared by byte probes and document preparation.

@@ -110,8 +110,8 @@ mod file {
                 assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0188"));
                 assert_eq!(issues[0].spec_paths, ["rows[1].filter"]);
                 assert_eq!(
-                    serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap(),
-                    yamaa_core::json::json!({"predicate": "ID >", "position": 4})
+                    yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
+                    yamaa_adapters::json!({"predicate": "ID >", "position": 4})
                 );
                 assert_eq!(
                     yamaa_adapters::project_application::check(
@@ -286,8 +286,8 @@ mod file {
             assert_eq!(finding.requirement.as_deref(), Some("REQ-0788"));
             assert_eq!(finding.spec_paths, ["input.SRC.path"]);
             assert_eq!(
-                serde_json::from_str::<yamaa_core::json::Value>(&finding.context).unwrap(),
-                yamaa_core::json::json!({"dataset":"SRC","path":"input.csv"})
+                yamaa_adapters::json_wire::decode(&finding.context).unwrap(),
+                yamaa_adapters::json!({"dataset":"SRC","path":"input.csv"})
             );
             for _ in 0..2 {
                 assert!(matches!(
@@ -317,10 +317,9 @@ mod file {
             assert_eq!(issues[0].condition, "project_environment_missing");
             assert_eq!(
                 issues[0].context,
-                yamaa_core::json::json!({
+                yamaa_adapters::json_wire::encode(&yamaa_adapters::json!({
                     "cause": "missing", "path": environment,
-                })
-                .to_string()
+                }))
             );
             assert_eq!(issues[0].spec_paths, ["environment"]);
             assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0694"));
@@ -431,7 +430,7 @@ mod file {
             let mut result = study.build();
             let before = result.output().unwrap().to_vec();
             let observations = result.observations();
-            assert_eq!(observations["artifacts"], yamaa_core::json::json!([]));
+            assert_eq!(observations["artifacts"], yamaa_adapters::json!([]));
             assert!(result.issues().is_empty());
             fs::write(study.0.join("input.csv"), b"changed").unwrap();
             fs::write(study.0.join("spec.yaml"), b"[changed").unwrap();
@@ -452,7 +451,7 @@ mod file {
                     "ID\n-9223372036854775808\n9223372036854775807\n"
                 );
                 let mut build = published;
-                build["artifacts"] = yamaa_core::json::json!([]);
+                build["artifacts"] = yamaa_adapters::json!([]);
                 assert_eq!(build, observations);
                 assert!(result.issues().is_empty());
                 assert_eq!(
@@ -692,7 +691,7 @@ mod file {
 
         #[test]
         fn compiler_refusals_retain_the_same_capacity_on_plain_and_environment_routes() {
-            use yamaa_core::json::json;
+            use yamaa_adapters::json;
             for (resource, limit, actual, path) in [
                 ("columns", 1024, 1025, "columns"),
                 ("inputs", 16, 17, "input"),
@@ -789,8 +788,7 @@ mod file {
                         assert_eq!(issue.requirement, None);
                         assert_eq!(issue.spec_paths, [path]);
                         assert_eq!(
-                            serde_json::from_str::<yamaa_core::json::Value>(&issue.context)
-                                .unwrap(),
+                            yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
                             json!({
                                 "stage":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual,
                             })
@@ -831,8 +829,8 @@ mod file {
 
         #[test]
         fn row_shape_boundaries_are_per_template_and_preserve_authored_preflight_precedence() {
+            use yamaa_adapters::json;
             use yamaa_core::{
-                json::json,
                 limits::Limits,
                 table::{TableAccess, ValueRef},
                 value::ColumnType,
@@ -872,8 +870,7 @@ mod file {
                     assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0065"));
                     assert_eq!(issues[0].spec_paths, ["rows[0].group_by"]);
                     assert_eq!(
-                        serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context)
-                            .unwrap(),
+                        yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
                         json!({"row":"r", "group_by":vec!["ID"; Limits::KEYS]}),
                     );
                 }
@@ -1110,10 +1107,10 @@ mod file {
                 ["columns.TERM.verifications[0].matches.pattern"]
             );
             let context: yamaa_core::json::Value =
-                serde_json::from_str(&findings[0].context).unwrap();
+                yamaa_adapters::json_wire::decode(&findings[0].context).unwrap();
             assert_eq!(
                 context,
-                yamaa_core::json::json!({"code":"execution_limit","stage":"execute","resource":"regex_steps","limit":1_000_000})
+                yamaa_adapters::json!({"code":"execution_limit","stage":"execute","resource":"regex_steps","limit":1_000_000})
             );
             assert!(!study.0.join("output.csv").exists());
         }
@@ -1703,12 +1700,13 @@ mod file {
             path::PathBuf,
             sync::atomic::{AtomicUsize, Ordering},
         };
+        use yamaa_adapters::json;
         use yamaa_adapters::{
             file_preparation::{Error, FileSpecification},
             file_resources::Resources,
         };
         use yamaa_core::application_observer::Scope;
-        use yamaa_core::json::{json, Value};
+        use yamaa_core::json::Value;
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         struct Study(PathBuf);
         impl Study {
@@ -1807,7 +1805,7 @@ mod file {
         #[test]
         fn entry_version_finding_precedes_parent_and_study_authority() {
             let study = Study::new();
-            let actual: Value = serde_json::from_str(&failure(
+            let actual: Value = yamaa_adapters::json_wire::decode(&failure(
                 &study,
                 &format!(
                     "{}parents: ../outside/missing.yaml\n",
@@ -1823,9 +1821,11 @@ mod file {
         #[test]
         fn missing_parent_retains_complete_authored_reference_finding() {
             let study = Study::new();
-            let actual: Value =
-                serde_json::from_str(&failure(&study, &format!("{VALID}parents: absent.yaml\n")))
-                    .unwrap();
+            let actual: Value = yamaa_adapters::json_wire::decode(&failure(
+                &study,
+                &format!("{VALID}parents: absent.yaml\n"),
+            ))
+            .unwrap();
             assert_eq!(
                 actual,
                 json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"absent.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
@@ -1839,7 +1839,7 @@ mod file {
                 "schema_version: '1.0'\ndomain: bad-name\n",
             )
             .unwrap();
-            let actual: Value = serde_json::from_str(&failure(
+            let actual: Value = yamaa_adapters::json_wire::decode(&failure(
                 &study,
                 &format!("{VALID}parents: ../parent/base.yaml\n"),
             ))
@@ -1923,7 +1923,7 @@ mod file {
                 Ok(_) => panic!("unreadable parent accepted through fallback"),
                 Err(error) => error,
             };
-            let actual: Value = serde_json::from_str(&error.into_message()).unwrap();
+            let actual: Value = yamaa_adapters::json_wire::decode(&error.into_message()).unwrap();
             assert_eq!(
                 actual,
                 json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"blocked.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
@@ -1966,7 +1966,7 @@ mod file {
                 .unwrap();
                 let preparation_reads = if name == "schema-inheritance" { 3 } else { 1 };
                 assert_eq!(prepared.capture_reads(), preparation_reads, "{name}");
-                let mut expected: Value = serde_json::from_slice(
+                let mut expected: Value = yamaa_adapters::json_wire::decode_slice(
                     &fs::read(
                         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                             .join(format!("tests/fixtures/specs/{name}.json")),
@@ -2053,7 +2053,7 @@ mod file {
             fs::write(study.0.join("entry/dict.yaml"), b"A: changed\n").unwrap();
             let response = prepared.run().execute_csv(b"ID,CODE\n1,A\n").unwrap();
             assert!(response.table.is_some());
-            let outcome: Value = serde_json::from_str(
+            let outcome: Value = yamaa_adapters::json_wire::decode(
                 &ipc_snapshot::table_snapshot(response.table.as_ref().unwrap()).unwrap(),
             )
             .unwrap();
@@ -2083,7 +2083,7 @@ mod file {
             assert_eq!(dictionary.bytes, b"A: declared-parent\n");
             assert!(dictionary.identity.ends_with("/parent/dict.yaml"));
             let response = prepared.run().execute_csv(b"ID,CODE\n1,A\n").unwrap();
-            let outcome: Value = serde_json::from_str(
+            let outcome: Value = yamaa_adapters::json_wire::decode(
                 &ipc_snapshot::table_snapshot(response.table.as_ref().unwrap()).unwrap(),
             )
             .unwrap();
@@ -2101,7 +2101,7 @@ mod file {
                 ("absent.yaml", "resource_path_missing"),
                 (".", "resource_path_not_regular_file"),
             ] {
-                let actual: Value = serde_json::from_str(&failure(
+                let actual: Value = yamaa_adapters::json_wire::decode(&failure(
                     &study,
                     &DICTIONARY_SPEC.replace("dict.yaml", path),
                 ))
@@ -2116,7 +2116,8 @@ mod file {
         fn dictionary_invalid_content_retains_original_typed_schema_context_before_study() {
             let study = Study::new();
             fs::write(study.0.join("entry/dict.yaml"), "7: answer\n").unwrap();
-            let actual: Value = serde_json::from_str(&failure(&study, DICTIONARY_SPEC)).unwrap();
+            let actual: Value =
+                yamaa_adapters::json_wire::decode(&failure(&study, DICTIONARY_SPEC)).unwrap();
             let diagnostics = actual["outcome"]["diagnostics"].as_array().unwrap();
             assert_eq!(diagnostics.len(), 1);
             assert_eq!(diagnostics[0]["condition"], "invalid_field_type");

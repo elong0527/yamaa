@@ -747,6 +747,15 @@ mod service {
             fn capture_published(&mut self, _: &str, _: &str, _: &str) -> Result<Vec<u8>, Opaque> {
                 panic!("no dataset selected")
             }
+            fn render_dataset_json<T: TableAccess>(
+                &mut self,
+                _: &yamaa_core::submission_json::DatasetJsonDocument,
+                _: &T,
+            ) -> Result<Vec<u8>, yamaa_core::submission_composition::Finding> {
+                // The fixture declares no datasets, so composition never
+                // reaches Dataset-JSON encoding.
+                Ok(Vec::new())
+            }
             fn decode_parquet(&mut self, _: &[u8]) -> Result<EmptyTable, ()> {
                 panic!("no codec selected")
             }
@@ -1158,10 +1167,24 @@ mod service {
                 assert_eq!(finding.spec_paths, ["sdtm.specs[0]"]);
                 assert_eq!(
                     finding.context,
-                    yamaa_core::json::json!({
-                        "path": "declared.yaml", "stage": "define", "code": "resource_limit",
-                        "resource": resource, "limit": limit, "actual": limit + 1,
-                    })
+                    yamaa_core::json::Value::Object(
+                        [
+                            (
+                                "path".into(),
+                                yamaa_core::json::Value::from("declared.yaml")
+                            ),
+                            ("stage".into(), yamaa_core::json::Value::from("define")),
+                            (
+                                "code".into(),
+                                yamaa_core::json::Value::from("resource_limit")
+                            ),
+                            ("resource".into(), yamaa_core::json::Value::from(resource)),
+                            ("limit".into(), yamaa_core::json::Value::from(limit)),
+                            ("actual".into(), yamaa_core::json::Value::from(limit + 1)),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    )
                     .as_object()
                     .unwrap()
                     .clone()

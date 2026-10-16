@@ -319,13 +319,14 @@ mod table {
     }
     mod source_diagnostics {
         //! Borrowed codec projections compare independently captured complete diagnostics.
+        use yamaa_adapters::json;
         use yamaa_adapters::{
             csv_source::{self, TextTableError},
             parquet_source as parquet, source_diagnostics, specification_diagnostics as projection,
             specification_run::Error,
             typed_csv,
         };
-        use yamaa_core::json::{json, Value};
+        use yamaa_core::json::Value;
         use yamaa_core::{
             diagnostic::{ParquetFinding, SourceFinding},
             specification::{SourceDeclaration, SourceProfile},
@@ -357,7 +358,8 @@ mod table {
                 *wanted
             );
             let failure: Value =
-                serde_json::from_str(&projection::failure(error, Some(source))).unwrap();
+                yamaa_adapters::json_wire::decode(&projection::failure(error, Some(source)))
+                    .unwrap();
             assert_eq!(
                 failure,
                 json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":wanted}})
@@ -368,7 +370,7 @@ mod table {
         fn all_independent_csv_profile_reports_preserve_original_projection() {
             let declaration = source("SRC", "source.csv");
             let mut count = 0;
-            for row in serde_json::from_str::<Vec<Value>>(include_str!(
+            for row in yamaa_adapters::json_wire::decode_array(include_str!(
                 "fixtures/csv_profile_diagnostics.json"
             ))
             .unwrap()
@@ -394,7 +396,7 @@ mod table {
             let declaration = source("SRC", "source.csv");
             let mut count = 0;
             for row in
-                serde_json::from_str::<Vec<Value>>(include_str!("fixtures/source_typing.json"))
+                yamaa_adapters::json_wire::decode_array(include_str!("fixtures/source_typing.json"))
                     .unwrap()
                     .iter()
             {
@@ -594,7 +596,7 @@ mod table {
                 Err(source_diagnostics::SourceProjectionError::InvalidContext)
             );
             let failure: Value =
-                serde_json::from_str(&projection::failure(&semantic, None)).unwrap();
+                yamaa_adapters::json_wire::decode(&projection::failure(&semantic, None)).unwrap();
             assert_eq!(
                 failure,
                 json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"ingest","code":"diagnostic_context"}})
@@ -632,7 +634,8 @@ mod table {
                 ]);
                 assert_eq!(source_diagnostics::findings(&collected, None), Ok(None));
                 let failure: Value =
-                    serde_json::from_str(&projection::failure(&collected, None)).unwrap();
+                    yamaa_adapters::json_wire::decode(&projection::failure(&collected, None))
+                        .unwrap();
                 assert_eq!(
                     failure["outcome"],
                     json!({"status":"rejected","stage":"ingest","code":"source_collection_boundary"})
@@ -668,7 +671,8 @@ mod table {
             let portable = projection::findings(&error, None).unwrap().unwrap();
             assert_eq!(portable.len(), 2);
             assert_eq!(portable[1]["context"]["value"], original);
-            let failure: Value = serde_json::from_str(&projection::failure(&error, None)).unwrap();
+            let failure: Value =
+                yamaa_adapters::json_wire::decode(&projection::failure(&error, None)).unwrap();
             assert_eq!(
                 failure,
                 json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":portable}})
@@ -787,7 +791,8 @@ mod table {
             ]);
             assert_eq!(source_diagnostics::findings(&error, None), Ok(None));
             assert_eq!(source_diagnostics::findings(&error, None), Ok(None));
-            let failure: Value = serde_json::from_str(&projection::failure(&error, None)).unwrap();
+            let failure: Value =
+                yamaa_adapters::json_wire::decode(&projection::failure(&error, None)).unwrap();
             assert_eq!(
                 failure["outcome"],
                 json!({"status":"rejected","stage":"ingest","code":"source_collection_boundary"})
@@ -820,7 +825,8 @@ mod table {
                 (source("LATE", "late.parquet"), opaque()),
             ]);
             assert_eq!(source_diagnostics::findings(&held, None), Ok(None));
-            let failure: Value = serde_json::from_str(&projection::failure(&held, None)).unwrap();
+            let failure: Value =
+                yamaa_adapters::json_wire::decode(&projection::failure(&held, None)).unwrap();
             assert_eq!(
                 failure,
                 json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"ingest","code":"source_collection_boundary"}})

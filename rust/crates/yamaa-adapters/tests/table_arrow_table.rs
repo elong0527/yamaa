@@ -964,19 +964,20 @@ mod table {
             let attempt = run.execute_with_port(&mut study, Scope::default());
             let table = attempt.result.as_ref().unwrap().table.as_ref().unwrap();
             let snapshot: yamaa_core::json::Value =
-                serde_json::from_str(&ipc_snapshot::table_snapshot(table).unwrap()).unwrap();
+                yamaa_adapters::json_wire::decode(&ipc_snapshot::table_snapshot(table).unwrap())
+                    .unwrap();
             assert_eq!(
                 snapshot["rows"][1][1],
-                yamaa_core::json::json!({"float": "3ff3be76c8b43958"})
+                yamaa_adapters::json!({"float": "3ff3be76c8b43958"})
             );
             assert_eq!(
                 snapshot["rows"][1][2],
-                yamaa_core::json::json!({"float": "4003be76c8b43958"})
+                yamaa_adapters::json!({"float": "4003be76c8b43958"})
             );
             let result = specification_report::build_result(&run, &attempt, identity()).unwrap();
             assert_eq!(
                 result.observations()["artifacts"],
-                yamaa_core::json::json!([])
+                yamaa_adapters::json!([])
             );
             let mut publisher = Publisher {
                 reject: true,
@@ -1104,7 +1105,8 @@ mod table {
         #[test]
         fn shared_installed_table_truth_and_repeated_ownership() {
             let expected: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/tables/expected.json")).unwrap();
+                yamaa_adapters::json_wire::decode(include_str!("fixtures/tables/expected.json"))
+                    .unwrap();
             for (name, input) in [
                 (
                     "mixed",
@@ -1124,15 +1126,13 @@ mod table {
                 ),
             ] {
                 let before: yamaa_core::json::Value =
-                    serde_json::from_str(&table_snapshot(input).unwrap()).unwrap();
+                    yamaa_adapters::json_wire::decode(&table_snapshot(input).unwrap()).unwrap();
                 assert_eq!(before, expected[name], "{name}");
                 let mut owned = table_round_trip(input).unwrap();
                 for _ in 0..5 {
                     assert_eq!(
-                        serde_json::from_str::<yamaa_core::json::Value>(
-                            &table_snapshot(&owned).unwrap()
-                        )
-                        .unwrap(),
+                        yamaa_adapters::json_wire::decode(&table_snapshot(&owned).unwrap())
+                            .unwrap(),
                         expected[name],
                         "{name}"
                     );
@@ -1534,7 +1534,8 @@ mod table {
             let input = stream(&batch);
             let snapshot = table_snapshot(&input).unwrap();
             assert!(snapshot.len() > 16 * 1024 * 1024);
-            let snapshot: yamaa_core::json::Value = serde_json::from_str(&snapshot).unwrap();
+            let snapshot: yamaa_core::json::Value =
+                yamaa_adapters::json_wire::decode(&snapshot).unwrap();
             assert_eq!(snapshot["rows"][0][0]["str"], "\0".repeat(3 * 1024 * 1024));
             assert!(table_round_trip(&input).is_ok());
         }
@@ -2670,7 +2671,8 @@ mod table {
                     },
                 )
                 .unwrap();
-                let expected: yamaa_core::json::Value = serde_json::from_str(fields[2]).unwrap();
+                let expected: yamaa_core::json::Value =
+                    yamaa_adapters::json_wire::decode(fields[2]).unwrap();
                 assert_eq!(result.observations(), expected, "{}", fields[0]);
                 assert!(result.output().is_none());
                 drop(attempt);

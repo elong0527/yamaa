@@ -52,24 +52,23 @@ impl Error {
     pub fn into_message(self) -> String {
         match self {
             Self::Resource(error) => error.message().into(),
-            Self::Inventory(_) => yamaa_core::json::json!({
+            Self::Inventory(_) => crate::json_wire::encode(&crate::json!({
                 "protocol": "specification/prototype",
                 "outcome": { "status": "rejected", "stage": "prepare", "code": "inventory" },
-            })
-            .to_string(),
+            })),
             Self::Preparation(error) => {
                 crate::specification_diagnostics::inheritance_failure(error)
                     .unwrap_or_else(|error| error.message().into())
             }
             Self::ResourceFinding { diagnostic, .. }
             | Self::PreparationFinding { diagnostic, .. } => {
-                yamaa_core::json::json!({
+                crate::json_wire::encode(&crate::json!({
                     "protocol": "specification/prototype",
                     "outcome": {
                         "status": "invalid",
                         "diagnostics": [crate::specification_diagnostics::portable_diagnostic(*diagnostic)],
                     },
-                }).to_string()
+                }))
             }
             Self::Compile(error) => crate::specification_diagnostics::failure(&error, None),
         }
@@ -585,12 +584,11 @@ mod dispatch_policy_tests {
             panic!("changed dictionary keeps original preparation error");
         };
         let message = crate::specification_diagnostics::inheritance_failure_ref(&error).unwrap();
-        let finding = &serde_json::from_str::<yamaa_core::json::Value>(&message).unwrap()
-            ["outcome"]["diagnostics"][0];
+        let finding = &crate::json_wire::decode(&message).unwrap()["outcome"]["diagnostics"][0];
         let definition = yamaa_core::diagnostic::ConditionCode::ResourceContentChanged.definition();
         assert_eq!(
             finding,
-            &yamaa_core::json::json!({
+            &crate::json!({
                 "phase":definition.phase, "condition":definition.condition, "requirement":definition.requirement,
                 "spec_paths":["columns.ID.derivation.mapping.dict"], "context":{"path":"dict.yaml"},
             })

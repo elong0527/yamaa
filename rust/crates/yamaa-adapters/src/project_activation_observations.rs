@@ -1,11 +1,12 @@
 //! Complete activation evidence from one owned build. This reads held metadata
 //! and actual engine observations; it never queries a host or invokes a case.
+use crate::json;
 use crate::{
     project_run::PreparedRun,
     project_source::{CapturedEnvironment, Origin},
     report_scalar::ScalarValue,
 };
-use yamaa_core::json::{json, Value as Json};
+use yamaa_core::json::Value as Json;
 use yamaa_core::project_activation::{BindingOutcome, LockObservation, Observations, TestOutcome};
 use yamaa_core::{
     project_environment::ExecutionEnvironment, project_function::Function, value::Value,
@@ -65,7 +66,7 @@ pub enum Error {
     Projection,
 }
 fn scalar(value: &Value) -> Result<Json, Error> {
-    yamaa_core::json::to_value(ScalarValue::from_core(value.clone())).map_err(|_| Error::Projection)
+    Ok(ScalarValue::from_core(value.clone()).to_json())
 }
 fn function(run: &dyn ActivationView, selected: usize) -> Result<(&Function, &str), Error> {
     let index = *run

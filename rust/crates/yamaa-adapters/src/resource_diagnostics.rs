@@ -307,10 +307,9 @@ mod tests {
         assert_eq!(refusal.limit, 10_000_000);
         assert_eq!(refusal.actual, Some(10_000_001));
         assert_eq!(refusal.spec_paths, ["input.XW"]);
-        let projected: Value = serde_json::from_str(&crate::specification_diagnostics::failure(
-            &failure,
-            Some(&declaration),
-        ))
+        let projected: Value = crate::json_wire::decode(
+            &crate::specification_diagnostics::failure(&failure, Some(&declaration)),
+        )
         .unwrap();
         assert_eq!(projected["outcome"]["stage"], "ingest");
         assert_eq!(projected["outcome"]["code"], "sas_limit");
@@ -319,7 +318,7 @@ mod tests {
         assert_eq!(projected["outcome"]["actual"], 10_000_001);
         assert_eq!(
             projected["outcome"]["spec_paths"],
-            yamaa_core::json::json!(["input.XW"])
+            crate::json!(["input.XW"])
         );
     }
 
@@ -365,8 +364,8 @@ mod tests {
                 },
             ] {
                 let encoded = crate::dataset_result::semantic_condition(&error).unwrap();
-                let wire = serde_json::to_string(&encoded).unwrap();
-                let decoded: Value = serde_json::from_str(&wire).unwrap();
+                let wire = crate::json_wire::encode(&encoded);
+                let decoded: Value = crate::json_wire::decode(&wire).unwrap();
                 let expected = Refusal::new(limit.resource, limit.limit, limit.actual, Vec::new());
                 assert_eq!(decoded["resource"], limit.resource);
                 assert_eq!(decoded["limit"], limit.limit.to_string());
@@ -397,9 +396,9 @@ mod tests {
             );
             let value = refusal.value("ingest", "source_limit");
             assert_eq!(value["context"]["resource"], resource);
-            assert_eq!(value["context"]["limit"], yamaa_core::json::json!(limit));
-            assert_eq!(value["context"]["actual"], yamaa_core::json::json!(actual));
-            assert_eq!(value["spec_paths"], yamaa_core::json::json!(["input.XW"]));
+            assert_eq!(value["context"]["limit"], crate::json!(limit));
+            assert_eq!(value["context"]["actual"], crate::json!(actual));
+            assert_eq!(value["spec_paths"], crate::json!(["input.XW"]));
         }
     }
 }

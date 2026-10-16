@@ -325,9 +325,8 @@ mod file {
                         assert_eq!(issue.requirement.as_deref(), Some(requirement));
                         assert_eq!(issue.spec_paths, ["input.SRC.path"]);
                         assert_eq!(
-                            serde_json::from_str::<yamaa_core::json::Value>(&issue.context)
-                                .unwrap(),
-                            yamaa_core::json::json!({"dataset":"SRC","path":written})
+                            yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                            yamaa_adapters::json!({"dataset":"SRC","path":written})
                         );
                     }
                     assert!(!study.0.join("entry/output.csv").exists());
@@ -389,8 +388,8 @@ mod file {
                 assert_eq!(issues[0].requirement.as_deref(), Some(requirement));
                 assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
                 assert_eq!(
-                    serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap(),
-                    yamaa_core::json::json!({"dataset":"SRC","path":written})
+                    yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
+                    yamaa_adapters::json!({"dataset":"SRC","path":written})
                 );
                 assert!(!study.0.join("entry/output.csv").exists());
             }
@@ -862,9 +861,10 @@ mod file {
 
         #[test]
         fn xml_text_findings_keep_field_owners_inheritance_and_render_order_in_both_hosts() {
-            let truth: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("../../../tests/host-fixtures/cases.json"))
-                    .unwrap();
+            let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "../../../tests/host-fixtures/cases.json"
+            ))
+            .unwrap();
             for case in truth["families"]["public-define"]["xml_text_cases"]
                 .as_array()
                 .unwrap()
@@ -902,16 +902,16 @@ mod file {
                         "0.3.0",
                         host,
                     );
-                    let actual: Vec<_> = run.issues().iter().map(|issue| yamaa_core::json::json!({
+                    let actual: Vec<_> = run.issues().iter().map(|issue| yamaa_adapters::json!({
                 "phase": issue.phase, "condition": issue.condition, "requirement": issue.requirement,
                 "spec_paths": issue.spec_paths,
-                "context": serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()
+                "context": yamaa_adapters::json_wire::decode(&issue.context).unwrap()
             })).collect();
                     assert_eq!(
-                        yamaa_core::json::json!(actual),
+                        yamaa_adapters::json!(actual),
                         case["issues"],
                         "{}",
-                        case["name"]
+                        yamaa_adapters::json_wire::encode(&case["name"])
                     );
                     assert!(!temp.0.join("define.xml").exists());
                     assert!(!temp.0.join("dm.json").exists());
@@ -1172,7 +1172,8 @@ mod file {
                 .find(|i| i.requirement.as_deref() == Some("REQ-0957"))
                 .unwrap();
             assert_eq!(issue.phase, "verification");
-            let context: yamaa_core::json::Value = serde_json::from_str(&issue.context).unwrap();
+            let context: yamaa_core::json::Value =
+                yamaa_adapters::json_wire::decode(&issue.context).unwrap();
             assert_eq!(context["value"], "Z");
             assert!(context["key_values"]
                 .as_array()
@@ -1198,7 +1199,8 @@ mod file {
             let result = temp.run("2026-09-11T00:00:00");
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             let data: yamaa_core::json::Value =
-                serde_json::from_slice(result.artifacts().next().unwrap().1).unwrap();
+                yamaa_adapters::json_wire::decode_slice(result.artifacts().next().unwrap().1)
+                    .unwrap();
             assert_eq!(data["columns"][5]["dataType"], "float");
             assert_eq!(data["rows"][0][5].as_f64(), Some(34.0));
         }

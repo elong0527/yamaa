@@ -1,10 +1,11 @@
 //! Portable compiler/ingestion diagnostics. This layer only represents findings;
 //! it does not select a phase, bind a name, evaluate a formula or read a table.
+use crate::json;
 use crate::{
     csv_source::{self, TextTableError},
     specification_run::Error,
 };
-use yamaa_core::json::{json, Value};
+use yamaa_core::json::Value;
 use yamaa_core::specification::{
     BindError, BindFinding, PreflightFinding, PrepareError, SourceDeclaration,
 };
@@ -163,7 +164,7 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
         };
         json!({"status":"rejected","stage":stage,"code":code})
     };
-    json!({"protocol":"specification/prototype","outcome":outcome}).to_string()
+    crate::json_wire::encode(&json!({"protocol":"specification/prototype","outcome":outcome}))
 }
 
 /// The same compiler failure facts are used by plain and environment routes.
@@ -192,10 +193,9 @@ pub(crate) fn preparation_outcome(error: &PrepareError) -> Value {
     json!({"status":"rejected","stage":"prepare","code":code})
 }
 pub(crate) fn compiler_failure(error: &PrepareError) -> crate::file_application::Failure {
-    crate::file_application::preparation_failure(
-        json!({"protocol":"specification/prototype","outcome":preparation_outcome(error)})
-            .to_string(),
-    )
+    crate::file_application::preparation_failure(crate::json_wire::encode(
+        &json!({"protocol":"specification/prototype","outcome":preparation_outcome(error)}),
+    ))
 }
 
 fn capture_response(outcome: Value) -> String {
@@ -350,7 +350,7 @@ mod resource_refusal_tests {
                 Limits::SEMANTIC_DEPTH,
             ),
         ] {
-            let value: Value = serde_json::from_str(&capture_failure(&error)).unwrap();
+            let value: Value = crate::json_wire::decode(&capture_failure(&error)).unwrap();
             let outcome = &value["outcome"];
             assert_eq!(outcome["status"], "resource_limit");
             assert_eq!(outcome["stage"], "capture");

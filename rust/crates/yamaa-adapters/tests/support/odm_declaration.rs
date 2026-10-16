@@ -1,10 +1,11 @@
 //! Typed fixture projections reuse production preparation and diagnostic representation.
+use yamaa_adapters::json;
 use yamaa_adapters::{
     shipped_schema, specification_diagnostics,
     specification_run::{Error, PreparedRun},
     specification_source::Source,
 };
-use yamaa_core::json::{json, Value};
+use yamaa_core::json::Value;
 fn projected_findings(
     error: &Error,
     source: Option<&yamaa_core::specification::SourceDeclaration>,
