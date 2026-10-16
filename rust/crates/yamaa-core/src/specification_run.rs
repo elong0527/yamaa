@@ -10,7 +10,7 @@ use std::{sync::Arc, vec};
 
 /// Capture authority for a declared source. Bound allocation before returning,
 /// hold immutable bytes and compare cached snapshots on bytes, never a digest.
-pub trait SourcePort {
+pub trait SpecificationSourcePort {
     type Error;
     /// Optional immutable native table, owned independently of host handles.
     /// The decoder admits its schema/values through the same binding lifecycle.
@@ -326,7 +326,7 @@ pub fn execute_bytes<D: SourceDecoder>(
 
 /// Fill caller-owned observations so panic containment retains the entered prefix.
 /// The supplied function port is already activated; this service never activates it.
-pub fn execute_into<P: SourcePort, D: SourceDecoder>(
+pub fn execute_into<P: SpecificationSourcePort, D: SourceDecoder>(
     prepared: &PreparedSpecification,
     port: &mut P,
     decoder: &mut D,
@@ -356,7 +356,7 @@ pub fn execute_into<P: SourcePort, D: SourceDecoder>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn execute_inner_into<P: SourcePort, D: SourceDecoder>(
+fn execute_inner_into<P: SpecificationSourcePort, D: SourceDecoder>(
     prepared: &PreparedSpecification,
     port: &mut P,
     decoder: &mut D,

@@ -1,5 +1,5 @@
 //! Inheritance application lifecycle over captured documents and explicit path authority.
-use crate::inheritance::{self, Layer, Source, SourcePort};
+use crate::inheritance::{self, InheritanceSourcePort, Layer, Source};
 use crate::schema::{
     Document, DocumentError, DocumentNode as N, InheritanceDependencyError, LayerCompositionError,
     LayerNodeOrigin, LayerProvenance, NormalizationError, SchemaDiagnostic, SchemaOrigin,
@@ -7,7 +7,7 @@ use crate::schema::{
 };
 
 /// The host respells paths using captured canonical file identities, without reopening them.
-pub trait PathPort: SourcePort {
+pub trait PathPort: InheritanceSourcePort {
     fn rebase(
         &mut self,
         layer: &Source,

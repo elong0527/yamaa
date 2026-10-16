@@ -12,7 +12,7 @@ mod execution {
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
@@ -20,7 +20,7 @@ mod execution {
                 bytes: Arc<[u8]>,
                 requests: Vec<String>,
             }
-            impl SourcePort for Host {
+            impl SpecificationSourcePort for Host {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -132,7 +132,7 @@ mod execution {
                 paths: Vec<String>,
                 fail_path: bool,
             }
-            impl graph::SourcePort for Host {
+            impl graph::InheritanceSourcePort for Host {
                 type Error = &'static str;
                 fn canonicalize(
                     &mut self,
@@ -178,7 +178,7 @@ mod execution {
                     declaring: &str,
                     written: &str,
                 ) -> Result<graph::Source, graph::SourceError<Self::Error>> {
-                    graph::SourcePort::canonicalize(self, declaring, written)
+                    graph::InheritanceSourcePort::canonicalize(self, declaring, written)
                 }
                 fn capture(
                     &mut self,
@@ -363,7 +363,7 @@ mod execution {
                 reads: usize,
                 published: Vec<Vec<u8>>,
             }
-            impl yamaa_adapters::specification_run::SourcePort for Data {
+            impl yamaa_adapters::specification_run::SpecificationSourcePort for Data {
                 fn inspect(
                     &mut self,
                     _source: &yamaa_core::specification::SourceDeclaration,
@@ -453,7 +453,7 @@ mod execution {
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PortError, PreparedRun, SourcePort},
+                specification_run::{PortError, PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::resource::ResourceFailure;
             use yamaa_core::specification::SourceDeclaration;
@@ -470,7 +470,7 @@ mod execution {
                 cause: Option<ResourceFailure>,
                 identity: Arc<()>,
             }
-            impl SourcePort for Port {
+            impl SpecificationSourcePort for Port {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -637,7 +637,7 @@ mod execution {
         fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
                 specification_source::{InheritancePort, Source},
             };
             use yamaa_core::resource::ResourceFailure;
@@ -678,7 +678,7 @@ mod execution {
                 }
             }
             struct Missing;
-            impl SourcePort for Missing {
+            impl SpecificationSourcePort for Missing {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -775,7 +775,7 @@ mod execution {
         fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PortError, PreparedRun, SourcePort},
+                specification_run::{PortError, PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::resource::ResourceFailure;
             use yamaa_core::specification::SourceDeclaration;
@@ -783,7 +783,7 @@ mod execution {
                 failures: yamaa_core::json::Value,
                 inspected: Vec<String>,
             }
-            impl SourcePort for Port {
+            impl SpecificationSourcePort for Port {
                 type Error = ResourceFailure;
                 fn resource_failure(&self, error: &ResourceFailure) -> Option<ResourceFailure> {
                     Some(*error)
@@ -945,14 +945,14 @@ mod execution {
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 bytes: Arc<[u8]>,
                 reads: usize,
             }
-            impl SourcePort for Host {
+            impl SpecificationSourcePort for Host {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -1173,7 +1173,7 @@ mod execution {
             use std::collections::BTreeMap;
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::specification::SourceDeclaration;
             struct Port {
@@ -1182,7 +1182,7 @@ mod execution {
                 expected: Vec<u8>,
                 saves: usize,
             }
-            impl SourcePort for Port {
+            impl SpecificationSourcePort for Port {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -1297,7 +1297,7 @@ mod execution {
             use std::collections::BTreeMap;
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::specification::SourceDeclaration;
             struct Port {
@@ -1306,7 +1306,7 @@ mod execution {
                 expected: Vec<u8>,
                 saves: usize,
             }
-            impl SourcePort for Port {
+            impl SpecificationSourcePort for Port {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }

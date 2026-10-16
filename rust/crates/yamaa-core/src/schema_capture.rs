@@ -55,7 +55,7 @@ pub fn default_findings(
 /// A codec keeps its own physical parsing limits and occurrence locations.
 /// Locations must address this exact decoded document; the engine cannot infer
 /// their authority from equal text or independently reconstructed arenas.
-pub trait DecodePort {
+pub trait SchemaDecodePort {
     type Error;
     type Locations;
     fn decode(
@@ -106,7 +106,7 @@ impl<L> CapturedClosure<L> {
 /// Physical decoding of each file completes in
 /// supplied order before bundle semantic admission, including entry/name errors.
 /// Core defaults are not validated early or promoted to execution qualification.
-pub fn admit<P: DecodePort>(
+pub fn admit<P: SchemaDecodePort>(
     sources: Vec<Source>,
     entry: usize,
     root: RootSelection<'_>,

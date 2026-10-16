@@ -607,7 +607,7 @@ mod log_tests {
         file_graph::FileGraph,
         file_producer_build::OwnedAttempt,
         file_resources::Resources,
-        project_source::{self, CapturePort, OwnedEnvironment, Reply, Request},
+        project_source::{self, OwnedEnvironment, ProjectCapturePort, Reply, Request},
         shipped_schema,
         specification_source::Source,
     };
@@ -720,7 +720,7 @@ mod log_tests {
         }
     }
     struct NoMetadata;
-    impl CapturePort for NoMetadata {
+    impl ProjectCapturePort for NoMetadata {
         type Error = Infallible;
         fn capture(&mut self, _: Request<'_>) -> Result<Reply, Infallible> {
             panic!("no metadata dependency")

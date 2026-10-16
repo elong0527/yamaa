@@ -10,14 +10,14 @@ mod execution {
         #[test]
         #[cfg(feature = "parquet")]
         fn parquet_input_policy_and_owned_source_observations_use_the_shared_build_path() {
-            use yamaa_adapters::specification_run::{PreparedRun, SourcePort};
+            use yamaa_adapters::specification_run::{PreparedRun, SpecificationSourcePort};
             use yamaa_core::specification::SourceDeclaration;
             use yamaa_core::table::ValueRef;
             struct Port {
                 content: Arc<[u8]>,
                 calls: usize,
             }
-            impl SourcePort for Port {
+            impl SpecificationSourcePort for Port {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -669,7 +669,9 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
-            use yamaa_adapters::specification_run::{Error, PortError, PreparedRun, SourcePort};
+            use yamaa_adapters::specification_run::{
+                Error, PortError, PreparedRun, SpecificationSourcePort,
+            };
             use yamaa_core::specification::SourceDeclaration;
             struct Port {
                 content: Arc<[u8]>,
@@ -677,7 +679,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 requests: usize,
                 fail: bool,
             }
-            impl SourcePort for Port {
+            impl SpecificationSourcePort for Port {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -765,14 +767,14 @@ output: {{path: output.csv, columns: [I, S]}}
         fn whole_failure_reports_match_reference_observations_from_actual_capture() {
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::specification::SourceDeclaration;
             struct Files {
                 base: std::path::PathBuf,
                 reads: usize,
             }
-            impl SourcePort for Files {
+            impl SpecificationSourcePort for Files {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -1074,7 +1076,7 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, CompleteError, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
@@ -1082,7 +1084,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 bytes: Arc<[u8]>,
                 reads: usize,
             }
-            impl SourcePort for Captured {
+            impl SpecificationSourcePort for Captured {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -1266,7 +1268,7 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
@@ -1274,7 +1276,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 bytes: Arc<[u8]>,
                 reads: usize,
             }
-            impl SourcePort for Host {
+            impl SpecificationSourcePort for Host {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -1530,7 +1532,7 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
@@ -1539,7 +1541,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 reads: usize,
                 published: Vec<Vec<u8>>,
             }
-            impl SourcePort for Host {
+            impl SpecificationSourcePort for Host {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -1660,7 +1662,7 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
@@ -1669,7 +1671,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 reads: usize,
                 published: Vec<Vec<u8>>,
             }
-            impl SourcePort for Host {
+            impl SpecificationSourcePort for Host {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -1887,7 +1889,7 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
@@ -1898,7 +1900,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 requests: Vec<String>,
                 published: Vec<Vec<u8>>,
             }
-            impl SourcePort for Host {
+            impl SpecificationSourcePort for Host {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -1997,7 +1999,7 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
@@ -2005,7 +2007,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 case: std::path::PathBuf,
                 requests: Vec<String>,
             }
-            impl SourcePort for Host {
+            impl SpecificationSourcePort for Host {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }
@@ -2203,7 +2205,7 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
-                specification_run::{PreparedRun, SourcePort},
+                specification_run::{PreparedRun, SpecificationSourcePort},
             };
             use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
@@ -2213,7 +2215,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 requests: usize,
                 published: Vec<Vec<u8>>,
             }
-            impl SourcePort for Host {
+            impl SpecificationSourcePort for Host {
                 fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                     Ok(())
                 }

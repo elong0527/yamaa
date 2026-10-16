@@ -8,7 +8,7 @@ use crate::schema::{
 
 /// A physical codec decodes this exact held source once. Its locations must
 /// address the returned arena; equal strings cannot establish replacement authority.
-pub trait DecodePort {
+pub trait StructuralDecodePort {
     type Error;
     type Locations;
     fn decode(&mut self, source: &Source) -> Result<Decoded<Self::Locations>, Self::Error>;
@@ -102,7 +102,7 @@ impl<L> Prepared<L> {
 /// physical decoding. Structural root has no separate named-selection guard.
 /// One successful decode precedes the existing default/type/value checkpoints.
 /// No source is captured, replayed, queried as a model or granted host authority.
-pub fn prepare<P: DecodePort>(
+pub fn prepare<P: StructuralDecodePort>(
     schema: &SchemaStructure,
     source: Source,
     selection: Selection<'_>,

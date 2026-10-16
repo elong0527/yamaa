@@ -46,7 +46,7 @@ pub enum Reply {
         kind: LockKind,
     },
 }
-pub trait CapturePort {
+pub trait ProjectCapturePort {
     type Error;
     fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error>;
     /// Hosts identify user interrupts without changing their original payload.
@@ -67,7 +67,7 @@ pub enum DecodeTarget {
 /// Decode and structurally prepare captured bytes without semantic lowering or effects.
 /// The owned document retains the exact source and its normalized context arena.
 /// Implementations bound physical parsing/normalization before allocating storage.
-pub trait DecodePort {
+pub trait ProjectDecodePort {
     type Error;
     type Document;
     fn decode(
@@ -165,7 +165,7 @@ pub enum Failure<E, D, X> {
 /// Preparation moves both admitted metadata and original boundary evidence.
 pub type PreparationResult<E, D, X> = Result<PreparedEnvironment<D>, Failure<E, D, X>>;
 
-fn capture<P: CapturePort, D, X>(
+fn capture<P: ProjectCapturePort, D, X>(
     port: &mut P,
     kind: Kind,
     declaring: &str,
@@ -192,7 +192,7 @@ fn capture<P: CapturePort, D, X>(
     Ok(reply)
 }
 
-pub fn prepare<P: CapturePort, D: DecodePort>(
+pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
     decoder: &mut D,
     source: Source,
     host: Language,

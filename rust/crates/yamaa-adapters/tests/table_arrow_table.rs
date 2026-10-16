@@ -883,7 +883,9 @@ mod table {
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::specification::{PreparedSpecification, SourceDeclaration};
-        use yamaa_core::{specification_output::SaveError, specification_run::SourcePort};
+        use yamaa_core::{
+            specification_output::SaveError, specification_run::SpecificationSourcePort,
+        };
 
         const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: output.csv, columns: [ID, VALUE, DOUBLE], decimals: PRECISION}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DOUBLE, type: float, derivation: {compute: {expr: 'VALUE + VALUE'}}}\n";
         fn prepared(precision: &str, path: &str, expression: &str) -> PreparedRun {
@@ -901,7 +903,7 @@ mod table {
             PreparedRun::prepare(document).unwrap()
         }
         struct Study(usize);
-        impl SourcePort for Study {
+        impl SpecificationSourcePort for Study {
             fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                 Ok(())
             }
@@ -2598,7 +2600,7 @@ mod table {
         use std::sync::Arc;
         use yamaa_adapters::{
             specification_report::{self, ArtifactPort, Identity},
-            specification_run::{PreparedRun, SourcePort},
+            specification_run::{PreparedRun, SpecificationSourcePort},
             specification_source::Source,
         };
         use yamaa_core::application_observer::Scope;
@@ -2607,7 +2609,7 @@ mod table {
         struct Port {
             captures: usize,
         }
-        impl SourcePort for Port {
+        impl SpecificationSourcePort for Port {
             fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                 Ok(())
             }

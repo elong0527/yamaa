@@ -15,7 +15,7 @@ mod project {
             dataset::ExecutionError,
             domain,
             function_invocation::{Argument, FailureKind, FunctionPort, HostError},
-            specification_run::{CapturedAttempt, SourceDecoder, SourcePort},
+            specification_run::{CapturedAttempt, SourceDecoder, SpecificationSourcePort},
         };
         use yamaa_core::{
             function_signature::{InvocationPlan, ProjectInvocationPlan},
@@ -90,7 +90,7 @@ mod project {
             reads: usize,
             requested: bool,
         }
-        impl SourcePort for Port {
+        impl SpecificationSourcePort for Port {
             fn resource_failure(
                 &self,
                 _error: &Self::Error,

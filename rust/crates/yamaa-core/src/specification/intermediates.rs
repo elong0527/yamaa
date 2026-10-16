@@ -28,6 +28,472 @@ struct Declaration {
 }
 #[derive(Debug, Default)]
 pub(super) struct Declarations(std::sync::Arc<Vec<Declaration>>, Option<String>);
+type ResolveRef<'a> = &'a (dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Option<usize> + 'a);
+type FinishedItem = (
+    Option<crate::dataset::RelationPredicate>,
+    Vec<OrderTerm>,
+    Option<Vec<usize>>,
+    Option<crate::dataset::RelationRange>,
+    Vec<crate::dataset::IntermediateUnique>,
+);
+
+#[allow(clippy::too_many_arguments)]
+fn finish_item(
+    item: &Declaration,
+    source_name: &str,
+    schema: &TableSchema,
+    donor_kind: &(dyn Fn(usize) -> Option<ColumnType> + '_),
+    admits: &(dyn Fn(usize) -> bool + '_),
+    resolve: ResolveRef<'_>,
+    catalog: &Catalog,
+    sources: &[SourceDeclaration],
+    schemas: &[&TableSchema],
+    driver: usize,
+    result: &[Option<Intermediate>],
+    secondary: &[SecondarySource],
+    pairs: &[IntermediateKey],
+    failed: &mut bool,
+    derivations: &Option<crate::dataset::IntermediateDerivations>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<FinishedItem, BindError> {
+    let filter = match &item.filter {
+        Some(Ok(plan)) => {
+            let filter = relation_predicates::bind(
+                plan,
+                source_name,
+                schema,
+                &donor_kind,
+                matches!(item.source, self_relations::Relation::SelfRows),
+                &admits,
+                &item.name,
+                sources,
+                schemas,
+                driver,
+                // Current source-key cardinality is resolved before
+                // selecting donor records. Its failure must precede
+                // the filter's operand types.
+                !(pairs.iter().any(|key| key.value.is_expression())
+                    && pairs.iter().flat_map(|key| key.value.reads()).any(|read| {
+                        matches!(
+                            read,
+                            crate::dataset::MatchRead::Record { .. }
+                                | crate::dataset::MatchRead::SecondaryRecord { .. }
+                        )
+                    })),
+                findings,
+            )?;
+            if filter.is_none() {
+                *failed = true;
+            }
+            filter
+        }
+        Some(Err(predicate_compiler::Error::Parse(
+            crate::predicate_parser::ParseError::Grammar {
+                position, failure, ..
+            },
+        ))) => {
+            findings.push(BindFinding::Lookup(LookupFinding::grammar(
+                &format!("{}.filter", item.path),
+                item.filter_text.as_deref().expect("written predicate"),
+                position.character,
+                failure,
+            )));
+            // A syntax rejection does not remove the declaration's schema.
+            None
+        }
+        Some(Err(error)) => return Err(BindError::PredicatePolicy(error.clone())),
+        None => None,
+    };
+    let mut order_by = Vec::new();
+    for (index, (name, descending, nulls_first)) in item.order.iter().enumerate() {
+        if let Some(column) = resolve(name, &format!("{}.order_by[{index}]", item.path), findings) {
+            order_by.push(OrderTerm {
+                column,
+                descending: *descending,
+                nulls_first: *nulls_first,
+            });
+        } else {
+            *failed = true;
+        }
+    }
+    let before = findings.len();
+    let columns = intermediate_range::bind_columns(
+        &item.columns,
+        source_name,
+        schema,
+        &admits,
+        &item.path,
+        &item.name,
+        findings,
+    );
+    // A rejected projection retains donor names for subsequent checkpoints.
+    // Its owned finding still prevents final plan admission.
+    let columns = (findings.len() == before).then_some(columns).flatten();
+    let range = item
+        .range
+        .as_ref()
+        .map(|declaration| {
+            intermediate_range::bind(
+                declaration,
+                &item.name,
+                schema,
+                &donor_kind,
+                &admits,
+                catalog,
+                sources,
+                schemas,
+                driver,
+                result,
+                secondary,
+                findings,
+            )
+        })
+        .transpose()?
+        .flatten();
+    let mut unique = Vec::new();
+    for (path, names, identity) in &item.unique {
+        let mut columns = Vec::new();
+        for (name, field_path) in names {
+            if let Some(column) = schema
+                .columns()
+                .iter()
+                .position(|column| column.name == *name)
+                .filter(|&column| admits(column))
+            {
+                columns.push(column);
+            } else {
+                let mut finding = LookupFinding::new(
+                    field_path,
+                    crate::diagnostic::ConditionCode::IntermediateUniqueField,
+                );
+                finding.text("intermediate", &item.name);
+                finding.text("identifier", &format!("{source_name}.{name}"));
+                findings.push(BindFinding::Lookup(finding));
+            }
+        }
+        unique.push(crate::dataset::IntermediateUnique {
+            path: path.clone(),
+            columns,
+            identity: identity.clone(),
+        });
+    }
+    for check in &unique {
+        if filter
+            .as_ref()
+            .is_some_and(crate::dataset::RelationPredicate::correlated)
+        {
+            let mut finding = LookupFinding::new(
+                &check.path,
+                crate::diagnostic::ConditionCode::IntermediateUniqueCorrelatedFilter,
+            );
+            finding.text("intermediate", &item.name);
+            findings.push(BindFinding::Lookup(finding));
+        }
+        if derivations
+            .as_ref()
+            .is_some_and(|derived| !derived.current.is_empty())
+        {
+            let mut finding = LookupFinding::new(
+                &check.path,
+                crate::diagnostic::ConditionCode::IntermediateUniqueCorrelatedDerivation,
+            );
+            finding.text("intermediate", &item.name);
+            findings.push(BindFinding::Lookup(finding));
+        }
+    }
+    Ok((filter, order_by, columns, range, unique))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bind_one(
+    named: &Declarations,
+    item: &Declaration,
+    sources: &[SourceDeclaration],
+    driver: usize,
+    schemas: &[&TableSchema],
+    output: &TableSchema,
+    keys: &[usize],
+    self_columns: Option<&[usize]>,
+    project: Option<&crate::project_calls::ProjectCalls>,
+    secondary: &[SecondarySource],
+    result: &[Option<Intermediate>],
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<Intermediate>, BindError> {
+    let mut failed = false;
+    let (schema, source_name) = match item.source {
+        self_relations::Relation::Input(index) => (schemas[index], sources[index].name.as_str()),
+        self_relations::Relation::SelfRows => (output, "SELF"),
+    };
+    let mut pending_schema = None;
+    let derivations = intermediate_derivations::bind(
+        &item.derivations,
+        source_name,
+        &item.name,
+        &mut pending_schema,
+        schema,
+        matches!(item.source, self_relations::Relation::SelfRows)
+            .then_some(self_columns.unwrap_or(&[])),
+        sources,
+        schemas,
+        driver,
+        output,
+        named,
+        result,
+        project,
+        findings,
+    )?;
+    let schema = pending_schema.as_ref().unwrap_or_else(|| {
+        derivations
+            .as_ref()
+            .map_or(schema, |derived| derived.plan.output())
+    });
+    let donor_kind = |column| {
+        if let Some(derived) = &derivations {
+            derived.column_kind(column)
+        } else {
+            match item.source {
+                self_relations::Relation::Input(index) => schemas[index]
+                    .columns()
+                    .get(column)
+                    .map(|column| column.kind),
+                self_relations::Relation::SelfRows => {
+                    output.columns().get(column).map(|column| column.kind)
+                }
+            }
+        }
+    };
+    let admits = |column: usize| {
+        !matches!(item.source, self_relations::Relation::SelfRows)
+            || column >= output.columns().len()
+            || self_columns.is_some_and(|columns| columns.contains(&column))
+    };
+    let resolve = |name: &str, path: &str, findings: &mut Vec<BindFinding>| {
+        let bare = name
+            .strip_prefix(&format!("{source_name}."))
+            .or_else(|| matches!(item.source, self_relations::Relation::SelfRows).then_some(name));
+        let field = bare.and_then(|name| {
+            schema
+                .columns()
+                .iter()
+                .position(|column| column.name == name)
+        });
+        let field = field.filter(|&column| admits(column));
+        if field.is_none() {
+            let suggestion = (!name.contains('.')
+                && schema.columns().iter().any(|c| c.name == name))
+            .then(|| format!("{source_name}.{name}"));
+            findings.push(BindFinding::Lookup(LookupFinding::reference(
+                path,
+                name,
+                Some(&item.name),
+                ReferenceCause::Selection,
+                suggestion,
+            )));
+        }
+        field
+    };
+    let output_fields = output
+        .columns()
+        .iter()
+        .map(|column| reference_binding::Field {
+            name: &column.name,
+            column_type: column.kind,
+        })
+        .collect::<Vec<_>>();
+    let current_sources = std::iter::once(driver)
+        .chain((0..sources.len()).filter(|&index| index != driver))
+        .collect::<Vec<_>>();
+    let source_fields = current_sources
+        .iter()
+        .map(|&index| {
+            schemas[index]
+                .columns()
+                .iter()
+                .map(|column| reference_binding::Field {
+                    name: &column.name,
+                    column_type: column.kind,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let datasets = current_sources
+        .iter()
+        .zip(&source_fields)
+        .map(|(&index, fields)| reference_binding::Dataset {
+            name: &sources[index].name,
+            fields,
+        })
+        .collect::<Vec<_>>();
+    let catalog = Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)?;
+    let default_keys = if item.keys.is_none() {
+        let before_keys = findings.len();
+        match intermediate_admission::inferred_keys(
+            &catalog,
+            output,
+            keys,
+            schema,
+            &donor_kind,
+            &admits,
+            &item.path,
+            source_name,
+            findings,
+        )? {
+            Some(keys) => keys,
+            None if item.driver_keys.is_some() => {
+                // A driver traverses donor records, without selecting by output keys.
+                findings.truncate(before_keys);
+                Vec::new()
+            }
+            None => {
+                return Ok(None);
+            }
+        }
+    } else {
+        Vec::new()
+    };
+    let pairs_declared = item.keys.as_ref().unwrap_or(&default_keys);
+    // Result types and donor fields precede expression declarations and reads.
+    for (field, declaration) in pairs_declared {
+        if let (Some(donor), Some(expected)) = (
+            schema
+                .columns()
+                .iter()
+                .position(|column| column.name == *field)
+                .and_then(&donor_kind),
+            declaration.result_type(&catalog),
+        ) {
+            if !crate::key_relation::comparable(expected, donor.into()) {
+                findings.push(BindFinding::Lookup(LookupFinding::key_type(
+                    &format!("{}.key", item.path),
+                    &item.name,
+                    &declaration.display_name(field),
+                    expected,
+                    donor,
+                )));
+                failed = true;
+            }
+        }
+    }
+    for (field, _) in pairs_declared {
+        if !schema
+            .columns()
+            .iter()
+            .enumerate()
+            .any(|(index, column)| column.name == *field && admits(index))
+        {
+            findings.push(BindFinding::Lookup(LookupFinding::reference(
+                &format!("{}.key", item.path),
+                &format!("{source_name}.{field}"),
+                Some(&item.name),
+                ReferenceCause::DonorKey,
+                None,
+            )));
+            failed = true;
+        }
+    }
+    let contextual_reader = named.0.iter().any(|reader| {
+        reader.derivations.iter().any(|derive| {
+            derive.references.iter().any(|reference| {
+                reference
+                    .split_once('.')
+                    .is_some_and(|(owner, _)| owner == item.name)
+            })
+        })
+    });
+    let mut pairs = Vec::new();
+    for (field, declaration) in pairs_declared {
+        let path = if matches!(declaration, match_values::Declaration::Variable(_)) {
+            format!("{}.key", item.path)
+        } else {
+            format!("{}.key.{field}", item.path)
+        };
+        let context = match_values::Context {
+            output,
+            driver: &sources[driver].name,
+            row: None,
+            phase: crate::reference_scope::Phase::Row { group_by: None },
+            project,
+            named,
+            secondary,
+            intermediates: result,
+        };
+        let value = if contextual_reader {
+            declaration.bind_deferred(&path, &item.name, &catalog, findings, context)?
+        } else {
+            declaration.bind(&path, &item.name, &catalog, findings, context)?
+        };
+        match value {
+            Some(value) => {
+                if let Some(source_column) = schema
+                    .columns()
+                    .iter()
+                    .position(|column| column.name == *field)
+                {
+                    pairs.push(IntermediateKey {
+                        source_column,
+                        path,
+                        value,
+                    });
+                }
+            }
+            None => failed = true,
+        }
+    }
+    let (filter, order_by, columns, range, unique) = finish_item(
+        item,
+        source_name,
+        schema,
+        &donor_kind,
+        &admits,
+        &resolve,
+        &catalog,
+        sources,
+        schemas,
+        driver,
+        result,
+        secondary,
+        &pairs,
+        &mut failed,
+        &derivations,
+        findings,
+    )?;
+    // Range rejection owns its original cause without turning an existing
+    // donor field into a second unknown-reference diagnostic.
+    Ok((!failed).then(|| Intermediate {
+        identifier: item.name.clone(),
+        path: item.path.clone(),
+        source: match item.source {
+            self_relations::Relation::Input(index) if index == driver => {
+                crate::dataset::IntermediateSource::Primary {
+                    schema: schemas[index].clone(),
+                    name: sources[index].name.clone(),
+                }
+            }
+            self_relations::Relation::Input(index) => {
+                crate::dataset::IntermediateSource::Input(if index > driver {
+                    index - 1
+                } else {
+                    index
+                })
+            }
+            self_relations::Relation::SelfRows => crate::dataset::IntermediateSource::SelfRows {
+                schema: output.clone(),
+                columns: self_columns.unwrap_or(&[]).to_vec(),
+            },
+        },
+        keys: pairs,
+        filter,
+        selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
+        no_match: item.no_match.clone(),
+        unique,
+        derivations,
+        pending_schema,
+
+        range,
+        columns,
+    }))
+}
+
 impl Declarations {
     pub(super) fn owns_filter_type_finding(&self, finding: &crate::diagnostic::Diagnostic) -> bool {
         use crate::diagnostic::ConditionCode as C;
@@ -562,414 +1028,21 @@ impl Declarations {
             .collect::<Vec<_>>();
         let mut result = Vec::new();
         for item in self.0.iter() {
-            let mut failed = false;
-            let (schema, source_name) = match item.source {
-                self_relations::Relation::Input(index) => {
-                    (schemas[index], sources[index].name.as_str())
-                }
-                self_relations::Relation::SelfRows => (output, "SELF"),
-            };
-            let mut pending_schema = None;
-            let derivations = intermediate_derivations::bind(
-                &item.derivations,
-                source_name,
-                &item.name,
-                &mut pending_schema,
-                schema,
-                matches!(item.source, self_relations::Relation::SelfRows)
-                    .then_some(self_columns.unwrap_or(&[])),
-                sources,
-                schemas,
-                driver,
-                output,
+            let bound = bind_one(
                 self,
-                &result,
+                item,
+                sources,
+                driver,
+                schemas,
+                output,
+                keys,
+                self_columns,
                 project,
+                &secondary,
+                &result,
                 findings,
             )?;
-            let schema = pending_schema.as_ref().unwrap_or_else(|| {
-                derivations
-                    .as_ref()
-                    .map_or(schema, |derived| derived.plan.output())
-            });
-            let donor_kind = |column| {
-                if let Some(derived) = &derivations {
-                    derived.column_kind(column)
-                } else {
-                    match item.source {
-                        self_relations::Relation::Input(index) => schemas[index]
-                            .columns()
-                            .get(column)
-                            .map(|column| column.kind),
-                        self_relations::Relation::SelfRows => {
-                            output.columns().get(column).map(|column| column.kind)
-                        }
-                    }
-                }
-            };
-            let admits = |column: usize| {
-                !matches!(item.source, self_relations::Relation::SelfRows)
-                    || column >= output.columns().len()
-                    || self_columns.is_some_and(|columns| columns.contains(&column))
-            };
-            let resolve = |name: &str, path: &str, findings: &mut Vec<BindFinding>| {
-                let bare = name.strip_prefix(&format!("{source_name}.")).or_else(|| {
-                    matches!(item.source, self_relations::Relation::SelfRows).then_some(name)
-                });
-                let field = bare.and_then(|name| {
-                    schema
-                        .columns()
-                        .iter()
-                        .position(|column| column.name == name)
-                });
-                let field = field.filter(|&column| admits(column));
-                if field.is_none() {
-                    let suggestion = (!name.contains('.')
-                        && schema.columns().iter().any(|c| c.name == name))
-                    .then(|| format!("{source_name}.{name}"));
-                    findings.push(BindFinding::Lookup(LookupFinding::reference(
-                        path,
-                        name,
-                        Some(&item.name),
-                        ReferenceCause::Selection,
-                        suggestion,
-                    )));
-                }
-                field
-            };
-            let output_fields = output
-                .columns()
-                .iter()
-                .map(|column| reference_binding::Field {
-                    name: &column.name,
-                    column_type: column.kind,
-                })
-                .collect::<Vec<_>>();
-            let current_sources = std::iter::once(driver)
-                .chain((0..sources.len()).filter(|&index| index != driver))
-                .collect::<Vec<_>>();
-            let source_fields = current_sources
-                .iter()
-                .map(|&index| {
-                    schemas[index]
-                        .columns()
-                        .iter()
-                        .map(|column| reference_binding::Field {
-                            name: &column.name,
-                            column_type: column.kind,
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
-            let datasets = current_sources
-                .iter()
-                .zip(&source_fields)
-                .map(|(&index, fields)| reference_binding::Dataset {
-                    name: &sources[index].name,
-                    fields,
-                })
-                .collect::<Vec<_>>();
-            let catalog =
-                Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)?;
-            let default_keys = if item.keys.is_none() {
-                let before_keys = findings.len();
-                match intermediate_admission::inferred_keys(
-                    &catalog,
-                    output,
-                    keys,
-                    schema,
-                    &donor_kind,
-                    &admits,
-                    &item.path,
-                    source_name,
-                    findings,
-                )? {
-                    Some(keys) => keys,
-                    None if item.driver_keys.is_some() => {
-                        // A driver traverses donor records, without selecting by output keys.
-                        findings.truncate(before_keys);
-                        Vec::new()
-                    }
-                    None => {
-                        result.push(None);
-                        continue;
-                    }
-                }
-            } else {
-                Vec::new()
-            };
-            let pairs_declared = item.keys.as_ref().unwrap_or(&default_keys);
-            // Result types and donor fields precede expression declarations and reads.
-            for (field, declaration) in pairs_declared {
-                if let (Some(donor), Some(expected)) = (
-                    schema
-                        .columns()
-                        .iter()
-                        .position(|column| column.name == *field)
-                        .and_then(&donor_kind),
-                    declaration.result_type(&catalog),
-                ) {
-                    if !crate::key_relation::comparable(expected, donor.into()) {
-                        findings.push(BindFinding::Lookup(LookupFinding::key_type(
-                            &format!("{}.key", item.path),
-                            &item.name,
-                            &declaration.display_name(field),
-                            expected,
-                            donor,
-                        )));
-                        failed = true;
-                    }
-                }
-            }
-            for (field, _) in pairs_declared {
-                if !schema
-                    .columns()
-                    .iter()
-                    .enumerate()
-                    .any(|(index, column)| column.name == *field && admits(index))
-                {
-                    findings.push(BindFinding::Lookup(LookupFinding::reference(
-                        &format!("{}.key", item.path),
-                        &format!("{source_name}.{field}"),
-                        Some(&item.name),
-                        ReferenceCause::DonorKey,
-                        None,
-                    )));
-                    failed = true;
-                }
-            }
-            let contextual_reader = self.0.iter().any(|reader| {
-                reader.derivations.iter().any(|derive| {
-                    derive.references.iter().any(|reference| {
-                        reference
-                            .split_once('.')
-                            .is_some_and(|(owner, _)| owner == item.name)
-                    })
-                })
-            });
-            let mut pairs = Vec::new();
-            for (field, declaration) in pairs_declared {
-                let path = if matches!(declaration, match_values::Declaration::Variable(_)) {
-                    format!("{}.key", item.path)
-                } else {
-                    format!("{}.key.{field}", item.path)
-                };
-                let context = match_values::Context {
-                    output,
-                    driver: &sources[driver].name,
-                    row: None,
-                    phase: crate::reference_scope::Phase::Row { group_by: None },
-                    project,
-                    named: self,
-                    secondary: &secondary,
-                    intermediates: &result,
-                };
-                let value = if contextual_reader {
-                    declaration.bind_deferred(&path, &item.name, &catalog, findings, context)?
-                } else {
-                    declaration.bind(&path, &item.name, &catalog, findings, context)?
-                };
-                match value {
-                    Some(value) => {
-                        if let Some(source_column) = schema
-                            .columns()
-                            .iter()
-                            .position(|column| column.name == *field)
-                        {
-                            pairs.push(IntermediateKey {
-                                source_column,
-                                path,
-                                value,
-                            });
-                        }
-                    }
-                    None => failed = true,
-                }
-            }
-            let filter = match &item.filter {
-                Some(Ok(plan)) => {
-                    let filter = relation_predicates::bind(
-                        plan,
-                        source_name,
-                        schema,
-                        &donor_kind,
-                        matches!(item.source, self_relations::Relation::SelfRows),
-                        &admits,
-                        &item.name,
-                        sources,
-                        schemas,
-                        driver,
-                        // Current source-key cardinality is resolved before
-                        // selecting donor records. Its failure must precede
-                        // the filter's operand types.
-                        !(pairs.iter().any(|key| key.value.is_expression())
-                            && pairs.iter().flat_map(|key| key.value.reads()).any(|read| {
-                                matches!(
-                                    read,
-                                    crate::dataset::MatchRead::Record { .. }
-                                        | crate::dataset::MatchRead::SecondaryRecord { .. }
-                                )
-                            })),
-                        findings,
-                    )?;
-                    if filter.is_none() {
-                        failed = true;
-                    }
-                    filter
-                }
-                Some(Err(predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::Grammar {
-                        position, failure, ..
-                    },
-                ))) => {
-                    findings.push(BindFinding::Lookup(LookupFinding::grammar(
-                        &format!("{}.filter", item.path),
-                        item.filter_text.as_deref().expect("written predicate"),
-                        position.character,
-                        failure,
-                    )));
-                    // A syntax rejection does not remove the declaration's schema.
-                    None
-                }
-                Some(Err(error)) => return Err(BindError::PredicatePolicy(error.clone())),
-                None => None,
-            };
-            let mut order_by = Vec::new();
-            for (index, (name, descending, nulls_first)) in item.order.iter().enumerate() {
-                if let Some(column) =
-                    resolve(name, &format!("{}.order_by[{index}]", item.path), findings)
-                {
-                    order_by.push(OrderTerm {
-                        column,
-                        descending: *descending,
-                        nulls_first: *nulls_first,
-                    });
-                } else {
-                    failed = true;
-                }
-            }
-            let before = findings.len();
-            let columns = intermediate_range::bind_columns(
-                &item.columns,
-                source_name,
-                schema,
-                &admits,
-                &item.path,
-                &item.name,
-                findings,
-            );
-            // A rejected projection retains donor names for subsequent checkpoints.
-            // Its owned finding still prevents final plan admission.
-            let columns = (findings.len() == before).then_some(columns).flatten();
-            let range = item
-                .range
-                .as_ref()
-                .map(|declaration| {
-                    intermediate_range::bind(
-                        declaration,
-                        &item.name,
-                        schema,
-                        &donor_kind,
-                        &admits,
-                        &catalog,
-                        sources,
-                        schemas,
-                        driver,
-                        &result,
-                        &secondary,
-                        findings,
-                    )
-                })
-                .transpose()?
-                .flatten();
-            let mut unique = Vec::new();
-            for (path, names, identity) in &item.unique {
-                let mut columns = Vec::new();
-                for (name, field_path) in names {
-                    if let Some(column) = schema
-                        .columns()
-                        .iter()
-                        .position(|column| column.name == *name)
-                        .filter(|&column| admits(column))
-                    {
-                        columns.push(column);
-                    } else {
-                        let mut finding = LookupFinding::new(
-                            field_path,
-                            crate::diagnostic::ConditionCode::IntermediateUniqueField,
-                        );
-                        finding.text("intermediate", &item.name);
-                        finding.text("identifier", &format!("{source_name}.{name}"));
-                        findings.push(BindFinding::Lookup(finding));
-                    }
-                }
-                unique.push(crate::dataset::IntermediateUnique {
-                    path: path.clone(),
-                    columns,
-                    identity: identity.clone(),
-                });
-            }
-            for check in &unique {
-                if filter
-                    .as_ref()
-                    .is_some_and(crate::dataset::RelationPredicate::correlated)
-                {
-                    let mut finding = LookupFinding::new(
-                        &check.path,
-                        crate::diagnostic::ConditionCode::IntermediateUniqueCorrelatedFilter,
-                    );
-                    finding.text("intermediate", &item.name);
-                    findings.push(BindFinding::Lookup(finding));
-                }
-                if derivations
-                    .as_ref()
-                    .is_some_and(|derived| !derived.current.is_empty())
-                {
-                    let mut finding = LookupFinding::new(
-                        &check.path,
-                        crate::diagnostic::ConditionCode::IntermediateUniqueCorrelatedDerivation,
-                    );
-                    finding.text("intermediate", &item.name);
-                    findings.push(BindFinding::Lookup(finding));
-                }
-            }
-            // Range rejection owns its original cause without turning an existing
-            // donor field into a second unknown-reference diagnostic.
-            result.push((!failed).then(|| Intermediate {
-                identifier: item.name.clone(),
-                path: item.path.clone(),
-                source: match item.source {
-                    self_relations::Relation::Input(index) if index == driver => {
-                        crate::dataset::IntermediateSource::Primary {
-                            schema: schemas[index].clone(),
-                            name: sources[index].name.clone(),
-                        }
-                    }
-                    self_relations::Relation::Input(index) => {
-                        crate::dataset::IntermediateSource::Input(if index > driver {
-                            index - 1
-                        } else {
-                            index
-                        })
-                    }
-                    self_relations::Relation::SelfRows => {
-                        crate::dataset::IntermediateSource::SelfRows {
-                            schema: output.clone(),
-                            columns: self_columns.unwrap_or(&[]).to_vec(),
-                        }
-                    }
-                },
-                keys: pairs,
-                filter,
-                selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
-                no_match: item.no_match.clone(),
-                unique,
-                derivations,
-                pending_schema,
-
-                range,
-                columns,
-            }));
+            result.push(bound);
         }
         Ok((secondary, result))
     }

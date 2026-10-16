@@ -3,7 +3,7 @@
 use crate::{diagnostic::Diagnostic, resource::ResourceFailure};
 use crate::{
     inheritance::{Source as Identity, SourceError},
-    inheritance_capture::CapturePort,
+    inheritance_capture::InheritanceCapturePort,
     project_preparation::Source,
 };
 use std::collections::BTreeMap;
@@ -85,7 +85,7 @@ pub trait PreparedView {
 pub trait DocumentPort<E> {
     type Prepared: PreparedView;
     type Error;
-    fn prepare<P: CapturePort<Error = E>>(
+    fn prepare<P: InheritanceCapturePort<Error = E>>(
         &mut self,
         source: Source,
         display_path: String,
@@ -136,7 +136,7 @@ impl<P: NativePort> AliasCache<'_, P> {
         }
     }
 }
-impl<P: NativePort> CapturePort for AliasCache<'_, P> {
+impl<P: NativePort> InheritanceCapturePort for AliasCache<'_, P> {
     type Error = P::Error;
     fn canonicalize(
         &mut self,

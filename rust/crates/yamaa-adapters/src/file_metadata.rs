@@ -2,7 +2,7 @@
 //! Parsing, semantic admission and route selection remain in the engine.
 use crate::{
     file_resources::{Error as ResourceError, Resources},
-    project_source::{CapturePort, Kind, Reply, Request},
+    project_source::{Kind, ProjectCapturePort, Reply, Request},
     specification_source::Source,
 };
 use yamaa_core::inheritance::{Source as Identity, SourceError};
@@ -184,7 +184,7 @@ fn rebase(layer: &str, entry: &str, written: &str) -> Result<String, ResourceErr
     Ok(result)
 }
 
-impl CapturePort for Reader<'_> {
+impl ProjectCapturePort for Reader<'_> {
     type Error = ResourceError;
     fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
         let identity = self

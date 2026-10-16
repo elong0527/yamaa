@@ -1951,7 +1951,9 @@ mod declaration {
         use yamaa_adapters::{
             issue_rows::Issue,
             project_environment_diagnostics as diagnostics,
-            project_source::{self, CaptureFailure, CapturePort, Failure, Kind, Reply, Request},
+            project_source::{
+                self, CaptureFailure, Failure, Kind, ProjectCapturePort, Reply, Request,
+            },
             specification_source::{CapturedSchema, Error, Source},
             yaml_decode::{decode_yaml, DecodeFailure},
         };
@@ -2043,7 +2045,7 @@ mod declaration {
                 }
             }
         }
-        impl CapturePort for Metadata {
+        impl ProjectCapturePort for Metadata {
             type Error = Opaque;
             fn capture(&mut self, request: Request<'_>) -> Result<Reply, Opaque> {
                 self.trace.push((request.kind, request.written.into()));
@@ -2411,7 +2413,7 @@ mod declaration {
         use yamaa_adapters::{
             project_check,
             project_run::PreparedRun,
-            project_source::{self, CapturePort, Kind, Reply, Request},
+            project_source::{self, Kind, ProjectCapturePort, Reply, Request},
             shipped_schema,
             specification_source::Source,
         };
@@ -2420,7 +2422,7 @@ mod declaration {
         struct DeclaredLock {
             captures: usize,
         }
-        impl CapturePort for DeclaredLock {
+        impl ProjectCapturePort for DeclaredLock {
             type Error = Infallible;
             fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
                 assert_eq!(request.kind, Kind::Lock);

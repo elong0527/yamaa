@@ -1158,7 +1158,7 @@ mod file {
             file_graph::{Error, FileGraph, RejectedGraph},
             file_resources::{Error as ResourceError, Resources},
             producer_graph::Error as GraphError,
-            project_source::{self, CapturePort, OwnedEnvironment, Reply, Request},
+            project_source::{self, OwnedEnvironment, ProjectCapturePort, Reply, Request},
             shipped_schema,
             specification_source::Source,
         };
@@ -1208,7 +1208,7 @@ mod file {
             }
         }
         struct NoMetadata;
-        impl CapturePort for NoMetadata {
+        impl ProjectCapturePort for NoMetadata {
             type Error = ();
             fn capture(&mut self, _: Request<'_>) -> Result<Reply, ()> {
                 panic!("no environment dependency declared");

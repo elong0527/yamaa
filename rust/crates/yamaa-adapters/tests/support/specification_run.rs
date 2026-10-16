@@ -110,12 +110,12 @@ pub(crate) fn independent_failed_reports(
 ) {
     pub(crate) use yamaa_adapters::{
         specification_report::{self, ArtifactPort, Identity},
-        specification_run::{PreparedRun, SourcePort},
+        specification_run::{PreparedRun, SpecificationSourcePort},
     };
     pub(crate) use yamaa_core::json::Value;
     pub(crate) use yamaa_core::specification::SourceDeclaration;
     pub(crate) struct Port(usize, Arc<[u8]>);
-    impl SourcePort for Port {
+    impl SpecificationSourcePort for Port {
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -222,7 +222,7 @@ pub(crate) fn independent_failed_reports(
 pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_cases: usize) {
     pub(crate) use yamaa_adapters::{
         specification_report::{self, ArtifactPort, Identity},
-        specification_run::{PreparedRun, SourcePort},
+        specification_run::{PreparedRun, SpecificationSourcePort},
     };
     pub(crate) use yamaa_core::specification::SourceDeclaration;
     pub(crate) struct Port {
@@ -230,7 +230,7 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
         pub(crate) saves: usize,
         pub(crate) expected: Vec<u8>,
     }
-    impl SourcePort for Port {
+    impl SpecificationSourcePort for Port {
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -330,7 +330,7 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
 pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: usize) {
     pub(crate) use yamaa_adapters::{
         specification_report::{self, Identity},
-        specification_run::{PreparedRun, SourcePort},
+        specification_run::{PreparedRun, SpecificationSourcePort},
     };
     pub(crate) use yamaa_core::specification::SourceDeclaration;
     pub(crate) struct Port {
@@ -339,7 +339,7 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
         pub(crate) expected: Vec<u8>,
         pub(crate) saves: usize,
     }
-    impl SourcePort for Port {
+    impl SpecificationSourcePort for Port {
         fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
             Ok(())
         }
