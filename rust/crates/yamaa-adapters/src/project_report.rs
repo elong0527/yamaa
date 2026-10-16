@@ -48,7 +48,7 @@ impl<E> Classified<'_, E> {
 pub fn classify_host_failures<'a, E>(
     failures: &[&'a E],
     details: &[Option<HostDetails<'a>>],
-    lock_findings: impl Fn(&E) -> Option<&'a [crate::project_lock::Finding]>,
+    lock_findings: impl Fn(&'a E) -> Option<&'a [crate::project_lock::Finding]>,
 ) -> Vec<Classified<'a, E>> {
     failures
         .iter()
