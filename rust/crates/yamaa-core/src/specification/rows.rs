@@ -1487,47 +1487,73 @@ impl Rows {
             }
         }
         // Source-reading defaults cannot complete column-phase under grouped
-        // contexts they cannot admit. When any template groups, keep safe
-        // (non-lookup, non-window) defaults row-phase everywhere. Lookup
-        // defaults stay per-template above, so suppressed candidates in
-        // templates that never read them never read the lookup (REQ-1264).
-        if raw_rows.iter().any(|&row| present(d, row, "group_by")) {
-            for (column, &node) in columns.iter().enumerate() {
-                let Some(derivation) = d
-                    .field(node, "derivation")
-                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                else {
-                    continue;
-                };
-                let value = field(d, derivation, "value")?;
-                let &[(operation, _)] = mapping(d, value)? else {
-                    return Err(PrepareError::Internal);
-                };
-                if matches!(
-                    text(d, operation)?,
-                    "row_number"
-                        | "rank"
-                        | "row_value"
-                        | "previous_non_missing"
-                        | "locf"
-                        | "baseline_flag"
-                        | "window"
-                        | "aggregate"
-                        | "lookup"
-                ) {
-                    continue;
+        // contexts they cannot admit. When a template groups, keep safe
+        // (non-lookup, non-window) defaults that read the grouped driver
+        // row-phase everywhere. Lookup defaults stay per-template above, so
+        // suppressed candidates in templates that never read them never read
+        // the lookup (REQ-1264). Defaults that read only other datasets
+        // (for example a reference date from a different input) stay
+        // column-phase: promoting them into the grouped row context would
+        // misbind their source (sdtm-lb, sdtm-vs-planned-time-points).
+        {
+            use std::collections::BTreeSet;
+            let mut grouped_drivers: BTreeSet<String> = BTreeSet::new();
+            for &row in raw_rows.iter() {
+                if present(d, row, "group_by") {
+                    let row_driver = d
+                        .field(row, "dataset")
+                        .map(|id| text(d, id))
+                        .transpose()?
+                        .unwrap_or(driver);
+                    grouped_drivers.insert(row_driver.to_owned());
                 }
-                let mut reads = Vec::new();
-                derivations::current_references(d, value, project, &mut reads, 0)?;
-                self_relations::template_references(d, value, string_templates, &mut reads, 0)?;
-                if reads.iter().any(|read| {
-                    read.split_once('.')
-                        .is_some_and(|(owner, _)| intermediates.contains(owner))
-                }) {
-                    continue;
-                }
-                for template_defaults in filter_defaults.iter_mut() {
-                    template_defaults.insert(column);
+            }
+            if !grouped_drivers.is_empty() {
+                for (column, &node) in columns.iter().enumerate() {
+                    let Some(derivation) = d
+                        .field(node, "derivation")
+                        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                    else {
+                        continue;
+                    };
+                    let value = field(d, derivation, "value")?;
+                    let &[(operation, _)] = mapping(d, value)? else {
+                        return Err(PrepareError::Internal);
+                    };
+                    if matches!(
+                        text(d, operation)?,
+                        "row_number"
+                            | "rank"
+                            | "row_value"
+                            | "previous_non_missing"
+                            | "locf"
+                            | "baseline_flag"
+                            | "window"
+                            | "aggregate"
+                            | "lookup"
+                            | "mapping"
+                    ) {
+                        continue;
+                    }
+                    let mut reads = Vec::new();
+                    derivations::current_references(d, value, project, &mut reads, 0)?;
+                    self_relations::template_references(d, value, string_templates, &mut reads, 0)?;
+                    if reads.iter().any(|read| {
+                        read.split_once('.')
+                            .is_some_and(|(owner, _)| intermediates.contains(owner))
+                    }) {
+                        continue;
+                    }
+                    let reads_grouped_driver = reads.iter().any(|read| {
+                        read.split_once('.')
+                            .is_some_and(|(owner, _)| grouped_drivers.contains(owner))
+                    });
+                    if !reads_grouped_driver {
+                        continue;
+                    }
+                    for template_defaults in filter_defaults.iter_mut() {
+                        template_defaults.insert(column);
+                    }
                 }
             }
         }
