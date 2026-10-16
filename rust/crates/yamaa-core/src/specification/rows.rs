@@ -1342,8 +1342,8 @@ impl Rows {
         // A reference owned by the template's own driver binds as a source
         // read, never as an intermediate read, so it admits no selector.
         let named_read = |read: &str, row_driver: &str| -> bool {
-            let owner = read.split_once('.').map_or(read, |(owner, _)| owner);
-            owner != row_driver && intermediates.contains(owner)
+            read.split_once('.')
+                .is_some_and(|(owner, _)| owner != row_driver && intermediates.contains(owner))
         };
         let mut secondary_reads = false;
         let mut selector_reads = false;
@@ -1378,6 +1378,13 @@ impl Rows {
                     d,
                     field(d, declaration, "value")?,
                     project,
+                    &mut reads,
+                    0,
+                )?;
+                self_relations::template_references(
+                    d,
+                    field(d, declaration, "value")?,
+                    string_templates,
                     &mut reads,
                     0,
                 )?;
