@@ -318,8 +318,15 @@ def missing_labels(document: Document, value: Mapping) -> Iterator[Departure]:
         name = entry.get("name")
         if isinstance(name, str) and name not in by_name:
             by_name[name] = (index, entry)
+    seen: set[str] = set()
     for name in output_columns:
-        if not isinstance(name, str) or name not in by_name:
+        if not isinstance(name, str) or name in seen:
+            # One column has one label departure, however many times the
+            # output list repeats it: reporting the same column entry again
+            # would print the identical finding and inflate the count.
+            continue
+        seen.add(name)
+        if name not in by_name:
             # Undeclared output columns fail validation; style stays silent.
             continue
         raw_index, entry = by_name[name]

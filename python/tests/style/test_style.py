@@ -1238,6 +1238,21 @@ def test_missing_label_positions_ignore_stray_column_entries(
     assert findings[0].line == age_line
 
 
+def test_missing_label_reports_a_repeated_output_column_once(
+    tmp_path: Path,
+) -> None:
+    # The output list repeats AGE: the column entry it names has one label
+    # departure, so the finding is reported once, not once per listing.
+    repeated = MISSING_LABEL.replace(
+        "  columns: [STUDYID, AGE]", "  columns: [STUDYID, AGE, AGE]"
+    )
+    path = _spec(tmp_path, repeated)
+    findings = check_file(path, orders=ORDERS)
+    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
+        ("missing_label", "columns[1]", "REQ-1290"),
+    ]
+
+
 def test_missing_label_skips_internal_and_inherited_columns(
     tmp_path: Path,
 ) -> None:
