@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! A mapping source carries the same filter, selection, and absent value as
 //! a plain source binding, so a filtered raw column no longer needs a
 //! helper column that exists only to feed the dictionary lookup.

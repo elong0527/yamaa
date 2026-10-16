@@ -2,6 +2,7 @@
 #[allow(dead_code)]
 mod support;
 mod file {
+    #[cfg(feature = "yaml")]
     mod local_paths {
         #[test]
         fn entry_relative_shared_program_uses_each_study_input_and_saves_held_artifacts() {
@@ -606,6 +607,7 @@ mod file {
             }
         }
     }
+    #[cfg(feature = "yaml")]
     mod shared_define {
         //! Independent fixed-byte DM and structural AE/VS shared-generation witnesses.
         #[test]

@@ -7,7 +7,11 @@ license.workspace = true
 publish.workspace = true
 
 [features]
-default = ["readstat"]
+default = ["yaml", "parquet", "readstat"]
+# Document syntax admission; owned core documents do not require this parser.
+yaml = ["dep:saphyr-parser", "dep:num-bigint"]
+# Source and artifact codecs share one edge, including native Zstd compression.
+parquet = ["dep:parquet", "dep:bytes", "dep:base64", "dep:brotli", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap"]
 # SAS binary input only; disabling this feature omits the bundled ReadStat build.
 readstat = ["dep:cc"]
 
@@ -18,24 +22,24 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.145", features = ["raw_value"] }
 # Source parsing stays at the adapter boundary; the core accepts owned documents.
 # 0.0.11 fixes comments interrupting multiline plain scalars (YAML case BS4K).
-saphyr-parser = { version = ">=0.0.11", default-features = false }
-num-bigint = { version = "0.5.1", default-features = false }
+saphyr-parser = { version = ">=0.0.11", default-features = false, optional = true }
+num-bigint = { version = "0.5.1", default-features = false, optional = true }
 
 arrow-array = { version = "=60.0.0", default-features = false }
 arrow-schema = { version = "=60.0.0", default-features = false }
 arrow-buffer = { version = "=60.0.0", default-features = false }
 arrow-ipc = { version = "=60.0.0", default-features = false }
 flatbuffers = { version = "=25.12.19", default-features = false }
-parquet = { version = "=60.0.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2-rust_backend", "lz4", "zstd"] }
+parquet = { version = "=60.0.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2-rust_backend", "lz4", "zstd"], optional = true }
 # Direct page admission bounds decompression before the general source reader.
 # These storage dependencies stay at the adapter boundary.
-bytes = "1.12.1"
-base64 = "0.23.1"
-brotli = { version = "9.0.0", default-features = false, features = ["std"] }
-flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
-lz4_flex = "0.14.0"
-zstd = { version = "0.14.0", default-features = false }
-snap = "1.1.2"
+bytes = { version = "1.12.1", optional = true }
+base64 = { version = "0.23.1", optional = true }
+brotli = { version = "9.0.0", default-features = false, features = ["std"], optional = true }
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"], optional = true }
+lz4_flex = { version = "0.14.0", optional = true }
+zstd = { version = "0.14.0", default-features = false, optional = true }
+snap = { version = "1.1.2", optional = true }
 
 # Safe descriptor-relative filesystem IO for the native R resource transport.
 [target.'cfg(unix)'.dependencies]

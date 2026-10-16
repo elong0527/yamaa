@@ -37,13 +37,7 @@ pub enum SourceEvent {
     MappingEnd,
 }
 
-/// Byte offset and one-based coordinates in the original ASCII snapshot.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct SourcePosition {
-    pub offset: usize,
-    pub line: usize,
-    pub column: usize,
-}
+pub use crate::yaml_decode::SourcePosition;
 
 impl From<Marker> for SourcePosition {
     fn from(mark: Marker) -> Self {

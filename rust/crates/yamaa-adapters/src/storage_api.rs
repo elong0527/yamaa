@@ -4,7 +4,9 @@
 //! changes this module, rather than the readers, writer or core type policy.
 //! In particular, keep schema conversion fallible: older `fb_to_schema` can
 //! panic on a verified but semantically malformed schema.
+#[cfg(feature = "parquet")]
 use parquet::basic::{LogicalType, TimeUnit};
+#[cfg(feature = "parquet")]
 use yamaa_core::parquet_source::{Logical, Unit};
 
 pub(crate) fn ipc_schema(
@@ -13,20 +15,22 @@ pub(crate) fn ipc_schema(
     arrow_ipc::convert::try_fb_to_schema(schema)
 }
 
+#[cfg(feature = "parquet")]
 pub(crate) fn timestamp_micros(utc: bool) -> LogicalType {
     LogicalType::timestamp(utc, TimeUnit::MICROS)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "parquet"))]
 pub(crate) fn timestamp_millis(utc: bool) -> LogicalType {
     LogicalType::timestamp(utc, TimeUnit::MILLIS)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "parquet"))]
 pub(crate) fn integer(bits: i8, signed: bool) -> LogicalType {
     LogicalType::integer(bits, signed)
 }
 
+#[cfg(feature = "parquet")]
 pub(crate) fn logical_type(logical: Option<&LogicalType>) -> Logical {
     match logical {
         None => Logical::None,

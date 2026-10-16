@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! Untyped donor expressions retain their scalar kind before later reads.
 use std::{
     fs,

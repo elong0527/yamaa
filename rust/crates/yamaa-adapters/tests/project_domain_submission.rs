@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! Project contracts.
 #[allow(dead_code)]
 mod support;

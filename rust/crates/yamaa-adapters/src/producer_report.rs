@@ -863,7 +863,7 @@ pub fn attempt_report_classified<'a, E>(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "yaml"))]
 mod tests {
     use super::*;
     #[test]

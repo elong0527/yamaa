@@ -872,6 +872,7 @@ mod table {
             );
         }
     }
+    #[cfg(feature = "yaml")]
     mod csv_precision {
         use crate::support::ipc_snapshot;
         use std::{convert::Infallible, sync::Arc};
@@ -1632,6 +1633,7 @@ mod table {
             assert_eq!(table_snapshot(&bytes), Err(E::InvalidStream));
         }
     }
+    #[cfg(feature = "parquet")]
     mod parquet_artifact {
         use parquet::{
             basic::{Compression, LogicalType, Repetition, Type},
@@ -2102,6 +2104,7 @@ mod table {
             }
         }
     }
+    #[cfg(feature = "parquet")]
     mod parquet_source {
         //! Independently authored PyArrow containers exercise the held-byte input codec.
         mod unknown_fields {
@@ -2587,6 +2590,7 @@ mod table {
             assert!(matches!(parse(&broken), Err(Error::Malformed)));
         }
     }
+    #[cfg(feature = "yaml")]
     mod predicate_diagnostics {
         //! Complete original-document outcomes captured independently from Python.
         use std::sync::Arc;
