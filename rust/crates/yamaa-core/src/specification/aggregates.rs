@@ -119,6 +119,73 @@ fn window_path(
     Ok(None)
 }
 #[allow(clippy::too_many_arguments)]
+fn prepare_keys(
+    d: &Document,
+    payload: usize,
+    path: &str,
+    scalar: bool,
+    project: Option<&functions::Prepared>,
+    extraction: &str_extract::Prepared,
+    templates: &str_template::Prepared,
+    extra: &mut Vec<UnsupportedFeature>,
+) -> Result<Option<Vec<(String, match_values::Declaration)>>, PrepareError> {
+    if scalar {
+        return Ok(None);
+    }
+    d.field(payload, "key")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        .map(|id| {
+            if matches!(&d.nodes()[id],N::Sequence(pairs) if pairs.len()>64)
+                || matches!(&d.nodes()[id],N::Mapping(pairs) if pairs.len()>64)
+            {
+                return Err(PrepareError::limit("aggregate_keys", 64, None, None));
+            }
+            let names = match &d.nodes()[id] {
+                N::Text(name) => Some(vec![name.as_str()]),
+                N::Sequence(ids) => Some(
+                    ids.iter()
+                        .map(|&id| text(d, id))
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+                _ => None,
+            };
+            if let Some(names) = names {
+                let mut pairs = Vec::new();
+                for name in names {
+                    if !pairs.iter().any(|(prior, _)| prior == name) {
+                        pairs.push((
+                            name.into(),
+                            match_values::Declaration::Variable(name.into()),
+                        ));
+                    }
+                }
+                return Ok(pairs);
+            }
+            mapping(d, id)?
+                .iter()
+                .map(|&(key, value)| {
+                    let name = text(d, key)?;
+                    Ok((
+                        name.into(),
+                        match_values::Declaration::prepare(
+                            d,
+                            value,
+                            &format!("{path}.key.{name}"),
+                            &[],
+                            0,
+                            project,
+                            extraction,
+                            templates,
+                            extra,
+                        )?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, PrepareError>>()
+        })
+        .transpose()
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(super) fn prepare(
     d: &Document,
     payload: usize,
@@ -295,61 +362,9 @@ pub(super) fn prepare(
         .iter()
         .map(|&id| Ok(text(d, id)?.into()))
         .collect::<Result<_, PrepareError>>()?;
-    let keys = if scalar {
-        None
-    } else {
-        d.field(payload, "key")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            .map(|id| {
-                if matches!(&d.nodes()[id],N::Sequence(pairs) if pairs.len()>64)
-                    || matches!(&d.nodes()[id],N::Mapping(pairs) if pairs.len()>64)
-                {
-                    return Err(PrepareError::limit("aggregate_keys", 64, None, None));
-                }
-                let names = match &d.nodes()[id] {
-                    N::Text(name) => Some(vec![name.as_str()]),
-                    N::Sequence(ids) => Some(
-                        ids.iter()
-                            .map(|&id| text(d, id))
-                            .collect::<Result<Vec<_>, _>>()?,
-                    ),
-                    _ => None,
-                };
-                if let Some(names) = names {
-                    let mut pairs = Vec::new();
-                    for name in names {
-                        if !pairs.iter().any(|(prior, _)| prior == name) {
-                            pairs.push((
-                                name.into(),
-                                match_values::Declaration::Variable(name.into()),
-                            ));
-                        }
-                    }
-                    return Ok(pairs);
-                }
-                mapping(d, id)?
-                    .iter()
-                    .map(|&(key, value)| {
-                        let name = text(d, key)?;
-                        Ok((
-                            name.into(),
-                            match_values::Declaration::prepare(
-                                d,
-                                value,
-                                &format!("{path}.key.{name}"),
-                                &[],
-                                0,
-                                project,
-                                extraction,
-                                templates,
-                                &mut extra,
-                            )?,
-                        ))
-                    })
-                    .collect::<Result<Vec<_>, PrepareError>>()
-            })
-            .transpose()?
-    };
+    let keys = prepare_keys(
+        d, payload, path, scalar, project, extraction, templates, &mut extra,
+    )?;
     let empty_key = if keys.as_ref().is_some_and(Vec::is_empty) {
         Some(
             if matches!(

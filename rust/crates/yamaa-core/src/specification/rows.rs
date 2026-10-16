@@ -1233,6 +1233,90 @@ fn bind_template(
     }))
 }
 
+type RowFilterDeclaration = Option<(
+    String,
+    Result<crate::predicate::Plan, predicate_compiler::Error>,
+)>;
+
+fn prepare_row_filters(
+    d: &Document,
+    raw_rows: &[usize],
+) -> Result<Vec<RowFilterDeclaration>, PrepareError> {
+    raw_rows
+        .iter()
+        .enumerate()
+        .map(|(index, &row)| {
+            d.field(row, "filter")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                .map(|id| {
+                    let expression = text(d, id)?;
+                    let path = format!("rows[{index}].filter");
+                    let compiled = predicate_compiler::compile(expression, &path);
+                    match &compiled {
+                        Ok(_)
+                        | Err(predicate_compiler::Error::Parse(
+                            crate::predicate_parser::ParseError::Grammar { .. },
+                        )) => {}
+                        Err(predicate_compiler::Error::Parse(
+                            crate::predicate_parser::ParseError::UnsupportedRegex { .. },
+                        )) => return Err(unsupported("predicate_regex", &path)),
+                        Err(predicate_compiler::Error::Internal) => {
+                            return Err(PrepareError::Internal)
+                        }
+                        Err(error) => {
+                            return Err(PrepareError::predicate(error.clone(), Some(&path)))
+                        }
+                    }
+                    Ok((String::from(expression), compiled))
+                })
+                .transpose()
+        })
+        .collect::<Result<Vec<_>, PrepareError>>()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepare_filter_defaults(
+    d: &Document,
+    output: &TableSchema,
+    project: Option<&functions::Prepared>,
+    intermediates: &intermediates::Declarations,
+    string_templates: &str_template::Prepared,
+    raw_rows: &[usize],
+    filters: &[RowFilterDeclaration],
+    columns: &[usize],
+) -> Result<std::collections::BTreeSet<usize>, PrepareError> {
+    let mut filter_defaults =
+        self_relations::donor_defaults(d, output, project, intermediates, string_templates)?;
+    for (&row, filter) in raw_rows.iter().zip(filters.iter()) {
+        if let Some((_, Ok(plan))) = filter {
+            for name in plan.identifiers() {
+                if !present(d, row, "group_by") {
+                    // A named lookup in an ungrouped filter also reads its
+                    // match defaults from this candidate's derived values.
+                    filter_defaults.extend(row_intermediates::default_dependencies(
+                        d,
+                        name,
+                        output,
+                        string_templates,
+                    )?);
+                }
+                if name.contains('.') {
+                    continue;
+                }
+                let Some(column) = output.columns().iter().position(|c| c.name == name) else {
+                    continue;
+                };
+                if d.field(columns[column], "derivation")
+                    .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
+                {
+                    filter_defaults.insert(column);
+                }
+            }
+        }
+    }
+    Ok(filter_defaults)
+}
+
 impl Rows {
     pub(super) fn self_columns(&self) -> Vec<usize> {
         self.templates[0]
@@ -1266,65 +1350,17 @@ impl Rows {
             return Err(PrepareError::Internal);
         }
         let columns = sequence(d, field(d, root, "columns")?)?;
-        let filters = raw_rows
-            .iter()
-            .enumerate()
-            .map(|(index, &row)| {
-                d.field(row, "filter")
-                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                    .map(|id| {
-                        let expression = text(d, id)?;
-                        let path = format!("rows[{index}].filter");
-                        let compiled = predicate_compiler::compile(expression, &path);
-                        match &compiled {
-                            Ok(_)
-                            | Err(predicate_compiler::Error::Parse(
-                                crate::predicate_parser::ParseError::Grammar { .. },
-                            )) => {}
-                            Err(predicate_compiler::Error::Parse(
-                                crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-                            )) => return Err(unsupported("predicate_regex", &path)),
-                            Err(predicate_compiler::Error::Internal) => {
-                                return Err(PrepareError::Internal)
-                            }
-                            Err(error) => {
-                                return Err(PrepareError::predicate(error.clone(), Some(&path)))
-                            }
-                        }
-                        Ok((String::from(expression), compiled))
-                    })
-                    .transpose()
-            })
-            .collect::<Result<Vec<_>, PrepareError>>()?;
-        let mut filter_defaults =
-            self_relations::donor_defaults(d, output, project, intermediates, string_templates)?;
-        for (&row, filter) in raw_rows.iter().zip(&filters) {
-            if let Some((_, Ok(plan))) = filter {
-                for name in plan.identifiers() {
-                    if !present(d, row, "group_by") {
-                        // A named lookup in an ungrouped filter also reads its
-                        // match defaults from this candidate's derived values.
-                        filter_defaults.extend(row_intermediates::default_dependencies(
-                            d,
-                            name,
-                            output,
-                            string_templates,
-                        )?);
-                    }
-                    if name.contains('.') {
-                        continue;
-                    }
-                    let Some(column) = output.columns().iter().position(|c| c.name == name) else {
-                        continue;
-                    };
-                    if d.field(columns[column], "derivation")
-                        .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
-                    {
-                        filter_defaults.insert(column);
-                    }
-                }
-            }
-        }
+        let filters = prepare_row_filters(d, raw_rows)?;
+        let mut filter_defaults = prepare_filter_defaults(
+            d,
+            output,
+            project,
+            intermediates,
+            string_templates,
+            raw_rows,
+            &filters,
+            columns,
+        )?;
         // Complete row-local identity defaults before a newly admitted selector can fail.
         let mut secondary_reads = false;
         for (row_index, &row) in raw_rows.iter().enumerate() {
