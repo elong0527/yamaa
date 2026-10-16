@@ -56,5 +56,25 @@ if (.Platform$OS.type == "unix") {
 }
 stopifnot(inherits(try(move_inputs(file.path(move_root, "absent"), moved), silent=TRUE), "try-error"))
 unlink(move_root, recursive=TRUE, force=TRUE)
+# read_plan: optional columns that are blank on every row (one case without an
+# environment, exclusion or variant) must stay "", not become logical NA, so
+# the runner keeps the case as a runnable entry.
+plan_root <- tempfile("plan-")
+dir.create(plan_root)
+plan_header <- "example\tspecification\tenvironment\texcluded\tvariant\tentry"
+writeLines(c(plan_header, "case-a\tspec.yaml\t\t\t\t"), file.path(plan_root, "r.tsv"))
+plan <- read_plan(plan_root)
+stopifnot(all(vapply(plan, is.character, logical(1L))))
+stopifnot(identical(unlist(plan[1L, ], use.names=FALSE), c("case-a", "spec.yaml", "", "", "", "")))
+plan_entries <- plan[!nzchar(plan$variant), , drop=FALSE]
+stopifnot(identical(nrow(plan_entries), 1L), !nzchar(plan_entries$excluded[[1L]]), !nzchar(plan_entries$environment[[1L]]))
+# Filled columns are read as the same text, including the variant entry index.
+writeLines(c(plan_header, "case-b\tspec.yaml\tr/environment.yaml\t\t\t",
+  "case-b\t__child_spec.yaml\tr/environment.yaml\t\tempty_child\t0"), file.path(plan_root, "r.tsv"))
+plan <- read_plan(plan_root)
+stopifnot(all(vapply(plan, is.character, logical(1L))), identical(plan$entry, c("", "0")),
+  identical(plan$variant, c("", "empty_child")), identical(plan$environment, rep("r/environment.yaml", 2L)))
+unlink(plan_root, recursive=TRUE, force=TRUE)
 cat("lossless R public tables, NUL text, signed int64, float bits, temporal values and issue JSON passed\n")
 cat("move_inputs cross-filesystem copy-and-delete fallback passed\n")
+cat("read_plan keeps blank and filled plan columns as text passed\n")
