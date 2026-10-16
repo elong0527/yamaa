@@ -134,7 +134,10 @@ fn grouped_key_column_is_not_read_for_a_suppressed_group() {
     // The suppressed S2 group never reads LAST, whatever `keys` declares,
     // and the built rows are the same either way.
     assert_eq!(in_keys.saved("advs.csv"), out_keys.saved("advs.csv"));
-    assert_eq!(in_keys.saved("advs.csv"), "USUBJID,PARAMCD,SRCSEQ,AVAL\nS1,SYSBP,2,122\n");
+    assert_eq!(
+        in_keys.saved("advs.csv"),
+        "USUBJID,PARAMCD,SRCSEQ,AVAL\nS1,SYSBP,2,122\n"
+    );
 }
 
 #[test]

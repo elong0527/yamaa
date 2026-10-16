@@ -722,6 +722,16 @@ impl Rows {
             }
         }
         // Complete row-local identity defaults before a newly admitted selector can fail.
+        // Only an implicit join justifies completing every key here: when a
+        // row-phase filter or derivation reads another input dataset, the
+        // join matches on the output keys, so each candidate needs its key
+        // values before the filter runs. The mere presence of intermediates
+        // is not a row-phase context (REQ-1260): promoting a key column whose
+        // derivation reads a named lookup would make candidates the filter
+        // suppresses read that lookup, and an intermediate without
+        // `no_match` must never fail `unmatched_key` for them (REQ-1264).
+        // Named reads by a filter, a row derivation, or another default
+        // already promote the columns they need through `default_dependencies`.
         let mut secondary_reads = false;
         for (row_index, &row) in raw_rows.iter().enumerate() {
             let row_driver = d
@@ -761,7 +771,7 @@ impl Rows {
                 });
             }
         }
-        if present(d, root, "intermediates") || secondary_reads {
+        if secondary_reads {
             for &key in sequence(d, field(d, root, "keys")?)? {
                 if let Some(column) = output
                     .columns()
