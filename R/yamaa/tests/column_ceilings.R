@@ -118,7 +118,10 @@ run_column_ceilings <- function() {
   # A fixed refusal does not certify that later semantic checks passed. Once
   # capacity is repaired, both operations and routes expose the remaining error.
   case_root <- path("incomplete-checks")
-  spec <- write_case(case_root, columns = 1025L, selected = "ID")
+  # Every specification is pruned after composition (REQ-0638-REQ-0641):
+  # keep all 1,025 columns live so the columns capacity is still exercised
+  # instead of being pruned away.
+  spec <- write_case(case_root, columns = 1025L)
   lines <- readLines(spec)
   lines[grepl("name: C0001,", lines, fixed = TRUE)] <-
     "  - {name: C0001, type: int, derivation: {literal: 1}}"
@@ -137,7 +140,12 @@ run_column_ceilings <- function() {
         grepl('"actual":1025', issue$context, fixed = TRUE),
         grepl('"limit":1024', issue$context, fixed = TRUE))
     }
-    writeLines(lines[!grepl("name: C1024,", lines, fixed = TRUE)], spec)
+    repaired <- lines[!grepl("name: C1024,", lines, fixed = TRUE)]
+    # Dropping the C1024 declaration must also drop it from the live output
+    # list, otherwise the repaired specification would fail on the dangling
+    # output reference instead of the remaining C0002 type error.
+    repaired[startsWith(repaired, "output:")] <- gsub(", C1024\]", "]", repaired[startsWith(repaired, "output:")])
+    writeLines(repaired, spec)
     for (operation in list(yamaa_check, yamaa_domain)) {
       issue <- operation(spec, environment = environment)$issues
       stopifnot(nrow(issue) == 1L, identical(issue$condition, "incompatible_input_type"),
@@ -156,11 +164,16 @@ run_column_ceilings <- function() {
       columns = if (resource == "columns") actual else 1L,
       fields = if (resource == "source_fields") actual else 1L,
       typed = resource == "source_fields",
-      selected = if (resource == "projected_columns") rep("ID", actual) else "ID")
+      # Keep the counted resource live through pruning: columns needs its
+      # full output, inputs needs a row-phase default that reads every input.
+      selected = if (resource == "columns") NULL else if (resource == "projected_columns") rep("ID", actual) else "ID")
     if (resource == "inputs") {
       lines <- readLines(spec)
       lines[startsWith(lines, "input:")] <- sprintf("input: {%s}",
         paste(sprintf("S%s: input.csv", seq_len(actual)), collapse = ", "))
+      sources <- paste(sprintf("S%s.ID", seq_len(actual)), collapse = ", ")
+      lines[grepl("name: ID,", lines, fixed = TRUE)] <- sprintf(
+        "  - {name: ID, type: str, label: ID, derivation: {first_available: {sources: [%s]}}}", sources)
       writeLines(lines, spec)
     }
     env <- file.path(case_root, "environment.yaml")
@@ -211,9 +224,11 @@ run_column_ceilings <- function() {
     }
   }
 
-  # Narrow output isolates the declared-column ceiling from projection width.
+  # The declared-column ceiling counts live columns after pruning: a narrow
+  # output with one live column builds, so exercise the ceiling with a live
+  # 1,025-column output.
   assert_build(write_case(path("admit-columns"), 1024L, selected = "ID"))
-  spec <- write_case(path("refuse-columns"), 1025L, selected = "ID")
+  spec <- write_case(path("refuse-columns"), 1025L)
   for (operation in list(yamaa_check, yamaa_domain)) assert_refusal(operation(spec), TRUE)
 
   assert_build(write_case(path("admit-output"), 1024L), 1024L)
