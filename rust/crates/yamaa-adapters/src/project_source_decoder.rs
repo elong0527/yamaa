@@ -82,9 +82,12 @@ impl<E> SourceDecoder for Decoder<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "yaml")]
     use crate::specification_source::Source;
     use yamaa_core::specification::SourceInterpretation;
-    use yamaa_core::{specification::SourceProfile, value::ColumnType};
+    use yamaa_core::specification::SourceProfile;
+    #[cfg(feature = "yaml")]
+    use yamaa_core::value::ColumnType;
 
     fn csv_source() -> SourceDeclaration {
         SourceDeclaration {
@@ -147,6 +150,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "parquet")]
     fn native_parquet_retains_all_sixty_four_records() {
         use arrow_array::{Int64Array, RecordBatch};
         use arrow_schema::{DataType, Field, Schema};
@@ -178,6 +182,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "parquet")]
     fn both_supported_odm_routes_preserve_all_eleven_fields() {
         use arrow_array::{ArrayRef, RecordBatch, StringArray};
         use arrow_schema::{DataType, Field, Schema};
@@ -244,6 +249,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "yaml")]
     fn generated_contract_csv_admits_100k_and_retains_exact_cell_and_ordinal_boundaries() {
         let document = crate::shipped_schema::capture()
             .unwrap()

@@ -101,6 +101,17 @@ pub fn import_batches(
     schema: SchemaRef,
     batches: Vec<RecordBatch>,
 ) -> Result<ArrowTable, TableError> {
+    let mut rows = 0usize;
+    for batch in &batches {
+        rows = rows
+            .checked_add(batch.num_rows())
+            .ok_or(TableError::Limit {
+                resource: "table_rows",
+                limit: yamaa_core::limits::Limits::TABLE_ROWS,
+                required: None,
+            })?;
+    }
+    yamaa_core::limits::Limits::table(rows, logical.columns().len()).map_err(limit)?;
     if schema.fields().len() != logical.columns().len()
         || schema
             .fields()

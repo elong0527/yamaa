@@ -34,7 +34,7 @@ pub fn issue_rows(run: &dyn RunView) -> Result<Vec<crate::issue_rows::Issue>, Er
     Ok(rows)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "yaml"))]
 mod tests {
     use super::*;
     use crate::specification_run::PreparedRun;

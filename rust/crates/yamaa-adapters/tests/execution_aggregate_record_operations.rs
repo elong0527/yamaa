@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! Execution contracts.
 #[allow(dead_code)]
 mod support;
@@ -566,19 +567,10 @@ S1,002,2024-06
         assert!(domain.issues().is_empty(), "{:?}", domain.issues());
         let table = domain.output_table().unwrap();
         assert_eq!(table.rows(), 1);
-        let columns = table.columns();
-        let yamaa_adapters::public_table::Values::Str(study) = &columns[0].1 else {
-            panic!("STUDYID must remain text");
-        };
-        let yamaa_adapters::public_table::Values::Str(subject) = &columns[1].1 else {
-            panic!("USUBJID must remain text");
-        };
-        let yamaa_adapters::public_table::Values::Float(values) = &columns[2].1 else {
-            panic!("AVAL must retain its declared float type");
-        };
-        assert_eq!(study, &[Some("S1".into())]);
-        assert_eq!(subject, &[Some("001".into())]);
-        assert_eq!(values, &[Some(expected)]);
+        let batch = &table.batches()[0];
+        assert_eq!(batch.column(0).as_any().downcast_ref::<arrow_array::StringArray>().unwrap().iter().collect::<Vec<_>>(), [Some("S1")]);
+        assert_eq!(batch.column(1).as_any().downcast_ref::<arrow_array::StringArray>().unwrap().iter().collect::<Vec<_>>(), [Some("001")]);
+        assert_eq!(batch.column(2).as_any().downcast_ref::<arrow_array::Float64Array>().unwrap().iter().collect::<Vec<_>>(), [Some(expected)]);
     }
             let fixture = original_derive_fixture(
                 "- name: QSNUM\n  type: float\n  derivation: QS.QSORRES",

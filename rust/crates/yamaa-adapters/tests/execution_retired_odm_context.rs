@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! Execution contracts.
 #[allow(dead_code)]
 mod support;
@@ -1690,17 +1691,24 @@ columns:
         }
 
         fn float_column(result: &file_application::Domain, name: &str) -> Vec<Option<f64>> {
-            let (_, values) = result
-                .output_table()
-                .unwrap()
+            let table = result.output_table().unwrap();
+            let column = table
                 .columns()
                 .iter()
-                .find(|(column, _)| column == name)
+                .position(|field| field.name() == name)
                 .unwrap();
-            let yamaa_adapters::public_table::Values::Float(values) = values else {
-                panic!("{name}: {values:?}");
-            };
-            values.clone()
+            table
+                .batches()
+                .iter()
+                .flat_map(|batch| {
+                    batch
+                        .column(column)
+                        .as_any()
+                        .downcast_ref::<arrow_array::Float64Array>()
+                        .unwrap()
+                        .iter()
+                })
+                .collect()
         }
 
         #[test]

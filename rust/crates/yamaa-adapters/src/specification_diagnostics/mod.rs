@@ -135,6 +135,9 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
             Error::ParquetSource(crate::parquet_source::Error::ResourceLimit { .. }) => {
                 ("ingest", "parquet_limit")
             }
+            Error::ParquetSource(crate::parquet_source::Error::ReaderUnavailable) => {
+                ("ingest", "parquet_reader_unavailable")
+            }
             Error::ParquetSource(crate::parquet_source::Error::Unavailable { .. }) => {
                 ("ingest", "parquet_codec_unavailable")
             }
@@ -254,6 +257,10 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> String {
     }
     let code = match error {
         Error::Limit(_) => unreachable!("handled physical capture refusal"),
+        Error::Decode {
+            error: crate::yaml_decode::DecodeFailure::Unavailable,
+            ..
+        } => "yaml_reader_unavailable",
         Error::Decode { .. } => "yaml_decode",
         Error::Bundle(_) => "schema_bundle",
         Error::Normalize(_) => "normalization",

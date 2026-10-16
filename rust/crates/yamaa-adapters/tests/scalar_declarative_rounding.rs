@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! Scalar contracts.
 #[allow(dead_code)]
 mod support;
@@ -8,9 +9,7 @@ mod scalar {
             path::PathBuf,
             sync::atomic::{AtomicUsize, Ordering},
         };
-        use yamaa_adapters::{
-            file_application, public_table::Values, specification_report::Identity,
-        };
+        use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::json;
         static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -181,23 +180,42 @@ mod scalar {
                 .collect::<Vec<_>>();
             assert_eq!(table.rows(), rows.len());
             assert_eq!(table.columns().len(), names.len());
-            for (column, (name, values)) in table.columns().iter().enumerate() {
-                assert_eq!(name, names[column]);
-                match values {
-                    Values::Str(actual) => assert_eq!(
-                        *actual,
+            for (column, field) in table.columns().iter().enumerate() {
+                assert_eq!(field.name(), names[column]);
+                match field.data_type() {
+                    arrow_schema::DataType::Utf8 => assert_eq!(
+                        table
+                            .batches()
+                            .iter()
+                            .flat_map(|batch| batch
+                                .column(column)
+                                .as_any()
+                                .downcast_ref::<arrow_array::StringArray>()
+                                .unwrap()
+                                .iter()
+                                .map(|value| value.map(str::to_owned)))
+                            .collect::<Vec<_>>(),
                         rows.iter()
                             .map(|row| (!row[column].is_empty()).then(|| row[column].to_owned()))
                             .collect::<Vec<_>>()
                     ),
-                    Values::Float(actual) => assert_eq!(
-                        *actual,
+                    arrow_schema::DataType::Float64 => assert_eq!(
+                        table
+                            .batches()
+                            .iter()
+                            .flat_map(|batch| batch
+                                .column(column)
+                                .as_any()
+                                .downcast_ref::<arrow_array::Float64Array>()
+                                .unwrap()
+                                .iter())
+                            .collect::<Vec<_>>(),
                         rows.iter()
                             .map(|row| (!row[column].is_empty())
                                 .then(|| row[column].parse::<f64>().unwrap()))
                             .collect::<Vec<_>>()
                     ),
-                    _ => panic!("unexpected public type for {name}"),
+                    _ => panic!("unexpected public type for {}", field.name()),
                 }
             }
         }

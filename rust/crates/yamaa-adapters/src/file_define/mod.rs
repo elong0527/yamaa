@@ -479,5 +479,6 @@ fn read_parquet(
     crate::parquet_source::parse(bytes)
 }
 
+#[cfg(feature = "yaml")]
 #[cfg(test)]
 mod publication_failure_tests;

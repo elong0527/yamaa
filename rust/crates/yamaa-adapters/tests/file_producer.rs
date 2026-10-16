@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! File contracts.
 #[allow(dead_code)]
 mod support;
@@ -188,7 +189,11 @@ mod file {
 
         #[test]
         fn native_uneven_csv_and_parquet_graphs_keep_each_tables_actual_rows() {
-            for format in ["csv", "parquet"] {
+            for format in [
+                "csv",
+                #[cfg(feature = "parquet")]
+                "parquet",
+            ] {
                 let study = Study::new();
                 study.write(
                     "raw/raw.csv",
@@ -878,6 +883,7 @@ columns:
         }
 
         #[test]
+        #[cfg(feature = "parquet")]
         fn native_parquet_round_trip_uses_held_artifact_and_a_functionless_graph_grants_no_activation(
         ) {
             let study = Study::new();
@@ -1543,7 +1549,8 @@ columns:
         #[test]
         fn public_root_result_keeps_independent_unrounded_truth_after_all_other_owners_and_files_drop(
         ) {
-            use yamaa_adapters::{producer_result, public_table::Values};
+            use arrow_array::{Float64Array, Int64Array};
+            use yamaa_adapters::producer_result;
             let study = Study::new();
             study.rounded();
             // Independent root precision witness: consumer references retain the
@@ -1570,28 +1577,58 @@ columns:
                     producer_result::prepare_classified(attempt, report_id(), &[]).unwrap();
                 assert!(result.issues().is_empty());
                 assert_eq!(result.observations()["outcome"], "success");
-                let columns = result.output_table().unwrap().columns();
+                let table = result.output_table().unwrap();
+                let columns = table.columns();
                 assert_eq!(
                     columns
                         .iter()
-                        .map(|(name, _)| name.as_str())
+                        .map(|field| field.name().as_str())
                         .collect::<Vec<_>>(),
                     ["ROOT_UNROUNDED", "ID", "VALUE"]
                 );
-                assert!(
-                    matches!(&columns[0].1, Values::Float(values) if values == &[Some(2.464), Some(4.704)])
+                let batch = &table.batches()[0];
+                assert_eq!(
+                    batch
+                        .column(0)
+                        .as_any()
+                        .downcast_ref::<Float64Array>()
+                        .unwrap()
+                        .iter()
+                        .collect::<Vec<_>>(),
+                    [Some(2.464), Some(4.704)]
                 );
-                assert!(
-                    matches!(&columns[1].1, Values::Int(values) if values == &[Some(1), Some(2)])
+                assert_eq!(
+                    batch
+                        .column(1)
+                        .as_any()
+                        .downcast_ref::<Int64Array>()
+                        .unwrap()
+                        .iter()
+                        .collect::<Vec<_>>(),
+                    [Some(1), Some(2)]
                 );
-                assert!(
-                    matches!(&columns[2].1, Values::Float(values) if values == &[Some(2.46), Some(4.70)])
+                assert_eq!(
+                    batch
+                        .column(2)
+                        .as_any()
+                        .downcast_ref::<Float64Array>()
+                        .unwrap()
+                        .iter()
+                        .collect::<Vec<_>>(),
+                    [Some(2.46), Some(4.70)]
                 );
                 let copied =
                     yamaa_adapters::public_table::PublicTable::decode(result.output().unwrap())
                         .unwrap();
-                assert!(
-                    matches!(&copied.columns()[0].1, Values::Float(values) if values == &[Some(2.464), Some(4.704)])
+                assert_eq!(
+                    copied.batches()[0]
+                        .column(0)
+                        .as_any()
+                        .downcast_ref::<Float64Array>()
+                        .unwrap()
+                        .iter()
+                        .collect::<Vec<_>>(),
+                    [Some(2.464), Some(4.704)]
                 );
                 assert_eq!(artifact(attempt, 0), b"ID,VALUE\n1,1.23\n2,2.35\n");
             }

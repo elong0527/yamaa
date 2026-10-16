@@ -18,8 +18,8 @@ class Domain:
 
     @property
     def output(self) -> pl.DataFrame | None:
-        data = self.output_arrow
-        return None if data is None else pl.from_arrow(data, rechunk=False)
+        data = self._native.output()
+        return None if data is None else pl.DataFrame(data)
 
     @property
     def output_arrow(self) -> pa.Table | None:
@@ -37,8 +37,8 @@ class Domain:
 
     @property
     def verification_log(self) -> pl.DataFrame | None:
-        data = self.verification_log_arrow
-        return None if data is None else pl.from_arrow(data, rechunk=False)
+        data = self._native.log(False)
+        return None if data is None else pl.DataFrame(data)
 
     @property
     def verification_log_arrow(self) -> pa.Table | None:
@@ -47,8 +47,8 @@ class Domain:
 
     @property
     def warning_log(self) -> pl.DataFrame | None:
-        data = self.warning_log_arrow
-        return None if data is None else pl.from_arrow(data, rechunk=False)
+        data = self._native.log(True)
+        return None if data is None else pl.DataFrame(data)
 
     @property
     def warning_log_arrow(self) -> pa.Table | None:

@@ -358,7 +358,7 @@ fn capture_environment(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "yaml"))]
 mod root_read_tests {
     use super::*;
     #[test]

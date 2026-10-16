@@ -1,7 +1,7 @@
 //! Public root results and explicit ordered publication from a sealed native owner.
 //! Successful node reports still gate artifact consumption inside the build.
 use crate::{
-    ipc_table::{self, TableError},
+    ipc_table::TableError,
     issue_rows::Issue,
     producer_report::{self, NativeAttempt, ProjectionError},
     project_report::Classified,
@@ -531,13 +531,12 @@ fn root_output<E>(attempt: &NativeAttempt<E>) -> Result<(PublicTable, Vec<u8>), 
     {
         return Err(invalid);
     }
-    let bytes = ipc_table::encode_projected_dataset(table, projection)?;
-    let table = PublicTable::decode(&bytes)?;
+    let table = PublicTable::from_table(table, projection)?;
     let bytes = table.ipc()?;
     Ok((table, bytes))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "yaml"))]
 mod log_tests {
     use super::*;
     use crate::{

@@ -154,21 +154,6 @@ pub(crate) fn encode_dataset(table: &yamaa_core::dataset::Dataset) -> Result<Vec
     encode_dataset_projection(table, None)
 }
 
-/// Export the projection already admitted by the output use case.
-pub(crate) fn encode_projected_dataset(
-    table: &yamaa_core::dataset::Dataset,
-    projection: &[usize],
-) -> Result<Vec<u8>, Error> {
-    encode_dataset_projection(table, Some(projection))
-}
-
-/// Only owned governed log tables enter this transport; arbitrary host inputs
-/// still pass the complete snapshot decoder admission.
-pub(crate) fn encode_log_table(
-    table: &yamaa_core::verification_logs::LogTable,
-) -> Result<Vec<u8>, Error> {
-    encode_dataset_projection(table, None)
-}
 fn encode_dataset_projection<T: TableAccess<Error = std::convert::Infallible>>(
     table: &T,
     projection: Option<&[usize]>,
@@ -195,7 +180,7 @@ pub(crate) struct DatasetBatches<'a, T = Dataset> {
     remaining: usize,
 }
 
-fn table_batches<'a, T: TableAccess<Error = std::convert::Infallible>>(
+pub(crate) fn table_batches<'a, T: TableAccess<Error = std::convert::Infallible>>(
     table: &'a T,
     projection: Option<&'a [usize]>,
 ) -> Result<DatasetBatches<'a, T>, Error> {

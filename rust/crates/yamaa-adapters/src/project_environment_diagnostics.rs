@@ -383,7 +383,7 @@ pub fn admission<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>, Err
     issues(report.diagnostics().map_err(projection_error)?)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "yaml"))]
 mod tests {
     use super::*;
     use crate::{file_resources, project_source, specification_source::Source};
