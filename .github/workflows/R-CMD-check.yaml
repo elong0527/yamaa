@@ -1,0 +1,181 @@
+# Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
+# (the same pattern tidyverse/dplyr uses in its R-CMD-check.yaml), adapted
+# for yamaa in three ways:
+#
+# 1. The R package is not standalone in this repository: R/yamaa only
+#    becomes a buildable source package after the shared Rust crates are
+#    staged into it, so the staged tree is what gets built and checked.
+# 2. DESCRIPTION requires R >= 4.6.1 and a Rust toolchain (cargo /
+#    rustc >= 1.90), so dplyr's oldrel-* matrix entries cannot run here;
+#    the matrix keeps release on all three operating systems plus devel
+#    on Ubuntu, and installs the pinned Rust toolchain before checking.
+# 3. Like the existing native qualification in native.yml, this runs as
+#    a regular build every two hours (offset to :47 so it does not pile
+#    onto the native run at :17), not only on push / pull request.
+
+on:
+  schedule:
+    - cron: '47 */2 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'R/**'
+      - 'crates/**'
+      - 'rust/**'
+      - 'Cargo.lock'
+      - 'yaml/grammar/**'
+      - 'tools/staging/**'
+      - 'tools/ci/toolchain.py'
+      - 'tools/paths.py'
+      - 'tools/benchmark.py'
+      - 'tools/conformance/supplemental_inventory.py'
+      - 'tools/conformance/host_fixtures.py'
+      - 'benchmarks/**'
+      - 'python/yamaa_build_backend.py'
+      - 'python/uv.lock'
+      - 'python/tests/installed/**'
+      - 'pyproject.toml'
+      - '.github/workflows/R-CMD-check.yaml'
+  pull_request:
+    paths:
+      - 'R/**'
+      - 'crates/**'
+      - 'rust/**'
+      - 'Cargo.lock'
+      - 'yaml/grammar/**'
+      - 'tools/staging/**'
+      - 'tools/ci/toolchain.py'
+      - 'tools/paths.py'
+      - 'tools/benchmark.py'
+      - 'tools/conformance/supplemental_inventory.py'
+      - 'tools/conformance/host_fixtures.py'
+      - 'benchmarks/**'
+      - 'python/yamaa_build_backend.py'
+      - 'python/uv.lock'
+      - 'python/tests/installed/**'
+      - 'pyproject.toml'
+      - '.github/workflows/R-CMD-check.yaml'
+
+name: R-CMD-check
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r-cmd-check-${{ github.ref }}
+  # Cancel stale pull-request feedback; scheduled main runs finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  R-CMD-check:
+    runs-on: ${{ matrix.config.os }}
+
+    name: ${{ matrix.config.os }} (${{ matrix.config.r }})
+
+    timeout-minutes: ${{ matrix.config.os == 'windows-latest' && 60 || 45 }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: macos-15,       r: 'release'}
+          - {os: windows-latest, r: 'release'}
+          - {os: ubuntu-24.04,   r: 'devel', http-user-agent: 'release'}
+          - {os: ubuntu-24.04,   r: 'release'}
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      _R_CHECK_CRAN_INCOMING_REMOTE_: 'false'
+
+    steps:
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: ${{ matrix.config.r }}
+          http-user-agent: ${{ matrix.config.http-user-agent }}
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          working-directory: R/yamaa
+          extra-packages: any::rcmdcheck
+          needs: check
+
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.11.6'
+          enable-cache: true
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      # Activation writes RUSTUP_TOOLCHAIN to GITHUB_ENV, which only takes
+      # effect in later steps; the Windows gnu target must be added to the
+      # pinned toolchain, so installation runs in its own step (as in
+      # native.yml).
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
+
+      - name: Install the pinned Rust toolchain
+        run: |
+          python -m tools.ci.toolchain --install
+          if [ "${{ runner.os }}" = Windows ]; then
+            rustup target add x86_64-pc-windows-gnu
+          fi
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: rust
+          shared-key: yamaa-${{ runner.os }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install the shared grammar fixture codec and PyYAML
+        run: python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
+
+      # The package tests resolve yamaabenchmarks::project_value from the
+      # benchmark R environments, exactly as make test-r installs it.
+      - name: Install the benchmark project-function package
+        run: R CMD INSTALL --library="${R_LIBS_USER}" rust/tests/project-programs/r
+
+      - name: Stage standalone R package
+        run: python -m tools.staging.stage_r_package "r-cmd-check/yamaa"
+
+      - name: Build R source package
+        working-directory: r-cmd-check
+        run: R CMD build --no-build-vignettes --no-manual yamaa
+
+      - name: Preserve R source package
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: r-package-${{ matrix.config.os }}-${{ matrix.config.r }}
+          path: r-cmd-check/yamaa_*.tar.gz
+          if-no-files-found: error
+
+      - uses: r-lib/actions/check-r-package@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          working-directory: r-cmd-check/yamaa
+          args: 'c("--no-manual")'
+          build_args: '"--no-manual"'
+          upload-snapshots: true
+          upload-results: true
