@@ -189,6 +189,45 @@ fn domain_output(handle: Robj) -> List {
     })
 }
 #[extendr]
+fn domain_arrow(handle: Robj, destination: Robj, kind: i32) -> List {
+    boundary(|| {
+        let state = resolve(&handle)?;
+        let state = state
+            .try_borrow()
+            .map_err(|_| "domain result already borrowed")?;
+        let table = match kind {
+            0 => state
+                .result
+                .as_ref()
+                .and_then(|result| result.output_table())
+                .or_else(|| {
+                    state
+                        .producer
+                        .as_ref()
+                        .and_then(|result| result.output_table())
+                }),
+            1 | 2 => {
+                let warning = kind == 2;
+                state
+                    .result
+                    .as_ref()
+                    .and_then(|result| result.log_table(warning))
+                    .or_else(|| {
+                        state
+                            .producer
+                            .as_ref()
+                            .and_then(|result| result.log_table(warning))
+                    })
+            }
+            _ => return Err("unknown Arrow table selection".into()),
+        };
+        table.map_or_else(
+            || Ok(NULL.into_robj()),
+            |table| crate::arrow_bridge::export(table, destination),
+        )
+    })
+}
+#[extendr]
 fn domain_observations(handle: Robj, include_measurements: bool) -> List {
     boundary(|| {
         let state = resolve(&handle)?;
@@ -377,6 +416,7 @@ extendr_module! {
     fn check_file;
     fn domain_issues;
     fn domain_output;
+    fn domain_arrow;
     fn domain_log;
     fn domain_observations;
     fn domain_save;

@@ -1,11 +1,64 @@
-//! Copy shared typed columns into owned R vectors; no JSON or semantic parser.
+//! Explicit copying view of shared Arrow columns into exact owned R vectors.
+use arrow_array::{
+    Date32Array, Float64Array, Int64Array, LargeStringArray, StringArray, StringViewArray,
+    TimestampSecondArray,
+};
+use arrow_schema::{DataType, TimeUnit};
 use extendr_api::prelude::*;
-use yamaa_adapters::public_table::{PublicTable, Values};
+use yamaa_adapters::public_table::PublicTable;
+
+enum Values {
+    Str(Vec<Option<String>>),
+    Int(Vec<Option<i64>>),
+    Float(Vec<Option<f64>>),
+    Date(Vec<Option<i32>>),
+    DateTime(Vec<Option<i64>>),
+}
 
 pub(super) fn frame(table: &PublicTable) -> std::result::Result<Robj, String> {
     let mut columns = Vec::new();
-    for (name, values) in table.columns() {
-        let mut value = match values {
+    for (index, field) in table.columns().iter().enumerate() {
+        macro_rules! collect {
+            ($kind:ty) => {{
+                let mut values = Vec::with_capacity(table.rows());
+                for batch in table.batches() {
+                    let array = batch
+                        .column(index)
+                        .as_any()
+                        .downcast_ref::<$kind>()
+                        .ok_or("public Arrow column type")?;
+                    values.extend(array.iter());
+                }
+                values
+            }};
+        }
+        macro_rules! strings {
+            ($kind:ty) => {{
+                let mut values = Vec::with_capacity(table.rows());
+                for batch in table.batches() {
+                    let array = batch
+                        .column(index)
+                        .as_any()
+                        .downcast_ref::<$kind>()
+                        .ok_or("public Arrow string type")?;
+                    values.extend(array.iter().map(|value| value.map(str::to_owned)));
+                }
+                values
+            }};
+        }
+        let values = match field.data_type() {
+            DataType::Utf8 => Values::Str(strings!(StringArray)),
+            DataType::LargeUtf8 => Values::Str(strings!(LargeStringArray)),
+            DataType::Utf8View => Values::Str(strings!(StringViewArray)),
+            DataType::Int64 => Values::Int(collect!(Int64Array)),
+            DataType::Float64 => Values::Float(collect!(Float64Array)),
+            DataType::Date32 => Values::Date(collect!(Date32Array)),
+            DataType::Timestamp(TimeUnit::Second, None) => {
+                Values::DateTime(collect!(TimestampSecondArray))
+            }
+            _ => return Err("unsupported public Arrow column type".into()),
+        };
+        let mut value = match &values {
             Values::Str(values) if values.iter().flatten().any(|v| v.contains('\0')) => {
                 let mut list = List::from_values(values.iter().map(|v| match v {
                     None => NULL.into_robj(),
@@ -50,7 +103,7 @@ pub(super) fn frame(table: &PublicTable) -> std::result::Result<Robj, String> {
             )
             .into_robj(),
         };
-        match values {
+        match &values {
             Values::Date(_) => {
                 value.set_class(["Date"]).map_err(|_| "date vector class")?;
             }
@@ -64,7 +117,7 @@ pub(super) fn frame(table: &PublicTable) -> std::result::Result<Robj, String> {
             }
             _ => {}
         }
-        columns.push((name.as_str(), value));
+        columns.push((field.name().as_str(), value));
     }
     let mut result = List::from_pairs(columns).into_robj();
     result

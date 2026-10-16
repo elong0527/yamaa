@@ -1,15 +1,29 @@
 """Public argument and data-frame conversion for the shared Rust lifecycle."""
 
+from __future__ import annotations
+
 from os import PathLike, fspath
+from typing import TYPE_CHECKING
 
 import polars as pl
+
+if TYPE_CHECKING:
+    import pyarrow as pa
 
 from yamaa._native import DomainError, _check_file, _domain_file
 from yamaa._native_results import issues_frame
 
 
+def _arrow_view(data) -> pa.Table | None:
+    if data is None:
+        return None
+    import pyarrow as pa
+
+    return pa.table(data)
+
+
 class Domain:
-    """An owned native build with independently copied host views."""
+    """An owned native build with independently owned Arrow and Polars views."""
 
     def __init__(self, native):
         self._native = native
@@ -17,7 +31,12 @@ class Domain:
     @property
     def output(self) -> pl.DataFrame | None:
         data = self._native.output()
-        return None if data is None else pl.read_ipc_stream(data)
+        return None if data is None else pl.DataFrame(data)
+
+    @property
+    def output_arrow(self) -> pa.Table | None:
+        """Share retained immutable buffers through the Arrow C Stream protocol."""
+        return _arrow_view(self._native.output())
 
     @property
     def issues(self) -> pl.DataFrame:
@@ -26,12 +45,20 @@ class Domain:
     @property
     def verification_log(self) -> pl.DataFrame | None:
         data = self._native.log(False)
-        return None if data is None else pl.read_ipc_stream(data)
+        return None if data is None else pl.DataFrame(data)
+
+    @property
+    def verification_log_arrow(self) -> pa.Table | None:
+        return _arrow_view(self._native.log(False))
 
     @property
     def warning_log(self) -> pl.DataFrame | None:
         data = self._native.log(True)
-        return None if data is None else pl.read_ipc_stream(data)
+        return None if data is None else pl.DataFrame(data)
+
+    @property
+    def warning_log_arrow(self) -> pa.Table | None:
+        return _arrow_view(self._native.log(True))
 
     def save(self) -> bool:
         """Publish held logs and output; a failed build raises DomainError."""

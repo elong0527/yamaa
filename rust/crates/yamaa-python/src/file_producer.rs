@@ -171,10 +171,7 @@ impl Report {
     pub(crate) fn domain_attempt(&self) -> Attempt {
         self.carrier.retained()
     }
-    pub(crate) fn domain_output<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<Option<Bound<'py, PyBytes>>> {
+    pub(crate) fn domain_output(&self) -> PyResult<Option<crate::arrow_bridge::ArrowTable>> {
         self.domain
             .as_ref()
             .ok()
@@ -182,8 +179,8 @@ impl Report {
                 Ok(result
                     .try_lock()
                     .map_err(|_| borrow_error())?
-                    .output()
-                    .map(|bytes| PyBytes::new(py, bytes)))
+                    .output_table()
+                    .map(crate::arrow_bridge::ArrowTable::from))
             })
             .transpose()
             .map(Option::flatten)
@@ -191,22 +188,19 @@ impl Report {
     pub(crate) fn domain_projection_failure(&self) -> Option<String> {
         self.output_error.map(|error| error.to_string())
     }
-    pub(crate) fn domain_log<'py>(
+    pub(crate) fn domain_log(
         &self,
-        py: Python<'py>,
         warning: bool,
-    ) -> PyResult<Option<Bound<'py, PyBytes>>> {
+    ) -> PyResult<Option<crate::arrow_bridge::ArrowTable>> {
         self.domain
             .as_ref()
             .ok()
             .map(|result| {
-                let result = result.try_lock().map_err(|_| borrow_error())?;
-                Ok((if warning {
-                    result.warning_log()
-                } else {
-                    result.verification_log()
-                })
-                .map(|bytes| PyBytes::new(py, bytes)))
+                Ok(result
+                    .try_lock()
+                    .map_err(|_| borrow_error())?
+                    .log_table(warning)
+                    .map(crate::arrow_bridge::ArrowTable::from))
             })
             .transpose()
             .map(Option::flatten)

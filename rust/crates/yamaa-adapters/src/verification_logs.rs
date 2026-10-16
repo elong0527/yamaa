@@ -312,9 +312,8 @@ fn held(path: &str, table: core::LogTable) -> Result<HeldLog, Error> {
         )
     };
     let observation = json!({"name":name,"profile":profile,"columns":table.schema().columns().iter().map(|c|&c.name).collect::<Vec<_>>(),"types":table.schema().columns().iter().map(|c|crate::specification_diagnostics::type_name(c.kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":rows,"byte_length":bytes.len(),"content":content});
-    let logical =
-        crate::ipc_table::encode_log_table(&table).map_err(|_| Error::InvalidObservation)?;
-    let table = PublicTable::decode(&logical).map_err(|_| Error::InvalidObservation)?;
+    let table =
+        PublicTable::from_table(&table, &projection).map_err(|_| Error::InvalidObservation)?;
     let ipc = table.ipc().map_err(|_| Error::InvalidObservation)?;
     Ok(HeldLog {
         path: path.into(),

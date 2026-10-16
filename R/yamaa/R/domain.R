@@ -47,6 +47,18 @@ yamaa_domain <- function(specification, environment = NULL) {
     if (!missing(value)) stop("output is read only", call. = FALSE)
     .domain_reply(.Call(wrap__domain_output, h))
   }}), result)
+  makeActiveBinding("output_arrow", local({ h <- handle; function(value) {
+    if (!missing(value)) stop("output_arrow is read only", call. = FALSE)
+    .domain_arrow(h, 0L)
+  }}), result)
+  makeActiveBinding("verification_log_arrow", local({ h <- handle; function(value) {
+    if (!missing(value)) stop("verification_log_arrow is read only", call. = FALSE)
+    .domain_arrow(h, 1L)
+  }}), result)
+  makeActiveBinding("warning_log_arrow", local({ h <- handle; function(value) {
+    if (!missing(value)) stop("warning_log_arrow is read only", call. = FALSE)
+    .domain_arrow(h, 2L)
+  }}), result)
   makeActiveBinding("issues", local({ h <- handle; function(value) {
     if (!missing(value)) stop("issues are read only", call. = FALSE)
     .domain_reply(.Call(wrap__domain_issues, h))
