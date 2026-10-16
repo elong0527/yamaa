@@ -9,8 +9,9 @@ and executable examples with authored expected results in
 The [contributor guide](../CONTRIBUTING.md) owns crate boundaries, locked builds
 and local verification commands. The
 [release guide](../docs/release.md) owns supported platforms, approved decisions
-and migration notes. Declared exports are read from the host sources
-themselves; there is no committed API inventory. Current rule checks and
+and migration notes. The [shared host interface](interface/README.md) chooses
+the generated boundary and inventories both hosts' declarations in one input;
+registrations remain handwritten until the generators land. Current rule checks and
 schema-owner controls are described in the [contributor guide](../CONTRIBUTING.md#develop-and-verify).
 [Installed package checks](qualification/README.md) compare actual Python and R
 results with authored expected data. The workflow recipes in

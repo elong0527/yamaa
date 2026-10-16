@@ -58,7 +58,7 @@ impl ResourceResolver for Port {
         let failure = reply.elt(0).map_err(|_| rejected())?;
         if !failure.is_null() {
             return Err(ResolverFailure::from_code(
-                failure.as_str().unwrap_or("rejected"),
+                failure.as_str().ok_or_else(rejected)?,
             ));
         }
         let reference = reply.elt(1).map_err(|_| rejected())?;

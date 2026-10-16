@@ -20,6 +20,37 @@ pub struct Identity<'a> {
     pub specification: &'a str,
     pub base_directory: &'a str,
 }
+impl<'a> Identity<'a> {
+    /// Every host reports the same engine version and base directory; only
+    /// the runtime name, its version, the example and the specification vary.
+    pub fn new(
+        runtime: &'a str,
+        runtime_version: &'a str,
+        example: &'a str,
+        specification: &'a str,
+    ) -> Self {
+        Self {
+            runtime,
+            runtime_version,
+            engine_version: yamaa_core::VERSION,
+            example,
+            specification,
+            base_directory: ".",
+        }
+    }
+    /// Map the five positional report fields both hosts capture, in order:
+    /// runtime version, engine version, example, specification, base directory.
+    pub fn from_fields(runtime: &'a str, fields: &'a [String]) -> Self {
+        Self {
+            runtime,
+            runtime_version: &fields[0],
+            engine_version: &fields[1],
+            example: &fields[2],
+            specification: &fields[3],
+            base_directory: &fields[4],
+        }
+    }
+}
 #[derive(Debug)]
 pub enum Error {
     UnsupportedOutcome,
@@ -927,5 +958,32 @@ impl Identity<'_> {
             specification: self.specification,
             base_directory: self.base_directory,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn identity_constructors_share_engine_facts() {
+        let identity = Identity::new("python", "3.14", "domain", "spec.yaml");
+        assert_eq!(identity.runtime, "python");
+        assert_eq!(identity.runtime_version, "3.14");
+        assert_eq!(identity.engine_version, yamaa_core::VERSION);
+        assert_eq!(identity.example, "domain");
+        assert_eq!(identity.specification, "spec.yaml");
+        assert_eq!(identity.base_directory, ".");
+        let fields: Vec<String> = ["3.14", "0.4.0", "check", "spec.yaml", "."]
+            .iter()
+            .map(|field| field.to_string())
+            .collect();
+        let identity = Identity::from_fields("r", &fields);
+        assert_eq!(identity.runtime, "r");
+        assert_eq!(identity.runtime_version, "3.14");
+        assert_eq!(identity.engine_version, "0.4.0");
+        assert_eq!(identity.example, "check");
+        assert_eq!(identity.specification, "spec.yaml");
+        assert_eq!(identity.base_directory, ".");
     }
 }

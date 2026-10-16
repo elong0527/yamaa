@@ -27,9 +27,7 @@ impl ResourceResolver for Port {
                 let reply = self.callback.bind(py).call1((args,))?;
                 let failure = reply.get_item("failure")?;
                 if !failure.is_none() {
-                    return Ok(Err(ResolverFailure::from_code(
-                        failure.extract::<&str>().unwrap_or("rejected"),
-                    )));
+                    return Ok(Err(ResolverFailure::from_code(failure.extract::<&str>()?)));
                 }
                 let reference = reply.get_item("reference")?.extract::<String>()?;
                 let bytes = reply.get_item("data")?;
