@@ -334,11 +334,11 @@ impl ColumnAdmission<'_> {
         let Self {
             doc,
             section,
-            catalogue,
             known,
             acrfs,
             keys,
             intermediates,
+            ..
         } = *self;
         let name = &column.name.value;
         let Some(metadata) = &column.submission else {
@@ -497,10 +497,39 @@ impl ColumnAdmission<'_> {
                 name,
             ));
         }
-        let maxima: Vec<_> = verification(doc, column.node, "max_length")
+        let length = self.admit_length(column, metadata, data_type, column_path, name, findings);
+        self.admit_codelist(column, metadata, column_path, findings, bound);
+        Some(Column {
+            declaration: column.clone(),
+            data_type,
+            length,
+            mandatory,
+            source: if section.family == Submission::Adam
+                && origin.kind.value != spec::OriginType::Predecessor
+            {
+                Some(spec::OriginSource::Sponsor)
+            } else {
+                source
+            },
+            documents: refs,
+            key_sequence: keys.iter().position(|key| key == name).map(|k| k + 1),
+            values: Vec::new(),
+        })
+    }
+    /// Admit length and significant-digit declarations; return the effective length.
+    fn admit_length(
+        &self,
+        column: &spec::Column,
+        metadata: &spec::ColumnSubmission,
+        data_type: spec::DataType,
+        column_path: &str,
+        name: &str,
+        findings: &mut Vec<Finding>,
+    ) -> Option<String> {
+        let maxima: Vec<_> = verification(self.doc, column.node, "max_length")
             .iter()
-            .filter_map(|&n| doc.field(n, "max"))
-            .filter_map(|n| match &doc.nodes()[n] {
+            .filter_map(|&n| self.doc.field(n, "max"))
+            .filter_map(|n| match &self.doc.nodes()[n] {
                 N::Integer(value) => Some(value.clone()),
                 _ => None,
             })
@@ -570,6 +599,17 @@ impl ColumnAdmission<'_> {
                 "significant_digits",
             ));
         }
+        length
+    }
+    /// Bind an admitted codelist declaration and report any binding findings.
+    fn admit_codelist(
+        &self,
+        column: &spec::Column,
+        metadata: &spec::ColumnSubmission,
+        column_path: &str,
+        findings: &mut Vec<Finding>,
+        bound: &mut BTreeSet<String>,
+    ) {
         if let Some(list) = &metadata.codelist {
             bound.insert(list.value.clone());
             let kind = match column.column_type.value {
@@ -579,12 +619,12 @@ impl ColumnAdmission<'_> {
                 spec::ColumnType::Date => crate::value::ColumnType::Date,
                 spec::ColumnType::Datetime => crate::value::ColumnType::DateTime,
             };
-            let allowed = verification(doc, column.node, "allowed_values");
-            let mut reader = crate::project_function_document::Reader::new(doc);
+            let allowed = verification(self.doc, column.node, "allowed_values");
+            let mut reader = crate::project_function_document::Reader::new(self.doc);
             let allowed: Vec<Vec<_>> = allowed
                 .iter()
-                .filter_map(|&n| doc.field(n, "values"))
-                .filter_map(|n| match &doc.nodes()[n] {
+                .filter_map(|&n| self.doc.field(n, "values"))
+                .filter_map(|n| match &self.doc.nodes()[n] {
                     N::Sequence(values) => Some(
                         values
                             .iter()
@@ -602,11 +642,11 @@ impl ColumnAdmission<'_> {
                 ));
             }
             let bindings = if allowed.is_empty() {
-                catalogue.bind(&list.value, kind, None)
+                self.catalogue.bind(&list.value, kind, None)
             } else {
                 allowed
                     .iter()
-                    .flat_map(|values| catalogue.bind(&list.value, kind, Some(values)))
+                    .flat_map(|values| self.catalogue.bind(&list.value, kind, Some(values)))
                     .collect()
             };
             for binding in bindings {
@@ -626,22 +666,6 @@ impl ColumnAdmission<'_> {
                 ));
             }
         }
-        Some(Column {
-            declaration: column.clone(),
-            data_type,
-            length,
-            mandatory,
-            source: if section.family == Submission::Adam
-                && origin.kind.value != spec::OriginType::Predecessor
-            {
-                Some(spec::OriginSource::Sponsor)
-            } else {
-                source
-            },
-            documents: refs,
-            key_sequence: keys.iter().position(|key| key == name).map(|k| k + 1),
-            values: Vec::new(),
-        })
     }
 }
 
@@ -857,86 +881,21 @@ fn compose_values(
     discriminator
 }
 
-pub fn compose(
-    study: &env::Study,
+/// Compose every captured dataset in order, collecting codelist bindings.
+fn compose_datasets(
     section: &env::Section,
     catalogue: &ct::Catalogue,
     inputs: &[Input<'_>],
-    installed: &str,
-    created: &str,
-) -> Result<Study, Vec<Finding>> {
-    let mut findings = Vec::new();
+    known: &BTreeSet<&str>,
+    acrfs: &[&env::DocumentReference],
+    findings: &mut Vec<Finding>,
+    bound: &mut BTreeSet<String>,
+) -> Vec<Dataset> {
     let family = family_name(section.family);
-    let prefix = family.to_string();
-    let mut fail = |code, suffix: &str, detail: &str| {
-        findings.push(Finding::cause(code, &format!("{prefix}.{suffix}"), detail));
-    };
-    if inputs.len() != section.specs.value.len() {
-        fail(
-            ConditionCode::SubmissionMetadataMissing,
-            "specs",
-            "incomplete captured dataset set",
-        );
-    }
-    let guide = section.standard.name.value.name();
-    let compatible = match section.family {
-        Submission::Sdtm => guide.starts_with("SDTMIG"),
-        Submission::Adam => guide.starts_with("ADaMIG"),
-        Submission::Send => guide.starts_with("SENDIG"),
-    };
-    if !compatible {
-        fail(
-            ConditionCode::SubmissionStandardFamily,
-            "standard.name",
-            guide,
-        );
-    }
-    if !section.define.value.to_ascii_lowercase().ends_with(".xml") {
-        fail(
-            ConditionCode::SubmissionDefineExtension,
-            "define",
-            "expected .xml extension",
-        );
-    }
-    let source_version = match section.source_versions(installed) {
-        Ok(v) => v.metadata().into(),
-        Err(_) => {
-            fail(
-                ConditionCode::SubmissionSourceVersion,
-                "source_system_version",
-                "empty generator version",
-            );
-            String::new()
-        }
-    };
-    let mut known = BTreeSet::new();
-    for document in &section.documents.value {
-        if !known.insert(document.id.value.as_str()) {
-            fail(
-                ConditionCode::SubmissionDuplicateIdentifier,
-                "documents",
-                &document.id.value,
-            );
-        }
-    }
-    let acrfs: Vec<_> = section
-        .documents
-        .value
-        .iter()
-        .filter(|d| d.kind.value == env::DocumentKind::AnnotatedCrf)
-        .collect();
-    if acrfs.len() > 1 {
-        fail(
-            ConditionCode::SubmissionAnnotatedCrfMultiplicity,
-            "documents",
-            "multiple annotated CRFs",
-        );
-    }
     let mut datasets = Vec::new();
     let mut ids = BTreeSet::new();
     let mut sources = BTreeSet::new();
     let mut artifacts = BTreeSet::new();
-    let mut bound = BTreeSet::new();
     for (index, input) in inputs.iter().enumerate() {
         let doc = input.document;
         let path = format!("{family}.specs[{index}]");
@@ -945,7 +904,7 @@ pub fn compose(
             doc.root(),
             spec::DATASET_METADATA_FIELDS,
             &path,
-            &mut findings,
+            findings,
         );
         let intermediates: BTreeSet<_> = doc
             .field(doc.root(), "intermediates")
@@ -1031,9 +990,9 @@ pub fn compose(
             ));
         }
         comment_references(
-            &mut findings,
+            findings,
             dataset.comment.as_ref(),
-            &known,
+            known,
             &format!("{path}.submission.comment"),
         );
         let output = doc.field(doc.root(), "output");
@@ -1075,7 +1034,7 @@ pub fn compose(
                 column.node,
                 spec::COLUMN_METADATA_FIELDS,
                 &format!("{path}.columns.{}", column.name.value),
-                &mut findings,
+                findings,
             );
             if column.submission.is_some() && !output_columns.contains(&column.name.value) {
                 findings.push(Finding::cause(
@@ -1089,8 +1048,8 @@ pub fn compose(
             doc,
             section,
             catalogue,
-            known: &known,
-            acrfs: &acrfs,
+            known,
+            acrfs,
             keys: &keys,
             intermediates: &intermediates,
         };
@@ -1110,8 +1069,8 @@ pub fn compose(
                 &column_path,
                 &derivations,
                 ConditionCode::SubmissionOriginRefuted,
-                &mut findings,
-                &mut bound,
+                findings,
+                bound,
             ) {
                 selected.push(column);
             }
@@ -1122,8 +1081,8 @@ pub fn compose(
             &output_columns,
             &mut selected,
             &path,
-            &mut findings,
-            &mut bound,
+            findings,
+            bound,
         );
         datasets.push(Dataset {
             id: id.clone(),
@@ -1135,6 +1094,94 @@ pub fn compose(
             discriminator,
         });
     }
+    datasets
+}
+
+pub fn compose(
+    study: &env::Study,
+    section: &env::Section,
+    catalogue: &ct::Catalogue,
+    inputs: &[Input<'_>],
+    installed: &str,
+    created: &str,
+) -> Result<Study, Vec<Finding>> {
+    let mut findings = Vec::new();
+    let family = family_name(section.family);
+    let prefix = family.to_string();
+    let mut fail = |code, suffix: &str, detail: &str| {
+        findings.push(Finding::cause(code, &format!("{prefix}.{suffix}"), detail));
+    };
+    if inputs.len() != section.specs.value.len() {
+        fail(
+            ConditionCode::SubmissionMetadataMissing,
+            "specs",
+            "incomplete captured dataset set",
+        );
+    }
+    let guide = section.standard.name.value.name();
+    let compatible = match section.family {
+        Submission::Sdtm => guide.starts_with("SDTMIG"),
+        Submission::Adam => guide.starts_with("ADaMIG"),
+        Submission::Send => guide.starts_with("SENDIG"),
+    };
+    if !compatible {
+        fail(
+            ConditionCode::SubmissionStandardFamily,
+            "standard.name",
+            guide,
+        );
+    }
+    if !section.define.value.to_ascii_lowercase().ends_with(".xml") {
+        fail(
+            ConditionCode::SubmissionDefineExtension,
+            "define",
+            "expected .xml extension",
+        );
+    }
+    let source_version = match section.source_versions(installed) {
+        Ok(v) => v.metadata().into(),
+        Err(_) => {
+            fail(
+                ConditionCode::SubmissionSourceVersion,
+                "source_system_version",
+                "empty generator version",
+            );
+            String::new()
+        }
+    };
+    let mut known = BTreeSet::new();
+    for document in &section.documents.value {
+        if !known.insert(document.id.value.as_str()) {
+            fail(
+                ConditionCode::SubmissionDuplicateIdentifier,
+                "documents",
+                &document.id.value,
+            );
+        }
+    }
+    let acrfs: Vec<_> = section
+        .documents
+        .value
+        .iter()
+        .filter(|d| d.kind.value == env::DocumentKind::AnnotatedCrf)
+        .collect();
+    if acrfs.len() > 1 {
+        fail(
+            ConditionCode::SubmissionAnnotatedCrfMultiplicity,
+            "documents",
+            "multiple annotated CRFs",
+        );
+    }
+    let mut bound = BTreeSet::new();
+    let datasets = compose_datasets(
+        section,
+        catalogue,
+        inputs,
+        &known,
+        &acrfs,
+        &mut findings,
+        &mut bound,
+    );
     let mut standards = std::vec![Standard {
         id: guide.into(),
         name: guide.into(),
