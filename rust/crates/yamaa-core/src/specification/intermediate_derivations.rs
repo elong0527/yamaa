@@ -417,27 +417,27 @@ pub(super) fn prepare(
     }
     Ok(result)
 }
+type FieldKinds = (
+    TableSchema,
+    Vec<Option<ColumnType>>,
+    Vec<Option<ColumnType>>,
+);
+
 #[allow(clippy::too_many_arguments)]
-pub(super) fn bind(
+fn resolve_field_kinds(
     declarations: &[Derivation],
     dataset: &str,
     reader: &str,
     pending_schema: &mut Option<TableSchema>,
     stored: &TableSchema,
-    stored_available: Option<&[usize]>,
     sources: &[SourceDeclaration],
     schemas: &[&TableSchema],
     driver: usize,
-    outer_output: &TableSchema,
     named: &intermediates::Declarations,
     previous: &[Option<Intermediate>],
-    project: Option<&crate::project_calls::ProjectCalls>,
+    before: usize,
     findings: &mut Vec<BindFinding>,
-) -> Result<Option<IntermediateDerivations>, BindError> {
-    if declarations.is_empty() {
-        return Ok(None);
-    }
-    let before = findings.len();
+) -> Result<Option<FieldKinds>, BindError> {
     // Shared earlier donor plans do not recursively copy their expression trees.
     // Admit aggregate retained schema/catalog copies before making the first copy.
     let original_secondary = outer_secondary(sources, schemas, driver);
@@ -545,6 +545,18 @@ pub(super) fn bind(
     if findings.len() != before {
         return Ok(None);
     }
+    Ok(Some((output, result_kinds, driver_kinds)))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn collect_current_fields(
+    declarations: &[Derivation],
+    dataset: &str,
+    named: &intermediates::Declarations,
+    sources: &[SourceDeclaration],
+    schemas: &[&TableSchema],
+    driver: usize,
+) -> Vec<CurrentField> {
     let mut current = Vec::new();
     for reference in declarations
         .iter()
@@ -587,6 +599,20 @@ pub(super) fn bind(
             });
         }
     }
+    current
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_catalog_context(
+    dataset: &str,
+    current: &[CurrentField],
+    sources: &[SourceDeclaration],
+    schemas: &[&TableSchema],
+    driver: usize,
+    stored: &TableSchema,
+    output: &TableSchema,
+    result_kinds: &[Option<ColumnType>],
+) -> Result<(Option<usize>, Vec<SecondarySource>, TableSchema, Catalog), BindError> {
     let donor = sources.iter().position(|source| source.name == dataset);
     if donor.is_none() && dataset != "SELF" {
         return Err(BindError::Internal);
@@ -684,6 +710,33 @@ pub(super) fn bind(
                 .chain(result_kinds.iter().copied())
                 .collect(),
         );
+    Ok((donor, secondary, source, catalog))
+}
+
+type EarlierSelection = (
+    Vec<Option<Intermediate>>,
+    std::collections::BTreeMap<usize, String>,
+    Catalog,
+);
+
+#[allow(clippy::too_many_arguments)]
+fn select_earlier(
+    declarations: &[Derivation],
+    previous: &[Option<Intermediate>],
+    sources: &[SourceDeclaration],
+    schemas: &[&TableSchema],
+    driver: usize,
+    donor: Option<usize>,
+    dataset: &str,
+    source: &TableSchema,
+    outer_output: &TableSchema,
+    output: &TableSchema,
+    named: &intermediates::Declarations,
+    project: Option<&crate::project_calls::ProjectCalls>,
+    catalog: Catalog,
+    secondary: &[SecondarySource],
+    findings: &mut Vec<BindFinding>,
+) -> Result<EarlierSelection, BindError> {
     let references = declarations
         .iter()
         .flat_map(|item| &item.references)
@@ -726,13 +779,13 @@ pub(super) fn bind(
         driver,
         donor,
         dataset,
-        &source,
+        source,
         outer_output,
-        &output,
+        output,
         named,
         project,
         &catalog,
-        &secondary,
+        secondary,
         findings,
     )?;
     let mut selected = Vec::new();
@@ -743,16 +796,16 @@ pub(super) fn bind(
         if !references.contains(item.identifier.as_str()) {
             continue;
         }
-        let schema = item.source_schema(&secondary).ok_or(BindError::Internal)?;
+        let schema = item.source_schema(secondary).ok_or(BindError::Internal)?;
         let fields = schema
             .columns()
             .iter()
             .enumerate()
-            .filter(|(_, field)| item.source_column(&secondary, &field.name).is_some())
+            .filter(|(_, field)| item.source_column(secondary, &field.name).is_some())
             .map(|(column, field)| {
                 (
                     field.name.clone(),
-                    (column, item.source_kind(&secondary, column)),
+                    (column, item.source_kind(secondary, column)),
                 )
             })
             .collect();
@@ -765,10 +818,79 @@ pub(super) fn bind(
             },
         ));
     }
-    let mut catalog = catalog
+    let catalog = catalog
         .with_selected(selected)
         .map_err(BindError::Catalog)?
         .with_record_derivation();
+    Ok((earlier, unavailable, catalog))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn bind(
+    declarations: &[Derivation],
+    dataset: &str,
+    reader: &str,
+    pending_schema: &mut Option<TableSchema>,
+    stored: &TableSchema,
+    stored_available: Option<&[usize]>,
+    sources: &[SourceDeclaration],
+    schemas: &[&TableSchema],
+    driver: usize,
+    outer_output: &TableSchema,
+    named: &intermediates::Declarations,
+    previous: &[Option<Intermediate>],
+    project: Option<&crate::project_calls::ProjectCalls>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<IntermediateDerivations>, BindError> {
+    if declarations.is_empty() {
+        return Ok(None);
+    }
+    let before = findings.len();
+    let Some((output, result_kinds, driver_kinds)) = resolve_field_kinds(
+        declarations,
+        dataset,
+        reader,
+        pending_schema,
+        stored,
+        sources,
+        schemas,
+        driver,
+        named,
+        previous,
+        before,
+        findings,
+    )?
+    else {
+        return Ok(None);
+    };
+    let current = collect_current_fields(declarations, dataset, named, sources, schemas, driver);
+    let (donor, secondary, source, catalog) = build_catalog_context(
+        dataset,
+        &current,
+        sources,
+        schemas,
+        driver,
+        stored,
+        &output,
+        &result_kinds,
+    )?;
+    let (earlier, unavailable, mut catalog) = select_earlier(
+        declarations,
+        previous,
+        sources,
+        schemas,
+        driver,
+        donor,
+        dataset,
+        &source,
+        outer_output,
+        &output,
+        named,
+        project,
+        catalog,
+        &secondary,
+        findings,
+    )?;
     let mut assignments = Vec::new();
     let mut available = stored_available.map_or_else(
         || (0..stored.columns().len()).collect::<Vec<_>>(),
