@@ -49,14 +49,7 @@ impl<'request> Runtime<'request> {
         })
     }
     fn identity(&self) -> Identity<'_> {
-        Identity {
-            runtime: "r",
-            runtime_version: self.version,
-            engine_version: yamaa_core::VERSION,
-            example: "domain",
-            specification: self.specification,
-            base_directory: ".",
-        }
+        Identity::new("r", self.version, "domain", self.specification)
     }
     fn plain_result(
         &self,

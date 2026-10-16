@@ -37,6 +37,30 @@ impl<E> Classified<'_, E> {
         }
     }
 }
+/// Classify visited host failures for report formatting. Every host applies
+/// the same rule: a lock failure is reported with its findings; otherwise the
+/// failure is reported with its projected host details; failures with no
+/// projection are skipped. Hosts supply only the lock findings and the host
+/// details, both of which are host-specific (a host projects its own
+/// exceptions/conditions through [`crate::callback::details`]); `details`
+/// aligns with `failures` by index. A lock failure takes the lock branch even
+/// when a details projection is also present.
+pub fn classify_host_failures<'a, E>(
+    failures: &[&'a E],
+    details: &[Option<HostDetails<'a>>],
+    lock_findings: impl Fn(&E) -> Option<&'a [crate::project_lock::Finding]>,
+) -> Vec<Classified<'a, E>> {
+    failures
+        .iter()
+        .zip(details)
+        .filter_map(|(&failure, details)| {
+            if let Some(findings) = lock_findings(failure) {
+                return Some(Classified::Lock { failure, findings });
+            }
+            details.map(|details| Classified::Host { failure, details })
+        })
+        .collect()
+}
 
 #[derive(Debug)]
 pub enum Error<'a, C, E> {
@@ -683,4 +707,53 @@ pub fn build_result<'a, C, E>(
     result["verifications"] = json!(verifications);
     result["activation"] = activation;
     Ok(report::prepare_result(run, execution, id, result)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use yamaa_core::project_diagnostics::HostDetails;
+
+    enum Failure {
+        Lock,
+        Host,
+        Silent,
+    }
+
+    #[test]
+    fn classify_host_failures_prefers_lock_then_details_then_skip() {
+        let findings = [crate::project_lock::Finding {
+            package: "pkg".into(),
+            reason: yamaa_core::diagnostic::LockReason::VersionMismatch,
+            expected: Vec::new(),
+            actual: None,
+        }];
+        let lock = Failure::Lock;
+        let host = Failure::Host;
+        let silent = Failure::Silent;
+        let failures: Vec<&Failure> = vec![&lock, &host, &silent];
+        // The lock failure also carries a details projection; the lock
+        // branch must win. The silent failure has no projection and is
+        // skipped.
+        let details = vec![
+            Some(HostDetails::Rejected {
+                reason: "lock projection must not win",
+                returned: None,
+            }),
+            Some(HostDetails::Exception {
+                class: "ValueError",
+                message: "boom",
+            }),
+            None,
+        ];
+        let classified = classify_host_failures(&failures, &details, |failure| match failure {
+            Failure::Lock => Some(findings.as_slice()),
+            _ => None,
+        });
+        assert_eq!(classified.len(), 2);
+        assert!(matches!(classified[0], Classified::Lock { .. }));
+        assert!(matches!(classified[1], Classified::Host { .. }));
+        assert!(std::ptr::eq(classified[0].failure(), &lock));
+        assert!(std::ptr::eq(classified[1].failure(), &host));
+    }
 }

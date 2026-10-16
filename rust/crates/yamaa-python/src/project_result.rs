@@ -8,9 +8,7 @@ use pyo3::{
 };
 use std::sync::Arc;
 use yamaa_adapters::{
-    callback::details,
-    file_application::BuildRefusal,
-    project_report::{self, Classified},
+    callback::details, file_application::BuildRefusal, project_report,
     specification_report::BuildResult,
 };
 
@@ -40,31 +38,23 @@ pub(super) fn prepare(
         ordinary.push(projection);
     }
     let formatted = {
-        let facts = failures
+        let projected = failures
             .iter()
             .zip(&ordinary)
-            .filter_map(|(&error, ordinary)| match error {
-                HostError::Lock(findings) => Some(Classified::Lock {
-                    failure: error,
-                    findings,
-                }),
-                HostError::Result(value) => details(value).map(|details| Classified::Host {
-                    failure: error,
-                    details,
-                }),
-                _ => ordinary
-                    .as_ref()
-                    .and_then(details)
-                    .map(|details| Classified::Host {
-                        failure: error,
-                        details,
-                    }),
+            .map(|(&error, ordinary)| match error {
+                HostError::Result(value) => details(value),
+                _ => ordinary.as_ref().and_then(details),
             })
             .collect::<Vec<_>>();
+        let facts =
+            project_report::classify_host_failures(&failures, &projected, |error| match error {
+                HostError::Lock(findings) => Some(findings.as_slice()),
+                _ => None,
+            });
         project_report::build_result(
             &attempt.run,
             &state,
-            report_fields::identity(&fields),
+            yamaa_adapters::specification_report::Identity::from_fields("python", &fields),
             &facts,
         )
         .map_err(|error| error.refusal())
@@ -101,15 +91,11 @@ impl Result {
         let state = self.carrier.inner.try_lock().map_err(|_| {
             PyRuntimeError::new_err("native project attempt is already borrowed or poisoned")
         })?;
-        let mut interrupt = None;
-        yamaa_adapters::project_attempt::visit_host_failures(&state, |_, error| {
-            if let HostError::Host(error) = error {
-                if !error.is_instance_of::<PyException>(py) && interrupt.is_none() {
-                    interrupt = Some(error.clone_ref(py));
-                }
-            }
-        });
-        match interrupt {
+        match crate::project_activation::interrupt_error(py, |visit| {
+            yamaa_adapters::project_attempt::visit_host_failures(&state, |stage, error| {
+                visit(stage, error);
+            });
+        }) {
             Some(error) => Err(error),
             None => Ok(()),
         }

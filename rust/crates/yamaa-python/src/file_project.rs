@@ -18,12 +18,13 @@ impl Attempt {
                 "native project attempt is already borrowed or poisoned",
             )
         })?;
-        let mut failures = Vec::new();
-        yamaa_adapters::project_attempt::visit_host_failures(&state, |stage, error| {
-            if let crate::project_activation::Error::Host(error) = error {
-                failures.push((stage, error.value(py).clone().into_any().unbind()));
-            }
-        });
-        Ok(failures)
+        Ok(crate::project_activation::host_failure_values(
+            py,
+            |visit| {
+                yamaa_adapters::project_attempt::visit_host_failures(&state, |stage, error| {
+                    visit(stage, error);
+                });
+            },
+        ))
     }
 }

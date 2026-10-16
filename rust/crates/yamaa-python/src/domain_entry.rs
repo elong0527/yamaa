@@ -156,11 +156,7 @@ impl Domain {
             Err(DomainError::new_err("cannot save a failed build"))
         })();
         if let Some(measurements) = &self.measurements {
-            measurements.save_completed(match &returned {
-                Ok(true) => "succeeded",
-                Ok(false) => "refused",
-                Err(_) => "failed",
-            });
+            measurements.save_completed_result(&returned);
         }
         returned
     }
@@ -253,14 +249,12 @@ pub fn _check_file(
                 specification,
                 environment,
             },
-            yamaa_adapters::specification_report::Identity {
-                runtime: "python",
-                runtime_version: py.version(),
-                engine_version: yamaa_core::VERSION,
-                example: "check",
+            yamaa_adapters::specification_report::Identity::new(
+                "python",
+                py.version(),
+                "check",
                 specification,
-                base_directory: ".",
-            },
+            ),
             resolver.map(crate::resource_resolver::Port::from_callback),
         );
         crate::report_fields::issue_rows(&issues)

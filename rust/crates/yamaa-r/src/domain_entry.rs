@@ -183,14 +183,12 @@ fn check_request(
                     specification,
                     environment,
                 },
-                yamaa_adapters::specification_report::Identity {
-                    runtime: "r",
-                    runtime_version: version,
-                    engine_version: yamaa_core::VERSION,
-                    example: "check",
+                yamaa_adapters::specification_report::Identity::new(
+                    "r",
+                    version,
+                    "check",
                     specification,
-                    base_directory: ".",
-                },
+                ),
                 resolver,
             );
             crate::issue_frame::frame(&issues)
@@ -346,11 +344,7 @@ fn domain_save(handle: Robj) -> List {
         if let Some(result) = &mut state.result {
             let returned = result.save();
             if let Some(measurements) = &measurements {
-                measurements.save_completed(match &returned {
-                    Ok(true) => "succeeded",
-                    Ok(false) => "refused",
-                    Err(_) => "failed",
-                });
+                measurements.save_completed_result(&returned);
             }
             return Ok(match returned {
                 Ok(saved) => list!(saved = saved, failed = false),
@@ -361,11 +355,7 @@ fn domain_save(handle: Robj) -> List {
         if let Some(result) = &mut state.producer {
             let returned = result.save();
             if let Some(measurements) = &measurements {
-                measurements.save_completed(match &returned {
-                    Ok(true) => "succeeded",
-                    Ok(false) => "refused",
-                    Err(_) => "failed",
-                });
+                measurements.save_completed_result(&returned);
             }
             return Ok(match returned {
                 Ok(saved) => list!(saved = saved, failed = false),
@@ -388,13 +378,10 @@ fn domain_interrupt(handle: Robj) -> List {
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
         if let Some(attempt) = &state.project {
-            let mut interrupted = None;
-            yamaa_adapters::project_attempt::visit_host_failures(&attempt.inner, |_, error| {
-                if let crate::project_activation::Error::Interrupt(condition) = error {
-                    if interrupted.is_none() {
-                        interrupted = Some(condition.clone());
-                    }
-                }
+            let interrupted = crate::project_activation::first_interrupt(|visit| {
+                yamaa_adapters::project_attempt::visit_host_failures(&attempt.inner, |_, error| {
+                    visit(error);
+                });
             });
             return Ok(interrupted.unwrap_or_else(|| r!(NULL)));
         }

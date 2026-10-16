@@ -160,6 +160,16 @@ impl Measurements {
             });
         }
     }
+    /// Record a finished save from its result. Every host maps the same
+    /// result to the same outcome: a saved build is `succeeded`, a refused
+    /// save is `refused`, and any error is `failed`.
+    pub fn save_completed_result<E>(&self, result: &Result<bool, E>) {
+        self.save_completed(match result {
+            Ok(true) => "succeeded",
+            Ok(false) => "refused",
+            Err(_) => "failed",
+        });
+    }
     pub fn save_completed(&self, outcome: &'static str) {
         let mut state = self.state();
         if let Some(now) = self.now(&mut state) {
@@ -414,6 +424,25 @@ mod tests {
         assert_eq!(evidence["save_attempts"], 17);
         assert_eq!(evidence["saves"].as_array().unwrap().len(), 17);
         assert!(evidence["retention_limits"].is_null());
+    }
+    #[test]
+    fn save_completed_result_maps_the_shared_outcomes() {
+        let measurements = Measurements::new();
+        let scope = Scope::new(&measurements);
+        scope.phase(Phase::Preparation);
+        scope.exit(Phase::Preparation, Outcome::Succeeded);
+        scope.phase(Phase::Finished);
+        measurements.complete(true);
+        measurements.save_entered();
+        measurements.save_completed_result(&Ok::<bool, ()>(true));
+        measurements.save_entered();
+        measurements.save_completed_result(&Ok::<bool, ()>(false));
+        measurements.save_entered();
+        measurements.save_completed_result(&Err::<bool, ()>(()));
+        let evidence = measurements.evidence();
+        assert_eq!(evidence["saves"][0]["outcome"], "succeeded");
+        assert_eq!(evidence["saves"][1]["outcome"], "refused");
+        assert_eq!(evidence["saves"][2]["outcome"], "failed");
     }
     #[test]
     fn later_observation_cannot_create_events_and_save_retries_keep_actual_attempts() {

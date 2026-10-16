@@ -14,14 +14,7 @@ pub struct Runtime<'py, 'request> {
 }
 impl Runtime<'_, '_> {
     fn identity(&self) -> Identity<'_> {
-        Identity {
-            runtime: "python",
-            runtime_version: self.py.version(),
-            engine_version: yamaa_core::VERSION,
-            example: "domain",
-            specification: self.specification,
-            base_directory: ".",
-        }
+        Identity::new("python", self.py.version(), "domain", self.specification)
     }
     fn plain_result(
         &self,

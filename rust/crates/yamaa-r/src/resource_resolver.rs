@@ -56,14 +56,9 @@ impl Resolver for Port {
             .ok_or(Failure::Rejected)?;
         let failure = reply.elt(0).map_err(|_| Failure::Rejected)?;
         if !failure.is_null() {
-            return Err(match failure.as_str().ok_or(Failure::Rejected)? {
-                "missing" => Failure::Missing,
-                "changed" => Failure::Changed,
-                "cancelled" => Failure::Cancelled,
-                "publication" => Failure::Publication,
-                "cleanup" => Failure::Cleanup,
-                _ => Failure::Rejected,
-            });
+            return Err(Failure::from_name(
+                failure.as_str().ok_or(Failure::Rejected)?,
+            ));
         }
         let reference = reply.elt(1).map_err(|_| Failure::Rejected)?;
         let reference = reference.as_raw().ok_or(Failure::Rejected)?;

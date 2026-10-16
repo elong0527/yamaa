@@ -109,6 +109,21 @@ impl Error {
         }
     }
 }
+/// The first retained interrupt condition in visit order, if any. The
+/// project and producer attempts are visited through different adapters
+/// traversals but apply the same selection; ordinary host conditions are
+/// report facts, not interrupts. The condition object itself is returned.
+pub(crate) fn first_interrupt(visit: impl FnOnce(&mut dyn FnMut(&Error))) -> Option<Robj> {
+    let mut interrupt = None;
+    visit(&mut |error| {
+        if let Error::Interrupt(condition) = error {
+            if interrupt.is_none() {
+                interrupt = Some(condition.clone());
+            }
+        }
+    });
+    interrupt
+}
 /// Capabilities are installed package helpers. Constructing this host port does
 /// not query versions, load project namespaces or invoke any project function.
 pub struct Port<'lock> {

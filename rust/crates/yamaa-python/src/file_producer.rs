@@ -8,7 +8,7 @@ use pyo3::{
 use std::sync::{Arc, Mutex, MutexGuard};
 use yamaa_adapters::{
     callback::details, file_application::BuildRefusal, file_producer_build::FileBuild,
-    producer_result::RootResult, project_report::Classified,
+    producer_result::RootResult, project_report,
 };
 
 type NativeAttempt = yamaa_adapters::file_producer_build::OwnedAttempt<HostError>;
@@ -30,8 +30,11 @@ pub(crate) fn build_selected(
             .lock()
             .map_or(&[], |lock| &lock.source.bytes),
     );
-    let inner =
-        build.build_owned_reported(&mut port, crate::report_fields::identity(&fields), scope);
+    let inner = build.build_owned_reported(
+        &mut port,
+        yamaa_adapters::specification_report::Identity::from_fields("python", &fields),
+        scope,
+    );
     Attempt {
         inner: Arc::new(Mutex::new(inner)),
         fields,
@@ -68,30 +71,22 @@ impl Attempt {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let facts = failures
+        let projected = failures
             .iter()
             .zip(&ordinary)
-            .filter_map(|(&error, ordinary)| match error {
-                HostError::Lock(findings) => Some(Classified::Lock {
-                    failure: error,
-                    findings,
-                }),
-                HostError::Result(value) => details(value).map(|details| Classified::Host {
-                    failure: error,
-                    details,
-                }),
-                _ => ordinary
-                    .as_ref()
-                    .and_then(details)
-                    .map(|details| Classified::Host {
-                        failure: error,
-                        details,
-                    }),
+            .map(|(&error, ordinary)| match error {
+                HostError::Result(value) => details(value),
+                _ => ordinary.as_ref().and_then(details),
             })
             .collect::<Vec<_>>();
+        let facts =
+            project_report::classify_host_failures(&failures, &projected, |error| match error {
+                HostError::Lock(findings) => Some(findings.as_slice()),
+                _ => None,
+            });
         let projection = yamaa_adapters::producer_result::project_owned(
             &state,
-            crate::report_fields::identity(&self.fields),
+            yamaa_adapters::specification_report::Identity::from_fields("python", &self.fields),
             &facts,
         );
         Ok(Report {
@@ -113,25 +108,23 @@ impl Attempt {
     }
     pub(crate) fn host_failures(&self, py: Python<'_>) -> PyResult<Vec<(&'static str, Py<PyAny>)>> {
         let state = self.get()?;
-        let mut failures = Vec::new();
-        yamaa_adapters::producer_attempt::visit_host_failures(&state, |stage, error| {
-            if let HostError::Host(error) = error {
-                failures.push((stage, error.value(py).clone().into_any().unbind()));
-            }
-        });
-        Ok(failures)
+        Ok(crate::project_activation::host_failure_values(
+            py,
+            |visit| {
+                yamaa_adapters::producer_attempt::visit_host_failures(&state, |stage, error| {
+                    visit(stage, error);
+                });
+            },
+        ))
     }
     pub(crate) fn propagate_interrupt(&self, py: Python<'_>) -> PyResult<()> {
         let state = self.get()?;
-        let mut interrupt = None;
-        yamaa_adapters::producer_attempt::visit_host_failures(&state, |_, error| {
-            if let HostError::Host(error) = error {
-                if !error.is_instance_of::<PyException>(py) && interrupt.is_none() {
-                    interrupt = Some(error.clone_ref(py));
-                }
-            }
-        });
-        interrupt.map_or(Ok(()), Err)
+        crate::project_activation::interrupt_error(py, |visit| {
+            yamaa_adapters::producer_attempt::visit_host_failures(&state, |stage, error| {
+                visit(stage, error);
+            });
+        })
+        .map_or(Ok(()), Err)
     }
     fn retained_sources<'py>(
         &self,

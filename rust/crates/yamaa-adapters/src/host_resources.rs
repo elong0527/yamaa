@@ -71,6 +71,20 @@ pub enum Failure {
     Publication,
     Cleanup,
 }
+impl Failure {
+    /// Translate a host resolver protocol failure name. Both host resolver
+    /// ports speak the same closed name set; any other name is `Rejected`.
+    pub fn from_name(name: &str) -> Self {
+        match name {
+            "missing" => Self::Missing,
+            "changed" => Self::Changed,
+            "cancelled" => Self::Cancelled,
+            "publication" => Self::Publication,
+            "cleanup" => Self::Cleanup,
+            _ => Self::Rejected,
+        }
+    }
+}
 /// A resolver may serve local objects, opaque URI identities or warehouse data.
 /// Stage creates a private provisional object; Commit atomically publishes it;
 /// Abort must remove it after any failed/interrupting Stage or Commit. Abort is
@@ -446,5 +460,21 @@ impl Resolver for MemoryResolver {
             }
             Operation::Abort => unreachable!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failure_from_name_covers_the_closed_protocol_set() {
+        assert_eq!(Failure::from_name("missing"), Failure::Missing);
+        assert_eq!(Failure::from_name("changed"), Failure::Changed);
+        assert_eq!(Failure::from_name("cancelled"), Failure::Cancelled);
+        assert_eq!(Failure::from_name("publication"), Failure::Publication);
+        assert_eq!(Failure::from_name("cleanup"), Failure::Cleanup);
+        assert_eq!(Failure::from_name("anything-else"), Failure::Rejected);
+        assert_eq!(Failure::from_name(""), Failure::Rejected);
     }
 }
