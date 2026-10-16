@@ -499,7 +499,15 @@ impl Run<'_> {
                             self.class(fields, &entry.name, site.child(payload, &path))
                         }
                         SchemaShape::Descriptor(descriptor) => {
-                            self.descriptor(*descriptor, site.child(payload, &path))
+                            let payload = site.child(payload, &path);
+                            let diagnostics = self.descriptor(*descriptor, payload)?;
+                            if diagnostics.is_empty()
+                                && registry.name == "expressions"
+                                && entry.name == "case"
+                            {
+                                return self.case_items(payload);
+                            }
+                            Ok(diagnostics)
                         }
                     }
                 }
@@ -566,6 +574,40 @@ impl Run<'_> {
         })();
         self.active.pop();
         result
+    }
+    /// REQ-0339 orders the items of a `case`, which its list type cannot state.
+    /// Like a descriptor constraint, it runs only after every item matched its
+    /// class, so each item is either a `when`/`then` branch or an `otherwise`.
+    fn case_items(&mut self, site: Site<'_>) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        let N::Sequence(items) = &self.input.nodes()[site.value] else {
+            return Ok(Vec::new());
+        };
+        let mut fallbacks = Vec::new();
+        for (index, &item) in items.iter().enumerate() {
+            if self.field(item, "otherwise")?.is_some() {
+                fallbacks.push((index, item));
+            }
+        }
+        let mut diagnostics = Vec::new();
+        if fallbacks.len() == items.len() {
+            diagnostics.push(self.diagnostic(
+                site,
+                ConditionCode::SchemaCaseItems,
+                vec![("expected", Self::text("at least one when/then item"))],
+            ));
+        }
+        for (index, item) in fallbacks {
+            if index + 1 == items.len() {
+                continue;
+            }
+            let path = self.joined(site.path, &index.to_string(), true)?;
+            diagnostics.push(self.diagnostic(
+                site.child(item, &path),
+                ConditionCode::SchemaCaseItems,
+                vec![("expected", Self::text("otherwise only as the last item"))],
+            ));
+        }
+        Ok(diagnostics)
     }
     fn single(
         &mut self,
