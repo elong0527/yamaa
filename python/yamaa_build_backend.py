@@ -359,7 +359,7 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
                         entry.pax_headers = {
                             key: value
                             for key, value in entry.pax_headers.items()
-                            if not key.startswith("GNU.sparse")
+                            if not key.startswith("GNU.sparse") and key != "size"
                         }
                         if entry.name == manifest_name:
                             payload_bytes = manifest
