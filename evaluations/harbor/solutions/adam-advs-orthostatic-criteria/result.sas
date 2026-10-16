@@ -8,6 +8,27 @@ data vs;
   input STUDYID : $char1024. USUBJID : $char1024. VSSEQ VISIT : $char1024. VSTESTCD : $char1024. VSPOS : $char1024. VSTPT : $char1024. VSSTRESN;
 run;
 
+/* A test with more than one supine reading, or more than one reading
+   after three minutes standing, at one visit stops the run rather
+   than choosing one: count the readings of each kind first, before
+   the aggregations below can pick one. */
+proc sql;
+  create table dup_readings as
+    select STUDYID, USUBJID, VISIT, VSTESTCD, count(*) as N
+      from (select STUDYID, USUBJID, VISIT, VSTESTCD, VSPOS,
+              case when VSPOS='SUPINE' then '' else VSTPT end as TPTKEY
+              from vs
+              where VSTESTCD in ('SYSBP','DIABP','HR')
+                and (VSPOS='SUPINE' or (VSPOS='STANDING' and VSTPT='AFTER 3 MIN STANDING'))) as r
+      group by STUDYID, USUBJID, VISIT, VSTESTCD, VSPOS, TPTKEY
+      having count(*) > 1;
+quit;
+
+data _null_;
+  set dup_readings;
+  abort;
+run;
+
 /* One row per subject and visit: the supine reading and the reading
    after three minutes standing of each test. The reading after one
    minute standing is never used. */

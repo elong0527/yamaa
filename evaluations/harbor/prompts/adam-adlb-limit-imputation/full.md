@@ -4,6 +4,8 @@ ADLB dataset with one record per laboratory result.
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, LBSEQ, PARAMCD, AVALC, AVAL, AVALU, DTYPE
 
+AVALU is the LBSTRESU value, "copies/mL" on every record.
+
 AVALC is the reported result text; it has no value when no result was
 reported. A reported result is a nonnegative decimal number, optionally
 preceded by "<", ">", "<=", ">=", or "=". AVAL is the numeric value of

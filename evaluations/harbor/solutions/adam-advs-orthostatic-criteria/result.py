@@ -22,7 +22,22 @@ def reading(test: str, position: str, time_point: str | None = None):
     return pl.col("VSSTRESN").filter(mask).first()
 
 
+def check_one_reading(test: str, position: str, time_point: str | None = None):
+    """Stop the run when a visit has more than one such reading."""
+    mask = (pl.col("VSTESTCD") == test) & (pl.col("VSPOS") == position)
+    if time_point is not None:
+        mask = mask & (pl.col("VSTPT") == time_point)
+    counts = vs.filter(mask).group_by("STUDYID", "USUBJID", "VISIT").len()
+    if counts.height and (counts["len"] > 1).any():
+        raise SystemExit(
+            "more than one reading for a test, position and visit"
+        )
+
+
 standing = "AFTER 3 MIN STANDING"
+for _test in ("SYSBP", "DIABP", "HR"):
+    check_one_reading(_test, "SUPINE")
+    check_one_reading(_test, "STANDING", standing)
 visits = (
     vs.group_by("STUDYID", "USUBJID", "VISIT", maintain_order=True)
     .agg(

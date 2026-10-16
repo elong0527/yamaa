@@ -11,8 +11,8 @@ The parameters are:
 - OHYPO, "Orthostatic Hypotension"
 - OTACHY, "Orthostatic Tachycardia"
 
-On a change record, AVAL is the test's reading after three minutes
-standing minus its supine reading at the same visit: systolic blood
+On a change record, AVAL is the change in the test's reading from
+supine to three minutes standing at the same visit: systolic blood
 pressure for SYSBPOC, diastolic blood pressure for DIABPOC, and heart
 rate for HROC. AVAL is not rounded, so a fall is negative. The reading
 after one minute standing is never used. No change record is added
