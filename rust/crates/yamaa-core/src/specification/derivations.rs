@@ -265,6 +265,273 @@ pub(super) fn prepare_value_with_driver(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn bind_row_compute(
+    compiled: &CompiledNumeric,
+    path: &str,
+    catalog: &Catalog,
+    driver: &str,
+    row: Option<&str>,
+    phase: Phase<'_>,
+    available: Option<&[usize]>,
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+    output: &TableSchema,
+    named: &intermediates::Declarations,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
+) -> Result<Option<Expression>, BindError> {
+    let before = findings.len();
+    let mut bindings = Vec::new();
+    for identifier in compiled.identifiers() {
+        if !catalog.record_derivation()
+            && identifier.split_once('.').is_some_and(|(dataset, _)| {
+                named.reference(identifier).is_none()
+                    && (matches!(phase, Phase::Column { .. })
+                        || catalog.joined(dataset).is_some())
+            })
+        {
+            match phase {
+                Phase::Column { .. } => {
+                    findings.push(BindFinding::QualifiedNumericReference {
+                        path: format!("{path}.expr"),
+                        expression: compiled.expression().into(),
+                        identifier: identifier.into(),
+                    })
+                }
+                Phase::Row { group_by } => {
+                    let mut finding = LookupFinding::new(
+                        &format!("{path}.expr"),
+                        if group_by.is_some() {
+                            crate::diagnostic::ConditionCode::GroupedRowNumericSourceScope
+                        } else {
+                            crate::diagnostic::ConditionCode::RowNumericSourceScope
+                        },
+                    );
+                    finding.text("identifier", identifier);
+                    finding.texts("drivers", &[driver]);
+                    findings.push(BindFinding::Lookup(finding));
+                }
+            }
+            continue;
+        }
+        if let Some(expression) = self_relations::bind_operand(
+            identifier,
+            &format!("{path}.expr"),
+            catalog,
+            driver,
+            row,
+            phase,
+            available,
+            edges,
+            findings,
+            output,
+            named,
+            secondary,
+            intermediates,
+        )? {
+            let read = match expression {
+                Expression::Source(column) => Read::Source(column),
+                Expression::Column(column) => Read::Column(column),
+                Expression::Intermediate { index, column } => {
+                    Read::Intermediate { index, column }
+                }
+                _ => return Err(BindError::Internal),
+            };
+            bindings.push(Binding {
+                name: identifier.into(),
+                read,
+            });
+        }
+    }
+    static_types::numeric(
+        compiled,
+        &bindings,
+        named,
+        catalog,
+        secondary,
+        intermediates,
+        findings,
+    )?;
+    (findings.len() == before)
+        .then(|| BoundNumeric::new(compiled.clone(), bindings).map(Expression::Compute))
+        .transpose()
+        .map_err(BindError::InvalidNumericBinding)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bind_row_project(
+    call: &usize,
+    catalog: &Catalog,
+    driver: &str,
+    row: Option<&str>,
+    phase: Phase<'_>,
+    available: Option<&[usize]>,
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+    project: Option<&crate::project_calls::ProjectCalls>,
+) -> Result<Option<Expression>, BindError> {
+    let project = project.ok_or(BindError::Internal)?;
+    let context = crate::project_call_binding::Context {
+        source_dataset: 0,
+        source_mode: crate::project_call_binding::SourceMode::Record,
+        available_outputs: available,
+        scope: Scope {
+            drivers: &[driver],
+            current_driver: true,
+            reach: Reach::Scalar,
+            joined: false,
+            phase,
+        },
+    };
+    match crate::project_call_binding::bind(project, *call, catalog, context) {
+        Ok(bound) => {
+            edges.extend(bound.dependencies);
+            Ok(Some(Expression::ProjectFunction(bound.function)))
+        }
+        Err(crate::project_call_binding::Error::Findings(errors)) => {
+            findings.extend(functions::bind_findings(project, *call, errors, row)?);
+            Ok(None)
+        }
+        Err(crate::project_call_binding::Error::Reference(error)) => {
+            Err(BindError::Catalog(error))
+        }
+        Err(_) => Err(BindError::Internal),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bind_row_case(
+    branches: &[cases::Branch],
+    column: usize,
+    catalog: &Catalog,
+    driver: &str,
+    row: Option<&str>,
+    phase: Phase<'_>,
+    available: Option<&[usize]>,
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+    reported: bool,
+    output: &TableSchema,
+    project: Option<&crate::project_calls::ProjectCalls>,
+    named: &intermediates::Declarations,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
+) -> Result<Option<Expression>, BindError> {
+    let before = findings.len();
+    let mut result = Vec::new();
+    for branch in branches {
+        let when = match branch.predicate() {
+            Some(Err(invalid)) => {
+                if !reported {
+                    findings.push(BindFinding::Predicate(invalid.diagnostic()?));
+                }
+                None
+            }
+            Some(Ok(plan)) => {
+                let mut bindings = Vec::new();
+                let mut seen = std::collections::BTreeSet::new();
+                for identifier in plan.identifiers() {
+                    if !seen.insert(identifier) {
+                        continue;
+                    }
+                    if let Phase::Row { group_by } = phase {
+                        if identifier
+                            .split_once('.')
+                            .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
+                        {
+                            let mut finding = LookupFinding::new(
+                                plan.spec_path(),
+                                if group_by.is_some() {
+                                    crate::diagnostic::ConditionCode::GroupedRowNumericSourceScope
+                                } else {
+                                    crate::diagnostic::ConditionCode::RowNumericSourceScope
+                                },
+                            );
+                            finding.text("identifier", identifier);
+                            finding.texts("drivers", &[driver]);
+                            findings.push(BindFinding::Lookup(finding));
+                            continue;
+                        }
+                    }
+                    let reference_start = findings.len();
+                    let expression = self_relations::bind_operand(
+                        identifier,
+                        plan.spec_path(),
+                        catalog,
+                        driver,
+                        row,
+                        phase,
+                        available,
+                        edges,
+                        findings,
+                        output,
+                        named,
+                        secondary,
+                        intermediates,
+                    )?;
+                    case_predicates::retain_reference_owner(
+                        &mut findings[reference_start..],
+                        catalog,
+                    )?;
+                    if let Some(expression) = expression {
+                        let read = match expression {
+                            Expression::Source(column) => Read::Source(column),
+                            Expression::Column(column) => Read::Column(column),
+                            Expression::Intermediate { index, column } => {
+                                Read::Intermediate { index, column }
+                            }
+                            Expression::Joined(read) => Read::Joined(read),
+                            _ => return Err(BindError::Internal),
+                        };
+                        bindings.push(Binding {
+                            name: identifier.into(),
+                            read,
+                        });
+                    }
+                }
+                if findings.len() == before {
+                    Some(
+                        BoundPredicate::new_contextual(plan.clone(), bindings, Vec::new())
+                            .map_err(BindError::InvalidPredicateBinding)?,
+                    )
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+        if let Some(expression) = bind_row(
+            &branch.operation,
+            &branch.path,
+            column,
+            catalog,
+            driver,
+            row,
+            phase,
+            available,
+            edges,
+            findings,
+            reported,
+            output,
+            project,
+            named,
+            secondary,
+            intermediates,
+        )? {
+            result.push(crate::dataset::CaseBranch {
+                when,
+                assignment: std::boxed::Box::new(Assignment {
+                    column,
+                    expression,
+                    path: branch.path.clone(),
+                }),
+            });
+        }
+    }
+    Ok((findings.len() == before).then_some(Expression::Case(result)))
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(super) fn bind_row(
     operation: &Operation,
     path: &str,
@@ -481,227 +748,17 @@ pub(super) fn bind_row(
             }
             Ok(None)
         }
-        Operation::Compute(compiled) => {
-            let before = findings.len();
-            let mut bindings = Vec::new();
-            for identifier in compiled.identifiers() {
-                if !catalog.record_derivation()
-                    && identifier.split_once('.').is_some_and(|(dataset, _)| {
-                        named.reference(identifier).is_none()
-                            && (matches!(phase, Phase::Column { .. })
-                                || catalog.joined(dataset).is_some())
-                    })
-                {
-                    match phase {
-                        Phase::Column { .. } => {
-                            findings.push(BindFinding::QualifiedNumericReference {
-                                path: format!("{path}.expr"),
-                                expression: compiled.expression().into(),
-                                identifier: identifier.into(),
-                            })
-                        }
-                        Phase::Row { group_by } => {
-                            let mut finding = LookupFinding::new(
-                                &format!("{path}.expr"),
-                                if group_by.is_some() {
-                                    crate::diagnostic::ConditionCode::GroupedRowNumericSourceScope
-                                } else {
-                                    crate::diagnostic::ConditionCode::RowNumericSourceScope
-                                },
-                            );
-                            finding.text("identifier", identifier);
-                            finding.texts("drivers", &[driver]);
-                            findings.push(BindFinding::Lookup(finding));
-                        }
-                    }
-                    continue;
-                }
-                if let Some(expression) = self_relations::bind_operand(
-                    identifier,
-                    &format!("{path}.expr"),
-                    catalog,
-                    driver,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                    output,
-                    named,
-                    secondary,
-                    intermediates,
-                )? {
-                    let read = match expression {
-                        Expression::Source(column) => Read::Source(column),
-                        Expression::Column(column) => Read::Column(column),
-                        Expression::Intermediate { index, column } => {
-                            Read::Intermediate { index, column }
-                        }
-                        _ => return Err(BindError::Internal),
-                    };
-                    bindings.push(Binding {
-                        name: identifier.into(),
-                        read,
-                    });
-                }
-            }
-            static_types::numeric(
-                compiled,
-                &bindings,
-                named,
-                catalog,
-                secondary,
-                intermediates,
-                findings,
-            )?;
-            (findings.len() == before)
-                .then(|| BoundNumeric::new(compiled.clone(), bindings).map(Expression::Compute))
-                .transpose()
-                .map_err(BindError::InvalidNumericBinding)
-        }
-        Operation::ProjectFunction(call) => {
-            let project = project.ok_or(BindError::Internal)?;
-            let context = crate::project_call_binding::Context {
-                source_dataset: 0,
-                source_mode: crate::project_call_binding::SourceMode::Record,
-                available_outputs: available,
-                scope: Scope {
-                    drivers: &[driver],
-                    current_driver: true,
-                    reach: Reach::Scalar,
-                    joined: false,
-                    phase,
-                },
-            };
-            match crate::project_call_binding::bind(project, *call, catalog, context) {
-                Ok(bound) => {
-                    edges.extend(bound.dependencies);
-                    Ok(Some(Expression::ProjectFunction(bound.function)))
-                }
-                Err(crate::project_call_binding::Error::Findings(errors)) => {
-                    findings.extend(functions::bind_findings(project, *call, errors, row)?);
-                    Ok(None)
-                }
-                Err(crate::project_call_binding::Error::Reference(error)) => {
-                    Err(BindError::Catalog(error))
-                }
-                Err(_) => Err(BindError::Internal),
-            }
-        }
-        Operation::Case(branches) => {
-            let before = findings.len();
-            let mut result = Vec::new();
-            for branch in branches {
-                let when = match branch.predicate() {
-                    Some(Err(invalid)) => {
-                        if !reported {
-                            findings.push(BindFinding::Predicate(invalid.diagnostic()?));
-                        }
-                        None
-                    }
-                    Some(Ok(plan)) => {
-                        let mut bindings = Vec::new();
-                        let mut seen = std::collections::BTreeSet::new();
-                        for identifier in plan.identifiers() {
-                            if !seen.insert(identifier) {
-                                continue;
-                            }
-                            if let Phase::Row { group_by } = phase {
-                                if identifier
-                                    .split_once('.')
-                                    .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
-                                {
-                                    let mut finding = LookupFinding::new(
-                                        plan.spec_path(),
-                                        if group_by.is_some() {
-                                            crate::diagnostic::ConditionCode::GroupedRowNumericSourceScope
-                                        } else {
-                                            crate::diagnostic::ConditionCode::RowNumericSourceScope
-                                        },
-                                    );
-                                    finding.text("identifier", identifier);
-                                    finding.texts("drivers", &[driver]);
-                                    findings.push(BindFinding::Lookup(finding));
-                                    continue;
-                                }
-                            }
-                            let reference_start = findings.len();
-                            let expression = self_relations::bind_operand(
-                                identifier,
-                                plan.spec_path(),
-                                catalog,
-                                driver,
-                                row,
-                                phase,
-                                available,
-                                edges,
-                                findings,
-                                output,
-                                named,
-                                secondary,
-                                intermediates,
-                            )?;
-                            case_predicates::retain_reference_owner(
-                                &mut findings[reference_start..],
-                                catalog,
-                            )?;
-                            if let Some(expression) = expression {
-                                let read = match expression {
-                                    Expression::Source(column) => Read::Source(column),
-                                    Expression::Column(column) => Read::Column(column),
-                                    Expression::Intermediate { index, column } => {
-                                        Read::Intermediate { index, column }
-                                    }
-                                    Expression::Joined(read) => Read::Joined(read),
-                                    _ => return Err(BindError::Internal),
-                                };
-                                bindings.push(Binding {
-                                    name: identifier.into(),
-                                    read,
-                                });
-                            }
-                        }
-                        if findings.len() == before {
-                            Some(
-                                BoundPredicate::new_contextual(plan.clone(), bindings, Vec::new())
-                                    .map_err(BindError::InvalidPredicateBinding)?,
-                            )
-                        } else {
-                            None
-                        }
-                    }
-                    None => None,
-                };
-                if let Some(expression) = bind_row(
-                    &branch.operation,
-                    &branch.path,
-                    column,
-                    catalog,
-                    driver,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                    reported,
-                    output,
-                    project,
-                    named,
-                    secondary,
-                    intermediates,
-                )? {
-                    result.push(crate::dataset::CaseBranch {
-                        when,
-                        assignment: std::boxed::Box::new(Assignment {
-                            column,
-                            expression,
-                            path: branch.path.clone(),
-                        }),
-                    });
-                }
-            }
-            Ok((findings.len() == before).then_some(Expression::Case(result)))
-        }
+        Operation::Compute(compiled) => bind_row_compute(
+            compiled, path, catalog, driver, row, phase, available, edges, findings, output,
+            named, secondary, intermediates,
+        ),
+        Operation::ProjectFunction(call) => bind_row_project(
+            call, catalog, driver, row, phase, available, edges, findings, project,
+        ),
+        Operation::Case(branches) => bind_row_case(
+            branches, column, catalog, driver, row, phase, available, edges, findings,
+            reported, output, project, named, secondary, intermediates,
+        ),
         Operation::Window(window) => window.bind_available(catalog, available, edges, findings),
         Operation::FirstAvailable(selection) => bind_selection(
             selection,
