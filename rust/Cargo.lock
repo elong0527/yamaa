@@ -65,6 +65,7 @@ dependencies = [
  "chrono",
  "half",
  "hashbrown",
+ "libc",
  "num-complex",
  "num-integer",
  "num-traits",
@@ -125,6 +126,9 @@ name = "arrow-schema"
 version = "60.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f85a9a58cd03560526b0066487574aacb9008e413504fa0ee23d61141e96c338"
+dependencies = [
+ "bitflags",
+]
 
 [[package]]
 name = "arrow-select"
@@ -1201,6 +1205,8 @@ dependencies = [
 name = "yamaa-r"
 version = "0.4.0"
 dependencies = [
+ "arrow-array",
+ "arrow-schema",
  "extendr-api",
  "yamaa-adapters",
  "yamaa-core",

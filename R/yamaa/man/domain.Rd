@@ -27,7 +27,12 @@ Text containing NUL uses raw values in a \code{yamaa_utf8_vector}; NULL is missi
 text, preserving names and missingness. If any present value contains NUL, the
 conversion raises an error because R character cannot preserve that value.
 Use \code{unclass} to access the held raw bytes. Conversion leaves the original
-output and \code{save()} publication unchanged.}
+output and \code{save()} publication unchanged. With nanoarrow 0.8.0 or newer,
+\code{output_arrow}, \code{verification_log_arrow} and \code{warning_log_arrow}
+are independent Arrow C Streams sharing retained immutable buffers. Nanoarrow
+owns each stream and releases it explicitly or on garbage collection; arrays
+already imported from a stream outlive both the stream and the build result.
+The ordinary data-frame views are explicit copying conversions.}
 \description{Runs native preparation and static checks. A build additionally captures
 study inputs and derives output. Save publishes retained bytes to the declared path.
 Failed-build saves signal \code{yamaa_domain_error}; operational save failures return

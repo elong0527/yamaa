@@ -50,6 +50,19 @@ containing NUL use lossless `yamaa_utf8_vector`. Subsetting preserves the exact
 values. Conversions preserve values or raise an error. Dates use Date and
 datetimes use POSIXct with UTC.
 
+With nanoarrow 0.8.0 or newer installed, `result$output_arrow`,
+`result$verification_log_arrow` and `result$warning_log_arrow` return standard
+`nanoarrow_array_stream` objects. Every access creates an independent stream
+cursor sharing immutable Arrow buffers. Nanoarrow owns each stream header and
+calls its release callback on explicit release or garbage collection. Imported
+arrays remain valid after releasing the stream or build result. These views
+preserve signed i64 extrema, NUL UTF-8, nulls and date/datetime epoch values.
+The ordinary data-frame views explicitly copy into the established exact R
+representations above; conversion to R character or numeric preserves values
+or raises an error. Generic consumers must choose equally exact conversions.
+Nanoarrow 0.7.0 uses an R-internals API removed in the supported R 4.6.1, so the
+bridge floor is 0.8.0. See the [ownership contract](../../rust/README.md#arrow-host-handoff).
+
 `yamaa_define` admits submission metadata without executing a domain. Explicit
 Dataset-JSON requests read already published artifacts. Save publishes retained
 JSON in specification order and XML last, stopping after an operational failure.

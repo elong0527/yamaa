@@ -1,5 +1,6 @@
 //! Python composition roots and lossless public result conversion.
 use pyo3::prelude::*;
+mod arrow_bridge;
 mod define_entry;
 mod domain_entry;
 mod file_domain;
@@ -13,6 +14,7 @@ mod style;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("_CORE_VERSION", yamaa_core::VERSION)?;
+    module.add_class::<arrow_bridge::ArrowTable>()?;
     module.add_class::<define_entry::Define>()?;
     module.add(
         "DefineError",

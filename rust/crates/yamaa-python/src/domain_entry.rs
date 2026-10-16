@@ -85,19 +85,22 @@ impl Domain {
             _ => observed,
         })
     }
-    fn output<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyBytes>>> {
+    fn output(&self) -> PyResult<Option<crate::arrow_bridge::ArrowTable>> {
         if let Some(inner) = &self.inner {
             return inner
                 .try_lock()
-                .map(|inner| inner.output().map(|bytes| PyBytes::new(py, bytes)))
+                .map(|inner| {
+                    inner
+                        .output_table()
+                        .map(crate::arrow_bridge::ArrowTable::from)
+                })
                 .map_err(|_| {
                     pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
                 });
         }
         if let Some(producer) = &self.producer {
-            return producer.domain_output(py);
+            return producer.domain_output();
         }
-        let _ = py;
         Ok(None)
     }
     fn issues(&self) -> PyResult<Vec<crate::report_fields::IssueRow>> {
@@ -114,26 +117,23 @@ impl Domain {
         }
         Ok(crate::report_fields::issue_rows(&self.failures))
     }
-    fn log<'py>(&self, py: Python<'py>, warning: bool) -> PyResult<Option<Bound<'py, PyBytes>>> {
+    fn log(&self, warning: bool) -> PyResult<Option<crate::arrow_bridge::ArrowTable>> {
         if let Some(inner) = &self.inner {
             return inner
                 .try_lock()
                 .map(|inner| {
-                    (if warning {
-                        inner.warning_log()
-                    } else {
-                        inner.verification_log()
-                    })
-                    .map(|bytes| PyBytes::new(py, bytes))
+                    inner
+                        .log_table(warning)
+                        .map(crate::arrow_bridge::ArrowTable::from)
                 })
                 .map_err(|_| {
                     pyo3::exceptions::PyRuntimeError::new_err("domain result handle poisoned")
                 });
         }
         if let Some(producer) = &self.producer {
-            return producer.domain_log(py, warning);
+            return producer.domain_log(warning);
         }
-        let _ = (py, warning);
+        let _ = warning;
         Ok(None)
     }
     fn save(&self) -> PyResult<bool> {
