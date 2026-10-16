@@ -1,0 +1,7 @@
+phase: validation
+condition: invalid_regex
+spec_paths:
+  - columns.AESPDIG.derivation.str_replace.pattern
+requirement: REQ-0827
+context:
+  pattern: '[^0-9'

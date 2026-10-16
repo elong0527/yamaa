@@ -6,6 +6,8 @@
 #   schema_pattern  the R006 pattern descriptor keyword, a full match
 #   matches         the R009 matches column verification, a search
 #   str_extract     the str_extract expression, a search keeping one group
+#   str_replace     optional: the str_replace expression, a search replacing
+#                   every match, with its replacement text and its result
 #
 # The matches outcome also governs the str_contains expression and predicate
 # call. Those consumers share search semantics but retain their own result
@@ -14,6 +16,9 @@
 # A str_extract outcome is null when the pattern matched nowhere. It is a
 # mapping of the requested group and its value when the pattern matched, and
 # that value is null when the match did not enter the group.
+#
+# A str_replace outcome is a mapping of the replacement text and the
+# complete result. A subject the pattern matches nowhere is its own result.
 #
 # A case carrying `invalid: true` records a pattern the portable contract
 # rejects. Every consumer rejects such a pattern, using invalid_regex except
@@ -44,6 +49,7 @@ cases:
     schema_pattern: false
     matches: false
     str_extract: null
+    str_replace: {replacement: "-", value: "\u0665"}
   - id: ascii-digit-class-accepts-ascii-digit
     covers: [unicode, escaping]
     pattern: '^\d$'
@@ -79,6 +85,7 @@ cases:
     schema_pattern: true
     matches: true
     str_extract: {group: 0, value: "\U0001D400"}
+    str_replace: {replacement: "-", value: "-"}
   - id: supplementary-scalar-is-not-two-characters
     covers: [unicode]
     pattern: '^..$'
@@ -136,6 +143,7 @@ cases:
     schema_pattern: false
     matches: false
     str_extract: null
+    str_replace: {replacement: "-", value: "a\nb"}
   - id: unanchored-pattern-searches-the-subject
     covers: [anchors, search]
     pattern: '[0-9]{3}'
@@ -143,6 +151,7 @@ cases:
     schema_pattern: false
     matches: true
     str_extract: {group: 0, value: "007"}
+    str_replace: {replacement: "#", value: "AE-#-X"}
   - id: word-boundary-anchors-inside-the-subject
     covers: [anchors, escaping]
     pattern: '\bAE\b'
@@ -273,6 +282,7 @@ cases:
     schema_pattern: false
     matches: true
     str_extract: {group: 0, value: ""}
+    str_replace: {replacement: "-", value: "-b-b-b-"}
   - id: empty-alternative-matches-the-empty-subject
     covers: [empty-match]
     pattern: '^(?:a|)$'
@@ -280,6 +290,7 @@ cases:
     schema_pattern: true
     matches: true
     str_extract: {group: 0, value: ""}
+    str_replace: {replacement: "-", value: "-"}
   - id: empty-match-is-the-empty-string-not-missing
     covers: [empty-match]
     pattern: 'x*'
@@ -287,6 +298,55 @@ cases:
     schema_pattern: false
     matches: true
     str_extract: {group: 0, value: ""}
+    str_replace: {replacement: "-", value: "-y-"}
+  - id: replacement-resumes-where-a-nonempty-match-ends
+    covers: [empty-match, search]
+    pattern: 'a*'
+    subject: "baa"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: ""}
+    str_replace: {replacement: "-", value: "-b--"}
+  - id: replacement-steps-over-one-supplementary-scalar
+    covers: [empty-match, unicode]
+    pattern: 'x*'
+    subject: "\U0001D400"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: ""}
+    str_replace: {replacement: "-", value: "-\U0001D400-"}
+  - id: replacement-caret-matches-only-at-the-start
+    covers: [anchors, search]
+    pattern: '^a'
+    subject: "aaa"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: "a"}
+    str_replace: {replacement: "", value: "aa"}
+  - id: replacement-lookbehind-reads-before-the-scan-position
+    covers: [anchors, search]
+    pattern: '(?<=a)a'
+    subject: "aaa"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: "a"}
+    str_replace: {replacement: "-", value: "a--"}
+  - id: replacement-text-is-literal
+    covers: [capture-groups, escaping]
+    pattern: '(b)'
+    subject: "abc"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: "b"}
+    str_replace: {replacement: "$1\\", value: "a$1\\c"}
+  - id: replacement-whitespace-run-includes-no-break-space
+    covers: [unicode, dialect, search]
+    pattern: '\s+'
+    subject: "a \u00A0\tb"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: " \u00A0\t"}
+    str_replace: {replacement: " ", value: "a b"}
   - id: python-named-group-syntax-is-rejected
     covers: [unsupported, dialect]
     pattern: '(?P<name>a)'

@@ -808,6 +808,22 @@ expressions:
         - no_match:
             type: literal_value
             description: See REQ-1111.
+    str_replace: # See REQ-1322.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1322.
+        - pattern:
+            type: regex
+            required: true
+            description: See REQ-1322.
+        - replacement:
+            type: str
+            required: true
+            description: See REQ-1322.
+        - missing:
+            type: literal_value
+            description: See REQ-1322.
     str_contains: # See REQ-1243.
         - source:
             type: variable
