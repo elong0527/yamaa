@@ -469,11 +469,67 @@ class PublicContract(unittest.TestCase):
 
 
 class ResolvedSpecificationContract(unittest.TestCase):
+    def test_original_origins_survive_inheritance_materialization_and_window_expansion(
+        self,
+    ):
+        with tempfile.TemporaryDirectory(prefix="yamaa-resolved-origins-") as temporary:
+            root = Path(temporary).resolve()
+            base = root / "base.yaml"
+            child = root / "child.yaml"
+            base.write_text(
+                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\n"
+                "columns: [{name: ID, type: str, derivation: {mapping: {source: RAW.ID, dict: {A: Alpha}}}}]\n"
+                "output: {path: result.csv, columns: [ID]}\n",
+                encoding="utf-8",
+            )
+            child.write_text(
+                "schema_version: '1.0'\nparents: base.yaml\n", encoding="utf-8"
+            )
+            direct = yamaa.resolve_specification(base).to_dict()["entries"][0][
+                "origins"
+            ]
+            inherited = yamaa.resolve_specification(child).to_dict()["entries"][0][
+                "origins"
+            ]
+            pointer = "/columns/0/derivation/value/mapping/case_sensitive"
+            self.assertEqual(direct[pointer]["source_kind"], "schema_default")
+            self.assertEqual(inherited[pointer], direct[pointer])
+            self.assertTrue(inherited["/input/RAW"]["generated"])
+            base.write_text(
+                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\n"
+                "windows: {W: {order_by: [RAW.ID]}}\n"
+                "columns: [{name: ID, type: int, derivation: RAW.ID}]\n"
+                "output: {path: result.csv, columns: [ID]}\n",
+                encoding="utf-8",
+            )
+            child.write_text(
+                "schema_version: '1.0'\nparents: base.yaml\n"
+                "columns: [{name: N, type: int, derivation: {row_number: {window: W}}}]\n"
+                "output: {path: result.csv, columns: [ID, N]}\n",
+                encoding="utf-8",
+            )
+            origins = yamaa.resolve_specification(child).to_dict()["entries"][0][
+                "origins"
+            ]
+            prefix = "/columns/1/derivation/value/row_number/window"
+            self.assertEqual(origins[prefix]["declaring_source"], child.as_posix())
+            self.assertEqual(
+                origins[prefix + "/order_by/0/variable"]["declaring_source"],
+                base.as_posix(),
+            )
+            self.assertEqual(
+                origins[prefix + "/order_by/0/direction"]["source_kind"],
+                "schema_default",
+            )
+            self.assertTrue(
+                origins["/columns/0/derivation/value/source/variable"]["generated"]
+            )
+
     def test_explicit_environment_is_admitted_without_activating_its_callable(self):
         with tempfile.TemporaryDirectory(
             prefix="yamaa-resolved-environment-"
         ) as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             source = root / "spec.yaml"
             environment = root / "environment.yaml"
             source.write_text(
@@ -513,7 +569,7 @@ class ResolvedSpecificationContract(unittest.TestCase):
         with tempfile.TemporaryDirectory(
             prefix="yamaa-resolved-producers-"
         ) as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             (root / "shared").mkdir()
             (root / "shared/producer.yaml").write_text(
                 "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\n"
@@ -565,7 +621,7 @@ class ResolvedSpecificationContract(unittest.TestCase):
         self,
     ):
         with tempfile.TemporaryDirectory(prefix="yamaa-resolved-public-") as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             spec = root / "spec.yaml"
             spec.write_text(
                 "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"

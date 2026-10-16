@@ -1,8 +1,8 @@
 //! Finish composed column fields only after every contribution has been applied.
 
 use super::{
-    ComposedLayers, Document, DocumentNode as N, NormalizationError, NormalizationResource,
-    SchemaStructure, ValidationError,
+    ComposedLayers, Document, DocumentNode as N, LayerNodeOrigin, NormalizationError,
+    NormalizationResource, SchemaStructure, ValidationError,
 };
 use std::collections::BTreeMap;
 
@@ -27,11 +27,18 @@ impl From<ValidationError> for LayerCompositionError {
     }
 }
 
+struct Materialized {
+    document: Document,
+    origins: Vec<LayerNodeOrigin>,
+}
+
 fn copy(
     input: &Document,
+    input_origins: &[LayerNodeOrigin],
     node: usize,
-    replacements: Option<&BTreeMap<usize, Document>>,
+    replacements: Option<&BTreeMap<usize, Materialized>>,
     output: &mut Vec<N>,
+    output_origins: &mut Vec<LayerNodeOrigin>,
     depth: usize,
 ) -> Result<usize, NormalizationError> {
     let limit = crate::limits::Limits::SEMANTIC_DEPTH;
@@ -43,7 +50,15 @@ fn copy(
     }
     if let Some(replacements) = replacements {
         if let Some(replacement) = replacements.get(&node) {
-            return copy(replacement, replacement.root(), None, output, depth);
+            return copy(
+                &replacement.document,
+                &replacement.origins,
+                replacement.document.root(),
+                None,
+                output,
+                output_origins,
+                depth,
+            );
         }
     }
     let value = match &input.nodes()[node] {
@@ -51,7 +66,15 @@ fn copy(
         N::Sequence(items) => {
             let mut values = Vec::with_capacity(items.len());
             for &item in items {
-                values.push(copy(input, item, replacements, output, depth + 1)?);
+                values.push(copy(
+                    input,
+                    input_origins,
+                    item,
+                    replacements,
+                    output,
+                    output_origins,
+                    depth + 1,
+                )?);
             }
             N::Sequence(values)
         }
@@ -59,8 +82,24 @@ fn copy(
             let mut values = Vec::with_capacity(items.len());
             for &(key, value) in items {
                 values.push((
-                    copy(input, key, replacements, output, depth + 1)?,
-                    copy(input, value, replacements, output, depth + 1)?,
+                    copy(
+                        input,
+                        input_origins,
+                        key,
+                        replacements,
+                        output,
+                        output_origins,
+                        depth + 1,
+                    )?,
+                    copy(
+                        input,
+                        input_origins,
+                        value,
+                        replacements,
+                        output,
+                        output_origins,
+                        depth + 1,
+                    )?,
                 ));
             }
             N::Mapping(values)
@@ -69,6 +108,7 @@ fn copy(
     };
     let id = output.len();
     output.push(value);
+    output_origins.push(input_origins[node]);
     Ok(id)
 }
 
@@ -85,14 +125,18 @@ impl SchemaStructure {
         // Canonical occurrence order also makes diagnostic node references stable:
         // each mapping key precedes its value, independently of merge history.
         let mut nodes = Vec::new();
+        let mut origins = Vec::new();
         let root = copy(
             &result.document,
+            &result.node_origins,
             result.document.root(),
             None,
             &mut nodes,
+            &mut origins,
             1,
         )?;
         result.document = Document::new(nodes, root).map_err(NormalizationError::Document)?;
+        result.node_origins = origins;
         let document = &result.document;
         let mut replacements = BTreeMap::new();
         if let Some(columns) = document.field(document.root(), "columns") {
@@ -134,7 +178,18 @@ impl SchemaStructure {
                                 })
                             }
                         };
-                        replacements.insert(value, normalized.document);
+                        let origins = normalized
+                            .origins
+                            .iter()
+                            .map(|&origin| LayerNodeOrigin::through(origin, &result.node_origins))
+                            .collect();
+                        replacements.insert(
+                            value,
+                            Materialized {
+                                document: normalized.document,
+                                origins,
+                            },
+                        );
                     }
                 }
             }
@@ -147,14 +202,18 @@ impl SchemaStructure {
         }
         if !replacements.is_empty() {
             let mut nodes = Vec::new();
+            let mut origins = Vec::new();
             let root = copy(
                 document,
+                &result.node_origins,
                 document.root(),
                 Some(&replacements),
                 &mut nodes,
+                &mut origins,
                 1,
             )?;
             result.document = Document::new(nodes, root).map_err(NormalizationError::Document)?;
+            result.node_origins = origins;
         }
         Ok(result)
     }

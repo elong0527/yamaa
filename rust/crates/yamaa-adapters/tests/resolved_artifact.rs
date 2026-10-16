@@ -1,4 +1,5 @@
 //! Independent resolution controls over original entry and producer preparation.
+#![cfg(feature = "yaml")]
 use std::{
     collections::BTreeMap,
     fs,
@@ -386,6 +387,77 @@ fn wire_validation_rejects_incomplete_or_invented_ledgers_and_preserves_large_nu
         assert!(
             ResolvedArtifact::from_json(&value.to_string()).is_err(),
             "{modification}"
+        );
+    }
+}
+
+#[test]
+fn inherited_defaults_and_shorthand_keep_the_original_normalization_origins() {
+    let study = Study::new();
+    study.write("mapping.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\ncolumns: [{name: ID, type: str, derivation: {mapping: {source: RAW.ID, dict: {A: Alpha}}}}]\noutput: {path: result.csv, columns: [ID]}\n");
+    study.write(
+        "mapping-child.yaml",
+        "schema_version: '1.0'\nparents: mapping.yaml\n",
+    );
+    let direct = study.resolve("mapping.yaml");
+    let inherited = study.resolve("mapping-child.yaml");
+    let pointer = "/columns/0/derivation/value/mapping/case_sensitive";
+    let expected = &direct.entries()[0].origins[pointer];
+    assert_eq!(expected.source_kind, OriginKind::SchemaDefault);
+    assert!(expected
+        .declaring_source
+        .as_ref()
+        .unwrap()
+        .contains("schema_expression_mapping"));
+    assert_eq!(&inherited.entries()[0].origins[pointer], expected);
+
+    study.write("shorthand.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\ncolumns: [{name: ID, type: str, derivation: RAW.ID}]\noutput: {path: result.csv, columns: [ID]}\n");
+    study.write(
+        "shorthand-child.yaml",
+        "schema_version: '1.0'\nparents: shorthand.yaml\n",
+    );
+    let direct = study.resolve("shorthand.yaml");
+    let inherited = study.resolve("shorthand-child.yaml");
+    for pointer in [
+        "/input/RAW",
+        "/input/RAW/path",
+        "/columns/0/derivation",
+        "/columns/0/derivation/value",
+        "/columns/0/derivation/value/source",
+        "/columns/0/derivation/value/source/variable",
+    ] {
+        assert_eq!(
+            inherited.entries()[0].origins[pointer],
+            direct.entries()[0].origins[pointer],
+            "{pointer}"
+        );
+    }
+    assert!(inherited.entries()[0].origins["/input/RAW"].generated);
+    assert!(
+        inherited.entries()[0].origins["/columns/0/derivation/value/source/variable"].generated
+    );
+}
+
+#[test]
+fn named_window_descendants_keep_the_definition_origin_and_root_keeps_the_use_site() {
+    let study = Study::new();
+    study.write("base.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: {path: missing.csv, types: {ID: int}}}\nwindows: {W: {order_by: [RAW.ID]}}\ncolumns: [{name: ID, type: int, derivation: RAW.ID}]\noutput: {path: result.csv, columns: [ID]}\n");
+    study.write("child.yaml", "schema_version: '1.0'\nparents: base.yaml\ncolumns: [{name: N, type: int, derivation: {row_number: {window: W}}}]\noutput: {path: result.csv, columns: [ID, N]}\n");
+    let artifact = study.resolve("child.yaml");
+    let origins = &artifact.entries()[0].origins;
+    let prefix = "/columns/1/derivation/value/row_number/window";
+    assert_eq!(
+        origins[prefix].declaring_source,
+        Some(study.path("child.yaml"))
+    );
+    assert_eq!(
+        origins[&format!("{prefix}/order_by/0/variable")].declaring_source,
+        Some(study.path("base.yaml"))
+    );
+    for field in ["direction", "nulls"] {
+        assert_eq!(
+            origins[&format!("{prefix}/order_by/0/{field}")].source_kind,
+            OriginKind::SchemaDefault
         );
     }
 }

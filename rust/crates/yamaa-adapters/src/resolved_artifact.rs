@@ -286,11 +286,25 @@ fn resource(
 fn origins(document: &PreparedDocument) -> BTreeMap<String, FieldOrigin> {
     let normalized = document.model().document();
     let mut result = BTreeMap::new();
-    let mut pending = vec![(normalized.root(), String::new(), String::new())];
-    while let Some((node, pointer, path)) = pending.pop() {
-        let origin = &document.origins()[node];
+    let mut pending = vec![(normalized.root(), String::new())];
+    while let Some((node, pointer)) = pending.pop() {
+        let (origin, layer_source) = match document.inheritance() {
+            Some(inherited) => {
+                let original = inherited.original_origins()[node];
+                (
+                    original.origin,
+                    original
+                        .layer
+                        .map(|layer| inherited.layers()[layer].source.identity.as_str()),
+                )
+            }
+            None => (
+                document.origins()[node],
+                Some(document.source().identity.as_str()),
+            ),
+        };
         let (declaring_source, source_kind) = match origin.source {
-            SchemaSource::Input => match document.declaring_source(&path) {
+            SchemaSource::Input => match layer_source {
                 Some(source) => (Some(source.into()), OriginKind::Authored),
                 None => (None, OriginKind::Composed),
             },
@@ -315,25 +329,13 @@ fn origins(document: &PreparedDocument) -> BTreeMap<String, FieldOrigin> {
             N::Mapping(items) => {
                 for &(key, child) in items {
                     if let N::Text(key) = &normalized.nodes()[key] {
-                        pending.push((
-                            child,
-                            model::pointer_child(&pointer, key),
-                            if path.is_empty() {
-                                key.clone()
-                            } else {
-                                format!("{path}.{key}")
-                            },
-                        ));
+                        pending.push((child, model::pointer_child(&pointer, key)));
                     }
                 }
             }
             N::Sequence(items) => {
                 for (index, &child) in items.iter().enumerate() {
-                    pending.push((
-                        child,
-                        model::pointer_child(&pointer, &index.to_string()),
-                        format!("{path}[{index}]"),
-                    ));
+                    pending.push((child, model::pointer_child(&pointer, &index.to_string())));
                 }
             }
             _ => {}

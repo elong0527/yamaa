@@ -405,3 +405,36 @@ qualify_resolved_producer_entries <- function() {
   cat("resolved producer entries agree with direct builds for both studies\n")
 }
 qualify_resolved_producer_entries()
+
+qualify_resolved_origins <- function() {
+  root <- tempfile("yamaa-resolved-origins-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  root <- normalizePath(root, winslash = "/")
+  base <- file.path(root, "base.yaml")
+  child <- file.path(root, "child.yaml")
+  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]", "input: {RAW: missing.csv}",
+    "columns: [{name: ID, type: str, derivation: {mapping: {source: RAW.ID, dict: {A: Alpha}}}}]",
+    "output: {path: result.csv, columns: [ID]}"), base)
+  writeLines(c("schema_version: '1.0'", "parents: base.yaml"), child)
+  origins <- function(path) jsonlite::fromJSON(as.character(yamaa_resolve_specification(path)), simplifyVector = FALSE)$entries[[1L]]$origins
+  direct <- origins(base)
+  inherited <- origins(child)
+  pointer <- "/columns/0/derivation/value/mapping/case_sensitive"
+  stopifnot(identical(direct[[pointer]]$source_kind, "schema_default"),
+    identical(inherited[[pointer]], direct[[pointer]]), isTRUE(inherited[["/input/RAW"]]$generated))
+  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]", "input: {RAW: missing.csv}",
+    "windows: {W: {order_by: [RAW.ID]}}", "columns: [{name: ID, type: int, derivation: RAW.ID}]",
+    "output: {path: result.csv, columns: [ID]}"), base)
+  writeLines(c("schema_version: '1.0'", "parents: base.yaml",
+    "columns: [{name: N, type: int, derivation: {row_number: {window: W}}}]",
+    "output: {path: result.csv, columns: [ID, N]}"), child)
+  inherited <- origins(child)
+  prefix <- "/columns/1/derivation/value/row_number/window"
+  stopifnot(identical(inherited[[prefix]]$declaring_source, child),
+    identical(inherited[[paste0(prefix, "/order_by/0/variable")]]$declaring_source, base),
+    identical(inherited[[paste0(prefix, "/order_by/0/direction")]]$source_kind, "schema_default"),
+    isTRUE(inherited[["/columns/0/derivation/value/source/variable"]]$generated))
+  cat("resolved original origins retain inherited defaults, shorthand and named-window definitions\n")
+}
+qualify_resolved_origins()
