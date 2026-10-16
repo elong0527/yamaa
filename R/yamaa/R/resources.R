@@ -114,10 +114,9 @@ yamaa_memory_resolver <- function(objects = list(), prefix = "memory:/") {
   }
   resolver <- yamaa_resource_resolver(function(request) {
     if (request$operation == "abort") {
+      # Attempt-owned cleanup: delete only the staged token, never the target,
+      # so overlapping publishes cannot delete each other's provisional output.
       backend$staging[[request$reference]] <- NULL
-      for (token in names(backend$staging)) {
-        if (identical(backend$staging[[token]]$reference, request$reference)) backend$staging[[token]] <- NULL
-      }
       return(yamaa_resource_result(request$reference))
     }
     if (backend$cancelled) yamaa_resource_failure("cancelled")
@@ -132,8 +131,16 @@ yamaa_memory_resolver <- function(objects = list(), prefix = "memory:/") {
     if (request$operation == "stage") {
       next_version <<- next_version + 1L
       token <- paste0("stage:", next_version, ":", request$reference)
-      backend$staging[[token]] <- yamaa_resource_result(request$reference, request$data)
-      return(yamaa_resource_result(token))
+      # Interruption-safe handoff: stage and deliver the token inside the
+      # guarded expression so an interruption during insertion or delivery
+      # rolls this attempt back instead of stranding it.
+      result <- tryCatch({
+        backend$staging[[token]] <- yamaa_resource_result(request$reference, request$data)
+        yamaa_resource_result(token)
+      },
+        interrupt = function(e) { backend$staging[[token]] <- NULL; stop(e) },
+        error = function(e) { backend$staging[[token]] <- NULL; stop(e) })
+      return(result)
     }
     if (request$operation == "commit") {
       staged <- backend$staging[[request$reference]]
