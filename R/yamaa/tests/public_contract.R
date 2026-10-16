@@ -7,7 +7,9 @@ host_truth <- read_host_fixture(host_fixture_root,"public-contract")
 stopifnot(identical(as.character(packageVersion("yamaa")), "0.4.0"),
   identical(yamaa:::.core_version(), as.character(packageVersion("yamaa"))))
 stopifnot(identical(sort(getNamespaceExports("yamaa")), c("yamaa_check", "yamaa_define", "yamaa_domain",
-  "yamaa_read_resolved_specification", "yamaa_resolve_specification")))
+  "yamaa_memory_resolver", "yamaa_read_resolved_specification", "yamaa_resolve_specification",
+  "yamaa_resource_failure", "yamaa_resource_resolver", "yamaa_resource_result",
+  "yamaa_synthetic_remote_resolver")))
 check_issues <- function(result) {
   value <- result$issues
   stopifnot(is.data.frame(value),
@@ -20,10 +22,12 @@ argument_failure <- function(code) {
   seen <- tryCatch({ force(code); NULL }, error = identity)
   stopifnot(inherits(seen, "yamaa_argument_error"), is.character(conditionMessage(seen)))
 }
-stopifnot(identical(names(formals(yamaa_domain)), c("specification", "environment")),
-  identical(names(formals(yamaa_check)), c("specification", "environment")),
+stopifnot(identical(names(formals(yamaa_domain)), c("specification", "environment", "resolver")),
+  identical(names(formals(yamaa_check)), c("specification", "environment", "resolver")),
   identical(formals(yamaa_domain)$environment, NULL),
   identical(formals(yamaa_check)$environment, NULL),
+  identical(formals(yamaa_domain)$resolver, NULL),
+  identical(formals(yamaa_check)$resolver, NULL),
   identical(names(formals(yamaa_define)), fixture_strings(host_truth[["define_argument_names"]])))
 for (value in list(NULL, 7L, TRUE, NA_character_, character(), c("a", "b"),
   structure("a", class = "path"), structure("a", names = "path"))) {

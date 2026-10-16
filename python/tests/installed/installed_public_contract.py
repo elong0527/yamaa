@@ -109,7 +109,9 @@ class PublicContract(unittest.TestCase):
     def test_signatures_argument_types_and_removed_options(self):
         for function in (yamaa.domain, yamaa.check):
             parameters = inspect.signature(function).parameters
-            self.assertEqual(list(parameters), ["specification", "environment"])
+            self.assertEqual(
+                list(parameters), ["specification", "environment", "resolver"]
+            )
             self.assertEqual(
                 parameters["environment"].kind, inspect.Parameter.KEYWORD_ONLY
             )

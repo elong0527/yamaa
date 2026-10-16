@@ -311,6 +311,14 @@ struct Study<'a> {
 }
 impl StudyPort for Study<'_> {
     type Error = ResourceError;
+    fn owned_table(
+        &self,
+        node: &Node,
+        source: &SourceDeclaration,
+    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+        self.resources
+            .owned_table_from(node.identity(), &source.path)
+    }
     fn resource_failure(
         &self,
         error: &Self::Error,

@@ -25,8 +25,9 @@ def _arrow_view(data) -> pa.Table | None:
 class Domain:
     """An owned native build with independently owned Arrow and Polars views."""
 
-    def __init__(self, native):
+    def __init__(self, native, resolver=None):
         self._native = native
+        self._resolver = resolver
 
     @property
     def output(self) -> pl.DataFrame | None:
@@ -41,6 +42,10 @@ class Domain:
     @property
     def issues(self) -> pl.DataFrame:
         return issues_frame(self._native.issues())
+
+    @property
+    def resource_provenance(self):
+        return () if self._resolver is None else self._resolver.provenance
 
     @property
     def verification_log(self) -> pl.DataFrame | None:
@@ -62,20 +67,30 @@ class Domain:
 
     def save(self) -> bool:
         """Publish held logs and output; a failed build raises DomainError."""
-        return self._native.save()
+        try:
+            return self._native.save()
+        finally:
+            if self._resolver is not None:
+                self._resolver._raise_pending()
 
 
 def domain(
     specification: str | PathLike[str],
     *,
     environment: str | PathLike[str] | None = None,
+    resolver=None,
 ) -> Domain:
+    resolver = None if resolver is None else resolver._session()
     native = _domain_file(
-        fspath(specification), None if environment is None else fspath(environment)
+        fspath(specification),
+        None if environment is None else fspath(environment),
+        None if resolver is None else resolver._dispatch,
     )
     try:
         native.propagate_interrupt()
-        return Domain(native)
+        if resolver is not None:
+            resolver._raise_pending()
+        return Domain(native, resolver)
     finally:
         # Retained callback tracebacks can include this frame. Keep their
         # native owner in the returned result, never in this frame's locals.
@@ -95,13 +110,20 @@ def check(
     specification: str | PathLike[str],
     *,
     environment: str | PathLike[str] | None = None,
+    resolver=None,
 ) -> Check:
     """Return native preparation and static issues without reading study data."""
-    return Check(
+    resolver = None if resolver is None else resolver._session()
+    result = Check(
         _check_file(
-            fspath(specification), None if environment is None else fspath(environment)
+            fspath(specification),
+            None if environment is None else fspath(environment),
+            None if resolver is None else resolver._dispatch,
         )
     )
+    if resolver is not None:
+        resolver._raise_pending()
+    return result
 
 
 __all__ = ["DomainError", "check", "domain"]

@@ -9,6 +9,7 @@ use std::{
 static NEXT: AtomicU64 = AtomicU64::new(0);
 #[derive(Debug)]
 pub enum Error {
+    Host(crate::host_resources::Failure),
     InvalidTarget,
     PathMismatch,
     Limit(yamaa_core::limits::LimitExceeded),
@@ -24,6 +25,7 @@ pub enum Error {
 impl Error {
     pub fn message(&self) -> String {
         match self {
+            Self::Host(_) => "host resource publication failed",
             Self::InvalidTarget => "invalid explicit publication target",
             Self::PathMismatch => "publication path does not match explicit target",
             Self::Limit(_) => "publication output byte limit",

@@ -168,13 +168,13 @@ impl FileSpecification {
 
     pub(crate) fn publication_target(
         &self,
-    ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {
+    ) -> Result<crate::resource_publication::AnchoredTarget, ResourceError> {
         self.publication_field_target("path")
     }
     pub(crate) fn publication_field_target(
         &self,
         field: &str,
-    ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {
+    ) -> Result<crate::resource_publication::AnchoredTarget, ResourceError> {
         let origin = self
             .run
             .document()

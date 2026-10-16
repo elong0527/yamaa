@@ -69,7 +69,7 @@ fn successful_observations<C, D, T: TableAccess>(
                 held.read.source != *declared
                     || !held.read.captured
                     || held.read.failure.is_some()
-                    || held.snapshot.is_none()
+                    || (held.snapshot.is_some() == held.owned_snapshot.is_some())
                     || held.table.is_none()
             })
     {
@@ -541,7 +541,11 @@ fn failed_observations<'a, E>(
         }
         Err(PortError::Capture(error)) => {
             let last = attempt.sources.last().ok_or(Error::InvalidObservation)?;
-            if last.read.captured || last.snapshot.is_some() || last.table.is_some() {
+            if last.read.captured
+                || last.snapshot.is_some()
+                || last.owned_snapshot.is_some()
+                || last.table.is_some()
+            {
                 return Err(Error::InvalidObservation);
             }
             if last.read.failure != native_resource_failure(error) {
@@ -794,7 +798,7 @@ pub fn attempt_report_classified<'a, E>(
                     .any(|(source, expected)| {
                         source.read.source != *expected
                             || !source.read.captured
-                            || source.snapshot.is_none()
+                            || (source.snapshot.is_some() == source.owned_snapshot.is_some())
                             || source.table.is_none()
                             || source.read.failure.is_some()
                     })

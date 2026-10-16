@@ -139,6 +139,7 @@ fn captured_failure<E>(
     if last.read.captured
         || last.read.failure.is_none()
         || last.snapshot.is_some()
+        || last.owned_snapshot.is_some()
         || last.table.is_some()
         || prefix
             .iter()

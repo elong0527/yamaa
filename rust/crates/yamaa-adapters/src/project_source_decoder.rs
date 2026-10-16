@@ -45,6 +45,21 @@ impl<E> Default for Decoder<E> {
 impl<E> SourceDecoder for Decoder<E> {
     type Error = Error;
     type Table = Snapshot<E>;
+    fn decode_owned(
+        &mut self,
+        source: &SourceDeclaration,
+        table: &(dyn std::any::Any + Send + Sync),
+        interpretation: yamaa_core::specification::SourceInterpretation,
+        contract: Option<&yamaa_core::producer_contract::Contract>,
+    ) -> Option<Result<Self::Table, Error>> {
+        table.downcast_ref::<ArrowTable>().map(|table| {
+            crate::specification_run::decode_frame(source, table.clone(), interpretation, contract)
+                .map(|table| Snapshot {
+                    table,
+                    error: PhantomData,
+                })
+        })
+    }
     fn continue_after(&self, error: &Error) -> bool {
         crate::specification_run::SourceDecoder.continue_after(error)
     }

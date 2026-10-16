@@ -201,7 +201,7 @@ impl RootResult {
     fn save_logs_with(
         &mut self,
         publish: impl FnMut(
-            &mut crate::file_publication::Publisher,
+            &mut crate::resource_publication::Publisher,
             &str,
             &[u8],
         ) -> Result<(), crate::file_publication::Error>,

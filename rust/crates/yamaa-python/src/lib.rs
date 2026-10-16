@@ -11,6 +11,7 @@ mod project_activation;
 mod project_result;
 mod report_fields;
 mod resolved_artifact;
+mod resource_resolver;
 mod style;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {

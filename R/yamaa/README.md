@@ -20,6 +20,40 @@ define$save()
 packageVersion("yamaa")
 ```
 
+Pass `resolver=` to `yamaa_domain` or `yamaa_check` for host-owned metadata,
+inputs and Save destinations. Default calls use native local files. The shared
+contract is described in [Host resources](../../python/README.md#host-resources).
+
+```r
+resources <- yamaa_memory_resolver(list(
+  "spec.yaml" = charToRaw(specification_text),
+  "raw.csv" = charToRaw("ID\n7\n")
+))
+result <- yamaa_domain("spec.yaml", resolver = resources)
+result$resource_provenance
+result$save()
+resources$backend$outputs
+```
+
+`yamaa_synthetic_remote_resolver` provides the same deterministic behavior with
+synthetic object-store identities. `yamaa_resource_resolver(callback)` wraps a
+callback that takes a typed request and returns `yamaa_resource_result`.
+Use `yamaa_resource_failure` for explicitly classified failures. Inspect and
+Target do not read study bytes; Capture returns raw bytes or an immutable
+Arrow-compatible frame. Stage, Commit and Abort publish held bytes with cleanup
+and preserve the completed publication prefix. Conditions and interrupts retain
+their original R objects through cleanup.
+
+`resources$backend$put("raw.csv", NULL, frame = frame)` captures immutable
+nanoarrow arrays and schema once, then supplies a fresh C Stream on every
+capture, including repeated aliases and later builds. Generic callbacks returning
+a stream must supply a fresh stream on every call. Supported fields are UTF-8,
+signed 64-bit integers, doubles, Date32 and whole-second timestamps without a
+timezone. No IPC or temporary input files are used for frames. References and
+held-content comparison establish snapshot freshness; no content hashing is used.
+Credentials remain private to the callback, independently from retained
+`resource_provenance`. Returned URI references do not change authored path rules.
+
 `yamaa_domain` computes without publishing files. Explicit Save publishes retained
 producer bytes before consumers and reuses those bytes on repeated calls. A failed
 build raises `yamaa_domain_error` on Save. Owned result attributes are read only;

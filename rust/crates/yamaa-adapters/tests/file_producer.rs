@@ -2305,6 +2305,7 @@ columns:
                 sources: vec![CapturedSource {
                     read: source.read,
                     snapshot: source.snapshot,
+                    owned_snapshot: source.owned_snapshot,
                     table: Some(Bomb {
                         schema: source.table.unwrap().schema().clone(),
                         reads: Rc::clone(&reads),

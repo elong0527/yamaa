@@ -74,7 +74,7 @@ pub(crate) fn string_array<'a>(
 
 /// Immutable arrays own/reference their buffers independently of input handles.
 /// Empty chunks are retained; row lookup skips them without changing record order.
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct ArrowTable {
     schema: TableSchema,
     batches: Vec<RecordBatch>,

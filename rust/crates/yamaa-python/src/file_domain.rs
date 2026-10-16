@@ -10,6 +10,7 @@ use yamaa_core::application_observer::{Outcome, Phase, Scope};
 pub struct Runtime<'py, 'request> {
     pub py: Python<'py>,
     pub specification: &'request str,
+    pub resolver: Option<std::sync::Arc<dyn yamaa_adapters::host_resources::Resolver>>,
 }
 impl Runtime<'_, '_> {
     fn identity(&self) -> Identity<'_> {
@@ -49,6 +50,9 @@ impl Runtime<'_, '_> {
 impl RuntimePort for Runtime<'_, '_> {
     type Result = Domain;
     type Error = PyErr;
+    fn resolver(&self) -> Option<std::sync::Arc<dyn yamaa_adapters::host_resources::Resolver>> {
+        self.resolver.clone()
+    }
     fn plain(
         &mut self,
         prepared: yamaa_adapters::file_preparation::FileSpecification,

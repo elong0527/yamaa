@@ -12,6 +12,14 @@ use std::{sync::Arc, vec};
 /// hold immutable bytes and compare cached snapshots on bytes, never a digest.
 pub trait SourcePort {
     type Error;
+    /// Optional immutable native table, owned independently of host handles.
+    /// The decoder admits its schema/values through the same binding lifecycle.
+    fn owned_table(
+        &self,
+        _source: &SourceDeclaration,
+    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+        None
+    }
     /// Opt in only for known resource causes. Opaque host errors retain their
     /// identity and are not converted by inspecting their text or class name.
     fn resource_failure(&self, error: &Self::Error) -> Option<ResourceFailure>;
@@ -32,6 +40,15 @@ pub trait SourcePort {
 pub trait SourceDecoder {
     type Error;
     type Table: TableAccess;
+    fn decode_owned(
+        &mut self,
+        _source: &SourceDeclaration,
+        _table: &(dyn std::any::Any + Send + Sync),
+        _interpretation: SourceInterpretation,
+        _contract: Option<&crate::producer_contract::Contract>,
+    ) -> Option<Result<Self::Table, Self::Error>> {
+        None
+    }
     /// Semantic ingestion findings can be collected across the remaining declared
     /// sources. Resource, transport and opaque boundary failures must abort.
     fn continue_after(&self, error: &Self::Error) -> bool;
@@ -197,6 +214,9 @@ pub fn inspection_declaration_diagnostics<'a, E>(
 pub struct CapturedSource<T> {
     pub read: SourceRead,
     pub snapshot: Option<Arc<[u8]>>,
+    /// An imported immutable table is retained as typed ownership evidence,
+    /// independently of decoding/projection, rather than fake encoded bytes.
+    pub owned_snapshot: Option<Arc<dyn std::any::Any + Send + Sync>>,
     pub table: Option<T>,
 }
 impl<T> CapturedSource<T> {
@@ -210,6 +230,7 @@ impl<T> CapturedSource<T> {
                 snapshots_created: None,
             },
             snapshot: None,
+            owned_snapshot: None,
             table: None,
         }
     }
@@ -428,14 +449,23 @@ fn execute_inner_into<P: SourcePort, D: SourceDecoder>(
             }));
             return;
         }
-        match decoder.decode(
-            declaration,
-            bytes,
-            prepared
-                .source_interpretation(index)
-                .expect("admitted source interpretation"),
-            None,
-        ) {
+        let owned = port.owned_table(declaration);
+        let interpretation = prepared
+            .source_interpretation(index)
+            .expect("admitted source interpretation");
+        let owned_decoded = owned.as_ref().and_then(|table| {
+            decoder.decode_owned(declaration, table.as_ref(), interpretation, None)
+        });
+        // Only a table the owned decoder accepted replaces the byte snapshot;
+        // a byte fallback keeps the bytes it actually decoded.
+        let used_owned = owned_decoded.is_some();
+        let decoded = owned_decoded
+            .unwrap_or_else(|| decoder.decode(declaration, bytes, interpretation, None));
+        if used_owned {
+            observed.snapshot = None;
+            observed.owned_snapshot = owned;
+        }
+        match decoded {
             Ok(table) => {
                 observed.table = Some(table);
                 let table = observed.table.as_ref().expect("decoded source");
