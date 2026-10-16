@@ -437,7 +437,10 @@ impl TableError {
             Table::Limit { .. } => "limit",
             Table::SchemaMismatch { .. } => "schema_mismatch",
             Table::ArrayType { .. } => "array_type",
-            Table::Temporal { .. } => "temporal",
+            Table::TemporalChildType { .. }
+            | Table::TemporalMissingChild { .. }
+            | Table::TemporalPrecision { .. }
+            | Table::TemporalRange { .. } => "temporal",
             Table::Arrow(_) => "arrow",
         };
         Self {

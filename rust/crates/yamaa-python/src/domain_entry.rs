@@ -84,12 +84,15 @@ impl Domain {
     /// Qualification can inspect original host failures even if report projection refuses.
     fn project_failures(&self, py: Python<'_>) -> PyResult<Vec<(String, Py<PyAny>)>> {
         let _ = py;
-        let failures = self
-            .inner
-            .try_lock()
-            .map_err(|_| poisoned())?
-            .project_failures()
-            .unwrap_or(&[])
+        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
+        let project = guard.project_failures().unwrap_or(&[]);
+        let producer = guard.producer_failures().unwrap_or(&[]);
+        let failures = if project.is_empty() {
+            producer
+        } else {
+            project
+        };
+        let failures = failures
             .iter()
             .filter_map(|failure| {
                 crate::function_callback::payload(py, &failure.error)
