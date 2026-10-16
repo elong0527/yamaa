@@ -108,6 +108,7 @@ mod file {
             shipped_schema,
             specification_source::Source,
         };
+        use yamaa_core::application_observer::Scope;
         use yamaa_core::{
             dataset::{Execution, ExecutionError},
             function_invocation::{Argument, FailureKind, HostError},
@@ -1476,7 +1477,7 @@ columns:
                     "producer/p.yaml",
                 )
                 .unwrap();
-                let mut direct = file_application::plain(prepared, id()).unwrap();
+                let mut direct = file_application::plain(prepared, id(), Scope::default()).unwrap();
                 assert_eq!(direct.observations()["diagnostics"], expected);
                 assert!(direct.output().is_none());
                 assert!(direct.save().is_err());

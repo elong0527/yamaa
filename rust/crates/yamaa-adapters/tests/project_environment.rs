@@ -1092,6 +1092,7 @@ mod project {
             specification_report::Identity,
             specification_source::Source,
         };
+        use yamaa_core::application_observer::Scope;
         use yamaa_core::{
             function_invocation::{Argument, HostError},
             project_activation::ActivationPort,
@@ -1247,7 +1248,8 @@ mod project {
                     root: case.clone(),
                     cached: BTreeMap::new(),
                 };
-                let attempt = run.execute_with_ports(&mut NoActivation, &mut study);
+                let attempt =
+                    run.execute_with_ports(&mut NoActivation, &mut study, Scope::default());
                 let result =
                     project_report::build_result(&run, &attempt, id(example), &[]).unwrap();
                 let reads = study.capture_reads();
@@ -1303,7 +1305,7 @@ mod project {
                     ),
                 )]),
             };
-            let attempt = run.execute_with_ports(&mut NoActivation, &mut study);
+            let attempt = run.execute_with_ports(&mut NoActivation, &mut study, Scope::default());
             let result = project_report::build_result(&run, &attempt, id("codelist"), &[]).unwrap();
             assert_eq!(result.output(), None);
             assert_eq!(result.issues().len(), 1);
@@ -1398,7 +1400,8 @@ mod project {
                         captures: 0,
                         inspections: 0,
                     };
-                    let attempt = run.execute_with_ports(&mut NoActivation, &mut resources);
+                    let attempt =
+                        run.execute_with_ports(&mut NoActivation, &mut resources, Scope::default());
                     let candidate =
                         project_report::build_result(&run, &attempt, id("failed-resource"), &[]);
                     if classified {
@@ -1463,7 +1466,7 @@ mod project {
                     ),
                 )]),
             };
-            let attempt = run.execute_with_ports(&mut NoActivation, &mut study);
+            let attempt = run.execute_with_ports(&mut NoActivation, &mut study, Scope::default());
             let result =
                 project_report::build_result(&run, &attempt, id("codelist-prefix"), &[]).unwrap();
             let observed = result.observations();
@@ -1499,6 +1502,7 @@ mod project {
             project_source::{self, CapturePort, Kind, OwnedEnvironment, Reply, Request},
             specification_source::{PreparedDocument, Source},
         };
+        use yamaa_core::application_observer::Scope;
         use yamaa_core::{
             dataset::ExecutionError,
             function_invocation::{Argument, FailureKind, HostError},
@@ -1770,7 +1774,7 @@ functions:
             assert_eq!(run.compiled().called_functions(), [1]);
             assert!(activation.trace.borrow().is_empty());
             for reads in [Some(1), Some(0)] {
-                let attempt = run.execute_with_ports(&mut activation, &mut study);
+                let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
                 assert!(attempt.boundary.is_ok());
                 assert_eq!(attempt.activation.lock, LockObservation::Verified);
                 assert_eq!(attempt.activation.tests.len(), 3);
@@ -1857,7 +1861,8 @@ functions:
                     assert_eq!(run.compiled().called_functions(), [1]);
                     let (mut activation, mut study) = ports();
                     study.bytes = Arc::from(b"ID\n1\n1\n2\n".as_slice());
-                    let attempt = run.execute_with_ports(&mut activation, &mut study);
+                    let attempt =
+                        run.execute_with_ports(&mut activation, &mut study, Scope::default());
                     assert!(attempt.boundary.is_ok());
                     let trace = activation.trace.borrow();
                     assert_eq!(&trace[..4], &["lock", "bind", "case", "case"]);
@@ -1891,7 +1896,7 @@ functions:
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
             study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
-            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             assert_eq!(activation.values, [7, i64::MIN, 10, 10, 40]);
             assert_eq!(
                 attempt
@@ -1937,7 +1942,7 @@ functions:
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
             study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
-            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             assert!(
                 attempt
                     .dataset
@@ -1991,7 +1996,7 @@ functions:
             ] {
                 let (mut activation, mut study) = ports();
                 activation.mode = mode;
-                let attempt = run.execute_with_ports(&mut activation, &mut study);
+                let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
                 let Err(BoundaryFailure::Activation(error)) = &attempt.boundary else {
                     panic!("activation failure")
                 };
@@ -2043,7 +2048,7 @@ functions:
             let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
             activation.mode = Mode::CaseUnwind;
-            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             let Err(BoundaryFailure::Unwind(payload)) = &attempt.boundary else {
                 panic!("original unwind")
             };
@@ -2071,7 +2076,7 @@ functions:
             assert!(attempt.dataset.sources.is_empty());
             assert_eq!(study.inspections, 0);
             activation.mode = Mode::Pass;
-            let next = run.execute_with_ports(&mut activation, &mut study);
+            let next = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             assert!(next.boundary.is_ok());
             assert_eq!(next.activation.tests.len(), 3);
             assert!(next.dataset.result.unwrap().result.is_ok());
@@ -2084,7 +2089,7 @@ functions:
             let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
             activation.mode = Mode::LiveFailure;
-            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             assert!(attempt.boundary.is_ok());
             assert!(attempt
                 .activation
@@ -2137,7 +2142,7 @@ functions:
             let run = PreparedRun::prepare(document(None), environment()).unwrap();
             let (mut activation, mut study) = ports();
             activation.mode = Mode::LockFailure;
-            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             assert!(attempt.boundary.is_ok());
             assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
             assert!(attempt.activation.bindings.is_empty());
@@ -2151,7 +2156,7 @@ functions:
             use yamaa_adapters::project_activation_observations::{activation, Error};
             let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
             let (mut host, mut study) = ports();
-            let mut attempt = run.execute_with_ports(&mut host, &mut study);
+            let mut attempt = run.execute_with_ports(&mut host, &mut study, Scope::default());
             let trace = host.trace.borrow().clone();
             let reads = study.capture_reads();
             assert!(activation(&run, &attempt.activation).is_ok());
@@ -2169,7 +2174,7 @@ functions:
             use yamaa_adapters::{project_activation_observations as activation, project_report};
             let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
             let (mut host, mut study) = ports();
-            let mut attempt = run.execute_with_ports(&mut host, &mut study);
+            let mut attempt = run.execute_with_ports(&mut host, &mut study, Scope::default());
             let trace = host.trace.borrow().clone();
             let reads = study.capture_reads();
             let bindings = attempt.activation.bindings.clone();
@@ -2234,7 +2239,7 @@ functions:
         fn complete_project_output_and_save_borrow_the_exact_attempt_without_reactivation() {
             let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
-            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             let trace = activation.trace.borrow().clone();
             let snapshot = attempt.dataset.sources[0]
                 .snapshot
@@ -2319,7 +2324,7 @@ functions:
             ] {
                 let (mut activation, mut study) = ports();
                 activation.mode = mode;
-                let attempt = run.execute_with_ports(&mut activation, &mut study);
+                let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
                 let trace = activation.trace.borrow().clone();
                 let unclassified = yamaa_adapters::project_report::build_result(
                     &run,
@@ -2395,7 +2400,7 @@ functions:
             let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
             activation.mode = Mode::BindFailure;
-            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             let Err(BoundaryFailure::Activation(Failure::Bindings(failures))) = &attempt.boundary
             else {
                 panic!("binding failure")
@@ -2448,7 +2453,8 @@ functions:
             let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
             for change in 0..5 {
                 let (mut activation, mut study) = ports();
-                let mut attempt = run.execute_with_ports(&mut activation, &mut study);
+                let mut attempt =
+                    run.execute_with_ports(&mut activation, &mut study, Scope::default());
                 let trace = activation.trace.borrow().clone();
                 match change {
                     0 => {
@@ -2485,7 +2491,7 @@ functions:
             let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
             activation.mode = Mode::LockFailure;
-            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             let Err(BoundaryFailure::Activation(Failure::Lock(original))) = &attempt.boundary
             else {
                 panic!("original lock payload")
@@ -2534,7 +2540,7 @@ functions:
             ));
             let (mut activation, mut study) = ports();
             activation.mode = Mode::CaseMismatch;
-            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             let result = yamaa_adapters::project_report::build_result(
                 &run,
                 &attempt,
@@ -2610,7 +2616,7 @@ functions:
             }
             let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
             let (_, mut study) = ports();
-            let attempt = run.execute_with_ports(&mut RejectLock, &mut study);
+            let attempt = run.execute_with_ports(&mut RejectLock, &mut study, Scope::default());
             let Err(BoundaryFailure::Activation(Failure::Lock(original))) = &attempt.boundary
             else {
                 panic!("held original zero-sized lock failure")
@@ -2719,7 +2725,7 @@ functions:
                     trace: Rc::clone(&activation.trace),
                     reads: 0,
                 };
-                let attempt = run.execute_with_ports(&mut activation, &mut study);
+                let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
                 let entered = attempt
                     .dataset
                     .result
@@ -2754,7 +2760,8 @@ functions:
                     assert_eq!(run.compiled().called_functions(), [1]);
                     let (mut activation, mut study) = ports();
                     study.bytes = Arc::from(b"ID\n1\n1\n2\n".as_slice());
-                    let attempt = run.execute_with_ports(&mut activation, &mut study);
+                    let attempt =
+                        run.execute_with_ports(&mut activation, &mut study, Scope::default());
                     assert!(attempt.boundary.is_ok());
                     let trace = activation.trace.borrow();
                     assert_eq!(&trace[..4], &["lock", "bind", "case", "case"]);
@@ -2786,7 +2793,7 @@ functions:
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
             study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
-            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             assert!(attempt.boundary.is_ok());
             let entered = attempt
                 .dataset
@@ -2814,7 +2821,7 @@ functions:
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
             study.bytes = Arc::from(b"ID\n1\n".as_slice());
-            let attempt = run.execute_with_ports(&mut activation, &mut study);
+            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             let error = attempt.dataset.result.unwrap_err();
             let PortError::Run(yamaa_core::specification_run::RunError::Bind(
                 yamaa_core::specification::BindError::Invalid(findings),

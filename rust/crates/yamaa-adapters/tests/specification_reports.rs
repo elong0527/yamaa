@@ -4,6 +4,7 @@ mod support;
 mod execution {
     mod specification_run {
         use crate::support::specification_run::*;
+        use yamaa_core::application_observer::Scope;
 
         #[test]
         fn original_window_failures_match_independent_diagnostics_and_completed_observations() {
@@ -69,7 +70,7 @@ mod execution {
                     bytes: Arc::from(content.into_bytes()),
                     requests: vec![],
                 };
-                let attempt = run.execute_with_port(&mut host);
+                let attempt = run.execute_with_port(&mut host, Scope::default());
                 let actual = specification_report::complete(
                     &run,
                     &attempt,
@@ -395,7 +396,7 @@ mod execution {
                 published: vec![],
             };
             for created in [1, 0] {
-                let attempt = run.execute_with_port(&mut data);
+                let attempt = run.execute_with_port(&mut data, Scope::default());
                 let report = yamaa_adapters::specification_report::complete(
                     &run,
                     &attempt,
@@ -532,7 +533,7 @@ mod execution {
                             cause: Some(cause),
                             identity: Arc::clone(&identity),
                         };
-                        let mut attempt = run.execute_with_port(&mut port);
+                        let mut attempt = run.execute_with_port(&mut port, Scope::default());
                         assert_eq!(
                             port.calls,
                             if fail_at == 0 {
@@ -616,7 +617,7 @@ mod execution {
                 cause: None,
                 identity: Arc::clone(&identity),
             };
-            let attempt = run.execute_with_port(&mut port);
+            let attempt = run.execute_with_port(&mut port, Scope::default());
             let Err(PortError::Capture(error)) = &attempt.result else {
                 panic!("opaque failure missing")
             };
@@ -718,7 +719,7 @@ mod execution {
                     if child_path.is_none() {
                         assert_eq!(run.source().path, "internal-location/nested/data.csv");
                     }
-                    let attempt = run.execute_with_port(&mut Missing);
+                    let attempt = run.execute_with_port(&mut Missing, Scope::default());
                     let report = specification_report::failure(
                         &run,
                         &attempt,
@@ -832,7 +833,7 @@ mod execution {
                     failures: serde_json::from_str(fields[1]).unwrap(),
                     inspected: vec![],
                 };
-                let mut attempt = run.execute_with_port(&mut port);
+                let mut attempt = run.execute_with_port(&mut port, Scope::default());
                 assert_eq!(port.inspected, ["DM", "AE", "MEDDRA"]);
                 assert!(attempt.sources.is_empty());
                 let expected = serde_json::from_str::<yamaa_core::json::Value>(fields[2]).unwrap();
@@ -987,7 +988,7 @@ mod execution {
                         bytes: input.into(),
                         reads: 0,
                     };
-                    let attempt = run.execute_with_port(&mut host);
+                    let attempt = run.execute_with_port(&mut host, Scope::default());
                     let result = specification_report::build_result(
                         &run,
                         &attempt,
@@ -1235,7 +1236,7 @@ mod execution {
                         expected: fixture_bytes(&row["artifact"]),
                         saves: 0,
                     };
-                    let attempt = run.execute_with_port(&mut port);
+                    let attempt = run.execute_with_port(&mut port, Scope::default());
                     let example = format!("source-binding-{}", case);
                     let result = specification_report::build_result(
                         &run,
@@ -1366,7 +1367,7 @@ mod execution {
                         expected: fixture_bytes(&row["artifact"]),
                         saves: 0,
                     };
-                    let attempt = run.execute_with_port(&mut port);
+                    let attempt = run.execute_with_port(&mut port, Scope::default());
                     let example = format!("mapping-cut-{}", case);
                     let result = specification_report::build_result(
                         &run,

@@ -8,6 +8,7 @@ use crate::{
     specification_source::CapturedSchema,
 };
 use std::sync::Arc;
+use yamaa_core::application_observer::Scope;
 use yamaa_core::project_activation::ActivationPort;
 use yamaa_core::project_function::Language;
 
@@ -166,28 +167,21 @@ impl FileProject {
     pub fn build<A: ActivationPort>(
         &mut self,
         activation: &mut A,
+        scope: Scope<'_>,
     ) -> Attempt<ResourceError, A::Error> {
-        self.run.execute_with_ports(activation, &mut self.resources)
+        self.run
+            .execute_with_ports(activation, &mut self.resources, scope)
     }
     /// Let an installed port borrow the exact retained lock without copying it
     /// or exposing study authority. Port construction performs no activation.
     pub fn build_with<'run, A: ActivationPort>(
         &'run mut self,
         factory: impl FnOnce(&'run PreparedRun) -> A,
-    ) -> Attempt<ResourceError, A::Error> {
-        self.build_with_observer(
-            factory,
-            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
-        )
-    }
-    pub fn build_with_observer<'run, A: ActivationPort>(
-        &'run mut self,
-        factory: impl FnOnce(&'run PreparedRun) -> A,
-        scope: yamaa_core::application_observer::Scope<'_>,
+        scope: Scope<'_>,
     ) -> Attempt<ResourceError, A::Error> {
         let mut activation = factory(&self.run);
         self.run
-            .execute_with_observer(&mut activation, &mut self.resources, scope)
+            .execute_with_ports(&mut activation, &mut self.resources, scope)
     }
 }
 

@@ -191,6 +191,7 @@ mod file {
             file_application, file_configuration, file_preparation::FileSpecification,
             specification_report::Identity,
         };
+        use yamaa_core::application_observer::Scope;
         use yamaa_core::domain_entry::Request;
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n";
@@ -263,7 +264,7 @@ mod file {
             let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
             let reads = prepared.capture_reads();
             fs::write(study.0.join("input.csv"), b"ID\n2\n").unwrap();
-            let attempt = prepared.build();
+            let attempt = prepared.build(Scope::default());
             assert!(matches!(
                 &attempt.result,
                 Err(PortError::Capture(
@@ -482,13 +483,13 @@ mod file {
             assert_eq!(resources.capture_reads(), 0);
             let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
             assert_eq!(prepared.capture_reads(), 1);
-            assert!(prepared.build().result.is_err());
+            assert!(prepared.build(Scope::default()).result.is_err());
             assert_eq!(prepared.capture_reads(), 1);
             fs::write(study.0.join("entry/input.csv"), b"ID\n1\n").unwrap();
             fs::write(study.0.join("yamaa-project.yaml"), b"[changed").unwrap();
-            assert!(prepared.build().result.is_ok());
+            assert!(prepared.build(Scope::default()).result.is_ok());
             assert_eq!(prepared.capture_reads(), 2);
-            assert!(prepared.build().result.is_ok());
+            assert!(prepared.build(Scope::default()).result.is_ok());
             assert_eq!(prepared.capture_reads(), 2);
         }
         #[test]
@@ -963,7 +964,7 @@ mod file {
                 yamaa_core::project_function::Language::Python,
             )
             .unwrap();
-            let attempt = project.build(&mut NoFunctions);
+            let attempt = project.build(&mut NoFunctions, Scope::default());
             assert!(attempt.boundary.is_ok());
             let result = yamaa_adapters::project_report::build_result(
                 project.run(),
@@ -1705,6 +1706,7 @@ mod file {
             file_preparation::{Error, FileSpecification},
             file_resources::Resources,
         };
+        use yamaa_core::application_observer::Scope;
         use yamaa_core::json::{json, Value};
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         struct Study(PathBuf);
@@ -1773,9 +1775,9 @@ mod file {
             // Compilation uses the retained original model rather than reopening entry YAML.
             fs::write(study.0.join("entry/spec.yaml"), b"[changed").unwrap();
             fs::write(study.0.join("entry/input.csv"), b"ID\n1\n").unwrap();
-            assert!(prepared.build().result.is_ok());
+            assert!(prepared.build(Scope::default()).result.is_ok());
             assert_eq!(prepared.capture_reads(), 2);
-            assert!(prepared.build().result.is_ok());
+            assert!(prepared.build(Scope::default()).result.is_ok());
             assert_eq!(prepared.capture_reads(), 2);
         }
 
@@ -1798,7 +1800,7 @@ mod file {
                     .unwrap()
             );
             assert_eq!(prepared.capture_reads(), 1);
-            assert!(prepared.build().result.is_ok());
+            assert!(prepared.build(Scope::default()).result.is_ok());
             assert_eq!(prepared.capture_reads(), 2);
         }
         #[test]
@@ -1866,9 +1868,9 @@ mod file {
                 "[]"
             );
             fs::write(study.0.join("parent/input.csv"), b"ID\n1\n").unwrap();
-            assert!(prepared.build().result.is_ok());
+            assert!(prepared.build(Scope::default()).result.is_ok());
             assert_eq!(prepared.capture_reads(), 3);
-            assert!(prepared.build().result.is_ok());
+            assert!(prepared.build(Scope::default()).result.is_ok());
             assert_eq!(prepared.capture_reads(), 3);
         }
         #[cfg(unix)]
@@ -1986,7 +1988,7 @@ mod file {
                             }
                         }
                     }
-                    let attempt = prepared.build();
+                    let attempt = prepared.build(Scope::default());
                     let result = specification_report::build_result(
                         prepared.run(),
                         &attempt,

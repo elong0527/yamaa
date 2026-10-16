@@ -880,6 +880,7 @@ mod table {
             specification_run::PreparedRun,
             specification_source::Source,
         };
+        use yamaa_core::application_observer::Scope;
         use yamaa_core::specification::{PreparedSpecification, SourceDeclaration};
         use yamaa_core::{specification_output::SaveError, specification_run::SourcePort};
 
@@ -959,7 +960,7 @@ mod table {
         fn whole_result_keeps_unrounded_derivation_and_prepares_exact_saved_bytes_once() {
             let run = prepared("2", "output.csv", "VALUE + VALUE");
             let mut study = Study(0);
-            let attempt = run.execute_with_port(&mut study);
+            let attempt = run.execute_with_port(&mut study, Scope::default());
             let table = attempt.result.as_ref().unwrap().table.as_ref().unwrap();
             let snapshot: yamaa_core::json::Value =
                 serde_json::from_str(&ipc_snapshot::table_snapshot(table).unwrap()).unwrap();
@@ -1024,7 +1025,7 @@ mod table {
                 ("19", "output.csv", "1 / 0", "division_by_zero"),
             ] {
                 let run = prepared(precision, path, expression);
-                let attempt = run.execute_with_port(&mut Study(0));
+                let attempt = run.execute_with_port(&mut Study(0), Scope::default());
                 let result =
                     specification_report::build_result(&run, &attempt, identity()).unwrap();
                 let report = result.observations();
@@ -2375,6 +2376,7 @@ mod table {
             specification_run::{PreparedRun, SourcePort},
             specification_source::Source,
         };
+        use yamaa_core::application_observer::Scope;
         use yamaa_core::specification::SourceDeclaration;
 
         struct Port {
@@ -2429,7 +2431,7 @@ mod table {
                     .unwrap();
                 let run = PreparedRun::prepare(prepared).unwrap();
                 let mut port = Port { captures: 0 };
-                let attempt = run.execute_with_port(&mut port);
+                let attempt = run.execute_with_port(&mut port, Scope::default());
                 let example = format!("predicate-context-{}", fields[0]);
                 let result = specification_report::build_result(
                     &run,

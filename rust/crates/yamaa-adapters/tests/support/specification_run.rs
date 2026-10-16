@@ -7,6 +7,7 @@ pub(crate) use yamaa_adapters::{
     specification_source::{CapturedSchema, PreparedDocument, Source},
     yaml_decode::decode_yaml,
 };
+use yamaa_core::application_observer::Scope;
 pub(crate) use yamaa_core::{
     evaluation::EvaluationErrorKind,
     schema::{Document, DocumentNode as N, SpecificationDocument},
@@ -182,7 +183,7 @@ pub(crate) fn independent_failed_reports(
         let run = PreparedRun::prepare(prepare(&schema, source.as_bytes())).unwrap();
         let content = source_bytes.as_deref().unwrap_or(content);
         let mut port = Port(0, Arc::from(content));
-        let attempt = run.execute_with_port(&mut port);
+        let attempt = run.execute_with_port(&mut port, Scope::default());
         let example = format!("{prefix}-{}", case);
         let result = specification_report::build_result(
             &run,
@@ -272,7 +273,7 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
         let run =
             PreparedRun::prepare(prepare(&schema, row["source"].as_str().unwrap().as_bytes()))
                 .unwrap();
-        let attempt = run.execute_with_port(&mut port);
+        let attempt = run.execute_with_port(&mut port, Scope::default());
         let example = format!("{prefix}-{}", row["case"].as_str().unwrap());
         let result = specification_report::build_result(
             &run,
@@ -382,7 +383,7 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
             expected: fixture_bytes(&row["artifact"]),
             saves: 0,
         };
-        let attempt = run.execute_with_port(&mut port);
+        let attempt = run.execute_with_port(&mut port, Scope::default());
         let example = format!("{prefix}-{}", case);
         let result = specification_report::build_result(
             &run,

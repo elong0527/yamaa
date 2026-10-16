@@ -109,6 +109,7 @@ mod service {
         use std::{convert::Infallible, rc::Rc, sync::Arc};
         use support::{call, specification, Tree};
         use yamaa_core::{
+            application_observer::Scope,
             build::{self, EntrySelection, MetadataAdmissionPort, PreparationPort, Prepared},
             domain_entry::{self, Ports, Request},
             function_invocation::{Argument, HostError},
@@ -447,16 +448,25 @@ mod service {
             fn check_producer(&mut self, _: Self::Producer) -> Result<(), Failure> {
                 unreachable!()
             }
-            fn build_plain(&mut self, _: Self::Plain) -> Result<PreparedOutput<()>, Failure> {
+            fn build_plain(
+                &mut self,
+                _: Self::Plain,
+                _: Scope<'_>,
+            ) -> Result<PreparedOutput<()>, Failure> {
                 unreachable!()
             }
             fn build_project(
                 &mut self,
                 checked: Self::Project,
+                _: Scope<'_>,
             ) -> Result<PreparedOutput<()>, Failure> {
                 self.run(checked)
             }
-            fn build_producer(&mut self, _: Self::Producer) -> Result<PreparedOutput<()>, Failure> {
+            fn build_producer(
+                &mut self,
+                _: Self::Producer,
+                _: Scope<'_>,
+            ) -> Result<PreparedOutput<()>, Failure> {
                 unreachable!()
             }
         }
@@ -477,7 +487,7 @@ mod service {
                 Scenario::Report,
             ] {
                 let mut ports = Application::new(scenario);
-                let result = domain_entry::domain(request(), &mut ports);
+                let result = domain_entry::domain(request(), &mut ports, Scope::default());
                 match (&scenario, &result) {
                     (Scenario::Environment, Err(Failure::Metadata(error))) => assert!(matches!(
                         error.as_ref(),
@@ -534,7 +544,7 @@ mod service {
                     | Event::Observation("lock" | "binding")
             )));
             ports.log.clear();
-            let result = domain_entry::domain(request(), &mut ports).unwrap();
+            let result = domain_entry::domain(request(), &mut ports, Scope::default()).unwrap();
             assert!(!ports
                 .log
                 .events()
@@ -1164,6 +1174,7 @@ mod service {
         use std::{cell::RefCell, rc::Rc};
         use yamaa_core::schema::{Document, DocumentNode as N};
         use yamaa_core::{
+            application_observer::Scope,
             build::{self, EntrySelection, MetadataAdmissionPort, PreparationPort, Prepared},
             domain_entry::{self, Ports, Request},
         };
@@ -1290,13 +1301,13 @@ mod service {
             fn check_producer(&mut self, _: ()) -> Result<(), Original> {
                 self.enter("graph check")
             }
-            fn build_plain(&mut self, _: ()) -> Result<(), Original> {
+            fn build_plain(&mut self, _: (), _: Scope<'_>) -> Result<(), Original> {
                 self.execute("plain build")
             }
-            fn build_project(&mut self, _: ()) -> Result<(), Original> {
+            fn build_project(&mut self, _: (), _: Scope<'_>) -> Result<(), Original> {
                 self.execute("project build")
             }
-            fn build_producer(&mut self, _: ()) -> Result<(), Original> {
+            fn build_producer(&mut self, _: (), _: Scope<'_>) -> Result<(), Original> {
                 self.execute("graph build")
             }
         }
@@ -1355,7 +1366,7 @@ mod service {
                             phases: Some(Rc::clone(&phases)),
                             ..Default::default()
                         };
-                        let result = domain_entry::domain_with_observer(
+                        let result = domain_entry::domain(
                             request(environment),
                             &mut port,
                             Scope::new(&observer),
@@ -1451,7 +1462,9 @@ mod service {
                 expected.extend(["entry", "snapshot verification", compilation, check]);
                 assert_eq!(port.events, expected);
                 port.events.clear();
-                assert!(domain_entry::domain(request(environment), &mut port).is_ok());
+                assert!(
+                    domain_entry::domain(request(environment), &mut port, Scope::default()).is_ok()
+                );
                 expected.pop();
                 expected.extend([
                     build,
@@ -1493,7 +1506,9 @@ mod service {
                         failure: Some((stage, Original(Rc::clone(&marker)))),
                         ..Default::default()
                     };
-                    let Err(error) = domain_entry::domain(request(true), &mut port) else {
+                    let Err(error) =
+                        domain_entry::domain(request(true), &mut port, Scope::default())
+                    else {
                         panic!("scripted failure")
                     };
                     assert!(Rc::ptr_eq(&marker, &error.0));

@@ -9,6 +9,7 @@ mod project {
             sync::atomic::{AtomicUsize, Ordering},
         };
         use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_core::application_observer::Scope;
         use yamaa_core::domain_entry::Request;
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         struct Study(PathBuf);
@@ -317,7 +318,7 @@ mod project {
             else {
                 panic!("ordinary metadata capability")
             };
-            let attempt = project.build(&mut NoActivation);
+            let attempt = project.build(&mut NoActivation, Scope::default());
             let result = yamaa_adapters::project_report::build_result(
                 project.run(),
                 &attempt,
@@ -481,7 +482,7 @@ mod project {
                 assert!(!study.0.join("catalog/never-read.csv").exists());
                 assert!(!study.0.join("input.csv").exists());
                 fs::write(study.0.join("input.csv"), "ID,VALUE\n1,DM\n2,renamed\n3,\n").unwrap();
-                let attempt = project.build(&mut NoActivation);
+                let attempt = project.build(&mut NoActivation, Scope::default());
                 let result = yamaa_adapters::project_report::build_result(
                     project.run(),
                     &attempt,
