@@ -14,6 +14,38 @@ pub enum Error<'a> {
 fn invalid() -> Error<'static> {
     Error::Projection(crate::specification_check::Error::InvalidContext)
 }
+fn declaring(
+    mut diagnostic: Diagnostic,
+    document: &crate::specification_source::PreparedDocument,
+) -> Result<Diagnostic, Error<'static>> {
+    let origins = diagnostic
+        .spec_paths
+        .iter()
+        .map(|path| match document.declaring_source(path) {
+            Some(source) => JsonValue::String(source.into()),
+            None => JsonValue::Null,
+        })
+        .collect();
+    if diagnostic
+        .context
+        .insert("declaring_sources".into(), JsonValue::Array(origins))
+        .is_some()
+    {
+        return Err(invalid());
+    }
+    Ok(diagnostic)
+}
+fn projected_issue(
+    diagnostic: Diagnostic,
+    declaring_document: Option<&crate::specification_source::PreparedDocument>,
+    source: Option<(&str, &str)>,
+) -> Result<Issue, Error<'static>> {
+    let diagnostic = match declaring_document {
+        Some(document) => declaring(diagnostic, document)?,
+        None => diagnostic,
+    };
+    issue(diagnostic, source)
+}
 fn issue(
     mut diagnostic: Diagnostic,
     source: Option<(&str, &str)>,
@@ -46,21 +78,7 @@ pub fn prepared(graph: &FileGraph) -> Result<Vec<Issue>, Error<'_>> {
             let mut diagnostic = finding.diagnostic();
             let document = &graph.graph().nodes()[index].document;
             if multiple && document.inheritance().is_some() {
-                let origins = diagnostic
-                    .spec_paths
-                    .iter()
-                    .map(|path| match document.declaring_source(path) {
-                        Some(source) => JsonValue::String(source.into()),
-                        None => JsonValue::Null,
-                    })
-                    .collect();
-                if diagnostic
-                    .context
-                    .insert("declaring_sources".into(), JsonValue::Array(origins))
-                    .is_some()
-                {
-                    return Err(invalid());
-                }
+                diagnostic = declaring(diagnostic, document)?;
             }
             issue(
                 diagnostic,
@@ -132,13 +150,8 @@ pub fn rejected(
     let Some((index, rejection)) = graph_error(cause) else {
         return Err(Error::Original(error));
     };
-    let source = graph
-        .documents()
-        .get(index)
-        .ok_or_else(invalid)?
-        .source()
-        .identity
-        .as_str();
+    let document = graph.documents().get(index).ok_or_else(invalid)?;
+    let source = document.source().identity.as_str();
     let entry = graph
         .documents()
         .first()
@@ -146,7 +159,10 @@ pub fn rejected(
         .source()
         .identity
         .as_str();
-    let provenance = (graph.documents().len() > 1).then_some((source, entry));
+    let multiple = graph.documents().len() > 1;
+    let provenance = multiple.then_some((source, entry));
+    let declaring_document =
+        (multiple && document.inheritance().is_some()).then_some(document.as_ref());
     match rejection {
         Rejection::Diagnostics(diagnostics) => {
             if diagnostics.is_empty() {
@@ -154,7 +170,9 @@ pub fn rejected(
             }
             diagnostics
                 .iter()
-                .map(|diagnostic| issue(diagnostic.clone(), provenance))
+                .map(|diagnostic| {
+                    projected_issue(diagnostic.clone(), declaring_document, provenance)
+                })
                 .collect()
         }
         Rejection::Compile(PrepareError::Invalid(findings)) => {
@@ -163,7 +181,9 @@ pub fn rejected(
             }
             findings
                 .iter()
-                .map(|finding| issue(finding.diagnostic(), provenance))
+                .map(|finding| {
+                    projected_issue(finding.diagnostic(), declaring_document, provenance)
+                })
                 .collect()
         }
         Rejection::Compile(PrepareError::Unsupported(features)) => {
@@ -173,11 +193,12 @@ pub fn rejected(
             features
                 .iter()
                 .map(|feature| {
-                    issue(
+                    projected_issue(
                         yamaa_core::application_issue::unsupported(
                             &feature.operation,
                             Some(&feature.path),
                         ),
+                        declaring_document,
                         provenance,
                     )
                 })
