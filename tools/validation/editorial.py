@@ -437,7 +437,11 @@ def validate_examples_index(root: Path):
             first_line = content.split("\n", 1)[0] if content else ""
             if ":" in first_line:
                 title_desc = first_line.split(":", 1)[1].strip()
-                if title_desc != indexed_entries[dname]:
+                # The derived index (build_index) carries the full title,
+                # while a committed table may carry only the part after the
+                # colon; either form satisfies the title contract.
+                full_title = first_line.removeprefix("#").strip()
+                if indexed_entries[dname] not in (title_desc, full_title):
                     errors.append(
                         f"ERROR: {dname} title description '{title_desc}' does not match index '{indexed_entries[dname]}'"
                     )
