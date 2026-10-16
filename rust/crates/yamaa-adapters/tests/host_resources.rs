@@ -192,7 +192,9 @@ fn abort_removes_only_the_staging_token_not_the_target() {
         })
     };
     let token = stage(b"ID\n7\n").unwrap().reference;
-    assert_eq!(backend.staged_count(), 1);
+    let second = stage(b"ID\n8\n").unwrap().reference;
+    assert_ne!(token, second);
+    assert_eq!(backend.staged_count(), 2);
     // Abort by the target identity must not delete another attempt's
     // provisional output; only the staging token cleans up.
     backend
@@ -205,7 +207,7 @@ fn abort_removes_only_the_staging_token_not_the_target() {
             bytes: None,
         })
         .unwrap();
-    assert_eq!(backend.staged_count(), 1);
+    assert_eq!(backend.staged_count(), 2);
     backend
         .request(Request {
             operation: Operation::Abort,
@@ -213,6 +215,17 @@ fn abort_removes_only_the_staging_token_not_the_target() {
             declaring: "/spec.yaml",
             written: "out.csv",
             reference: Some(&token),
+            bytes: None,
+        })
+        .unwrap();
+    assert_eq!(backend.staged_count(), 1);
+    backend
+        .request(Request {
+            operation: Operation::Abort,
+            kind: Kind::Output,
+            declaring: "/spec.yaml",
+            written: "out.csv",
+            reference: Some(&second),
             bytes: None,
         })
         .unwrap();

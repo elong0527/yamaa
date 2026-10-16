@@ -332,6 +332,7 @@ pub struct MemoryResolver {
     staged: Mutex<StagedObjects>,
     published: Mutex<BTreeMap<String, Arc<[u8]>>>,
     cancelled: std::sync::atomic::AtomicBool,
+    next_stage: std::sync::atomic::AtomicU64,
 }
 type StagedObjects = BTreeMap<String, (String, Arc<[u8]>)>;
 impl MemoryResolver {
@@ -422,18 +423,19 @@ impl Resolver for MemoryResolver {
                 .map(|path| empty(format!("memory:{path}"))),
             Operation::Stage => {
                 let reference = request.reference.ok_or(Failure::Rejected)?;
-                let token = format!("stage:{reference}");
+                let bytes = Arc::from(request.bytes.ok_or(Failure::Rejected)?);
+                // Unique per-attempt token: overlapping publishes to the same
+                // target stage independently, so a late Abort by one attempt
+                // can never remove another attempt's provisional output.
+                let sequence = self
+                    .next_stage
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let token = format!("stage:{sequence}:{reference}");
                 let mut staged = self.staged.lock().map_err(|_| Failure::Publication)?;
                 if staged.contains_key(&token) {
                     return Err(Failure::Publication);
                 }
-                staged.insert(
-                    token.clone(),
-                    (
-                        reference.into(),
-                        Arc::from(request.bytes.ok_or(Failure::Rejected)?),
-                    ),
-                );
+                staged.insert(token.clone(), (reference.into(), bytes));
                 Ok(empty(token))
             }
             Operation::Commit => {

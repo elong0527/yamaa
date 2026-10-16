@@ -211,8 +211,15 @@ class MemoryResolver(ResourceResolver):
                 raise ResourceFailure("rejected")
             self._next += 1
             token = f"stage:{self._next}:{request.reference}"
+            # Interruption-safe handoff: if staging succeeds but token delivery
+            # fails (e.g. KeyboardInterrupt during result construction), roll
+            # back this attempt so a tokenless failure strands nothing.
             self.staging[token] = (request.reference, request.data)
-            return ResourceResult(token)
+            try:
+                return ResourceResult(token)
+            except BaseException:
+                self.staging.pop(token, None)
+                raise
         if request.operation == "commit":
             try:
                 target, data = self.staging.pop(request.reference)

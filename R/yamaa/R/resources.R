@@ -131,8 +131,12 @@ yamaa_memory_resolver <- function(objects = list(), prefix = "memory:/") {
     if (request$operation == "stage") {
       next_version <<- next_version + 1L
       token <- paste0("stage:", next_version, ":", request$reference)
+      # Interruption-safe handoff: roll back this attempt if token delivery fails.
       backend$staging[[token]] <- yamaa_resource_result(request$reference, request$data)
-      return(yamaa_resource_result(token))
+      result <- tryCatch(yamaa_resource_result(token),
+        interrupt = function(e) { backend$staging[[token]] <- NULL; stop(e) },
+        error = function(e) { backend$staging[[token]] <- NULL; stop(e) })
+      return(result)
     }
     if (request$operation == "commit") {
       staged <- backend$staging[[request$reference]]

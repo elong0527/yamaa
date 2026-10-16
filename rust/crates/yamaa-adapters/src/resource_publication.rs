@@ -112,20 +112,18 @@ impl Publisher {
                     })
                     .map(|reply| reply.reference.clone());
                 let result = match (&staged, token.as_deref()) {
-                    (Ok(_), Some(staging_token)) => {
-                        resolver
-                            .request(request(Operation::Commit, staging_token, None))
-                            .and_then(|reply| {
-                                if reply.reference == *reference
-                                    && reply.bytes.is_none()
-                                    && reply.frame.is_none()
-                                {
-                                    Ok(())
-                                } else {
-                                    Err(Failure::Publication)
-                                }
-                            })
-                    }
+                    (Ok(_), Some(staging_token)) => resolver
+                        .request(request(Operation::Commit, staging_token, None))
+                        .and_then(|reply| {
+                            if reply.reference == *reference
+                                && reply.bytes.is_none()
+                                && reply.frame.is_none()
+                            {
+                                Ok(())
+                            } else {
+                                Err(Failure::Publication)
+                            }
+                        }),
                     (Ok(_), None) => Err(Failure::Rejected),
                     (Err(failure), _) => Err(*failure),
                 };
