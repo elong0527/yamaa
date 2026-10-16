@@ -98,7 +98,11 @@ impl Publisher {
                     bytes,
                 };
                 let staged = resolver.request(request(Operation::Stage, reference, Some(bytes)));
-                let token = staged
+                // Attempt-owned cleanup: only a Stage that returned a token
+                // staged provisional output. A failed Stage is atomic by
+                // contract and leaves nothing to abort, so Abort uses the
+                // returned staging token and never the target reference.
+                let token: Option<String> = staged
                     .as_ref()
                     .ok()
                     .filter(|reply| {
@@ -106,35 +110,31 @@ impl Publisher {
                             && reply.bytes.is_none()
                             && reply.frame.is_none()
                     })
-                    .map_or(reference.as_str(), |reply| reply.reference.as_str());
-                let result = match &staged {
-                    Ok(reply)
-                        if !reply.reference.is_empty()
-                            && reply.bytes.is_none()
-                            && reply.frame.is_none() =>
-                    {
-                        resolver
-                            .request(request(Operation::Commit, token, None))
-                            .and_then(|reply| {
-                                if reply.reference == *reference
-                                    && reply.bytes.is_none()
-                                    && reply.frame.is_none()
-                                {
-                                    Ok(())
-                                } else {
-                                    Err(Failure::Publication)
-                                }
-                            })
-                    }
-                    Ok(_) => Err(Failure::Rejected),
-                    Err(failure) => Err(*failure),
+                    .map(|reply| reply.reference.clone());
+                let result = match (&staged, token.as_deref()) {
+                    (Ok(_), Some(staging_token)) => resolver
+                        .request(request(Operation::Commit, staging_token, None))
+                        .and_then(|reply| {
+                            if reply.reference == *reference
+                                && reply.bytes.is_none()
+                                && reply.frame.is_none()
+                            {
+                                Ok(())
+                            } else {
+                                Err(Failure::Publication)
+                            }
+                        }),
+                    (Ok(_), None) => Err(Failure::Rejected),
+                    (Err(failure), _) => Err(*failure),
                 };
                 if let Err(failure) = result {
-                    if resolver
-                        .request(request(Operation::Abort, token, None))
-                        .is_err()
-                    {
-                        return Err(file::Error::Host(Failure::Cleanup));
+                    if let Some(staging_token) = token.as_deref() {
+                        if resolver
+                            .request(request(Operation::Abort, staging_token, None))
+                            .is_err()
+                        {
+                            return Err(file::Error::Host(Failure::Cleanup));
+                        }
                     }
                     return Err(file::Error::Host(failure));
                 }

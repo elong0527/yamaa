@@ -125,6 +125,11 @@ struct InterruptStage(MemoryResolver);
 #[cfg(feature = "yaml")]
 impl Resolver for InterruptStage {
     fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
+        // Stage is atomic: a failed Stage leaves no provisional output, so
+        // fail before delegating instead of staging then reporting failure.
+        if request.operation == Operation::Stage {
+            return Err(Failure::Cancelled);
+        }
         let operation = request.operation;
         let reply = self.0.request(request)?;
         if operation == Operation::Stage {
@@ -137,7 +142,7 @@ impl Resolver for InterruptStage {
 
 #[cfg(feature = "yaml")]
 #[test]
-fn interrupted_stage_cleans_provisional_output_by_held_target_identity() {
+fn interrupted_stage_leaves_no_provisional_output() {
     let backend = Arc::new(InterruptStage(MemoryResolver::default()));
     let spec = b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns: [{name: ID, type: int, derivation: RAW.ID}]\noutput: {path: out.csv, columns: [ID]}\n";
     backend
@@ -169,4 +174,60 @@ fn interrupted_stage_cleans_provisional_output_by_held_target_identity() {
     assert!(!result.save().unwrap());
     assert_eq!(backend.0.staged_count(), 0);
     assert!(backend.0.published("memory:/out.csv").is_none());
+}
+
+#[cfg(feature = "yaml")]
+#[test]
+fn abort_removes_only_the_staging_token_not_the_target() {
+    use yamaa_adapters::host_resources::{Kind, Operation};
+    let backend = MemoryResolver::default();
+    let stage = |bytes: &[u8]| {
+        backend.request(Request {
+            operation: Operation::Stage,
+            kind: Kind::Output,
+            declaring: "/spec.yaml",
+            written: "out.csv",
+            reference: Some("memory:/out.csv"),
+            bytes: Some(bytes),
+        })
+    };
+    let token = stage(b"ID\n7\n").unwrap().reference;
+    let second = stage(b"ID\n8\n").unwrap().reference;
+    assert_ne!(token, second);
+    assert_eq!(backend.staged_count(), 2);
+    // Abort by the target identity must not delete another attempt's
+    // provisional output; only the staging token cleans up.
+    backend
+        .request(Request {
+            operation: Operation::Abort,
+            kind: Kind::Output,
+            declaring: "/spec.yaml",
+            written: "out.csv",
+            reference: Some("memory:/out.csv"),
+            bytes: None,
+        })
+        .unwrap();
+    assert_eq!(backend.staged_count(), 2);
+    backend
+        .request(Request {
+            operation: Operation::Abort,
+            kind: Kind::Output,
+            declaring: "/spec.yaml",
+            written: "out.csv",
+            reference: Some(&token),
+            bytes: None,
+        })
+        .unwrap();
+    assert_eq!(backend.staged_count(), 1);
+    backend
+        .request(Request {
+            operation: Operation::Abort,
+            kind: Kind::Output,
+            declaring: "/spec.yaml",
+            written: "out.csv",
+            reference: Some(&second),
+            bytes: None,
+        })
+        .unwrap();
+    assert_eq!(backend.staged_count(), 0);
 }

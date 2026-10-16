@@ -66,8 +66,9 @@ class ResourceResolver:
     Inspect and Target return identities without reading study bytes. Capture
     returns immutable bytes and the same identity on reuse. Stage creates a
     private provisional object and returns its token; Commit publishes it
-    atomically; Abort removes it after a failed or interrupted publication.
-    Abort must also accept the target identity if Stage raised before returning.
+    atomically; Abort removes it after a failed Commit or an interrupted Stage
+    that returned a token. Stage is atomic: a failed Stage leaves nothing to
+    abort, so Abort receives only the staging token, never the target.
     """
 
     def __init__(self, callback: Callable[[ResourceRequest], ResourceResult]):
@@ -182,11 +183,11 @@ class MemoryResolver(ResourceResolver):
 
     def _request(self, request: ResourceRequest) -> ResourceResult:
         if request.operation == "abort":
+            # Attempt-owned cleanup: delete only the staged token. Never match
+            # on the target identity, so overlapping publishes to the same
+            # target cannot delete each other's provisional output. Stage is
+            # atomic: a failed Stage leaves nothing to abort.
             self.staging.pop(request.reference, None)
-            # Stage can raise after creating an object and before returning its token.
-            for token, (target, _) in list(self.staging.items()):
-                if target == request.reference:
-                    del self.staging[token]
             return ResourceResult(request.reference or "aborted")
         if self.cancelled:
             raise ResourceFailure("cancelled")
@@ -210,8 +211,15 @@ class MemoryResolver(ResourceResolver):
                 raise ResourceFailure("rejected")
             self._next += 1
             token = f"stage:{self._next}:{request.reference}"
-            self.staging[token] = (request.reference, request.data)
-            return ResourceResult(token)
+            # Interruption-safe handoff: stage and deliver the token inside
+            # the guarded block so an interruption during insertion or token
+            # delivery rolls this attempt back instead of stranding it.
+            try:
+                self.staging[token] = (request.reference, request.data)
+                return ResourceResult(token)
+            except BaseException:
+                self.staging.pop(token, None)
+                raise
         if request.operation == "commit":
             try:
                 target, data = self.staging.pop(request.reference)

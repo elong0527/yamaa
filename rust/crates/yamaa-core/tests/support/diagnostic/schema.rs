@@ -187,6 +187,52 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             .unwrap();
         check(&mut reached, &findings, code, path, condition, req);
     }
+    let cases = schema(
+        vec![field("derive", "expression", false)],
+        vec![
+            (
+                "expression",
+                T::map(vec![("registry", T::text("expressions"))]),
+            ),
+            (
+                "expressions",
+                T::map(vec![("case", descriptor("list[case_item_class]"))]),
+            ),
+            (
+                "case_item_class",
+                T::map(vec![(
+                    "type",
+                    T::List(vec![
+                        T::text("case_branch_class"),
+                        T::text("case_otherwise_class"),
+                    ]),
+                )]),
+            ),
+            (
+                "case_branch_class",
+                T::List(vec![field("when", "str", true), field("then", "int", true)]),
+            ),
+            (
+                "case_otherwise_class",
+                T::List(vec![field("otherwise", "int", true)]),
+            ),
+        ],
+    );
+    let otherwise_only = T::map(vec![(
+        "case",
+        T::List(vec![T::map(vec![("otherwise", integer("0"))])]),
+    )]);
+    let findings = cases
+        .validate_document(&document(T::map(vec![("derive", otherwise_only)])))
+        .unwrap();
+    check(
+        &mut reached,
+        &findings,
+        SchemaCaseItems,
+        "derive.case",
+        "invalid_field_type",
+        "REQ-0339",
+    );
     for (alias, req, codes) in [
         (
             "custom",
