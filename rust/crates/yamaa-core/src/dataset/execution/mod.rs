@@ -491,66 +491,9 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         return evaluate_raw_retained(table, source, candidate, plan, row, state, retained);
     }
     if let Expression::FirstAvailable(selection) = &assignment.expression {
-        for operand in selection.sources() {
-            let value = match &operand.read {
-                crate::dataset::SelectionRead::Expression(source) => {
-                    evaluate_raw_retained(table, source, candidate, plan, row, state, retained)
-                        .map_err(|mut error| {
-                            // Collection cardinality belongs to the enclosing selection.
-                            // Keep operand metadata for handlers and every other failure.
-                            if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
-                                path.clone_from(&assignment.path);
-                            }
-                            error
-                        })?
-                }
-                crate::dataset::SelectionRead::Source(column) => {
-                    let source_row = candidate.members[0];
-                    let value = table.cell(source_row, *column).map_err(|error| {
-                        Box::new(ExecutionError::Cell {
-                            path: operand.path.clone(),
-                            source_row,
-                            error,
-                        })
-                    })?;
-                    own(value)
-                }
-                crate::dataset::SelectionRead::Column(column) => {
-                    let value = &candidate.values[*column];
-                    value.clone()
-                }
-                crate::dataset::SelectionRead::Collect {
-                    column,
-                    identifier,
-                    filter,
-                } => key_grain::collect_bound(
-                    table,
-                    key_grain::Collection {
-                        column: *column,
-                        identifier,
-                        filter: filter.as_deref(),
-                        selection: None,
-                    },
-                    key_grain::CollectionContext {
-                        path: &operand.path,
-                        candidate,
-                        plan,
-                        row,
-                    },
-                    state.handlers,
-                )
-                .map_err(|mut error| {
-                    if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
-                        *path = assignment.path.clone();
-                    }
-                    error
-                })?,
-            };
-            if value != Value::Missing {
-                return Ok(value);
-            }
-        }
-        return Ok(selection.missing().clone());
+        return evaluate_first_available(
+            table, selection, assignment, candidate, plan, row, state, retained,
+        );
     }
     if let Expression::Flag(flag) = &assignment.expression {
         return flags::evaluate(flag, table, candidate, plan, row, assignment, state);
@@ -625,42 +568,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         operation,
     } = &assignment.expression
     {
-        let mut values = Vec::with_capacity(operands.len());
-        for (index, operand) in operands.iter().enumerate() {
-            let value = evaluate_raw(table, operand, candidate, plan, row, state)?;
-            operation
-                .validate_operand(index, &value)
-                .expect("admitted operand index")
-                .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)))?;
-            values.push(value);
-        }
-        let result = operation
-            .apply_values(&values)
-            .expect("admitted temporal arity")
-            .map_err(|diagnostic| {
-                if diagnostic.definition().phase == "validation" {
-                    Box::new(ExecutionError::ScalarDiagnostic(diagnostic))
-                } else {
-                    retained_diagnostic(diagnostic, true, candidate, plan, row)
-                }
-            })?;
-        let value = match result {
-            crate::dataset::TemporalStep::Value(value) => value,
-            crate::dataset::TemporalStep::Invalid => {
-                state
-                    .handlers
-                    .record(
-                        &std::format!("{}.invalid", operation.path()),
-                        HandlerKind::Invalid,
-                    )
-                    .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
-                operation
-                    .invalid_handler()
-                    .expect("declared recovery")
-                    .clone()
-            }
-        };
-        return Ok(value);
+        return evaluate_temporal(table, operands, operation, candidate, plan, row, state);
     }
     if let Expression::Compute(expression) = &assignment.expression {
         return numeric::evaluate(expression, table, candidate, plan, row, assignment, state);
@@ -671,146 +579,8 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     if let Expression::Odm(expression) = &assignment.expression {
         return odm::evaluate(expression, table, candidate, plan, row, state);
     }
-    let EvaluationState {
-        handlers,
-        secondary,
-        ..
-    } = state;
-
-    let value = match &assignment.expression {
-        Expression::Function(_) | Expression::ProjectFunction(_) => {
-            unreachable!("callback arguments resolve through complete run state")
-        }
-        Expression::Window(_) | Expression::ContextWindow(_) => {
-            unreachable!("window assignments execute by whole column")
-        }
-        Expression::Intermediate { .. } => unreachable!("intermediates execute through run state"),
-        Expression::Joined(_) | Expression::JoinedSource { .. } => {
-            unreachable!("joined reads execute through run state")
-        }
-        Expression::Literal(value) => value.clone(),
-        Expression::Extreme { .. }
-        | Expression::StrConcat { .. }
-        | Expression::StrContains { .. }
-        | Expression::Flag(_)
-        | Expression::Compute(_)
-        | Expression::Aggregate(_)
-        | Expression::Odm(_)
-        | Expression::Case(_)
-        | Expression::MappingCut { .. }
-        | Expression::Round { .. }
-        | Expression::Temporal { .. }
-        | Expression::Imputation { .. }
-        | Expression::StrCase { .. }
-        | Expression::StrPad { .. }
-        | Expression::StrExtract { .. }
-        | Expression::StrTemplate { .. } => {
-            unreachable!("recursive evaluation handled above")
-        }
-        Expression::Column(column) => {
-            let value = &candidate.values[*column];
-            value.clone()
-        }
-        Expression::Source(column) => {
-            let source_row = candidate.members[0];
-            let value = table.cell(source_row, *column).map_err(|error| {
-                Box::new(ExecutionError::Cell {
-                    path: assignment.path.clone(),
-                    source_row,
-                    error,
-                })
-            })?;
-            own(value)
-        }
-        Expression::RowLookup(lookup) => lookup::read_row(
-            table,
-            secondary[lookup.source],
-            lookup,
-            &lookup::Context {
-                assignment,
-                candidate,
-                plan,
-                row,
-            },
-        )?,
-        Expression::Lookup(lookup) => lookup::read(
-            secondary[lookup.source],
-            lookup,
-            assignment,
-            candidate,
-            plan,
-            row,
-        )?,
-        Expression::FirstAvailable(_) | Expression::SourceBinding { .. } => {
-            unreachable!("source recursion is handled above")
-        }
-        Expression::SourceLookup {
-            lookup: bound,
-            filter,
-            selection,
-        } => lookup::read_source(
-            secondary[bound.source],
-            bound,
-            filter.as_ref(),
-            selection.as_ref(),
-            &lookup::Context {
-                assignment,
-                candidate,
-                plan,
-                row,
-            },
-            handlers,
-        )?,
-        Expression::Collect { .. } => {
-            key_grain::collect(table, assignment, candidate, plan, row, handlers)?
-        }
-        Expression::Count { column, .. } => Value::from(
-            count_selected(table, *column, &candidate.members).map_err(|error| {
-                Box::new(ExecutionError::Reduction {
-                    path: assignment.path.clone(),
-                    error,
-                    identity: None,
-                })
-            })?,
-        ),
-        Expression::Reduce {
-            identifier,
-            column,
-            reducer,
-            text,
-        } => match reduce_column(table, *column, &candidate.members, *reducer, text) {
-            Ok(value) => Value::from(value),
-            Err(TableReductionError::Reduction(
-                crate::reduction::ReductionError::IncompatibleInputType { actual, .. },
-            )) => {
-                return Err(Box::new(ExecutionError::ReductionType {
-                    path: assignment.path.clone(),
-                    expression: text.clone(),
-                    reducer: *reducer,
-                    source: identifier
-                        .clone()
-                        .unwrap_or_else(|| table.schema().columns()[*column].name.clone()),
-                    actual,
-                }));
-            }
-            Err(error) => {
-                let identity = if matches!(&error, TableReductionError::Reduction(crate::reduction::ReductionError::Arithmetic { error, .. }) if error.phase() == "derivation")
-                {
-                    failure_identity(candidate, plan.keys(), row)?
-                } else {
-                    None
-                };
-                return Err(Box::new(ExecutionError::Reduction {
-                    path: assignment.path.clone(),
-                    error,
-                    identity,
-                }));
-            }
-        },
-    };
-    Ok(value)
+    evaluate_leaf(table, assignment, candidate, plan, row, state)
 }
-
 /// Convert and account one completed result before publishing its column slot.
 fn finish<E>(
     value: Value,
@@ -1051,7 +821,6 @@ impl DatasetPlan {
         } = observations;
         let primary = row_drivers::Driver::Primary(table);
         let mut intermediate_run = intermediates::Run::default();
-        let mut candidates: Vec<Candidate> = Vec::new();
         intermediates::verify(
             self,
             false,
@@ -1068,18 +837,71 @@ impl DatasetPlan {
                 aggregate_row: None,
             },
         )?;
+        let mut candidates = self.build_candidates(
+            table,
+            secondary,
+            functions,
+            handlers,
+            &mut intermediate_run,
+            &primary,
+        )?;
+        self.complete_columns(
+            table,
+            secondary,
+            functions,
+            handlers,
+            &mut intermediate_run,
+            &primary,
+            &mut candidates,
+            records,
+        )?;
+        self.verify_output(
+            table,
+            secondary,
+            functions,
+            handlers,
+            &mut intermediate_run,
+            &primary,
+            &candidates,
+            records,
+            observer,
+        )?;
+        let mut dataset = Dataset {
+            schema: self.output().clone(),
+            rows: candidates.into_iter().map(|row| row.values).collect(),
+        };
+        ordering::apply(self.output_order(), &mut dataset)?;
+        Ok(Execution {
+            dataset,
+            verifications: std::mem::take(records),
+        })
+    }
+
+    /// Construct all output candidates, either from the key grain of the
+    /// sole key-mode template or by processing every row template in order.
+    #[allow(clippy::too_many_arguments)]
+    fn build_candidates<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        handlers: &mut HandlerCounter,
+        intermediate_run: &mut intermediates::Run,
+        primary: &row_drivers::Driver<'_, T>,
+    ) -> Result<Vec<Candidate>, Box<ExecutionError<T::Error>>> {
+        let mut candidates: Vec<Candidate> = Vec::new();
         let mut next_selection_identity = 0usize;
         if matches!(self.templates()[0].mode, RowMode::Keys) {
             candidates = key_grain::construct(
                 self,
                 table,
                 &mut EvaluationState {
-                    primary: &primary,
+                    primary,
                     functions,
                     secondary,
                     self_rows: &[],
                     handlers,
-                    intermediates: &mut intermediate_run,
+                    intermediates: &mut *intermediate_run,
                     output_rows: &[],
                     output_offset: 0,
                     windows: &mut windows::Cache::default(),
@@ -1088,291 +910,363 @@ impl DatasetPlan {
             )?;
         } else {
             for (template_index, template) in self.templates().iter().enumerate() {
-                let named = if let RowMode::IntermediateDriver { index, .. } = &template.mode {
-                    Some(intermediates::driver(
-                        *index,
+                next_selection_identity = self.process_template(
+                    template_index,
+                    template,
+                    table,
+                    secondary,
+                    functions,
+                    handlers,
+                    &mut *intermediate_run,
+                    primary,
+                    &mut candidates,
+                    next_selection_identity,
+                )?;
+            }
+        }
+        Ok(candidates)
+    }
+
+    /// Build the candidates of one row template: evaluate its assignments,
+    /// apply its pre- and post-window filters and publish its self rows.
+    #[allow(clippy::too_many_arguments)]
+    fn process_template<T: TableAccess + ?Sized>(
+        &self,
+        template_index: usize,
+        template: &RowTemplate,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        handlers: &mut HandlerCounter,
+        intermediate_run: &mut intermediates::Run,
+        primary: &row_drivers::Driver<'_, T>,
+        candidates: &mut Vec<Candidate>,
+        mut next_selection_identity: usize,
+    ) -> Result<usize, Box<ExecutionError<T::Error>>> {
+        let named = if let RowMode::IntermediateDriver { index, .. } = &template.mode {
+            Some(intermediates::driver(
+                *index,
+                self,
+                &mut EvaluationState {
+                    primary,
+                    functions,
+                    secondary,
+                    self_rows: candidates,
+                    handlers,
+                    intermediates: &mut *intermediate_run,
+                    output_rows: &[],
+                    output_offset: 0,
+                    windows: &mut windows::Cache::default(),
+                    aggregate_row: None,
+                },
+            )?)
+        } else {
+            None
+        };
+        let data = named
+            .as_ref()
+            .and_then(|relation| relation.materialized.as_ref())
+            .map(|data| intermediates::Data::<T::Error>::new(data));
+        let stored = row_drivers::Driver::new(table, secondary, template.mode.source_index());
+        let table = if let Some(data) = &data {
+            row_drivers::Driver::Secondary(data)
+        } else {
+            stored
+        };
+        let table = &table;
+        let first = candidates.len();
+        let deferred = crate::dataset::window_stages(
+            &template.assignments,
+            self.output().columns().len(),
+            self.intermediates(),
+        );
+        // Grouped predicates may read the completed window pass. Predicates
+        // independent of windows keep their single prewindow eligibility pass.
+        let postwindow_filter = matches!(template.mode.local_mode(), RowMode::Groups(_))
+            && template.filter.as_ref().is_some_and(|filter| {
+                filter.bindings().iter().any(|binding| {
+                    crate::dataset::read_requires_window(
+                        &binding.read,
+                        &deferred,
+                        self.intermediates(),
+                    )
+                })
+            });
+        let groups = match template.mode.local_mode() {
+            RowMode::Driver { .. } | RowMode::IntermediateDriver { .. } => {
+                unreachable!("plan admission rejects nested drivers")
+            }
+            RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
+            RowMode::Records => {
+                // Admit the known cardinality before materializing record memberships.
+                let rows = named
+                    .as_ref()
+                    .map_or(table.row_count(), |relation| relation.eligible.len());
+                self.check_capacity(candidates.len(), rows)?;
+                if let Some(relation) = &named {
+                    relation.eligible.iter().map(|&row| vec![row]).collect()
+                } else {
+                    (0..table.row_count()).map(|row| vec![row]).collect()
+                }
+            }
+            RowMode::Groups(keys) => {
+                if let Some(relation) = &named {
+                    intermediates::driver_groups(table, &relation.eligible, keys)?
+                } else {
+                    partition(table, keys)
+                        .map_err(|error| Box::new(ExecutionError::Grouping(error)))?
+                }
+            }
+        };
+        self.check_capacity(candidates.len(), groups.len())?;
+        candidates
+            .try_reserve(groups.len())
+            .map_err(|_| Box::new(ExecutionError::Allocation))?;
+        for members in groups {
+            let selection_identity = SelectionIdentity::Candidate(next_selection_identity);
+            next_selection_identity = next_selection_identity
+                .checked_add(1)
+                .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
+            let mut candidate = Candidate {
+                template: Some(template_index),
+                selection_identity,
+                members,
+                values: vec![Value::Missing; self.output().columns().len()],
+                completed: vec![false; self.output().columns().len()],
+            };
+            for assignment in template
+                .assignments
+                .iter()
+                .filter(|assignment| !deferred[assignment.column])
+            {
+                candidate.values[assignment.column] = evaluate(
+                    table,
+                    assignment,
+                    &candidate,
+                    self,
+                    candidates.len(),
+                    &mut EvaluationState {
+                        primary,
+                        functions,
+                        secondary,
+                        self_rows: &candidates[..first],
+                        handlers,
+                        intermediates: &mut *intermediate_run,
+                        output_rows: &[],
+                        output_offset: 0,
+                        windows: &mut windows::Cache::default(),
+                        aggregate_row: None,
+                    },
+                )?;
+                candidate.completed[assignment.column] = true;
+            }
+            if let Some(filter) = template.filter.as_ref().filter(|_| !postwindow_filter) {
+                let source_row = candidate.members[0];
+                let truth = if filter.bindings().iter().any(|binding| {
+                    matches!(
+                        binding.read,
+                        crate::bound_expression::Read::Intermediate { .. }
+                            | crate::bound_expression::Read::Joined(_)
+                    )
+                }) {
+                    let assignment = Assignment {
+                        column: 0,
+                        path: filter.plan().spec_path().into(),
+                        expression: Expression::Literal(Value::Missing),
+                    };
+                    case_predicates::evaluate(
+                        filter,
+                        table,
+                        &candidate,
                         self,
+                        candidates.len(),
+                        &assignment,
                         &mut EvaluationState {
-                            primary: &primary,
+                            primary,
                             functions,
                             secondary,
-                            self_rows: &candidates,
+                            self_rows: &candidates[..first],
                             handlers,
-                            intermediates: &mut intermediate_run,
+                            intermediates: &mut *intermediate_run,
                             output_rows: &[],
                             output_offset: 0,
                             windows: &mut windows::Cache::default(),
                             aggregate_row: None,
                         },
-                    )?)
+                    )?
                 } else {
-                    None
+                    crate::dataset::execution::predicates::evaluate(
+                        filter,
+                        table,
+                        source_row,
+                        &candidate.values,
+                    )
+                    .map_err(|error| match error.kind {
+                        crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
+                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                    })?
                 };
-                let data = named
-                    .as_ref()
-                    .and_then(|relation| relation.materialized.as_ref())
-                    .map(|data| intermediates::Data::<T::Error>::new(data));
-                let stored =
-                    row_drivers::Driver::new(table, secondary, template.mode.source_index());
-                let table = if let Some(data) = &data {
-                    row_drivers::Driver::Secondary(data)
-                } else {
-                    stored
-                };
-                let table = &table;
-                let first = candidates.len();
-                let deferred = crate::dataset::window_stages(
-                    &template.assignments,
-                    self.output().columns().len(),
-                    self.intermediates(),
-                );
-                // Grouped predicates may read the completed window pass. Predicates
-                // independent of windows keep their single prewindow eligibility pass.
-                let postwindow_filter = matches!(template.mode.local_mode(), RowMode::Groups(_))
-                    && template.filter.as_ref().is_some_and(|filter| {
-                        filter.bindings().iter().any(|binding| {
-                            crate::dataset::read_requires_window(
-                                &binding.read,
-                                &deferred,
-                                self.intermediates(),
-                            )
-                        })
-                    });
-                let groups = match template.mode.local_mode() {
-                    RowMode::Driver { .. } | RowMode::IntermediateDriver { .. } => {
-                        unreachable!("plan admission rejects nested drivers")
-                    }
-                    RowMode::Keys => unreachable!("key mode is admitted only as the sole template"),
-                    RowMode::Records => {
-                        // Admit the known cardinality before materializing record memberships.
-                        let rows = named
-                            .as_ref()
-                            .map_or(table.row_count(), |relation| relation.eligible.len());
-                        self.check_capacity(candidates.len(), rows)?;
-                        if let Some(relation) = &named {
-                            relation.eligible.iter().map(|&row| vec![row]).collect()
-                        } else {
-                            (0..table.row_count()).map(|row| vec![row]).collect()
-                        }
-                    }
-                    RowMode::Groups(keys) => {
-                        if let Some(relation) = &named {
-                            intermediates::driver_groups(table, &relation.eligible, keys)?
-                        } else {
-                            partition(table, keys)
-                                .map_err(|error| Box::new(ExecutionError::Grouping(error)))?
-                        }
-                    }
-                };
-                self.check_capacity(candidates.len(), groups.len())?;
-                candidates
-                    .try_reserve(groups.len())
-                    .map_err(|_| Box::new(ExecutionError::Allocation))?;
-                for members in groups {
-                    let selection_identity = SelectionIdentity::Candidate(next_selection_identity);
-                    next_selection_identity = next_selection_identity
-                        .checked_add(1)
-                        .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
-                    let mut candidate = Candidate {
-                        template: Some(template_index),
-                        selection_identity,
-                        members,
-                        values: vec![Value::Missing; self.output().columns().len()],
-                        completed: vec![false; self.output().columns().len()],
-                    };
-                    for assignment in template
-                        .assignments
-                        .iter()
-                        .filter(|assignment| !deferred[assignment.column])
-                    {
-                        candidate.values[assignment.column] = evaluate(
-                            table,
-                            assignment,
-                            &candidate,
-                            self,
-                            candidates.len(),
-                            &mut EvaluationState {
-                                primary: &primary,
-                                functions,
-                                secondary,
-                                self_rows: &candidates[..first],
-                                handlers,
-                                intermediates: &mut intermediate_run,
-                                output_rows: &[],
-                                output_offset: 0,
-                                windows: &mut windows::Cache::default(),
-                                aggregate_row: None,
-                            },
-                        )?;
-                        candidate.completed[assignment.column] = true;
-                    }
-                    if let Some(filter) = template.filter.as_ref().filter(|_| !postwindow_filter) {
-                        let source_row = candidate.members[0];
-                        let truth = if filter.bindings().iter().any(|binding| {
-                            matches!(
-                                binding.read,
-                                crate::bound_expression::Read::Intermediate { .. }
-                                    | crate::bound_expression::Read::Joined(_)
-                            )
-                        }) {
-                            let assignment = Assignment {
-                                column: 0,
-                                path: filter.plan().spec_path().into(),
-                                expression: Expression::Literal(Value::Missing),
-                            };
-                            case_predicates::evaluate(
-                                filter,
-                                table,
-                                &candidate,
-                                self,
-                                candidates.len(),
-                                &assignment,
-                                &mut EvaluationState {
-                                    primary: &primary,
-                                    functions,
-                                    secondary,
-                                    self_rows: &candidates[..first],
-                                    handlers,
-                                    intermediates: &mut intermediate_run,
-                                    output_rows: &[],
-                                    output_offset: 0,
-                                    windows: &mut windows::Cache::default(),
-                                    aggregate_row: None,
-                                },
-                            )?
-                        } else {
-                            crate::dataset::execution::predicates::evaluate(
-                                filter,
-                                table,
-                                source_row,
-                                &candidate.values,
-                            )
-                            .map_err(|error| match error.kind {
-                                crate::predicate::ErrorKind::Regex(limit) => {
-                                    Box::new(regex_limit(limit))
-                                }
-                                _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                            })?
-                        };
-                        if truth != crate::predicate::Truth::True {
-                            continue;
-                        }
-                    }
-                    candidates.push(candidate);
+                if truth != crate::predicate::Truth::True {
+                    continue;
                 }
-                let (prior, current) = candidates.split_at_mut(first);
-                row_windows::complete(
+            }
+            candidates.push(candidate);
+        }
+        let (prior, current) = candidates.split_at_mut(first);
+        row_windows::complete(
+            table,
+            template,
+            &deferred,
+            current,
+            self,
+            first,
+            &mut EvaluationState {
+                primary,
+                functions,
+                secondary,
+                self_rows: prior,
+                handlers,
+                intermediates: &mut *intermediate_run,
+                output_rows: &[],
+                output_offset: 0,
+                windows: &mut windows::Cache::default(),
+                aggregate_row: None,
+            },
+        )?;
+        if postwindow_filter {
+            self.apply_postwindow_filter(
+                template,
+                table,
+                primary,
+                secondary,
+                functions,
+                handlers,
+                &mut *intermediate_run,
+                candidates,
+                first,
+            )?;
+        }
+        intermediate_run.publish_self(self)?;
+        intermediates::verify(
+            self,
+            true,
+            &mut EvaluationState {
+                primary,
+                functions,
+                secondary,
+                self_rows: candidates,
+                handlers,
+                intermediates: &mut *intermediate_run,
+                output_rows: &[],
+                output_offset: 0,
+                windows: &mut windows::Cache::default(),
+                aggregate_row: None,
+            },
+        )?;
+        Ok(next_selection_identity)
+    }
+
+    /// Retain only the candidates whose deferred post-window filter is true,
+    /// preserving their relative order.
+    #[allow(clippy::too_many_arguments)]
+    fn apply_postwindow_filter<T: TableAccess + ?Sized>(
+        &self,
+        template: &RowTemplate,
+        table: &row_drivers::Driver<'_, T>,
+        primary: &row_drivers::Driver<'_, T>,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        handlers: &mut HandlerCounter,
+        intermediate_run: &mut intermediates::Run,
+        candidates: &mut Vec<Candidate>,
+        first: usize,
+    ) -> Result<(), Box<ExecutionError<T::Error>>> {
+        let filter = template.filter.as_ref().expect("deferred filter exists");
+        let mut retained = first;
+        for row in first..candidates.len() {
+            let candidate = &candidates[row];
+            let source_row = candidate.members[0];
+            let truth = if filter.bindings().iter().any(|binding| {
+                matches!(
+                    binding.read,
+                    crate::bound_expression::Read::Intermediate { .. }
+                        | crate::bound_expression::Read::Joined(_)
+                )
+            }) {
+                let assignment = Assignment {
+                    column: 0,
+                    path: filter.plan().spec_path().into(),
+                    expression: Expression::Literal(Value::Missing),
+                };
+                case_predicates::evaluate(
+                    filter,
                     table,
-                    template,
-                    &deferred,
-                    current,
+                    candidate,
                     self,
-                    first,
+                    row,
+                    &assignment,
                     &mut EvaluationState {
-                        primary: &primary,
+                        primary,
                         functions,
                         secondary,
-                        self_rows: prior,
+                        self_rows: &candidates[..first],
                         handlers,
-                        intermediates: &mut intermediate_run,
-                        output_rows: &[],
-                        output_offset: 0,
+                        intermediates: &mut *intermediate_run,
+                        output_rows: &candidates[first..],
+                        output_offset: first,
                         windows: &mut windows::Cache::default(),
                         aggregate_row: None,
                     },
-                )?;
-                if postwindow_filter {
-                    let filter = template.filter.as_ref().expect("deferred filter exists");
-                    let mut retained = first;
-                    for row in first..candidates.len() {
-                        let candidate = &candidates[row];
-                        let source_row = candidate.members[0];
-                        let truth = if filter.bindings().iter().any(|binding| {
-                            matches!(
-                                binding.read,
-                                crate::bound_expression::Read::Intermediate { .. }
-                                    | crate::bound_expression::Read::Joined(_)
-                            )
-                        }) {
-                            let assignment = Assignment {
-                                column: 0,
-                                path: filter.plan().spec_path().into(),
-                                expression: Expression::Literal(Value::Missing),
-                            };
-                            case_predicates::evaluate(
-                                filter,
-                                table,
-                                candidate,
-                                self,
-                                row,
-                                &assignment,
-                                &mut EvaluationState {
-                                    primary: &primary,
-                                    functions,
-                                    secondary,
-                                    self_rows: &candidates[..first],
-                                    handlers,
-                                    intermediates: &mut intermediate_run,
-                                    output_rows: &candidates[first..],
-                                    output_offset: first,
-                                    windows: &mut windows::Cache::default(),
-                                    aggregate_row: None,
-                                },
-                            )?
-                        } else {
-                            crate::dataset::execution::predicates::evaluate(
-                                filter,
-                                table,
-                                source_row,
-                                &candidate.values,
-                            )
-                            .map_err(|error| match error.kind {
-                                crate::predicate::ErrorKind::Regex(limit) => {
-                                    Box::new(regex_limit(limit))
-                                }
-                                _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                            })?
-                        };
-                        if truth == crate::predicate::Truth::True {
-                            candidates.swap(retained, row);
-                            retained += 1;
-                        }
-                    }
-                    candidates.truncate(retained);
-                }
-                intermediate_run.publish_self(self)?;
-                intermediates::verify(
-                    self,
-                    true,
-                    &mut EvaluationState {
-                        primary: &primary,
-                        functions,
-                        secondary,
-                        self_rows: &candidates,
-                        handlers,
-                        intermediates: &mut intermediate_run,
-                        output_rows: &[],
-                        output_offset: 0,
-                        windows: &mut windows::Cache::default(),
-                        aggregate_row: None,
-                    },
-                )?;
+                )?
+            } else {
+                crate::dataset::execution::predicates::evaluate(
+                    filter,
+                    table,
+                    source_row,
+                    &candidate.values,
+                )
+                .map_err(|error| match error.kind {
+                    crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
+                    _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                })?
+            };
+            if truth == crate::predicate::Truth::True {
+                candidates.swap(retained, row);
+                retained += 1;
             }
         }
+        candidates.truncate(retained);
+        Ok(())
+    }
+
+    /// Complete the declared column assignments over every candidate,
+    /// checking each available prefix of column verifications in order.
+    #[allow(clippy::too_many_arguments)]
+    fn complete_columns<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        handlers: &mut HandlerCounter,
+        intermediate_run: &mut intermediates::Run,
+        primary: &row_drivers::Driver<'_, T>,
+        candidates: &mut Vec<Candidate>,
+        records: &mut Vec<CheckRecord>,
+    ) -> Result<(), Box<ExecutionError<T::Error>>> {
         intermediate_run.begin_columns(self)?;
         let mut completed = vec![false; self.output().columns().len()];
         for assignment in &self.templates()[0].assignments {
             completed[assignment.column] = true;
         }
         let mut next_column = 0;
-        self.check_columns(&candidates, &completed, &mut next_column, records)?;
+        self.check_columns(candidates, &completed, &mut next_column, records)?;
         for assignment in self.columns() {
             let mut nested_windows = windows::Cache::default();
             let mut numbers =
-                windows::Evaluation::new(assignment, &candidates, self, table, handlers)?;
+                windows::Evaluation::new(assignment, candidates, self, table, handlers)?;
             for row in 0..candidates.len() {
                 let number = if let Some(run) = &mut numbers {
-                    Some(run.value(row, &candidates, table, assignment, self)?)
+                    Some(run.value(row, candidates, table, assignment, self)?)
                 } else {
                     None
                 };
@@ -1387,13 +1281,13 @@ impl DatasetPlan {
                         self,
                         row,
                         &mut EvaluationState {
-                            primary: &primary,
+                            primary,
                             functions,
                             secondary,
-                            self_rows: &candidates,
+                            self_rows: candidates,
                             handlers,
-                            intermediates: &mut intermediate_run,
-                            output_rows: &candidates,
+                            intermediates: &mut *intermediate_run,
+                            output_rows: candidates,
                             aggregate_row: None,
                             output_offset: 0,
                             windows: &mut nested_windows,
@@ -1405,11 +1299,29 @@ impl DatasetPlan {
                 candidate.completed[assignment.column] = true;
             }
             completed[assignment.column] = true;
-            self.check_columns(&candidates, &completed, &mut next_column, records)?;
+            self.check_columns(candidates, &completed, &mut next_column, records)?;
         }
         // A selector hidden by an empty input or a lazy branch must still report
         // its known filter-type refusal before a successful result can publish.
         intermediates::check_unobserved_filter_types(self)?;
+        Ok(())
+    }
+
+    /// Check output key completeness and uniqueness, then run every
+    /// declared verification over the completed rows.
+    #[allow(clippy::too_many_arguments)]
+    fn verify_output<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        handlers: &mut HandlerCounter,
+        intermediate_run: &mut intermediates::Run,
+        primary: &row_drivers::Driver<'_, T>,
+        candidates: &[Candidate],
+        records: &mut Vec<CheckRecord>,
+        observer: &mut dyn FnMut(ExecutionEvent),
+    ) -> Result<(), Box<ExecutionError<T::Error>>> {
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Derivation,
             outcome: crate::application_observer::Outcome::Succeeded,
@@ -1505,15 +1417,15 @@ impl DatasetPlan {
                         &dataset,
                         self,
                         table,
-                        &candidates,
+                        candidates,
                         &mut EvaluationState {
-                            primary: &primary,
+                            primary,
                             functions,
                             secondary,
-                            self_rows: &candidates,
+                            self_rows: candidates,
                             handlers,
-                            intermediates: &mut intermediate_run,
-                            output_rows: &candidates,
+                            intermediates: &mut *intermediate_run,
+                            output_rows: candidates,
                             aggregate_row: None,
                             output_offset: 0,
                             windows: &mut windows::Cache::default(),
@@ -1586,15 +1498,15 @@ impl DatasetPlan {
                     &dataset,
                     self,
                     table,
-                    &candidates,
+                    candidates,
                     &mut EvaluationState {
-                        primary: &primary,
+                        primary,
                         functions,
                         secondary,
-                        self_rows: &candidates,
+                        self_rows: candidates,
                         handlers,
-                        intermediates: &mut intermediate_run,
-                        output_rows: &candidates,
+                        intermediates: &mut *intermediate_run,
+                        output_rows: candidates,
                         aggregate_row: None,
                         output_offset: 0,
                         windows: &mut windows::Cache::default(),
@@ -1631,16 +1543,7 @@ impl DatasetPlan {
                 std::mem::take(records),
             )));
         }
-        drop(dataset);
-        let mut dataset = Dataset {
-            schema: self.output().clone(),
-            rows: candidates.into_iter().map(|row| row.values).collect(),
-        };
-        ordering::apply(self.output_order(), &mut dataset)?;
-        Ok(Execution {
-            dataset,
-            verifications: std::mem::take(records),
-        })
+        Ok(())
     }
 
     /// Check only the available declared prefix, after every key is complete.
@@ -1991,3 +1894,279 @@ impl<E: std::fmt::Debug> std::fmt::Display for ExecutionError<E> {
     }
 }
 impl<E: std::fmt::Debug> std::error::Error for ExecutionError<E> {}
+
+/// Return the first present operand of a first-available selection,
+/// or its declared missing value when every operand is missing.
+#[allow(clippy::too_many_arguments)]
+fn evaluate_first_available<T: TableAccess + ?Sized>(
+    table: &T,
+    selection: &FirstAvailable,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    state: &mut EvaluationState<'_, T::Error>,
+    retained: bool,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    for operand in selection.sources() {
+        let value = match &operand.read {
+            crate::dataset::SelectionRead::Expression(source) => {
+                evaluate_raw_retained(table, source, candidate, plan, row, state, retained)
+                    .map_err(|mut error| {
+                        // Collection cardinality belongs to the enclosing selection.
+                        // Keep operand metadata for handlers and every other failure.
+                        if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
+                            path.clone_from(&assignment.path);
+                        }
+                        error
+                    })?
+            }
+            crate::dataset::SelectionRead::Source(column) => {
+                let source_row = candidate.members[0];
+                let value = table.cell(source_row, *column).map_err(|error| {
+                    Box::new(ExecutionError::Cell {
+                        path: operand.path.clone(),
+                        source_row,
+                        error,
+                    })
+                })?;
+                own(value)
+            }
+            crate::dataset::SelectionRead::Column(column) => {
+                let value = &candidate.values[*column];
+                value.clone()
+            }
+            crate::dataset::SelectionRead::Collect {
+                column,
+                identifier,
+                filter,
+            } => key_grain::collect_bound(
+                table,
+                key_grain::Collection {
+                    column: *column,
+                    identifier,
+                    filter: filter.as_deref(),
+                    selection: None,
+                },
+                key_grain::CollectionContext {
+                    path: &operand.path,
+                    candidate,
+                    plan,
+                    row,
+                },
+                state.handlers,
+            )
+            .map_err(|mut error| {
+                if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
+                    *path = assignment.path.clone();
+                }
+                error
+            })?,
+        };
+        if value != Value::Missing {
+            return Ok(value);
+        }
+    }
+    Ok(selection.missing().clone())
+}
+
+/// Evaluate one temporal operation over its already admitted operands,
+/// recording the declared invalid handler when a step is invalid.
+#[allow(clippy::too_many_arguments)]
+fn evaluate_temporal<T: TableAccess + ?Sized>(
+    table: &T,
+    operands: &[Assignment],
+    operation: &Temporal,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    let mut values = Vec::with_capacity(operands.len());
+    for (index, operand) in operands.iter().enumerate() {
+        let value = evaluate_raw(table, operand, candidate, plan, row, state)?;
+        operation
+            .validate_operand(index, &value)
+            .expect("admitted operand index")
+            .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)))?;
+        values.push(value);
+    }
+    let result = operation
+        .apply_values(&values)
+        .expect("admitted temporal arity")
+        .map_err(|diagnostic| {
+            if diagnostic.definition().phase == "validation" {
+                Box::new(ExecutionError::ScalarDiagnostic(diagnostic))
+            } else {
+                retained_diagnostic(diagnostic, true, candidate, plan, row)
+            }
+        })?;
+    let value = match result {
+        crate::dataset::TemporalStep::Value(value) => value,
+        crate::dataset::TemporalStep::Invalid => {
+            state
+                .handlers
+                .record(
+                    &std::format!("{}.invalid", operation.path()),
+                    HandlerKind::Invalid,
+                )
+                .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
+            operation
+                .invalid_handler()
+                .expect("declared recovery")
+                .clone()
+        }
+    };
+    Ok(value)
+}
+
+/// Evaluate the leaf expressions that read directly from the candidate,
+/// the source table or a secondary lookup without recursive delegation.
+#[allow(clippy::too_many_arguments)]
+fn evaluate_leaf<T: TableAccess + ?Sized>(
+    table: &T,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    let EvaluationState {
+        handlers,
+        secondary,
+        ..
+    } = state;
+
+    let value = match &assignment.expression {
+        Expression::Function(_) | Expression::ProjectFunction(_) => {
+            unreachable!("callback arguments resolve through complete run state")
+        }
+        Expression::Window(_) | Expression::ContextWindow(_) => {
+            unreachable!("window assignments execute by whole column")
+        }
+        Expression::Intermediate { .. } => unreachable!("intermediates execute through run state"),
+        Expression::Joined(_) | Expression::JoinedSource { .. } => {
+            unreachable!("joined reads execute through run state")
+        }
+        Expression::Literal(value) => value.clone(),
+        Expression::Extreme { .. }
+        | Expression::StrConcat { .. }
+        | Expression::StrContains { .. }
+        | Expression::Flag(_)
+        | Expression::Compute(_)
+        | Expression::Aggregate(_)
+        | Expression::Odm(_)
+        | Expression::Case(_)
+        | Expression::MappingCut { .. }
+        | Expression::Round { .. }
+        | Expression::Temporal { .. }
+        | Expression::Imputation { .. }
+        | Expression::StrCase { .. }
+        | Expression::StrPad { .. }
+        | Expression::StrExtract { .. }
+        | Expression::StrTemplate { .. } => {
+            unreachable!("recursive evaluation handled above")
+        }
+        Expression::Column(column) => {
+            let value = &candidate.values[*column];
+            value.clone()
+        }
+        Expression::Source(column) => {
+            let source_row = candidate.members[0];
+            let value = table.cell(source_row, *column).map_err(|error| {
+                Box::new(ExecutionError::Cell {
+                    path: assignment.path.clone(),
+                    source_row,
+                    error,
+                })
+            })?;
+            own(value)
+        }
+        Expression::RowLookup(lookup) => lookup::read_row(
+            table,
+            secondary[lookup.source],
+            lookup,
+            &lookup::Context {
+                assignment,
+                candidate,
+                plan,
+                row,
+            },
+        )?,
+        Expression::Lookup(lookup) => lookup::read(
+            secondary[lookup.source],
+            lookup,
+            assignment,
+            candidate,
+            plan,
+            row,
+        )?,
+        Expression::FirstAvailable(_) | Expression::SourceBinding { .. } => {
+            unreachable!("source recursion is handled above")
+        }
+        Expression::SourceLookup {
+            lookup: bound,
+            filter,
+            selection,
+        } => lookup::read_source(
+            secondary[bound.source],
+            bound,
+            filter.as_ref(),
+            selection.as_ref(),
+            &lookup::Context {
+                assignment,
+                candidate,
+                plan,
+                row,
+            },
+            handlers,
+        )?,
+        Expression::Collect { .. } => {
+            key_grain::collect(table, assignment, candidate, plan, row, handlers)?
+        }
+        Expression::Count { column, .. } => Value::from(
+            count_selected(table, *column, &candidate.members).map_err(|error| {
+                Box::new(ExecutionError::Reduction {
+                    path: assignment.path.clone(),
+                    error,
+                    identity: None,
+                })
+            })?,
+        ),
+        Expression::Reduce {
+            identifier,
+            column,
+            reducer,
+            text,
+        } => match reduce_column(table, *column, &candidate.members, *reducer, text) {
+            Ok(value) => Value::from(value),
+            Err(TableReductionError::Reduction(
+                crate::reduction::ReductionError::IncompatibleInputType { actual, .. },
+            )) => {
+                return Err(Box::new(ExecutionError::ReductionType {
+                    path: assignment.path.clone(),
+                    expression: text.clone(),
+                    reducer: *reducer,
+                    source: identifier
+                        .clone()
+                        .unwrap_or_else(|| table.schema().columns()[*column].name.clone()),
+                    actual,
+                }));
+            }
+            Err(error) => {
+                let identity = if matches!(&error, TableReductionError::Reduction(crate::reduction::ReductionError::Arithmetic { error, .. }) if error.phase() == "derivation")
+                {
+                    failure_identity(candidate, plan.keys(), row)?
+                } else {
+                    None
+                };
+                return Err(Box::new(ExecutionError::Reduction {
+                    path: assignment.path.clone(),
+                    error,
+                    identity,
+                }));
+            }
+        },
+    };
+    Ok(value)
+}

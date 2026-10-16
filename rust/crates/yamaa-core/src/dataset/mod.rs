@@ -754,484 +754,41 @@ fn validate_assignment_at(
     if record_derivation {
         validate_donor_reads(&assignment.expression, available, intermediates)?;
     }
-    match &assignment.expression {
-        Expression::Joined(read) => read.validate(source, secondary, output, available, mode)?,
-        Expression::JoinedSource {
-            read,
-            filter,
-            selection,
-        } => {
-            read.validate(source, secondary, output, available, mode)?;
-            let width = read.schema.columns().len();
-            if let Some(filter) = filter {
-                filter
-                    .validate(width, &[], false)
-                    .map_err(PlanError::Filter)?;
-            }
-            if selection.as_ref().is_some_and(|s| {
-                s.order_by.is_empty() || s.order_by.iter().any(|term| term.column >= width)
-            }) {
-                return Err(PlanError::InvalidSourceOrder);
-            }
-        }
-        Expression::Case(branches) => {
-            if branches.is_empty() || branches[0].when.is_none() {
-                return Err(PlanError::InvalidColumns);
-            }
-            for (index, branch) in branches.iter().enumerate() {
-                if branch.assignment.column != assignment.column
-                    || branch.when.is_none() && index + 1 != branches.len()
-                {
-                    return Err(PlanError::InvalidColumns);
-                }
-                if let Some(when) = &branch.when {
-                    if !when.collected().is_empty()
-                        && !matches!(mode, RowMode::Keys | RowMode::Records)
-                    {
-                        return Err(PlanError::InvalidKeyMode);
-                    }
-                    if let RowMode::Groups(keys) = mode {
-                        if when.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !keys.contains(&column))) {
-                            return Err(PlanError::NonGroupSource);
-                        }
-                    }
-                    when.validate_contextual(source.columns().len(), available)
-                        .map_err(PlanError::Filter)?;
-                    for binding in when.bindings() {
-                        if let Read::Intermediate { index, column } = binding.read {
-                            let item = intermediates
-                                .get(index)
-                                .ok_or(PlanError::InvalidIntermediate)?;
-                            intermediates::validate_context_read(
-                                item, column, primary, secondary, available, output, mode,
-                            )?;
-                        }
-                    }
-                }
-                validate_assignment_at(
-                    &branch.assignment,
-                    available,
-                    source,
-                    primary,
-                    secondary,
-                    intermediates,
-                    output,
-                    mode,
-                    depth + 1,
-                    record_derivation,
-                    destination_free,
-                )?;
-                if !destination_free {
-                    available[assignment.column] = false;
-                }
-            }
-        }
-        // REQ-0211/0213 convert one derived value at execution, including
-        // literals. Eager conversion would invent failures for empty templates
-        // and move runtime conversion conditions into the planning phase.
-        Expression::Literal(_) => {}
-        Expression::Flag(flag) => {
-            flag.validate(source, available, secondary, intermediates, output, mode)?
-        }
-        Expression::Compute(expression) => {
-            for binding in expression.bindings() {
-                if let crate::bound_expression::Read::Intermediate { index, column } = binding.read
-                {
-                    let item = intermediates
-                        .get(index)
-                        .ok_or(PlanError::InvalidIntermediate)?;
-                    intermediates::validate_context_read(
-                        item, column, primary, secondary, available, output, mode,
-                    )?;
-                }
-            }
-            if let RowMode::Groups(keys) = mode {
-                if expression.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !keys.contains(&column))) {
-                    return Err(PlanError::NonGroupSource);
-                }
-            }
-            expression
-                .validate(source.columns().len(), available, false)
-                .map_err(|error| match error {
-                    crate::bound_expression::ScopeError::GroupedSource => PlanError::NonGroupSource,
-                    crate::bound_expression::ScopeError::InvalidSource => PlanError::InvalidSource,
-                    crate::bound_expression::ScopeError::UnavailableColumn => {
-                        PlanError::UnavailableColumn
-                    }
-                })?;
-        }
-        Expression::Round {
-            source: operand,
-            rounding,
-        } => {
-            if rounding.source().is_empty() || rounding.path().is_empty() {
-                return Err(PlanError::EmptyPath);
-            }
-            if operand.column != assignment.column {
-                return Err(PlanError::InvalidColumns);
-            }
-            validate_assignment_at(
-                operand,
-                available,
-                source,
-                primary,
-                secondary,
-                intermediates,
-                output,
-                mode,
-                depth + 1,
-                record_derivation,
-                destination_free,
-            )?;
-            if !destination_free {
-                available[assignment.column] = false;
-            }
-        }
-        Expression::Imputation {
-            operands,
-            operation,
-        } => {
-            if operands.len() != 1 + usize::from(operation.bound_source().is_some()) {
-                return Err(PlanError::InvalidColumns);
-            }
-            for operand in operands {
-                if operand.column != assignment.column {
-                    return Err(PlanError::InvalidColumns);
-                }
-                validate_assignment_at(
-                    operand,
-                    available,
-                    source,
-                    primary,
-                    secondary,
-                    intermediates,
-                    output,
-                    mode,
-                    depth + 1,
-                    record_derivation,
-                    destination_free,
-                )?;
-                if !destination_free {
-                    available[assignment.column] = false;
-                }
-            }
-        }
-        Expression::MappingCut {
-            source: operand, ..
-        }
-        | Expression::StrCase {
-            source: operand, ..
-        }
-        | Expression::StrPad {
-            source: operand, ..
-        }
-        | Expression::StrExtract {
-            source: operand, ..
-        }
-        | Expression::StrContains {
-            source: operand, ..
-        } => {
-            if operand.column != assignment.column {
-                return Err(PlanError::InvalidColumns);
-            }
-            validate_assignment_at(
-                operand,
-                available,
-                source,
-                primary,
-                secondary,
-                intermediates,
-                output,
-                mode,
-                depth + 1,
-                record_derivation,
-                destination_free,
-            )?;
-            if !destination_free {
-                available[assignment.column] = false;
-            }
-        }
-        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => {
-            for operand in operands {
-                if operand.column != assignment.column {
-                    return Err(PlanError::InvalidColumns);
-                }
-                validate_assignment_at(
-                    operand,
-                    available,
-                    source,
-                    primary,
-                    secondary,
-                    intermediates,
-                    output,
-                    mode,
-                    depth + 1,
-                    record_derivation,
-                    destination_free,
-                )?;
-                if !destination_free {
-                    available[assignment.column] = false;
-                }
-            }
-        }
-        Expression::StrTemplate {
-            operands,
-            operation,
-        } => {
-            if operands.len() != operation.identifiers().len() {
-                return Err(PlanError::InvalidColumns);
-            }
-            for operand in operands {
-                if operand.column != assignment.column {
-                    return Err(PlanError::InvalidColumns);
-                }
-                validate_assignment_at(
-                    operand,
-                    available,
-                    source,
-                    primary,
-                    secondary,
-                    intermediates,
-                    output,
-                    mode,
-                    depth + 1,
-                    record_derivation,
-                    destination_free,
-                )?;
-                if !destination_free {
-                    available[assignment.column] = false;
-                }
-            }
-        }
-        Expression::Temporal {
-            operands,
-            operation,
-        } => {
-            if operands.len() != operation.sources().len() {
-                return Err(PlanError::InvalidColumns);
-            }
-            for operand in operands {
-                if operand.column != assignment.column {
-                    return Err(PlanError::InvalidColumns);
-                }
-                validate_assignment_at(
-                    operand,
-                    available,
-                    source,
-                    primary,
-                    secondary,
-                    intermediates,
-                    output,
-                    mode,
-                    depth + 1,
-                    record_derivation,
-                    destination_free,
-                )?;
-                if !destination_free {
-                    available[assignment.column] = false;
-                }
-            }
-        }
-        Expression::Function(function) => {
-            function.validate(source, secondary, output, available, mode)?;
-            validate_function_intermediates(
-                function.arguments(),
-                primary,
-                secondary,
-                intermediates,
-                available,
-                output,
-                mode,
-            )?;
-        }
-        Expression::ProjectFunction(function) => {
-            function.validate(source, secondary, output, available, mode)?;
-            validate_function_intermediates(
-                function.arguments(),
-                primary,
-                secondary,
-                intermediates,
-                available,
-                output,
-                mode,
-            )?;
-        }
-        Expression::FirstAvailable(selection) => {
-            selection.validate(source, available, mode)?;
-            for operand in selection.sources() {
-                if let SelectionRead::Expression(operand) = &operand.read {
-                    if operand.column != assignment.column {
-                        return Err(PlanError::InvalidColumns);
-                    }
-                    validate_assignment_at(
-                        operand,
-                        available,
-                        source,
-                        primary,
-                        secondary,
-                        intermediates,
-                        output,
-                        mode,
-                        depth + 1,
-                        record_derivation,
-                        destination_free,
-                    )?;
-                    if !destination_free {
-                        available[assignment.column] = false;
-                    }
-                }
-            }
-        }
-        Expression::SourceBinding {
-            source: operand,
-            path,
-            variable,
-            absent,
-            variable_absent,
-            ..
-        } => {
-            if operand.column != assignment.column
-                || path.is_empty()
-                || variable.is_empty()
-                || (*variable_absent && absent.is_none())
-            {
-                return Err(PlanError::InvalidColumns);
-            }
-            validate_assignment_at(
-                operand,
-                available,
-                source,
-                primary,
-                secondary,
-                intermediates,
-                output,
-                mode,
-                depth + 1,
-                record_derivation,
-                destination_free,
-            )?;
-            if !destination_free {
-                available[assignment.column] = false;
-            }
-        }
-        Expression::SourceLookup {
-            lookup: bound,
-            filter,
-            selection,
-        } => {
-            // Implicit source joins use completed output keys in every row
-            // mode. Their ownership and availability are admitted below; they
-            // do not borrow a raw record from the enclosing driver.
-            lookup::validate_source(bound, secondary, available, output)?;
-            let width = secondary[bound.source].schema.columns().len();
-            if let Some(filter) = filter {
-                filter
-                    .validate(width, &[], false)
-                    .map_err(PlanError::Filter)?;
-            }
-            if selection.as_ref().is_some_and(|s| {
-                s.order_by.is_empty() || s.order_by.iter().any(|term| term.column >= width)
-            }) {
-                return Err(PlanError::InvalidSourceOrder);
-            }
-        }
-        Expression::Intermediate { index, column } => {
-            let item = intermediates
-                .get(*index)
-                .ok_or(PlanError::InvalidIntermediate)?;
-            intermediates::validate_context_read(
-                item, *column, primary, secondary, available, output, mode,
-            )?;
-        }
-        Expression::RowLookup(lookup) => lookup::validate_row(lookup, source, secondary, mode)?,
-        Expression::Lookup(lookup) => {
-            if !matches!(mode, RowMode::Keys) {
-                return Err(PlanError::InvalidLookup);
-            }
-            lookup::validate(lookup, secondary, available, output)?;
-        }
-        Expression::ContextWindow(window) => {
-            window.validate(available, output, source, mode)?;
-        }
-        Expression::Window(window) => {
-            window.validate(available, output)?;
-        }
-        Expression::Column(column) => {
-            if !available.get(*column).copied().unwrap_or(false) {
-                return Err(PlanError::UnavailableColumn);
-            }
-        }
-        Expression::Source(column) => {
-            if *column >= source.columns().len() {
-                return Err(PlanError::InvalidSource);
-            }
-            if let RowMode::Groups(keys) = mode {
-                if !keys.contains(column) {
-                    return Err(PlanError::NonGroupSource);
-                }
-            }
-        }
-        Expression::Collect {
-            column,
-            identifier,
-            filter,
-            selection,
-        } => {
-            if *column >= source.columns().len() {
-                return Err(PlanError::InvalidSource);
-            }
-            let scalar_records = matches!(mode, RowMode::Records)
-                || matches!(mode, RowMode::Groups(keys) if keys.contains(column));
-            if (!matches!(mode, RowMode::Keys) && !scalar_records) || identifier.is_empty() {
-                return Err(PlanError::InvalidKeyMode);
-            }
-            if let Some(filter) = filter {
-                filter
-                    .validate(source.columns().len(), &[], false)
-                    .map_err(PlanError::Filter)?;
-            }
-            if let Some(selection) = selection {
-                if selection.order_by.is_empty()
-                    || selection
-                        .order_by
-                        .iter()
-                        .any(|term| term.column >= source.columns().len())
-                {
-                    return Err(PlanError::InvalidSourceOrder);
-                }
-            }
-        }
-        Expression::Aggregate(aggregate) => {
-            aggregate.validate(source, secondary, intermediates, output, available, mode)?;
-        }
-        Expression::Odm(odm) => odm.validate(source, secondary, mode)?,
-        Expression::Count { column, text } => {
-            if column.is_some_and(|column| column >= source.columns().len()) {
-                return Err(PlanError::InvalidSource);
-            }
-            if !matches!(mode, RowMode::Groups(_)) {
-                return Err(PlanError::UngroupedReduction);
-            }
-            if text.is_empty() {
-                return Err(PlanError::EmptyPath);
-            }
-        }
-        Expression::Reduce {
-            column,
-            text,
-            identifier,
-            ..
-        } => {
-            if *column >= source.columns().len() {
-                return Err(PlanError::InvalidSource);
-            }
-            if !matches!(mode, RowMode::Groups(_)) {
-                return Err(PlanError::UngroupedReduction);
-            }
-            if text.is_empty() || identifier.as_ref().is_some_and(String::is_empty) {
-                return Err(PlanError::EmptyPath);
-            }
-        }
+    if !validate_operand_assignment(
+        assignment,
+        available,
+        source,
+        primary,
+        secondary,
+        intermediates,
+        output,
+        mode,
+        depth,
+        record_derivation,
+        destination_free,
+    )? && !validate_branching_assignment(
+        assignment,
+        available,
+        source,
+        primary,
+        secondary,
+        intermediates,
+        output,
+        mode,
+        depth,
+        record_derivation,
+        destination_free,
+    )? {
+        validate_direct_assignment(
+            assignment,
+            available,
+            source,
+            primary,
+            secondary,
+            intermediates,
+            output,
+            mode,
+        )?;
     }
     match &assignment.expression {
         Expression::Compute(numeric) => {
@@ -1822,91 +1379,15 @@ impl DatasetPlan {
                 return Err(PlanError::IncompleteRow);
             }
         }
-        for (position, verification) in verifications.iter().enumerate() {
-            if verification.path.is_empty() {
-                return Err(PlanError::EmptyPath);
-            }
-            if verifications[..position]
-                .iter()
-                .any(|previous| previous.path == verification.path)
-            {
-                return Err(PlanError::DuplicateVerificationPath);
-            }
-            match &verification.check {
-                Check::NotMissing
-                | Check::AllowedValues(_)
-                | Check::Codelist { .. }
-                | Check::ValueCodelists { .. }
-                | Check::Inventory { .. }
-                | Check::ValueMaxLength { .. }
-                | Check::Range { .. }
-                | Check::MaxLength(_)
-                | Check::WideMaxLength(_)
-                | Check::Matches(_) => return Err(PlanError::InvalidColumns),
-                Check::InvalidDiagnostic(_) => {}
-                Check::InvalidDeclaration { .. } => {}
-                Check::PredicateDeclaration(predicate) => verification_predicates::validate(
-                    predicate,
-                    &source,
-                    &secondary,
-                    &intermediates,
-                    &output,
-                    &templates,
-                )?,
-                Check::Assert { when, require } => {
-                    for predicate in when.iter().chain([require]) {
-                        verification_predicates::validate(
-                            predicate,
-                            &source,
-                            &secondary,
-                            &intermediates,
-                            &output,
-                            &templates,
-                        )?;
-                    }
-                }
-                Check::Unique(columns) => {
-                    // Unlike row.group_by, unique.columns permits repeated names.
-                    if columns.is_empty() || columns.iter().any(|&column| column >= width) {
-                        return Err(PlanError::InvalidColumns);
-                    }
-                }
-                Check::AllOrNone(columns) => {
-                    if columns.iter().any(|&column| column >= width)
-                        || !columns.iter().any(|column| columns.first() != Some(column))
-                    {
-                        return Err(PlanError::InvalidColumns);
-                    }
-                }
-                Check::RowCount { min, max } => {
-                    if (min.is_none() && max.is_none())
-                        || matches!((min, max), (Some(a), Some(b)) if a > b)
-                    {
-                        return Err(PlanError::InvalidBounds);
-                    }
-                }
-                Check::ScopedRowCount(check) => {
-                    check.validate(width)?;
-                    for predicate in check.filter.iter().chain(&check.when) {
-                        verification_predicates::validate(
-                            predicate,
-                            &source,
-                            &secondary,
-                            &intermediates,
-                            &output,
-                            &templates,
-                        )?;
-                    }
-                }
-                Check::WideRowCount { min, max } => {
-                    if (min.is_none() && max.is_none())
-                        || matches!((min, max), (Some(a), Some(b)) if a > b)
-                    {
-                        return Err(PlanError::InvalidBounds);
-                    }
-                }
-            }
-        }
+        validate_plan_verifications(
+            &verifications,
+            &source,
+            &secondary,
+            &intermediates,
+            &output,
+            &templates,
+            width,
+        )?;
         Ok(Self {
             source,
             secondary,
@@ -2164,3 +1645,643 @@ pub use execution::{
     CheckRecord, CodelistObservation, Dataset, Execution, ExecutionAttempt, ExecutionError,
     ExecutionEvent, ExecutionPhase, Resource, RowCountObservation, RowIdentity,
 };
+
+/// Validate expressions built from nested operand assignments:
+/// rounding, imputation, unary transforms, extremes and templates.
+#[allow(clippy::too_many_arguments)]
+fn validate_operand_assignment(
+    assignment: &Assignment,
+    available: &mut [bool],
+    source: &TableSchema,
+    primary: &TableSchema,
+    secondary: &[SecondarySource],
+    intermediates: &[Intermediate],
+    output: &TableSchema,
+    mode: &RowMode,
+    depth: usize,
+    record_derivation: bool,
+    destination_free: bool,
+) -> Result<bool, PlanError> {
+    match &assignment.expression {
+        Expression::Round {
+            source: operand,
+            rounding,
+        } => {
+            if rounding.source().is_empty() || rounding.path().is_empty() {
+                return Err(PlanError::EmptyPath);
+            }
+            if operand.column != assignment.column {
+                return Err(PlanError::InvalidColumns);
+            }
+            validate_assignment_at(
+                operand,
+                available,
+                source,
+                primary,
+                secondary,
+                intermediates,
+                output,
+                mode,
+                depth + 1,
+                record_derivation,
+                destination_free,
+            )?;
+            if !destination_free {
+                available[assignment.column] = false;
+            }
+        }
+        Expression::Imputation {
+            operands,
+            operation,
+        } => {
+            if operands.len() != 1 + usize::from(operation.bound_source().is_some()) {
+                return Err(PlanError::InvalidColumns);
+            }
+            for operand in operands {
+                if operand.column != assignment.column {
+                    return Err(PlanError::InvalidColumns);
+                }
+                validate_assignment_at(
+                    operand,
+                    available,
+                    source,
+                    primary,
+                    secondary,
+                    intermediates,
+                    output,
+                    mode,
+                    depth + 1,
+                    record_derivation,
+                    destination_free,
+                )?;
+                if !destination_free {
+                    available[assignment.column] = false;
+                }
+            }
+        }
+        Expression::MappingCut {
+            source: operand, ..
+        }
+        | Expression::StrCase {
+            source: operand, ..
+        }
+        | Expression::StrPad {
+            source: operand, ..
+        }
+        | Expression::StrExtract {
+            source: operand, ..
+        }
+        | Expression::StrContains {
+            source: operand, ..
+        } => {
+            if operand.column != assignment.column {
+                return Err(PlanError::InvalidColumns);
+            }
+            validate_assignment_at(
+                operand,
+                available,
+                source,
+                primary,
+                secondary,
+                intermediates,
+                output,
+                mode,
+                depth + 1,
+                record_derivation,
+                destination_free,
+            )?;
+            if !destination_free {
+                available[assignment.column] = false;
+            }
+        }
+        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => {
+            for operand in operands {
+                if operand.column != assignment.column {
+                    return Err(PlanError::InvalidColumns);
+                }
+                validate_assignment_at(
+                    operand,
+                    available,
+                    source,
+                    primary,
+                    secondary,
+                    intermediates,
+                    output,
+                    mode,
+                    depth + 1,
+                    record_derivation,
+                    destination_free,
+                )?;
+                if !destination_free {
+                    available[assignment.column] = false;
+                }
+            }
+        }
+        Expression::StrTemplate {
+            operands,
+            operation,
+        } => {
+            if operands.len() != operation.identifiers().len() {
+                return Err(PlanError::InvalidColumns);
+            }
+            for operand in operands {
+                if operand.column != assignment.column {
+                    return Err(PlanError::InvalidColumns);
+                }
+                validate_assignment_at(
+                    operand,
+                    available,
+                    source,
+                    primary,
+                    secondary,
+                    intermediates,
+                    output,
+                    mode,
+                    depth + 1,
+                    record_derivation,
+                    destination_free,
+                )?;
+                if !destination_free {
+                    available[assignment.column] = false;
+                }
+            }
+        }
+        Expression::Temporal {
+            operands,
+            operation,
+        } => {
+            if operands.len() != operation.sources().len() {
+                return Err(PlanError::InvalidColumns);
+            }
+            for operand in operands {
+                if operand.column != assignment.column {
+                    return Err(PlanError::InvalidColumns);
+                }
+                validate_assignment_at(
+                    operand,
+                    available,
+                    source,
+                    primary,
+                    secondary,
+                    intermediates,
+                    output,
+                    mode,
+                    depth + 1,
+                    record_derivation,
+                    destination_free,
+                )?;
+                if !destination_free {
+                    available[assignment.column] = false;
+                }
+            }
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+/// Validate expressions that select among nested assignments:
+/// case branches, first-available selections and source bindings.
+#[allow(clippy::too_many_arguments)]
+fn validate_branching_assignment(
+    assignment: &Assignment,
+    available: &mut [bool],
+    source: &TableSchema,
+    primary: &TableSchema,
+    secondary: &[SecondarySource],
+    intermediates: &[Intermediate],
+    output: &TableSchema,
+    mode: &RowMode,
+    depth: usize,
+    record_derivation: bool,
+    destination_free: bool,
+) -> Result<bool, PlanError> {
+    match &assignment.expression {
+        Expression::Case(branches) => {
+            if branches.is_empty() || branches[0].when.is_none() {
+                return Err(PlanError::InvalidColumns);
+            }
+            for (index, branch) in branches.iter().enumerate() {
+                if branch.assignment.column != assignment.column
+                    || branch.when.is_none() && index + 1 != branches.len()
+                {
+                    return Err(PlanError::InvalidColumns);
+                }
+                if let Some(when) = &branch.when {
+                    if !when.collected().is_empty()
+                        && !matches!(mode, RowMode::Keys | RowMode::Records)
+                    {
+                        return Err(PlanError::InvalidKeyMode);
+                    }
+                    if let RowMode::Groups(keys) = mode {
+                        if when.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !keys.contains(&column))) {
+                            return Err(PlanError::NonGroupSource);
+                        }
+                    }
+                    when.validate_contextual(source.columns().len(), available)
+                        .map_err(PlanError::Filter)?;
+                    for binding in when.bindings() {
+                        if let Read::Intermediate { index, column } = binding.read {
+                            let item = intermediates
+                                .get(index)
+                                .ok_or(PlanError::InvalidIntermediate)?;
+                            intermediates::validate_context_read(
+                                item, column, primary, secondary, available, output, mode,
+                            )?;
+                        }
+                    }
+                }
+                validate_assignment_at(
+                    &branch.assignment,
+                    available,
+                    source,
+                    primary,
+                    secondary,
+                    intermediates,
+                    output,
+                    mode,
+                    depth + 1,
+                    record_derivation,
+                    destination_free,
+                )?;
+                if !destination_free {
+                    available[assignment.column] = false;
+                }
+            }
+        }
+        // REQ-0211/0213 convert one derived value at execution, including
+        // literals. Eager conversion would invent failures for empty templates
+        // and move runtime conversion conditions into the planning phase.
+        Expression::FirstAvailable(selection) => {
+            selection.validate(source, available, mode)?;
+            for operand in selection.sources() {
+                if let SelectionRead::Expression(operand) = &operand.read {
+                    if operand.column != assignment.column {
+                        return Err(PlanError::InvalidColumns);
+                    }
+                    validate_assignment_at(
+                        operand,
+                        available,
+                        source,
+                        primary,
+                        secondary,
+                        intermediates,
+                        output,
+                        mode,
+                        depth + 1,
+                        record_derivation,
+                        destination_free,
+                    )?;
+                    if !destination_free {
+                        available[assignment.column] = false;
+                    }
+                }
+            }
+        }
+        Expression::SourceBinding {
+            source: operand,
+            path,
+            variable,
+            absent,
+            variable_absent,
+            ..
+        } => {
+            if operand.column != assignment.column
+                || path.is_empty()
+                || variable.is_empty()
+                || (*variable_absent && absent.is_none())
+            {
+                return Err(PlanError::InvalidColumns);
+            }
+            validate_assignment_at(
+                operand,
+                available,
+                source,
+                primary,
+                secondary,
+                intermediates,
+                output,
+                mode,
+                depth + 1,
+                record_derivation,
+                destination_free,
+            )?;
+            if !destination_free {
+                available[assignment.column] = false;
+            }
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+/// Validate expressions admitted directly against the schemas,
+/// without nested assignment recursion.
+#[allow(clippy::too_many_arguments)]
+fn validate_direct_assignment(
+    assignment: &Assignment,
+    available: &mut [bool],
+    source: &TableSchema,
+    primary: &TableSchema,
+    secondary: &[SecondarySource],
+    intermediates: &[Intermediate],
+    output: &TableSchema,
+    mode: &RowMode,
+) -> Result<(), PlanError> {
+    match &assignment.expression {
+        Expression::Joined(read) => read.validate(source, secondary, output, available, mode)?,
+        Expression::JoinedSource {
+            read,
+            filter,
+            selection,
+        } => {
+            read.validate(source, secondary, output, available, mode)?;
+            let width = read.schema.columns().len();
+            if let Some(filter) = filter {
+                filter
+                    .validate(width, &[], false)
+                    .map_err(PlanError::Filter)?;
+            }
+            if selection.as_ref().is_some_and(|s| {
+                s.order_by.is_empty() || s.order_by.iter().any(|term| term.column >= width)
+            }) {
+                return Err(PlanError::InvalidSourceOrder);
+            }
+        }
+        Expression::Literal(_) => {}
+        Expression::Flag(flag) => {
+            flag.validate(source, available, secondary, intermediates, output, mode)?
+        }
+        Expression::Compute(expression) => {
+            for binding in expression.bindings() {
+                if let crate::bound_expression::Read::Intermediate { index, column } = binding.read
+                {
+                    let item = intermediates
+                        .get(index)
+                        .ok_or(PlanError::InvalidIntermediate)?;
+                    intermediates::validate_context_read(
+                        item, column, primary, secondary, available, output, mode,
+                    )?;
+                }
+            }
+            if let RowMode::Groups(keys) = mode {
+                if expression.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !keys.contains(&column))) {
+                    return Err(PlanError::NonGroupSource);
+                }
+            }
+            expression
+                .validate(source.columns().len(), available, false)
+                .map_err(|error| match error {
+                    crate::bound_expression::ScopeError::GroupedSource => PlanError::NonGroupSource,
+                    crate::bound_expression::ScopeError::InvalidSource => PlanError::InvalidSource,
+                    crate::bound_expression::ScopeError::UnavailableColumn => {
+                        PlanError::UnavailableColumn
+                    }
+                })?;
+        }
+        Expression::Function(function) => {
+            function.validate(source, secondary, output, available, mode)?;
+            validate_function_intermediates(
+                function.arguments(),
+                primary,
+                secondary,
+                intermediates,
+                available,
+                output,
+                mode,
+            )?;
+        }
+        Expression::ProjectFunction(function) => {
+            function.validate(source, secondary, output, available, mode)?;
+            validate_function_intermediates(
+                function.arguments(),
+                primary,
+                secondary,
+                intermediates,
+                available,
+                output,
+                mode,
+            )?;
+        }
+        Expression::SourceLookup {
+            lookup: bound,
+            filter,
+            selection,
+        } => {
+            // Implicit source joins use completed output keys in every row
+            // mode. Their ownership and availability are admitted below; they
+            // do not borrow a raw record from the enclosing driver.
+            lookup::validate_source(bound, secondary, available, output)?;
+            let width = secondary[bound.source].schema.columns().len();
+            if let Some(filter) = filter {
+                filter
+                    .validate(width, &[], false)
+                    .map_err(PlanError::Filter)?;
+            }
+            if selection.as_ref().is_some_and(|s| {
+                s.order_by.is_empty() || s.order_by.iter().any(|term| term.column >= width)
+            }) {
+                return Err(PlanError::InvalidSourceOrder);
+            }
+        }
+        Expression::Intermediate { index, column } => {
+            let item = intermediates
+                .get(*index)
+                .ok_or(PlanError::InvalidIntermediate)?;
+            intermediates::validate_context_read(
+                item, *column, primary, secondary, available, output, mode,
+            )?;
+        }
+        Expression::RowLookup(lookup) => lookup::validate_row(lookup, source, secondary, mode)?,
+        Expression::Lookup(lookup) => {
+            if !matches!(mode, RowMode::Keys) {
+                return Err(PlanError::InvalidLookup);
+            }
+            lookup::validate(lookup, secondary, available, output)?;
+        }
+        Expression::ContextWindow(window) => {
+            window.validate(available, output, source, mode)?;
+        }
+        Expression::Window(window) => {
+            window.validate(available, output)?;
+        }
+        Expression::Column(column) => {
+            if !available.get(*column).copied().unwrap_or(false) {
+                return Err(PlanError::UnavailableColumn);
+            }
+        }
+        Expression::Source(column) => {
+            if *column >= source.columns().len() {
+                return Err(PlanError::InvalidSource);
+            }
+            if let RowMode::Groups(keys) = mode {
+                if !keys.contains(column) {
+                    return Err(PlanError::NonGroupSource);
+                }
+            }
+        }
+        Expression::Collect {
+            column,
+            identifier,
+            filter,
+            selection,
+        } => {
+            if *column >= source.columns().len() {
+                return Err(PlanError::InvalidSource);
+            }
+            let scalar_records = matches!(mode, RowMode::Records)
+                || matches!(mode, RowMode::Groups(keys) if keys.contains(column));
+            if (!matches!(mode, RowMode::Keys) && !scalar_records) || identifier.is_empty() {
+                return Err(PlanError::InvalidKeyMode);
+            }
+            if let Some(filter) = filter {
+                filter
+                    .validate(source.columns().len(), &[], false)
+                    .map_err(PlanError::Filter)?;
+            }
+            if let Some(selection) = selection {
+                if selection.order_by.is_empty()
+                    || selection
+                        .order_by
+                        .iter()
+                        .any(|term| term.column >= source.columns().len())
+                {
+                    return Err(PlanError::InvalidSourceOrder);
+                }
+            }
+        }
+        Expression::Aggregate(aggregate) => {
+            aggregate.validate(source, secondary, intermediates, output, available, mode)?;
+        }
+        Expression::Odm(odm) => odm.validate(source, secondary, mode)?,
+        Expression::Count { column, text } => {
+            if column.is_some_and(|column| column >= source.columns().len()) {
+                return Err(PlanError::InvalidSource);
+            }
+            if !matches!(mode, RowMode::Groups(_)) {
+                return Err(PlanError::UngroupedReduction);
+            }
+            if text.is_empty() {
+                return Err(PlanError::EmptyPath);
+            }
+        }
+        Expression::Reduce {
+            column,
+            text,
+            identifier,
+            ..
+        } => {
+            if *column >= source.columns().len() {
+                return Err(PlanError::InvalidSource);
+            }
+            if !matches!(mode, RowMode::Groups(_)) {
+                return Err(PlanError::UngroupedReduction);
+            }
+            if text.is_empty() || identifier.as_ref().is_some_and(String::is_empty) {
+                return Err(PlanError::EmptyPath);
+            }
+        }
+        _ => (),
+    }
+    Ok(())
+}
+
+/// Validate the declared verifications of one admitted plan,
+/// rejecting empty or duplicate paths and malformed checks.
+#[allow(clippy::too_many_arguments)]
+fn validate_plan_verifications(
+    verifications: &[Verification],
+    source: &TableSchema,
+    secondary: &[SecondarySource],
+    intermediates: &[Intermediate],
+    output: &TableSchema,
+    templates: &[RowTemplate],
+    width: usize,
+) -> Result<(), PlanError> {
+    for (position, verification) in verifications.iter().enumerate() {
+        if verification.path.is_empty() {
+            return Err(PlanError::EmptyPath);
+        }
+        if verifications[..position]
+            .iter()
+            .any(|previous| previous.path == verification.path)
+        {
+            return Err(PlanError::DuplicateVerificationPath);
+        }
+        match &verification.check {
+            Check::NotMissing
+            | Check::AllowedValues(_)
+            | Check::Codelist { .. }
+            | Check::ValueCodelists { .. }
+            | Check::Inventory { .. }
+            | Check::ValueMaxLength { .. }
+            | Check::Range { .. }
+            | Check::MaxLength(_)
+            | Check::WideMaxLength(_)
+            | Check::Matches(_) => return Err(PlanError::InvalidColumns),
+            Check::InvalidDiagnostic(_) => {}
+            Check::InvalidDeclaration { .. } => {}
+            Check::PredicateDeclaration(predicate) => verification_predicates::validate(
+                predicate,
+                source,
+                secondary,
+                intermediates,
+                output,
+                templates,
+            )?,
+            Check::Assert { when, require } => {
+                for predicate in when.iter().chain([require]) {
+                    verification_predicates::validate(
+                        predicate,
+                        source,
+                        secondary,
+                        intermediates,
+                        output,
+                        templates,
+                    )?;
+                }
+            }
+            Check::Unique(columns) => {
+                // Unlike row.group_by, unique.columns permits repeated names.
+                if columns.is_empty() || columns.iter().any(|&column| column >= width) {
+                    return Err(PlanError::InvalidColumns);
+                }
+            }
+            Check::AllOrNone(columns) => {
+                if columns.iter().any(|&column| column >= width)
+                    || !columns.iter().any(|column| columns.first() != Some(column))
+                {
+                    return Err(PlanError::InvalidColumns);
+                }
+            }
+            Check::RowCount { min, max } => {
+                if (min.is_none() && max.is_none())
+                    || matches!((min, max), (Some(a), Some(b)) if a > b)
+                {
+                    return Err(PlanError::InvalidBounds);
+                }
+            }
+            Check::ScopedRowCount(check) => {
+                check.validate(width)?;
+                for predicate in check.filter.iter().chain(&check.when) {
+                    verification_predicates::validate(
+                        predicate,
+                        source,
+                        secondary,
+                        intermediates,
+                        output,
+                        templates,
+                    )?;
+                }
+            }
+            Check::WideRowCount { min, max } => {
+                if (min.is_none() && max.is_none())
+                    || matches!((min, max), (Some(a), Some(b)) if a > b)
+                {
+                    return Err(PlanError::InvalidBounds);
+                }
+            }
+        }
+    }
+    Ok(())
+}

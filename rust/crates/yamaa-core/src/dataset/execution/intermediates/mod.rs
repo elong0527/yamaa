@@ -614,245 +614,19 @@ fn read_with_observations<T: TableAccess + ?Sized>(
     let choice = if let Some(choice) = state.intermediates.choices.get(&cache_key) {
         *choice
     } else {
-        // Newly admitted expressions use the original dependency/filter boundary.
-        // Ordinary selectors retain the established filter-before-raw-key behavior.
-        let current = if item.has_expression_keys() {
-            Some(match_values::resolve(
-                item, candidate, plan, row, primary, state,
-            )?)
-        } else {
-            None
-        };
-        check_deferred_filter_types(item)?;
-
-        if !state.intermediates.eligible.contains_key(&index)
-            || item
-                .derivations
-                .as_ref()
-                .is_some_and(|derived| !derived.current.is_empty())
-        {
-            let eligible = eligibility(table, item)?;
-
-            state.intermediates.eligible.insert(index, eligible);
-        }
-        let mut count = 0;
-        let mut selected = None;
-        let keys = match current {
-            Some(current) => {
-                match_values::evaluate(item, &current, candidate, plan, row, primary, state)?
-            }
-            None => match_values::ordinary(item, candidate, plan, row, primary, state)?,
-        };
-        let range_value = item
-            .range
-            .as_ref()
-            .map(|range| {
-                relation_predicates::resolve_current(
-                    range.current(),
-                    range.path(),
-                    primary,
-                    candidate,
-                    plan,
-                    row,
-                    assignment,
-                    relation_predicates::CurrentObservation::Operand,
-                    state,
-                )
-            })
-            .transpose()?;
-
-        let eligible_len = state.intermediates.eligible[&index].len();
-        if range_value
-            .as_ref()
-            .is_none_or(|value| !matches!(value, Value::Missing))
-            && !keys
-                .iter()
-                .any(|(_, value)| matches!(value, Value::Missing))
-        {
-            let mut scanned = Vec::new();
-            // Small relations retain their existing scan and observation profile;
-            // the index pays off only for repeated reads of a sizable relation.
-            let indexed_key = if eligible_len >= key_index::MINIMUM_ROWS
-                && item.keys.len() == 1
-                && !item.has_expression_keys()
-                && !item.source.is_self()
-                && item.range.is_none()
-                && item.derivations.is_none()
-                && item
-                    .filter
-                    .as_ref()
-                    .is_none_or(|filter| !filter.correlated())
-            {
-                match &keys[0].1 {
-                    Value::Str(key) => Some(key.as_str()),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            let matching = if let Some(key) = indexed_key {
-                if !state.intermediates.string_indexes.contains_key(&index) {
-                    let indexed = key_index::StringIndex::build(
-                        table,
-                        item,
-                        &state.intermediates.eligible[&index],
-                        keys[0].0,
-                    )?;
-
-                    state.intermediates.string_indexes.insert(index, indexed);
-                }
-                state.intermediates.string_indexes[&index].matching(key)?
-            } else {
-                // First count every matching record without reading order or donor fields.
-                let matching = &mut scanned;
-
-                matching
-                    .try_reserve_exact(eligible_len)
-                    .map_err(|_| Box::new(ExecutionError::Allocation))?;
-                for position in 0..eligible_len {
-                    let source_row = state.intermediates.eligible[&index][position];
-                    let mut matches = true;
-                    for (column, expected) in &keys {
-                        // A false equality cannot hide a later dynamic type refusal.
-                        // Known compatible pairs need no further reads once this row differs.
-                        if !matches
-                            && item
-                                .source_kind(plan.secondary(), *column)
-                                .is_some_and(|kind| {
-                                    expected.value_type().is_some_and(|expected| {
-                                        crate::value::comparable_types(expected, kind.into())
-                                    })
-                                })
-                        {
-                            continue;
-                        }
-                        let value = cell(table, item, source_row, *column)?;
-                        if let (ValueRef::Bool(left), Value::Bool(right)) = (value, expected) {
-                            matches &= left == *right;
-                            continue;
-                        }
-                        match crate::value::compare_present_refs(value, ValueRef::from(expected)) {
-                            Ok(std::cmp::Ordering::Equal) => (),
-                            Err(crate::value::ComparisonError::IncompatibleTypes) => {
-                                let key = item
-                                    .keys
-                                    .iter()
-                                    .find(|key| key.source_column == *column)
-                                    .expect("resolved key belongs to the admitted selector");
-                                let field = &table.schema().columns()[*column].name;
-                                let source = if key.value.is_expression() {
-                                    format!("key[{field}]")
-                                } else {
-                                    key.value
-                                        .read()
-                                        .map_or(field.clone(), |read| read.identifier().into())
-                                };
-                                return Err(Box::new(ExecutionError::ScalarDiagnostic(
-                                    crate::diagnostic::lookup_key_type(
-                                        &key.path,
-                                        &item.identifier,
-                                        &source,
-                                        expected.value_type().expect("present key"),
-                                        value.value_type().expect("present donor key"),
-                                    ),
-                                )));
-                            }
-                            _ => {
-                                matches = false;
-                            }
-                        }
-                    }
-                    if matches {
-                        if let Some(filter) =
-                            item.filter.as_ref().filter(|filter| filter.correlated())
-                        {
-                            let owner = match &item.source {
-                                IntermediateSource::Input(index) => {
-                                    relation_predicates::DonorOwner::Secondary(*index)
-                                }
-                                IntermediateSource::Primary { .. } => {
-                                    relation_predicates::DonorOwner::Primary
-                                }
-                                IntermediateSource::SelfRows { .. } => {
-                                    relation_predicates::DonorOwner::Completed
-                                }
-                            };
-                            if relation_predicates::evaluate(
-                                filter,
-                                relation_predicates::Donor {
-                                    table,
-                                    row: source_row,
-                                    owner,
-                                },
-                                primary,
-                                candidate,
-                                plan,
-                                row,
-                                assignment,
-                                state,
-                            )? != crate::predicate::Truth::True
-                            {
-                                continue;
-                            }
-                        }
-                        if let (Some(range), Some(value)) = (&item.range, &range_value) {
-                            let allowed = range
-                                .allows(ValueRef::from(value), |column| {
-                                    cell(table, item, source_row, column)
-                                })
-                                .map_err(|failure| match failure {
-                                    RelationRangeFailure::Access(error) => error,
-                                    RelationRangeFailure::Incomparable(types) => {
-                                        Box::new(ExecutionError::ScalarDiagnostic(
-                                            types.diagnostic(range.path(), &item.identifier),
-                                        ))
-                                    }
-                                })?;
-                            if !allowed {
-                                continue;
-                            }
-                        }
-                        matching.push(source_row);
-                    }
-                }
-                scanned.as_slice()
-            };
-            count = matching.len();
-            selected = matching.first().copied();
-            if count > 1 {
-                if let Some(selection) = &item.selection {
-                    selected = Some(select(table, item, matching, selection)?);
-                } else {
-                    return Err(Box::new(ExecutionError::MultipleMatches {
-                        path: item.path.clone(),
-                        dataset: source_name.into(),
-                        intermediate: item.identifier.clone(),
-                        match_count: count,
-                        matched_key: matched_key(table, &keys)?,
-                        identity: failure_identity(candidate, plan.keys(), row)?,
-                    }));
-                }
-            }
-        }
-        let choice = if let Some(row) = selected {
-            Choice::Record {
-                row,
-                multiple: count > 1,
-            }
-        } else if item.no_match.is_some() {
-            Choice::Absent
-        } else {
-            return Err(Box::new(ExecutionError::UnmatchedKey {
-                path: item.path.clone(),
-                dataset: source_name.into(),
-                intermediate: item.identifier.clone(),
-                matched_key: matched_key(table, &keys)?,
-                identity: failure_identity(candidate, plan.keys(), row)?,
-            }));
-        };
-
-        state.intermediates.choices.insert(cache_key, choice);
-        choice
+        resolve_choice(
+            index,
+            assignment,
+            candidate,
+            plan,
+            row,
+            primary,
+            state,
+            table,
+            item,
+            source_name,
+            cache_key,
+        )?
     };
     let (value, handler) = match choice {
         Choice::Record { row, multiple } => (
@@ -978,4 +752,260 @@ fn select<E>(
         }
     }
     Ok(best)
+}
+
+/// Resolve and cache the record choice for one intermediate read,
+/// scanning eligible donors against the resolved keys, range and filter.
+#[allow(clippy::too_many_arguments)]
+fn resolve_choice<T: TableAccess + ?Sized>(
+    index: usize,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    primary: &T,
+    state: &mut EvaluationState<'_, T::Error>,
+    table: &dyn TableAccess<Error = T::Error>,
+    item: &Intermediate,
+    source_name: &str,
+    cache_key: (SelectionIdentity, usize),
+) -> Result<Choice, Box<ExecutionError<T::Error>>> {
+    // Newly admitted expressions use the original dependency/filter boundary.
+    // Ordinary selectors retain the established filter-before-raw-key behavior.
+    let current = if item.has_expression_keys() {
+        Some(match_values::resolve(
+            item, candidate, plan, row, primary, state,
+        )?)
+    } else {
+        None
+    };
+    check_deferred_filter_types(item)?;
+
+    if !state.intermediates.eligible.contains_key(&index)
+        || item
+            .derivations
+            .as_ref()
+            .is_some_and(|derived| !derived.current.is_empty())
+    {
+        let eligible = eligibility(table, item)?;
+
+        state.intermediates.eligible.insert(index, eligible);
+    }
+    let mut count = 0;
+    let mut selected = None;
+    let keys = match current {
+        Some(current) => {
+            match_values::evaluate(item, &current, candidate, plan, row, primary, state)?
+        }
+        None => match_values::ordinary(item, candidate, plan, row, primary, state)?,
+    };
+    let range_value = item
+        .range
+        .as_ref()
+        .map(|range| {
+            relation_predicates::resolve_current(
+                range.current(),
+                range.path(),
+                primary,
+                candidate,
+                plan,
+                row,
+                assignment,
+                relation_predicates::CurrentObservation::Operand,
+                state,
+            )
+        })
+        .transpose()?;
+
+    let eligible_len = state.intermediates.eligible[&index].len();
+    if range_value
+        .as_ref()
+        .is_none_or(|value| !matches!(value, Value::Missing))
+        && !keys
+            .iter()
+            .any(|(_, value)| matches!(value, Value::Missing))
+    {
+        let mut scanned = Vec::new();
+        // Small relations retain their existing scan and observation profile;
+        // the index pays off only for repeated reads of a sizable relation.
+        let indexed_key = if eligible_len >= key_index::MINIMUM_ROWS
+            && item.keys.len() == 1
+            && !item.has_expression_keys()
+            && !item.source.is_self()
+            && item.range.is_none()
+            && item.derivations.is_none()
+            && item
+                .filter
+                .as_ref()
+                .is_none_or(|filter| !filter.correlated())
+        {
+            match &keys[0].1 {
+                Value::Str(key) => Some(key.as_str()),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let matching = if let Some(key) = indexed_key {
+            if !state.intermediates.string_indexes.contains_key(&index) {
+                let indexed = key_index::StringIndex::build(
+                    table,
+                    item,
+                    &state.intermediates.eligible[&index],
+                    keys[0].0,
+                )?;
+
+                state.intermediates.string_indexes.insert(index, indexed);
+            }
+            state.intermediates.string_indexes[&index].matching(key)?
+        } else {
+            // First count every matching record without reading order or donor fields.
+            let matching = &mut scanned;
+
+            matching
+                .try_reserve_exact(eligible_len)
+                .map_err(|_| Box::new(ExecutionError::Allocation))?;
+            for position in 0..eligible_len {
+                let source_row = state.intermediates.eligible[&index][position];
+                let mut matches = true;
+                for (column, expected) in &keys {
+                    // A false equality cannot hide a later dynamic type refusal.
+                    // Known compatible pairs need no further reads once this row differs.
+                    if !matches
+                        && item
+                            .source_kind(plan.secondary(), *column)
+                            .is_some_and(|kind| {
+                                expected.value_type().is_some_and(|expected| {
+                                    crate::value::comparable_types(expected, kind.into())
+                                })
+                            })
+                    {
+                        continue;
+                    }
+                    let value = cell(table, item, source_row, *column)?;
+                    if let (ValueRef::Bool(left), Value::Bool(right)) = (value, expected) {
+                        matches &= left == *right;
+                        continue;
+                    }
+                    match crate::value::compare_present_refs(value, ValueRef::from(expected)) {
+                        Ok(std::cmp::Ordering::Equal) => (),
+                        Err(crate::value::ComparisonError::IncompatibleTypes) => {
+                            let key = item
+                                .keys
+                                .iter()
+                                .find(|key| key.source_column == *column)
+                                .expect("resolved key belongs to the admitted selector");
+                            let field = &table.schema().columns()[*column].name;
+                            let source = if key.value.is_expression() {
+                                format!("key[{field}]")
+                            } else {
+                                key.value
+                                    .read()
+                                    .map_or(field.clone(), |read| read.identifier().into())
+                            };
+                            return Err(Box::new(ExecutionError::ScalarDiagnostic(
+                                crate::diagnostic::lookup_key_type(
+                                    &key.path,
+                                    &item.identifier,
+                                    &source,
+                                    expected.value_type().expect("present key"),
+                                    value.value_type().expect("present donor key"),
+                                ),
+                            )));
+                        }
+                        _ => {
+                            matches = false;
+                        }
+                    }
+                }
+                if matches {
+                    if let Some(filter) = item.filter.as_ref().filter(|filter| filter.correlated())
+                    {
+                        let owner = match &item.source {
+                            IntermediateSource::Input(index) => {
+                                relation_predicates::DonorOwner::Secondary(*index)
+                            }
+                            IntermediateSource::Primary { .. } => {
+                                relation_predicates::DonorOwner::Primary
+                            }
+                            IntermediateSource::SelfRows { .. } => {
+                                relation_predicates::DonorOwner::Completed
+                            }
+                        };
+                        if relation_predicates::evaluate(
+                            filter,
+                            relation_predicates::Donor {
+                                table,
+                                row: source_row,
+                                owner,
+                            },
+                            primary,
+                            candidate,
+                            plan,
+                            row,
+                            assignment,
+                            state,
+                        )? != crate::predicate::Truth::True
+                        {
+                            continue;
+                        }
+                    }
+                    if let (Some(range), Some(value)) = (&item.range, &range_value) {
+                        let allowed = range
+                            .allows(ValueRef::from(value), |column| {
+                                cell(table, item, source_row, column)
+                            })
+                            .map_err(|failure| match failure {
+                                RelationRangeFailure::Access(error) => error,
+                                RelationRangeFailure::Incomparable(types) => {
+                                    Box::new(ExecutionError::ScalarDiagnostic(
+                                        types.diagnostic(range.path(), &item.identifier),
+                                    ))
+                                }
+                            })?;
+                        if !allowed {
+                            continue;
+                        }
+                    }
+                    matching.push(source_row);
+                }
+            }
+            scanned.as_slice()
+        };
+        count = matching.len();
+        selected = matching.first().copied();
+        if count > 1 {
+            if let Some(selection) = &item.selection {
+                selected = Some(select(table, item, matching, selection)?);
+            } else {
+                return Err(Box::new(ExecutionError::MultipleMatches {
+                    path: item.path.clone(),
+                    dataset: source_name.into(),
+                    intermediate: item.identifier.clone(),
+                    match_count: count,
+                    matched_key: matched_key(table, &keys)?,
+                    identity: failure_identity(candidate, plan.keys(), row)?,
+                }));
+            }
+        }
+    }
+    let choice = if let Some(row) = selected {
+        Choice::Record {
+            row,
+            multiple: count > 1,
+        }
+    } else if item.no_match.is_some() {
+        Choice::Absent
+    } else {
+        return Err(Box::new(ExecutionError::UnmatchedKey {
+            path: item.path.clone(),
+            dataset: source_name.into(),
+            intermediate: item.identifier.clone(),
+            matched_key: matched_key(table, &keys)?,
+            identity: failure_identity(candidate, plan.keys(), row)?,
+        }));
+    };
+
+    state.intermediates.choices.insert(cache_key, choice);
+    Ok(choice)
 }
