@@ -297,7 +297,7 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
                 "phase": "validation",
                 "condition": "incompatible_input_type",
                 "requirement": "REQ-0190",
-                "spec_paths": ["intermediates[0].filter"],
+                "spec_paths": ["input.ADSL.schema.intermediates[0].filter"],
                 "context": {"left_type": "date", "right_type": "str"},
             },
         )

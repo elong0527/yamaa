@@ -349,6 +349,63 @@ fn activation_prefix<E>(attempt: &NativeAttempt<E>) -> Result<Value, Error> {
     project_report::validate_activation(held, observed, boundary)?;
     Ok(value)
 }
+/// Entry-relative link prefix for every graph node: the chain of
+/// `input.<dataset>.schema.` segments from the root to the node, following
+/// authored declaration order (the traversal that also fixes the build
+/// order). A binding finding a linked producer reports about itself reads,
+/// from the entry specification, as a path through each schema link that
+/// reaches it, exactly as REQ-0534 contract findings are already written.
+/// The root's own prefix is empty, so a directly built specification keeps
+/// its authored paths, and prefixes accumulate naturally through chains.
+fn link_prefixes(metadata: &yamaa_core::producer_graph::PreparedGraph) -> Vec<String> {
+    let nodes = metadata.nodes();
+    let mut prefixes: Vec<Option<String>> = vec![None; nodes.len()];
+    let root = metadata.root();
+    prefixes[root] = Some(String::new());
+    let mut stack = vec![(root, 0usize)];
+    while let Some(&(node, next)) = stack.last() {
+        if next == nodes[node].dependencies().len() {
+            stack.pop();
+            continue;
+        }
+        stack.last_mut().expect("nonempty traversal").1 += 1;
+        let producer = nodes[node].dependencies()[next];
+        if prefixes[producer].is_none() {
+            let prefix = format!(
+                "{}input.{}.schema.",
+                prefixes[node].as_deref().unwrap_or_default(),
+                nodes[node].producers()[next].dataset(),
+            );
+            prefixes[producer] = Some(prefix);
+            stack.push((producer, 0));
+        }
+    }
+    prefixes
+        .into_iter()
+        .map(|prefix| prefix.unwrap_or_default())
+        .collect()
+}
+
+/// Prefix diagnostics in place. Applied to a linked producer's binding
+/// findings as they join the whole-build union: only the union (and
+/// therefore the root issues) is entry-relative; the node's own report
+/// section keeps its local paths beside its specification name.
+fn prefix_diagnostics(diagnostics: &mut [Value], prefix: &str) {
+    if prefix.is_empty() {
+        return;
+    }
+    for diagnostic in diagnostics {
+        let Some(paths) = diagnostic["spec_paths"].as_array_mut() else {
+            continue;
+        };
+        for path in paths {
+            if let Some(authored) = path.as_str() {
+                *path = Value::String(format!("{prefix}{authored}"));
+            }
+        }
+    }
+}
+
 fn push_diagnostic(
     findings: &mut Vec<Value>,
     diagnostic: &yamaa_core::diagnostic::Diagnostic,
@@ -416,6 +473,7 @@ fn failed_observations<'a, E>(
     id: &Identity<'_>,
     facts: &crate::producer_diagnostics::Facts<'a, '_, E>,
     entry: &str,
+    link_prefix: &str,
 ) -> Result<(StoredReport, bool), Error> {
     use yamaa_core::dataset::ExecutionError;
     use yamaa_core::specification_run::{PortError, RunError};
@@ -434,6 +492,9 @@ fn failed_observations<'a, E>(
     let mut diagnostics = Vec::new();
     let mut verifications = Vec::new();
     let mut portable = true;
+    // The slice of `diagnostics` contributed by the Bind arm, if any. Only
+    // binding findings are entry-relative in the whole-build union (#2713).
+    let mut binding_range: Option<std::ops::Range<usize>> = None;
     match &attempt.result {
         Ok(execution) => {
             records(&execution.retained_verifications)?;
@@ -605,7 +666,9 @@ fn failed_observations<'a, E>(
             if let Some(findings) =
                 crate::specification_diagnostics::binding(error, view.compiled().source())
             {
+                let start = diagnostics.len();
                 diagnostics.extend(findings);
+                binding_range = Some(start..diagnostics.len());
             } else {
                 portable = false;
             }
@@ -693,7 +756,17 @@ fn failed_observations<'a, E>(
         }
         _ => {}
     }
-    report::set_diagnostics(&mut value, diagnostics);
+    if let Some(range) = binding_range.filter(|_| !link_prefix.is_empty()) {
+        // The whole-build union is entry-relative: this node's binding
+        // findings carry the schema-link chain that reaches the node. The
+        // node's own report section keeps the local binding paths.
+        let local = diagnostics.clone();
+        prefix_diagnostics(&mut diagnostics[range], link_prefix);
+        report::set_diagnostics(&mut value, diagnostics);
+        value["nodes"][0]["diagnostics"] = json!(local);
+    } else {
+        report::set_diagnostics(&mut value, diagnostics);
+    }
     value["verifications"] = json!(verifications);
     Ok((value, portable))
 }
@@ -716,6 +789,7 @@ pub fn attempt_report_classified<'a, E>(
 ) -> Result<StoredReport, ProjectionError<'a, E>> {
     let facts = crate::producer_diagnostics::Facts::admit(attempt, facts)?;
     let metadata = attempt.provenance.metadata();
+    let prefixes = link_prefixes(metadata);
     let entered = &attempt.graph.nodes;
     if entered.len() > metadata.order().len()
         || entered
@@ -824,6 +898,7 @@ pub fn attempt_report_classified<'a, E>(
                     .ok_or(Error::InvalidObservation)?
                     .source()
                     .identity,
+                &prefixes[node.node],
             )?;
             portable &= supported;
             value
