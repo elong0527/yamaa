@@ -1,5 +1,10 @@
 _CORE_VERSION: str
 
+def _resolve_specification_file(
+    specification: str, environment: str | None = None
+) -> tuple[str | None, list[tuple[str, str, str | None, list[str], str]]]: ...
+def _read_resolved_specification(text: str) -> str: ...
+
 class DomainError(Exception): ...
 
 class _ArrowTable:

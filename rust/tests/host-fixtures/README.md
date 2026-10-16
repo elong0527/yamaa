@@ -1,5 +1,13 @@
 # Installed host semantic fixtures
 
+`saved-readers.json` independently owns the saved-format reader controls:
+invented source records, declarations, exact CSV text, logical values, i64
+decimal strings, IEEE 754 float bits and temporal epoch counts. The Python and
+R `saved_readers` suites consume this same truth through installed public Build
+and Save APIs. Both nonempty and header-only sources are qualified for CSV,
+Parquet and their generated Dataset-JSON and Define-XML documents. No benchmark
+input or expected artifact is regenerated.
+
 `cases.json` owns independently authored inputs and expected truth repeated by
 installed Python and R controls. The two readers only decode this data. They do
 not invoke a native engine, reference evaluator, benchmark or callback to make

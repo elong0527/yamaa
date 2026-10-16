@@ -103,6 +103,30 @@ The ordinary CI workflow runs the same check targets listed above for each PR.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
+`.github/workflows/dependency-graphs.yml` also resolves minimum and newest
+compatible graphs on each PR, main push, weekly schedule and dispatch. Run a
+lane locally with R and the normal development prerequisites installed:
+
+```sh
+uv run --project python --no-sync python -m tools.ci.dependency_graphs \
+  --graph minimum --python 3.12 --destination /tmp/yamaa-minimum
+```
+
+Use `--graph newest` for the upper lane. The destination must be new and outside
+the checkout. The minimum lane pins each workspace registry dependency to its
+declared lower bound and each Python runtime/test dependency to its floor.
+Reviewed local patches and exact policy pins remain in force. Transitive Cargo
+dependencies use the newest Rust-1.90-compatible selection, rather than claiming
+support for every historical transitive release. The newest lane starts without
+a Cargo lock and resolves all declared ranges with Cargo's MSRV fallback policy;
+both lanes reject metadata declaring a higher MSRV. Python resolves independently
+for each interpreter. Each lane builds its own extension and runs workspace Rust,
+Python package/installed-host and strict R source-package checks. CI retains the
+resolved Cargo lock, Python requirements and Cargo metadata for reproduction.
+Neither lane updates the source checkout's locks. Release builds and source
+archives continue to use the canonical unchanged locks; these compatibility
+lanes supplement [native qualification](rust/qualification/README.md).
+
 Before every merge, run a fresh read-only review check with an authenticated
 GitHub CLI, supplying the exact final commit:
 
@@ -131,18 +155,7 @@ requires a fresh PR and head, even if the base was later changed back to main.
 PRs above 300 changed files require bounded coverage below, including when a
 shared head already has a successful status. Triage findings outside inline
 threads as well.
-The trusted-main `review.yml` workflow publishes the `review-completion` status
-for current open PRs targeting main. It refreshes after PR/status/discussion
-events and on a five-minute schedule for review and thread changes. It never
-checks out PR code; a formal review submission is optional for clean reviews.
-
-The workflow does not configure repository rules. Server enforcement requires a
-maintainer to make `review-completion` from GitHub Actions a required status on
-main, require CodeRabbit's own status, and require conversation resolution.
-The fresh manual check remains mandatory, including during bootstrap and when
-scheduled runs are delayed. An administrator must configure these rules
-separately; the workflow's token cannot administer repository rules.
-
+The fresh manual check above remains mandatory before every merge.
 An atomic change above CodeRabbit's 300-file review limit can use bounded
 review-only PRs. Each review PR must have a distinct head commit with the
 **complete target head tree**, a synthetic base in this repository, and at

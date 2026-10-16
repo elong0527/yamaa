@@ -60,9 +60,9 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: make test-python
-      - name: Test the minimum supported Python Parquet readers
+      - name: Test the minimum supported Python saved artifact readers
         run: |
-          uv pip install --python python/.venv/bin/python 'polars==1.43.2' 'pyarrow==23.0.1'
+          uv pip install --python python/.venv/bin/python 'polars==1.43.2' 'pyarrow==23.0.1' 'lxml==6.1.0'
           make test-python
   r:
     runs-on: ubuntu-24.04
@@ -74,6 +74,8 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           r: check
+      - name: Install the minimum supported R saved artifact readers
+        run: Rscript --vanilla tools/ci/install_minimum_r_readers.R
       - name: Install the oldest supported R Arrow bridge
         run: |
           curl --fail --location --silent --show-error \

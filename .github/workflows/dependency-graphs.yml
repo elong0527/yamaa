@@ -1,0 +1,60 @@
+name: Dependency graphs
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-graphs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  graph:
+    name: ${{ matrix.graph }} (Python ${{ matrix.python }}, Rust 1.90, R 4.6.1)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        graph: [minimum, newest]
+        python: ['3.12', '3.14']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          r: check
+      - name: Resolve and test an isolated graph
+        env:
+          GRAPH: ${{ matrix.graph }}
+          GRAPH_PYTHON: ${{ matrix.python }}
+          CARGO_TARGET_DIR: ${{ runner.temp }}/dependency-target
+        run: |
+          uv run --project python --no-sync python -m tools.ci.dependency_graphs \
+            --graph "$GRAPH" --python "$GRAPH_PYTHON" \
+            --destination "$RUNNER_TEMP/dependency-graph"
+      - name: Preserve the exact tested dependency selections
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: dependency-${{ matrix.graph }}-python-${{ matrix.python }}
+          path: |
+            ${{ runner.temp }}/dependency-graph/rust/Cargo.lock
+            ${{ runner.temp }}/dependency-graph/requirements.in
+            ${{ runner.temp }}/dependency-graph/requirements.txt
+            ${{ runner.temp }}/dependency-graph/cargo-metadata.json
+            ${{ runner.temp }}/dependency-graph/python-installed.txt
+            ${{ runner.temp }}/dependency-graph/r-session.txt
+          if-no-files-found: warn

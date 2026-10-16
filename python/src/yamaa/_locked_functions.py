@@ -327,3 +327,69 @@ def resolve_callable(call: str, parameters: Sequence[str]):
             unsupported=unsupported,
         )
     return target
+
+
+def check_registry_callable(target, call, parameters):
+    """Validate one caller-supplied registry callable without importing.
+
+    The same concrete-signature rules as `resolve_callable` apply; the
+    only difference is the source of the callable: an explicit registry
+    mapping supplied by the caller instead of an installed module member.
+    """
+    if not callable(target):
+        raise InvalidBinding(call, "registered member is not callable")
+    try:
+        signature = _concrete_signature(target)
+    except (ValueError, TypeError) as error:
+        raise InvalidBinding(
+            call, "registered callable has no concrete call signature"
+        ) from error
+    allowed = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    actual = {p.name for p in signature.parameters.values() if p.kind in allowed}
+    unsupported = tuple(
+        (p.name, p.kind.name.lower())
+        for p in signature.parameters.values()
+        if p.kind not in allowed
+    )
+    declared = set(parameters)
+    if len(declared) != len(parameters) or unsupported or actual != declared:
+        raise InvalidBinding(
+            call,
+            "registered callable signature differs from params",
+            missing=sorted(declared - actual),
+            extra=sorted(actual - declared),
+            unsupported=unsupported,
+        )
+    return target
+
+
+def resolve_registry_callable(registry, call, parameters):
+    """Resolve one binding from a caller-supplied registry mapping.
+
+    A missing binding is a refusal, never a fallback to module import.
+    """
+    try:
+        target = registry[call]
+    except KeyError:
+        raise InvalidBinding(call, "registered binding is missing") from None
+    return check_registry_callable(target, call, parameters)
+
+
+def invoke_batch_callable(target, columns):
+    """Call a vectorized registry callable once with named columns.
+
+    Every column must have the same length; the callable must return a
+    list or tuple of exactly that length. Anything else is refused here,
+    and the shared engine re-validates length and exact result types
+    before accepting any output.
+    """
+    lengths = {len(column) for column in columns.values()}
+    if len(lengths) > 1:
+        raise InvalidBinding("batch", "batch columns differ in length")
+    rows = lengths.pop() if lengths else 0
+    returned = target(**{name: list(column) for name, column in columns.items()})
+    if isinstance(returned, (str, bytes)) or not isinstance(returned, (list, tuple)):
+        raise InvalidBinding("batch", "batch callable returned no sequence")
+    if len(returned) != rows:
+        raise InvalidBinding("batch", "batch callable returned the wrong length")
+    return list(returned)

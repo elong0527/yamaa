@@ -9,14 +9,14 @@ use pyo3::{
 use std::sync::Arc;
 use yamaa_adapters::{
     callback::details,
+    file_application::BuildRefusal,
     project_report::{self, Classified},
+    specification_report::BuildResult,
 };
 
 pub struct Result {
     carrier: Attempt,
-    formatted: Option<yamaa_adapters::specification_report::BuildResult>,
-    refusal: &'static str,
-    refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
+    formatted: std::result::Result<BuildResult, BuildRefusal>,
 }
 pub(super) fn prepare(
     py: Python<'_>,
@@ -30,8 +30,6 @@ pub(super) fn prepare(
     let mut failures = Vec::new();
     yamaa_adapters::project_attempt::visit_host_failures(&state, |_, error| failures.push(error));
     let mut ordinary = Vec::new();
-    let mut refusal = "";
-    let mut refusal_details = None;
     for error in &failures {
         let projection = match error {
             HostError::Host(error) if error.is_instance_of::<PyException>(py) => {
@@ -63,33 +61,13 @@ pub(super) fn prepare(
                     }),
             })
             .collect::<Vec<_>>();
-        match project_report::build_result(
+        project_report::build_result(
             &attempt.run,
             &state,
             report_fields::identity(&fields),
             &facts,
-        ) {
-            Ok(inner) => Some(inner),
-            Err(error) => {
-                if let project_report::Error::Report(
-                    yamaa_adapters::specification_report::Error::ResourceLimit(details),
-                ) = &error
-                {
-                    refusal_details = Some(details.clone());
-                }
-                refusal = match error {
-                    project_report::Error::Opaque(_) => "opaque_host",
-                    project_report::Error::Boundary(_) => "activation_boundary",
-                    project_report::Error::Source(_) => "source_boundary",
-                    project_report::Error::Execution(_) => "execution_boundary",
-                    project_report::Error::Report(
-                        yamaa_adapters::specification_report::Error::ResourceLimit(_),
-                    ) => "output_limit",
-                    project_report::Error::Report(_) => "report_refusal",
-                };
-                None
-            }
-        }
+        )
+        .map_err(|error| error.refusal())
     };
     Ok(Result {
         carrier: Attempt {
@@ -97,8 +75,6 @@ pub(super) fn prepare(
             run: Arc::clone(&attempt.run),
         },
         formatted,
-        refusal,
-        refusal_details,
     })
 }
 impl Result {
@@ -113,13 +89,10 @@ impl Result {
         >,
     ) {
         let result = match self.formatted {
-            Some(formatted) => {
+            Ok(formatted) => {
                 yamaa_adapters::file_application::Domain::from_project(formatted, project)
             }
-            None => Err(self.refusal_details.map_or_else(
-                || yamaa_adapters::file_application::rejected("build", self.refusal),
-                |details| details.issues("build", self.refusal),
-            )),
+            Err(refusal) => Err(refusal.issues()),
         };
         (self.carrier, result)
     }

@@ -10,6 +10,7 @@ mod function_callback;
 mod project_activation;
 mod project_result;
 mod report_fields;
+mod resolved_artifact;
 mod style;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -28,6 +29,14 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     module.add_function(wrap_pyfunction!(domain_entry::_domain_file, module)?)?;
     module.add_function(wrap_pyfunction!(domain_entry::_check_file, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        resolved_artifact::_resolve_specification_file,
+        module
+    )?)?;
+    module.add_function(wrap_pyfunction!(
+        resolved_artifact::_read_resolved_specification,
+        module
+    )?)?;
     module.add_class::<file_producer::Attempt>()?;
     module.add_function(wrap_pyfunction!(style::_style_same_value, module)?)?;
     Ok(())

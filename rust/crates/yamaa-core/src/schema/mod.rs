@@ -43,7 +43,7 @@ pub use inheritance_references::{
     InheritanceReference, InheritanceReferenceError, InheritanceReferenceKind,
 };
 pub use layer_materialization::LayerCompositionError;
-pub use layers::{ComposedLayers, LayerProvenance};
+pub use layers::{ComposedLayers, LayerNodeOrigin, LayerProvenance};
 pub use model::SpecificationDocument;
 pub use normalization::{
     NormalizationError, NormalizationResource, NormalizedDocument, SchemaOrigin, SchemaSource,

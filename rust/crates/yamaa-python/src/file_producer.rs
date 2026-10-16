@@ -7,8 +7,8 @@ use pyo3::{
 };
 use std::sync::{Arc, Mutex, MutexGuard};
 use yamaa_adapters::{
-    callback::details, file_producer_build::FileBuild, producer_report::ProjectionError,
-    project_report::Classified,
+    callback::details, file_application::BuildRefusal, file_producer_build::FileBuild,
+    producer_result::RootResult, project_report::Classified,
 };
 
 type NativeAttempt = yamaa_adapters::file_producer_build::OwnedAttempt<HostError>;
@@ -16,7 +16,7 @@ fn borrow_error() -> PyErr {
     PyRuntimeError::new_err("native producer handle is already borrowed or poisoned")
 }
 /// Transfer the selected whole build directly; preparation is never repeated.
-pub(crate) fn build_selected_with_observer(
+pub(crate) fn build_selected(
     py: Python<'_>,
     build: &mut FileBuild,
     fields: Arc<Vec<String>>,
@@ -68,92 +68,37 @@ impl Attempt {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let mut refusal = "";
-        let mut refusal_details = None;
-        let mut observations = None;
-        let mut domain = None;
-        let mut output_error = None;
-        {
-            let facts = failures
-                .iter()
-                .zip(&ordinary)
-                .filter_map(|(&error, ordinary)| match error {
-                    HostError::Lock(findings) => Some(Classified::Lock {
-                        failure: error,
-                        findings,
-                    }),
-                    HostError::Result(value) => details(value).map(|details| Classified::Host {
+        let facts = failures
+            .iter()
+            .zip(&ordinary)
+            .filter_map(|(&error, ordinary)| match error {
+                HostError::Lock(findings) => Some(Classified::Lock {
+                    failure: error,
+                    findings,
+                }),
+                HostError::Result(value) => details(value).map(|details| Classified::Host {
+                    failure: error,
+                    details,
+                }),
+                _ => ordinary
+                    .as_ref()
+                    .and_then(details)
+                    .map(|details| Classified::Host {
                         failure: error,
                         details,
                     }),
-                    _ => ordinary
-                        .as_ref()
-                        .and_then(details)
-                        .map(|details| Classified::Host {
-                            failure: error,
-                            details,
-                        }),
-                })
-                .collect::<Vec<_>>();
-            let projected = match yamaa_adapters::producer_result::prepare_owned_classified(
-                &state,
-                crate::report_fields::identity(&self.fields),
-                &facts,
-            ) {
-                Ok(value) => {
-                    domain = Some(Mutex::new(value));
-                    Ok(())
-                }
-                Err(yamaa_adapters::producer_result::Error::Report(error)) => Err(error),
-                Err(yamaa_adapters::producer_result::Error::Output {
-                    observations: value,
-                    error,
-                    ..
-                }) => {
-                    observations = Some(value.to_string());
-                    if let yamaa_adapters::ipc_table::TableError::Limit {
-                        resource,
-                        limit,
-                        required,
-                    } = error
-                    {
-                        refusal_details = Some(yamaa_adapters::resource_diagnostics::Refusal::new(
-                            resource,
-                            limit,
-                            required,
-                            vec!["output.path".into()],
-                        ));
-                    }
-                    output_error = Some(error);
-                    refusal = "output_projection";
-                    Ok(())
-                }
-            };
-            match projected {
-                Ok(()) => {}
-                Err(ProjectionError::Original {
-                    observations: value,
-                    ..
-                }) => {
-                    observations = Some(value.to_string());
-                    refusal = "original_boundary";
-                }
-                Err(ProjectionError::Report(
-                    yamaa_adapters::specification_report::Error::ResourceLimit(details),
-                )) => {
-                    refusal = "output_limit";
-                    refusal_details = Some(details);
-                }
-                Err(_) => refusal = "report_refusal",
-            }
-        }
+            })
+            .collect::<Vec<_>>();
+        let projection = yamaa_adapters::producer_result::project_owned(
+            &state,
+            crate::report_fields::identity(&self.fields),
+            &facts,
+        );
         Ok(Report {
             carrier: self.retained(),
-            observations,
-            refusal,
-            refusal_details,
-            domain,
-            output_error,
+            observations: projection.observations,
+            domain: projection.result.map(Mutex::new),
+            output_error: projection.output_error,
         })
     }
 }
@@ -219,9 +164,7 @@ impl Attempt {
 pub struct Report {
     carrier: Attempt,
     observations: Option<String>,
-    refusal: &'static str,
-    refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
-    domain: Option<Mutex<yamaa_adapters::producer_result::RootResult>>,
+    domain: Result<Mutex<RootResult>, BuildRefusal>,
     output_error: Option<yamaa_adapters::ipc_table::TableError>,
 }
 impl Report {
@@ -231,6 +174,7 @@ impl Report {
     pub(crate) fn domain_output(&self) -> PyResult<Option<crate::arrow_bridge::ArrowTable>> {
         self.domain
             .as_ref()
+            .ok()
             .map(|result| {
                 Ok(result
                     .try_lock()
@@ -250,6 +194,7 @@ impl Report {
     ) -> PyResult<Option<crate::arrow_bridge::ArrowTable>> {
         self.domain
             .as_ref()
+            .ok()
             .map(|result| {
                 Ok(result
                     .try_lock()
@@ -261,24 +206,17 @@ impl Report {
             .map(Option::flatten)
     }
     pub(crate) fn domain_issues(&self) -> PyResult<Vec<yamaa_adapters::issue_rows::Issue>> {
-        self.domain
-            .as_ref()
-            .map(|result| {
-                Ok(result
-                    .try_lock()
-                    .map_err(|_| borrow_error())?
-                    .issues()
-                    .to_vec())
-            })
-            .unwrap_or_else(|| {
-                Ok(self.refusal_details.as_ref().map_or_else(
-                    || yamaa_adapters::file_application::rejected("build", self.refusal),
-                    |details| details.issues("build", self.refusal),
-                ))
-            })
+        match &self.domain {
+            Ok(result) => Ok(result
+                .try_lock()
+                .map_err(|_| borrow_error())?
+                .issues()
+                .to_vec()),
+            Err(refusal) => Ok(refusal.issues()),
+        }
     }
     pub(crate) fn domain_accepted(&self) -> bool {
-        self.domain.as_ref().is_some_and(|result| {
+        self.domain.as_ref().is_ok_and(|result| {
             result
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -289,6 +227,7 @@ impl Report {
     pub(crate) fn domain_observations(&self) -> PyResult<Option<String>> {
         self.domain
             .as_ref()
+            .ok()
             .map(|result| {
                 Ok(Some(
                     result
@@ -301,9 +240,10 @@ impl Report {
     }
     pub(crate) fn domain_save(&self) -> PyResult<bool> {
         let _owner = self.carrier.get()?;
-        let result = self.domain.as_ref().ok_or_else(|| {
-            crate::domain_entry::DomainError::new_err("cannot save a failed build")
-        })?;
+        let result = self
+            .domain
+            .as_ref()
+            .map_err(|_| crate::domain_entry::DomainError::new_err("cannot save a failed build"))?;
         result
             .try_lock()
             .map_err(|_| borrow_error())?

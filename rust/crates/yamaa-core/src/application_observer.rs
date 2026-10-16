@@ -102,10 +102,17 @@ impl Observer for Noop {
     fn observe(&self, _: Event<'_>) {}
 }
 
+/// Every observed operation takes one scope; an unobserved caller passes
+/// `Scope::default()`, which discards events.
 #[derive(Clone, Copy)]
 pub struct Scope<'a> {
     pub observer: &'a dyn Observer,
     pub node: Option<Node<'a>>,
+}
+impl Default for Scope<'_> {
+    fn default() -> Self {
+        Self::new(&Noop)
+    }
 }
 impl<'a> Scope<'a> {
     pub fn new(observer: &'a dyn Observer) -> Self {

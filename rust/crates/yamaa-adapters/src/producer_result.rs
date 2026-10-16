@@ -1,6 +1,7 @@
 //! Public root results and explicit ordered publication from a sealed native owner.
 //! Successful node reports still gate artifact consumption inside the build.
 use crate::{
+    file_application::BuildRefusal,
     ipc_table::TableError,
     issue_rows::Issue,
     producer_report::{self, NativeAttempt, ProjectionError},
@@ -492,6 +493,71 @@ pub fn prepare_owned_classified<'a, E>(
     Ok(result)
 }
 
+/// The public projection of one owned producer attempt. A refused projection
+/// keeps the observations and output error it retained.
+pub struct RootProjection {
+    pub result: Result<RootResult, BuildRefusal>,
+    pub observations: Option<String>,
+    pub output_error: Option<TableError>,
+}
+
+/// Project an owned attempt and classify any refusal for both hosts.
+pub fn project_owned<'a, E>(
+    attempt: &'a crate::file_producer_build::OwnedAttempt<E>,
+    id: Identity<'_>,
+    facts: &[Classified<'a, E>],
+) -> RootProjection {
+    let refused = |code, limit| Err(BuildRefusal { code, limit });
+    match prepare_owned_classified(attempt, id, facts) {
+        Ok(result) => RootProjection {
+            result: Ok(result),
+            observations: None,
+            output_error: None,
+        },
+        Err(Error::Output {
+            observations,
+            error,
+            ..
+        }) => {
+            let limit = match error {
+                TableError::Limit {
+                    resource,
+                    limit,
+                    required,
+                } => Some(crate::resource_diagnostics::Refusal::new(
+                    resource,
+                    limit,
+                    required,
+                    vec!["output.path".into()],
+                )),
+                _ => None,
+            };
+            RootProjection {
+                result: refused("output_projection", limit),
+                observations: Some(observations.to_string()),
+                output_error: Some(error),
+            }
+        }
+        Err(Error::Report(ProjectionError::Original { observations, .. })) => RootProjection {
+            result: refused("original_boundary", None),
+            observations: Some(observations.to_string()),
+            output_error: None,
+        },
+        Err(Error::Report(ProjectionError::Report(ReportError::ResourceLimit(limit)))) => {
+            RootProjection {
+                result: refused("output_limit", Some(limit)),
+                observations: None,
+                output_error: None,
+            }
+        }
+        Err(Error::Report(_)) => RootProjection {
+            result: refused("report_refusal", None),
+            observations: None,
+            output_error: None,
+        },
+    }
+}
+
 fn root_output<E>(attempt: &NativeAttempt<E>) -> Result<(PublicTable, Vec<u8>), TableError> {
     let invalid = TableError::InvalidTable;
     let metadata = attempt.provenance.metadata();
@@ -553,6 +619,7 @@ mod log_tests {
         path::PathBuf,
         sync::atomic::{AtomicUsize, Ordering},
     };
+    use yamaa_core::application_observer::Scope;
     use yamaa_core::{
         function_invocation::{Argument, HostError},
         project_activation::ActivationPort,
@@ -738,7 +805,8 @@ mod log_tests {
                         "producer.yaml",
                     )
                     .unwrap();
-                    let result = crate::file_application::plain(prepared, id()).unwrap();
+                    let result =
+                        crate::file_application::plain(prepared, id(), Scope::default()).unwrap();
                     assert!(result.output().is_none());
                     result.issues()
                 }
@@ -753,7 +821,7 @@ mod log_tests {
                         shipped_schema::capture_environment().unwrap(),
                     )
                     .unwrap();
-                    let attempt = prepared.build(&mut NoActivation);
+                    let attempt = prepared.build(&mut NoActivation, Scope::default());
                     let result =
                         crate::project_report::build_result(prepared.run(), &attempt, id(), &[])
                             .unwrap();
