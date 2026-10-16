@@ -18,6 +18,7 @@ use yamaa_core::limits::{LimitExceeded, Limits};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
+    Host(crate::host_resources::Failure),
     Missing,
     Unreadable,
     NotRegularFile,
@@ -34,6 +35,7 @@ pub enum Error {
 impl Error {
     pub fn message(&self) -> &'static str {
         match self {
+            Self::Host(_) => "host resource request failed",
             Self::Missing => "resource path missing",
             Self::Unreadable => "resource path is not readable",
             Self::NotRegularFile => "resource path is not a regular file",
@@ -84,6 +86,8 @@ struct Snapshot {
 }
 
 pub struct Resources {
+    host: Option<crate::host_resources::Resources>,
+    host_sources: RetainedSources,
     roots: Vec<Root>,
     local_paths: bool,
     base: Segments,
@@ -95,6 +99,10 @@ pub struct Resources {
 
 pub type RetainedSources = Vec<(String, Arc<[u8]>)>;
 impl Resources {
+    pub fn with_resolver(resolver: Arc<dyn crate::host_resources::Resolver>, base: &str) -> Self {
+        Self { host_sources: vec![], host: Some(crate::host_resources::Resources::new(resolver, base.into())), roots: vec![], local_paths: false, base: vec![], snapshots: vec![], by_path: BTreeMap::new(), by_identity: BTreeMap::new(), reads: 0 }
+    }
+
     /// Public entry paths select their existing parent once. Document paths
     /// resolve at their declaring file without configuration or fallback roots.
     /// The retained parent admits caller-owned aliases; every declared component
@@ -116,6 +124,8 @@ impl Resources {
         }
         let base = directory_segments(&path).ok_or(Error::InvalidBase)?;
         Ok(Self {
+            host: None,
+            host_sources: vec![],
             roots,
             local_paths: false,
             base,
@@ -129,22 +139,18 @@ impl Resources {
         self.reads
     }
     pub(crate) fn snapshot_count(&self) -> usize {
-        self.snapshots.len()
+        self.host.as_ref().map_or(self.snapshots.len(), crate::host_resources::Resources::len)
     }
     /// Immutable raw prefix evidence survives failed decoding and inheritance.
     /// This view grants no resource, execution or publication port.
     pub(crate) fn captured_sources(&self) -> impl Iterator<Item = (String, &[u8])> {
-        self.snapshots.iter().flat_map(|snapshot| {
-            snapshot
-                .paths
-                .iter()
-                .map(|(key, _, _)| (path_text(key), snapshot.bytes.as_ref()))
-        })
+        self.snapshots.iter().flat_map(|snapshot| snapshot.paths.iter().map(|(key, _, _)| (path_text(key), snapshot.bytes.as_ref()))).chain(self.host_sources.iter().map(|(name, bytes)| (name.clone(), bytes.as_ref())))
     }
     pub(crate) fn verify_captured(&self) -> Result<(), (String, Error)> {
-        self.verify_prefix(self.snapshots.len())
+        self.verify_prefix(self.snapshot_count())
     }
     pub(crate) fn verify_prefix(&self, count: usize) -> Result<(), (String, Error)> {
+        if let Some(host) = &self.host { return host.verify(count).map_err(|(path, error)| (path, Error::Host(error))); }
         if count > self.snapshots.len() {
             return Err((String::new(), Error::InvalidPath));
         }
@@ -155,6 +161,7 @@ impl Resources {
     }
     /// Own immutable raw evidence without copying content or reopening files.
     pub(crate) fn retain_sources(&self) -> RetainedSources {
+        if let Some(host) = &self.host { return host.sources(); }
         self.snapshots
             .iter()
             .flat_map(|snapshot| {
@@ -167,15 +174,18 @@ impl Resources {
     }
     /// Metadata only: no bytes read and no snapshot created.
     pub fn inspect(&self, written: &str) -> Result<(), Error> {
+        if let Some(host) = &self.host { return host.resolve(&host.base, written, crate::host_resources::Kind::Input).map(drop).map_err(Error::Host); }
         self.open(written).map(drop)
     }
     /// Inspect relative to a canonical declaring entry without changing another
     /// node's resource base, reading bytes or creating a snapshot.
     pub fn inspect_from(&self, declaring: &str, written: &str) -> Result<(), Error> {
+        if let Some(host) = &self.host { return host.resolve(declaring, written, crate::host_resources::Kind::Input).map(drop).map_err(Error::Host); }
         self.open_at(&file_base(declaring)?, written).map(drop)
     }
     /// Capture source bytes under the fixed per-file source boundary.
     pub fn capture(&mut self, written: &str) -> Result<(Arc<[u8]>, bool), Error> {
+        if let Some(host) = &self.host { let result = host.capture(&host.base, written, crate::host_resources::Kind::Input, Limits::SOURCE_BYTES).map_err(Error::Host)?; self.reads += usize::from(result.1); self.host_sources = host.sources(); return Ok(result); }
         self.capture_at(
             self.base.clone(),
             written,
@@ -185,21 +195,25 @@ impl Resources {
     }
     /// Capture specification bytes under the fixed per-file metadata boundary.
     pub fn capture_metadata(&mut self, written: &str) -> Result<(Arc<[u8]>, bool), Error> {
+        if let Some(host) = &self.host { let result = host.capture(&host.base, written, crate::host_resources::Kind::Metadata, Limits::SPEC_BYTES).map_err(Error::Host)?; self.reads += usize::from(result.1); self.host_sources = host.sources(); return Ok(result); }
         self.capture_at(self.base.clone(), written, "spec_bytes", Limits::SPEC_BYTES)
     }
     /// A declaring identity comes from this reader's canonical regular-file resolution.
     pub fn resolve_from(&self, declaring: &str, written: &str) -> Result<String, Error> {
+        if let Some(host) = &self.host { return host.resolve(declaring, written, crate::host_resources::Kind::Metadata).map_err(Error::Host); }
         let base = file_base(declaring)?;
         let opened = self.open_at(&base, written)?;
         Ok(path_text(&opened.key))
     }
     pub fn resolve(&self, written: &str) -> Result<String, Error> {
+        if let Some(host) = &self.host { return host.resolve(&host.base, written, crate::host_resources::Kind::Metadata).map_err(Error::Host); }
         Ok(path_text(&self.open(written)?.key))
     }
     /// A lexical declaration location under the selected resolution policy.
     /// The target may be absent. This fact opens no file and grants no byte or
     /// publication authority; declaring identities come from this reader.
     pub fn location_from(&self, declaring: &str, written: &str) -> Result<String, Error> {
+        if self.host.is_some() { return crate::host_resources::Resources::location(declaring, written).map_err(Error::Host); }
         let anchor = self.declaration_anchor(&file_base(declaring)?, written)?;
         Ok(path_text(&anchor.key))
     }
@@ -226,19 +240,23 @@ impl Resources {
         &self,
         declaring: &str,
         written: &str,
-    ) -> Result<crate::file_publication::AnchoredTarget, Error> {
+    ) -> Result<crate::resource_publication::AnchoredTarget, Error> {
+        if let Some(host) = &self.host {
+            return Ok(crate::resource_publication::AnchoredTarget::Host { resolver: Arc::clone(&host.resolver), declaring: declaring.into(), written: written.into(), reference: host.target(declaring, written).map_err(Error::Host)? });
+        }
         let anchor = self.declaration_anchor(&file_base(declaring)?, written)?;
-        Ok(crate::file_publication::AnchoredTarget::new(
+        Ok(crate::resource_publication::AnchoredTarget::File(crate::file_publication::AnchoredTarget::new(
             anchor.descriptor,
             anchor.remainder,
             path_text(&anchor.key),
-        ))
+        )))
     }
     pub fn capture_from(
         &mut self,
         declaring: &str,
         written: &str,
     ) -> Result<(Arc<[u8]>, bool), Error> {
+        if let Some(host) = &self.host { let result = host.capture(declaring, written, crate::host_resources::Kind::Input, Limits::SOURCE_BYTES).map_err(Error::Host)?; self.reads += usize::from(result.1); self.host_sources = host.sources(); return Ok(result); }
         self.capture_at(
             file_base(declaring)?,
             written,
@@ -251,6 +269,7 @@ impl Resources {
         declaring: &str,
         written: &str,
     ) -> Result<(Arc<[u8]>, bool), Error> {
+        if let Some(host) = &self.host { let result = host.capture(declaring, written, crate::host_resources::Kind::Metadata, Limits::SPEC_BYTES).map_err(Error::Host)?; self.reads += usize::from(result.1); self.host_sources = host.sources(); return Ok(result); }
         self.capture_at(
             file_base(declaring)?,
             written,
@@ -260,6 +279,7 @@ impl Resources {
     }
     /// Keep the same path authority and captures for data declared by this entry.
     pub fn select_entry_base(&mut self, identity: &str) -> Result<(), Error> {
+        if let Some(host) = &mut self.host { host.base = identity.into(); return Ok(()); }
         let base = file_base(identity)?;
         // This is a canonical identity returned by the reader, not an authored
         // path. Selected physical root names can contain a literal backslash on
@@ -782,6 +802,9 @@ fn selected_root(written: &str) -> Result<Root, Error> {
 pub(crate) fn resource_failure(error: &Error) -> Option<yamaa_core::resource::ResourceFailure> {
     use yamaa_core::resource::ResourceFailure;
     match error {
+        Error::Host(crate::host_resources::Failure::Missing) => Some(yamaa_core::resource::ResourceFailure::Missing),
+        Error::Host(crate::host_resources::Failure::Changed) => Some(yamaa_core::resource::ResourceFailure::ContentChanged),
+        Error::Host(_) => None,
         Error::Missing => Some(ResourceFailure::Missing),
         Error::NotRegularFile => Some(ResourceFailure::NotRegularFile),
         Error::Symlink => Some(ResourceFailure::Symlink),

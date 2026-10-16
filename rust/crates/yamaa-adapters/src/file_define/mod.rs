@@ -213,8 +213,8 @@ impl Ports for NativePorts {
     type Bytes = std::sync::Arc<[u8]>;
     type Parquet = crate::arrow_table::ArrowTable;
     type ParquetError = crate::parquet_source::Error;
-    type Target = file_publication::AnchoredTarget;
-    type Publisher = file_publication::Publisher;
+    type Target = crate::resource_publication::AnchoredTarget;
+    type Publisher = crate::resource_publication::Publisher;
     fn utc_seconds(&mut self) -> Option<u64> {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -437,6 +437,7 @@ fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
             use file_resources::Error as E;
             use service::ResourceObservation as R;
             let observation = match error {
+                E::Host(_) => R::Unreadable,
                 E::Missing => R::Missing,
                 E::Unreadable => R::Unreadable,
                 E::NotRegularFile => R::NotRegularFile,

@@ -1,0 +1,162 @@
+//! Host resource authority, separate from codecs, credentials and language rules.
+//!
+//! References are immutable host identities, never content digests. Captures
+//! retain their original bytes and compare those bytes on every freshness check.
+use std::{collections::BTreeMap, sync::{Arc, Mutex}};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Operation { Inspect, Capture, Target, Stage, Commit, Abort }
+impl Operation {
+    pub fn name(self) -> &'static str {
+        match self { Self::Inspect => "inspect", Self::Capture => "capture", Self::Target => "target", Self::Stage => "stage", Self::Commit => "commit", Self::Abort => "abort" }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind { Metadata, Input, Output }
+impl Kind {
+    pub fn name(self) -> &'static str {
+        match self { Self::Metadata => "metadata", Self::Input => "input", Self::Output => "output" }
+    }
+}
+/// Only public resource facts cross this boundary. Credentials belong to the
+/// resolver closure and must not appear in references or returned errors.
+pub struct Request<'a> {
+    pub operation: Operation,
+    pub kind: Kind,
+    pub declaring: &'a str,
+    pub written: &'a str,
+    /// The held reference on freshness/publication requests; a staging token on
+    /// commit and abort. The host must reject a changed reference.
+    pub reference: Option<&'a str>,
+    pub bytes: Option<&'a [u8]>,
+}
+#[derive(Clone, Debug)]
+pub struct Reply {
+    pub reference: String,
+    /// Present only for Capture. Inspect and Target must never read data.
+    pub bytes: Option<Arc<[u8]>>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Failure { Missing, Changed, Cancelled, Rejected, Publication, Cleanup }
+/// A resolver may serve local objects, opaque URI identities or warehouse data.
+/// Stage creates a private provisional object; Commit atomically publishes it;
+/// Abort must remove it after any failed/interrupting Stage or Commit. Abort is
+/// idempotent and may receive the target reference when Stage did not return.
+pub trait Resolver: Send + Sync {
+    fn request(&self, request: Request<'_>) -> Result<Reply, Failure>;
+}
+#[derive(Clone)]
+struct Snapshot { declaring: String, written: String, kind: Kind, reference: String, bytes: Arc<[u8]> }
+pub(crate) struct Resources {
+    pub resolver: Arc<dyn Resolver>,
+    pub base: String,
+    snapshots: Mutex<Vec<Snapshot>>,
+}
+impl Resources {
+    pub fn new(resolver: Arc<dyn Resolver>, base: String) -> Self {
+        Self { resolver, base: format!("/{}", base.trim_start_matches('/')), snapshots: Mutex::new(Vec::new()) }
+    }
+    fn call(&self, operation: Operation, kind: Kind, declaring: &str, written: &str, reference: Option<&str>) -> Result<Reply, Failure> {
+        let reply = self.resolver.request(Request { operation, kind, declaring, written, reference, bytes: None })?;
+        if reply.reference.is_empty() || reply.reference.contains('\0') || (operation != Operation::Capture && reply.bytes.is_some()) {
+            return Err(Failure::Rejected);
+        }
+        Ok(reply)
+    }
+    pub fn resolve(&self, declaring: &str, written: &str, kind: Kind) -> Result<String, Failure> {
+        self.call(Operation::Inspect, kind, declaring, written, None)?;
+        Self::location(declaring, written)
+    }
+    /// Logical declaring locations remain independent of the backend identity.
+    /// A returned URI is retained evidence and is never interpreted as a path.
+    pub fn location(declaring: &str, written: &str) -> Result<String, Failure> {
+        if yamaa_core::resource::written_path_failure(written).is_some() || written.contains('\0') { return Err(Failure::Rejected); }
+        let mut parts = if written.starts_with('/') { Vec::new() } else { declaring.rsplit_once('/').map_or(Vec::new(), |(base, _)| base.split('/').filter(|s| !s.is_empty()).collect()) };
+        for part in written.split('/') {
+            match part { "" | "." => (), ".." => { parts.pop(); }, name => parts.push(name) }
+        }
+        Ok(format!("/{}", parts.join("/")))
+    }
+    pub fn target(&self, declaring: &str, written: &str) -> Result<String, Failure> {
+        self.call(Operation::Target, Kind::Output, declaring, written, None).map(|reply| reply.reference)
+    }
+    pub fn capture(&self, declaring: &str, written: &str, kind: Kind, maximum: usize) -> Result<(Arc<[u8]>, bool), Failure> {
+        let old = self.snapshots.lock().map_err(|_| Failure::Rejected)?.iter().find(|s| s.declaring == declaring && s.written == written && s.kind == kind).cloned();
+        let reply = self.call(Operation::Capture, kind, declaring, written, old.as_ref().map(|s| s.reference.as_str()))?;
+        let bytes = reply.bytes.ok_or(Failure::Rejected)?;
+        if bytes.len() > maximum { return Err(Failure::Rejected); }
+        if let Some(old) = old {
+            if old.reference != reply.reference || old.bytes != bytes { return Err(Failure::Changed); }
+            return Ok((old.bytes, false));
+        }
+        let mut snapshots = self.snapshots.lock().map_err(|_| Failure::Rejected)?;
+        if let Some(old) = snapshots.iter().find(|s| s.reference == reply.reference) {
+            if old.bytes != bytes { return Err(Failure::Changed); }
+        }
+        snapshots.push(Snapshot { declaring: declaring.into(), written: written.into(), kind, reference: reply.reference, bytes: Arc::clone(&bytes) });
+        Ok((bytes, true))
+    }
+    pub fn len(&self) -> usize { self.snapshots.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len() }
+    pub fn sources(&self) -> Vec<(String, Arc<[u8]>)> {
+        self.snapshots.lock().unwrap_or_else(std::sync::PoisonError::into_inner).iter().map(|s| (s.reference.clone(), Arc::clone(&s.bytes))).collect()
+    }
+    pub fn verify(&self, count: usize) -> Result<(), (String, Failure)> {
+        let snapshots = self.snapshots.lock().map_err(|_| (String::new(), Failure::Rejected))?.clone();
+        if count > snapshots.len() { return Err((String::new(), Failure::Rejected)); }
+        for snapshot in snapshots.into_iter().take(count) {
+            self.capture(&snapshot.declaring, &snapshot.written, snapshot.kind, snapshot.bytes.len()).map_err(|failure| (snapshot.reference, failure))?;
+        }
+        Ok(())
+    }
+}
+
+/// Deterministic object store for tests and host-owned local/remote adapters.
+/// Replacing a value with a new reference models a remote object-version change.
+#[derive(Default)]
+pub struct MemoryResolver {
+    objects: Mutex<BTreeMap<(String, String), Reply>>,
+    staged: Mutex<BTreeMap<String, (String, Arc<[u8]>)>>,
+    published: Mutex<BTreeMap<String, Arc<[u8]>>>,
+    cancelled: std::sync::atomic::AtomicBool,
+}
+impl MemoryResolver {
+    pub fn insert(&self, declaring: &str, written: &str, reference: &str, bytes: Arc<[u8]>) {
+        self.objects.lock().unwrap().insert((declaring.into(), written.into()), Reply { reference: reference.into(), bytes: Some(bytes) });
+    }
+    pub fn cancel(&self) { self.cancelled.store(true, std::sync::atomic::Ordering::SeqCst); }
+    pub fn published(&self, reference: &str) -> Option<Arc<[u8]>> { self.published.lock().unwrap().get(reference).cloned() }
+    pub fn staged_count(&self) -> usize { self.staged.lock().unwrap().len() }
+}
+impl Resolver for MemoryResolver {
+    fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
+        if request.operation == Operation::Abort {
+            self.staged.lock().map_err(|_| Failure::Cleanup)?.remove(request.reference.ok_or(Failure::Rejected)?);
+            return Ok(Reply { reference: request.reference.unwrap().into(), bytes: None });
+        }
+        if self.cancelled.load(std::sync::atomic::Ordering::SeqCst) { return Err(Failure::Cancelled); }
+        let empty = |reference: String| Reply { reference, bytes: None };
+        match request.operation {
+            Operation::Inspect | Operation::Capture => {
+                let object = self.objects.lock().map_err(|_| Failure::Rejected)?.get(&(request.declaring.into(), request.written.into())).cloned().ok_or(Failure::Missing)?;
+                if request.reference.is_some_and(|held| held != object.reference) { return Err(Failure::Changed); }
+                Ok(if request.operation == Operation::Inspect { empty(object.reference) } else { object })
+            }
+            Operation::Target => Ok(empty(format!("{}/{}", request.declaring.rsplit_once('/').map_or(request.declaring, |(base, _)| base), request.written))),
+            Operation::Stage => {
+                let reference = request.reference.ok_or(Failure::Rejected)?;
+                let token = format!("stage:{reference}");
+                let mut staged = self.staged.lock().map_err(|_| Failure::Publication)?;
+                if staged.contains_key(&token) { return Err(Failure::Publication); }
+                staged.insert(token.clone(), (reference.into(), Arc::from(request.bytes.ok_or(Failure::Rejected)?)));
+                Ok(empty(token))
+            }
+            Operation::Commit => {
+                let token = request.reference.ok_or(Failure::Rejected)?;
+                let (target, bytes) = self.staged.lock().map_err(|_| Failure::Publication)?.remove(token).ok_or(Failure::Publication)?;
+                self.published.lock().map_err(|_| Failure::Publication)?.insert(target.clone(), bytes);
+                Ok(empty(target))
+            }
+            Operation::Abort => unreachable!(),
+        }
+    }
+}

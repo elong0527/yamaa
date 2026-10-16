@@ -11,8 +11,9 @@ from yamaa._native_results import issues_frame
 class Domain:
     """An owned native build with independently copied host views."""
 
-    def __init__(self, native):
+    def __init__(self, native, resolver=None):
         self._native = native
+        self._resolver = resolver
 
     @property
     def output(self) -> pl.DataFrame | None:
@@ -35,20 +36,28 @@ class Domain:
 
     def save(self) -> bool:
         """Publish held logs and output; a failed build raises DomainError."""
-        return self._native.save()
+        try:
+            return self._native.save()
+        finally:
+            if self._resolver is not None:
+                self._resolver._raise_pending()
 
 
 def domain(
     specification: str | PathLike[str],
     *,
     environment: str | PathLike[str] | None = None,
+    resolver=None,
 ) -> Domain:
     native = _domain_file(
-        fspath(specification), None if environment is None else fspath(environment)
+        fspath(specification), None if environment is None else fspath(environment),
+        None if resolver is None else resolver._dispatch,
     )
     try:
         native.propagate_interrupt()
-        return Domain(native)
+        if resolver is not None:
+            resolver._raise_pending()
+        return Domain(native, resolver)
     finally:
         # Retained callback tracebacks can include this frame. Keep their
         # native owner in the returned result, never in this frame's locals.

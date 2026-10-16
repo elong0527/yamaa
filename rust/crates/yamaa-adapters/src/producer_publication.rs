@@ -1,7 +1,7 @@
 //! Retained native targets for an actual complete producer build.
 use crate::{
     file_producer_build::Provenance,
-    file_publication::{AnchoredTarget, Publisher},
+    resource_publication::{AnchoredTarget, Publisher},
     file_resources::{Error as ResourceError, Resources},
 };
 use std::{

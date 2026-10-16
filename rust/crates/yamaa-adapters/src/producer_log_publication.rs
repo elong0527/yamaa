@@ -2,7 +2,7 @@
 //! Failed graphs retain verification-only authority; public attempts grant none.
 use crate::{
     file_producer_build::Provenance,
-    file_publication::{AnchoredTarget, Publisher},
+    resource_publication::{AnchoredTarget, Publisher},
     file_resources::{Error as ResourceError, Resources},
     producer_publication::{same_location, AdmissionFailure},
     producer_report::{NativeAttempt, NodeLogs},

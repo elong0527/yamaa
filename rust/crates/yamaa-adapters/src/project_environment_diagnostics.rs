@@ -231,6 +231,7 @@ fn read_issue(
 ) -> Result<Issue, Error> {
     use crate::file_resources::Error as E;
     let cause = match error {
+        E::Host(_) => "host_resource_failure",
         E::Missing => "missing",
         E::Unreadable => "unreadable",
         E::NotRegularFile => "not_regular_file",

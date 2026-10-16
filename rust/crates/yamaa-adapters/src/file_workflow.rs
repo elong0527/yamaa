@@ -211,6 +211,27 @@ pub fn select_request(
     yamaa_core::build::prepare(request, &mut Metadata { host })
 }
 
+/// Host authority replaces physical lookup while all metadata preparation and
+/// ordinary/project/producer selection use the same engine ports.
+pub fn select_with_resolver(
+    request: yamaa_core::build::Request<'_>,
+    host: Language,
+    resolver: Arc<dyn crate::host_resources::Resolver>,
+) -> Result<Selected, SelectionError> {
+    let specification_schema = crate::shipped_schema::capture()
+        .map_err(|error| SelectionError::Preparation(Error::Schema(error)))?;
+    let environment_schema = crate::shipped_schema::capture_environment()
+        .map_err(|error| SelectionError::Preparation(Error::Schema(error)))?;
+    select_with_optional_resources(
+        Resources::with_resolver(resolver, request.specification),
+        request.specification,
+        request.environment,
+        host,
+        specification_schema,
+        environment_schema,
+    )
+}
+
 struct Metadata {
     host: Language,
 }

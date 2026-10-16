@@ -202,6 +202,9 @@ pub(crate) struct SourceDecoder;
 impl application::SourceDecoder for SourceDecoder {
     type Error = Error;
     type Table = dataset_result::Snapshot;
+    fn decode_owned(&mut self, source: &SourceDeclaration, table: &(dyn std::any::Any + Send + Sync), interpretation: yamaa_core::specification::SourceInterpretation, contract: Option<&yamaa_core::producer_contract::Contract>) -> Option<Result<Self::Table, Self::Error>> {
+        table.downcast_ref::<ArrowTable>().map(|table| decode_frame(source, table.clone(), interpretation, contract).map(dataset_result::Snapshot))
+    }
     fn continue_after(&self, error: &Self::Error) -> bool {
         matches!(
             error,
@@ -235,6 +238,24 @@ impl application::SourceDecoder for SourceDecoder {
     ) -> Result<Self::Table, Self::Error> {
         decode_source(source, bytes, interpretation, contract).map(dataset_result::Snapshot)
     }
+}
+
+/// A frame has already admitted physical types at the Arrow boundary. Preserve
+/// those values, enforce explicit source declarations and reuse ODM/ordinal
+/// and producer-contract admission before ordinary binding and execution.
+pub(crate) fn decode_frame(source: &SourceDeclaration, table: ArrowTable, interpretation: yamaa_core::specification::SourceInterpretation, contract: Option<&yamaa_core::producer_contract::Contract>) -> Result<ArrowTable, Error> {
+    use yamaa_core::table::TableAccess;
+    yamaa_core::typed_csv::PreparedTypes::new(&source.types).map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
+    for (name, kind) in &source.types {
+        let field = table.schema().columns().iter().find(|field| field.name == *name).ok_or_else(|| typed_source_error(crate::typed_csv::Error::Typing(yamaa_core::typed_csv::Error::UnknownField { field: name.clone() })))?;
+        if field.kind != *kind { return Err(typed_source_error(crate::typed_csv::Error::Typing(yamaa_core::typed_csv::Error::InvalidSource))); }
+    }
+    if let Some(contract) = contract {
+        let fields = table.schema().columns().iter().map(|field| (field.name.as_str(), field.kind)).collect::<Vec<_>>();
+        if let Some(diagnostic) = contract.validate_typed_fields(&source.name, &fields).map_err(Error::ProducerContract)? { return Err(Error::ProducerMetadata(diagnostic)); }
+    }
+    let table = if interpretation == yamaa_core::specification::SourceInterpretation::Odm { project_odm(table)? } else { table };
+    crate::source_ordinal::append(source, table)
 }
 
 pub(crate) fn decode_source(

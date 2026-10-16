@@ -185,16 +185,17 @@ impl Domain {
 }
 
 #[pyfunction]
-#[pyo3(signature=(specification,environment=None))]
+#[pyo3(signature=(specification,environment=None,resolver=None))]
 pub fn _domain_file(
     py: Python<'_>,
     specification: &str,
     environment: Option<&str>,
+    resolver: Option<Py<PyAny>>,
 ) -> PyResult<Domain> {
     {
         let mut ports = yamaa_adapters::file_application::Application {
             host: yamaa_core::project_function::Language::Python,
-            runtime: crate::file_domain::Runtime { py, specification },
+            runtime: crate::file_domain::Runtime { py, specification, resolver: resolver.map(crate::resource_resolver::Port::new) },
         };
         let measurements =
             std::sync::Arc::new(yamaa_adapters::application_measurements::Measurements::new());
