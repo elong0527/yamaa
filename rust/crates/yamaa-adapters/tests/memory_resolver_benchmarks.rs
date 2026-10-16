@@ -2394,12 +2394,6 @@ const EXEMPTIONS: &[(&str, &str)] = &[
         "negative-path-symlink",
         "expected diagnostic judges a symlinked filesystem path; a memory resolver holds no symlinks, so the input resolves and the build succeeds",
     ),
-    // A pre-existing Rust-route gap (1), verified not to be an
-    // in-memory divergence.
-    (
-        "adam-adpc-blq-imputation",
-        "fails identically through the Rust file route at this commit (validation unknown_field, REQ-0405, for PC.PCSTRESC in verifications[3].assert.when); the gap is between the Rust application route and the host routes' verification binding, not between input routes",
-    ),
 ];
 
 /// A representative subset across every mechanism class (inheritance,
