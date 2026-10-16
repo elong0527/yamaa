@@ -153,6 +153,7 @@ pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStanda
         .iter()
         .map(|&id| normalized.origins[id])
         .collect::<Vec<_>>();
+    let expanded_references = expanded.references;
     let pruned = match schema.prune_inheritance_dependencies(&expanded.document) {
         Ok(pruned) => pruned,
         Err(error) => return Err(dependency_failure(error, expanded.document)),
@@ -170,12 +171,55 @@ pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStanda
     let model = SpecificationDocument::admit(expanded.document)
         .map_err(Error::Validation)?
         .map_err(Error::Model)?;
+    // The strict expansion runs on the pruned document, whose surviving
+    // window selections were already inlined by the non-strict expansion,
+    // so it records no references. Report the non-strict references whose
+    // declaring column or intermediate survived pruning instead.
+    let windows = surviving_references(&pruned.document, expanded_references);
     Ok(PreparedStandalone {
         raw,
         model,
         origins,
-        windows: expanded.references,
+        windows,
     })
+}
+
+/// Keep the window references recorded before pruning whose declaring
+/// column or intermediate is still present in the pruned document.
+/// References outside `columns`/`intermediates` are kept as recorded.
+fn surviving_references(
+    pruned: &Document,
+    references: Vec<WindowReference>,
+) -> Vec<WindowReference> {
+    fn declared(document: &Document, field: &str, identity: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        if let Some(list) = document.field(document.root(), field) {
+            if let crate::schema::DocumentNode::Sequence(items) = &document.nodes()[list] {
+                for &item in items {
+                    if let Some(id) = document.field(item, identity) {
+                        if let crate::schema::DocumentNode::Text(name) = &document.nodes()[id] {
+                            names.push(name.clone());
+                        }
+                    }
+                }
+            }
+        }
+        names
+    }
+    let columns = declared(pruned, "columns", "name");
+    let intermediates = declared(pruned, "intermediates", "id");
+    references
+        .into_iter()
+        .filter(|reference| {
+            for (prefix, names) in [("columns.", &columns), ("intermediates.", &intermediates)] {
+                if let Some(rest) = reference.path.strip_prefix(prefix) {
+                    let name = rest.split('.').next().unwrap_or(rest);
+                    return names.iter().any(|candidate| candidate == name);
+                }
+            }
+            true
+        })
+        .collect()
 }
 
 #[cfg(test)]
