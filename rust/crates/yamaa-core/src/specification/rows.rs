@@ -737,8 +737,8 @@ fn bind_assignment(
             output,
             project,
             named,
-            &secondary,
-            &intermediates,
+            secondary,
+            intermediates,
         )?,
         RowOperation::Source(reference) => {
             if reference
@@ -763,8 +763,8 @@ fn bind_assignment(
                     reference,
                     &declaration.path,
                     named,
-                    &secondary,
-                    &intermediates,
+                    secondary,
+                    intermediates,
                     output,
                     catalog,
                     available,
@@ -844,13 +844,13 @@ fn bind_template_filter(
                     if let Some(Expression::Intermediate { index, column }) =
                         row_intermediates::bind(
                             identifier,
-                            &filter_path,
+                            filter_path,
                             named,
                             secondary,
                             intermediates,
                             output,
                             row_catalog,
-                            Some(&available),
+                            Some(available),
                             &mut edges,
                             findings,
                         )?
@@ -865,17 +865,15 @@ fn bind_template_filter(
                         .split_once('.')
                         .is_some_and(|(owner, _)| row_catalog.joined(owner).is_some())
                 {
-                    if let Some(Expression::Joined(read)) =
-                        source_expressions::bind_catalog_join(
-                            identifier,
-                            &filter_path,
-                            row_catalog,
-                            Some(&template.id),
-                            Some(&available),
-                            &mut Vec::new(),
-                            findings,
-                        )?
-                    {
+                    if let Some(Expression::Joined(read)) = source_expressions::bind_catalog_join(
+                        identifier,
+                        filter_path,
+                        row_catalog,
+                        Some(&template.id),
+                        Some(available),
+                        &mut Vec::new(),
+                        findings,
+                    )? {
                         bindings.push(Binding {
                             name: identifier.into(),
                             read: Read::Joined(read),
@@ -884,7 +882,7 @@ fn bind_template_filter(
                 } else if !grouped {
                     if let Some(column) = resolve_reference(
                         identifier,
-                        &filter_path,
+                        filter_path,
                         row_source,
                         &template.driver,
                         findings,
@@ -937,8 +935,7 @@ fn bind_template_filter(
             .filter_map(Option::as_ref)
             .cloned()
             .collect::<Vec<_>>();
-        let deferred =
-            crate::dataset::window_stages(&assignments, output.columns().len(), &bound);
+        let deferred = crate::dataset::window_stages(assignments, output.columns().len(), &bound);
         for binding in filter.bindings() {
             let lookup_match = match binding.read {
                 Read::Intermediate { index, .. } => {
@@ -1036,16 +1033,9 @@ fn bind_template(
         &template.driver,
         named_driver.and_then(|index| intermediates[index].as_ref()),
     )?;
-    let row_catalog = row_drivers::extend_catalog(
-        row_catalog,
-        source,
-        name,
-        keys,
-        secondary,
-        &template.driver,
-    )?;
     let row_catalog =
-        row_catalog.with_row_joins(&template.driver, template.groups.as_deref());
+        row_drivers::extend_catalog(row_catalog, source, name, keys, secondary, &template.driver)?;
+    let row_catalog = row_catalog.with_row_joins(&template.driver, template.groups.as_deref());
     let mode = match &template.groups {
         None => RowMode::Records,
         Some(groups) => RowMode::Groups(
@@ -1082,11 +1072,11 @@ fn bind_template(
     let predicate = match &template.filter {
         Some((
             text,
-            Err(predicate_compiler::Error::Parse(
-                crate::predicate_parser::ParseError::Grammar {
-                    position, failure, ..
-                },
-            )),
+            Err(predicate_compiler::Error::Parse(crate::predicate_parser::ParseError::Grammar {
+                position,
+                failure,
+                ..
+            })),
         )) => {
             findings.push(BindFinding::Lookup(LookupFinding::grammar(
                 &filter_path,
@@ -1148,11 +1138,7 @@ fn bind_template(
     if declarations_reported {
         for declaration in &template.declarations {
             if let RowOperation::Shared(branch) = &declaration.operation {
-                derivations::declaration_findings(
-                    &branch.operation,
-                    &branch.path,
-                    findings,
-                )?;
+                derivations::declaration_findings(&branch.operation, &branch.path, findings)?;
             }
         }
     }
@@ -1177,31 +1163,33 @@ fn bind_template(
             assignments.insert(declaration.column, value);
         }
     }
-    let analyzed =
-        crate::dependency_analysis::analyze(&graph).map_err(|_| BindError::Internal)?;
+    let analyzed = crate::dependency_analysis::analyze(&graph).map_err(|_| BindError::Internal)?;
     if let Some(cycle) = analyzed.cycle {
         let mut paths = std::vec![""; output.columns().len()];
         for declaration in &template.declarations {
             paths[declaration.column] = declaration.path.as_str();
         }
         let repeated = findings.iter().any(|finding| {
-            let BindFinding::Dependencies { paths: prior_paths, diagnostics, .. } = finding else {
+            let BindFinding::Dependencies {
+                paths: prior_paths,
+                diagnostics,
+                ..
+            } = finding
+            else {
                 return false;
             };
             diagnostics.iter().any(|diagnostic| {
                 matches!(diagnostic, column_dependencies::Diagnostic::Cycle { columns }
-                    if columns == &cycle && cycle.iter().all(|&column| {
-                        prior_paths.get(column).map(String::as_str) == paths.get(column).copied()
-                    }))
+                if columns == &cycle && cycle.iter().all(|&column| {
+                    prior_paths.get(column).map(String::as_str) == paths.get(column).copied()
+                }))
             })
         });
         if !repeated {
             findings.push(BindFinding::Dependencies {
                 columns: output.columns().iter().map(|c| c.name.clone()).collect(),
                 paths: paths.into_iter().map(String::from).collect(),
-                diagnostics: std::vec![column_dependencies::Diagnostic::Cycle {
-                    columns: cycle
-                }],
+                diagnostics: std::vec![column_dependencies::Diagnostic::Cycle { columns: cycle }],
             });
         }
     }

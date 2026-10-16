@@ -286,18 +286,15 @@ fn bind_row_compute(
         if !catalog.record_derivation()
             && identifier.split_once('.').is_some_and(|(dataset, _)| {
                 named.reference(identifier).is_none()
-                    && (matches!(phase, Phase::Column { .. })
-                        || catalog.joined(dataset).is_some())
+                    && (matches!(phase, Phase::Column { .. }) || catalog.joined(dataset).is_some())
             })
         {
             match phase {
-                Phase::Column { .. } => {
-                    findings.push(BindFinding::QualifiedNumericReference {
-                        path: format!("{path}.expr"),
-                        expression: compiled.expression().into(),
-                        identifier: identifier.into(),
-                    })
-                }
+                Phase::Column { .. } => findings.push(BindFinding::QualifiedNumericReference {
+                    path: format!("{path}.expr"),
+                    expression: compiled.expression().into(),
+                    identifier: identifier.into(),
+                }),
                 Phase::Row { group_by } => {
                     let mut finding = LookupFinding::new(
                         &format!("{path}.expr"),
@@ -332,9 +329,7 @@ fn bind_row_compute(
             let read = match expression {
                 Expression::Source(column) => Read::Source(column),
                 Expression::Column(column) => Read::Column(column),
-                Expression::Intermediate { index, column } => {
-                    Read::Intermediate { index, column }
-                }
+                Expression::Intermediate { index, column } => Read::Intermediate { index, column },
                 _ => return Err(BindError::Internal),
             };
             bindings.push(Binding {
@@ -392,9 +387,7 @@ fn bind_row_project(
             findings.extend(functions::bind_findings(project, *call, errors, row)?);
             Ok(None)
         }
-        Err(crate::project_call_binding::Error::Reference(error)) => {
-            Err(BindError::Catalog(error))
-        }
+        Err(crate::project_call_binding::Error::Reference(error)) => Err(BindError::Catalog(error)),
         Err(_) => Err(BindError::Internal),
     }
 }
@@ -749,15 +742,39 @@ pub(super) fn bind_row(
             Ok(None)
         }
         Operation::Compute(compiled) => bind_row_compute(
-            compiled, path, catalog, driver, row, phase, available, edges, findings, output,
-            named, secondary, intermediates,
+            compiled,
+            path,
+            catalog,
+            driver,
+            row,
+            phase,
+            available,
+            edges,
+            findings,
+            output,
+            named,
+            secondary,
+            intermediates,
         ),
         Operation::ProjectFunction(call) => bind_row_project(
             call, catalog, driver, row, phase, available, edges, findings, project,
         ),
         Operation::Case(branches) => bind_row_case(
-            branches, column, catalog, driver, row, phase, available, edges, findings,
-            reported, output, project, named, secondary, intermediates,
+            branches,
+            column,
+            catalog,
+            driver,
+            row,
+            phase,
+            available,
+            edges,
+            findings,
+            reported,
+            output,
+            project,
+            named,
+            secondary,
+            intermediates,
         ),
         Operation::Window(window) => window.bind_available(catalog, available, edges, findings),
         Operation::FirstAvailable(selection) => bind_selection(

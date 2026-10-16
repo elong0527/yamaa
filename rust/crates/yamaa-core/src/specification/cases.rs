@@ -267,20 +267,22 @@ fn bind_project_operation(
             phase: crate::reference_scope::Phase::Column { groups: &[] },
         },
     };
-    Ok(match project_call_binding::bind(calls, *call, catalog, context) {
-        Ok(bound) => {
-            edges.extend(bound.dependencies);
-            Some(Expression::ProjectFunction(bound.function))
-        }
-        Err(project_call_binding::Error::Findings(errors)) => {
-            findings.extend(functions::bind_findings(calls, *call, errors, None)?);
-            None
-        }
-        Err(project_call_binding::Error::Reference(error)) => {
-            return Err(BindError::Catalog(error))
-        }
-        Err(_) => return Err(BindError::Internal),
-    })
+    Ok(
+        match project_call_binding::bind(calls, *call, catalog, context) {
+            Ok(bound) => {
+                edges.extend(bound.dependencies);
+                Some(Expression::ProjectFunction(bound.function))
+            }
+            Err(project_call_binding::Error::Findings(errors)) => {
+                findings.extend(functions::bind_findings(calls, *call, errors, None)?);
+                None
+            }
+            Err(project_call_binding::Error::Reference(error)) => {
+                return Err(BindError::Catalog(error))
+            }
+            Err(_) => return Err(BindError::Internal),
+        },
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -539,7 +541,15 @@ fn bind_operation(
             findings,
         )?,
         Operation::Compute(compiled) => bind_compute_operation(
-            spec, branch, compiled, catalog, secondary, intermediates, edges, findings, start,
+            spec,
+            branch,
+            compiled,
+            catalog,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+            start,
         )?,
         Operation::FirstAvailable(selection) => derivations::bind_selection(
             selection,

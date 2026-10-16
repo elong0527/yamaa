@@ -610,6 +610,10 @@ fn validate_header<'a>(
     Ok(Some((compiled, relations)))
 }
 
+type ResolveRef<'a> = &'a (dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Result<Option<(usize, ColumnType)>, BindError>
+         + 'a);
+type GroupOperands = (Vec<usize>, Vec<AggregateBinding>);
+
 #[allow(clippy::too_many_arguments)]
 fn bind_groups_and_operands(
     compiled: &CompiledAggregate,
@@ -621,10 +625,10 @@ fn bind_groups_and_operands(
     donor_schema: &TableSchema,
     grain: &[&str],
     phase: Phase<'_>,
-    resolve: &(dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Result<Option<(usize, ColumnType)>, BindError> + '_),
+    resolve: ResolveRef<'_>,
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
-) -> Result<Option<(Vec<usize>, Vec<AggregateBinding>)>, BindError> {
+) -> Result<Option<GroupOperands>, BindError> {
     if matches!(phase, Phase::Row { .. })
         && grain.iter().any(|name| {
             !catalog.bind(name).is_some_and(|binding| {
@@ -768,7 +772,7 @@ fn bind_groups_and_operands(
 #[allow(clippy::too_many_arguments)]
 fn bind_filter(
     declaration: &Declaration,
-    resolve: &(dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Result<Option<(usize, ColumnType)>, BindError> + '_),
+    resolve: ResolveRef<'_>,
     relation: Option<&str>,
     before: usize,
     edges: &mut Vec<usize>,

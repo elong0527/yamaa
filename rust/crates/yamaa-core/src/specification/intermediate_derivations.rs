@@ -417,6 +417,12 @@ pub(super) fn prepare(
     }
     Ok(result)
 }
+type FieldKinds = (
+    TableSchema,
+    Vec<Option<ColumnType>>,
+    Vec<Option<ColumnType>>,
+);
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_field_kinds(
     declarations: &[Derivation],
@@ -431,10 +437,7 @@ fn resolve_field_kinds(
     previous: &[Option<Intermediate>],
     before: usize,
     findings: &mut Vec<BindFinding>,
-) -> Result<
-    Option<(TableSchema, Vec<Option<ColumnType>>, Vec<Option<ColumnType>>)>,
-    BindError,
-> {
+) -> Result<Option<FieldKinds>, BindError> {
     // Shared earlier donor plans do not recursively copy their expression trees.
     // Admit aggregate retained schema/catalog copies before making the first copy.
     let original_secondary = outer_secondary(sources, schemas, driver);
@@ -710,6 +713,12 @@ fn build_catalog_context(
     Ok((donor, secondary, source, catalog))
 }
 
+type EarlierSelection = (
+    Vec<Option<Intermediate>>,
+    std::collections::BTreeMap<usize, String>,
+    Catalog,
+);
+
 #[allow(clippy::too_many_arguments)]
 fn select_earlier(
     declarations: &[Derivation],
@@ -727,14 +736,7 @@ fn select_earlier(
     catalog: Catalog,
     secondary: &[SecondarySource],
     findings: &mut Vec<BindFinding>,
-) -> Result<
-    (
-        Vec<Option<Intermediate>>,
-        std::collections::BTreeMap<usize, String>,
-        Catalog,
-    ),
-    BindError,
-> {
+) -> Result<EarlierSelection, BindError> {
     let references = declarations
         .iter()
         .flat_map(|item| &item.references)
@@ -777,13 +779,13 @@ fn select_earlier(
         driver,
         donor,
         dataset,
-        &source,
+        source,
         outer_output,
-        &output,
+        output,
         named,
         project,
         &catalog,
-        &secondary,
+        secondary,
         findings,
     )?;
     let mut selected = Vec::new();
@@ -794,16 +796,16 @@ fn select_earlier(
         if !references.contains(item.identifier.as_str()) {
             continue;
         }
-        let schema = item.source_schema(&secondary).ok_or(BindError::Internal)?;
+        let schema = item.source_schema(secondary).ok_or(BindError::Internal)?;
         let fields = schema
             .columns()
             .iter()
             .enumerate()
-            .filter(|(_, field)| item.source_column(&secondary, &field.name).is_some())
+            .filter(|(_, field)| item.source_column(secondary, &field.name).is_some())
             .map(|(column, field)| {
                 (
                     field.name.clone(),
-                    (column, item.source_kind(&secondary, column)),
+                    (column, item.source_kind(secondary, column)),
                 )
             })
             .collect();
