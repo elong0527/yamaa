@@ -3,13 +3,14 @@
 from os import PathLike, fspath
 
 import polars as pl
+import pyarrow as pa
 
 from yamaa._native import DomainError, _check_file, _domain_file
 from yamaa._native_results import issues_frame
 
 
 class Domain:
-    """An owned native build with independently copied host views."""
+    """An owned native build with independently owned Arrow and Polars views."""
 
     def __init__(self, native, resolver=None):
         self._native = native
@@ -17,8 +18,14 @@ class Domain:
 
     @property
     def output(self) -> pl.DataFrame | None:
+        data = self.output_arrow
+        return None if data is None else pl.from_arrow(data, rechunk=False)
+
+    @property
+    def output_arrow(self) -> pa.Table | None:
+        """Share retained immutable buffers through the Arrow C Stream protocol."""
         data = self._native.output()
-        return None if data is None else pl.read_ipc_stream(data)
+        return None if data is None else pa.table(data)
 
     @property
     def issues(self) -> pl.DataFrame:
@@ -26,13 +33,23 @@ class Domain:
 
     @property
     def verification_log(self) -> pl.DataFrame | None:
+        data = self.verification_log_arrow
+        return None if data is None else pl.from_arrow(data, rechunk=False)
+
+    @property
+    def verification_log_arrow(self) -> pa.Table | None:
         data = self._native.log(False)
-        return None if data is None else pl.read_ipc_stream(data)
+        return None if data is None else pa.table(data)
 
     @property
     def warning_log(self) -> pl.DataFrame | None:
+        data = self.warning_log_arrow
+        return None if data is None else pl.from_arrow(data, rechunk=False)
+
+    @property
+    def warning_log_arrow(self) -> pa.Table | None:
         data = self._native.log(True)
-        return None if data is None else pl.read_ipc_stream(data)
+        return None if data is None else pa.table(data)
 
     def save(self) -> bool:
         """Publish held logs and output; a failed build raises DomainError."""

@@ -58,13 +58,24 @@ or Parquet.
 
 Build reads inputs and invokes the declared project functions through the shared
 engine. Check performs preparation/static validation without reading study data
-or invoking project code. Each result owns its native state; copied Polars output,
+or invoking project code. Each result owns its native state; owned Polars output,
 issue and log views remain independent. Issues contain `phase`, `condition`,
 `requirement`, `spec_paths` and JSON-text `context`. The public issue table has no
 `severity` field. Signed integers retain their full 64-bit range; strings
 retain Unicode and embedded NUL, and date/datetime columns retain ordinary Polars
 types. Capacity refusals retain the shared condition and authored paths;
 [release guidance](../docs/release.md#resource-refusals) describes their context.
+
+`built.output_arrow`, `built.verification_log_arrow` and `built.warning_log_arrow`
+return PyArrow tables through the Arrow C Stream/PyCapsule protocol, supported
+with PyArrow 23.0.1 or newer. Every access creates an independent cursor and shares
+the retained immutable value and validity buffers. A table remains valid after
+the build handle, exporter or stream is released. The ordinary Polars views use
+this same handoff without IPC serialization; Polars may copy string buffers and
+convert whole-second timestamps to its supported unit. The Arrow views retain
+the exact UTF-8, signed i64, null and epoch values, including NUL strings.
+Requested schema conversion is refused; perform an explicit preserving Arrow
+conversion after importing. See the [bridge ownership contract](../rust/README.md#arrow-host-handoff).
 
 Numeric operations use PortableLibmV1 with pinned libm 0.2.16;
 the [numeric implementation](../rust/crates/yamaa-core/src/numeric.rs) defines

@@ -1,98 +1,131 @@
-//! Owned public columns; temporal precision stays in the internal execution table.
-use crate::ipc_table::{self, TableError as Error};
+//! Retained public Arrow arrays; temporal precision stays in the execution table.
+use crate::{
+    arrow_table::ArrowTable,
+    ipc_table::{self, TableError as Error},
+};
 use arrow_array::{
-    ArrayRef, Date32Array, Float64Array, Int64Array, RecordBatch, StringArray, TimestampSecondArray,
+    Array, ArrayRef, Date32Array, RecordBatch, RecordBatchOptions, StructArray,
+    TimestampSecondArray,
 };
 use arrow_ipc::writer::StreamWriter;
-use arrow_schema::{DataType, Field, Schema, TimeUnit};
+use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use std::sync::Arc;
-use yamaa_core::{
-    table::{TableAccess, ValueRef},
-    value::ColumnType,
-};
+use yamaa_core::{table::TableAccess, value::ColumnType};
 
-#[derive(Debug)]
-pub enum Values {
-    Str(Vec<Option<String>>),
-    Int(Vec<Option<i64>>),
-    Float(Vec<Option<f64>>),
-    Date(Vec<Option<i32>>),
-    DateTime(Vec<Option<i64>>),
-}
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PublicTable {
-    columns: Vec<(String, Values)>,
+    schema: SchemaRef,
+    batches: Vec<RecordBatch>,
     rows: usize,
 }
 impl PublicTable {
-    pub fn columns(&self) -> &[(String, Values)] {
-        &self.columns
+    pub fn columns(&self) -> &arrow_schema::Fields {
+        self.schema.fields()
+    }
+    pub fn schema(&self) -> &SchemaRef {
+        &self.schema
+    }
+    pub fn batches(&self) -> &[RecordBatch] {
+        &self.batches
     }
     pub fn rows(&self) -> usize {
         self.rows
     }
+
     pub fn decode(input: &[u8]) -> Result<Self, Error> {
-        let table = ipc_table::decode_snapshot(input)?;
-        let mut columns = Vec::new();
-        for (index, column) in table.schema().columns().iter().enumerate() {
-            macro_rules! collect {
-                ($pattern:pat => $value:expr) => {
-                    (0..table.row_count())
-                        .map(
-                            |row| match table.cell(row, index).map_err(|_| Error::Internal)? {
-                                ValueRef::Missing => Ok(None),
-                                $pattern => Ok(Some($value)),
-                                _ => Err(Error::InvalidTable),
-                            },
-                        )
-                        .collect::<Result<Vec<_>, Error>>()?
+        Self::from_snapshot(&ipc_table::decode_snapshot(input)?)
+    }
+
+    /// Primitive buffers are shared with the snapshot. Temporal values project
+    /// the existing child buffer and the parent validity bitmap, retaining the
+    /// established public epoch representation without leaking precision fields.
+    pub fn from_snapshot(table: &ArrowTable) -> Result<Self, Error> {
+        let fields = table
+            .schema()
+            .columns()
+            .iter()
+            .enumerate()
+            .map(|(index, column)| {
+                let kind = match column.kind {
+                    ColumnType::Str => table.batches().first().map_or(DataType::Utf8, |batch| {
+                        batch.schema().field(index).data_type().clone()
+                    }),
+                    ColumnType::Int => DataType::Int64,
+                    ColumnType::Float => DataType::Float64,
+                    ColumnType::Date => DataType::Date32,
+                    ColumnType::DateTime => {
+                        DataType::Timestamp(arrow_schema::TimeUnit::Second, None)
+                    }
                 };
+                Field::new(&column.name, kind, true)
+            })
+            .collect::<Vec<_>>();
+        let schema = Arc::new(Schema::new(fields));
+        let mut batches = Vec::with_capacity(table.batches().len());
+        for batch in table.batches() {
+            let mut arrays = Vec::<ArrayRef>::with_capacity(batch.num_columns());
+            for (column, array) in table.schema().columns().iter().zip(batch.columns()) {
+                let public: ArrayRef = match column.kind {
+                    ColumnType::Date | ColumnType::DateTime => {
+                        let temporal = array
+                            .as_any()
+                            .downcast_ref::<StructArray>()
+                            .ok_or(Error::InvalidTable)?;
+                        match column.kind {
+                            ColumnType::Date => {
+                                let value = temporal
+                                    .column(0)
+                                    .as_any()
+                                    .downcast_ref::<Date32Array>()
+                                    .ok_or(Error::InvalidTable)?;
+                                Arc::new(Date32Array::new(
+                                    value.values().clone(),
+                                    temporal.nulls().cloned(),
+                                ))
+                            }
+                            _ => {
+                                let value = temporal
+                                    .column(0)
+                                    .as_any()
+                                    .downcast_ref::<TimestampSecondArray>()
+                                    .ok_or(Error::InvalidTable)?;
+                                Arc::new(TimestampSecondArray::new(
+                                    value.values().clone(),
+                                    temporal.nulls().cloned(),
+                                ))
+                            }
+                        }
+                    }
+                    _ => array.clone(),
+                };
+                arrays.push(public);
             }
-            let values = match column.kind {
-                ColumnType::Str => Values::Str(collect!(ValueRef::Str(v) => v.to_owned())),
-                ColumnType::Int => Values::Int(collect!(ValueRef::Int(v) => v)),
-                ColumnType::Float => Values::Float(collect!(ValueRef::Float(v) => v.get())),
-                ColumnType::Date => {
-                    Values::Date(collect!(ValueRef::Date(v) => crate::arrow_temporal::date_days(v)))
-                }
-                ColumnType::DateTime => Values::DateTime(
-                    collect!(ValueRef::DateTime(v) => crate::arrow_temporal::datetime_seconds(v)),
-                ),
-            };
-            columns.push((column.name.clone(), values));
+            let options = RecordBatchOptions::new().with_row_count(Some(batch.num_rows()));
+            batches.push(
+                RecordBatch::try_new_with_options(schema.clone(), arrays, &options)
+                    .map_err(|_| Error::InvalidTable)?,
+            );
         }
         Ok(Self {
-            columns,
+            schema,
+            batches,
             rows: table.row_count(),
         })
     }
+
+    /// Each export owns an independent cursor and shared immutable buffer refs.
+    pub fn stream(&self) -> arrow_array::ffi_stream::FFI_ArrowArrayStream {
+        crate::arrow_bridge::export_stream(self.schema.clone(), self.batches.clone())
+    }
+
+    /// Storage/qualification encoding only; host views use the C Stream bridge.
     pub fn ipc(&self) -> Result<Vec<u8>, Error> {
-        let mut fields = Vec::new();
-        let mut arrays = Vec::<ArrayRef>::new();
-        for (name, values) in &self.columns {
-            let (kind, array): (DataType, ArrayRef) = match values {
-                Values::Str(v) => (
-                    DataType::Utf8,
-                    Arc::new(StringArray::from_iter(v.iter().map(Option::as_deref))),
-                ),
-                Values::Int(v) => (DataType::Int64, Arc::new(Int64Array::from(v.clone()))),
-                Values::Float(v) => (DataType::Float64, Arc::new(Float64Array::from(v.clone()))),
-                Values::Date(v) => (DataType::Date32, Arc::new(Date32Array::from(v.clone()))),
-                Values::DateTime(v) => (
-                    DataType::Timestamp(TimeUnit::Second, None),
-                    Arc::new(TimestampSecondArray::from(v.clone())),
-                ),
-            };
-            fields.push(Field::new(name, kind, true));
-            arrays.push(array);
-        }
-        let schema = Arc::new(Schema::new(fields));
-        let options = arrow_array::RecordBatchOptions::new().with_row_count(Some(self.rows));
-        let batch = RecordBatch::try_new_with_options(schema.clone(), arrays, &options)
-            .map_err(|_| Error::InvalidTable)?;
         let mut bytes = Vec::new();
-        let mut writer = StreamWriter::try_new(&mut bytes, &schema).map_err(|_| Error::Internal)?;
-        writer.write(&batch).map_err(|_| Error::Internal)?;
+        let mut writer =
+            StreamWriter::try_new(&mut bytes, &self.schema).map_err(|_| Error::Internal)?;
+        for batch in &self.batches {
+            writer.write(batch).map_err(|_| Error::Internal)?;
+        }
         writer.finish().map_err(|_| Error::Internal)?;
         drop(writer);
         Ok(bytes)
