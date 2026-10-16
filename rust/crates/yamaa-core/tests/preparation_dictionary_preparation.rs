@@ -13,7 +13,7 @@ mod preparation {
         use yamaa_core::{
             dictionary_preparation as app,
             inheritance::{Source as Identity, SourceError},
-            inheritance_capture::{CapturePort, DecodePort},
+            inheritance_capture::{InheritanceCapturePort, InheritanceDecodePort},
             project_preparation::Source,
         };
 
@@ -175,7 +175,7 @@ mod preparation {
                 }
             }
         }
-        impl CapturePort for Port {
+        impl InheritanceCapturePort for Port {
             type Error = Host;
             fn canonicalize(&mut self, _: &str, _: &str) -> Result<Identity, SourceError<Host>> {
                 panic!("parent route entered")
@@ -239,7 +239,7 @@ mod preparation {
                 }
             }
         }
-        impl DecodePort for Decoder {
+        impl InheritanceDecodePort for Decoder {
             type Raw = Document;
             type Error = DecodeError;
             fn decode(&mut self, identity: &str, bytes: &[u8]) -> Result<Document, DecodeError> {
@@ -584,7 +584,7 @@ mod preparation {
             documents: BTreeMap<String, Raw>,
             calls: Vec<String>,
         }
-        impl capture::DecodePort for Parents {
+        impl capture::InheritanceDecodePort for Parents {
             type Raw = Raw;
             type Error = Failure;
             fn decode(&mut self, identity: &str, _: &[u8]) -> Result<Raw, Failure> {
@@ -600,7 +600,7 @@ mod preparation {
             bytes: BTreeMap<String, Vec<u8>>,
             error: Option<Payload>,
         }
-        impl capture::CapturePort for Host {
+        impl capture::InheritanceCapturePort for Host {
             type Error = Payload;
             fn canonicalize(
                 &mut self,
@@ -1127,7 +1127,7 @@ mod preparation {
         use yamaa_core::{
             file_preparation as app,
             inheritance::{Source as Identity, SourceError},
-            inheritance_capture::CapturePort,
+            inheritance_capture::InheritanceCapturePort,
             project_preparation::Source,
         };
         #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1271,7 +1271,7 @@ mod preparation {
         impl app::DocumentPort<Fault> for Documents {
             type Prepared = Prepared;
             type Error = Failure;
-            fn prepare<P: CapturePort<Error = Fault>>(
+            fn prepare<P: InheritanceCapturePort<Error = Fault>>(
                 &mut self,
                 source: Source,
                 display: String,
@@ -1572,7 +1572,7 @@ mod preparation {
                 self
             }
         }
-        impl SourcePort for Port {
+        impl InheritanceSourcePort for Port {
             type Error = (&'static str, u32);
             fn canonicalize(
                 &mut self,
@@ -2214,7 +2214,7 @@ mod preparation {
                 }
             }
         }
-        impl app::CapturePort for Host {
+        impl app::InheritanceCapturePort for Host {
             type Error = Payload;
             fn canonicalize(
                 &mut self,
@@ -2285,7 +2285,7 @@ mod preparation {
             documents: BTreeMap<String, Raw>,
             failure: Option<Payload>,
         }
-        impl app::DecodePort for Decoder {
+        impl app::InheritanceDecodePort for Decoder {
             type Raw = Raw;
             type Error = CodecFailure;
             fn decode(&mut self, identity: &str, bytes: &[u8]) -> Result<Raw, CodecFailure> {

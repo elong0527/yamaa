@@ -1020,7 +1020,7 @@ mod file {
             assert_eq!(first.as_ref(), b"ID,V\n1,2\n");
             assert_eq!(resources.capture_reads(), 1);
             use yamaa_core::resource::ResourceFailure;
-            use yamaa_core::specification_run::SourcePort;
+            use yamaa_core::specification_run::SpecificationSourcePort;
             assert_eq!(
                 resources.resource_failure(&Error::Changed),
                 Some(ResourceFailure::ContentChanged)
@@ -1227,7 +1227,7 @@ mod file {
             let captured = resources.capture("blocked");
             fs::set_permissions(&earlier, permissions).unwrap();
             assert_eq!(
-                <Resources as yamaa_core::specification_run::SourcePort>::resource_failure(
+                <Resources as yamaa_core::specification_run::SpecificationSourcePort>::resource_failure(
                     &resources,
                     inspected.as_ref().unwrap_err()
                 ),
@@ -1261,7 +1261,7 @@ mod file {
             let captured = resources.capture("private/blocked");
             fs::set_permissions(&earlier, permissions).unwrap();
             assert_eq!(
-                <Resources as yamaa_core::specification_run::SourcePort>::resource_failure(
+                <Resources as yamaa_core::specification_run::SpecificationSourcePort>::resource_failure(
                     &resources,
                     inspected.as_ref().unwrap_err()
                 ),

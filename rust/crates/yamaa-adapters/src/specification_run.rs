@@ -29,7 +29,7 @@ pub enum Error {
     Bind(BindError),
     Execution(DatasetError),
 }
-pub use yamaa_core::specification_run::{InspectionFailure, SourcePort, SourceRead};
+pub use yamaa_core::specification_run::{InspectionFailure, SourceRead, SpecificationSourcePort};
 #[derive(Debug)]
 pub enum PortError<E> {
     Capture(E),
@@ -102,7 +102,7 @@ impl PreparedRun {
 
     /// Delegate capture and execution order to the engine. Preserve observations
     /// outside the panic fence; reporting never captures or decodes a source again.
-    pub fn execute_with_port<P: SourcePort>(
+    pub fn execute_with_port<P: SpecificationSourcePort>(
         &self,
         port: &mut P,
         scope: yamaa_core::application_observer::Scope<'_>,

@@ -2510,7 +2510,7 @@ mod execution {
         fn all_inputs_inspect_then_capture_decode_in_authored_order_and_move_opaque_failure_once() {
             use std::sync::Arc;
             use yamaa_core::specification_run::{
-                self as run, PortError, RunError, SourceDecoder, SourcePort,
+                self as run, PortError, RunError, SourceDecoder, SpecificationSourcePort,
             };
             type IoTrace = Rc<RefCell<Vec<String>>>;
             struct Port {
@@ -2518,7 +2518,7 @@ mod execution {
                 reads: usize,
                 fail: Option<Failure>,
             }
-            impl SourcePort for Port {
+            impl SpecificationSourcePort for Port {
                 fn resource_failure(
                     &self,
                     _error: &Self::Error,

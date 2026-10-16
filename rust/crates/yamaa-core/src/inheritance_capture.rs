@@ -7,7 +7,7 @@ use crate::{
 
 /// Fail-fast inheritance authority. Unlike project metadata capture, an ordinary
 /// failure stops the attempt; no independent-error collection or retry occurs.
-pub trait CapturePort {
+pub trait InheritanceCapturePort {
     type Error;
     fn canonicalize(
         &mut self,
@@ -43,7 +43,7 @@ pub trait CapturePort {
     ) -> Result<String, Self::Error>;
 }
 /// A physical decoder retains original source and occurrence authority.
-pub trait DecodePort {
+pub trait InheritanceDecodePort {
     type Raw;
     type Error;
     fn decode(&mut self, identity: &str, bytes: &[u8]) -> Result<Self::Raw, Self::Error>;
@@ -86,7 +86,7 @@ pub struct Prepared<R> {
     pub parents: Vec<CapturedParent<R>>,
 }
 pub type PreparationResult<E, X, R> = Result<Prepared<R>, Error<E, X, R>>;
-struct Application<'a, P, D: DecodePort> {
+struct Application<'a, P, D: InheritanceDecodePort> {
     host: &'a mut P,
     decoder: &'a mut D,
     parents: Vec<CapturedParent<D::Raw>>,
@@ -97,7 +97,9 @@ fn host_error<E, X>(error: graph::SourceError<E>) -> graph::SourceError<SourceFa
         graph::SourceError::Raised(error) => graph::SourceError::Raised(SourceFailure::Host(error)),
     }
 }
-impl<P: CapturePort, D: DecodePort> graph::SourcePort for Application<'_, P, D> {
+impl<P: InheritanceCapturePort, D: InheritanceDecodePort> graph::InheritanceSourcePort
+    for Application<'_, P, D>
+{
     type Error = SourceFailure<P::Error, D::Error>;
     fn canonicalize(
         &mut self,
@@ -129,7 +131,9 @@ impl<P: CapturePort, D: DecodePort> graph::SourcePort for Application<'_, P, D> 
         Ok(document)
     }
 }
-impl<P: CapturePort, D: DecodePort> lifecycle::PathPort for Application<'_, P, D> {
+impl<P: InheritanceCapturePort, D: InheritanceDecodePort> lifecycle::PathPort
+    for Application<'_, P, D>
+{
     fn rebase(
         &mut self,
         layer: &graph::Source,
@@ -144,7 +148,7 @@ impl<P: CapturePort, D: DecodePort> lifecycle::PathPort for Application<'_, P, D
 /// Continue from the exact already-decoded entry. Entry parsing occurs once in
 /// the caller's codec; this application neither reopens nor decodes it again.
 /// Root/capture, traversal, normalization and rebasing policies remain distinct.
-pub fn prepare<P: CapturePort, D: DecodePort>(
+pub fn prepare<P: InheritanceCapturePort, D: InheritanceDecodePort>(
     schema: &SchemaStructure,
     source: &Source,
     display_path: String,

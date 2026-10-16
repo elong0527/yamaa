@@ -11,7 +11,7 @@ mod project {
             issue_rows::Issue,
             project_environment_diagnostics::{self as diagnostic, Error as ProjectionError},
             project_source::{
-                self, CaptureFailure, CapturePort, Failure, Kind, Origin, Reply, Request,
+                self, CaptureFailure, Failure, Kind, Origin, ProjectCapturePort, Reply, Request,
             },
             specification_source::{CapturedSchema, Source},
         };
@@ -51,7 +51,7 @@ mod project {
             )
             .unwrap()
         }
-        impl CapturePort for Port {
+        impl ProjectCapturePort for Port {
             type Error = Opaque;
             fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
                 self.trace.push((request.kind, request.written.into()));
@@ -281,7 +281,7 @@ mod project {
             struct RefusingPort {
                 reads: usize,
             }
-            impl CapturePort for RefusingPort {
+            impl ProjectCapturePort for RefusingPort {
                 type Error = ResourceError;
                 fn capture(&mut self, _: Request<'_>) -> Result<Reply, Self::Error> {
                     self.reads += 1;
@@ -867,7 +867,7 @@ mod project {
         use yamaa_adapters::{
             project_lock::{Finding, Reason},
             project_lock_diagnostics::{issues, Error},
-            project_source::{self, CapturePort, CapturedEnvironment, Kind, Reply, Request},
+            project_source::{self, CapturedEnvironment, Kind, ProjectCapturePort, Reply, Request},
             specification_source::{CapturedSchema, Source},
         };
         use yamaa_core::{project_environment::LockKind, project_function::Language};
@@ -875,7 +875,7 @@ mod project {
         struct Capture {
             calls: usize,
         }
-        impl CapturePort for Capture {
+        impl ProjectCapturePort for Capture {
             type Error = std::convert::Infallible;
             fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
                 assert_eq!(request.kind, Kind::Lock);
@@ -1091,7 +1091,7 @@ mod project {
         use yamaa_adapters::{
             project_report,
             project_run::PreparedRun,
-            project_source::{self, CapturePort, OwnedEnvironment, Reply, Request},
+            project_source::{self, OwnedEnvironment, ProjectCapturePort, Reply, Request},
             specification_report::Identity,
             specification_source::Source,
         };
@@ -1099,7 +1099,7 @@ mod project {
         use yamaa_core::{
             function_invocation::{Argument, HostError},
             project_activation::ActivationPort,
-            specification_run::SourcePort,
+            specification_run::SpecificationSourcePort,
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
@@ -1115,7 +1115,7 @@ mod project {
             }
         }
         struct NoCapture;
-        impl CapturePort for NoCapture {
+        impl ProjectCapturePort for NoCapture {
             type Error = Infallible;
             fn capture(&mut self, _: Request<'_>) -> Result<Reply, Infallible> {
                 panic!("inline environment has no resource authority")
@@ -1165,7 +1165,7 @@ mod project {
             root: PathBuf,
             cached: BTreeMap<String, Arc<[u8]>>,
         }
-        impl SourcePort for Study {
+        impl SpecificationSourcePort for Study {
             fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                 Ok(())
             }
@@ -1353,7 +1353,7 @@ mod project {
                 captures: usize,
                 inspections: usize,
             }
-            impl SourcePort for Resources {
+            impl SpecificationSourcePort for Resources {
                 type Error = Failure;
                 fn inspect(&mut self, _: &SourceDeclaration) -> Result<(), Failure> {
                     self.inspections += 1;
@@ -1502,7 +1502,7 @@ mod project {
         use std::{cell::RefCell, rc::Rc, sync::Arc};
         use yamaa_adapters::{
             project_run::{BoundaryFailure, PreparedRun},
-            project_source::{self, CapturePort, Kind, OwnedEnvironment, Reply, Request},
+            project_source::{self, Kind, OwnedEnvironment, ProjectCapturePort, Reply, Request},
             specification_source::{PreparedDocument, Source},
         };
         use yamaa_core::application_observer::Scope;
@@ -1510,7 +1510,7 @@ mod project {
             dataset::ExecutionError,
             function_invocation::{Argument, FailureKind, HostError},
             project_activation::{ActivationPort, Failure, LockObservation, TestOutcome},
-            specification_run::{PortError, SourcePort},
+            specification_run::{PortError, SpecificationSourcePort},
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
@@ -1528,7 +1528,7 @@ mod project {
             }
         }
         struct EnvironmentCapture;
-        impl CapturePort for EnvironmentCapture {
+        impl ProjectCapturePort for EnvironmentCapture {
             type Error = std::convert::Infallible;
             fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
                 assert_eq!(request.kind, Kind::Lock);
@@ -1687,7 +1687,7 @@ functions:
             captured: bool,
             inspections: usize,
         }
-        impl SourcePort for Study {
+        impl SpecificationSourcePort for Study {
             fn resource_failure(
                 &self,
                 _error: &Self::Error,
@@ -2665,7 +2665,7 @@ functions:
                 trace: Trace,
                 reads: usize,
             }
-            impl SourcePort for TwoSources {
+            impl SpecificationSourcePort for TwoSources {
                 fn resource_failure(
                     &self,
                     _error: &Self::Error,

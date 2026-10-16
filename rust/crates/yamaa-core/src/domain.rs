@@ -3,7 +3,7 @@
 //! Source capture, YAML preparation and schema selection precede this boundary.
 //! Project activation is the project boundary's authority. A successful check
 //! admits declarations; actual source schemas and values are observed at build.
-use crate::specification_run::{self, CapturedAttempt, SourceDecoder, SourcePort};
+use crate::specification_run::{self, CapturedAttempt, SourceDecoder, SpecificationSourcePort};
 use crate::{
     schema::SpecificationDocument,
     specification::{PrepareError, PreparedSpecification},
@@ -50,7 +50,7 @@ pub fn check_with_environment(
 impl CheckedSpecification {
     /// Execute with explicit activated handles and caller-held observations.
     /// Metadata admission precedes every source inspection, capture and decode.
-    pub fn build_into<P: SourcePort, D: SourceDecoder>(
+    pub fn build_into<P: SpecificationSourcePort, D: SourceDecoder>(
         &self,
         port: &mut P,
         decoder: &mut D,
@@ -83,7 +83,7 @@ impl CheckedSpecification {
 
 /// Check and build in one engine operation. Preparation failures return before
 /// capture or decoding; later failures retain their original typed attempt.
-pub fn build<P: SourcePort, D: SourceDecoder>(
+pub fn build<P: SpecificationSourcePort, D: SourceDecoder>(
     document: &SpecificationDocument,
     port: &mut P,
     decoder: &mut D,

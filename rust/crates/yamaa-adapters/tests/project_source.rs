@@ -7,7 +7,7 @@ mod project {
         use std::sync::Arc;
         use yamaa_adapters::{
             project_source::{
-                self, CaptureFailure, CapturePort, Failure, Kind, Origin, Reply, Request,
+                self, CaptureFailure, Failure, Kind, Origin, ProjectCapturePort, Reply, Request,
             },
             specification_source::{CapturedSchema, Error, Source},
         };
@@ -61,7 +61,7 @@ mod project {
                 }
             }
         }
-        impl CapturePort for Port {
+        impl ProjectCapturePort for Port {
             type Error = Payload;
             fn is_interrupt(&self, error: &Payload) -> bool {
                 error.0.as_ref() == "host interrupt"
@@ -396,7 +396,9 @@ mod project {
             function_invocation::{Argument, FailureKind, HostError},
             project_activation::{ActivationPort, Failure},
             project_domain,
-            specification_run::{CapturedAttempt, PortError, SourceDecoder, SourcePort},
+            specification_run::{
+                CapturedAttempt, PortError, SourceDecoder, SpecificationSourcePort,
+            },
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
@@ -795,7 +797,7 @@ mod project {
             bytes: Arc<[u8]>,
             reads: usize,
         }
-        impl SourcePort for Source {
+        impl SpecificationSourcePort for Source {
             fn resource_failure(
                 &self,
                 _error: &Self::Error,

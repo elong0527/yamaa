@@ -92,7 +92,7 @@ impl CapturedDocument {
 /// Physical schema YAML representation; closure ordering and admission belong
 /// to the engine. Original occurrence locations stay here.
 struct SchemaDecoder;
-impl capture::DecodePort for SchemaDecoder {
+impl capture::SchemaDecodePort for SchemaDecoder {
     type Error = DecodeFailure;
     type Locations = Vec<SourcePosition>;
     fn decode(
@@ -110,7 +110,7 @@ impl capture::DecodePort for SchemaDecoder {
 
 /// Physical entry decoding retains its source-limit order and YAML locations.
 struct StructuralDecoder<'a>(&'a CapturedSchema);
-impl yamaa_core::structural_preparation::DecodePort for StructuralDecoder<'_> {
+impl yamaa_core::structural_preparation::StructuralDecodePort for StructuralDecoder<'_> {
     type Error = Error;
     type Locations = Vec<SourcePosition>;
     fn decode(

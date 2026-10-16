@@ -689,7 +689,7 @@ mod preparation {
         use yamaa_core::{
             project_preparation::Source,
             schema_capture::{
-                self, CapturedClosure, DecodePort, DecodedModule, Error, RootSelection,
+                self, CapturedClosure, DecodedModule, Error, RootSelection, SchemaDecodePort,
             },
         };
 
@@ -792,7 +792,7 @@ mod preparation {
                 }
             }
         }
-        impl DecodePort for Decoder {
+        impl SchemaDecodePort for Decoder {
             type Error = Payload;
             type Locations = Locations;
             fn decode(
@@ -1647,7 +1647,9 @@ mod preparation {
         };
         use yamaa_core::{
             project_preparation::Source,
-            structural_preparation::{self as application, DecodePort, Decoded, Error, Selection},
+            structural_preparation::{
+                self as application, Decoded, Error, Selection, StructuralDecodePort,
+            },
         };
 
         use crate::support::document::Tree as V;
@@ -1780,7 +1782,7 @@ mod preparation {
                 }
             }
         }
-        impl DecodePort for Codec {
+        impl StructuralDecodePort for Codec {
             type Error = Opaque;
             type Locations = Vec<usize>;
             fn decode(&mut self, source: &Source) -> Result<Decoded<Vec<usize>>, Opaque> {

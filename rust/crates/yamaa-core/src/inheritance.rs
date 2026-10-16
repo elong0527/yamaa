@@ -19,7 +19,7 @@ pub enum SourceError<E> {
 }
 
 /// Synchronous source authority. No discovery, retry, concurrency or implicit ambient reader.
-pub trait SourcePort {
+pub trait InheritanceSourcePort {
     type Error;
     /// Resolve relative to the declaring canonical file and verify a regular local file.
     fn canonicalize(
@@ -224,7 +224,7 @@ fn admit<E>(
 
 /// Visit normalized parents left-to-right, admit each unique layer before reading its parents,
 /// and return once-only postorder contributions. The caller supplies the already captured entry.
-pub fn traverse<P: SourcePort>(
+pub fn traverse<P: InheritanceSourcePort>(
     schema: &SchemaStructure,
     entry: Source,
     entry_document: Document,
