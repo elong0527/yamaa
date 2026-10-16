@@ -1,34 +1,15 @@
 //! Python report metadata and issue-row conversion.
-use pyo3::{
-    prelude::*,
-    types::{PyString, PyTuple},
-};
-
-pub(super) fn fields(metadata: &Bound<'_, PyTuple>) -> PyResult<Vec<String>> {
-    if metadata.len() != 5 {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "invalid report metadata",
-        ));
-    }
-    metadata
-        .iter()
-        .map(|item| {
-            let text = item.cast::<PyString>()?.to_str()?;
-            Ok(text.to_owned())
-        })
-        .collect()
-}
 pub(super) type IssueRow = (String, String, Option<String>, Vec<String>, String);
-pub(super) fn issue_rows(issues: &[yamaa_adapters::issue_rows::Issue]) -> Vec<IssueRow> {
-    issues
+pub(super) fn issue_rows(diagnostics: &[yamaa::Diagnostic]) -> Vec<IssueRow> {
+    diagnostics
         .iter()
-        .map(|issue| {
+        .map(|diagnostic| {
             (
-                issue.phase.clone(),
-                issue.condition.clone(),
-                issue.requirement.clone(),
-                issue.spec_paths.clone(),
-                issue.context.clone(),
+                diagnostic.phase.clone(),
+                diagnostic.code.clone(),
+                diagnostic.requirement.clone(),
+                diagnostic.spec_path.clone(),
+                diagnostic.context.to_json().to_owned(),
             )
         })
         .collect()

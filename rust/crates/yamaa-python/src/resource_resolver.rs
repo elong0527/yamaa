@@ -4,19 +4,19 @@ use pyo3::{
     types::{PyBytes, PyDict},
 };
 use std::sync::Arc;
-use yamaa_adapters::host_resources::{Failure, Reply, Request, Resolver};
+use yamaa::{InputFrame, ResolverFailure, ResolverReply, ResolverRequest, ResourceResolver};
 pub struct Port {
     callback: Py<PyAny>,
 }
 impl Port {
-    pub fn from_callback(callback: Py<PyAny>) -> Arc<dyn Resolver> {
+    pub fn from_callback(callback: Py<PyAny>) -> Arc<dyn ResourceResolver> {
         Arc::new(Self { callback })
     }
 }
-impl Resolver for Port {
-    fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
+impl ResourceResolver for Port {
+    fn request(&self, request: ResolverRequest<'_>) -> Result<ResolverReply, ResolverFailure> {
         Python::attach(|py| {
-            let run = || -> PyResult<Result<Reply, Failure>> {
+            let run = || -> PyResult<Result<ResolverReply, ResolverFailure>> {
                 let args = PyDict::new(py);
                 args.set_item("operation", request.operation.name())?;
                 args.set_item("kind", request.kind.name())?;
@@ -27,7 +27,7 @@ impl Resolver for Port {
                 let reply = self.callback.bind(py).call1((args,))?;
                 let failure = reply.get_item("failure")?;
                 if !failure.is_none() {
-                    return Ok(Err(Failure::from_name(failure.extract::<&str>()?)));
+                    return Ok(Err(ResolverFailure::from_code(failure.extract::<&str>()?)));
                 }
                 let reference = reply.get_item("reference")?.extract::<String>()?;
                 let bytes = reply.get_item("data")?;
@@ -40,20 +40,12 @@ impl Resolver for Port {
                 let frame = if frame.is_none() {
                     None
                 } else {
-                    Some(Arc::new(
-                        yamaa_adapters::arrow_bridge::import_public_stream(
-                            crate::arrow_bridge::take_stream(&frame)?,
-                        )
-                        .map_err(|_| {
-                            pyo3::exceptions::PyValueError::new_err("unsupported host frame")
-                        })?,
-                    ))
+                    let stream = crate::arrow_bridge::take_stream(&frame)?;
+                    Some(InputFrame::import(stream).map_err(|error| {
+                        pyo3::exceptions::PyValueError::new_err(error.message().to_owned())
+                    })?)
                 };
-                Ok(Ok(Reply {
-                    reference,
-                    bytes,
-                    frame,
-                }))
+                Ok(Ok(ResolverReply::new(reference, bytes, frame)))
             };
             match run() {
                 Ok(reply) => reply,
@@ -62,9 +54,9 @@ impl Resolver for Port {
                         .is_instance_of::<pyo3::exceptions::PyKeyboardInterrupt>(py)
                         || error.is_instance_of::<pyo3::exceptions::PySystemExit>(py)
                     {
-                        Failure::Cancelled
+                        ResolverFailure::from_code("cancelled")
                     } else {
-                        Failure::Rejected
+                        ResolverFailure::from_code("rejected")
                     };
                     // Exporters and native representation admission run after
                     // Python dispatch. Retain that exact error on the same

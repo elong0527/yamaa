@@ -5,17 +5,12 @@ use std::{
     cell::{Cell, RefCell},
     collections::BTreeMap,
     rc::{Rc, Weak},
+    sync::Arc,
 };
-use yamaa_adapters::issue_rows::Issue;
+use yamaa::{Build, CancellationToken, Engine, EngineOptions, HostLanguage, Request, SaveOutcome};
 
 pub(crate) struct State {
-    pub(crate) measurements:
-        Option<std::sync::Arc<yamaa_adapters::application_measurements::Measurements>>,
-    pub(crate) result: Option<yamaa_adapters::file_application::Domain>,
-    pub(crate) project: Option<Rc<crate::file_project::platform::HeldAttempt>>,
-    pub(crate) _preparation: Option<yamaa_adapters::file_workflow::SelectionError>,
-    pub(crate) producer: Option<crate::file_producer::platform::PublicResult>,
-    pub(crate) issues: Vec<Issue>,
+    pub(crate) build: Build,
 }
 thread_local! { static HANDLES:RefCell<BTreeMap<usize,Weak<RefCell<State>>>>=const { RefCell::new(BTreeMap::new()) }; }
 struct Handle {
@@ -60,6 +55,27 @@ fn environment(value: &Robj) -> std::result::Result<Option<Raw>, String> {
             .ok_or_else(|| "environment must be raw UTF-8 or NULL".into())
     }
 }
+fn parse_capabilities(parsed: List) -> std::result::Result<(Function, Function, Function), String> {
+    if parsed.len() != 3 {
+        return Err("invalid project host capabilities".into());
+    }
+    let verify = parsed
+        .elt(0)
+        .map_err(|_| "missing lock capability")?
+        .as_function()
+        .ok_or("invalid lock capability")?;
+    let resolve = parsed
+        .elt(1)
+        .map_err(|_| "missing binding capability")?
+        .as_function()
+        .ok_or("invalid binding capability")?;
+    let formatter = parsed
+        .elt(2)
+        .map_err(|_| "missing condition capability")?
+        .as_function()
+        .ok_or("invalid condition capability")?;
+    Ok((verify, resolve, formatter))
+}
 
 #[extendr]
 fn domain_file(
@@ -91,61 +107,34 @@ fn domain_request(
     environment_path: Robj,
     version: Raw,
     capabilities: List,
-    resolver: Option<std::sync::Arc<dyn yamaa_adapters::host_resources::Resolver>>,
+    resolver: Option<Arc<dyn yamaa::ResourceResolver>>,
 ) -> List {
     boundary(|| {
-        let specification = text(&specification)?;
+        let specification_text = text(&specification)?.to_owned();
         let environment = environment(&environment_path)?;
-        let environment = environment.as_ref().map(text).transpose()?;
-        let version = text(&version)?;
-        {
-            let mut runtime =
-                crate::file_domain::Runtime::new(specification, version, capabilities)?;
-            runtime.resolver = resolver;
-            let mut ports = yamaa_adapters::file_application::Application {
-                host: yamaa_core::project_function::Language::R,
-                runtime,
-            };
-            let measurements =
-                std::sync::Arc::new(yamaa_adapters::application_measurements::Measurements::new());
-            let mut state = match yamaa_core::domain_entry::domain(
-                yamaa_core::domain_entry::Request {
-                    specification,
-                    environment,
-                },
-                &mut ports,
-                yamaa_core::application_observer::Scope::new(measurements.as_ref()),
-            ) {
-                Ok(state) => state,
-                Err(yamaa_adapters::file_application::ApplicationError::Runtime(error)) => {
-                    measurements.complete(false);
-                    return Err(error);
-                }
-                Err(yamaa_adapters::file_application::ApplicationError::Preparation(error)) => {
-                    State {
-                        producer: None,
-                        measurements: None,
-                        result: None,
-                        project: None,
-                        issues: yamaa_adapters::project_application::selection_failure(
-                            &error, ports.host,
-                        ),
-                        _preparation: Some(error),
-                    }
-                }
-            };
-            let accepted = state
-                .result
-                .as_ref()
-                .is_some_and(|result| result.output().is_some())
-                || state
-                    .producer
-                    .as_ref()
-                    .is_some_and(|result| result.accepted());
-            measurements.complete(accepted);
-            state.measurements = Some(measurements);
-            store(state)
+        let environment_text = environment
+            .as_ref()
+            .map(text)
+            .transpose()?
+            .map(str::to_owned);
+        let version = text(&version)?.to_owned();
+        let (verify, resolve, formatter) = parse_capabilities(capabilities)?;
+        let functions = Arc::new(crate::project_activation::Functions::new(
+            verify, resolve, formatter,
+        ));
+        let mut options =
+            EngineOptions::new(HostLanguage::R, "r".into(), version).with_functions(functions);
+        if let Some(resolver) = resolver {
+            options = options.with_resolver(resolver);
         }
+        let mut request = Request::new(&specification_text);
+        if let Some(environment) = environment_text.as_deref() {
+            request = request.with_environment(environment);
+        }
+        let build = Engine::new(options)
+            .build(&request, &CancellationToken::new())
+            .map_err(|error| error.to_string())?;
+        store(State { build })
     })
 }
 #[extendr]
@@ -170,29 +159,27 @@ fn check_request(
     specification: Raw,
     environment_path: Robj,
     version: Raw,
-    resolver: Option<std::sync::Arc<dyn yamaa_adapters::host_resources::Resolver>>,
+    resolver: Option<Arc<dyn yamaa::ResourceResolver>>,
 ) -> List {
     boundary(|| {
-        let specification = text(&specification)?;
+        let specification_text = text(&specification)?.to_owned();
         let environment = environment(&environment_path)?;
-        let environment = environment.as_ref().map(text).transpose()?;
-        let version = text(&version)?;
-        {
-            let issues = yamaa_adapters::file_application::check_with_resolver(
-                yamaa_core::domain_entry::Request {
-                    specification,
-                    environment,
-                },
-                yamaa_adapters::specification_report::Identity::new(
-                    "r",
-                    version,
-                    "check",
-                    specification,
-                ),
-                resolver,
-            );
-            crate::issue_frame::frame(&issues)
+        let environment_text = environment
+            .as_ref()
+            .map(text)
+            .transpose()?
+            .map(str::to_owned);
+        let version = text(&version)?.to_owned();
+        let mut options = EngineOptions::new(HostLanguage::R, "r".into(), version);
+        if let Some(resolver) = resolver {
+            options = options.with_resolver(resolver);
         }
+        let mut request = Request::new(&specification_text);
+        if let Some(environment) = environment_text.as_deref() {
+            request = request.with_environment(environment);
+        }
+        let report = Engine::new(options).check(&request, &CancellationToken::new());
+        crate::issue_frame::frame(&report.diagnostics)
     })
 }
 #[extendr]
@@ -202,13 +189,7 @@ fn domain_issues(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        if let Some(result) = &state.result {
-            return crate::issue_frame::frame(&result.issues());
-        }
-        if let Some(producer) = &state.producer {
-            return crate::issue_frame::frame(&producer.issues());
-        }
-        crate::issue_frame::frame(&state.issues)
+        crate::issue_frame::frame(&state.build.report().diagnostics)
     })
 }
 #[extendr]
@@ -218,22 +199,10 @@ fn domain_output(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        if let Some(table) = state
-            .result
-            .as_ref()
-            .and_then(|result| result.output_table())
-        {
-            return crate::public_table::frame(table);
+        match state.build.output() {
+            Some(table) => crate::public_table::frame(table),
+            None => Ok(NULL.into_robj()),
         }
-        if let Some(table) = state
-            .producer
-            .as_ref()
-            .and_then(|result| result.output_table())
-        {
-            return crate::public_table::frame(table);
-        }
-        let _ = state;
-        Ok(NULL.into_robj())
     })
 }
 #[extendr]
@@ -244,29 +213,8 @@ fn domain_arrow(handle: Robj, destination: Robj, kind: i32) -> List {
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
         let table = match kind {
-            0 => state
-                .result
-                .as_ref()
-                .and_then(|result| result.output_table())
-                .or_else(|| {
-                    state
-                        .producer
-                        .as_ref()
-                        .and_then(|result| result.output_table())
-                }),
-            1 | 2 => {
-                let warning = kind == 2;
-                state
-                    .result
-                    .as_ref()
-                    .and_then(|result| result.log_table(warning))
-                    .or_else(|| {
-                        state
-                            .producer
-                            .as_ref()
-                            .and_then(|result| result.log_table(warning))
-                    })
-            }
+            0 => state.build.output(),
+            1 | 2 => state.build.log(kind == 2),
             _ => return Err("unknown Arrow table selection".into()),
         };
         table.map_or_else(
@@ -282,23 +230,7 @@ fn domain_observations(handle: Robj, include_measurements: bool) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        let observed: Option<String> = (|| {
-            if let Some(result) = &state.result {
-                return Some(result.observations_json());
-            }
-            if let Some(value) = state
-                .producer
-                .as_ref()
-                .and_then(|result| result.observations())
-            {
-                return Some(value);
-            }
-            None
-        })();
-        let observed = match (include_measurements, state.measurements.as_ref()) {
-            (true, Some(measurements)) => Some(measurements.envelope(observed)),
-            _ => observed,
-        };
+        let observed = state.build.observations(include_measurements);
         Ok(observed.map_or_else(
             || NULL.into_robj(),
             |value| Raw::from_bytes(value.as_bytes()).into_robj(),
@@ -312,22 +244,10 @@ fn domain_log(handle: Robj, warning: bool) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        if let Some(table) = state
-            .result
-            .as_ref()
-            .and_then(|result| result.log_table(warning))
-        {
-            return crate::public_table::frame(table);
+        match state.build.log(warning) {
+            Some(table) => crate::public_table::frame(table),
+            None => Ok(NULL.into_robj()),
         }
-        if let Some(table) = state
-            .producer
-            .as_ref()
-            .and_then(|result| result.log_table(warning))
-        {
-            return crate::public_table::frame(table);
-        }
-        let _ = (state, warning);
-        Ok(NULL.into_robj())
     })
 }
 #[extendr]
@@ -337,37 +257,12 @@ fn domain_save(handle: Robj) -> List {
         let mut state = state
             .try_borrow_mut()
             .map_err(|_| "domain result already borrowed")?;
-        let measurements = state.measurements.as_ref().map(std::sync::Arc::clone);
-        if let Some(measurements) = &measurements {
-            measurements.save_entered();
-        }
-        if let Some(result) = &mut state.result {
-            let returned = result.save();
-            if let Some(measurements) = &measurements {
-                measurements.save_completed_result(&returned);
-            }
-            return Ok(match returned {
-                Ok(saved) => list!(saved = saved, failed = false),
-                Err(_) => list!(saved = false, failed = true),
-            }
-            .into_robj());
-        }
-        if let Some(result) = &mut state.producer {
-            let returned = result.save();
-            if let Some(measurements) = &measurements {
-                measurements.save_completed_result(&returned);
-            }
-            return Ok(match returned {
-                Ok(saved) => list!(saved = saved, failed = false),
-                Err(_) => list!(saved = false, failed = true),
-            }
-            .into_robj());
-        }
-        if let Some(measurements) = &measurements {
-            measurements.save_completed("failed");
-        }
-        let _ = &mut state;
-        Ok(list!(saved = false, failed = true).into_robj())
+        let saved = match state.build.save() {
+            Ok(SaveOutcome::Saved) => (true, false),
+            Ok(_) => (false, false),
+            Err(_) => (false, true),
+        };
+        Ok(list!(saved = saved.0, failed = saved.1).into_robj())
     })
 }
 #[extendr]
@@ -377,19 +272,16 @@ fn domain_interrupt(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        if let Some(attempt) = &state.project {
-            let interrupted = crate::project_activation::first_interrupt(|visit| {
-                yamaa_adapters::project_attempt::visit_host_failures(&attempt.inner, |_, error| {
-                    visit(error);
-                });
-            });
-            return Ok(interrupted.unwrap_or_else(|| r!(NULL)));
-        }
-        if let Some(producer) = &state.producer {
-            return producer.interrupt();
-        }
-        let _ = state;
-        Ok(r!(NULL))
+        let interrupted = state.build.interrupt().and_then(|error| match error {
+            yamaa::FunctionError::Interrupted { payload } => payload
+                .as_ref()?
+                .with::<crate::thread_bound::ThreadBound<Robj>, _>(|condition| {
+                    condition.get().cloned().ok()
+                })
+                .flatten(),
+            _ => None,
+        });
+        Ok(interrupted.unwrap_or_else(|| r!(NULL)))
     })
 }
 /// Private installed evidence consults the exact held public-domain owner.
@@ -400,11 +292,38 @@ fn domain_producer_evidence(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        if let Some(producer) = &state.producer {
-            return producer.evidence();
-        }
-        let _ = state;
-        Ok(r!(NULL))
+        let build = &state.build;
+        let Some(nodes) = build.producer_nodes() else {
+            return Ok(r!(NULL));
+        };
+        let failures = build
+            .producer_failures()
+            .into_iter()
+            .flatten()
+            .map(|failure| {
+                list!(
+                    stage = failure.stage,
+                    facts = crate::project_activation::facts(&failure.error)
+                )
+            })
+            .collect::<Vec<_>>();
+        Ok(list!(
+            accepted = build.producer_accepted().unwrap_or(false),
+            entered = List::from_values(nodes.iter().map(|node| r!(*node as f64))),
+            failures = List::from_values(failures),
+            sources = List::from_values(
+                build
+                    .producer_sources()
+                    .into_iter()
+                    .flatten()
+                    .map(|(name, bytes)| list!(
+                        name = Raw::from_bytes(name.as_bytes()),
+                        bytes = Raw::from_bytes(bytes)
+                    ))
+                    .collect::<Vec<_>>()
+            )
+        )
+        .into_robj())
     })
 }
 #[extendr]
@@ -414,18 +333,19 @@ fn domain_preparation_sources(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        if let Some(error) = &state._preparation {
-            let sources = error.retained_sources();
-            return Ok(List::from_values(sources.iter().map(|(name, bytes)| {
-                list!(
-                    name = Raw::from_bytes(name.as_bytes()),
-                    bytes = Raw::from_bytes(bytes)
-                )
-            }))
-            .into_robj());
-        }
-        let _ = state;
-        Ok(List::new(0).into_robj())
+        Ok(List::from_values(
+            state
+                .build
+                .preparation_sources()
+                .iter()
+                .map(|(name, bytes)| {
+                    list!(
+                        name = Raw::from_bytes(name.as_bytes()),
+                        bytes = Raw::from_bytes(bytes)
+                    )
+                }),
+        )
+        .into_robj())
     })
 }
 
@@ -436,15 +356,10 @@ fn domain_projection_failure(handle: Robj) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        if let Some(value) = state
-            .producer
-            .as_ref()
-            .and_then(|producer| producer.projection_failure())
-        {
-            return Ok(r!(value));
+        match state.build.projection_failure() {
+            Some(value) => Ok(r!(value)),
+            None => Ok(r!(NULL)),
         }
-        let _ = state;
-        Ok(r!(NULL))
     })
 }
 extendr_module! {
