@@ -77,12 +77,14 @@ check_submission <- function(directory, profile, empty) {
             identical(vapply(data$columns, `[[`, character(1), "name"), columns),
             identical(vapply(data$columns, `[[`, character(1), "dataType"),
                       c("string", "string", "integer", "float", "date", "datetime", "string")),
-            length(data$rows) == if (empty) 0L else 4L)
+            length(data$rows) == if (empty) 0L else 4L,
+            all(vapply(data$rows, length, integer(1)) == length(columns)))
   for (i in seq_along(columns)) {
     kind <- kinds[[i]]; name <- columns[[i]]
     values <- lapply(data$rows, `[[`, i)
     expected <- if (empty) character() else strings(truth$values[[name]])
     if (kind == "float") {
+      stopifnot(all(vapply(values, function(value) is.null(value) || is.numeric(value), logical(1))))
       actual <- float_hex(vapply(values, function(value) if (is.null(value)) NA_real_ else
         as.double(value), double(1)))
       if (!empty) {
