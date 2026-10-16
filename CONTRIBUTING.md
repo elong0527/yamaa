@@ -103,6 +103,30 @@ The ordinary CI workflow runs the same check targets listed above for each PR.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
+`.github/workflows/dependency-graphs.yml` also resolves minimum and newest
+compatible graphs on each PR, main push, weekly schedule and dispatch. Run a
+lane locally with R and the normal development prerequisites installed:
+
+```sh
+uv run --project python --no-sync python -m tools.ci.dependency_graphs \
+  --graph minimum --python 3.12 --destination /tmp/yamaa-minimum
+```
+
+Use `--graph newest` for the upper lane. The destination must be new and outside
+the checkout. The minimum lane pins each workspace registry dependency to its
+declared lower bound and each Python runtime/test dependency to its floor.
+Reviewed local patches and exact policy pins remain in force. Transitive Cargo
+dependencies use the newest Rust-1.90-compatible selection, rather than claiming
+support for every historical transitive release. The newest lane starts without
+a Cargo lock and resolves all declared ranges with Cargo's MSRV fallback policy;
+both lanes reject metadata declaring a higher MSRV. Python resolves independently
+for each interpreter. Each lane builds its own extension and runs workspace Rust,
+Python package/installed-host and strict R source-package checks. CI retains the
+resolved Cargo lock, Python requirements and Cargo metadata for reproduction.
+Neither lane updates the source checkout's locks. Release builds and source
+archives continue to use the canonical unchanged locks; these compatibility
+lanes supplement [native qualification](rust/qualification/README.md).
+
 Before every merge, run a fresh read-only review check with an authenticated
 GitHub CLI, supplying the exact final commit:
 
