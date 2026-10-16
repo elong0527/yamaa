@@ -6,8 +6,9 @@ pub(crate) mod platform {
     use std::{cell::RefCell, rc::Rc};
     use yamaa_adapters::{
         callback::{details, CallbackError},
+        file_application::BuildRefusal,
         file_producer_build::FileBuild,
-        producer_report::ProjectionError,
+        producer_result::RootResult,
         project_report::Classified,
     };
     type NativeAttempt = yamaa_adapters::file_producer_build::OwnedAttempt<HostError>;
@@ -18,12 +19,10 @@ pub(crate) mod platform {
     pub(crate) struct PublicResult {
         attempt: Rc<Attempt>,
         observations: Option<String>,
-        refusal: &'static str,
-        refusal_details: Option<yamaa_adapters::resource_diagnostics::Refusal>,
-        domain: Option<Box<yamaa_adapters::producer_result::RootResult>>,
+        domain: Result<Box<RootResult>, BuildRefusal>,
         output_error: Option<yamaa_adapters::ipc_table::TableError>,
     }
-    fn build_selected_attempt_with_observer(
+    fn build_selected_attempt(
         prepared: &mut FileBuild,
         fields: Vec<String>,
         verify: Function,
@@ -50,7 +49,7 @@ pub(crate) mod platform {
         })
     }
 
-    pub(crate) fn build_selected_with_observer(
+    pub(crate) fn build_selected(
         prepared: &mut FileBuild,
         fields: Vec<String>,
         verify: Function,
@@ -58,8 +57,7 @@ pub(crate) mod platform {
         formatter: Function,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<PublicResult, String> {
-        let attempt =
-            build_selected_attempt_with_observer(prepared, fields, verify, resolve_host, scope);
+        let attempt = build_selected_attempt(prepared, fields, verify, resolve_host, scope);
         scope.phase(yamaa_core::application_observer::Phase::Output);
         let converted = format_attempt(attempt, &formatter);
         scope.exit(
@@ -76,7 +74,7 @@ pub(crate) mod platform {
         pub(crate) fn accepted(&self) -> bool {
             self.domain
                 .as_ref()
-                .is_some_and(|result| result.output().is_some())
+                .is_ok_and(|result| result.output().is_some())
         }
         pub(crate) fn save(
             &mut self,
@@ -84,7 +82,7 @@ pub(crate) mod platform {
             let result = self
                 .domain
                 .as_mut()
-                .ok_or(yamaa_adapters::file_application::FailedBuild)?;
+                .map_err(|_| yamaa_adapters::file_application::FailedBuild)?;
             let _owner = self
                 .attempt
                 .inner
@@ -95,6 +93,7 @@ pub(crate) mod platform {
         pub(crate) fn output_table(&self) -> Option<&yamaa_adapters::public_table::PublicTable> {
             self.domain
                 .as_ref()
+                .ok()
                 .and_then(|result| result.output_table())
         }
         pub(crate) fn log_table(
@@ -103,24 +102,20 @@ pub(crate) mod platform {
         ) -> Option<&yamaa_adapters::public_table::PublicTable> {
             self.domain
                 .as_ref()
+                .ok()
                 .and_then(|result| result.log_table(warning))
         }
         pub(crate) fn issues(&self) -> Vec<yamaa_adapters::issue_rows::Issue> {
-            self.domain.as_ref().map_or_else(
-                || {
-                    self.refusal_details.as_ref().map_or_else(
-                        || yamaa_adapters::file_application::rejected("build", self.refusal),
-                        |details| details.issues("build", self.refusal),
-                    )
-                },
-                |result| result.issues().to_vec(),
-            )
+            match &self.domain {
+                Ok(result) => result.issues().to_vec(),
+                Err(refusal) => refusal.issues(),
+            }
         }
         pub(crate) fn observations(&self) -> Option<String> {
-            self.domain
-                .as_ref()
-                .map(|result| result.observations_json())
-                .or_else(|| self.observations.clone())
+            match &self.domain {
+                Ok(result) => Some(result.observations_json()),
+                Err(_) => self.observations.clone(),
+            }
         }
         pub(crate) fn projection_failure(&self) -> Option<String> {
             self.output_error.map(|error| error.to_string())
@@ -155,80 +150,28 @@ pub(crate) mod platform {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let mut refusal = "";
-        let mut refusal_details = None;
-        let mut formatted = None;
-        let mut domain = None;
-        let mut output_error = None;
-        {
-            let facts = failures
-                .iter()
-                .zip(&projections)
-                .filter_map(|(&failure, projection)| match failure {
-                    HostError::Lock(findings) => Some(Classified::Lock { failure, findings }),
-                    _ => projection
-                        .as_ref()
-                        .and_then(details)
-                        .map(|details| Classified::Host { failure, details }),
-                })
-                .collect::<Vec<_>>();
-            let projected = match yamaa_adapters::producer_result::prepare_owned_classified(
-                &observations,
-                crate::report_fields::identity(&attempt.fields),
-                &facts,
-            ) {
-                Ok(value) => {
-                    domain = Some(Box::new(value));
-                    Ok(())
-                }
-                Err(yamaa_adapters::producer_result::Error::Report(error)) => Err(error),
-                Err(yamaa_adapters::producer_result::Error::Output {
-                    observations: value,
-                    error,
-                    ..
-                }) => {
-                    formatted = Some(value.to_string());
-                    if let yamaa_adapters::ipc_table::TableError::Limit {
-                        resource,
-                        limit,
-                        required,
-                    } = error
-                    {
-                        refusal_details = Some(yamaa_adapters::resource_diagnostics::Refusal::new(
-                            resource,
-                            limit,
-                            required,
-                            vec!["output.path".into()],
-                        ));
-                    }
-                    output_error = Some(error);
-                    refusal = "output_projection";
-                    Ok(())
-                }
-            };
-            match projected {
-                Ok(()) => {}
-                Err(ProjectionError::Original { observations, .. }) => {
-                    formatted = Some(observations.to_string());
-                    refusal = "original_boundary";
-                }
-                Err(ProjectionError::Report(
-                    yamaa_adapters::specification_report::Error::ResourceLimit(details),
-                )) => {
-                    refusal = "output_limit";
-                    refusal_details = Some(details);
-                }
-                Err(_) => refusal = "report_refusal",
-            }
-        }
+        let facts = failures
+            .iter()
+            .zip(&projections)
+            .filter_map(|(&failure, projection)| match failure {
+                HostError::Lock(findings) => Some(Classified::Lock { failure, findings }),
+                _ => projection
+                    .as_ref()
+                    .and_then(details)
+                    .map(|details| Classified::Host { failure, details }),
+            })
+            .collect::<Vec<_>>();
+        let projection = yamaa_adapters::producer_result::project_owned(
+            &observations,
+            crate::report_fields::identity(&attempt.fields),
+            &facts,
+        );
         drop(observations);
         Ok(PublicResult {
             attempt,
-            observations: formatted,
-            refusal,
-            refusal_details,
-            domain,
-            output_error,
+            observations: projection.observations,
+            domain: projection.result.map(Box::new),
+            output_error: projection.output_error,
         })
     }
     fn held_evidence(attempt: &Attempt) -> Result<Robj, String> {

@@ -9,6 +9,7 @@ use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
+use yamaa_core::application_observer::Scope;
 use yamaa_core::domain_entry::{self, Request};
 use yamaa_core::json::Value;
 
@@ -40,6 +41,22 @@ pub(crate) fn resource_rejected(
         ))
         .expect("application resource issue"),
     ]
+}
+/// A build that produced no public result: its closed refusal code and, for a
+/// classified resource limit, the limit facts. Both hosts convert this value;
+/// neither chooses the code.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BuildRefusal {
+    pub code: &'static str,
+    pub limit: Option<crate::resource_diagnostics::Refusal>,
+}
+impl BuildRefusal {
+    pub fn issues(&self) -> Failure {
+        self.limit.as_ref().map_or_else(
+            || rejected("build", self.code),
+            |limit| limit.issues("build", self.code),
+        )
+    }
 }
 fn report_failure(stage: &str, code: &str, error: &specification_report::Error) -> Failure {
     match error {
@@ -535,36 +552,21 @@ struct Native<'a> {
 pub trait RuntimePort {
     type Result;
     type Error;
-    fn plain(&mut self, prepared: FileSpecification) -> Result<Self::Result, Self::Error>;
+    fn plain(
+        &mut self,
+        prepared: FileSpecification,
+        scope: Scope<'_>,
+    ) -> Result<Self::Result, Self::Error>;
     fn project(
         &mut self,
         prepared: Box<crate::file_project::FileProject>,
+        scope: Scope<'_>,
     ) -> Result<Self::Result, Self::Error>;
     fn producer(
         &mut self,
         prepared: Box<crate::file_graph::FileGraph>,
+        scope: Scope<'_>,
     ) -> Result<Self::Result, Self::Error>;
-    fn plain_with_observer(
-        &mut self,
-        prepared: FileSpecification,
-        _scope: yamaa_core::application_observer::Scope<'_>,
-    ) -> Result<Self::Result, Self::Error> {
-        self.plain(prepared)
-    }
-    fn project_with_observer(
-        &mut self,
-        prepared: Box<crate::file_project::FileProject>,
-        _scope: yamaa_core::application_observer::Scope<'_>,
-    ) -> Result<Self::Result, Self::Error> {
-        self.project(prepared)
-    }
-    fn producer_with_observer(
-        &mut self,
-        prepared: Box<crate::file_graph::FileGraph>,
-        _scope: yamaa_core::application_observer::Scope<'_>,
-    ) -> Result<Self::Result, Self::Error> {
-        self.producer(prepared)
-    }
 }
 pub enum ApplicationError<E> {
     Preparation(crate::file_workflow::SelectionError),
@@ -600,64 +602,43 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
         Ok(crate::producer_check::prepared(&prepared)
             .unwrap_or_else(|_| rejected("check", "issue_projection")))
     }
-    fn build_plain(&mut self, prepared: FileSpecification) -> Result<R::Result, Self::Failure> {
-        self.runtime
-            .plain(prepared)
-            .map_err(ApplicationError::Runtime)
-    }
-    fn build_project(&mut self, prepared: Self::Project) -> Result<R::Result, Self::Failure> {
-        self.runtime
-            .project(prepared)
-            .map_err(ApplicationError::Runtime)
-    }
-    fn build_producer(&mut self, prepared: Self::Producer) -> Result<R::Result, Self::Failure> {
-        self.runtime
-            .producer(prepared)
-            .map_err(ApplicationError::Runtime)
-    }
-    fn build_plain_with_observer(
+    fn build_plain(
         &mut self,
         prepared: FileSpecification,
-        scope: yamaa_core::application_observer::Scope<'_>,
+        scope: Scope<'_>,
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
-            .plain_with_observer(prepared, scope)
+            .plain(prepared, scope)
             .map_err(ApplicationError::Runtime)
     }
-    fn build_project_with_observer(
+    fn build_project(
         &mut self,
         prepared: Self::Project,
-        scope: yamaa_core::application_observer::Scope<'_>,
+        scope: Scope<'_>,
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
-            .project_with_observer(prepared, scope)
+            .project(prepared, scope)
             .map_err(ApplicationError::Runtime)
     }
-    fn build_producer_with_observer(
+    fn build_producer(
         &mut self,
         prepared: Self::Producer,
-        scope: yamaa_core::application_observer::Scope<'_>,
+        scope: Scope<'_>,
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
-            .producer_with_observer(prepared, scope)
+            .producer(prepared, scope)
             .map_err(ApplicationError::Runtime)
     }
 }
 impl RuntimePort for Native<'_> {
     type Result = Domain;
     type Error = Failure;
-    fn plain(&mut self, prepared: FileSpecification) -> Result<Domain, Failure> {
-        self.plain_with_observer(
-            prepared,
-            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
-        )
-    }
-    fn plain_with_observer(
+    fn plain(
         &mut self,
         mut prepared: FileSpecification,
-        scope: yamaa_core::application_observer::Scope<'_>,
+        scope: Scope<'_>,
     ) -> Result<Domain, Failure> {
-        let attempt = prepared.build_with_observer(scope);
+        let attempt = prepared.build(scope);
         if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
             return Err(resource_failure("capture", error));
         }
@@ -694,24 +675,29 @@ impl RuntimePort for Native<'_> {
         );
         converted
     }
-    fn project(&mut self, _: Box<crate::file_project::FileProject>) -> Result<Domain, Failure> {
+    fn project(
+        &mut self,
+        _: Box<crate::file_project::FileProject>,
+        _: Scope<'_>,
+    ) -> Result<Domain, Failure> {
         Err(unsupported("environment", Some("environment")))
     }
-    fn producer(&mut self, _: Box<crate::file_graph::FileGraph>) -> Result<Domain, Failure> {
+    fn producer(
+        &mut self,
+        _: Box<crate::file_graph::FileGraph>,
+        _: Scope<'_>,
+    ) -> Result<Domain, Failure> {
         Err(unsupported("producer_host", None))
     }
 }
 
 /// Convert an already checked plain capability without recapturing metadata.
-pub fn plain(prepared: FileSpecification, identity: Identity<'_>) -> Result<Domain, Failure> {
-    Native { identity }.plain(prepared)
-}
-pub fn plain_with_observer(
+pub fn plain(
     prepared: FileSpecification,
     identity: Identity<'_>,
-    scope: yamaa_core::application_observer::Scope<'_>,
+    scope: Scope<'_>,
 ) -> Result<Domain, Failure> {
-    Native { identity }.plain_with_observer(prepared, scope)
+    Native { identity }.plain(prepared, scope)
 }
 fn native(identity: Identity<'_>) -> Application<Native<'_>> {
     Application {
@@ -736,7 +722,7 @@ pub fn check(request: Request<'_>, identity: Identity<'_>) -> Failure {
 }
 pub fn domain(request: Request<'_>, identity: Identity<'_>) -> Result<Domain, Failure> {
     let mut application = native(identity);
-    domain_entry::domain(request, &mut application)
+    domain_entry::domain(request, &mut application, Scope::default())
         .map_err(|error| match error {
             ApplicationError::Preparation(error) => {
                 crate::project_application::selection_failure(&error, application.host)
@@ -783,7 +769,7 @@ mod tests {
         let document =
             crate::file_preparation::prepare_document(&mut resources, &entry, None).unwrap();
         let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
-        let attempt = prepared.execute_with_port(&mut resources);
+        let attempt = prepared.execute_with_port(&mut resources, Scope::default());
         let result = specification_report::build_result(
             &prepared,
             &attempt,
@@ -884,12 +870,9 @@ mod tests {
         let ordinary = domain(request(), identity()).unwrap();
         let result = if let Some(measurements) = measurements {
             let mut application = native(identity());
-            let observed = domain_entry::domain_with_observer(
-                request(),
-                &mut application,
-                yamaa_core::application_observer::Scope::new(measurements),
-            )
-            .unwrap_or_else(|_| panic!("observed fixture failed"));
+            let observed =
+                domain_entry::domain(request(), &mut application, Scope::new(measurements))
+                    .unwrap_or_else(|_| panic!("observed fixture failed"));
             measurements.complete(observed.output().is_some());
             assert_eq!(observed.observations_json(), ordinary.observations_json());
             assert_eq!(observed.output(), ordinary.output());
@@ -1230,7 +1213,7 @@ mod tests {
                 crate::file_preparation::prepare_document(&mut resources, &entry, Some(schema))
                     .unwrap();
             let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
-            let attempt = prepared.execute_with_port(&mut resources);
+            let attempt = prepared.execute_with_port(&mut resources, Scope::default());
             assert!(attempt.result.as_ref().unwrap().execution.is_some());
             let result = specification_report::build_result(
                 &prepared,

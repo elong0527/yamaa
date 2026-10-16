@@ -6,7 +6,7 @@ use yamaa_adapters::{
     file_application::{self, RuntimePort},
     specification_report::Identity,
 };
-use yamaa_core::application_observer::{Noop, Outcome, Phase, Scope};
+use yamaa_core::application_observer::{Outcome, Phase, Scope};
 pub(crate) struct Runtime<'request> {
     specification: &'request str,
     version: &'request str,
@@ -95,32 +95,16 @@ impl RuntimePort for Runtime<'_> {
     fn plain(
         &mut self,
         prepared: yamaa_adapters::file_preparation::FileSpecification,
-    ) -> std::result::Result<State, String> {
-        self.plain_with_observer(prepared, Scope::new(&Noop))
-    }
-    fn plain_with_observer(
-        &mut self,
-        prepared: yamaa_adapters::file_preparation::FileSpecification,
         scope: Scope<'_>,
     ) -> std::result::Result<State, String> {
-        Ok(self.plain_result(file_application::plain_with_observer(
-            prepared,
-            self.identity(),
-            scope,
-        )))
+        Ok(self.plain_result(file_application::plain(prepared, self.identity(), scope)))
     }
     fn project(
-        &mut self,
-        project: Box<yamaa_adapters::file_project::FileProject>,
-    ) -> std::result::Result<State, String> {
-        self.project_with_observer(project, Scope::new(&Noop))
-    }
-    fn project_with_observer(
         &mut self,
         mut project: Box<yamaa_adapters::file_project::FileProject>,
         scope: Scope<'_>,
     ) -> std::result::Result<State, String> {
-        let inner = project.build_with_observer(
+        let inner = project.build_with(
             |run| {
                 crate::project_activation::Port::new(
                     run.captured_environment()
@@ -144,12 +128,9 @@ impl RuntimePort for Runtime<'_> {
                 &fields,
                 &self.formatter,
             );
-            let result = match formatted.formatted {
-                Some(result) => file_application::Domain::from_project(result, &project),
-                None => Err(formatted.refusal_details.as_ref().map_or_else(
-                    || file_application::rejected("build", formatted.refusal),
-                    |details| details.issues("build", formatted.refusal),
-                )),
+            let result = match formatted {
+                Ok(result) => file_application::Domain::from_project(result, &project),
+                Err(refusal) => Err(refusal.issues()),
             };
             let outcome = if result.is_ok() {
                 Outcome::Succeeded
@@ -166,17 +147,11 @@ impl RuntimePort for Runtime<'_> {
     fn producer(
         &mut self,
         graph: Box<yamaa_adapters::file_graph::FileGraph>,
-    ) -> std::result::Result<State, String> {
-        self.producer_with_observer(graph, Scope::new(&Noop))
-    }
-    fn producer_with_observer(
-        &mut self,
-        graph: Box<yamaa_adapters::file_graph::FileGraph>,
         scope: Scope<'_>,
     ) -> std::result::Result<State, String> {
         let mut build = graph.into_build();
         let fields = self.fields();
-        let producer = crate::file_producer::platform::build_selected_with_observer(
+        let producer = crate::file_producer::platform::build_selected(
             &mut build,
             fields.map(str::to_owned).to_vec(),
             self.verify.clone(),

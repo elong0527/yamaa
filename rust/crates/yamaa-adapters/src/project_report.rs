@@ -50,6 +50,22 @@ impl<C, E> From<report::Error> for Error<'_, C, E> {
         Self::Report(error)
     }
 }
+impl<C, E> Error<'_, C, E> {
+    /// The public refusal for a project result this attempt could not build.
+    pub fn refusal(&self) -> crate::file_application::BuildRefusal {
+        let (code, limit) = match self {
+            Self::Opaque(_) => ("opaque_host", None),
+            Self::Boundary(_) => ("activation_boundary", None),
+            Self::Source(_) => ("source_boundary", None),
+            Self::Execution(_) => ("execution_boundary", None),
+            Self::Report(report::Error::ResourceLimit(limit)) => {
+                ("output_limit", Some(limit.clone()))
+            }
+            Self::Report(_) => ("report_refusal", None),
+        };
+        crate::file_application::BuildRefusal { code, limit }
+    }
+}
 fn invalid<'a, C, E>() -> Error<'a, C, E> {
     Error::Report(report::Error::InvalidObservation)
 }

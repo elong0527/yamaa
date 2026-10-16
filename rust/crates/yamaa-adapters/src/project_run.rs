@@ -119,17 +119,6 @@ impl PreparedRun {
         &self,
         activation: &mut A,
         source: &mut P,
-    ) -> Attempt<P::Error, A::Error> {
-        self.execute_with_observer(
-            activation,
-            source,
-            yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop),
-        )
-    }
-    pub fn execute_with_observer<A: ActivationPort, P: SourcePort>(
-        &self,
-        activation: &mut A,
-        source: &mut P,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Attempt<P::Error, A::Error> {
         let mut attempt = Attempt {

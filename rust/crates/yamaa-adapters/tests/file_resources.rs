@@ -95,7 +95,7 @@ mod file {
                         "shared/base.yaml"
                     })
                 );
-                assert!(prepared.build().result.is_ok());
+                assert!(prepared.build(Scope::default()).result.is_ok());
             }
         }
 
@@ -109,6 +109,7 @@ mod file {
             file_preparation::FileSpecification,
             file_resources::{Error, Resources},
         };
+        use yamaa_core::application_observer::Scope;
 
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         struct Study(PathBuf);
@@ -422,7 +423,7 @@ mod file {
                 "../outputs/out.csv"
             );
             assert_eq!(prepared.capture_reads(), 2);
-            assert!(prepared.build().result.is_ok());
+            assert!(prepared.build(Scope::default()).result.is_ok());
             assert_eq!(prepared.capture_reads(), 3);
             assert!(!study.0.join("outputs/out.csv").exists());
         }
