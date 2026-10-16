@@ -488,10 +488,10 @@ fn collect_sources(
         for (name, decl) in input {
             let slot = out.entry(name.clone()).or_default();
             match decl {
-                Json::String(path) => slot.path = path.clone(),
+                Json::String(path) => slot.path = normalize(spec, path),
                 Json::Object(map) => {
                     if let Some(path) = map.get("path").and_then(Json::as_str) {
-                        slot.path = path.to_string();
+                        slot.path = normalize(spec, path);
                     }
                     if let Some(Json::Object(declared)) = map.get("types") {
                         for (field, kind) in declared {
