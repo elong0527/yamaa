@@ -1,0 +1,230 @@
+schema_version: "1.0"
+domain: ADEG
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+input:
+  ADEG_RAW:
+    path: input/adeg_raw.csv
+    types: {AVAL: float, BASE: float, CHG: float}
+
+output:
+  path: adeg.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, ABLFL, ONTRTFL,
+            BASE, CHG, CRIT1, CRIT1FL, CRIT2, CRIT2FL, CRIT3, CRIT3FL, CRIT4,
+            CRIT4FL, CRIT5, CRIT5FL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADEG_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADEG_RAW.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: ADEG_RAW.PARAMCD
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation: ADEG_RAW.PARAM
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: ADEG_RAW.AVISIT
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: ADEG_RAW.AVAL
+
+  - name: ABLFL
+    type: str
+    label: Baseline Record Flag
+    derivation: ADEG_RAW.ABLFL
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: ONTRTFL
+    type: str
+    label: On Treatment Record Flag
+    derivation: ADEG_RAW.ONTRTFL
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: BASE
+    type: float
+    label: Baseline Value
+    derivation: ADEG_RAW.BASE
+
+  - name: CHG
+    type: float
+    label: Change from Baseline
+    derivation: ADEG_RAW.CHG
+
+  # Only on-treatment QTcF records are assessed: the baseline record, records
+  # after the on-treatment window and other parameters carry no criterion. An
+  # absolute criterion also needs the record's own value. Each text is set
+  # exactly where its flag is set.
+  - name: CRIT1
+    type: str
+    label: Analysis Criterion 1
+    derivation:
+      case:
+        - when: "PARAMCD = 'QTCF' AND ONTRTFL = 'Y' AND AVAL IS NOT NULL"
+          then: {literal: "QTcF > 450 ms"}
+
+  # Strictly greater than the limit, compared unrounded: exactly 450 is N.
+  - name: CRIT1FL
+    type: str
+    label: Criterion 1 Evaluation Result Flag
+    derivation:
+      case:
+        - when: "CRIT1 IS NULL"
+          then: {literal: null}
+        - when: "AVAL > 450"
+          then: {literal: "Y"}
+        - otherwise: {literal: "N"}
+    verifications:
+      allowed_values:
+        values: [Y, N]
+
+  - name: CRIT2
+    type: str
+    label: Analysis Criterion 2
+    derivation:
+      case:
+        - when: "PARAMCD = 'QTCF' AND ONTRTFL = 'Y' AND AVAL IS NOT NULL"
+          then: {literal: "QTcF > 480 ms"}
+
+  - name: CRIT2FL
+    type: str
+    label: Criterion 2 Evaluation Result Flag
+    derivation:
+      case:
+        - when: "CRIT2 IS NULL"
+          then: {literal: null}
+        - when: "AVAL > 480"
+          then: {literal: "Y"}
+        - otherwise: {literal: "N"}
+    verifications:
+      allowed_values:
+        values: [Y, N]
+
+  - name: CRIT3
+    type: str
+    label: Analysis Criterion 3
+    derivation:
+      case:
+        - when: "PARAMCD = 'QTCF' AND ONTRTFL = 'Y' AND AVAL IS NOT NULL"
+          then: {literal: "QTcF > 500 ms"}
+
+  - name: CRIT3FL
+    type: str
+    label: Criterion 3 Evaluation Result Flag
+    derivation:
+      case:
+        - when: "CRIT3 IS NULL"
+          then: {literal: null}
+        - when: "AVAL > 500"
+          then: {literal: "Y"}
+        - otherwise: {literal: "N"}
+    verifications:
+      allowed_values:
+        values: [Y, N]
+
+  # A change criterion needs a change from baseline, so a record without a
+  # baseline value is not assessed against it even when its own value is.
+  - name: CRIT4
+    type: str
+    label: Analysis Criterion 4
+    derivation:
+      case:
+        - when: "PARAMCD = 'QTCF' AND ONTRTFL = 'Y' AND CHG IS NOT NULL"
+          then: {literal: "QTcF increase from baseline > 30 ms"}
+
+  # An increase strictly greater than the limit; a decrease is never met.
+  - name: CRIT4FL
+    type: str
+    label: Criterion 4 Evaluation Result Flag
+    derivation:
+      case:
+        - when: "CRIT4 IS NULL"
+          then: {literal: null}
+        - when: "CHG > 30"
+          then: {literal: "Y"}
+        - otherwise: {literal: "N"}
+    verifications:
+      allowed_values:
+        values: [Y, N]
+
+  - name: CRIT5
+    type: str
+    label: Analysis Criterion 5
+    derivation:
+      case:
+        - when: "PARAMCD = 'QTCF' AND ONTRTFL = 'Y' AND CHG IS NOT NULL"
+          then: {literal: "QTcF increase from baseline > 60 ms"}
+
+  - name: CRIT5FL
+    type: str
+    label: Criterion 5 Evaluation Result Flag
+    derivation:
+      case:
+        - when: "CRIT5 IS NULL"
+          then: {literal: null}
+        - when: "CHG > 60"
+          then: {literal: "Y"}
+        - otherwise: {literal: "N"}
+    verifications:
+      allowed_values:
+        values: [Y, N]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
+  - row_count:
+      min: 16
+      max: 16
+  - assert:
+      id: a-baseline-record-is-not-on-treatment
+      when: "ABLFL = 'Y'"
+      require: "ONTRTFL IS NULL"
+  - assert:
+      id: no-change-without-a-baseline-value
+      when: "BASE IS NULL"
+      require: "CHG IS NULL"
+  - all_or_none:
+      id: criterion-1-text-accompanies-its-flag
+      columns: [CRIT1, CRIT1FL]
+  - all_or_none:
+      id: criterion-2-text-accompanies-its-flag
+      columns: [CRIT2, CRIT2FL]
+  - all_or_none:
+      id: criterion-3-text-accompanies-its-flag
+      columns: [CRIT3, CRIT3FL]
+  - all_or_none:
+      id: criterion-4-text-accompanies-its-flag
+      columns: [CRIT4, CRIT4FL]
+  - all_or_none:
+      id: criterion-5-text-accompanies-its-flag
+      columns: [CRIT5, CRIT5FL]
+  - assert:
+      id: above-480-is-also-above-450
+      when: "CRIT2FL = 'Y'"
+      require: "CRIT1FL = 'Y'"
+  - assert:
+      id: above-500-is-also-above-480
+      when: "CRIT3FL = 'Y'"
+      require: "CRIT2FL = 'Y'"
+  - assert:
+      id: an-increase-above-60-is-also-above-30
+      when: "CRIT5FL = 'Y'"
+      require: "CRIT4FL = 'Y'"
