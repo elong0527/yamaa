@@ -211,11 +211,11 @@ class MemoryResolver(ResourceResolver):
                 raise ResourceFailure("rejected")
             self._next += 1
             token = f"stage:{self._next}:{request.reference}"
-            # Interruption-safe handoff: if staging succeeds but token delivery
-            # fails (e.g. KeyboardInterrupt during result construction), roll
-            # back this attempt so a tokenless failure strands nothing.
-            self.staging[token] = (request.reference, request.data)
+            # Interruption-safe handoff: stage and deliver the token inside
+            # the guarded block so an interruption during insertion or token
+            # delivery rolls this attempt back instead of stranding it.
             try:
+                self.staging[token] = (request.reference, request.data)
                 return ResourceResult(token)
             except BaseException:
                 self.staging.pop(token, None)

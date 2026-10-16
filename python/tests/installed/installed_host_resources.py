@@ -206,15 +206,31 @@ class HostResources(unittest.TestCase):
 
         backend = MemoryResolver()
         first = backend._request(
-            ResourceRequest("stage", "output", "/spec.yaml", "out.csv", "memory:/out.csv", b"ID\n7\n")
+            ResourceRequest(
+                "stage",
+                "output",
+                "/spec.yaml",
+                "out.csv",
+                "memory:/out.csv",
+                b"ID\n7\n",
+            )
         )
         second = backend._request(
-            ResourceRequest("stage", "output", "/spec.yaml", "out.csv", "memory:/out.csv", b"ID\n8\n")
+            ResourceRequest(
+                "stage",
+                "output",
+                "/spec.yaml",
+                "out.csv",
+                "memory:/out.csv",
+                b"ID\n8\n",
+            )
         )
         self.assertEqual(len(backend.staging), 2)
         # Abort by the target identity must not delete either attempt.
         backend._request(
-            ResourceRequest("abort", "output", "/spec.yaml", "out.csv", "memory:/out.csv")
+            ResourceRequest(
+                "abort", "output", "/spec.yaml", "out.csv", "memory:/out.csv"
+            )
         )
         self.assertEqual(len(backend.staging), 2)
         backend._request(
