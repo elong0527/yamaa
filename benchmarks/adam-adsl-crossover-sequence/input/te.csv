@@ -1,0 +1,6 @@
+STUDYID,ETCD,ELEMENT,TESTRL,TEDUR
+YAMAA-01,FU,Follow-up,Day after the last dose of the second period,P14D
+YAMAA-01,PBO,Placebo,First dose of Placebo,P14D
+YAMAA-01,SCRN,Screening,Informed consent,P14D
+YAMAA-01,VITD,Vitamin D3,First dose of Vitamin D3,P14D
+YAMAA-01,WASH,Washout,Day after the last dose of the first period,P7D
