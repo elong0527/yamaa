@@ -3,26 +3,44 @@
 //! Fixed source and table boundaries are logical admission checks, not process
 //! memory guarantees. This codec performs no filesystem
 //! access, resource lookup, host callbacks, semantic fallback, or publication.
+#[cfg(feature = "parquet")]
 mod compact;
+#[cfg(feature = "parquet")]
 mod compression;
+#[cfg(feature = "parquet")]
 mod delta;
+#[cfg(feature = "parquet")]
 mod framing;
+#[cfg(feature = "parquet")]
 mod metadata;
+#[cfg(feature = "parquet")]
 mod payload;
+#[cfg(feature = "parquet")]
 mod physical;
+#[cfg(feature = "parquet")]
 mod profile;
+#[cfg(feature = "parquet")]
 mod reader;
+#[cfg(feature = "parquet")]
 mod rle;
+#[cfg(feature = "parquet")]
 mod schema;
+#[cfg(feature = "parquet")]
 mod shape;
+#[cfg(feature = "parquet")]
 mod table;
+#[cfg(feature = "parquet")]
 mod type_name;
 
-use crate::arrow_table::{ArrowTable, TableError, UTF8_OFFSETS};
+#[cfg(feature = "parquet")]
+use crate::arrow_table::UTF8_OFFSETS;
+use crate::arrow_table::{ArrowTable, TableError};
 
 /// Typed adapter failures; the consuming frontend supplies diagnostic location.
 #[derive(Debug)]
 pub enum Error {
+    /// This build omits the optional Parquet reader and writer.
+    ReaderUnavailable,
     OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
     Malformed,
     Representation {
@@ -72,7 +90,8 @@ impl Error {
                 row: *row,
                 value: *value,
             },
-            Self::OdmFields(_)
+            Self::ReaderUnavailable
+            | Self::OdmFields(_)
             | Self::Representation { .. }
             | Self::ResourceLimit { .. }
             | Self::Unavailable { .. }
@@ -86,6 +105,7 @@ impl Error {
     }
 }
 
+#[cfg(feature = "parquet")]
 impl From<reader::Error> for Error {
     fn from(error: reader::Error) -> Self {
         match error {
@@ -125,16 +145,19 @@ impl From<reader::Error> for Error {
 /// Decode every physical chunk before reporting closed-profile findings. The
 /// resulting snapshot owns its values independently of `content`. Empty strings
 /// remain present here; input declarations apply missing-string policy later.
+#[cfg(feature = "parquet")]
 pub fn parse(content: &[u8]) -> Result<ArrowTable, Error> {
     convert(reader::read(content)?)
 }
 
 /// Admit the fixed ODM schema before decoding values, then expose its eleven
 /// canonical text fields. Physical vendor chunks are validated and discarded.
+#[cfg(feature = "parquet")]
 pub fn parse_odm(content: &[u8]) -> Result<ArrowTable, Error> {
     convert(reader::read_odm(content)?)
 }
 
+#[cfg(feature = "parquet")]
 fn convert(decoded: reader::Decoded) -> Result<ArrowTable, Error> {
     table::convert(decoded).map_err(|error| match error {
         table::Error::Invalid => Error::Malformed,
@@ -145,7 +168,7 @@ fn convert(decoded: reader::Decoded) -> Result<ArrowTable, Error> {
     })
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "parquet"))]
 mod tests {
     use super::*;
 
@@ -160,4 +183,14 @@ mod tests {
         ));
         assert!(error.finding("RAW", "raw.parquet").is_none());
     }
+}
+
+/// Omitted codecs report a capability failure before inspecting source bytes.
+#[cfg(not(feature = "parquet"))]
+pub fn parse(_: &[u8]) -> Result<ArrowTable, Error> {
+    Err(Error::ReaderUnavailable)
+}
+#[cfg(not(feature = "parquet"))]
+pub fn parse_odm(_: &[u8]) -> Result<ArrowTable, Error> {
+    Err(Error::ReaderUnavailable)
 }

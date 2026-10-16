@@ -420,6 +420,7 @@ mod width_tests {
     };
 
     #[test]
+    #[cfg(feature = "parquet")]
     fn parquet_decode_admits_small_groups_beyond_prior_group_and_metadata_frontiers() {
         use arrow_array::{Int64Array, RecordBatch};
         use arrow_schema::{DataType, Field, Schema};
@@ -455,6 +456,7 @@ mod width_tests {
     }
 
     #[test]
+    #[cfg(feature = "parquet")]
     fn parquet_decode_admits_1024_and_refuses_1025_source_fields() {
         use arrow_array::{ArrayRef, RecordBatch, StringArray};
         use arrow_schema::{DataType, Field, Schema};

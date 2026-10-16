@@ -24,7 +24,9 @@ fn source_diagnostics<'a>(
             reason,
         },
         DecodeFailure::InvalidText(issues) => Failure::InvalidText(issues),
-        DecodeFailure::Limit(_) | DecodeFailure::Internal => return None,
+        DecodeFailure::Unavailable | DecodeFailure::Limit(_) | DecodeFailure::Internal => {
+            return None
+        }
     };
     Some(yamaa_core::yaml_diagnostics::diagnostics(failure, identity))
 }

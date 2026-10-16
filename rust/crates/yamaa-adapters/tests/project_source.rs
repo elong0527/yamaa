@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! Project contracts.
 #[allow(dead_code)]
 mod support;
@@ -697,29 +698,32 @@ mod project {
             ));
             assert!(!decoder.continue_after(&error));
 
-            let bytes = include_bytes!("fixtures/pq/text.parquet");
-            for present in [false, true] {
-                let source = SourceDeclaration {
-                    name: "SRC".into(),
-                    path: "text.parquet".into(),
-                    types: vec![("I".into(), ColumnType::Int), ("S".into(), ColumnType::Str)],
-                    profile: SourceProfile::Parquet,
-                    encoding: None,
-                    empty_string_present: present,
-                    ordinal: None,
-                };
-                let table = decoder
-                    .decode(&source, bytes, SourceInterpretation::Ordinary, None)
-                    .unwrap();
-                assert_eq!(
-                    table.cell(0, 1).unwrap(),
-                    if present {
-                        ValueRef::Str("")
-                    } else {
-                        ValueRef::Missing
-                    }
-                );
-                assert_eq!(table.cell(1, 1).unwrap(), ValueRef::Str("X"));
+            #[cfg(feature = "parquet")]
+            {
+                let bytes = include_bytes!("fixtures/pq/text.parquet");
+                for present in [false, true] {
+                    let source = SourceDeclaration {
+                        name: "SRC".into(),
+                        path: "text.parquet".into(),
+                        types: vec![("I".into(), ColumnType::Int), ("S".into(), ColumnType::Str)],
+                        profile: SourceProfile::Parquet,
+                        encoding: None,
+                        empty_string_present: present,
+                        ordinal: None,
+                    };
+                    let table = decoder
+                        .decode(&source, bytes, SourceInterpretation::Ordinary, None)
+                        .unwrap();
+                    assert_eq!(
+                        table.cell(0, 1).unwrap(),
+                        if present {
+                            ValueRef::Str("")
+                        } else {
+                            ValueRef::Missing
+                        }
+                    );
+                    assert_eq!(table.cell(1, 1).unwrap(), ValueRef::Str("X"));
+                }
             }
         }
 

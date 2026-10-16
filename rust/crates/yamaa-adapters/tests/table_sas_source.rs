@@ -428,6 +428,7 @@ mod table {
         }
 
         #[test]
+        #[cfg(feature = "parquet")]
         fn independently_authored_parquet_schemas_keep_exact_spelling_and_raw_value() {
             let declaration = source("SRC", "held.parquet");
             for (fixture, condition, requirement, extra) in [

@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! Execution contracts.
 #[allow(dead_code)]
 mod support;
@@ -2205,6 +2206,7 @@ columns:
         }
 
         #[test]
+        #[cfg(feature = "parquet")]
         fn parquet_records_expose_identical_ordinal_policy_without_changing_stored_fields() {
             use yamaa_adapters::{parquet_artifact, typed_csv};
             let fixture = authored(
