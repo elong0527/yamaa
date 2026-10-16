@@ -290,6 +290,17 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("<script>", readme)
         self.assertIn('href="https://benchmark.org/fixture/input/ae.csv"', readme)
 
+    def test_root_relative_links_and_images_are_not_prefixed(self):
+        _, readme = generate.render_readme(
+            "# Benchmark\n\n[Abs](/absolute/path) ![Img](/img.png) [Rel](rel/path)",
+            "https://benchmark.org/fixture",
+        )
+        self.assertIn('href="/absolute/path"', readme)
+        self.assertIn('href="/img.png"', readme)
+        self.assertIn('href="https://benchmark.org/fixture/rel/path"', readme)
+        self.assertNotIn("fixture//absolute", readme)
+        self.assertNotIn("fixture//img", readme)
+
     def test_taxonomy_lives_in_metadata_and_not_in_summary_prose(self):
         metadata = generate.load_metadata(BENCHMARK)
         self.assertEqual((metadata["standard"], metadata["domain"]), ("ADaM", "ADAE"))
