@@ -198,7 +198,7 @@ pub fn _domain_file(
             runtime: crate::file_domain::Runtime {
                 py,
                 specification,
-                resolver: resolver.map(crate::resource_resolver::Port::new),
+                resolver: resolver.map(crate::resource_resolver::Port::from_callback),
             },
         };
         let measurements =
@@ -261,7 +261,7 @@ pub fn _check_file(
                 specification,
                 base_directory: ".",
             },
-            resolver.map(crate::resource_resolver::Port::new),
+            resolver.map(crate::resource_resolver::Port::from_callback),
         );
         crate::report_fields::issue_rows(&issues)
     }

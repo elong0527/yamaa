@@ -9,7 +9,7 @@ pub struct Port {
     callback: Py<PyAny>,
 }
 impl Port {
-    pub fn new(callback: Py<PyAny>) -> Arc<dyn Resolver> {
+    pub fn from_callback(callback: Py<PyAny>) -> Arc<dyn Resolver> {
         Arc::new(Self { callback })
     }
 }

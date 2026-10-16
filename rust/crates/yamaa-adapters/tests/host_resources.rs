@@ -118,7 +118,9 @@ fn frame_freshness_compares_signed_zero_and_collected_temporal_precision() {
     }
 }
 
+#[cfg(feature = "yaml")]
 struct InterruptStage(MemoryResolver);
+#[cfg(feature = "yaml")]
 impl Resolver for InterruptStage {
     fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
         let operation = request.operation;
@@ -131,6 +133,7 @@ impl Resolver for InterruptStage {
     }
 }
 
+#[cfg(feature = "yaml")]
 #[test]
 fn interrupted_stage_cleans_provisional_output_by_held_target_identity() {
     let backend = Arc::new(InterruptStage(MemoryResolver::default()));

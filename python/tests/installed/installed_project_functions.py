@@ -40,7 +40,9 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                     ),
                 ),
             )
-        bound = host.resolve_callable("yamaa.domain", ["specification", "environment"])
+        bound = host.resolve_callable(
+            "yamaa.domain", ["specification", "environment", "resolver"]
+        )
         self.assertIs(bound, __import__("yamaa").domain)
 
     def test_normally_installed_project_wheel_is_checked_before_import_and_binding(
