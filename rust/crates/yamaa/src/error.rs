@@ -581,6 +581,37 @@ mod tests {
     }
 
     #[test]
+    fn table_temporal_errors_carry_the_temporal_code() {
+        use yamaa_adapters::arrow_table::TableError as Table;
+        for error in [
+            Table::TemporalChildType {
+                batch: 0,
+                column: 0,
+                row: 0,
+            },
+            Table::TemporalMissingChild {
+                batch: 0,
+                column: 0,
+                row: 0,
+            },
+            Table::TemporalPrecision {
+                batch: 0,
+                column: 0,
+                row: 0,
+            },
+            Table::TemporalRange {
+                batch: 0,
+                column: 0,
+                row: 0,
+            },
+        ] {
+            let converted = TableError::from_table(error);
+            assert_eq!(converted.code(), "temporal");
+            assert!(!converted.message().is_empty());
+        }
+    }
+
+    #[test]
     fn error_display_names_each_channel() {
         let report = Report {
             diagnostics: Vec::new(),
