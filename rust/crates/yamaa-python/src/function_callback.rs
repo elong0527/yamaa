@@ -5,36 +5,57 @@ use pyo3::{
     types::{PyBool, PyDate, PyDateTime, PyFloat, PyInt, PyString},
     IntoPyObjectExt,
 };
-use yamaa_adapters::callback::{BoundaryError as Error, CallbackError};
-use yamaa_core::{
-    table::ValueRef,
-    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
-    value::Value,
-};
+use yamaa::{Date, DateTime, EncodedScalar, FunctionError, HostPayload, Scalar, ScalarRef};
 
 /// Function argument encoding drops collected precision only at this boundary.
 pub(super) fn host_argument<'py>(
     py: Python<'py>,
-    value: ValueRef<'_>,
+    value: ScalarRef<'_>,
 ) -> PyResult<Bound<'py, PyAny>> {
     match value {
-        ValueRef::Missing => Ok(py.None().into_bound(py)),
-        ValueRef::Str(s) => s.into_bound_py_any(py),
-        ValueRef::Int(n) => n.into_bound_py_any(py),
-        ValueRef::Float(n) => n.get().into_bound_py_any(py),
-        ValueRef::Bool(b) => b.into_bound_py_any(py),
-        ValueRef::Date(d) => {
+        ScalarRef::Missing => Ok(py.None().into_bound(py)),
+        ScalarRef::Str(s) => s.into_bound_py_any(py),
+        ScalarRef::Int(n) => n.into_bound_py_any(py),
+        ScalarRef::Float(n) => n.into_bound_py_any(py),
+        ScalarRef::Bool(b) => b.into_bound_py_any(py),
+        ScalarRef::Date(d) => {
             let (y, m, d) = d.fields();
             Ok(PyDate::new(py, i32::from(y), m, d)?.into_any())
         }
-        ValueRef::DateTime(d) => {
+        ScalarRef::DateTime(d) => {
             let (y, m, d, h, minute, s) = d.fields();
             Ok(PyDateTime::new(py, i32::from(y), m, d, h, minute, s, 0, None)?.into_any())
         }
+        // The facade enum is non-exhaustive; uncovered variants cannot occur.
+        _ => Err(pyo3::exceptions::PyRuntimeError::new_err(
+            "unsupported scalar argument",
+        )),
     }
 }
+
+/// Classify one Python failure, retaining the original exception object.
+/// Exceptions stay raisable payloads; anything else is an interrupt.
+pub(super) fn host_error(py: Python<'_>, error: PyErr) -> FunctionError {
+    if error.is_instance_of::<pyo3::exceptions::PyException>(py) {
+        let (class, message) = describe(py, &error);
+        FunctionError::Exception {
+            class,
+            message,
+            payload: Some(HostPayload::new(
+                error.value(py).clone().into_any().unbind(),
+            )),
+        }
+    } else {
+        FunctionError::Interrupted {
+            payload: Some(HostPayload::new(
+                error.value(py).clone().into_any().unbind(),
+            )),
+        }
+    }
+}
+
 /// Secondary __str__ failures cannot replace the original host exception class.
-pub(super) fn exception(py: Python<'_>, error: PyErr) -> CallbackError {
+fn describe(py: Python<'_>, error: &PyErr) -> (String, String) {
     let class = error
         .get_type(py)
         .name()
@@ -47,58 +68,80 @@ pub(super) fn exception(py: Python<'_>, error: PyErr) -> CallbackError {
         .ok()
         .and_then(|s| s.to_str().ok().map(str::to_owned))
         .unwrap_or_else(|| "<exception message unavailable>".into());
-    CallbackError::Exception { class, message }
+    (class, message)
 }
+
+/// Borrow the retained original exception, when the failure carries one.
+pub(super) fn payload(py: Python<'_>, error: &FunctionError) -> Option<Py<PyAny>> {
+    match error {
+        FunctionError::Exception { payload, .. } | FunctionError::Interrupted { payload } => {
+            payload
+                .as_ref()?
+                .with::<Py<PyAny>, _>(|held| held.clone_ref(py))
+        }
+        _ => None,
+    }
+}
+
+/// Raise the retained original exception object.
+pub(super) fn raise(py: Python<'_>, error: Py<PyAny>) -> PyErr {
+    PyErr::from_value(error.into_bound(py))
+}
+
 /// Reject a returned representation without converting it to another logical type.
-fn rejected(reason: &str, returned: Option<String>) -> CallbackError {
-    CallbackError::Rejected {
+fn rejected(reason: &str, returned: Option<String>) -> FunctionError {
+    FunctionError::Rejected {
         reason: reason.into(),
         returned,
     }
 }
+
 /// Admit exact numeric/temporal built-ins, compatible text subclasses, and None.
 /// ABI3 date fields use safe attributes after exact built-in type admission.
-pub(super) fn host_result(value: &Bound<'_, PyAny>) -> Result<Value, CallbackError> {
+pub(super) fn host_result(value: &Bound<'_, PyAny>) -> Result<Scalar, FunctionError> {
     if value.is_none() {
-        return Ok(Value::Missing);
+        return Ok(Scalar::Missing);
     }
     if value.is_exact_instance_of::<PyBool>() {
-        return Ok(Value::Bool(
-            value
-                .extract()
-                .map_err(|_| CallbackError::Boundary(Error::Internal))?,
-        ));
+        return value
+            .extract()
+            .map(Scalar::Bool)
+            .map_err(|_| FunctionError::Internal {
+                code: "function_boundary",
+            });
     }
     if value.is_exact_instance_of::<PyInt>() {
         return value
             .extract()
-            .map(Value::Int)
+            .map(Scalar::Int)
             .map_err(|_| rejected("a returned integer exceeds 64 bits", None));
     }
     if value.is_exact_instance_of::<PyFloat>() {
-        let number: f64 = value
-            .extract()
-            .map_err(|_| CallbackError::Boundary(Error::Internal))?;
-        return yamaa_adapters::scalar_bytes::decode(2, &number.to_le_bytes())
-            .map_err(|_| CallbackError::Boundary(Error::Internal));
+        let number: f64 = value.extract().map_err(|_| FunctionError::Internal {
+            code: "function_boundary",
+        })?;
+        return EncodedScalar::decode(2, &number.to_le_bytes()).map_err(|_| {
+            FunctionError::Internal {
+                code: "function_boundary",
+            }
+        });
     }
     if let Ok(text) = value.cast::<PyString>() {
         let text = text
             .to_cow()
             .map_err(|_| rejected("a returned string is not valid UTF-8", None))?;
-        return Ok(Value::Str(text.into_owned()));
+        return Ok(Scalar::Str(text.into_owned()));
     }
     let is_date = value.is_exact_instance_of::<PyDate>();
     let is_datetime = value.is_exact_instance_of::<PyDateTime>();
     if is_date || is_datetime {
-        let extract = || -> PyResult<Value> {
+        let extract = || -> PyResult<Scalar> {
             let year = value.getattr("year")?.extract()?;
             let month = value.getattr("month")?.extract()?;
             let day = value.getattr("day")?.extract()?;
-            let date = Date::new(year, month, day, DatePrecision::Day)
-                .map_err(|_| PyValueError::new_err("date"))?;
+            let date = Date::new(year, month, day).ok_or_else(|| PyValueError::new_err("date"))?;
             if is_date {
-                return Ok(Value::Date(date));
+                return Ok(Scalar::Date(date));
             }
             if !value.getattr("tzinfo")?.is_none()
                 || value.getattr("microsecond")?.extract::<u32>()? != 0
@@ -108,10 +151,16 @@ pub(super) fn host_result(value: &Bound<'_, PyAny>) -> Result<Value, CallbackErr
             let hour = value.getattr("hour")?.extract()?;
             let minute = value.getattr("minute")?.extract()?;
             let second = value.getattr("second")?.extract()?;
-            Ok(Value::DateTime(
-                DateTime::new(date, hour, minute, second, DateTimePrecision::Second)
-                    .map_err(|_| PyValueError::new_err("datetime"))?,
-            ))
+            DateTime::new(
+                date.fields().0,
+                date.fields().1,
+                date.fields().2,
+                hour,
+                minute,
+                second,
+            )
+            .map(Scalar::DateTime)
+            .ok_or_else(|| PyValueError::new_err("datetime"))
         };
         return extract().map_err(|_| {
             rejected(

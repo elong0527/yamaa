@@ -1,6 +1,6 @@
 [workspace]
 exclude = ["vendor/saphyr-parser"]
-members = ["crates/yamaa-core", "crates/yamaa-adapters", "crates/yamaa-python", "crates/yamaa-r"]
+members = ["crates/yamaa-core", "crates/yamaa-adapters", "crates/yamaa", "crates/yamaa-python", "crates/yamaa-r"]
 default-members = ["crates/yamaa-core", "crates/yamaa-adapters"]
 resolver = "2"
 

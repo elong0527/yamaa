@@ -437,8 +437,8 @@ Until #2583 lands, git/path is the distribution route.
 
 ### Host-usage mapping
 
-Every adapters or core module the two host crates use today (26 adapters
-modules, 5 core modules, counted from the host sources on 2026-10-16) maps to
+Every adapters or core module the two host crates use today (28 adapters
+modules, 11 core modules, counted from the host sources on 2026-10-16) maps to
 a facade item or is marked internal. Any module not listed here is internal by
 default.
 
@@ -463,6 +463,8 @@ default.
 | `producer_result` | Facade -- `Build` is its public form (`project_owned` stays an internal constructor). |
 | `project_application` | Internal -- selection failures convert into diagnostics. |
 | `project_attempt` | Internal -- same disposition as `producer_attempt`. |
+| `project_lock` | Facade -- `LockFinding`/`LockReason` are the public lock-finding types and `decode_renv_lock` is the public renv admission; lock-kind detection stays internal (the engine supplies `LockKind` through `LockContext`). |
+| `project_report` | Internal -- `build_result` runs behind `Build`; `Classified` stays an internal constructor. |
 | `project_run` | Facade (future) -- `Plan` wraps `PreparedRun` (#2679); `Attempt`/`PreparedRun` stay internal in the first surface. |
 | `public_table` | Facade -- `Table`. |
 | `resolved_artifact` | Facade -- `ResolvedSpecification` (#2725). |
@@ -474,5 +476,11 @@ default.
 | `yamaa_core::domain_entry` | Internal -- entry dispatch behind `Engine`. |
 | `yamaa_core::function_batch` | Facade -- `ProjectFunctions` batch invocation with facade scalar arguments; `BatchFunctionPort` stays internal. |
 | `yamaa_core::function_invocation` | Facade -- `FunctionError` is its public form; `HostError` stays internal. |
+| `yamaa_core::function_signature` | Facade -- `FunctionIdentity` and `Signature`/`Parameter` are the public activation types; `LogicalSignature` stays internal. |
+| `yamaa_core::project_activation::ActivationPort` | Facade -- the `ProjectFunctions` trait; the core port stays internal. |
+| `yamaa_core::project_environment` | Facade -- `LockKind` and `LockContext`; environment admission stays internal. |
 | `yamaa_core::project_function` | Facade -- `HostLanguage` and the facade `Scalar` value type; the core `Language` enum stays internal. |
+| `yamaa_core::table::ValueRef` | Facade -- `ScalarRef`; the core table stays internal. |
+| `yamaa_core::temporal` | Facade -- `Date` and `DateTime`; collected precision is dropped at the boundary. |
+| `yamaa_core::value::Value` | Facade -- `Scalar`. |
 | `yamaa_core::VERSION` (crate root) | Facade -- re-exported as `yamaa::VERSION` with the same value. |

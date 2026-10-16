@@ -1,11 +1,9 @@
 //! Explicit copying view of shared Arrow columns into exact owned R vectors.
-use arrow_array::{
-    Date32Array, Float64Array, Int64Array, LargeStringArray, StringArray, StringViewArray,
-    TimestampSecondArray,
-};
-use arrow_schema::{DataType, TimeUnit};
 use extendr_api::prelude::*;
-use yamaa_adapters::public_table::PublicTable;
+use yamaa::{
+    Array, DataType, Date32Array, Float64Array, Int64Array, LargeStringArray, StringArray,
+    StringViewArray, Table, TimeUnit, TimestampSecondArray,
+};
 
 enum Values {
     Str(Vec<Option<String>>),
@@ -15,7 +13,7 @@ enum Values {
     DateTime(Vec<Option<i64>>),
 }
 
-pub(super) fn frame(table: &PublicTable) -> std::result::Result<Robj, String> {
+pub(super) fn frame(table: &Table) -> std::result::Result<Robj, String> {
     let mut columns = Vec::new();
     for (index, field) in table.columns().iter().enumerate() {
         macro_rules! collect {

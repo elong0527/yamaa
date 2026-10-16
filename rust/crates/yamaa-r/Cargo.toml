@@ -13,8 +13,5 @@ crate-type = ["staticlib"]
 doctest = false
 
 [dependencies]
-yamaa-core = { path = "../yamaa-core" }
-yamaa-adapters = { path = "../yamaa-adapters" }
+yamaa = { path = "../yamaa" }
 extendr-api = "0.9.0"
-arrow-array = { version = "=60.0.0", default-features = false }
-arrow-schema = { version = "=60.0.0", default-features = false }
