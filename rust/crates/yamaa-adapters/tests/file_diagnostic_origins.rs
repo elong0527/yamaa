@@ -110,7 +110,7 @@ mod file {
                 assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0188"));
                 assert_eq!(issues[0].spec_paths, ["rows[1].filter"]);
                 assert_eq!(
-                    yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
+                    issues[0].context.clone(),
                     yamaa_adapters::json!({"predicate": "ID >", "position": 4})
                 );
                 assert_eq!(
@@ -166,7 +166,10 @@ mod file {
             );
             let issues = yamaa_adapters::specification_check::issue_rows(prepared.run()).unwrap();
             assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].context, "{\"pattern\":\"(\"}");
+            assert_eq!(
+                yamaa_adapters::json_wire::encode(&issues[0].context),
+                "{\"pattern\":\"(\"}"
+            );
             assert_eq!(
                 yamaa_adapters::project_application::check(
                     &study.identity("spec.yaml"),
@@ -286,7 +289,7 @@ mod file {
             assert_eq!(finding.requirement.as_deref(), Some("REQ-0788"));
             assert_eq!(finding.spec_paths, ["input.SRC.path"]);
             assert_eq!(
-                yamaa_adapters::json_wire::decode(&finding.context).unwrap(),
+                finding.context.clone(),
                 yamaa_adapters::json!({"dataset":"SRC","path":"input.csv"})
             );
             for _ in 0..2 {
@@ -317,9 +320,9 @@ mod file {
             assert_eq!(issues[0].condition, "project_environment_missing");
             assert_eq!(
                 issues[0].context,
-                yamaa_adapters::json_wire::encode(&yamaa_adapters::json!({
+                yamaa_adapters::json!({
                     "cause": "missing", "path": environment,
-                }))
+                })
             );
             assert_eq!(issues[0].spec_paths, ["environment"]);
             assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0694"));
@@ -347,7 +350,7 @@ mod file {
             assert_eq!(issues[0].requirement, Some("REQ-0852".into()));
             assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
             assert_eq!(
-                issues[0].context,
+                yamaa_adapters::json_wire::encode(&issues[0].context),
                 "{\"dataset\":\"SRC\",\"path\":\"input.unknown\"}"
             );
             assert!(!study.0.join("input.csv").exists());
@@ -397,7 +400,7 @@ mod file {
             assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0785"));
             assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
             assert_eq!(
-                issues[0].context,
+                yamaa_adapters::json_wire::encode(&issues[0].context),
                 "{\"dataset\":\"SRC\",\"path\":\"input.unknown\"}"
             );
             fs::remove_dir(study.0.join("input.unknown")).unwrap();
@@ -438,7 +441,7 @@ mod file {
             assert_eq!(result.observations(), observations);
             assert_eq!(result.issues().len(), 1);
             assert_eq!(
-                result.issues()[0].context,
+                yamaa_adapters::json_wire::encode(&result.issues()[0].context),
                 "{\"code\":\"invalid_target\",\"stage\":\"output\"}"
             );
             assert_eq!(result.output().unwrap(), before);
@@ -568,7 +571,7 @@ mod file {
             assert_eq!(issues[0].condition, "resource_path_symlink");
             assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0783"));
             assert_eq!(
-                issues[0].context,
+                yamaa_adapters::json_wire::encode(&issues[0].context),
                 "{\"dataset\":\"SRC\",\"path\":\"../outside-link.csv\"}"
             );
             std::os::unix::fs::symlink("spec.yaml", study.0.join("entry/link.yaml")).unwrap();
@@ -619,7 +622,7 @@ mod file {
                 assert!(result.output().is_some());
                 assert!(!result.save().unwrap());
                 assert_eq!(
-                    result.issues()[0].context,
+                    yamaa_adapters::json_wire::encode(&result.issues()[0].context),
                     "{\"code\":\"invalid_target\",\"stage\":\"output\"}"
                 );
                 if existing {
@@ -788,7 +791,7 @@ mod file {
                         assert_eq!(issue.requirement, None);
                         assert_eq!(issue.spec_paths, [path]);
                         assert_eq!(
-                            yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                            issue.context.clone(),
                             json!({
                                 "stage":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual,
                             })
@@ -870,7 +873,7 @@ mod file {
                     assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0065"));
                     assert_eq!(issues[0].spec_paths, ["rows[0].group_by"]);
                     assert_eq!(
-                        yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
+                        issues[0].context.clone(),
                         json!({"row":"r", "group_by":vec!["ID"; Limits::KEYS]}),
                     );
                 }
@@ -1081,7 +1084,7 @@ mod file {
                     assert_eq!(issue.requirement.as_deref(), Some("REQ-0281"));
                     assert_eq!(issue.spec_paths, ["schema_version"]);
                     assert_eq!(
-                        issue.context,
+                        yamaa_adapters::json_wire::encode(&issue.context),
                         format!(r#"{{"actual":{digits},"expected":"1.0"}}"#)
                     );
                 }
@@ -1106,8 +1109,7 @@ mod file {
                 findings[0].spec_paths,
                 ["columns.TERM.verifications[0].matches.pattern"]
             );
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&findings[0].context).unwrap();
+            let context: yamaa_core::json::Value = findings[0].context.clone();
             assert_eq!(
                 context,
                 yamaa_adapters::json!({"code":"execution_limit","stage":"execute","resource":"regex_steps","limit":1_000_000})

@@ -400,7 +400,7 @@ mod root_read_tests {
         assert_eq!(issues[0].requirement.as_deref(), definition.requirement);
         assert_eq!(
             issues[0].context,
-            crate::json_wire::encode(&crate::json!({"cause":"unreadable", "path":path}))
+            crate::json!({"cause":"unreadable", "path":path})
         );
 
         assert_eq!(owner.error() as *const file_project::Error, original);

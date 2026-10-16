@@ -28,7 +28,7 @@ pub(super) fn issue_rows(issues: &[yamaa_adapters::issue_rows::Issue]) -> Vec<Is
                 issue.condition.clone(),
                 issue.requirement.clone(),
                 issue.spec_paths.clone(),
-                issue.context.clone(),
+                yamaa_adapters::json_wire::encode(&issue.context),
             )
         })
         .collect()

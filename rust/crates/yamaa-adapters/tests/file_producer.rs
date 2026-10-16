@@ -360,7 +360,7 @@ columns:
                 );
                 assert_eq!(issue.spec_paths, ["input.FIRST.ordinal"]);
                 assert_eq!(
-                    yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                    issue.context.clone(),
                     yamaa_adapters::json!({"dataset":"FIRST", "field":"ID"})
                 );
             }
@@ -1477,6 +1477,7 @@ columns:
                     "phase": "validation", "condition": "incompatible_input_type",
                     "requirement": "REQ-0190", "spec_paths": [format!("intermediates[{index}].filter")],
                     "context": {"left_type": "date", "right_type": "str"},
+                    "operand_route": [],
                 })).collect());
                 let prepared = FileSpecification::prepare(
                     Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),

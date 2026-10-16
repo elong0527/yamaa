@@ -14,12 +14,18 @@ pub(super) fn frame(issues: &[Issue]) -> std::result::Result<Robj, String> {
             .iter()
             .map(|issue| issue.requirement.as_deref().unwrap_or(<&str>::na())),
     );
+    // The R frame keeps its legacy string column: the structured context
+    // tree is encoded once here, at the host boundary, with exact numbers.
+    let contexts: Vec<String> = issues
+        .iter()
+        .map(|issue| yamaa_adapters::json_wire::encode(&issue.context))
+        .collect();
     let mut result = list!(
         phase = Strings::from_values(issues.iter().map(|issue| &issue.phase)),
         condition = Strings::from_values(issues.iter().map(|issue| &issue.condition)),
         requirement = requirements,
         spec_paths = paths,
-        context = Strings::from_values(issues.iter().map(|issue| &issue.context))
+        context = Strings::from_values(contexts.iter())
     )
     .into_robj();
     result

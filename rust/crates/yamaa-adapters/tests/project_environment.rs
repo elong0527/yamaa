@@ -138,7 +138,9 @@ mod project {
                 condition: condition.into(),
                 requirement: Some(requirement.into()),
                 spec_paths: vec![path.into()],
-                context: yamaa_adapters::json_wire::encode(&context),
+                context,
+                source_span: None,
+                operand_route: None,
             }
         }
         fn opaque(
@@ -335,11 +337,13 @@ mod project {
                         condition: "engine_rejected".into(),
                         requirement: None,
                         spec_paths: vec!["codelists[1]".into()],
-                        context: yamaa_adapters::json_wire::encode(&json!({
+                        context: json!({
                             "stage": "environment", "code": "resource_limit",
                             "resource": "spec_bytes", "limit": Limits::SPEC_BYTES,
                             "actual": Limits::SPEC_BYTES + 1,
-                        })),
+                        }),
+                        source_span: None,
+                        operand_route: None,
                     }],
                 );
                 assert_eq!(owner.root.source().bytes.as_ptr(), held_root);
@@ -545,8 +549,7 @@ mod project {
                 assert_eq!(issue.condition, condition);
                 assert_eq!(issue.requirement.as_deref(), Some(requirement));
                 assert_eq!(issue.spec_paths, ["rows[2].derivation.BMI.function"]);
-                let context: yamaa_core::json::Value =
-                    yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+                let context: yamaa_core::json::Value = issue.context.clone();
                 assert_eq!(context["function"], "bmi");
                 assert_eq!(context["call"], "projectbmi.bmi");
                 assert_eq!(
@@ -582,8 +585,7 @@ mod project {
                     }),
                 )
                 .unwrap();
-                let context: yamaa_core::json::Value =
-                    yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+                let context: yamaa_core::json::Value = issue.context.clone();
                 assert_eq!(context["host_error"], "ValueError");
                 assert_eq!(context["host_message"], "é\0🙂");
                 assert!(context.get("host_details_truncated").is_none());
@@ -600,8 +602,7 @@ mod project {
                     }),
                 )
                 .unwrap();
-                let context: yamaa_core::json::Value =
-                    yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+                let context: yamaa_core::json::Value = issue.context.clone();
                 assert_eq!(context["reason"], oversized);
             }
             let failure = make_failure(FailureKind::InvalidHostResult(payload));
@@ -617,10 +618,7 @@ mod project {
             )
             .unwrap();
             assert_eq!(issue.condition, "invalid_function_result");
-            assert_eq!(
-                yamaa_adapters::json_wire::decode(&issue.context).unwrap()["returned"],
-                "list"
-            );
+            assert_eq!(issue.context.clone()["returned"], "list");
         }
         #[test]
         fn malformed_identity_keys_refuse_and_escaped_arguments_remain_complete() {
@@ -662,8 +660,7 @@ mod project {
             let failure = make_failure(FailureKind::UnknownArguments(vec![oversized.clone()]));
             let issue =
                 invocation("columns.BMI.derivation.function", &failure, None, &[], None).unwrap();
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+            let context: yamaa_core::json::Value = issue.context.clone();
             assert_eq!(context["unknown"], yamaa_adapters::json!([oversized]));
         }
 
@@ -997,7 +994,7 @@ mod project {
                 assert_eq!(record.requirement.as_deref(), Some("REQ-0697"));
                 assert_eq!(record.spec_paths, ["lock"]);
                 assert_eq!(
-                    yamaa_adapters::json_wire::decode(&record.context).unwrap(),
+                    record.context.clone(),
                     yamaa_adapters::json!({"source":"study/environment.yaml", "entry":"study/environment.yaml",
                 "lock_source":"held/uv.lock", "lock":"../uv.lock", "package":"program",
                 "reason":reason, "expected":versions, "actual":actual})
@@ -1019,8 +1016,7 @@ mod project {
             ];
             let records = issues(&environment, &facts).unwrap();
             assert_eq!(records.len(), 3);
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&records[2].context).unwrap();
+            let context: yamaa_core::json::Value = records[2].context.clone();
             assert_eq!(context["expected"], yamaa_adapters::json!(["1.0"]));
             assert_eq!(context["actual"], "1.0.0");
         }
@@ -1067,8 +1063,7 @@ mod project {
                 )],
             )
             .unwrap();
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&result[0].context).unwrap();
+            let context: yamaa_core::json::Value = result[0].context.clone();
             assert_eq!(context["actual"], wide);
             let facts = (0..2_050)
                 .map(|_| finding(Reason::VersionNotLocked, &[], None))
@@ -1312,8 +1307,7 @@ mod project {
             let result = project_report::build_result(&run, &attempt, id("codelist"), &[]).unwrap();
             assert_eq!(result.output(), None);
             assert_eq!(result.issues().len(), 1);
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&result.issues()[0].context).unwrap();
+            let context: yamaa_core::json::Value = result.issues()[0].context.clone();
             assert_eq!(
                 context,
                 yamaa_adapters::json!({"column":"CODE","codelist":"SEX","failure_count":2,"keys":[{"ID":i64::MAX},{"ID":i64::MIN}],"values":["X","Z"]})
@@ -2517,7 +2511,7 @@ functions:
             .unwrap();
             assert_eq!(result.issues()[0].condition, "runtime_artifact_mismatch");
             assert_eq!(
-                yamaa_adapters::json_wire::decode(&result.issues()[0].context).unwrap(),
+                result.issues()[0].context.clone(),
                 yamaa_adapters::json!({"source":"study/environment.yaml","entry":"study/environment.yaml","lock_source":"held/uv.lock","lock":"../uv.lock","package":"project","reason":"distribution_not_identified","expected":[],"actual":null})
             );
             assert_eq!(
@@ -2552,8 +2546,7 @@ functions:
             .unwrap();
             assert_eq!(result.issues()[0].condition, "function_conformance_failed");
             assert_eq!(result.issues()[0].spec_paths, ["functions.id.tests[0]"]);
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&result.issues()[0].context).unwrap();
+            let context: yamaa_core::json::Value = result.issues()[0].context.clone();
             assert_eq!(context["expected"], 7);
             assert_eq!(context["actual"], 8);
             assert_eq!(

@@ -55,7 +55,8 @@ pub(super) fn schema_findings(
         .collect())
 }
 
-/// Admit already projected core findings in the same five-field diagnostic shape.
+/// Admit already projected core findings in the same portable diagnostic shape
+/// (geometry keys are admitted only when a finding recorded geometry).
 pub(super) fn literal_outcome(outcome: Value) -> Result<Value, Error> {
     if outcome["status"] == "invalid" {
         let findings = outcome["diagnostics"]
