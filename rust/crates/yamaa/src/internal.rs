@@ -480,8 +480,10 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
             lock_bytes: &lock_bytes,
         };
         let identity = self.shared.identity("domain", self.specification);
-        scope.phase(yamaa_core::application_observer::Phase::Output);
         let inner = build.build_owned_reported(&mut port, identity, scope);
+        // The Output phase starts after the producer build, exactly as the
+        // pre-facade host paths did: producer execution is not output work.
+        scope.phase(yamaa_core::application_observer::Phase::Output);
         let projection = {
             let identity = self.shared.identity("domain", self.specification);
             format_producer_attempt(&inner, identity)

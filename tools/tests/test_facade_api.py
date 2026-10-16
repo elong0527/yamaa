@@ -11,6 +11,14 @@ class FacadeApiTests(unittest.TestCase):
             generator.TARGET.read_bytes(), generator.render().encode("utf-8")
         )
 
+    def test_only_exact_test_gates_are_test_only(self):
+        self.assertTrue(generator._is_test_cfg(["#[cfg(test)]"]))
+        self.assertTrue(generator._is_test_cfg(['#[cfg(all(test, unix))]']))
+        self.assertFalse(generator._is_test_cfg(["#[cfg(not(test))]"]))
+        self.assertFalse(generator._is_test_cfg(['#[cfg(feature = "test-utils")]']))
+        self.assertFalse(generator._is_test_cfg(["#[cfg(unix)]"]))
+        self.assertFalse(generator._is_test_cfg([]))
+
 
 if __name__ == "__main__":
     unittest.main()

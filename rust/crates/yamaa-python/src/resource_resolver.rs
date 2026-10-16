@@ -43,12 +43,9 @@ impl ResourceResolver for Port {
                     None
                 } else {
                     let stream = crate::arrow_bridge::take_stream(&frame)?;
-                    match InputFrame::import(stream) {
-                        Ok(frame) => Some(frame),
-                        Err(_) => {
-                            return Ok(Err(ResolverFailure::from_code("rejected")));
-                        }
-                    }
+                    Some(InputFrame::import(stream).map_err(|error| {
+                        pyo3::exceptions::PyValueError::new_err(error.message().to_owned())
+                    })?)
                 };
                 Ok(Ok(ResolverReply::new(reference, bytes, frame)))
             };

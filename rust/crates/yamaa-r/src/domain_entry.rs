@@ -275,9 +275,10 @@ fn domain_interrupt(handle: Robj) -> List {
         let interrupted = state.build.interrupt().and_then(|error| match error {
             yamaa::FunctionError::Interrupted { payload } => payload
                 .as_ref()?
-                .with::<crate::thread_bound::ThreadBound<Robj>, _>(
-                |condition| condition.0.clone(),
-            ),
+                .with::<crate::thread_bound::ThreadBound<Robj>, _>(|condition| {
+                    condition.get().cloned().ok()
+                })
+                .flatten(),
             _ => None,
         });
         Ok(interrupted.unwrap_or_else(|| r!(NULL)))

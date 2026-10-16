@@ -221,7 +221,33 @@ def _peel_attrs(text):
 
 
 def _is_test_cfg(attrs):
-    return any(re.search(r"\bcfg\b.*\btest\b", attr) for attr in attrs)
+    # Only exact test gates count: #[cfg(test)], or `test` as a top-level
+    # operand of #[cfg(all(...))]. A looser match would also drop
+    # #[cfg(not(test))] or features named like "test-utils", hiding real
+    # surface items from the inventory.
+    for attr in attrs:
+        body = attr.strip()
+        if body == "#[cfg(test)]":
+            return True
+        match = re.fullmatch(r"#\[cfg\(all\((.*)\)\)\]", body, re.DOTALL)
+        if match is None:
+            continue
+        depth = 0
+        part = ""
+        for char in match.group(1):
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+            if char == "," and depth == 0:
+                if part.strip() == "test":
+                    return True
+                part = ""
+            else:
+                part += char
+        if part.strip() == "test":
+            return True
+    return False
 
 
 def _attr_markers(attrs):

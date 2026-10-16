@@ -153,8 +153,10 @@ fn classify_status(formatter: &Function, status: Status) -> std::result::Result<
     }
 }
 
-fn owned_scalar(value: ScalarRef<'_>) -> Scalar {
-    match value {
+fn owned_scalar(value: ScalarRef<'_>) -> std::result::Result<Scalar, CallError> {
+    // No wildcard: `ScalarRef` may grow under the stability policy, and a new
+    // argument variant must fail loudly rather than arrive as `NA`.
+    Ok(match value {
         ScalarRef::Missing => Scalar::Missing,
         ScalarRef::Str(value) => Scalar::Str(value.to_owned()),
         ScalarRef::Int(value) => Scalar::Int(value),
@@ -162,8 +164,10 @@ fn owned_scalar(value: ScalarRef<'_>) -> Scalar {
         ScalarRef::Bool(value) => Scalar::Bool(value),
         ScalarRef::Date(value) => Scalar::Date(value),
         ScalarRef::DateTime(value) => Scalar::DateTime(value),
-        _ => Scalar::Missing,
-    }
+        _ => {
+            return Err(CallError::Raised(FunctionError::Protocol));
+        }
+    })
 }
 
 fn invoke_scalar(
@@ -173,7 +177,7 @@ fn invoke_scalar(
 ) -> std::result::Result<Scalar, CallError> {
     let mut encoded = Vec::with_capacity(arguments.len());
     for argument in arguments {
-        let value = yamaa::EncodedScalar::encode(owned_scalar(argument.value));
+        let value = yamaa::EncodedScalar::encode(owned_scalar(argument.value)?);
         encoded.push((
             argument.name,
             Robj::from(list!(
@@ -224,14 +228,16 @@ impl ProjectFunctions for Functions {
             return Err(FunctionError::Protocol);
         }
         let locked = yamaa::decode_renv_lock(lock.bytes).map_err(FunctionError::LockSyntax)?;
-        let verify = self
+        let verify_guard = self
             .verify
             .lock()
             .map_err(|_| FunctionError::Internal { code: "host_port" })?;
-        let formatter = self
+        let verify = verify_guard.get()?;
+        let formatter_guard = self
             .formatter
             .lock()
             .map_err(|_| FunctionError::Internal { code: "host_port" })?;
+        let formatter = formatter_guard.get()?;
         let versions = List::from_pairs(locked.packages.iter().map(|(name, version)| {
             (
                 name.as_str(),
@@ -243,12 +249,12 @@ impl ProjectFunctions for Functions {
                 .iter()
                 .map(|function| Raw::from_bytes(function.call.as_bytes())),
         );
-        let status = call_status(&verify.0, pairlist!(versions = versions, calls = calls))?;
+        let status = call_status(verify, pairlist!(versions = versions, calls = calls))?;
         let rows = match status {
             Status::Completed(rows) => rows,
-            Status::Host(condition) => return Err(classify_host(&formatter.0, &condition)),
+            Status::Host(condition) => return Err(classify_host(formatter, &condition)),
             Status::Representation(condition) => {
-                return Err(classify_representation(&formatter.0, &condition));
+                return Err(classify_representation(formatter, &condition));
             }
             Status::Interrupt(condition) => {
                 return Err(FunctionError::Interrupted {
@@ -298,14 +304,16 @@ impl ProjectFunctions for Functions {
         identity: &FunctionIdentity,
         signature: &Signature,
     ) -> Result<FunctionHandle, FunctionError> {
-        let resolve = self
+        let resolve_guard = self
             .resolve
             .lock()
             .map_err(|_| FunctionError::Internal { code: "host_port" })?;
-        let formatter = self
+        let resolve = resolve_guard.get()?;
+        let formatter_guard = self
             .formatter
             .lock()
             .map_err(|_| FunctionError::Internal { code: "host_port" })?;
+        let formatter = formatter_guard.get()?;
         let names = List::from_values(
             signature
                 .parameters
@@ -313,7 +321,7 @@ impl ProjectFunctions for Functions {
                 .map(|parameter| Raw::from_bytes(parameter.name.as_bytes())),
         );
         let status = call_status(
-            &resolve.0,
+            resolve,
             pairlist!(
                 call = Raw::from_bytes(identity.call.as_bytes()),
                 parameters = names
@@ -321,9 +329,9 @@ impl ProjectFunctions for Functions {
         )?;
         let handle = match status {
             Status::Completed(handle) => handle,
-            Status::Host(condition) => return Err(classify_host(&formatter.0, &condition)),
+            Status::Host(condition) => return Err(classify_host(formatter, &condition)),
             Status::Representation(condition) => {
-                return Err(classify_representation(&formatter.0, &condition));
+                return Err(classify_representation(formatter, &condition));
             }
             Status::Interrupt(condition) => {
                 return Err(FunctionError::Interrupted {
@@ -345,13 +353,15 @@ impl ProjectFunctions for Functions {
         arguments: &[Argument<'_>],
     ) -> std::result::Result<Scalar, CallError> {
         let handle = handle
-            .with::<crate::thread_bound::ThreadBound<Function>, _>(|handle| handle.0.clone())
-            .ok_or(CallError::Raised(FunctionError::Protocol))?;
-        let formatter = self
+            .with::<crate::thread_bound::ThreadBound<Function>, _>(|handle| handle.get().cloned())
+            .ok_or(CallError::Raised(FunctionError::Protocol))?
+            .map_err(CallError::Raised)?;
+        let formatter_guard = self
             .formatter
             .lock()
             .map_err(|_| CallError::Raised(FunctionError::Internal { code: "host_port" }))?;
-        invoke_scalar(&handle, &formatter.0, arguments)
+        let formatter = formatter_guard.get().map_err(CallError::Raised)?;
+        invoke_scalar(&handle, formatter, arguments)
     }
 }
 
@@ -392,11 +402,11 @@ impl ProjectFunctions for RegistryPort {
         identity: &FunctionIdentity,
         signature: &Signature,
     ) -> std::result::Result<FunctionHandle, FunctionError> {
-        let handle = self
+        let bound = self
             .registry
             .get(&identity.call)
-            .map(|handle| handle.0.clone())
             .ok_or_else(|| FunctionError::MissingBinding(identity.call.clone()))?;
+        let handle = bound.get()?.clone();
         // Parity with the Python registry port: the registered function's
         // formals must name exactly the logical parameters.
         let formals = handle.formals().ok_or(FunctionError::Protocol)?;
@@ -422,11 +432,12 @@ impl ProjectFunctions for RegistryPort {
         // payloads stay opaque: the core still validates lengths and exact
         // types before accepting any output.
         let handle = handle
-            .with::<crate::thread_bound::ThreadBound<Function>, _>(|handle| handle.0.clone())
-            .ok_or(CallError::Raised(FunctionError::Protocol))?;
+            .with::<crate::thread_bound::ThreadBound<Function>, _>(|handle| handle.get().cloned())
+            .ok_or(CallError::Raised(FunctionError::Protocol))?
+            .map_err(CallError::Raised)?;
         let mut encoded = Vec::with_capacity(arguments.len());
         for argument in arguments {
-            let value = yamaa::EncodedScalar::encode(owned_scalar(argument.value));
+            let value = yamaa::EncodedScalar::encode(owned_scalar(argument.value)?);
             encoded.push((
                 argument.name,
                 Robj::from(list!(
@@ -489,9 +500,13 @@ pub(crate) fn facts(error: &FunctionError) -> Robj {
         payload
             .as_ref()
             .and_then(|payload| {
-                payload.with::<crate::thread_bound::ThreadBound<Robj>, _>(|condition| {
-                    condition.0.clone()
-                })
+                // Best-effort evidence: a payload created on another thread
+                // cannot be touched here, so it reports as absent.
+                payload
+                    .with::<crate::thread_bound::ThreadBound<Robj>, _>(|condition| {
+                        condition.get().cloned().ok()
+                    })
+                    .flatten()
             })
             .unwrap_or_else(|| NULL.into_robj())
     };

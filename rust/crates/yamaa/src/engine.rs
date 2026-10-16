@@ -841,7 +841,16 @@ impl DefineBuild {
             .map(|(path, bytes, state)| DefineArtifact {
                 path: path.to_owned(),
                 bytes: bytes.to_vec(),
-                state: format!("{state:?}"),
+                // Explicit tokens, not the adapter `Debug` text: a renamed
+                // or restructured adapter variant must break this build
+                // rather than silently change a public value.
+                state: match state {
+                    yamaa_adapters::file_define::PublicationState::Ready => "Ready",
+                    yamaa_adapters::file_define::PublicationState::Published => "Published",
+                    yamaa_adapters::file_define::PublicationState::Failed => "Failed",
+                    yamaa_adapters::file_define::PublicationState::Stopped => "Stopped",
+                }
+                .to_owned(),
             })
             .collect()
     }
