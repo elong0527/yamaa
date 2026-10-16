@@ -14,7 +14,12 @@ pub trait SourcePort {
     type Error;
     /// Optional immutable native table, owned independently of host handles.
     /// The decoder admits its schema/values through the same binding lifecycle.
-    fn owned_table(&self, _source: &SourceDeclaration) -> Option<Arc<dyn std::any::Any + Send + Sync>> { None }
+    fn owned_table(
+        &self,
+        _source: &SourceDeclaration,
+    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+        None
+    }
     /// Opt in only for known resource causes. Opaque host errors retain their
     /// identity and are not converted by inspecting their text or class name.
     fn resource_failure(&self, error: &Self::Error) -> Option<ResourceFailure>;
@@ -41,7 +46,9 @@ pub trait SourceDecoder {
         _table: &(dyn std::any::Any + Send + Sync),
         _interpretation: SourceInterpretation,
         _contract: Option<&crate::producer_contract::Contract>,
-    ) -> Option<Result<Self::Table, Self::Error>> { None }
+    ) -> Option<Result<Self::Table, Self::Error>> {
+        None
+    }
     /// Semantic ingestion findings can be collected across the remaining declared
     /// sources. Resource, transport and opaque boundary failures must abort.
     fn continue_after(&self, error: &Self::Error) -> bool;
@@ -439,15 +446,17 @@ fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
             return;
         }
         let owned = port.owned_table(declaration);
-        let interpretation = prepared.source_interpretation(index).expect("admitted source interpretation");
-        let decoded = owned.as_ref().and_then(|table| decoder.decode_owned(declaration, table.as_ref(), interpretation, None));
-        let decoded = decoded.unwrap_or_else(|| decoder.decode(
-            declaration,
-            bytes,
-            interpretation,
-            None,
-        ));
-        if owned.is_some() { observed.snapshot = None; }
+        let interpretation = prepared
+            .source_interpretation(index)
+            .expect("admitted source interpretation");
+        let decoded = owned.as_ref().and_then(|table| {
+            decoder.decode_owned(declaration, table.as_ref(), interpretation, None)
+        });
+        let decoded =
+            decoded.unwrap_or_else(|| decoder.decode(declaration, bytes, interpretation, None));
+        if owned.is_some() {
+            observed.snapshot = None;
+        }
         match decoded {
             Ok(table) => {
                 observed.table = Some(table);

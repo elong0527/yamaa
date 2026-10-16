@@ -195,7 +195,11 @@ pub fn _domain_file(
     {
         let mut ports = yamaa_adapters::file_application::Application {
             host: yamaa_core::project_function::Language::Python,
-            runtime: crate::file_domain::Runtime { py, specification, resolver: resolver.map(crate::resource_resolver::Port::new) },
+            runtime: crate::file_domain::Runtime {
+                py,
+                specification,
+                resolver: resolver.map(crate::resource_resolver::Port::new),
+            },
         };
         let measurements =
             std::sync::Arc::new(yamaa_adapters::application_measurements::Measurements::new());
@@ -236,14 +240,15 @@ pub fn _domain_file(
     }
 }
 #[pyfunction]
-#[pyo3(signature=(specification,environment=None))]
+#[pyo3(signature=(specification,environment=None,resolver=None))]
 pub fn _check_file(
     py: Python<'_>,
     specification: &str,
     environment: Option<&str>,
+    resolver: Option<Py<PyAny>>,
 ) -> Vec<crate::report_fields::IssueRow> {
     {
-        let issues = yamaa_adapters::file_application::check(
+        let issues = yamaa_adapters::file_application::check_with_resolver(
             yamaa_core::domain_entry::Request {
                 specification,
                 environment,
@@ -256,6 +261,7 @@ pub fn _check_file(
                 specification,
                 base_directory: ".",
             },
+            resolver.map(crate::resource_resolver::Port::new),
         );
         crate::report_fields::issue_rows(&issues)
     }

@@ -1075,7 +1075,9 @@
     "r/public-file-resources": "shared_run",
     "r/public-grammar": "shared_run",
     "r/sas-sources": "shared_run",
-    "r/verification-logs": "shared_run"
+    "r/verification-logs": "shared_run",
+    "python/host-resources": "shared_run",
+    "r/host-resources": "shared_run"
   },
   "suite_ids": {
     "R/yamaa/tests/public_producers.R": "r/public-producer-builds",

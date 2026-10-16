@@ -1,10 +1,17 @@
 //! Translate the host resolver protocol; source semantics stay in the engine.
-use pyo3::{prelude::*, types::{PyBytes, PyDict}};
+use pyo3::{
+    prelude::*,
+    types::{PyBytes, PyDict},
+};
 use std::sync::Arc;
 use yamaa_adapters::host_resources::{Failure, Reply, Request, Resolver};
-pub struct Port { callback: Py<PyAny> }
+pub struct Port {
+    callback: Py<PyAny>,
+}
 impl Port {
-    pub fn new(callback: Py<PyAny>) -> Arc<dyn Resolver> { Arc::new(Self { callback }) }
+    pub fn new(callback: Py<PyAny>) -> Arc<dyn Resolver> {
+        Arc::new(Self { callback })
+    }
 }
 impl Resolver for Port {
     fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
@@ -21,17 +28,62 @@ impl Resolver for Port {
                 let failure = reply.get_item("failure")?;
                 if !failure.is_none() {
                     return Ok(Err(match failure.extract::<&str>()? {
-                        "missing" => Failure::Missing, "changed" => Failure::Changed,
-                        "cancelled" => Failure::Cancelled, "publication" => Failure::Publication,
-                        "cleanup" => Failure::Cleanup, _ => Failure::Rejected,
+                        "missing" => Failure::Missing,
+                        "changed" => Failure::Changed,
+                        "cancelled" => Failure::Cancelled,
+                        "publication" => Failure::Publication,
+                        "cleanup" => Failure::Cleanup,
+                        _ => Failure::Rejected,
                     }));
                 }
                 let reference = reply.get_item("reference")?.extract::<String>()?;
                 let bytes = reply.get_item("data")?;
-                let bytes = if bytes.is_none() { None } else { Some(Arc::from(bytes.cast::<PyBytes>()?.as_bytes())) };
-                Ok(Ok(Reply { reference, bytes }))
+                let bytes = if bytes.is_none() {
+                    None
+                } else {
+                    Some(Arc::from(bytes.cast::<PyBytes>()?.as_bytes()))
+                };
+                let frame = reply.get_item("frame")?;
+                let frame = if frame.is_none() {
+                    None
+                } else {
+                    Some(Arc::new(
+                        yamaa_adapters::arrow_bridge::import_public_stream(
+                            crate::arrow_bridge::take_stream(&frame)?,
+                        )
+                        .map_err(|_| {
+                            pyo3::exceptions::PyValueError::new_err("unsupported host frame")
+                        })?,
+                    ))
+                };
+                Ok(Ok(Reply {
+                    reference,
+                    bytes,
+                    frame,
+                }))
             };
-            run().unwrap_or(Err(Failure::Rejected))
+            match run() {
+                Ok(reply) => reply,
+                Err(error) => {
+                    let failure = if error
+                        .is_instance_of::<pyo3::exceptions::PyKeyboardInterrupt>(py)
+                        || error.is_instance_of::<pyo3::exceptions::PySystemExit>(py)
+                    {
+                        Failure::Cancelled
+                    } else {
+                        Failure::Rejected
+                    };
+                    // Exporters and native representation admission run after
+                    // Python dispatch. Retain that exact error on the same
+                    // per-attempt owner before the engine projects the failure.
+                    let _ = self
+                        .callback
+                        .bind(py)
+                        .getattr("__self__")
+                        .and_then(|owner| owner.call_method1("_retain_error", (error.value(py),)));
+                    Err(failure)
+                }
+            }
         })
     }
 }

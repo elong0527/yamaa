@@ -50,7 +50,9 @@ impl Runtime<'_, '_> {
 impl RuntimePort for Runtime<'_, '_> {
     type Result = Domain;
     type Error = PyErr;
-    fn resolver(&self) -> Option<std::sync::Arc<dyn yamaa_adapters::host_resources::Resolver>> { self.resolver.clone() }
+    fn resolver(&self) -> Option<std::sync::Arc<dyn yamaa_adapters::host_resources::Resolver>> {
+        self.resolver.clone()
+    }
     fn plain(
         &mut self,
         prepared: yamaa_adapters::file_preparation::FileSpecification,

@@ -33,16 +33,25 @@
 #' Build a domain through the shared Rust engine
 #' @param specification One domain-specification path.
 #' @param environment Optional study environment path for functions and codelists.
+#' @param resolver Optional host resource resolver.
 #' @return An owned result with output, issues, declared logs and a save method.
 #' @export
-yamaa_domain <- function(specification, environment = NULL) {
+yamaa_domain <- function(specification, environment = NULL, resolver = NULL) {
   args <- .domain_arguments(specification, environment)
   capabilities <- .yamaa_locked_host_capabilities()
-  handle <- .domain_reply(.Call(wrap__domain_file, args[[1L]], args[[2L]], args[[3L]],
-    list(capabilities$verify, capabilities$resolve, .project_condition_details)))
+  if (!is.null(resolver)) resolver <- resolver$session()
+  host <- list(capabilities$verify, capabilities$resolve, .project_condition_details)
+  handle <- if (is.null(resolver)) {
+    .domain_reply(.Call(wrap__domain_file, args[[1L]], args[[2L]], args[[3L]], host))
+  } else {
+    value <- .domain_reply(.Call(wrap__domain_resolved, args[[1L]], args[[2L]], args[[3L]], host, resolver$dispatch))
+    resolver$raise_pending()
+    value
+  }
   interrupted <- .domain_reply(.Call(wrap__domain_interrupt, handle))
   if (!is.null(interrupted)) stop(interrupted)
   result <- new.env(parent = emptyenv())
+  result$resource_provenance <- if (is.null(resolver)) list() else resolver$provenance
   makeActiveBinding("output", local({ h <- handle; function(value) {
     if (!missing(value)) stop("output is read only", call. = FALSE)
     .domain_reply(.Call(wrap__domain_output, h))
@@ -72,6 +81,7 @@ yamaa_domain <- function(specification, environment = NULL) {
     .domain_reply(.Call(wrap__domain_log, h, TRUE))
   }}), result)
   result$save <- local({ h <- handle; function() {
+    if (!is.null(resolver)) on.exit(resolver$raise_pending())
     reply <- .domain_reply(.Call(wrap__domain_save, h))
     if (reply$failed) stop(structure(list(message = "cannot save a failed build", call = NULL),
       class = c("yamaa_domain_error", "error", "condition")))
@@ -85,9 +95,15 @@ yamaa_domain <- function(specification, environment = NULL) {
 #' @inheritParams yamaa_domain
 #' @return A list containing the issues data frame.
 #' @export
-yamaa_check <- function(specification, environment = NULL) {
+yamaa_check <- function(specification, environment = NULL, resolver = NULL) {
   args <- .domain_arguments(specification, environment)
-  list(issues = .domain_reply(.Call(wrap__check_file, args[[1L]], args[[2L]], args[[3L]])))
+  if (is.null(resolver)) {
+    return(list(issues = .domain_reply(.Call(wrap__check_file, args[[1L]], args[[2L]], args[[3L]]))))
+  }
+  resolver <- resolver$session()
+  value <- .domain_reply(.Call(wrap__check_resolved, args[[1L]], args[[2L]], args[[3L]], resolver$dispatch))
+  resolver$raise_pending()
+  list(issues = value)
 }
 
 #' Copy lossless signed 64-bit output values as canonical text

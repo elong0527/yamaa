@@ -26,6 +26,16 @@ class ResourceRequest:
 class ResourceResult:
     reference: str
     data: bytes | None = None
+    frame: object | None = None
+
+
+@dataclass(frozen=True)
+class ResourceProvenance:
+    declaring: str
+    written: str
+    kind: str
+    reference: str
+    representation: Literal["bytes", "frame"]
 
 
 class ResourceFailure(Exception):
@@ -51,6 +61,15 @@ class ResourceResolver:
     def __init__(self, callback: Callable[[ResourceRequest], ResourceResult]):
         self._callback = callback
         self._pending: BaseException | None = None
+        self._provenance: dict[tuple[str, str, str], ResourceProvenance] = {}
+
+    def _session(self):
+        return ResourceResolver(self._callback)
+
+    @property
+    def provenance(self) -> tuple[ResourceProvenance, ...]:
+        """Original callback capture identities, in acquisition order."""
+        return tuple(self._provenance.values())
 
     def _dispatch(self, values):
         try:
@@ -59,7 +78,10 @@ class ResourceResolver:
                 raise ResourceFailure("rejected")
             if reply.data is not None and not isinstance(reply.data, bytes):
                 raise ResourceFailure("rejected")
-            return {"reference": reply.reference, "data": reply.data, "failure": None}
+            if values["operation"] == "capture":
+                key = (values["declaring"], values["written"], values["kind"])
+                self._provenance.setdefault(key, ResourceProvenance(*key, reply.reference, "frame" if reply.frame is not None else "bytes"))
+            return {"reference": reply.reference, "data": reply.data, "frame": reply.frame, "failure": None}
         except ResourceFailure as error:
             return {"failure": error.reason}
         except BaseException as error:
@@ -73,6 +95,10 @@ class ResourceResolver:
         error, self._pending = self._pending, None
         if error is not None:
             raise error
+
+    def _retain_error(self, error: BaseException):
+        if self._pending is None:
+            self._pending = error
 
 
 class MemoryResolver(ResourceResolver):
@@ -95,6 +121,11 @@ class MemoryResolver(ResourceResolver):
             raise TypeError("resource data must be immutable bytes")
         self._next += 1
         self.objects[key] = ResourceResult(reference or f"{self.prefix}{key}#v{self._next}", data)
+
+    def put_frame(self, key: str, frame, *, reference: str | None = None):
+        """Retain an immutable Arrow-compatible frame without IPC serialization."""
+        self._next += 1
+        self.objects[key] = ResourceResult(reference or f"{self.prefix}{key}#v{self._next}", frame=frame)
 
     def _key(self, declaring: str, written: str) -> str:
         if written.startswith(self.prefix):
@@ -121,7 +152,7 @@ class MemoryResolver(ResourceResolver):
                 raise ResourceFailure("missing") from None
             if request.reference is not None and request.reference != result.reference:
                 raise ResourceFailure("changed")
-            return ResourceResult(result.reference, result.data if request.operation == "capture" else None)
+            return ResourceResult(result.reference, result.data if request.operation == "capture" else None, result.frame if request.operation == "capture" else None)
         if request.operation == "target":
             return ResourceResult(self.prefix + key)
         if request.operation == "stage":
@@ -148,4 +179,4 @@ class SyntheticRemoteResolver(MemoryResolver):
         super().__init__(objects, prefix="object://synthetic/")
 
 
-__all__ = ["MemoryResolver", "ResourceFailure", "ResourceRequest", "ResourceResolver", "ResourceResult", "SyntheticRemoteResolver"]
+__all__ = ["MemoryResolver", "ResourceFailure", "ResourceProvenance", "ResourceRequest", "ResourceResolver", "ResourceResult", "SyntheticRemoteResolver"]

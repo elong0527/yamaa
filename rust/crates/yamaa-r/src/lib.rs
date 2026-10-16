@@ -13,6 +13,7 @@ mod project_activation;
 mod project_result;
 mod public_table;
 mod report_fields;
+mod resource_resolver;
 mod scalars;
 
 #[extendr]

@@ -533,6 +533,7 @@ pub struct FailedBuild;
 
 struct Native<'a> {
     identity: Identity<'a>,
+    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 }
 /// The host provides activation and original-error conversion. All route
 /// preparation, static checks and dispatch stay behind the shared application.
@@ -593,9 +594,12 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
         request: Request<'_>,
     ) -> Result<crate::file_workflow::Selected, Self::Failure> {
         match self.runtime.resolver() {
-            Some(resolver) => crate::file_workflow::select_with_resolver(request, self.host, resolver),
+            Some(resolver) => {
+                crate::file_workflow::select_with_resolver(request, self.host, resolver)
+            }
             None => crate::file_workflow::select_request(request, self.host),
-        }.map_err(ApplicationError::Preparation)
+        }
+        .map_err(ApplicationError::Preparation)
     }
     fn check_plain(&mut self, prepared: FileSpecification) -> Result<Failure, Self::Failure> {
         Ok(crate::specification_check::issue_rows(prepared.run())
@@ -655,6 +659,9 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
 impl RuntimePort for Native<'_> {
     type Result = Domain;
     type Error = Failure;
+    fn resolver(&self) -> Option<std::sync::Arc<dyn crate::host_resources::Resolver>> {
+        self.resolver.clone()
+    }
     fn plain(&mut self, prepared: FileSpecification) -> Result<Domain, Failure> {
         self.plain_with_observer(
             prepared,
@@ -713,14 +720,22 @@ impl RuntimePort for Native<'_> {
 
 /// Convert an already checked plain capability without recapturing metadata.
 pub fn plain(prepared: FileSpecification, identity: Identity<'_>) -> Result<Domain, Failure> {
-    Native { identity }.plain(prepared)
+    Native {
+        identity,
+        resolver: None,
+    }
+    .plain(prepared)
 }
 pub fn plain_with_observer(
     prepared: FileSpecification,
     identity: Identity<'_>,
     scope: yamaa_core::application_observer::Scope<'_>,
 ) -> Result<Domain, Failure> {
-    Native { identity }.plain_with_observer(prepared, scope)
+    Native {
+        identity,
+        resolver: None,
+    }
+    .plain_with_observer(prepared, scope)
 }
 fn native(identity: Identity<'_>) -> Application<Native<'_>> {
     Application {
@@ -729,11 +744,22 @@ fn native(identity: Identity<'_>) -> Application<Native<'_>> {
         } else {
             yamaa_core::project_function::Language::Python
         },
-        runtime: Native { identity },
+        runtime: Native {
+            identity,
+            resolver: None,
+        },
     }
 }
 pub fn check(request: Request<'_>, identity: Identity<'_>) -> Failure {
+    check_with_resolver(request, identity, None)
+}
+pub fn check_with_resolver(
+    request: Request<'_>,
+    identity: Identity<'_>,
+    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
+) -> Failure {
     let mut application = native(identity);
+    application.runtime.resolver = resolver;
     crate::issue_rows::collect(
         domain_entry::check(request, &mut application).unwrap_or_else(|error| match error {
             ApplicationError::Preparation(error) => {

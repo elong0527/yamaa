@@ -68,13 +68,40 @@ fn domain_file(
     version: Raw,
     capabilities: List,
 ) -> List {
+    domain_request(specification, environment_path, version, capabilities, None)
+}
+#[extendr]
+fn domain_resolved(
+    specification: Raw,
+    environment_path: Robj,
+    version: Raw,
+    capabilities: List,
+    resolver: Function,
+) -> List {
+    domain_request(
+        specification,
+        environment_path,
+        version,
+        capabilities,
+        Some(crate::resource_resolver::new(resolver)),
+    )
+}
+fn domain_request(
+    specification: Raw,
+    environment_path: Robj,
+    version: Raw,
+    capabilities: List,
+    resolver: Option<std::sync::Arc<dyn yamaa_adapters::host_resources::Resolver>>,
+) -> List {
     boundary(|| {
         let specification = text(&specification)?;
         let environment = environment(&environment_path)?;
         let environment = environment.as_ref().map(text).transpose()?;
         let version = text(&version)?;
         {
-            let runtime = crate::file_domain::Runtime::new(specification, version, capabilities)?;
+            let mut runtime =
+                crate::file_domain::Runtime::new(specification, version, capabilities)?;
+            runtime.resolver = resolver;
             let mut ports = yamaa_adapters::file_application::Application {
                 host: yamaa_core::project_function::Language::R,
                 runtime,
@@ -123,13 +150,35 @@ fn domain_file(
 }
 #[extendr]
 fn check_file(specification: Raw, environment_path: Robj, version: Raw) -> List {
+    check_request(specification, environment_path, version, None)
+}
+#[extendr]
+fn check_resolved(
+    specification: Raw,
+    environment_path: Robj,
+    version: Raw,
+    resolver: Function,
+) -> List {
+    check_request(
+        specification,
+        environment_path,
+        version,
+        Some(crate::resource_resolver::new(resolver)),
+    )
+}
+fn check_request(
+    specification: Raw,
+    environment_path: Robj,
+    version: Raw,
+    resolver: Option<std::sync::Arc<dyn yamaa_adapters::host_resources::Resolver>>,
+) -> List {
     boundary(|| {
         let specification = text(&specification)?;
         let environment = environment(&environment_path)?;
         let environment = environment.as_ref().map(text).transpose()?;
         let version = text(&version)?;
         {
-            let issues = yamaa_adapters::file_application::check(
+            let issues = yamaa_adapters::file_application::check_with_resolver(
                 yamaa_core::domain_entry::Request {
                     specification,
                     environment,
@@ -142,6 +191,7 @@ fn check_file(specification: Raw, environment_path: Robj, version: Raw) -> List 
                     specification,
                     base_directory: ".",
                 },
+                resolver,
             );
             crate::issue_frame::frame(&issues)
         }
@@ -413,7 +463,9 @@ fn domain_projection_failure(handle: Robj) -> List {
 extendr_module! {
     mod domain_entry;
     fn domain_file;
+    fn domain_resolved;
     fn check_file;
+    fn check_resolved;
     fn domain_issues;
     fn domain_output;
     fn domain_arrow;

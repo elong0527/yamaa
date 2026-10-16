@@ -8,14 +8,15 @@
 \alias{[.yamaa_utf8_vector}
 \title{Build or Check a Domain with the Shared Rust Engine}
 \usage{
-yamaa_domain(specification, environment = NULL)
-yamaa_check(specification, environment = NULL)
+yamaa_domain(specification, environment = NULL, resolver = NULL)
+yamaa_check(specification, environment = NULL, resolver = NULL)
 \method{as.character}{yamaa_int64_vector}(x, ...)
 \method{as.character}{yamaa_utf8_vector}(x, ...)
 }
 \arguments{
 \item{specification}{One domain-specification path.}
 \item{environment}{Optional study environment path for functions and codelists.}
+\item{resolver}{Optional host resource resolver.}
 \item{x}{A lossless signed 64-bit integer or UTF-8 output vector.}
 \item{...}{Unused arguments.}
 }

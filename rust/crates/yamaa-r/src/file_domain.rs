@@ -13,6 +13,7 @@ pub(crate) struct Runtime<'request> {
     verify: Function,
     resolve: Function,
     formatter: Function,
+    pub(crate) resolver: Option<std::sync::Arc<dyn yamaa_adapters::host_resources::Resolver>>,
 }
 impl<'request> Runtime<'request> {
     pub fn new(
@@ -44,6 +45,7 @@ impl<'request> Runtime<'request> {
             verify,
             resolve,
             formatter,
+            resolver: None,
         })
     }
     fn identity(&self) -> Identity<'_> {
@@ -92,6 +94,9 @@ impl<'request> Runtime<'request> {
 impl RuntimePort for Runtime<'_> {
     type Result = State;
     type Error = String;
+    fn resolver(&self) -> Option<std::sync::Arc<dyn yamaa_adapters::host_resources::Resolver>> {
+        self.resolver.clone()
+    }
     fn plain(
         &mut self,
         prepared: yamaa_adapters::file_preparation::FileSpecification,

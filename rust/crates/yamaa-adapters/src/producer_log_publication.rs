@@ -2,11 +2,11 @@
 //! Failed graphs retain verification-only authority; public attempts grant none.
 use crate::{
     file_producer_build::Provenance,
-    resource_publication::{AnchoredTarget, Publisher},
     file_resources::{Error as ResourceError, Resources},
     producer_publication::{same_location, AdmissionFailure},
     producer_report::{NativeAttempt, NodeLogs},
     report_storage::StoredReport,
+    resource_publication::{AnchoredTarget, Publisher},
     specification_report::Error as ReportError,
 };
 use std::{

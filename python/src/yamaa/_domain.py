@@ -32,6 +32,10 @@ class Domain:
         return issues_frame(self._native.issues())
 
     @property
+    def resource_provenance(self):
+        return () if self._resolver is None else self._resolver.provenance
+
+    @property
     def verification_log(self) -> pl.DataFrame | None:
         data = self.verification_log_arrow
         return None if data is None else pl.from_arrow(data, rechunk=False)
@@ -66,6 +70,7 @@ def domain(
     environment: str | PathLike[str] | None = None,
     resolver=None,
 ) -> Domain:
+    resolver = None if resolver is None else resolver._session()
     native = _domain_file(
         fspath(specification), None if environment is None else fspath(environment),
         None if resolver is None else resolver._dispatch,
@@ -94,13 +99,19 @@ def check(
     specification: str | PathLike[str],
     *,
     environment: str | PathLike[str] | None = None,
+    resolver=None,
 ) -> Check:
     """Return native preparation and static issues without reading study data."""
-    return Check(
+    resolver = None if resolver is None else resolver._session()
+    result = Check(
         _check_file(
-            fspath(specification), None if environment is None else fspath(environment)
+            fspath(specification), None if environment is None else fspath(environment),
+            None if resolver is None else resolver._dispatch,
         )
     )
+    if resolver is not None:
+        resolver._raise_pending()
+    return result
 
 
 __all__ = ["DomainError", "check", "domain"]

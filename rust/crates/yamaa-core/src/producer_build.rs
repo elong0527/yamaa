@@ -20,7 +20,13 @@ use std::sync::Arc;
 /// producer sources never reach this port, even for location inspection.
 pub trait StudyPort {
     type Error;
-    fn owned_table(&self, _node: &Node, _source: &SourceDeclaration) -> Option<Arc<dyn std::any::Any + Send + Sync>> { None }
+    fn owned_table(
+        &self,
+        _node: &Node,
+        _source: &SourceDeclaration,
+    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+        None
+    }
     fn resource_failure(&self, error: &Self::Error) -> Option<ResourceFailure>;
     fn inspect(&mut self, node: &Node, source: &SourceDeclaration) -> Result<(), Self::Error>;
     fn capture_reads(&self) -> usize;
@@ -302,8 +308,16 @@ struct NodeDecoder<'a, D> {
 impl<D: SourceDecoder> SourceDecoder for NodeDecoder<'_, D> {
     type Error = DecodeError<D::Error>;
     type Table = D::Table;
-    fn decode_owned(&mut self, source: &SourceDeclaration, table: &(dyn std::any::Any + Send + Sync), interpretation: crate::specification::SourceInterpretation, contract: Option<&crate::producer_contract::Contract>) -> Option<Result<Self::Table, Self::Error>> {
-        self.decoder.decode_owned(source, table, interpretation, contract).map(|result| result.map_err(DecodeError::Codec))
+    fn decode_owned(
+        &mut self,
+        source: &SourceDeclaration,
+        table: &(dyn std::any::Any + Send + Sync),
+        interpretation: crate::specification::SourceInterpretation,
+        contract: Option<&crate::producer_contract::Contract>,
+    ) -> Option<Result<Self::Table, Self::Error>> {
+        self.decoder
+            .decode_owned(source, table, interpretation, contract)
+            .map(|result| result.map_err(DecodeError::Codec))
     }
     fn continue_after(&self, error: &Self::Error) -> bool {
         match error {
@@ -413,8 +427,15 @@ impl<P: StudyPort, D, T: TableAccess, R, RE, CE> Sources<'_, P, D, T, R, RE, CE>
 }
 impl<P: StudyPort, D, T: TableAccess, R, RE, CE> SourcePort for Sources<'_, P, D, T, R, RE, CE> {
     type Error = CaptureError<P::Error>;
-    fn owned_table(&self, source: &SourceDeclaration) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
-        if self.producer(source).is_some() { None } else { self.external.owned_table(self.node, source) }
+    fn owned_table(
+        &self,
+        source: &SourceDeclaration,
+    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+        if self.producer(source).is_some() {
+            None
+        } else {
+            self.external.owned_table(self.node, source)
+        }
     }
     fn resource_failure(&self, error: &Self::Error) -> Option<ResourceFailure> {
         match error {

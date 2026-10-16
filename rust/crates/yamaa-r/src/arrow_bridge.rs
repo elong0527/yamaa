@@ -2,6 +2,24 @@
 use extendr_api::prelude::*;
 use yamaa_adapters::{arrow_bridge::FFI_ArrowArrayStream, public_table::PublicTable};
 
+pub(crate) fn import(
+    source: Robj,
+) -> std::result::Result<yamaa_adapters::arrow_table::ArrowTable, String> {
+    if !source.is_external_pointer() || !source.inherits("nanoarrow_array_stream") {
+        return Err("expected a nanoarrow array stream".into());
+    }
+    // SAFETY: a compliant native nanoarrow producer owns this aligned standard
+    // stream shell. Move clears its release callback while the R owner is rooted.
+    let pointer =
+        unsafe { extendr_api::R_ExternalPtrAddr(source.get()) }.cast::<FFI_ArrowArrayStream>();
+    if pointer.is_null() {
+        return Err("null Arrow stream source".into());
+    }
+    let stream = unsafe { FFI_ArrowArrayStream::from_raw(pointer) };
+    yamaa_adapters::arrow_bridge::import_public_stream(stream)
+        .map_err(|_| "unsupported host frame".into())
+}
+
 pub(crate) fn export(table: &PublicTable, destination: Robj) -> std::result::Result<Robj, String> {
     if !destination.is_external_pointer() || !destination.inherits("nanoarrow_array_stream") {
         return Err("expected a fresh nanoarrow array stream".into());
