@@ -34,7 +34,6 @@ The minimum supported independent readers are:
 | Python standard library | Supported CPython above | Dataset-JSON 1.1 |
 | R jsonlite | 2.0.0 | Dataset-JSON 1.1, with `bigint_as_char = TRUE` |
 | Python lxml | 6.1.0 | Define-XML 2.1 |
-| R nanoarrow | 0.8.0 | Arrow C Stream result views (`output_arrow`, `verification_log_arrow`, `warning_log_arrow`) |
 
 Python package dependencies and R package `Suggests` declare these floors.
 The R readers are optional: public Build and Save use the shared native codecs.
