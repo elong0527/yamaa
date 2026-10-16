@@ -1,0 +1,110 @@
+
+name: R-CMD-check
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r-cmd-check-${{ github.ref }}
+  # Cancel stale pull-request feedback; scheduled main runs finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  R-CMD-check:
+    runs-on: ${{ matrix.config.os }}
+
+    name: ${{ matrix.config.os }} (${{ matrix.config.r }})
+
+    timeout-minutes: ${{ matrix.config.os == 'windows-latest' && 60 || 45 }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: macos-15,       r: 'release'}
+          - {os: windows-latest, r: 'release'}
+          - {os: ubuntu-24.04,   r: 'devel', http-user-agent: 'release'}
+          - {os: ubuntu-24.04,   r: 'release'}
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      _R_CHECK_CRAN_INCOMING_REMOTE_: 'false'
+
+    steps:
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: ${{ matrix.config.r }}
+          http-user-agent: ${{ matrix.config.http-user-agent }}
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: R/yamaa
+          extra-packages: any::rcmdcheck
+          needs: check
+
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.11.6'
+          enable-cache: true
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install repository tools and the pinned Rust toolchain
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain --install
+          if [ "${{ runner.os }}" = Windows ]; then
+            rustup target add x86_64-pc-windows-gnu
+          fi
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: rust
+          shared-key: yamaa-${{ runner.os }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install the shared grammar fixture codec
+        run: python -m pip install py-yaml12==0.2.0
+
+      - name: Stage standalone R package
+        run: python -m tools.staging.stage_r_package "r-cmd-check/yamaa"
+
+      - name: Build R source package
+        working-directory: r-cmd-check
+        run: R CMD build --no-build-vignettes --no-manual yamaa
+
+      - name: Preserve R source package
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: r-package-${{ matrix.config.os }}-${{ matrix.config.r }}
+          path: r-cmd-check/yamaa_*.tar.gz
+          if-no-files-found: error
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          working-directory: r-cmd-check/yamaa
+          args: 'c("--no-manual")'
+          build_args: '"--no-manual"'
+          upload-snapshots: true
+          upload-results: true
