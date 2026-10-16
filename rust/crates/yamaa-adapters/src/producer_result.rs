@@ -617,7 +617,6 @@ mod log_tests {
         path::PathBuf,
         sync::atomic::{AtomicUsize, Ordering},
     };
-    use yamaa_core::application_observer::Scope;
     use yamaa_core::{
         function_invocation::{Argument, HostError},
         project_activation::ActivationPort,
@@ -786,6 +785,7 @@ mod log_tests {
     #[test]
     #[cfg(unix)]
     fn actual_sparse_source_boundary_keeps_facts_across_plain_project_and_graph_results() {
+        use yamaa_core::application_observer::Scope;
         for route in ["plain", "project", "producer"] {
             let study = Study::new();
             study.fixture(false, false, false);
