@@ -252,11 +252,14 @@ fn repeated_type_findings_keep_the_complete_ordered_context() {
         assert_eq!(finding.spec_paths, ["result"]);
         assert_eq!(
             finding.context["source"],
-            crate::json::json!(format!("X{index}"))
+            crate::json::Value::from(format!("X{index}"))
         );
-        assert_eq!(finding.context["expr"], crate::json::json!(expression));
-        assert_eq!(finding.context["expected"], crate::json::json!("numeric"));
-        assert_eq!(finding.context["actual"], crate::json::json!("str"));
+        assert_eq!(
+            finding.context["expr"],
+            crate::json::Value::from(expression.as_str())
+        );
+        assert_eq!(finding.context["expected"], crate::json::Value::from("numeric"));
+        assert_eq!(finding.context["actual"], crate::json::Value::from("str"));
     }
 }
 

@@ -1125,7 +1125,7 @@ mod diagnostics {
                     .unwrap(),
                 );
                 let finding =
-                    submission_json::render(&study, &study.datasets()[0], &table, "define.xml")
+                    submission_json::admit(&study, &study.datasets()[0], &table)
                         .unwrap_err();
                 assert_eq!(finding.code, ConditionCode::ApplicationRejected);
                 assert_eq!(finding.path, "datasets.D0.dataset_json");

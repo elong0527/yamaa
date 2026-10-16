@@ -2001,7 +2001,7 @@ mod preparation {
                 let diagnostic = error.diagnostic().unwrap().unwrap();
                 assert_eq!(
                     diagnostic.context["path"],
-                    yamaa_core::json::json!("p".repeat(512))
+                    yamaa_core::json::Value::from("p".repeat(512))
                 );
             }
             let Error::Unavailable { declaring, path } = &error else {
@@ -2015,7 +2015,7 @@ mod preparation {
             };
             assert_eq!(
                 cycle.diagnostic().unwrap().unwrap().context["cycle"],
-                yamaa_core::json::json!(["entry", "base", "entry"])
+                yamaa_core::json::Value::from(["entry", "base", "entry"].map(yamaa_core::json::Value::from))
             );
         }
 

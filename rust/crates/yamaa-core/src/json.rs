@@ -1,19 +1,14 @@
 //! Owned diagnostic values with exact JSON number tokens.
 //!
 //! Number admission preserves spelling and never passes integers through binary64.
-//! Wire helpers keep that representation across reports and verification records.
+//! This module owns only the pure owned values: wire admission, codec traits,
+//! JSON text encoding/decoding and artifact writers live in yamaa-adapters
+//! (see `json_wire` there), which projects these values through explicit
+//! wire wrappers because the serde orphan rule bars foreign trait impls.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::BTreeMap, fmt, ops, str::FromStr};
 
-pub use crate::json;
-use serde_json::value;
-use serde_json::Error;
 pub type Map<K, V> = BTreeMap<K, V>;
-
-// Preserve serde_json's default wire recursion budget. It decrements before
-// entering a container and rejects zero, admitting 127 nested containers.
-const DEFAULT_JSON_RECURSION_LIMIT: usize = 128;
 
 /// A validated JSON number, retaining integer, fractional and exponent spelling.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -97,20 +92,6 @@ impl fmt::Display for Number {
     }
 }
 
-impl Serialize for Number {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let raw: &value::RawValue = serde_json::from_str(&self.0).expect("admitted number token");
-        raw.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Number {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = Box::<value::RawValue>::deserialize(deserializer)?;
-        raw.get().parse().map_err(serde::de::Error::custom)
-    }
-}
-
 /// Structured context shared by diagnostics and retained verification logs.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum Value {
@@ -121,171 +102,6 @@ pub enum Value {
     String(String),
     Array(Vec<Value>),
     Object(Map<String, Value>),
-}
-
-impl Serialize for Value {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            Self::Null => serializer.serialize_unit(),
-            Self::Bool(value) => serializer.serialize_bool(*value),
-            Self::Number(value) => value.serialize(serializer),
-            Self::String(value) => serializer.serialize_str(value),
-            Self::Array(value) => value.serialize(serializer),
-            Self::Object(value) => value.serialize(serializer),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for Value {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = Box::<value::RawValue>::deserialize(deserializer)?;
-        decode(raw.get(), true).map_err(serde::de::Error::custom)
-    }
-}
-
-fn decode(text: &str, check_wire_depth: bool) -> Result<Value, Error> {
-    let mut decoder = Decoder {
-        text,
-        offset: 0,
-        check_wire_depth,
-    };
-    let value = decoder.value(0)?;
-    decoder.space();
-    if decoder.offset != text.len() {
-        return Err(Decoder::invalid());
-    }
-    Ok(value)
-}
-
-/// Walk an already validated RawValue once. Revalidating each child container
-/// would multiply the work of materializing large retained table reports.
-struct Decoder<'a> {
-    text: &'a str,
-    offset: usize,
-    check_wire_depth: bool,
-}
-impl Decoder<'_> {
-    fn invalid() -> Error {
-        <Error as serde::de::Error>::custom("invalid exact JSON tree")
-    }
-    fn byte(&self) -> Option<u8> {
-        self.text.as_bytes().get(self.offset).copied()
-    }
-    fn space(&mut self) {
-        while matches!(self.byte(), Some(b' ' | b'\t' | b'\r' | b'\n')) {
-            self.offset += 1;
-        }
-    }
-    fn consume(&mut self, byte: u8) -> Result<(), Error> {
-        if self.byte() != Some(byte) {
-            return Err(Self::invalid());
-        }
-        self.offset += 1;
-        Ok(())
-    }
-    fn string(&mut self) -> Result<String, Error> {
-        self.consume(b'"')?;
-        let start = self.offset;
-        let mut escaped = false;
-        while let Some(byte) = self.byte() {
-            match byte {
-                b'"' => {
-                    let end = self.offset;
-                    self.offset += 1;
-                    return if escaped {
-                        serde_json::from_str(&self.text[start - 1..self.offset])
-                    } else {
-                        Ok(self.text[start..end].to_owned())
-                    };
-                }
-                b'\\' => {
-                    escaped = true;
-                    self.offset += 2;
-                }
-                _ => self.offset += 1,
-            }
-        }
-        Err(Self::invalid())
-    }
-    fn value(&mut self, depth: usize) -> Result<Value, Error> {
-        self.space();
-        if self.check_wire_depth
-            && depth >= DEFAULT_JSON_RECURSION_LIMIT - 1
-            && matches!(self.byte(), Some(b'[' | b'{'))
-        {
-            return Err(<Error as serde::de::Error>::custom(
-                "JSON recursion limit exceeded",
-            ));
-        }
-        Ok(match self.byte() {
-            Some(b'n' | b't' | b'f') => {
-                let (word, value) = match self.byte() {
-                    Some(b'n') => ("null", Value::Null),
-                    Some(b't') => ("true", Value::Bool(true)),
-                    _ => ("false", Value::Bool(false)),
-                };
-                if !self.text[self.offset..].starts_with(word) {
-                    return Err(Self::invalid());
-                }
-                self.offset += word.len();
-                value
-            }
-            Some(b'"') => Value::String(self.string()?),
-            Some(b'[') => {
-                self.offset += 1;
-                self.space();
-                let mut values = Vec::new();
-                if self.byte() != Some(b']') {
-                    loop {
-                        values.push(self.value(depth + 1)?);
-                        self.space();
-                        if self.byte() != Some(b',') {
-                            break;
-                        }
-                        self.offset += 1;
-                    }
-                }
-                self.consume(b']')?;
-                Value::Array(values)
-            }
-            Some(b'{') => {
-                self.offset += 1;
-                self.space();
-                let mut values = Map::new();
-                if self.byte() != Some(b'}') {
-                    loop {
-                        self.space();
-                        let key = self.string()?;
-                        self.space();
-                        self.consume(b':')?;
-                        values.insert(key, self.value(depth + 1)?);
-                        self.space();
-                        if self.byte() != Some(b',') {
-                            break;
-                        }
-                        self.offset += 1;
-                    }
-                }
-                self.consume(b'}')?;
-                Value::Object(values)
-            }
-            Some(b'-' | b'0'..=b'9') => {
-                let start = self.offset;
-                while matches!(
-                    self.byte(),
-                    Some(b'-' | b'+' | b'.' | b'e' | b'E' | b'0'..=b'9')
-                ) {
-                    self.offset += 1;
-                }
-                Value::Number(
-                    self.text[start..self.offset]
-                        .parse()
-                        .map_err(<Error as serde::de::Error>::custom)?,
-                )
-            }
-            _ => return Err(Self::invalid()),
-        })
-    }
 }
 
 impl Value {
@@ -430,12 +246,6 @@ impl<I: Index> ops::IndexMut<I> for Value {
         index.insert(self)
     }
 }
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&serde_json::to_string(self).map_err(|_| fmt::Error)?)
-    }
-}
-
 impl From<bool> for Value {
     fn from(value: bool) -> Self {
         Self::Bool(value)
@@ -541,56 +351,12 @@ impl PartialEq<Value> for bool {
     }
 }
 
-/// Serialize into the exact tree, without an intermediate machine-width JSON value.
-pub fn to_value<T: Serialize>(value: T) -> Result<Value, Error> {
-    let text = serde_json::to_string(&value)?;
-    let raw: &value::RawValue = serde_json::from_str(&text)?;
-    // Programmatic construction did not use serde_json's wire recursion guard.
-    decode(raw.get(), false)
-}
-
-/// Construct an owned context. Interpolated values retain exact numeric spelling.
-#[macro_export]
-macro_rules! json {
-    (null) => { $crate::json::Value::Null };
-    (true) => { $crate::json::Value::Bool(true) };
-    (false) => { $crate::json::Value::Bool(false) };
-    ([]) => { $crate::json::Value::Array(::std::vec::Vec::new()) };
-    ({}) => { $crate::json::Value::Object($crate::json::Map::new()) };
-    ([$($tokens:tt)*]) => {{
-        let mut values = ::std::vec::Vec::new();
-        $crate::json!(@array values $($tokens)*);
-        $crate::json::Value::Array(values)
-    }};
-    ({$($tokens:tt)*}) => {{
-        let mut values = $crate::json::Map::new();
-        $crate::json!(@object values $($tokens)*);
-        $crate::json::Value::Object(values)
-    }};
-    (@array $values:ident) => {};
-    (@array $values:ident , $($rest:tt)*) => { $crate::json!(@array $values $($rest)*); };
-    (@array $values:ident null $($rest:tt)*) => { $values.push($crate::json!(null)); $crate::json!(@array $values $($rest)*); };
-    (@array $values:ident [$($nested:tt)*] $($rest:tt)*) => { $values.push($crate::json!([$($nested)*])); $crate::json!(@array $values $($rest)*); };
-    (@array $values:ident {$($nested:tt)*} $($rest:tt)*) => { $values.push($crate::json!({$($nested)*})); $crate::json!(@array $values $($rest)*); };
-    (@array $values:ident $value:expr, $($rest:tt)*) => { $values.push($crate::json!($value)); $crate::json!(@array $values $($rest)*); };
-    (@array $values:ident $value:expr) => { $values.push($crate::json!($value)); };
-    (@object $values:ident) => {};
-    (@object $values:ident , $($rest:tt)*) => { $crate::json!(@object $values $($rest)*); };
-    (@object $values:ident $key:tt : null $($rest:tt)*) => { $values.insert(($key).into(), $crate::json!(null)); $crate::json!(@object $values $($rest)*); };
-    (@object $values:ident $key:tt : [$($nested:tt)*] $($rest:tt)*) => { $values.insert(($key).into(), $crate::json!([$($nested)*])); $crate::json!(@object $values $($rest)*); };
-    (@object $values:ident $key:tt : {$($nested:tt)*} $($rest:tt)*) => { $values.insert(($key).into(), $crate::json!({$($nested)*})); $crate::json!(@object $values $($rest)*); };
-    (@object $values:ident $key:tt : $value:expr, $($rest:tt)*) => { $values.insert(($key).into(), $crate::json!($value)); $crate::json!(@object $values $($rest)*); };
-    (@object $values:ident $key:tt : $value:expr) => { $values.insert(($key).into(), $crate::json!($value)); };
-    ($value:expr) => { $crate::json::to_value(&$value).expect("serializable owned JSON context") };
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::{from_str, to_string};
 
     #[test]
-    fn exact_number_tokens_survive_owned_tree_and_wire_roundtrips() {
+    fn exact_number_tokens_are_admitted_with_spelling_retained() {
         for text in [
             "0",
             "-0",
@@ -606,14 +372,11 @@ mod tests {
         ] {
             let number: Number = text.parse().unwrap();
             assert_eq!(number.as_str(), text);
-            let value: Value = from_str(text).unwrap();
-            assert_eq!(value, Value::Number(number));
-            assert_eq!(to_string(&value).unwrap(), text);
-            assert_eq!(to_value(&value).unwrap(), value);
+            assert_eq!(Value::Number(number).as_number().unwrap().as_str(), text);
         }
         assert_ne!(
-            from_str::<Value>("1").unwrap(),
-            from_str::<Value>("1.0").unwrap()
+            Value::Number("1".parse().unwrap()),
+            Value::Number("1.0".parse().unwrap())
         );
         assert_eq!("1e9999".parse::<Number>().unwrap().as_f64(), None);
     }
@@ -629,93 +392,21 @@ mod tests {
     }
 
     #[test]
-    fn nested_report_interpolation_preserves_wide_numbers_and_float_kinds() {
-        let exact: Value = from_str("92233720368547758081234567890").unwrap();
-        let report = json!({"context": {"actual": exact}, "keys": [{"ID":1.0}], "label":"é\n\""});
-        let encoded = to_string(&report).unwrap();
-        assert_eq!(encoded, "{\"context\":{\"actual\":92233720368547758081234567890},\"keys\":[{\"ID\":1.0}],\"label\":\"é\\n\\\"\"}");
-        assert_eq!(from_str::<Value>(&encoded).unwrap(), report);
-    }
-
-    #[test]
-    fn serde_private_token_shaped_objects_remain_ordinary_objects() {
-        for text in [
-            r#"{"$serde_json::private::Number":"99999999999999999999"}"#,
-            r#"{"$serde_json::private::RawValue":"[1,2]"}"#,
-        ] {
-            let value: Value = from_str(text).unwrap();
-            assert!(value.is_object());
-            assert_eq!(to_string(&value).unwrap(), text);
-        }
-    }
-
-    #[test]
-    fn recursive_values_keep_the_existing_json_deserializer_boundary() {
-        for depth in [0, 1, 126, 127, 128, 129, 130] {
-            for leaf in ["0", "[]", "{}"] {
-                for (opening, closing) in [("[", "]"), ("{\"nested\":", "}")] {
-                    let text = format!("{}{leaf}{}", opening.repeat(depth), closing.repeat(depth));
-                    assert_eq!(
-                        from_str::<Value>(&text).is_ok(),
-                        from_str::<serde_json::Value>(&text).is_ok(),
-                        "depth={depth}, leaf={leaf}, opening={opening}",
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn programmatic_construction_keeps_trees_beyond_the_wire_recursion_boundary() {
-        const DIGITS: &str = "92233720368547758081234567890";
-        let mut value = Value::Number(DIGITS.parse().unwrap());
-        let mut previous = serde_json::Value::from(1);
-        for _ in 0..132 {
-            value = Value::Array(vec![value]);
-            previous = serde_json::Value::Array(vec![previous]);
-        }
-        assert!(serde_json::to_value(&previous).is_ok());
-        assert_eq!(to_value(&value).unwrap(), value);
-        let context = json!({"context": value.clone()});
-        assert_eq!(context["context"], value);
-        let text = format!("{}{DIGITS}{}", "[".repeat(132), "]".repeat(132));
-        assert_eq!(to_string(&value).unwrap(), text);
-        assert!(from_str::<Value>(&text).is_err());
-    }
-
-    #[test]
-    fn validated_walk_retains_escaped_keys_nested_values_and_duplicate_behavior() {
-        let value: Value = from_str(r#" { "\u96ea\ud83d\ude00": [null, true, false, {}, [], {"q\"\\":"雪\ud83d\ude00"}], "same": 1, "same": 2, "wide": -184467440737095516160000, "exp": 1E+9999 } "#).unwrap();
-        assert_eq!(value["雪😀"][0], Value::Null);
-        assert_eq!(value["雪😀"][1], true);
-        assert_eq!(value["雪😀"][2], false);
-        assert_eq!(value["雪😀"][3], json!({}));
-        assert_eq!(value["雪😀"][4], json!([]));
-        assert_eq!(value["雪😀"][5]["q\"\\"], "雪😀");
-        assert_eq!(value["same"], 2);
-        assert_eq!(
-            value["wide"].as_number().unwrap().as_str(),
-            "-184467440737095516160000"
-        );
-        assert_eq!(value["exp"].as_number().unwrap().as_str(), "1E+9999");
-        assert_eq!(
-            from_str::<Value>(&to_string(&value).unwrap()).unwrap(),
-            value
-        );
-    }
-
-    #[test]
-    fn wire_admission_keeps_json_grammar_and_escaped_unicode_validation() {
-        for text in [
-            r#"{"x":1,}"#,
-            "[1,]",
-            r#"{"x":"\ud800"}"#,
-            r#"{"x":"\q"}"#,
-            r#"{"x":01}"#,
-            "[true false]",
-            "[1e,0]",
-        ] {
-            assert!(from_str::<Value>(text).is_err(), "{text:?}");
-        }
+    fn owned_tree_accessors_and_indexing_keep_typed_semantics() {
+        let mut value = Value::Object(Map::from([
+            ("name".into(), Value::String("é".into())),
+            ("counts".into(), Value::Array(vec![Value::from(1), Value::from(2)])),
+            ("flag".into(), Value::Bool(true)),
+            ("absent".into(), Value::Null),
+        ]));
+        assert_eq!(value["name"], "é");
+        assert_eq!(value["counts"][1], 2);
+        assert_eq!(value["flag"], true);
+        assert!(value["absent"].is_null());
+        assert!(value["missing"].is_null());
+        value["counts"] = Value::from(7);
+        assert_eq!(value["counts"], 7);
+        assert_eq!(value.take()["name"], "é");
+        assert!(value.is_null());
     }
 }
