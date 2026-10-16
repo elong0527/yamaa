@@ -346,6 +346,106 @@ pub(crate) fn activation_origins(
         .collect()
 }
 
+/// Build the report envelope for an activation-boundary failure, appending
+/// its diagnostics to the caller's collection in the original order.
+fn activation_failure_result<'a, C, E>(
+    run: &PreparedRun,
+    attempt: &'a Attempt<C, E>,
+    boundary: &'a BoundaryFailure<E>,
+    supplied: &FactMap<'a, '_, E>,
+    id: &Identity<'_>,
+    diagnostics: &mut Vec<Value>,
+) -> Result<crate::report_storage::StoredReport, Error<'a, C, E>> {
+    let BoundaryFailure::Activation(failure) = boundary else {
+        return Err(Error::Boundary(boundary));
+    };
+    let paths = run
+        .compiled()
+        .called_functions()
+        .iter()
+        .map(|&index| {
+            format!(
+                "functions.{}",
+                run.environment().functions()[index].definition().name
+            )
+        })
+        .collect::<Vec<_>>();
+    let definitions = run
+        .compiled()
+        .called_functions()
+        .iter()
+        .zip(&paths)
+        .map(|(&index, path)| DefinitionSource {
+            function: &run.environment().functions()[index],
+            path,
+        })
+        .collect::<Vec<_>>();
+    let issues = match failure {
+        Failure::Lock(error) => {
+            let Some(Classified::Lock { findings, .. }) = supplied.get(&std::ptr::from_ref(error))
+            else {
+                return Err(Error::Opaque(error));
+            };
+            if findings.is_empty() {
+                return Err(invalid());
+            }
+            crate::project_lock_diagnostics::issues(run.captured_environment(), findings)
+                .map_err(|_| invalid())?
+                .into_iter()
+                .map(diagnostic)
+                .collect::<Result<Vec<_>, _>>()?
+        }
+        Failure::Bindings(failures) => {
+            let details = failures
+                .iter()
+                .map(|failure| host(supplied, &failure.error))
+                .collect::<Vec<_>>();
+            let issues = activation::binding_issues(&definitions, failures, &details)
+                .map_err(project_error)?;
+            activation_origins(
+                run,
+                &paths,
+                issues,
+                failures.iter().map(|failure| failure.function),
+            )?
+        }
+        Failure::Tests(failures) => {
+            let details = failures
+                .iter()
+                .map(|failure| match failure {
+                    TestFailure::Invocation { error, .. } => invocation_host(supplied, &error.kind),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let issues =
+                activation::test_issues(&definitions, failures, &details).map_err(project_error)?;
+            activation_origins(
+                run,
+                &paths,
+                issues,
+                failures.iter().map(|failure| match failure {
+                    TestFailure::Invocation { function, .. }
+                    | TestFailure::Result { function, .. } => *function,
+                }),
+            )?
+        }
+        _ => return Err(Error::Boundary(boundary)),
+    };
+    diagnostics.extend(issues);
+    // Before activation succeeds, the engine has no inspection/capture authority.
+    if !attempt.dataset.sources.is_empty()
+        || !matches!(attempt.dataset.result, Err(PortError::Incomplete))
+    {
+        return Err(invalid());
+    }
+    Ok(report::envelope_sources(
+        run,
+        &attempt.dataset.sources,
+        id,
+        true,
+    )?)
+}
+
 /// Neither reporting nor obtaining output invokes a port. Publication remains
 /// the same explicit successful-output gate used by ordinary specification runs.
 pub fn build_result<'a, C, E>(
@@ -397,92 +497,8 @@ pub fn build_result<'a, C, E>(
     let mut verifications = Vec::new();
     let mut result;
     if let Err(boundary) = &attempt.boundary {
-        let BoundaryFailure::Activation(failure) = boundary else {
-            return Err(Error::Boundary(boundary));
-        };
-        let paths = run
-            .compiled()
-            .called_functions()
-            .iter()
-            .map(|&index| {
-                format!(
-                    "functions.{}",
-                    run.environment().functions()[index].definition().name
-                )
-            })
-            .collect::<Vec<_>>();
-        let definitions = run
-            .compiled()
-            .called_functions()
-            .iter()
-            .zip(&paths)
-            .map(|(&index, path)| DefinitionSource {
-                function: &run.environment().functions()[index],
-                path,
-            })
-            .collect::<Vec<_>>();
-        let issues = match failure {
-            Failure::Lock(error) => {
-                let Some(Classified::Lock { findings, .. }) =
-                    supplied.get(&std::ptr::from_ref(error))
-                else {
-                    return Err(Error::Opaque(error));
-                };
-                if findings.is_empty() {
-                    return Err(invalid());
-                }
-                crate::project_lock_diagnostics::issues(run.captured_environment(), findings)
-                    .map_err(|_| invalid())?
-                    .into_iter()
-                    .map(diagnostic)
-                    .collect::<Result<Vec<_>, _>>()?
-            }
-            Failure::Bindings(failures) => {
-                let details = failures
-                    .iter()
-                    .map(|failure| host(&supplied, &failure.error))
-                    .collect::<Vec<_>>();
-                let issues = activation::binding_issues(&definitions, failures, &details)
-                    .map_err(project_error)?;
-                activation_origins(
-                    run,
-                    &paths,
-                    issues,
-                    failures.iter().map(|failure| failure.function),
-                )?
-            }
-            Failure::Tests(failures) => {
-                let details = failures
-                    .iter()
-                    .map(|failure| match failure {
-                        TestFailure::Invocation { error, .. } => {
-                            invocation_host(&supplied, &error.kind)
-                        }
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>();
-                let issues = activation::test_issues(&definitions, failures, &details)
-                    .map_err(project_error)?;
-                activation_origins(
-                    run,
-                    &paths,
-                    issues,
-                    failures.iter().map(|failure| match failure {
-                        TestFailure::Invocation { function, .. }
-                        | TestFailure::Result { function, .. } => *function,
-                    }),
-                )?
-            }
-            _ => return Err(Error::Boundary(boundary)),
-        };
-        diagnostics.extend(issues);
-        // Before activation succeeds, the engine has no inspection/capture authority.
-        if !attempt.dataset.sources.is_empty()
-            || !matches!(attempt.dataset.result, Err(PortError::Incomplete))
-        {
-            return Err(invalid());
-        }
-        result = report::envelope_sources(run, &attempt.dataset.sources, &id, true)?;
+        result =
+            activation_failure_result(run, attempt, boundary, &supplied, &id, &mut diagnostics)?;
     } else {
         result = report::envelope_sources(run, &attempt.dataset.sources, &id, true)?;
         match &attempt.dataset.result {
