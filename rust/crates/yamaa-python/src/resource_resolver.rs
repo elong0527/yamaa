@@ -27,14 +27,7 @@ impl Resolver for Port {
                 let reply = self.callback.bind(py).call1((args,))?;
                 let failure = reply.get_item("failure")?;
                 if !failure.is_none() {
-                    return Ok(Err(match failure.extract::<&str>()? {
-                        "missing" => Failure::Missing,
-                        "changed" => Failure::Changed,
-                        "cancelled" => Failure::Cancelled,
-                        "publication" => Failure::Publication,
-                        "cleanup" => Failure::Cleanup,
-                        _ => Failure::Rejected,
-                    }));
+                    return Ok(Err(Failure::from_name(failure.extract::<&str>()?)));
                 }
                 let reference = reply.get_item("reference")?.extract::<String>()?;
                 let bytes = reply.get_item("data")?;

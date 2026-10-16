@@ -3,7 +3,6 @@ use pyo3::{
     prelude::*,
     types::{PyString, PyTuple},
 };
-use yamaa_adapters::specification_report::Identity;
 
 pub(super) fn fields(metadata: &Bound<'_, PyTuple>) -> PyResult<Vec<String>> {
     if metadata.len() != 5 {
@@ -18,16 +17,6 @@ pub(super) fn fields(metadata: &Bound<'_, PyTuple>) -> PyResult<Vec<String>> {
             Ok(text.to_owned())
         })
         .collect()
-}
-pub(super) fn identity(fields: &[String]) -> Identity<'_> {
-    Identity {
-        runtime: "python",
-        runtime_version: &fields[0],
-        engine_version: &fields[1],
-        example: &fields[2],
-        specification: &fields[3],
-        base_directory: &fields[4],
-    }
 }
 pub(super) type IssueRow = (String, String, Option<String>, Vec<String>, String);
 pub(super) fn issue_rows(issues: &[yamaa_adapters::issue_rows::Issue]) -> Vec<IssueRow> {

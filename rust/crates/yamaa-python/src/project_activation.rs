@@ -31,6 +31,39 @@ pub enum Error {
     #[allow(dead_code)]
     MissingBinding(String),
 }
+/// Collect the original host errors retained by an attempt, in visit order.
+/// The project and producer attempts are visited through different adapters
+/// traversals but apply the same selection: only `Error::Host` payloads are
+/// host errors, and their exact Python objects are retained.
+pub(crate) fn host_failure_values(
+    py: Python<'_>,
+    visit: impl FnOnce(&mut dyn FnMut(&'static str, &Error)),
+) -> Vec<(&'static str, Py<PyAny>)> {
+    let mut failures = Vec::new();
+    visit(&mut |stage, error| {
+        if let Error::Host(error) = error {
+            failures.push((stage, error.value(py).clone().into_any().unbind()));
+        }
+    });
+    failures
+}
+/// The first retained host error that is not an ordinary Python exception is
+/// the attempt's interrupt, if any. Shared by the project and producer
+/// attempts; ordinary exceptions are report facts, not interrupts.
+pub(crate) fn interrupt_error(
+    py: Python<'_>,
+    visit: impl FnOnce(&mut dyn FnMut(&'static str, &Error)),
+) -> Option<PyErr> {
+    let mut interrupt = None;
+    visit(&mut |_, error| {
+        if let Error::Host(error) = error {
+            if !error.is_instance_of::<PyException>(py) && interrupt.is_none() {
+                interrupt = Some(error.clone_ref(py));
+            }
+        }
+    });
+    interrupt
+}
 /// Borrow the exact captured lock snapshot for this activation. No construction
 /// imports a helper or project module; empty selection has no host effects.
 pub struct Port<'py, 'lock> {

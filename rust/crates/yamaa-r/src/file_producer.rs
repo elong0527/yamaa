@@ -9,7 +9,7 @@ pub(crate) mod platform {
         file_application::BuildRefusal,
         file_producer_build::FileBuild,
         producer_result::RootResult,
-        project_report::Classified,
+        project_report,
     };
     type NativeAttempt = yamaa_adapters::file_producer_build::OwnedAttempt<HostError>;
     struct Attempt {
@@ -40,7 +40,7 @@ pub(crate) mod platform {
         );
         let inner = prepared.build_owned_reported(
             &mut port,
-            crate::report_fields::identity(&fields),
+            yamaa_adapters::specification_report::Identity::from_fields("r", &fields),
             scope,
         );
         Rc::new(Attempt {
@@ -150,20 +150,22 @@ pub(crate) mod platform {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let facts = failures
+        let projected = projections
             .iter()
-            .zip(&projections)
-            .filter_map(|(&failure, projection)| match failure {
-                HostError::Lock(findings) => Some(Classified::Lock { failure, findings }),
-                _ => projection
-                    .as_ref()
-                    .and_then(details)
-                    .map(|details| Classified::Host { failure, details }),
-            })
+            .map(|projection| projection.as_ref().and_then(details))
             .collect::<Vec<_>>();
+        let facts =
+            project_report::classify_host_failures(
+                &failures,
+                &projected,
+                |failure| match failure {
+                    HostError::Lock(findings) => Some(findings.as_slice()),
+                    _ => None,
+                },
+            );
         let projection = yamaa_adapters::producer_result::project_owned(
             &observations,
-            crate::report_fields::identity(&attempt.fields),
+            yamaa_adapters::specification_report::Identity::from_fields("r", &attempt.fields),
             &facts,
         );
         drop(observations);
@@ -201,13 +203,10 @@ pub(crate) mod platform {
             .inner
             .try_borrow()
             .map_err(|_| "producer attempt already borrowed")?;
-        let mut interrupt = None;
-        yamaa_adapters::producer_attempt::visit_host_failures(&held, |_, failure| {
-            if let HostError::Interrupt(condition) = failure {
-                if interrupt.is_none() {
-                    interrupt = Some(condition.clone());
-                }
-            }
+        let interrupt = crate::project_activation::first_interrupt(|visit| {
+            yamaa_adapters::producer_attempt::visit_host_failures(&held, |_, failure| {
+                visit(failure);
+            });
         });
         Ok(interrupt.unwrap_or_else(|| r!(NULL)))
     }

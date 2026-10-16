@@ -7,7 +7,7 @@ pub(crate) mod platform {
     use yamaa_adapters::{
         callback::{details, CallbackError},
         file_application::BuildRefusal,
-        project_report::{self, Classified},
+        project_report,
         specification_report::BuildResult,
     };
     // The installed helper renders only explicitly ordinary conditions. A failed
@@ -58,21 +58,23 @@ pub(crate) mod platform {
             };
             projections.push(projection);
         }
-        let facts = failures
+        let projected = projections
             .iter()
-            .zip(&projections)
-            .filter_map(|(&failure, projection)| match failure {
-                HostError::Lock(findings) => Some(Classified::Lock { failure, findings }),
-                _ => projection
-                    .as_ref()
-                    .and_then(details)
-                    .map(|details| Classified::Host { failure, details }),
-            })
+            .map(|projection| projection.as_ref().and_then(details))
             .collect::<Vec<_>>();
+        let facts =
+            project_report::classify_host_failures(
+                &failures,
+                &projected,
+                |failure| match failure {
+                    HostError::Lock(findings) => Some(findings.as_slice()),
+                    _ => None,
+                },
+            );
         project_report::build_result(
             &attempt.run,
             &attempt.inner,
-            crate::report_fields::identity(fields),
+            yamaa_adapters::specification_report::Identity::from_fields("r", fields),
             &facts,
         )
         .map_err(|error| error.refusal())
