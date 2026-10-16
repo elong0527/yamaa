@@ -76,7 +76,17 @@ def parse(text: str) -> Document:
     lines = re.split(r"\r\n|\r|\n", text)
     if lines and lines[-1] == "":
         lines.pop()
-    newline = "\r\n" if "\r\n" in text else "\r" if "\r" in text else "\n"
+    # The ending a fix writes back is the file's dominant one: counting a
+    # single CRLF in an otherwise LF file as the file's ending would let a
+    # one-line fix rewrite every line ending in the file (and the reverse
+    # for one stray LF in a CRLF file). Ties keep the order above, so a
+    # uniformly written file always keeps its own ending.
+    endings = re.findall(r"\r\n|\r|\n", text)
+    newline = "\n"
+    dominant = 0
+    for candidate in ("\r\n", "\r", "\n"):
+        if endings.count(candidate) > dominant:
+            newline, dominant = candidate, endings.count(candidate)
     document = Document(
         text=text,
         lines=lines,

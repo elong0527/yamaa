@@ -314,6 +314,32 @@ def test_fix_preserves_crlf_line_endings(tmp_path: Path) -> None:
     assert data.decode("utf-8").replace("\r\n", "\n") == CANONICAL
 
 
+def test_fix_keeps_the_dominant_ending_of_a_mixed_file(tmp_path: Path) -> None:
+    # A mixed file's ending is the one it mostly uses: a single CRLF line
+    # in an LF file (or a single LF line in a CRLF file) must not let a
+    # one-line spacing fix rewrite every other line ending in the file.
+    broken = CANONICAL.replace("\n\noutput:", "\noutput:")
+    lines = broken.split("\n")
+    mixed_lf = "\n".join(lines[:3]) + "\r\n" + "\n".join(lines[3:])
+    path = tmp_path / "mixed-lf.yaml"
+    path.write_bytes(mixed_lf.encode("utf-8"))
+    changed, remaining = fix_file(path, orders=ORDERS)
+    assert changed is True
+    assert remaining == ()
+    assert path.read_bytes().decode("utf-8") == CANONICAL
+
+    crlf = broken.replace("\n", "\r\n")
+    mixed_crlf = crlf.replace("\r\n", "\n", 1)
+    path = tmp_path / "mixed-crlf.yaml"
+    path.write_bytes(mixed_crlf.encode("utf-8"))
+    changed, remaining = fix_file(path, orders=ORDERS)
+    assert changed is True
+    assert remaining == ()
+    data = path.read_bytes()
+    assert data.count(b"\n") == data.count(b"\r\n")
+    assert data.decode("utf-8").replace("\r\n", "\n") == CANONICAL
+
+
 def test_crlf_line_width_counts_the_line_without_its_ending(
     tmp_path: Path,
 ) -> None:
