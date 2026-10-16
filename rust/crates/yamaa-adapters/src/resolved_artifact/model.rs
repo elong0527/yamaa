@@ -300,8 +300,14 @@ pub fn specification_value(
         Ok(match &document.nodes()[node] {
             N::Null => Value::Null,
             N::Boolean(value) => Value::Bool(*value),
-            N::Integer(value) => Value::Number(value.parse().expect("admitted integer")),
-            N::Float(value) => Value::Number(json::Number::from_f64(*value).expect("finite")),
+            N::Integer(value) => Value::Number(
+                value
+                    .parse()
+                    .map_err(|_| Error::Facts("invalid integer occurrence"))?,
+            ),
+            N::Float(value) => Value::Number(
+                json::Number::from_f64(*value).ok_or(Error::Facts("nonfinite float occurrence"))?,
+            ),
             N::Text(value) => Value::String(value.clone()),
             N::Sequence(items) => Value::Array(
                 items
