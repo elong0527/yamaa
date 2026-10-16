@@ -395,7 +395,10 @@ mod tests {
     fn owned_tree_accessors_and_indexing_keep_typed_semantics() {
         let mut value = Value::Object(Map::from([
             ("name".into(), Value::String("é".into())),
-            ("counts".into(), Value::Array(vec![Value::from(1), Value::from(2)])),
+            (
+                "counts".into(),
+                Value::Array(vec![Value::from(1), Value::from(2)]),
+            ),
             ("flag".into(), Value::Bool(true)),
             ("absent".into(), Value::Null),
         ]));

@@ -1,12 +1,13 @@
 //! Complete reports borrow the sealed whole graph and actual entered attempts.
 //! Rendering and obtaining evidence grant no publication or callback authority.
+use crate::json;
 use crate::{
     file_producer_build::{NodeReport, Provenance},
     project_report,
     report_storage::StoredReport,
     specification_report::{self as report, Error, Identity},
 };
-use yamaa_core::json::{json, Value};
+use yamaa_core::json::Value;
 use yamaa_core::{
     dataset::{CheckRecord, Execution},
     producer_build::ReportPort,
@@ -893,7 +894,7 @@ mod tests {
         assert_eq!(findings[0]["context"]["value"], value);
         assert_eq!(
             findings[0]["spec_paths"],
-            yamaa_core::json::json!(["input.RAW.types.N"])
+            crate::json!(["input.RAW.types.N"])
         );
     }
     #[test]
@@ -980,18 +981,12 @@ mod tests {
             assert!(decoded_finding(&mut findings, &source, &error).unwrap());
             assert_eq!(findings.len(), 1);
             assert_eq!(findings[0]["context"]["resource"], resource);
-            assert_eq!(
-                findings[0]["context"]["limit"],
-                yamaa_core::json::json!(limit)
-            );
+            assert_eq!(findings[0]["context"]["limit"], crate::json!(limit));
             assert_eq!(
                 findings[0]["context"]["actual"],
-                yamaa_core::json::json!(actual.unwrap())
+                crate::json!(actual.unwrap())
             );
-            assert_eq!(
-                findings[0]["spec_paths"],
-                yamaa_core::json::json!(["input.XW"])
-            );
+            assert_eq!(findings[0]["spec_paths"], crate::json!(["input.XW"]));
         }
     }
 }

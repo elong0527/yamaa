@@ -430,10 +430,10 @@ impl Publication {
                 .map(|(_, request)| request.observation.clone())
                 .collect(),
         );
-        result["publication"] = yamaa_core::json::json!({
+        result["publication"] = crate::json!({
             "status":"failure", "mode":if diagnostic {"diagnostic"} else {"complete"},
             "entered":self.requests(diagnostic).take(entered).enumerate()
-                .map(|(position, (_, request))| yamaa_core::json::json!({"node":request.node,
+                .map(|(position, (_, request))| crate::json!({"node":request.node,
                     "field":request.field,"path":request.path,"published":position < completed})).collect::<Vec<_>>(),
             "error":{"stage":"publication","code":"publication_incomplete","node":null,"field":null}
         });

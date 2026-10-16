@@ -95,6 +95,7 @@ enum Outcome {
         verifications: Vec<Record>,
     },
     Condition {
+        #[serde(serialize_with = "serialize_diagnostic")]
         diagnostic: Box<Diagnostic>,
         identity: Option<Identity>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -465,12 +466,196 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
     })
 }
 
+fn serialize_diagnostic<S: serde::Serializer>(
+    value: &Diagnostic,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::Serialize;
+    crate::json_wire::WireValue(value).serialize(serializer)
+}
+
+/// Project one scalar record fact into the owned tree without text reparse.
+fn scalar_json(value: &ScalarValue) -> yamaa_core::json::Value {
+    value.to_json()
+}
+
+fn identity_json(identity: &Identity) -> yamaa_core::json::Value {
+    use yamaa_core::json::{Map, Value as Json};
+    Json::Object(
+        [
+            ("position".into(), Json::String(identity.position.clone())),
+            (
+                "keys".into(),
+                Json::Array(identity.keys.iter().map(scalar_json).collect()),
+            ),
+        ]
+        .into_iter()
+        .collect::<Map<_, _>>(),
+    )
+}
+
+fn record_json(record: &Record) -> yamaa_core::json::Value {
+    use yamaa_core::json::{Map, Value as Json};
+    let mut object = Map::new();
+    if let Some(codelist) = &record.codelist {
+        object.insert(
+            "codelist".into(),
+            Json::Object(
+                [
+                    ("id".into(), Json::String(codelist.id.clone())),
+                    (
+                        "values".into(),
+                        Json::Array(codelist.values.iter().map(scalar_json).collect()),
+                    ),
+                ]
+                .into_iter()
+                .collect::<Map<_, _>>(),
+            ),
+        );
+    }
+    if let Some(inventory) = &record.inventory {
+        object.insert(
+            "inventory".into(),
+            Json::Array(inventory.iter().map(scalar_json).collect()),
+        );
+    }
+    object.insert("spec_path".into(), Json::String(record.spec_path.clone()));
+    object.insert("condition".into(), Json::String(record.condition.into()));
+    object.insert(
+        "requirement".into(),
+        Json::String(record.requirement.into()),
+    );
+    object.insert(
+        "evaluated_count".into(),
+        Json::String(record.evaluated_count.clone()),
+    );
+    object.insert(
+        "failed_count".into(),
+        Json::String(record.failed_count.clone()),
+    );
+    object.insert(
+        "output_rows".into(),
+        Json::String(record.output_rows.clone()),
+    );
+    object.insert(
+        "offending_rows".into(),
+        Json::Array(record.offending_rows.iter().map(identity_json).collect()),
+    );
+    Json::Object(object)
+}
+
+fn partition_json(value: &PartitionValue) -> yamaa_core::json::Value {
+    use yamaa_core::json::{Map, Value as Json};
+    Json::Object(
+        [
+            ("name".into(), Json::String(value.name.clone())),
+            ("value".into(), scalar_json(&value.value)),
+        ]
+        .into_iter()
+        .collect::<Map<_, _>>(),
+    )
+}
+
+/// Direct typed projection of the serde outcome shape into the owned tree.
+/// This replaces the removed stringify-and-reparse helper: the diagnostic
+/// subtree is already an owned tree and scalar facts project through
+/// `ScalarValue::to_json`, so exact number tokens never narrow.
+fn outcome_json(outcome: &Outcome) -> yamaa_core::json::Value {
+    use yamaa_core::json::{Map, Value as Json};
+    let mut object = Map::new();
+    match outcome {
+        Outcome::Success { verifications } => {
+            object.insert("status".into(), Json::String("success".into()));
+            object.insert(
+                "verifications".into(),
+                Json::Array(verifications.iter().map(record_json).collect()),
+            );
+        }
+        Outcome::Failure {
+            phase,
+            verifications,
+        } => {
+            object.insert("status".into(), Json::String("failure".into()));
+            object.insert("phase".into(), Json::String((*phase).into()));
+            object.insert(
+                "verifications".into(),
+                Json::Array(verifications.iter().map(record_json).collect()),
+            );
+        }
+        Outcome::Condition {
+            diagnostic,
+            identity,
+            partition,
+            matched_key,
+            verifications,
+        } => {
+            object.insert("status".into(), Json::String("condition".into()));
+            object.insert("diagnostic".into(), (**diagnostic).clone());
+            object.insert(
+                "identity".into(),
+                identity.as_ref().map_or(Json::Null, identity_json),
+            );
+            if let Some(partition) = partition {
+                object.insert(
+                    "partition".into(),
+                    Json::Array(partition.iter().map(partition_json).collect()),
+                );
+            }
+            if let Some(matched_key) = matched_key {
+                object.insert(
+                    "matched_key".into(),
+                    Json::Array(matched_key.iter().map(partition_json).collect()),
+                );
+            }
+            if let Some(verifications) = verifications {
+                object.insert(
+                    "verifications".into(),
+                    Json::Array(verifications.iter().map(record_json).collect()),
+                );
+            }
+        }
+        Outcome::Limit {
+            resource,
+            limit,
+            required,
+            spec_paths,
+            source_index,
+        } => {
+            object.insert("status".into(), Json::String("limit".into()));
+            object.insert("resource".into(), Json::String((*resource).into()));
+            object.insert(
+                "limit".into(),
+                limit.clone().map_or(Json::Null, Json::String),
+            );
+            object.insert(
+                "required".into(),
+                required.clone().map_or(Json::Null, Json::String),
+            );
+            if !spec_paths.is_empty() {
+                object.insert(
+                    "spec_paths".into(),
+                    Json::Array(
+                        spec_paths
+                            .iter()
+                            .map(|path| Json::String(path.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+            if let Some(source_index) = source_index {
+                object.insert("source_index".into(), Json::from(*source_index));
+            }
+        }
+    }
+    Json::Object(object)
+}
+
 /// Borrow a retained non-host failure for the complete project report formatter.
 pub(crate) fn semantic_condition<E>(
     error: &ExecutionError<E>,
 ) -> Result<yamaa_core::json::Value, Error> {
     let outcome = semantic_failure(error, false)?;
-    yamaa_core::json::to_value(outcome).map_err(|_| Error::Internal)
+    Ok(outcome_json(&outcome))
 }
 
 /// Encode the admitted execution attempt, retaining typed results for publication.

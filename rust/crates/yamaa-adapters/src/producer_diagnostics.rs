@@ -89,13 +89,10 @@ impl<'a, 'f, E> Facts<'a, 'f, E> {
                     .ok_or(Error::InvalidObservation)?;
                 context.insert(
                     "source".into(),
-                    yamaa_core::json::json!(view.document().source().identity),
+                    crate::json!(view.document().source().identity),
                 );
-                context.insert("entry".into(), yamaa_core::json::json!(entry));
-                context.insert(
-                    "declaring_sources".into(),
-                    yamaa_core::json::json!([declaring]),
-                );
+                context.insert("entry".into(), crate::json!(entry));
+                context.insert("declaring_sources".into(), crate::json!([declaring]));
                 Ok(Some(value))
             }
             Err(invocation::Error::Opaque(_)) => Ok(None),

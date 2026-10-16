@@ -1,5 +1,6 @@
 //! Private typed parser observations for independent differential fixtures.
-use yamaa_core::json::{json, Value};
+use yamaa_adapters::json;
+use yamaa_core::json::Value;
 use yamaa_core::{
     predicate::Comparison,
     predicate_parser::{
@@ -19,7 +20,8 @@ pub fn observe(expression: &str) -> Value {
         }) => {
             let issue = yamaa_adapters::issue_rows::Issue::from_core(failure.syntax_diagnostic())
                 .expect("typed syntax diagnostic");
-            let context: Value = serde_json::from_str(&issue.context).expect("encoded context");
+            let context: Value =
+                yamaa_adapters::json_wire::decode(&issue.context).expect("encoded context");
             json!({"status":"invalid","message":message,"condition":failure.condition(),"requirement":failure.requirement(),"position":{"byte":position.byte,"character":position.character},"context":context})
         }
         Err(ParseError::Limit {

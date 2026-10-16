@@ -258,7 +258,10 @@ fn repeated_type_findings_keep_the_complete_ordered_context() {
             finding.context["expr"],
             crate::json::Value::from(expression.as_str())
         );
-        assert_eq!(finding.context["expected"], crate::json::Value::from("numeric"));
+        assert_eq!(
+            finding.context["expected"],
+            crate::json::Value::from("numeric")
+        );
         assert_eq!(finding.context["actual"], crate::json::Value::from("str"));
     }
 }

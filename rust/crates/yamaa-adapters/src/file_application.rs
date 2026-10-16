@@ -186,7 +186,7 @@ pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Fai
     vec![Issue::from_core(finding).expect("application issue")]
 }
 pub(crate) fn preparation_failure(message: String) -> Failure {
-    let Ok(value) = serde_json::from_str::<Value>(&message) else {
+    let Ok(value) = crate::json_wire::decode(&message) else {
         return rejected("prepare", "resource_boundary");
     };
     let outcome = &value["outcome"];
@@ -255,9 +255,9 @@ pub(crate) fn preparation_failure(message: String) -> Failure {
             if let Some(phase) = outcome["phase"].as_str() {
                 for issue in &mut issues {
                     let mut context: Value =
-                        serde_json::from_str(&issue.context).expect("resource context");
-                    context["phase"] = yamaa_core::json::json!(phase);
-                    issue.context = context.to_string();
+                        crate::json_wire::decode(&issue.context).expect("resource context");
+                    context["phase"] = crate::json!(phase);
+                    issue.context = crate::json_wire::encode(&context);
                 }
             }
 
@@ -291,11 +291,11 @@ fn publication_at(
     for issue in &mut issues {
         issue.spec_paths = vec![format!("output.{field}")];
         let mut context: Value =
-            serde_json::from_str(&issue.context).expect("native issue context");
-        context["path"] = yamaa_core::json::json!(path);
-        context["entered"] = yamaa_core::json::json!(attempt.entered);
-        context["completed"] = yamaa_core::json::json!(attempt.completed);
-        issue.context = context.to_string();
+            crate::json_wire::decode(&issue.context).expect("native issue context");
+        context["path"] = crate::json!(path);
+        context["entered"] = crate::json!(attempt.entered);
+        context["completed"] = crate::json!(attempt.completed);
+        issue.context = crate::json_wire::encode(&context);
     }
     issues
 }
@@ -931,11 +931,12 @@ mod tests {
                     .unwrap()
                     .iter()
                     .any(|stage| stage["phase"] == phase && stage["outcome"] == "succeeded"),
-                "missing actual stage {phase}: {evidence}"
+                "missing actual stage {phase}: {}",
+                crate::json_wire::encode(&evidence)
             );
         }
         assert_eq!(
-            serde_json::from_str::<Value>(&measurements.envelope(Some(original.clone()))).unwrap()
+            crate::json_wire::decode(&measurements.envelope(Some(original.clone()))).unwrap()
                 ["report"],
             result.observations()
         );
@@ -989,7 +990,10 @@ mod tests {
         for fail_at in 0..3 {
             let (study, mut result) = built();
             let mut expected = result.observations();
-            assert_eq!(result.observations_json(), expected.to_string());
+            assert_eq!(
+                result.observations_json(),
+                crate::json_wire::encode(&expected)
+            );
             expected["artifacts"] = Value::Array(
                 result
                     .result
@@ -1030,7 +1034,10 @@ mod tests {
                 fail_at
             );
             assert_eq!(result.observations(), expected);
-            assert_eq!(result.observations_json(), expected.to_string());
+            assert_eq!(
+                result.observations_json(),
+                crate::json_wire::encode(&expected)
+            );
             for (index, name) in ["adsl-checks.csv", "adsl-warnings.csv", "adsl.csv"]
                 .iter()
                 .enumerate()
@@ -1045,7 +1052,7 @@ mod tests {
                     ["verification_log", "warning_log", "path"][fail_at]
                 )]
             );
-            let context: Value = serde_json::from_str(&issue.context).unwrap();
+            let context: Value = crate::json_wire::decode(&issue.context).unwrap();
             assert_eq!(context["entered"], fail_at + 1);
             assert_eq!(context["completed"], fail_at);
             assert!(result.save().unwrap());
@@ -1057,7 +1064,7 @@ mod tests {
             );
             assert_eq!(
                 result.observations_json(),
-                result.observations().to_string()
+                crate::json_wire::encode(&result.observations())
             );
         }
     }
@@ -1103,7 +1110,10 @@ mod tests {
                 .collect(),
         );
         assert_eq!(result.observations(), expected);
-        assert_eq!(result.observations_json(), expected.to_string());
+        assert_eq!(
+            result.observations_json(),
+            crate::json_wire::encode(&expected)
+        );
     }
     #[cfg(unix)]
     #[test]

@@ -2462,10 +2462,7 @@ mod relations {
             assert_eq!(verification[0][8], PreparedCell::Text("held".into()));
             assert_eq!(verification[0][9], PreparedCell::Missing);
             assert_eq!(verification[0][11], PreparedCell::Count(0));
-            assert_eq!(
-                verification[0][12],
-                PreparedCell::Details(BTreeMap::new())
-            );
+            assert_eq!(verification[0][12], PreparedCell::Details(BTreeMap::new()));
             let warning_record = warning();
             let failure = warning_record.failure.as_ref().unwrap();
             assert_eq!(
@@ -2475,10 +2472,7 @@ mod relations {
             let warning_rows = prepared.warning.unwrap();
             assert_eq!(warning_rows.len(), 1);
             assert_eq!(warning_rows[0][7], PreparedCell::Count(7));
-            assert_eq!(
-                warning_rows[0][8],
-                PreparedCell::Keys(failure.keys.clone())
-            );
+            assert_eq!(warning_rows[0][8], PreparedCell::Keys(failure.keys.clone()));
             assert_eq!(
                 warning_rows[0][9],
                 PreparedCell::Details(failure.details.clone())
@@ -2547,7 +2541,9 @@ mod relations {
             let details = BTreeMap::from([
                 (
                     "date".into(),
-                    Json::from(yamaa_core::value::Value::Date("2025-01-02".parse().unwrap())),
+                    Json::from(yamaa_core::value::Value::Date(
+                        "2025-01-02".parse().unwrap(),
+                    )),
                 ),
                 (
                     "datetime".into(),

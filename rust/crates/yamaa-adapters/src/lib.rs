@@ -9,10 +9,12 @@ pub mod arrow_batch;
 pub mod arrow_table;
 mod arrow_temporal;
 pub mod file_define;
+pub mod json_wire;
 pub mod public_table;
 mod report_publication;
 pub mod report_storage;
 mod storage_api;
+pub mod submission_json;
 
 pub mod scalar_bytes;
 

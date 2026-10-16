@@ -1169,9 +1169,15 @@ mod service {
                     finding.context,
                     yamaa_core::json::Value::Object(
                         [
-                            ("path".into(), yamaa_core::json::Value::from("declared.yaml")),
+                            (
+                                "path".into(),
+                                yamaa_core::json::Value::from("declared.yaml")
+                            ),
                             ("stage".into(), yamaa_core::json::Value::from("define")),
-                            ("code".into(), yamaa_core::json::Value::from("resource_limit")),
+                            (
+                                "code".into(),
+                                yamaa_core::json::Value::from("resource_limit")
+                            ),
                             ("resource".into(), yamaa_core::json::Value::from(resource)),
                             ("limit".into(), yamaa_core::json::Value::from(limit)),
                             ("actual".into(), yamaa_core::json::Value::from(limit + 1)),

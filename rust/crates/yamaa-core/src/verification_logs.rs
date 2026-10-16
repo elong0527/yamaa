@@ -102,10 +102,7 @@ pub struct Logs {
 /// already encoded every `PreparedCell::Details`/`PreparedCell::Keys` cell
 /// into its governed JSON text (a plain string cell here); column names,
 /// order and integer kinds remain owned by this module.
-pub fn assemble(
-    verification: Option<Vec<Vec<Value>>>,
-    warning: Option<Vec<Vec<Value>>>,
-) -> Logs {
+pub fn assemble(verification: Option<Vec<Vec<Value>>>, warning: Option<Vec<Vec<Value>>>) -> Logs {
     Logs {
         verification: verification.map(|rows| table(VERIFICATION_COLUMNS, &[10, 11], rows)),
         warning: warning.map(|rows| table(WARNING_COLUMNS, &[7], rows)),

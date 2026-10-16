@@ -177,11 +177,11 @@ impl Measurements {
     }
     pub fn evidence(&self) -> yamaa_core::json::Value {
         let state = self.state();
-        let callback_counts=state.calls.iter().filter(|(node, _)| node.is_some()).chain(state.calls.iter().filter(|(node, _)| node.is_none())).flat_map(|(node,stages)|stages.iter().enumerate().filter(|(_,calls)|calls.observed).map(move |(stage,calls)|yamaa_core::json::json!({
+        let callback_counts=state.calls.iter().filter(|(node, _)| node.is_some()).chain(state.calls.iter().filter(|(node, _)| node.is_none())).flat_map(|(node,stages)|stages.iter().enumerate().filter(|(_,calls)|calls.observed).map(move |(stage,calls)|crate::json!({
             "node":node,"stage":(["activation","execution_admission","execution_derivation","output_keys","verification","execution_finished"][stage]),
             "entered":calls.entered,"succeeded":calls.succeeded,"failed":calls.failed
         }))).collect::<Vec<_>>();
-        yamaa_core::json::json!({"protocol":"application-measurements/1", "clock":{"provider":"std::time::Instant","unit":"nanoseconds","origin":"owner-local monotonic origin immediately before original application entry"},
+        crate::json!({"protocol":"application-measurements/1", "clock":{"provider":"std::time::Instant","unit":"nanoseconds","origin":"owner-local monotonic origin immediately before original application entry"},
             "types":{"offsets":"uint64 nanoseconds since owner origin","function_counts":"uint64 actual calls","resource_counts":"usize; required null preserves original overflow/absence"},
             "classified_refusals":state.refusals,
             "admitted":state.refused.is_none() && state.finished && state.accepted.is_some() && state.saves.iter().all(|save|save.completed_ns.is_some()),"refusal":state.refused,"original_execution_finished":state.finished,"build_accepted":state.accepted,
@@ -189,18 +189,19 @@ impl Measurements {
     }
     pub fn envelope(&self, report: Option<String>) -> String {
         #[derive(Serialize)]
-        struct Envelope {
+        struct Envelope<'a> {
             protocol: &'static str,
             report: Option<Box<serde_json::value::RawValue>>,
-            measurements: yamaa_core::json::Value,
+            measurements: crate::json_wire::WireValue<'a>,
         }
         let report = report.map(|value| {
             serde_json::value::RawValue::from_string(value).expect("admitted report JSON")
         });
+        let evidence = self.evidence();
         serde_json::to_string(&Envelope {
             protocol: "held-observations/1",
             report,
-            measurements: self.evidence(),
+            measurements: crate::json_wire::WireValue(&evidence),
         })
         .expect("measurement evidence is serializable")
     }
@@ -374,11 +375,8 @@ mod tests {
         assert_eq!(measurements.evidence()["function_calls"][0]["failed"], 0);
         let report = r#"{"tables":[],"artifacts":[],"error":{"stage":"original"}}"#;
         let wrapped: yamaa_core::json::Value =
-            serde_json::from_str(&measurements.envelope(Some(report.into()))).unwrap();
-        assert_eq!(
-            wrapped["report"],
-            serde_json::from_str::<yamaa_core::json::Value>(report).unwrap()
-        );
+            crate::json_wire::decode(&measurements.envelope(Some(report.into()))).unwrap();
+        assert_eq!(wrapped["report"], crate::json_wire::decode(report).unwrap());
         let _ = Scope::new(&Noop);
     }
     #[test]

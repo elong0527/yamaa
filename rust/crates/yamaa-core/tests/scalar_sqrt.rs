@@ -813,7 +813,10 @@ mod scalar {
             assert_eq!(op.handler("missing"), Some(&handler));
             let subject = "x".repeat(100_000);
             let finding = op.failure_diagnostic(Step::NoMatch(&subject)).unwrap();
-            assert_eq!(finding.context["value"], yamaa_core::json::Value::from(subject));
+            assert_eq!(
+                finding.context["value"],
+                yamaa_core::json::Value::from(subject)
+            );
         }
         use crate::support::diagnostic::text_extract as diagnostic;
         #[test]

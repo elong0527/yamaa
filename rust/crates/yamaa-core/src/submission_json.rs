@@ -78,7 +78,10 @@ pub fn document(study: &Study, dataset: &Dataset, define_name: &str) -> DatasetJ
                 }
                 .into(),
                 length: column.length.clone(),
-                display_format: meta.display_format.as_ref().map(|display| display.value.clone()),
+                display_format: meta
+                    .display_format
+                    .as_ref()
+                    .map(|display| display.value.clone()),
                 key_sequence: column.key_sequence,
             }
         })

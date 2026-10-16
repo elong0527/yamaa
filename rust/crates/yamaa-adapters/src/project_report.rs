@@ -1,5 +1,6 @@
 //! Complete project reports borrow one owned attempt. Only explicit ordinary
 //! host facts are portable; original opaque payloads and interrupts stay held.
+use crate::json;
 use crate::{
     issue_rows::Issue,
     project_activation_diagnostics::{self as activation, DefinitionSource},
@@ -7,7 +8,7 @@ use crate::{
     project_run::{Attempt, BoundaryFailure, PreparedRun},
     specification_report::{self as report, BuildResult, Identity},
 };
-use yamaa_core::json::{json, Value};
+use yamaa_core::json::Value;
 use yamaa_core::{
     dataset::{CheckRecord, ExecutionError},
     function_invocation::FailureKind,

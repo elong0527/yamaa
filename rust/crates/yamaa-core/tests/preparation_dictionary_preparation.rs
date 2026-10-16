@@ -2015,7 +2015,9 @@ mod preparation {
             };
             assert_eq!(
                 cycle.diagnostic().unwrap().unwrap().context["cycle"],
-                yamaa_core::json::Value::from(["entry", "base", "entry"].map(yamaa_core::json::Value::from))
+                yamaa_core::json::Value::from(
+                    ["entry", "base", "entry"].map(yamaa_core::json::Value::from)
+                )
             );
         }
 

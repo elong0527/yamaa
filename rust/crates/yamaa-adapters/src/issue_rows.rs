@@ -53,11 +53,12 @@ impl Issue {
             .iter()
             .map(|value| value.as_str().map(str::to_owned).ok_or(InvalidIssue))
             .collect::<Result<Vec<_>, _>>()?;
-        let context = object
-            .get("context")
-            .filter(|value| value.is_object())
-            .ok_or(InvalidIssue)?
-            .to_string();
+        let context = crate::json_wire::encode(
+            object
+                .get("context")
+                .filter(|value| value.is_object())
+                .ok_or(InvalidIssue)?,
+        );
         Ok(Self {
             phase: text("phase")?,
             condition: text("condition")?,
@@ -68,13 +69,13 @@ impl Issue {
     }
 
     pub fn as_value(&self) -> Value {
-        yamaa_core::json::to_value(self).expect("owned issue fields serialize")
+        crate::json_wire::project(self).expect("owned issue fields serialize")
     }
 
     /// Retained report observations expose admitted context data while installed
     /// issue tables retain JSON text. Both use this one five-field serializer.
     pub(crate) fn report_value(&self) -> Result<Value, InvalidIssue> {
-        let context: Value = serde_json::from_str(&self.context).map_err(|_| InvalidIssue)?;
+        let context: Value = crate::json_wire::decode(&self.context).map_err(|_| InvalidIssue)?;
         if !context.is_object() {
             return Err(InvalidIssue);
         }
@@ -97,14 +98,14 @@ pub(crate) fn report(
         condition: condition.into(),
         requirement: requirement.map(str::to_owned),
         spec_paths: paths,
-        context: context.to_string(),
+        context: crate::json_wire::encode(&context),
     }
     .report_value()
     .expect("admitted core diagnostic context")
 }
 
 pub fn encode(issues: &[Issue]) -> String {
-    Value::Array(issues.iter().map(Issue::as_value).collect()).to_string()
+    crate::json_wire::encode(&Value::Array(issues.iter().map(Issue::as_value).collect()))
 }
 
 /// Final public issue-table collection. Raw facts and retained reports remain complete.
@@ -119,7 +120,7 @@ pub(crate) fn collect(issues: impl IntoIterator<Item = Issue>) -> Vec<Issue> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use yamaa_core::json::json;
+    use crate::json;
 
     #[test]
     fn context_retains_full_integer_range_unicode_and_nested_values() {
@@ -133,8 +134,8 @@ mod tests {
         assert_eq!(issue.spec_paths, ["columns.é🙂.derivation"]);
         assert_eq!(encode(&[]), "[]");
         assert_eq!(
-            serde_json::from_str::<Value>(&encode(std::slice::from_ref(&issue))).unwrap(),
-            json!([issue.as_value()])
+            crate::json_wire::decode(&encode(std::slice::from_ref(&issue))).unwrap(),
+            Value::Array(vec![issue.as_value()])
         );
     }
 

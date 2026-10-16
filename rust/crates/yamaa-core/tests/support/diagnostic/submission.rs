@@ -724,8 +724,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         .unwrap(),
         value: Value::Bool(true),
     };
-    let finding =
-        submission_json::admit(&study, &study.datasets()[0], &table).unwrap_err();
+    let finding = submission_json::admit(&study, &study.datasets()[0], &table).unwrap_err();
     reached_finding(
         &mut reached,
         &[finding],
@@ -748,8 +747,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         .unwrap(),
         value: Value::Str("UNKNOWN_DATASET".into()),
     };
-    let finding =
-        submission_json::admit(&study, &study.datasets()[0], &table).unwrap_err();
+    let finding = submission_json::admit(&study, &study.datasets()[0], &table).unwrap_err();
     reached_finding(
         &mut reached,
         std::slice::from_ref(&finding),

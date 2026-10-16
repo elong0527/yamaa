@@ -277,15 +277,15 @@ mod execution {
             };
             assert!(!fixture.0.join("out.csv").exists());
             issues
-        .iter()
-        .map(|issue| {
-            yamaa_core::json::json!({
-                "phase": issue.phase, "condition": issue.condition,
-                "requirement": issue.requirement, "spec_paths": issue.spec_paths,
-                "context": serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()
-            })
-        })
-        .collect()
+                .iter()
+                .map(|issue| {
+                    yamaa_adapters::json!({
+                        "phase": issue.phase, "condition": issue.condition,
+                        "requirement": issue.requirement, "spec_paths": issue.spec_paths,
+                        "context": yamaa_adapters::json_wire::decode(&issue.context).unwrap()
+                    })
+                })
+                .collect()
         }
 
         #[test]
@@ -304,7 +304,7 @@ mod execution {
                     ));
                     assert_eq!(
                         complete_aggregate_issues(&fixture),
-                        vec![yamaa_core::json::json!({
+                        vec![yamaa_adapters::json!({
                             "phase": "validation", "condition": "incompatible_input_type",
                             "requirement": "REQ-0004", "spec_paths": ["columns.V.derivation.aggregate.expr"],
                             "context": {"source": "key[N]", "expected": kind, "actual": "int"}
@@ -328,7 +328,7 @@ mod execution {
                 ));
                 assert_eq!(
                     complete_aggregate_issues(&fixture),
-                    vec![yamaa_core::json::json!({
+                    vec![yamaa_adapters::json!({
                         "phase": "validation", "condition": "incompatible_input_type",
                         "requirement": "REQ-0004", "spec_paths": [path],
                         "context": {"source": "key[N]", "expected": "bool", "actual": "int"}
@@ -349,7 +349,7 @@ mod execution {
                     fieldless_count_fixture(&original_fieldless_count(expression, key, ""));
                 assert_eq!(
                     complete_aggregate_issues(&fixture),
-                    vec![yamaa_core::json::json!({
+                    vec![yamaa_adapters::json!({
                         "phase": "validation", "condition": "unknown_field",
                         "requirement": requirement, "spec_paths": ["columns.V.derivation.aggregate.expr"],
                         "context": {"identifier": identifier}
@@ -368,7 +368,7 @@ mod execution {
                 ));
                 assert_eq!(
                     complete_aggregate_issues(&fixture),
-                    vec![yamaa_core::json::json!({
+                    vec![yamaa_adapters::json!({
                         "phase": "validation", "condition": "unknown_field",
                         "requirement": "REQ-0103", "spec_paths": ["columns.V.derivation.aggregate.expr"],
                         "context": {"identifier": identifier}
@@ -394,7 +394,7 @@ mod execution {
                     } else {
                         assert_eq!(
                             complete_aggregate_issues(&fixture),
-                            vec![yamaa_core::json::json!({
+                            vec![yamaa_adapters::json!({
                                 "phase": "validation", "condition": "incompatible_input_type",
                                 "requirement": "REQ-0004", "spec_paths": ["columns.V.derivation.aggregate.filter"],
                                 "context": {"source": "key[N]", "expected": "bool", "actual": "int"}
@@ -531,7 +531,7 @@ S1,002,2024-06
             let issues = original_derive_issues(&fixture);
             assert_eq!(issues[0].condition, "invalid_derive_step");
             let context: yamaa_core::json::Value =
-                serde_json::from_str(&issues[0].context).unwrap();
+                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
             assert!(context["reason"].as_str().unwrap().contains("unique"));
 
             let fixture = original_derive_fixture(
@@ -542,7 +542,7 @@ S1,002,2024-06
             let issues = original_derive_issues(&fixture);
             assert_eq!(issues[0].condition, "unknown_derive_variable");
             let context: yamaa_core::json::Value =
-                serde_json::from_str(&issues[0].context).unwrap();
+                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
             assert_eq!(context["variable"], "QSNUM");
         }
 
@@ -631,8 +631,9 @@ S1,002,2024-06
                 .find(|issue| issue.condition == "invalid_derive_step")
                 .unwrap();
             assert_eq!(issue.requirement.as_deref(), Some("REQ-1191"));
-            let context: yamaa_core::json::Value = serde_json::from_str(&issue.context).unwrap();
-            assert_eq!(context["relations"], yamaa_core::json::json!(["QS", "XX"]));
+            let context: yamaa_core::json::Value =
+                yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+            assert_eq!(context["relations"], yamaa_adapters::json!(["QS", "XX"]));
 
             for (source, requirement) in
                 [("QS.NOSUCHFIELD", "REQ-0103"), ("CAP.NOSUCH", "REQ-0125")]
@@ -651,7 +652,7 @@ S1,002,2024-06
                 assert_eq!(unknown.len(), 1, "{issues:?}");
                 assert_eq!(unknown[0].requirement.as_deref(), Some(requirement));
                 let context: yamaa_core::json::Value =
-                    serde_json::from_str(&unknown[0].context).unwrap();
+                    yamaa_adapters::json_wire::decode(&unknown[0].context).unwrap();
                 assert_eq!(context["identifier"], source);
             }
 
@@ -669,7 +670,7 @@ S1,002,2024-06
             assert_eq!(invalid.len(), 1, "{issues:?}");
             assert_eq!(invalid[0].requirement.as_deref(), Some("REQ-1242"));
             let context: yamaa_core::json::Value =
-                serde_json::from_str(&invalid[0].context).unwrap();
+                yamaa_adapters::json_wire::decode(&invalid[0].context).unwrap();
             assert_eq!(context["intermediate"], "CAP");
         }
 
@@ -705,16 +706,17 @@ S1,002,2024-06
             }
         }
         fn issues(rows: &[yamaa_adapters::issue_rows::Issue]) -> yamaa_core::json::Value {
-            yamaa_core::json::json!(rows.iter().map(|row| yamaa_core::json::json!({
+            yamaa_adapters::json!(rows.iter().map(|row| yamaa_adapters::json!({
         "phase":row.phase,"condition":row.condition,"requirement":row.requirement,
-        "spec_paths":row.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&row.context).unwrap()
+        "spec_paths":row.spec_paths,"context":yamaa_adapters::json_wire::decode(&row.context).unwrap()
     })).collect::<Vec<_>>())
         }
         #[test]
         fn baseline_types_preserve_conditions_and_reference_priority() {
-            let truth: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("../../../tests/host-fixtures/cases.json"))
-                    .unwrap();
+            let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "../../../tests/host-fixtures/cases.json"
+            ))
+            .unwrap();
             for case in truth["families"]["original-specifications"]["baseline_window_types"]
                 .as_array()
                 .unwrap()
@@ -749,18 +751,28 @@ S1,002,2024-06
                     issues(&file_application::check(request(), identity())),
                     case["check_issues"],
                     "{}",
-                    case["name"]
+                    yamaa_adapters::json_wire::encode(&case["name"])
                 );
                 let mut result = match file_application::domain(request(), identity()) {
                     Ok(result) => result,
                     Err(rows) => {
-                        assert_eq!(issues(&rows), case["issues"], "{}", case["name"]);
+                        assert_eq!(
+                            issues(&rows),
+                            case["issues"],
+                            "{}",
+                            yamaa_adapters::json_wire::encode(&case["name"])
+                        );
                         assert!(case["csv"].is_null());
                         assert!(!fixture.0.join("out.csv").exists());
                         continue;
                     }
                 };
-                assert_eq!(issues(&result.issues()), case["issues"], "{}", case["name"]);
+                assert_eq!(
+                    issues(&result.issues()),
+                    case["issues"],
+                    "{}",
+                    yamaa_adapters::json_wire::encode(&case["name"])
+                );
                 if let Some(csv) = case["csv"].as_str() {
                     assert!(result.save().unwrap());
                     assert_eq!(fs::read(fixture.0.join("out.csv")).unwrap(), csv.as_bytes());
@@ -818,7 +830,7 @@ S1,002,2024-06
         }
 
         fn issue(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_core::json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
         }
 
         fn expected(path: &Path) -> yamaa_core::json::Value {
@@ -831,8 +843,8 @@ S1,002,2024-06
                 match &d.nodes()[id] {
                     N::Null => yamaa_core::json::Value::Null,
                     N::Boolean(v) => (*v).into(),
-                    N::Integer(v) => serde_json::from_str(v).unwrap(),
-                    N::Float(v) => yamaa_core::json::json!(v),
+                    N::Integer(v) => yamaa_adapters::json_wire::decode(v).unwrap(),
+                    N::Float(v) => yamaa_adapters::json!(v),
                     N::Text(v) => v.clone().into(),
                     N::Sequence(ids) => ids.iter().map(|&id| value(d, id)).collect(),
                     N::Mapping(pairs) => pairs
@@ -968,17 +980,17 @@ S1,002,2024-06
                 (
                     "undeclared",
                     "{path: out.csv, columns: [USUBJID, N, ZZZ]}",
-                    yamaa_core::json::json!({"phase":"validation","condition":"undeclared_column","requirement":"REQ-0234","spec_paths":["output.columns[2]"],"context":{"column":"ZZZ"}}),
+                    yamaa_adapters::json!({"phase":"validation","condition":"undeclared_column","requirement":"REQ-0234","spec_paths":["output.columns[2]"],"context":{"column":"ZZZ"}}),
                 ),
                 (
                     "decimals-parquet",
                     "{path: out.parquet, columns: [USUBJID, N], decimals: 2}",
-                    yamaa_core::json::json!({"phase":"validation","condition":"decimals_not_applicable","requirement":"REQ-0762","spec_paths":["output.decimals"],"context":{"path":"out.parquet","profile":"parquet"}}),
+                    yamaa_adapters::json!({"phase":"validation","condition":"decimals_not_applicable","requirement":"REQ-0762","spec_paths":["output.decimals"],"context":{"path":"out.parquet","profile":"parquet"}}),
                 ),
                 (
                     "decimals-negative",
                     "{path: out.csv, columns: [USUBJID, N], decimals: -1}",
-                    yamaa_core::json::json!({"phase":"validation","condition":"invalid_field_type","requirement":"REQ-0744","spec_paths":["output.decimals"],"context":{"expected":"an integer from 0 through 18","actual":-1}}),
+                    yamaa_adapters::json!({"phase":"validation","condition":"invalid_field_type","requirement":"REQ-0744","spec_paths":["output.decimals"],"context":{"expected":"an integer from 0 through 18","actual":-1}}),
                 ),
             ];
             for (name, output, oracle) in rows {
@@ -1010,8 +1022,10 @@ S1,002,2024-06
 
         #[test]
         fn csv_precision_range_is_validated_for_empty_and_non_float_outputs_in_both_hosts() {
-            let oracle: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/csv_precision_limit.json")).unwrap();
+            let oracle: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/csv_precision_limit.json"
+            ))
+            .unwrap();
             let huge = format!("1{}", "0".repeat(400));
             for decimals in [
                 "-1",
@@ -1025,7 +1039,8 @@ S1,002,2024-06
                 huge.as_str(),
             ] {
                 let mut expected = oracle.clone();
-                expected["context"]["actual"] = serde_json::from_str(decimals).unwrap();
+                expected["context"]["actual"] =
+                    yamaa_adapters::json_wire::decode(decimals).unwrap();
                 for (kind, input) in [
                     ("float", "USUBJID,VALUE\nS-001,0.125\n"),
                     ("float", "USUBJID,VALUE\n"),
@@ -1687,7 +1702,7 @@ S1,002,2024-06
             }
         }
         fn issue(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_core::json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
         }
         fn expected(path: &Path) -> yamaa_core::json::Value {
             let text = fs::read_to_string(path).unwrap();
@@ -1699,8 +1714,8 @@ S1,002,2024-06
                 match &d.nodes()[id] {
                     N::Null => yamaa_core::json::Value::Null,
                     N::Boolean(v) => (*v).into(),
-                    N::Integer(v) => serde_json::from_str(v).unwrap(),
-                    N::Float(v) => yamaa_core::json::json!(v),
+                    N::Integer(v) => yamaa_adapters::json_wire::decode(v).unwrap(),
+                    N::Float(v) => yamaa_adapters::json!(v),
                     N::Text(v) => v.clone().into(),
                     N::Sequence(ids) => ids.iter().map(|&id| value(d, id)).collect(),
                     N::Mapping(pairs) => pairs
@@ -1839,8 +1854,8 @@ S1,002,2024-06
             assert_eq!(
                 actual,
                 vec![
-                    yamaa_core::json::json!({"phase":"verification","condition":"duplicate_intermediate_records","requirement":"REQ-1245","spec_paths":["intermediates[0].verifications[0].unique"],"context":{"intermediate":"P","dataset":"DONOR","columns":["ID"],"duplicate_count":1,"verification_id":"donor-id"}}),
-                    yamaa_core::json::json!({"phase":"verification","condition":"duplicate_intermediate_records","requirement":"REQ-1245","spec_paths":["intermediates[0].verifications[1].unique"],"context":{"intermediate":"P","dataset":"DONOR","columns":["X"],"duplicate_count":1}})
+                    yamaa_adapters::json!({"phase":"verification","condition":"duplicate_intermediate_records","requirement":"REQ-1245","spec_paths":["intermediates[0].verifications[0].unique"],"context":{"intermediate":"P","dataset":"DONOR","columns":["ID"],"duplicate_count":1,"verification_id":"donor-id"}}),
+                    yamaa_adapters::json!({"phase":"verification","condition":"duplicate_intermediate_records","requirement":"REQ-1245","spec_paths":["intermediates[0].verifications[1].unique"],"context":{"intermediate":"P","dataset":"DONOR","columns":["X"],"duplicate_count":1}})
                 ]
             );
             assert!(result.save().is_err());
@@ -1918,7 +1933,7 @@ S1,002,2024-06
             assert_eq!(
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
                 vec![
-                    yamaa_core::json::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0117","spec_paths":["intermediates[0].key"],"context":{"identifier":"DONOR.KEY","intermediate":"P"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0117","spec_paths":["intermediates[0].key"],"context":{"identifier":"DONOR.KEY","intermediate":"P"}})
                 ]
             );
             assert!(result.save().is_err());
@@ -1973,7 +1988,7 @@ S1,002,2024-06
         #[test]
         fn contextual_keys_reject_later_unknown_wrong_owner_and_known_type_at_binding() {
             let base = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.NEWKEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations:\n      NEWKEY: KEY\n      LOOKED_UP: EARLIER.VAL\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
-            let unknown = |name: &str| yamaa_core::json::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-1263","spec_paths":["intermediates[1].derivations.LOOKED_UP.source"],"context":{"identifier":name,"intermediate":"LATER","read":"EARLIER"}});
+            let unknown = |name: &str| yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-1263","spec_paths":["intermediates[1].derivations.LOOKED_UP.source"],"context":{"identifier":name,"intermediate":"LATER","read":"EARLIER"}});
             for (spec, first) in [
                 (
                     base.replace(
@@ -1992,7 +2007,7 @@ S1,002,2024-06
                 ),
                 (
                     base.replace("NEWKEY: KEY", "NEWKEY: {literal: wrong-type}"),
-                    yamaa_core::json::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0323","spec_paths":["intermediates[0].key"],"context":{"intermediate":"EARLIER","source":"DONOR.NEWKEY","expected":"str","actual":"int"}}),
+                    yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0323","spec_paths":["intermediates[0].key"],"context":{"intermediate":"EARLIER","source":"DONOR.NEWKEY","expected":"str","actual":"int"}}),
                 ),
             ] {
                 let (fixture, result) = independent(&spec, "ID,VAL\n1,100\n", Some("KEY\n2\n"));
@@ -2032,7 +2047,7 @@ S1,002,2024-06
                 let mut result = result.unwrap();
                 assert_eq!(
                     result.issues().iter().map(issue).collect::<Vec<_>>(),
-                    vec![yamaa_core::json::json!({
+                    vec![yamaa_adapters::json!({
                         "phase":"validation", "condition":"unknown_field", "requirement":"REQ-1185",
                         "spec_paths":["intermediates[0].derivations.TWICE.compute.expr"],
                         "context":{"intermediate":"P", "identifier":reference}
@@ -2052,7 +2067,7 @@ S1,002,2024-06
             let mut result = result.unwrap();
             assert_eq!(
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
-                vec![yamaa_core::json::json!({
+                vec![yamaa_adapters::json!({
                     "phase":"validation", "condition":"duplicate_derivation", "requirement":"REQ-1185",
                     "spec_paths":["intermediates[0].derivations.VALUE"],
                     "context":{"intermediate":"P", "derivation":"VALUE", "identifier":"SELF.VALUE"}
@@ -2076,7 +2091,7 @@ S1,002,2024-06
             let mut result = result.unwrap();
             assert_eq!(
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
-                vec![yamaa_core::json::json!({
+                vec![yamaa_adapters::json!({
                     "phase":"verification", "condition":"duplicate_intermediate_records", "requirement":"REQ-1245",
                     "spec_paths":["intermediates[0].verifications[0].unique"],
                     "context":{"intermediate":"P", "dataset":"SELF", "columns":["TWICE"], "duplicate_count":1}
@@ -2217,7 +2232,7 @@ S1,002,2024-06
             let mut result = between_run(&fixture);
             assert_eq!(
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
-                vec![yamaa_core::json::json!({
+                vec![yamaa_adapters::json!({
                     "phase": "validation", "condition": "unknown_field", "requirement": "REQ-1263",
                     "spec_paths": ["intermediates[1].derivations.LD.source"],
                     "context": {"intermediate": "SUBJ", "identifier": "ADTM", "read": "LAST_DOSE"}
@@ -2245,7 +2260,7 @@ S1,002,2024-06
             let result = between_run(&fixture);
             assert_eq!(
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
-                vec![yamaa_core::json::json!({
+                vec![yamaa_adapters::json!({
                     "phase": "validation", "condition": "unknown_field", "requirement": "REQ-1263",
                     "spec_paths": ["intermediates[2].derivations.LD.source"],
                     "context": {"intermediate": "SUBJ", "identifier": "ADTM", "read": "SECOND"}
@@ -2280,7 +2295,8 @@ S1,002,2024-06
                 rows.iter()
                     .map(|issue| {
                         let mut value = issue.as_value();
-                        value["context"] = serde_json::from_str(&issue.context).unwrap();
+                        value["context"] =
+                            yamaa_adapters::json_wire::decode(&issue.context).unwrap();
                         value
                     })
                     .collect(),
@@ -2288,9 +2304,10 @@ S1,002,2024-06
         }
         #[test]
         fn complete_independent_lookup_assertions_keep_declaring_sites_and_prior_records() {
-            let truth: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/completed_lookup_assertions.json"))
-                    .unwrap();
+            let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/completed_lookup_assertions.json"
+            ))
+            .unwrap();
             for (name, case) in truth["cases"].as_object().unwrap() {
                 for _ in 0..2 {
                     let fixture = Fixture(std::env::temp_dir().join(format!(
@@ -2342,7 +2359,7 @@ S1,002,2024-06
                         report["verifications"], expected,
                         "{name}: complete ordered verification records"
                     );
-                    assert_eq!(report["artifacts"], yamaa_core::json::json!([]));
+                    assert_eq!(report["artifacts"], yamaa_adapters::json!([]));
                     if let Some(csv) = case.get("csv") {
                         assert!(result.output().is_some(), "{name}");
                         assert!(result.save().unwrap(), "{name}");
@@ -2464,7 +2481,7 @@ columns:
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.case[0].then.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"columns.A.derivation.case[0].then.source.no_match","handler":"no_match","count":1},
                     {"spec_path":"columns.B.derivation.case[0].then.source.multiple_matches","handler":"multiple_matches","count":1},
@@ -2492,7 +2509,7 @@ columns:
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.C.derivation.str_concat.sources[1].case[0].then.source.multiple_matches","handler":"multiple_matches","count":1}
                 ])
             );
@@ -2521,7 +2538,7 @@ columns:
             assert_eq!(fs::read(original.join("spec.yaml")).unwrap(), written);
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.AEDT.derivation.source.multiple_matches","handler":"multiple_matches","count":2},
                     {"spec_path":"columns.AEDT.derivation.source.no_match","handler":"no_match","count":3},
                     {"spec_path":"columns.SRCSEQ.derivation.case[0].then.source.multiple_matches","handler":"multiple_matches","count":2}
@@ -2560,7 +2577,7 @@ columns:
                         .find(|entry| entry["spec_path"]
                             == "columns.A.derivation.case[0].then.source.absent")
                         .unwrap(),
-                    &yamaa_core::json::json!({"spec_path":"columns.A.derivation.case[0].then.source.absent","handler":"absent","count":count})
+                    &yamaa_adapters::json!({"spec_path":"columns.A.derivation.case[0].then.source.absent","handler":"absent","count":count})
                 );
             }
         }

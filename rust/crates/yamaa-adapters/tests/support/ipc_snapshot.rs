@@ -16,7 +16,7 @@ pub fn table_snapshot(input: &[u8]) -> Result<String, TableError> {
     ipc_table::serialize_json(&Snapshot(&table))
 }
 fn scalar(value: yamaa_core::value::Value) -> yamaa_core::json::Value {
-    use yamaa_core::json::json;
+    use yamaa_adapters::json;
     use yamaa_core::{
         temporal::{DatePrecision, DateTimePrecision},
         value::Value,
@@ -100,7 +100,8 @@ impl Serialize for Row<'_> {
                 ValueRef::DateTime(v) => Value::DateTime(v),
                 ValueRef::Bool(v) => Value::Bool(v),
             };
-            row.serialize_element(&scalar(value))?;
+            let scalar = scalar(value);
+            row.serialize_element(&yamaa_adapters::json_wire::WireValue(&scalar))?;
         }
         row.end()
     }
