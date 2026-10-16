@@ -22,6 +22,50 @@ Python, R and Cargo versions move together;
 `tools.packaging.check_shared_release_versions` checks that they agree. The
 previous Python release is the `yamaa-py-0.3.0` tag.
 
+## Saved artifact readers
+
+The minimum supported independent readers are:
+
+| Reader | Minimum | Saved formats qualified |
+| --- | --- | --- |
+| Python Polars | 1.43.2 | CSV text and Parquet |
+| Python PyArrow | 23.0.1 | CSV text and Parquet |
+| R arrow | 23.0.1 | CSV text and Parquet |
+| Python standard library | Supported CPython above | Dataset-JSON 1.1 |
+| R jsonlite | 2.0.0 | Dataset-JSON 1.1, with `bigint_as_char = TRUE` |
+| Python lxml | 6.1.0 | Define-XML 2.1 |
+
+Python package dependencies and R package `Suggests` declare these floors.
+The R readers are optional: public Build and Save use the shared native codecs.
+CSV carries text rather than an embedded schema; controls supply an explicit
+text schema and check exact authored CSV bytes. Its empty-field ingestion
+semantics are described in the [CSV profile](https://github.com/elong0527/yamaa/blob/main/rules/storage/csv.md).
+Parquet checks every logical type, nullable field, zone-free microsecond
+timestamp, field and row order, full signed-i64 values, exact finite double
+bits and empty-table schema. Read R integer columns through Arrow arrays, or
+cast to text inside Arrow: converting to `bit64` loses `INT64_MIN` to its
+missing-value sentinel. R doubles cannot represent every signed-i64 integer.
+
+Dataset-JSON controls use column metadata to retain integer, float and temporal
+meaning. Python's integer decoder must preserve the JSON token `-0` when it
+belongs to a float column. jsonlite decodes that token as integer zero; R
+qualification checks its mathematical value and the original signed token,
+and pins every other finite float's bits. CSV ingestion maps collected empty
+text to missing; Parquet retains it as present empty text. Both forms are
+covered before Dataset-JSON publication. Define-XML has independent schema and
+fixed-byte controls in the installed public Define suites.
+
+The standalone `saved_readers` suites use shared independently authored
+fixtures under `rust/tests/host-fixtures/`, build through installed Python and
+R public APIs, remove the original inputs and specifications, then read the
+held Save bytes. The Python readers decode the same captured byte buffer;
+R arrow reads its installed host's corresponding captured buffer. Repeated
+domain saves must retain identical bytes. Ordinary CI tests the minimum
+readers; every native wheel/source and R source lane also runs these controls
+with the minimum versions. SAS datasets and Transport are input formats;
+the published dataset profiles remain CSV and Parquet. Dataset-JSON and
+Define-XML are generated through the public study-document API.
+
 ## Publication
 
 After the final commit is on main and its complete native qualification has
