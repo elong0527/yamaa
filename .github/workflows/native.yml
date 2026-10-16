@@ -302,7 +302,7 @@ jobs:
           python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz project-dist/*.whl
       - name: Install the minimum supported Python saved artifact readers
         working-directory: ${{ runner.temp }}
-        run: python -m pip install polars==1.43.2 pyarrow==23.0.1
+        run: python -m pip install polars==1.43.2 pyarrow==23.0.1 lxml==6.1.0
       - name: Report installed Python public benchmark conformance
         working-directory: ${{ runner.temp }}
         run: |

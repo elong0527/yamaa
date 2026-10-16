@@ -62,7 +62,7 @@ jobs:
       - run: make test-python
       - name: Test the minimum supported Python saved artifact readers
         run: |
-          uv pip install --python python/.venv/bin/python 'polars==1.43.2' 'pyarrow==23.0.1'
+          uv pip install --python python/.venv/bin/python 'polars==1.43.2' 'pyarrow==23.0.1' 'lxml==6.1.0'
           make test-python
   r:
     runs-on: ubuntu-24.04

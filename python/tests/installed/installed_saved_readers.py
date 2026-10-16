@@ -239,5 +239,8 @@ class SavedReaders(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print(f"Saved artifact readers: Polars {pl.__version__}, PyArrow {pa.__version__}")
+    print(
+        f"Saved artifact readers: Polars {pl.__version__}, PyArrow {pa.__version__}, "
+        f"lxml {'.'.join(map(str, etree.LXML_VERSION[:3]))}"
+    )
     unittest.main()
