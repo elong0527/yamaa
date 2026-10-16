@@ -615,8 +615,17 @@ fn read_with_observations<T: TableAccess + ?Sized>(
         *choice
     } else {
         resolve_choice(
-            index, assignment, candidate, plan, row, primary, state, table, item,
-            source_name, cache_key,
+            index,
+            assignment,
+            candidate,
+            plan,
+            row,
+            primary,
+            state,
+            table,
+            item,
+            source_name,
+            cache_key,
         )?
     };
     let (value, handler) = match choice {
@@ -910,8 +919,7 @@ fn resolve_choice<T: TableAccess + ?Sized>(
                     }
                 }
                 if matches {
-                    if let Some(filter) =
-                        item.filter.as_ref().filter(|filter| filter.correlated())
+                    if let Some(filter) = item.filter.as_ref().filter(|filter| filter.correlated())
                     {
                         let owner = match &item.source {
                             IntermediateSource::Input(index) => {

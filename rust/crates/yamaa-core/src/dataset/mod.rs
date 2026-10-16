@@ -780,17 +780,14 @@ fn validate_assignment_at(
         destination_free,
     )? {
         validate_direct_assignment(
-        assignment,
-        available,
-        source,
-        primary,
-        secondary,
-        intermediates,
-        output,
-        mode,
-        depth,
-        record_derivation,
-        destination_free,
+            assignment,
+            available,
+            source,
+            primary,
+            secondary,
+            intermediates,
+            output,
+            mode,
         )?;
     }
     match &assignment.expression {
@@ -1383,9 +1380,14 @@ impl DatasetPlan {
             }
         }
         validate_plan_verifications(
-            &verifications, &source, &secondary, &intermediates, &output, &templates, width,
+            &verifications,
+            &source,
+            &secondary,
+            &intermediates,
+            &output,
+            &templates,
+            width,
         )?;
-        }
         Ok(Self {
             source,
             secondary,
@@ -1985,9 +1987,6 @@ fn validate_direct_assignment(
     intermediates: &[Intermediate],
     output: &TableSchema,
     mode: &RowMode,
-    depth: usize,
-    record_derivation: bool,
-    destination_free: bool,
 ) -> Result<(), PlanError> {
     match &assignment.expression {
         Expression::Joined(read) => read.validate(source, secondary, output, available, mode)?,
@@ -2224,21 +2223,21 @@ fn validate_plan_verifications(
             Check::InvalidDeclaration { .. } => {}
             Check::PredicateDeclaration(predicate) => verification_predicates::validate(
                 predicate,
-                &source,
-                &secondary,
-                &intermediates,
-                &output,
-                &templates,
+                source,
+                secondary,
+                intermediates,
+                output,
+                templates,
             )?,
             Check::Assert { when, require } => {
                 for predicate in when.iter().chain([require]) {
                     verification_predicates::validate(
                         predicate,
-                        &source,
-                        &secondary,
-                        &intermediates,
-                        &output,
-                        &templates,
+                        source,
+                        secondary,
+                        intermediates,
+                        output,
+                        templates,
                     )?;
                 }
             }
@@ -2267,11 +2266,11 @@ fn validate_plan_verifications(
                 for predicate in check.filter.iter().chain(&check.when) {
                     verification_predicates::validate(
                         predicate,
-                        &source,
-                        &secondary,
-                        &intermediates,
-                        &output,
-                        &templates,
+                        source,
+                        secondary,
+                        intermediates,
+                        output,
+                        templates,
                     )?;
                 }
             }
@@ -2283,5 +2282,6 @@ fn validate_plan_verifications(
                 }
             }
         }
+    }
     Ok(())
 }

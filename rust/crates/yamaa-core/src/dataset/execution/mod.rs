@@ -941,7 +941,7 @@ impl DatasetPlan {
         intermediate_run: &mut intermediates::Run,
         primary: &row_drivers::Driver<'_, T>,
         candidates: &mut Vec<Candidate>,
-        next_selection_identity: usize,
+        mut next_selection_identity: usize,
     ) -> Result<usize, Box<ExecutionError<T::Error>>> {
         let named = if let RowMode::IntermediateDriver { index, .. } = &template.mode {
             Some(intermediates::driver(
@@ -951,7 +951,7 @@ impl DatasetPlan {
                     primary,
                     functions,
                     secondary,
-                    self_rows: &candidates,
+                    self_rows: candidates,
                     handlers,
                     intermediates: &mut *intermediate_run,
                     output_rows: &[],
@@ -967,8 +967,7 @@ impl DatasetPlan {
             .as_ref()
             .and_then(|relation| relation.materialized.as_ref())
             .map(|data| intermediates::Data::<T::Error>::new(data));
-        let stored =
-            row_drivers::Driver::new(table, secondary, template.mode.source_index());
+        let stored = row_drivers::Driver::new(table, secondary, template.mode.source_index());
         let table = if let Some(data) = &data {
             row_drivers::Driver::Secondary(data)
         } else {
@@ -1103,9 +1102,7 @@ impl DatasetPlan {
                         &candidate.values,
                     )
                     .map_err(|error| match error.kind {
-                        crate::predicate::ErrorKind::Regex(limit) => {
-                            Box::new(regex_limit(limit))
-                        }
+                        crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
                         _ => Box::new(ExecutionError::Predicate { source_row, error }),
                     })?
                 };
@@ -1145,7 +1142,7 @@ impl DatasetPlan {
                 functions,
                 handlers,
                 &mut *intermediate_run,
-                &mut candidates,
+                candidates,
                 first,
             )?;
         }
@@ -1157,7 +1154,7 @@ impl DatasetPlan {
                 primary,
                 functions,
                 secondary,
-                self_rows: &candidates,
+                self_rows: candidates,
                 handlers,
                 intermediates: &mut *intermediate_run,
                 output_rows: &[],
@@ -1229,9 +1226,7 @@ impl DatasetPlan {
                     &candidate.values,
                 )
                 .map_err(|error| match error.kind {
-                    crate::predicate::ErrorKind::Regex(limit) => {
-                        Box::new(regex_limit(limit))
-                    }
+                    crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
                     _ => Box::new(ExecutionError::Predicate { source_row, error }),
                 })?
             };
@@ -1264,14 +1259,14 @@ impl DatasetPlan {
             completed[assignment.column] = true;
         }
         let mut next_column = 0;
-        self.check_columns(&candidates, &completed, &mut next_column, records)?;
+        self.check_columns(candidates, &completed, &mut next_column, records)?;
         for assignment in self.columns() {
             let mut nested_windows = windows::Cache::default();
             let mut numbers =
-                windows::Evaluation::new(assignment, &candidates, self, table, handlers)?;
+                windows::Evaluation::new(assignment, candidates, self, table, handlers)?;
             for row in 0..candidates.len() {
                 let number = if let Some(run) = &mut numbers {
-                    Some(run.value(row, &candidates, table, assignment, self)?)
+                    Some(run.value(row, candidates, table, assignment, self)?)
                 } else {
                     None
                 };
@@ -1289,10 +1284,10 @@ impl DatasetPlan {
                             primary,
                             functions,
                             secondary,
-                            self_rows: &candidates,
+                            self_rows: candidates,
                             handlers,
                             intermediates: &mut *intermediate_run,
-                            output_rows: &candidates,
+                            output_rows: candidates,
                             aggregate_row: None,
                             output_offset: 0,
                             windows: &mut nested_windows,
@@ -1304,7 +1299,7 @@ impl DatasetPlan {
                 candidate.completed[assignment.column] = true;
             }
             completed[assignment.column] = true;
-            self.check_columns(&candidates, &completed, &mut next_column, records)?;
+            self.check_columns(candidates, &completed, &mut next_column, records)?;
         }
         // A selector hidden by an empty input or a lazy branch must still report
         // its known filter-type refusal before a successful result can publish.
@@ -1422,7 +1417,7 @@ impl DatasetPlan {
                         &dataset,
                         self,
                         table,
-                        &candidates,
+                        candidates,
                         &mut EvaluationState {
                             primary,
                             functions,
@@ -1503,7 +1498,7 @@ impl DatasetPlan {
                     &dataset,
                     self,
                     table,
-                    &candidates,
+                    candidates,
                     &mut EvaluationState {
                         primary,
                         functions,
@@ -1913,66 +1908,66 @@ fn evaluate_first_available<T: TableAccess + ?Sized>(
     state: &mut EvaluationState<'_, T::Error>,
     retained: bool,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
-        for operand in selection.sources() {
-            let value = match &operand.read {
-                crate::dataset::SelectionRead::Expression(source) => {
-                    evaluate_raw_retained(table, source, candidate, plan, row, state, retained)
-                        .map_err(|mut error| {
-                            // Collection cardinality belongs to the enclosing selection.
-                            // Keep operand metadata for handlers and every other failure.
-                            if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
-                                path.clone_from(&assignment.path);
-                            }
-                            error
-                        })?
-                }
-                crate::dataset::SelectionRead::Source(column) => {
-                    let source_row = candidate.members[0];
-                    let value = table.cell(source_row, *column).map_err(|error| {
-                        Box::new(ExecutionError::Cell {
-                            path: operand.path.clone(),
-                            source_row,
-                            error,
-                        })
-                    })?;
-                    own(value)
-                }
-                crate::dataset::SelectionRead::Column(column) => {
-                    let value = &candidate.values[*column];
-                    value.clone()
-                }
-                crate::dataset::SelectionRead::Collect {
-                    column,
-                    identifier,
-                    filter,
-                } => key_grain::collect_bound(
-                    table,
-                    key_grain::Collection {
-                        column: *column,
-                        identifier,
-                        filter: filter.as_deref(),
-                        selection: None,
-                    },
-                    key_grain::CollectionContext {
-                        path: &operand.path,
-                        candidate,
-                        plan,
-                        row,
-                    },
-                    state.handlers,
-                )
-                .map_err(|mut error| {
-                    if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
-                        *path = assignment.path.clone();
-                    }
-                    error
-                })?,
-            };
-            if value != Value::Missing {
-                return Ok(value);
+    for operand in selection.sources() {
+        let value = match &operand.read {
+            crate::dataset::SelectionRead::Expression(source) => {
+                evaluate_raw_retained(table, source, candidate, plan, row, state, retained)
+                    .map_err(|mut error| {
+                        // Collection cardinality belongs to the enclosing selection.
+                        // Keep operand metadata for handlers and every other failure.
+                        if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
+                            path.clone_from(&assignment.path);
+                        }
+                        error
+                    })?
             }
+            crate::dataset::SelectionRead::Source(column) => {
+                let source_row = candidate.members[0];
+                let value = table.cell(source_row, *column).map_err(|error| {
+                    Box::new(ExecutionError::Cell {
+                        path: operand.path.clone(),
+                        source_row,
+                        error,
+                    })
+                })?;
+                own(value)
+            }
+            crate::dataset::SelectionRead::Column(column) => {
+                let value = &candidate.values[*column];
+                value.clone()
+            }
+            crate::dataset::SelectionRead::Collect {
+                column,
+                identifier,
+                filter,
+            } => key_grain::collect_bound(
+                table,
+                key_grain::Collection {
+                    column: *column,
+                    identifier,
+                    filter: filter.as_deref(),
+                    selection: None,
+                },
+                key_grain::CollectionContext {
+                    path: &operand.path,
+                    candidate,
+                    plan,
+                    row,
+                },
+                state.handlers,
+            )
+            .map_err(|mut error| {
+                if let ExecutionError::MultipleValues { path, .. } = error.as_mut() {
+                    *path = assignment.path.clone();
+                }
+                error
+            })?,
+        };
+        if value != Value::Missing {
+            return Ok(value);
         }
-        return Ok(selection.missing().clone());
+    }
+    Ok(selection.missing().clone())
 }
 
 /// Evaluate one temporal operation over its already admitted operands,
@@ -1987,46 +1982,42 @@ fn evaluate_temporal<T: TableAccess + ?Sized>(
     row: usize,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
-        operands,
-        operation,
-    } = &assignment.expression
-    {
-        let mut values = Vec::with_capacity(operands.len());
-        for (index, operand) in operands.iter().enumerate() {
-            let value = evaluate_raw(table, operand, candidate, plan, row, state)?;
-            operation
-                .validate_operand(index, &value)
-                .expect("admitted operand index")
-                .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)))?;
-            values.push(value);
-        }
-        let result = operation
-            .apply_values(&values)
-            .expect("admitted temporal arity")
-            .map_err(|diagnostic| {
-                if diagnostic.definition().phase == "validation" {
-                    Box::new(ExecutionError::ScalarDiagnostic(diagnostic))
-                } else {
-                    retained_diagnostic(diagnostic, true, candidate, plan, row)
-                }
-            })?;
-        let value = match result {
-            crate::dataset::TemporalStep::Value(value) => value,
-            crate::dataset::TemporalStep::Invalid => {
-                state
-                    .handlers
-                    .record(
-                        &std::format!("{}.invalid", operation.path()),
-                        HandlerKind::Invalid,
-                    )
-                    .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
-                operation
-                    .invalid_handler()
-                    .expect("declared recovery")
-                    .clone()
+    let mut values = Vec::with_capacity(operands.len());
+    for (index, operand) in operands.iter().enumerate() {
+        let value = evaluate_raw(table, operand, candidate, plan, row, state)?;
+        operation
+            .validate_operand(index, &value)
+            .expect("admitted operand index")
+            .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)))?;
+        values.push(value);
+    }
+    let result = operation
+        .apply_values(&values)
+        .expect("admitted temporal arity")
+        .map_err(|diagnostic| {
+            if diagnostic.definition().phase == "validation" {
+                Box::new(ExecutionError::ScalarDiagnostic(diagnostic))
+            } else {
+                retained_diagnostic(diagnostic, true, candidate, plan, row)
             }
-        };
-        return Ok(value);
+        })?;
+    let value = match result {
+        crate::dataset::TemporalStep::Value(value) => value,
+        crate::dataset::TemporalStep::Invalid => {
+            state
+                .handlers
+                .record(
+                    &std::format!("{}.invalid", operation.path()),
+                    HandlerKind::Invalid,
+                )
+                .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
+            operation
+                .invalid_handler()
+                .expect("declared recovery")
+                .clone()
+        }
+    };
+    Ok(value)
 }
 
 /// Evaluate the leaf expressions that read directly from the candidate,
