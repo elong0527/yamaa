@@ -39,3 +39,58 @@ construction, and logical-type inspection. The canonical lock and manifests
 continue to select 60; using 57 requires adapting this boundary and qualifying
 that dependency graph. Keep malformed-schema rejection and the closed output
 profile when adapting the boundary.
+
+## Resolved specification artifact
+
+`resolved_artifact::ResolvedArtifact` is an owned inspection format produced from
+the same prepared documents and producer graph used for direct compilation.
+Version 1 serializes as compact UTF-8 JSON with these envelope fields:
+
+| Field | Meaning |
+| --- | --- |
+| `format` | `yamaa.resolved-specification`, distinct from authored YAML. |
+| `artifact_version` | Integer `1`; readers reject other versions. |
+| `model_kind` | `normalized_with_named_dictionary_references`. |
+| `replay` | `inspection_only`. |
+| `entry` | Canonical identity of the requested specification entry. |
+| `environment` | Explicit environment identity, or null when absent. |
+| `entries` | Root first, then linked producer entries in preparation order. |
+
+Each entry contains `schema_version`, its complete composed normalized
+`specification`, `layers` in composition postorder, `origins`, `mapping_order`,
+`resources`, and `producers` mapping input dataset names to their producer entry.
+Named mapping-dictionary references remain in the specification; preparation
+admits those resources as usual, and their declaring locations are recorded.
+The artifact carries no reusable executable code or activated environment.
+Normalized inherited paths may already be respelled relative to the entry;
+resource records retain their original spellings and selected locations. The
+normalized mapping must not be dumped as authored YAML and compiled again.
+
+`origins` uses RFC 6901 JSON pointers to identify normalized values. Each origin
+records its original `declaring_source`, `source_kind` (`authored`,
+`schema_default`, or `composed`) and whether normalization generated it.
+Composed containers with no single declaring layer have a null source. Default
+origins identify the retained schema module. `mapping_order` uses the same
+pointers to retain every mapping's original key order; JSON object keys alone
+cannot retain semantic iteration order. Arrays retain their normal order.
+
+Resources include final input data and producer links, output and both logs,
+named dictionaries and every inherited-parent reference. Each record contains
+`spec_path`, `role`, `owning_entry`, `declaring_source`, `relative_to`,
+`base_source`, `written`, and `location: {kind: local, path: ...}`. The composed
+selector governs inherited input paths and schema links; output is atomic.
+Every producer selects its own linked entry. Locations follow the existing
+lexical local-path policy, including absolute and parent-relative spellings.
+They state neither existence nor file-access authority. Environment internals
+are admitted through the usual environment owner and are outside this domain
+specification resource inventory.
+
+Serialization is deterministic for identical preparation facts. Exact integer
+tokens and floating-point values survive JSON round trips; mapping order has its
+own ledger. Reading validates the distinct format and supported version and
+retains these facts without source access, path resolution, callbacks or
+recompilation. It works after source deletion and working-directory changes.
+Loading does not authenticate caller-edited JSON. Resources contain no content
+digests, bytes, file descriptors or access capabilities. Execution replay is
+unsupported: `domain` and `check` continue to accept original source entries and
+obtain fresh resource authority through their existing preparation lifecycle.

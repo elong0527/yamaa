@@ -60,6 +60,7 @@ pub mod file_publication;
 pub mod file_publication;
 pub mod file_resources;
 pub mod file_workflow;
+pub mod resolved_artifact;
 
 pub mod project_source;
 

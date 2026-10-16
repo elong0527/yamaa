@@ -161,6 +161,12 @@ impl FileSpecification {
         self.resources.capture_reads()
     }
 
+    pub fn resolved_specification(
+        &self,
+    ) -> Result<crate::resolved_artifact::ResolvedArtifact, crate::resolved_artifact::Error> {
+        crate::resolved_artifact::single(self.run.document(), &self.resources, None)
+    }
+
     pub(crate) fn publication_target(
         &self,
     ) -> Result<crate::file_publication::AnchoredTarget, ResourceError> {

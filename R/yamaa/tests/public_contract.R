@@ -6,7 +6,8 @@ source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-contract")
 stopifnot(identical(as.character(packageVersion("yamaa")), "0.4.0"),
   identical(yamaa:::.core_version(), as.character(packageVersion("yamaa"))))
-stopifnot(identical(sort(getNamespaceExports("yamaa")), c("yamaa_check", "yamaa_define", "yamaa_domain")))
+stopifnot(identical(sort(getNamespaceExports("yamaa")), c("yamaa_check", "yamaa_define", "yamaa_domain",
+  "yamaa_read_resolved_specification", "yamaa_resolve_specification")))
 check_issues <- function(result) {
   value <- result$issues
   stopifnot(is.data.frame(value),
@@ -336,3 +337,71 @@ qualify_public_large_text_callback <- function() {
   cat("public callback text beyond one MiB remains owned and saves exact bytes\n")
 }
 qualify_public_large_text_callback()
+
+qualify_resolved_specification <- function() {
+  root <- tempfile("yamaa-resolved-public-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  root <- normalizePath(root, winslash = "/")
+  entry <- file.path(root, "spec.yaml")
+  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+    "input: {RAW: {path: missing/raw.csv, types: {ID: int}}}",
+    "columns: [{name: ID, type: int, derivation: RAW.ID}]",
+    "output: {path: absent/output.csv, columns: [ID]}"), entry)
+  artifact <- yamaa_resolve_specification(entry)
+  stopifnot(inherits(artifact, "yamaa_resolved_specification"))
+  serialized <- as.character(artifact)
+  facts <- jsonlite::fromJSON(serialized, simplifyVector = FALSE)
+  stopifnot(identical(facts$format, "yamaa.resolved-specification"),
+    identical(facts$artifact_version, 1L), identical(facts$entry, entry),
+    identical(facts$replay, "inspection_only"),
+    !dir.exists(file.path(root, "absent")))
+  resource <- Filter(function(value) identical(value$role, "input_data"), facts$entries[[1L]]$resources)[[1L]]
+  stopifnot(identical(resource$location, list(kind = "local", path = file.path(root, "missing/raw.csv"))))
+  unlink(entry)
+  previous <- getwd()
+  on.exit(setwd(previous), add = TRUE)
+  setwd(dirname(root))
+  restored <- yamaa_read_resolved_specification(serialized)
+  stopifnot(identical(as.character(restored), serialized))
+  error <- tryCatch(yamaa_resolve_specification(entry), error = identity)
+  stopifnot(inherits(error, "yamaa_resolved_specification_error"), nrow(error$issues) > 0L)
+  invalid <- sub('"artifact_version":1', '"artifact_version":2', serialized, fixed = TRUE)
+  stopifnot(inherits(tryCatch(yamaa_read_resolved_specification(invalid), error = identity), "error"))
+  cat("resolved specification survives source deletion and working-directory changes\n")
+}
+qualify_resolved_specification()
+
+qualify_resolved_producer_entries <- function() {
+  root <- tempfile("yamaa-resolved-producers-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  root <- normalizePath(root, winslash = "/")
+  dir.create(file.path(root, "shared"))
+  writeLines(c("schema_version: '1.0'", "domain: PRODUCER", "keys: [ID]",
+    "input: {RAW: {path: input/raw.csv, relative_to: entry, types: {ID: int}}}",
+    "columns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]",
+    "output: {path: output/produced.csv, relative_to: entry, columns: [ID]}"), file.path(root, "shared/producer.yaml"))
+  writeLines(c("schema_version: '1.0'", "domain: CONSUMER", "keys: [ID]",
+    "input: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}",
+    "columns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]",
+    "output: {path: output/final.csv, relative_to: entry, columns: [ID]}"), file.path(root, "shared/consumer.yaml"))
+  for (wrapper in c("A", "B")) {
+    study <- file.path(root, wrapper)
+    dir.create(file.path(study, "input"), recursive = TRUE)
+    identifier <- if (identical(wrapper, "A")) "17" else "29"
+    writeLines(c("ID", identifier), file.path(study, "input/raw.csv"))
+    writeLines(c("schema_version: '1.0'", "parents: ../shared/consumer.yaml"), file.path(study, "spec.yaml"))
+    writeLines(c("schema_version: '1.0'", "parents: ../shared/producer.yaml"), file.path(study, "producer.yaml"))
+    artifact <- yamaa_resolve_specification(file.path(study, "spec.yaml"))
+    entries <- jsonlite::fromJSON(as.character(artifact), simplifyVector = FALSE)$entries
+    stopifnot(length(entries) == 2L, identical(entries[[1L]]$producers$P, file.path(study, "producer.yaml")))
+    resource <- Filter(function(value) identical(value$role, "input_data"), entries[[2L]]$resources)[[1L]]
+    stopifnot(identical(resource$location$path, file.path(study, "input/raw.csv")))
+    result <- yamaa_domain(file.path(study, "spec.yaml"))
+    stopifnot(nrow(result$issues) == 0L, identical(as.character(result$output$ID), identifier),
+      !dir.exists(file.path(study, "output")))
+  }
+  cat("resolved producer entries agree with direct builds for both studies\n")
+}
+qualify_resolved_producer_entries()

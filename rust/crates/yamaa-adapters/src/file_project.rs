@@ -54,6 +54,18 @@ impl std::fmt::Debug for RejectedOrdinary {
     }
 }
 impl FileProject {
+    pub fn resolved_specification(
+        &self,
+    ) -> Result<crate::resolved_artifact::ResolvedArtifact, crate::resolved_artifact::Error> {
+        crate::resolved_artifact::single(
+            self.run.document(),
+            &self.resources,
+            self.run
+                .captured_environment()
+                .root_optional()
+                .map(|root| root.source().identity.clone()),
+        )
+    }
     /// Consume only the complete sealed native capture. No externally supplied
     /// standalone document or replacement environment can enter this transfer.
     pub(crate) fn from_workflow(

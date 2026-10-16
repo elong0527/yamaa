@@ -1,7 +1,7 @@
 # yamaa for Python
 
 The `yamaa` distribution contains the Python facade and shared Rust engine.
-Its public API consists of `domain`, `check`, `define`, their result/error APIs,
+Its public API consists of `domain`, `check`, `define`, `resolve_specification`, their result/error APIs,
 package version metadata, and the two ODM file helpers.
 
 ```python
@@ -77,6 +77,29 @@ sidecar can still be publishable. An operational publication failure returns
 `False` and remains in issues. Publication preflights targets, then writes the
 ordered producer/log/output set. Replacement is atomic for each file; completed
 writes remain if a later target fails. There is no whole-run file rollback.
+
+## Resolved specification inspection
+
+```python
+artifact = yamaa.resolve_specification("study/spec.yaml")
+facts = artifact.to_dict()
+serialized = artifact.to_json()
+restored = yamaa.ResolvedSpecification.from_json(serialized)
+```
+
+The [resolved artifact format](../rust/README.md#resolved-specification-artifact)
+records the complete composed normalized model, field origins and each resource's
+declaring source, selected base, authored spelling and location. Linked producers
+have their own entries. Resolution uses the same metadata preparation as direct
+compilation and accepts the same optional `environment`; it invokes no callbacks.
+Missing study data and nonexistent output directories can be inspected. Missing
+required metadata still raises `ResolvedSpecificationError` with structured `issues`.
+
+Serialization preserves exact integer values and mapping order in a separate ledger.
+Dictionary views are independent copies. Deserialization validates the distinct
+format and version and replays inspection facts only; it does not compile a program,
+open resources or rebind paths. Held facts remain available after source deletion or
+a working-directory change. Use original source paths with `domain` and `check`.
 
 ## Implementation limits
 

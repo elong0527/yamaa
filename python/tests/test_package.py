@@ -9,11 +9,14 @@ def test_installed_package_exports_public_helpers() -> None:
     assert set(yamaa.__all__) == {
         "DefineError",
         "DomainError",
+        "ResolvedSpecification",
+        "ResolvedSpecificationError",
         "__version__",
         "check",
         "define",
         "domain",
         "read_odm",
+        "resolve_specification",
         "write_odm_parquet",
     }
     for name in ("domain", "check", "define", "read_odm", "write_odm_parquet"):
