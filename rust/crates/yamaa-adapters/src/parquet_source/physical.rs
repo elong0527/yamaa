@@ -3,9 +3,13 @@ use super::{reader::Error, shape};
 use parquet::{
     column::reader::{ColumnReader, ColumnReaderImpl},
     data_type::{ByteArray, DataType},
-    file::{reader::FileReader, serialized_reader::SerializedFileReader},
+    file::{
+        metadata::ParquetMetaData, properties::ReaderProperties, reader::RowGroupReader,
+        serialized_reader::SerializedRowGroupReader,
+    },
     schema::types::ColumnDescriptor,
 };
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub(super) enum Column {
@@ -91,19 +95,28 @@ fn collect<T: DataType>(
 
 pub(super) fn read(
     bytes: &[u8],
+    metadata: &ParquetMetaData,
     keep: &[bool],
     schema: &arrow_schema::Schema,
 ) -> Result<Vec<Column>, Error> {
-    let reader = SerializedFileReader::new(bytes::Bytes::copy_from_slice(bytes))
-        .map_err(|_| Error::Malformed)?;
-    let descriptors = reader.metadata().file_metadata().schema_descr().columns();
-    let shapes = shape::constraints(schema, reader.metadata().file_metadata().schema_descr())?;
+    // Reuse the admitted metadata instead of reparsing the original footer
+    // through the native unknown-boolean-collection skip path a second time.
+    let source = Arc::new(bytes::Bytes::copy_from_slice(bytes));
+    let properties = Arc::new(ReaderProperties::builder().build());
+    let descriptors = metadata.file_metadata().schema_descr().columns();
+    let shapes = shape::constraints(schema, metadata.file_metadata().schema_descr())?;
     if keep.len() != descriptors.len() {
         return Err(Error::Malformed);
     }
     let mut result: Vec<_> = descriptors.iter().map(|_| Column::Discard).collect();
-    for group in 0..reader.num_row_groups() {
-        let group = reader.get_row_group(group).map_err(|_| Error::Malformed)?;
+    for (index, group) in metadata.row_groups().iter().enumerate() {
+        let group = SerializedRowGroupReader::new(
+            source.clone(),
+            group,
+            metadata.page_index_for_row_group(index),
+            properties.clone(),
+        )
+        .map_err(|_| Error::Malformed)?;
         let rows = usize::try_from(group.metadata().num_rows()).map_err(|_| Error::Malformed)?;
         if group.num_columns() != descriptors.len() {
             return Err(Error::Malformed);
@@ -174,7 +187,7 @@ mod tests {
     use arrow_array::{Int64Array, RecordBatch};
     use arrow_schema::{DataType as ArrowType, Field, Schema};
     use parquet::arrow::ArrowWriter;
-    use std::sync::Arc;
+    use parquet::file::{reader::FileReader, serialized_reader::SerializedFileReader};
 
     #[test]
     fn physical_values_are_decoded_in_order() {
@@ -186,7 +199,8 @@ mod tests {
         let mut writer = ArrowWriter::try_new(&mut bytes, schema.clone(), None).unwrap();
         writer.write(&batch).unwrap();
         writer.close().unwrap();
-        let result = read(&bytes, &[true], &schema).unwrap();
+        let reader = SerializedFileReader::new(bytes::Bytes::copy_from_slice(&bytes)).unwrap();
+        let result = read(&bytes, reader.metadata(), &[true], &schema).unwrap();
         assert!(matches!(&result[0], Column::Int64(values) if values == &[Some(1), Some(2)]));
     }
 }
