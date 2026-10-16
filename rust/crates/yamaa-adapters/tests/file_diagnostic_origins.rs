@@ -732,8 +732,21 @@ mod file {
                             .map(|i| format!("S{i}: input.csv"))
                             .collect::<Vec<_>>()
                             .join(", ");
+                        let sources = (0..actual)
+                            .map(|i| format!("S{i}.ID"))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        // Every declared input must be read, or pruning
+                        // (REQ-0638) discards it before the inputs capacity
+                        // is counted.
                         body = body
-                            .replace("input: {SRC: input.csv}", &format!("input: {{{inputs}}}"));
+                            .replace("input: {SRC: input.csv}", &format!("input: {{{inputs}}}"))
+                            .replace(
+                                "derivation: {source: SRC.ID}",
+                                &format!(
+                                    "derivation: {{first_available: {{sources: [{sources}]}}}}"
+                                ),
+                            );
                     }
                     "source_fields" => {
                         let fields = (0..actual)

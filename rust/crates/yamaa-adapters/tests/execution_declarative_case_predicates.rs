@@ -649,13 +649,23 @@ columns:
                     {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":4}
                 ])
             );
-            // Only B is neutralised: A still derives P.A, so pruning
-            // (REQ-0638) keeps P live and its filter is still refused.
+            // An aggregate dataset reference keeps P live under pruning
+            // (REQ-0638): a field reader (P.A) would gain its own
+            // unknown_field finding once the filter is broken.
             let issues = refusal(
                 &fixture,
                 &BODY
                     .replace("D.TIME < SRC.CUT", "TIME < SRC.CUT")
-                    .replace("derivation: P.B", "derivation: {literal: unused}"),
+                    .replace("derivation: P.A", "derivation: {literal: unused}")
+                    .replace("derivation: P.B", "derivation: {literal: unused}")
+                    .replace(
+                        "columns: [ID, SEQ, A, B]",
+                        "columns: [ID, SEQ, A, B, C]",
+                    )
+                    .replace(
+                        "  - {name: B, type: str, derivation: {literal: unused}}",
+                        "  - {name: B, type: str, derivation: {literal: unused}}\n  - {name: C, type: int, derivation: {aggregate: {expr: \"COUNT(P.*)\"}}}",
+                    ),
             );
             assert_eq!(
                 issues,
@@ -1046,10 +1056,20 @@ columns:
             let fixture = Fixture::new();
             fs::write(fixture.0.join("src.csv"), "ID\n1\n").unwrap();
             fs::write(fixture.0.join("donor.csv"), "OTHER,SEQ,A,B\nx,0,a,b\n").unwrap();
-            // Only B is neutralised: A still derives P.A, so pruning
-            // (REQ-0638) keeps P live and key admission still runs for it.
+            // An aggregate dataset reference keeps P live under pruning
+            // (REQ-0638) so key admission still runs for it; a field reader
+            // (P.A) would gain its own finding once P is refused.
             let unused = BODY
+                .replace("derivation: P.A", "derivation: {literal: a}")
                 .replace("derivation: P.B", "derivation: {literal: b}")
+                .replace(
+                    "columns: [ID, PARAM, A, B]",
+                    "columns: [ID, PARAM, A, B, C]",
+                )
+                .replace(
+                    "  - {name: B, type: str, derivation: {literal: b}}",
+                    "  - {name: B, type: str, derivation: {literal: b}}\n  - {name: C, type: int, derivation: {aggregate: {expr: \"COUNT(P.*)\"}}}",
+                )
                 .replace("types: {ID: float, SEQ: int}", "types: {SEQ: int}");
             assert_eq!(
                 issues(fixture.run(&unused)),

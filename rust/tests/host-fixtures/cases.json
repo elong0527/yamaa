@@ -1581,24 +1581,8 @@
             "src.csv": "V,G\n3,3\n4,4\n"
           },
           "check_issues": [],
-          "issues": [
-            {
-              "phase": "validation",
-              "condition": "no_applicable_keys",
-              "requirement": "REQ-0153",
-              "spec_paths": [
-                "intermediates[0]"
-              ],
-              "context": {
-                "dataset": "SRC",
-                "keys": [
-                  "K"
-                ],
-                "hint": "declare the `key` explicitly"
-              }
-            }
-          ],
-          "csv": null
+          "issues": [],
+          "csv": "K\n3\n4\n"
         },
         {
           "name": "mixed_driver_compatible_lookup",
