@@ -404,38 +404,17 @@ pub enum CompleteError<E> {
 #[derive(Debug)]
 pub struct BuildResult {
     prepared: yamaa_core::specification_output::PreparedOutput<StoredReport>,
-    table: Option<Vec<u8>>,
+    table: Option<(crate::public_table::PublicTable, Vec<u8>)>,
     issues: Vec<crate::issue_rows::Issue>,
     verification: Option<crate::verification_logs::HeldLog>,
     warning: Option<crate::verification_logs::HeldLog>,
 }
 impl BuildResult {
-    pub(crate) fn reject_host_output(&mut self) -> Result<(), Error> {
-        if self.verification.is_none() {
-            return Err(Error::InvalidObservation);
-        }
-
-        self.prepared = rejected_output(
-            self.prepared.prepared_report().clone(),
-            &Error::InvalidObservation,
-            "output",
-        )?;
-        self.table = None;
-        self.warning = None;
-        self.issues = self.prepared.prepared_report()["diagnostics"]
-            .as_array()
-            .ok_or(Error::InvalidObservation)?
-            .iter()
-            .cloned()
-            .map(crate::issue_rows::Issue::from_diagnostic)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| Error::InvalidObservation)?;
-
-        self.issues = crate::issue_rows::collect(std::mem::take(&mut self.issues));
-        Ok(())
-    }
     pub fn output(&self) -> Option<&[u8]> {
-        self.table.as_deref()
+        self.table.as_ref().map(|(_, bytes)| bytes.as_slice())
+    }
+    pub(crate) fn output_table(&self) -> Option<&crate::public_table::PublicTable> {
+        self.table.as_ref().map(|(table, _)| table)
     }
     pub fn issues(&self) -> &[crate::issue_rows::Issue] {
         &self.issues
@@ -593,10 +572,11 @@ pub(crate) fn prepare_result(
     let table = prepared
         .artifact()
         .map(|artifact| {
-            crate::ipc_table::encode_projected_dataset(
+            crate::public_table::PublicTable::from_table(
                 &execution.ok_or(Error::InvalidObservation)?.dataset,
                 artifact.projection(),
             )
+            .and_then(|table| table.ipc().map(|bytes| (table, bytes)))
             .map_err(|e| match e {
                 crate::ipc_table::TableError::Limit {
                     resource,

@@ -252,7 +252,6 @@ pub(crate) fn preparation_failure(message: String) -> Failure {
 
 pub struct Domain {
     result: BuildResult,
-    output: Option<(crate::public_table::PublicTable, Vec<u8>)>,
     targets: Option<Vec<crate::file_publication::AnchoredTarget>>,
     publication_issues: Failure,
     published: Option<StoredReport>,
@@ -297,7 +296,7 @@ impl Domain {
         })
     }
     fn from_build(
-        mut result: BuildResult,
+        result: BuildResult,
         mut target: impl FnMut(
             &str,
         ) -> Result<
@@ -305,29 +304,6 @@ impl Domain {
             crate::file_resources::Error,
         >,
     ) -> Result<Self, Failure> {
-        let output = result
-            .output()
-            .map(|bytes| {
-                let table = crate::public_table::PublicTable::decode(bytes)
-                    .map_err(|_| rejected("build", "output_projection"))?;
-                let bytes = table
-                    .ipc()
-                    .map_err(|_| rejected("build", "output_projection"))?;
-                Ok::<_, Failure>((table, bytes))
-            })
-            .transpose();
-        let output = match output {
-            Ok(output) => output,
-            Err(original) => {
-                if result.verification_log().is_none() {
-                    return Err(original);
-                }
-                result
-                    .reject_host_output()
-                    .map_err(|error| report_failure("build", "result_projection", &error))?;
-                None
-            }
-        };
         let fields = [
             ("verification_log", result.verification_log().is_some()),
             (
@@ -347,7 +323,6 @@ impl Domain {
         };
         Ok(Self {
             result,
-            output,
             targets,
             publication_issues,
             published: None,
@@ -355,10 +330,10 @@ impl Domain {
         })
     }
     pub fn output(&self) -> Option<&[u8]> {
-        self.output.as_ref().map(|(_, bytes)| bytes.as_slice())
+        self.result.output()
     }
     pub fn output_table(&self) -> Option<&crate::public_table::PublicTable> {
-        self.output.as_ref().map(|(table, _)| table)
+        self.result.output_table()
     }
     pub fn verification_log(&self) -> Option<&[u8]> {
         self.result.verification_log()

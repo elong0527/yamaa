@@ -19,6 +19,31 @@ pub struct PublicTable {
     rows: usize,
 }
 impl PublicTable {
+    /// Materialize the checked output/log projection once into sanitized Arrow
+    /// arrays. No IPC byte encoding or decoding is part of this host handoff.
+    pub(crate) fn from_table<T: TableAccess<Error = std::convert::Infallible>>(
+        table: &T,
+        projection: &[usize],
+    ) -> Result<Self, Error> {
+        let logical = yamaa_core::table::TableSchema::new(
+            projection
+                .iter()
+                .map(|&index| {
+                    table
+                        .schema()
+                        .columns()
+                        .get(index)
+                        .cloned()
+                        .ok_or(Error::InvalidTable)
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+        .map_err(|_| Error::InvalidTable)?;
+        let batches =
+            ipc_table::table_batches(table, Some(projection))?.collect::<Result<Vec<_>, _>>()?;
+        let snapshot = ArrowTable::try_new(logical, batches).map_err(|_| Error::InvalidTable)?;
+        Self::from_snapshot(&snapshot)
+    }
     pub fn columns(&self) -> &arrow_schema::Fields {
         self.schema.fields()
     }

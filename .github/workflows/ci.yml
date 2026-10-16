@@ -74,4 +74,12 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           r: check
+      - name: Install the oldest supported R Arrow bridge
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/apache/arrow-nanoarrow/archive/refs/tags/apache-arrow-nanoarrow-0.8.0.tar.gz \
+            --output "$RUNNER_TEMP/nanoarrow-bridge.tar.gz"
+          tar -xzf "$RUNNER_TEMP/nanoarrow-bridge.tar.gz" -C "$RUNNER_TEMP"
+          R CMD INSTALL "$RUNNER_TEMP/arrow-nanoarrow-apache-arrow-nanoarrow-0.8.0/r"
+          Rscript --vanilla -e 'stopifnot(as.character(packageVersion("nanoarrow")) == "0.8.0")'
       - run: make test-r

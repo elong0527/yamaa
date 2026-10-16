@@ -1054,10 +1054,10 @@ rows:
                 assert_eq!(artifact["content"], "");
                 let table = result.log_table(name == "warnings").unwrap();
                 for column in integer_columns {
-                    assert!(matches!(
-                        table.columns()[column].1,
-                        yamaa_adapters::public_table::Values::Int(_)
-                    ));
+                    assert_eq!(
+                        table.columns()[column].data_type(),
+                        &arrow_schema::DataType::Int64
+                    );
                 }
                 assert_eq!(
                     fs::read(study.0.join(format!("{name}.parquet")))

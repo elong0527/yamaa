@@ -2471,7 +2471,7 @@ mod table {
         use std::{io::Cursor, sync::Arc};
         use yamaa_adapters::{
             arrow_table::{date_array, datetime_array, physical_schema},
-            public_table::{PublicTable, Values},
+            public_table::PublicTable,
         };
         use yamaa_core::{
             table::{Column, TableSchema},
@@ -2537,8 +2537,15 @@ mod table {
         fn public_columns_preserve_exact_values_missing_and_temporal_null_masks() {
             let table = PublicTable::decode(&source(3)).unwrap();
             assert_eq!(table.rows(), 3);
-            assert!(
-                matches!(&table.columns()[1].1,Values::Int(v) if v==&vec![Some(i64::MIN),None,Some(i64::MAX)])
+            assert_eq!(
+                table.batches()[0]
+                    .column(1)
+                    .as_any()
+                    .downcast_ref::<Int64Array>()
+                    .unwrap()
+                    .iter()
+                    .collect::<Vec<_>>(),
+                vec![Some(i64::MIN), None, Some(i64::MAX)]
             );
             let mut stream =
                 StreamReader::try_new(Cursor::new(table.ipc().unwrap()), None).unwrap();

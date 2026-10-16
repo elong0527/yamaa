@@ -360,9 +360,7 @@ columns:
             sync::atomic::{AtomicUsize, Ordering},
         };
         use yamaa_adapters::{
-            file_application,
-            issue_rows::Issue,
-            public_table::{PublicTable, Values},
+            file_application, issue_rows::Issue, public_table::PublicTable,
             specification_report::Identity,
         };
         use yamaa_core::domain_entry::Request;
@@ -406,28 +404,53 @@ columns:
             )
         }
         fn table(view: &PublicTable) -> yamaa_core::json::Value {
+            use arrow_array::{Array, Int64Array, StringArray};
             let columns: Vec<_> = view
                 .columns()
                 .iter()
-                .map(|(name, values)| {
-                    let kind = match values {
-                        Values::Str(_) => "str",
-                        Values::Int(_) => "int",
+                .map(|field| {
+                    let kind = match field.data_type() {
+                        arrow_schema::DataType::Utf8 => "str",
+                        arrow_schema::DataType::Int64 => "int",
                         _ => panic!("unexpected control type"),
                     };
-                    yamaa_core::json::json!([name, kind])
+                    yamaa_core::json::json!([field.name(), kind])
                 })
                 .collect();
-            let rows: Vec<Vec<Option<String>>> = (0..view.rows())
-                .map(|row| {
-                    view.columns()
-                        .iter()
-                        .map(|(_, values)| match values {
-                            Values::Str(values) => values[row].clone(),
-                            Values::Int(values) => values[row].map(|value| value.to_string()),
-                            _ => panic!("unexpected control type"),
-                        })
-                        .collect()
+            let rows: Vec<Vec<Option<String>>> = view
+                .batches()
+                .iter()
+                .flat_map(|batch| {
+                    (0..batch.num_rows()).map(move |row| {
+                        batch
+                            .columns()
+                            .iter()
+                            .map(|array| {
+                                if array.is_null(row) {
+                                    return None;
+                                }
+                                match array.data_type() {
+                                    arrow_schema::DataType::Utf8 => Some(
+                                        array
+                                            .as_any()
+                                            .downcast_ref::<StringArray>()
+                                            .unwrap()
+                                            .value(row)
+                                            .to_owned(),
+                                    ),
+                                    arrow_schema::DataType::Int64 => Some(
+                                        array
+                                            .as_any()
+                                            .downcast_ref::<Int64Array>()
+                                            .unwrap()
+                                            .value(row)
+                                            .to_string(),
+                                    ),
+                                    _ => panic!("unexpected control type"),
+                                }
+                            })
+                            .collect()
+                    })
                 })
                 .collect();
             yamaa_core::json::json!({"columns": columns, "rows": rows})
