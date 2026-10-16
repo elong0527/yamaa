@@ -728,6 +728,505 @@ fn preflight(spec: &SpecificationDocument) -> Result<Vec<PreflightFinding>, Prep
     Ok(findings)
 }
 
+fn check_prepare_limits(d: &Document) -> Result<(), PrepareError> {
+    let root = d.root();
+    for (field_name, limit) in [
+        ("columns", crate::limits::Limits::COLUMNS),
+        ("keys", crate::limits::Limits::KEYS),
+    ] {
+        let actual = sequence(d, field(d, root, field_name)?)?.len();
+        if actual > limit {
+            return Err(PrepareError::limit(
+                field_name,
+                limit,
+                Some(actual),
+                Some(field_name),
+            ));
+        }
+    }
+    let actual = mapping(d, field(d, root, "input")?)?.len();
+    if actual > crate::limits::Limits::INPUTS {
+        return Err(PrepareError::limit(
+            "inputs",
+            crate::limits::Limits::INPUTS,
+            Some(actual),
+            Some("input"),
+        ));
+    }
+    let output = field(d, root, "output")?;
+    let actual = sequence(d, field(d, output, "columns")?)?.len();
+    if actual > crate::limits::Limits::COLUMNS {
+        return Err(PrepareError::limit(
+            "projected_columns",
+            crate::limits::Limits::COLUMNS,
+            Some(actual),
+            Some("output.columns"),
+        ));
+    }
+    for &column in sequence(d, field(d, root, "columns")?)? {
+        let value = d
+            .field(column, "derivation")
+            .and_then(|id| d.field(id, "value"));
+        let operands = value
+            .and_then(|id| d.field(id, "first_available"))
+            .and_then(|id| d.field(id, "sources"))
+            .map(|id| sequence(d, id))
+            .transpose()?
+            .unwrap_or(&[]);
+        if operands.len() > crate::limits::Limits::SOURCE_OPERANDS {
+            let name = text(d, field(d, column, "name")?)?;
+            return Err(PrepareError::limit(
+                "source_operands",
+                crate::limits::Limits::SOURCE_OPERANDS,
+                Some(operands.len()),
+                Some(&format!(
+                    "columns.{name}.derivation.first_available.sources"
+                )),
+            ));
+        }
+    }
+    // Own row-shape admission before filters or default expansion allocate a plan.
+    if let Some(rows) = d
+        .field(root, "rows")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    {
+        for (index, &row) in sequence(d, rows)?.iter().enumerate() {
+            for (resource, name, actual, maximum) in [
+                (
+                    "group_keys",
+                    "group_by",
+                    d.field(row, "group_by")
+                        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                        .map(|id| sequence(d, id).map(<[_]>::len))
+                        .transpose()?
+                        .unwrap_or(0),
+                    crate::limits::Limits::KEYS,
+                ),
+                (
+                    "row_columns",
+                    "derivations",
+                    mapping(d, field(d, row, "derivations")?)?.len(),
+                    crate::limits::Limits::COLUMNS,
+                ),
+            ] {
+                if actual > maximum {
+                    return Err(PrepareError::limit(
+                        resource,
+                        maximum,
+                        Some(actual),
+                        Some(&format!("rows[{index}].{name}")),
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn collect_source_findings<'a>(
+    d: &'a Document,
+    inputs: &[(usize, usize)],
+    odm_inputs: &std::collections::BTreeSet<&'a str>,
+    producers: Option<&[crate::producer_admission::Declaration]>,
+    extra: &mut Vec<UnsupportedFeature>,
+) -> Result<Vec<PreflightFinding>, PrepareError> {
+    let mut source_findings = Vec::new();
+    for &(name, id) in inputs {
+        let prefix = format!("input.{}", text(d, name)?);
+        let written = text(d, field(d, id, "path")?)?;
+        if let Some(failure) = crate::resource::written_path_failure(written) {
+            source_findings.push(PreflightFinding::Scalar(
+                failure.diagnostic(text(d, name)?, written),
+            ));
+            continue;
+        }
+        let profile = SourceProfile::from_path(text(d, field(d, id, "path")?)?);
+        let sas = matches!(
+            profile,
+            Some(SourceProfile::Xport | SourceProfile::Sas7bdat)
+        );
+        let encoding = d
+            .field(id, "encoding")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null));
+        if sas != encoding.is_some() {
+            source_findings.push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
+                code: crate::diagnostic::ConditionCode::SasSourceEncoding,
+                spec_paths: vec![format!("{prefix}.encoding")],
+                context: crate::diagnostic::Context::from([(
+                    "dataset".into(),
+                    crate::json::Value::String(text(d, name)?.into()),
+                )]),
+                source_span: None,
+                operand_route: None,
+            }));
+        }
+        if profile == Some(SourceProfile::Csv)
+            && d.field(id, "empty_string")
+                .is_some_and(|id| !matches!(&d.nodes()[id],N::Text(v) if v=="missing"))
+        {
+            source_findings.push(PreflightFinding::EmptyStringPresentUnsupported {
+                dataset: text(d, name)?.into(),
+            });
+        }
+        if profile.is_none() {
+            source_findings.push(PreflightFinding::UnknownSourceProfile {
+                dataset: text(d, name)?.into(),
+                path: text(d, field(d, id, "path")?)?.into(),
+            });
+        }
+        if odm_inputs.contains(text(d, name)?) {
+            let declared = [
+                ("types", crate::diagnostic::OdmDeclared::Types),
+                ("schema", crate::diagnostic::OdmDeclared::Schema),
+                ("ordinal", crate::diagnostic::OdmDeclared::Ordinal),
+            ]
+            .into_iter()
+            .find(|(field, _)| present(d, id, field));
+            if let Some((_, declared)) = declared {
+                source_findings.push(PreflightFinding::Odm(
+                    crate::diagnostic::OdmFinding::Declared {
+                        dataset: text(d, name)?,
+                        declared,
+                    }
+                    .diagnostic(),
+                ));
+            }
+            continue;
+        }
+        if producers.is_none() {
+            optional_features(d, id, &["schema"], &prefix, extra);
+        }
+        if profile == Some(SourceProfile::Parquet) {
+            if let Some(types) = d
+                .field(id, "types")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+            {
+                let fields = mapping(d, types)?;
+                if fields.len() > crate::limits::Limits::COLUMNS {
+                    return Err(PrepareError::limit(
+                        "source_fields",
+                        crate::limits::Limits::COLUMNS,
+                        Some(fields.len()),
+                        Some(&format!("input.{}.types", text(d, name)?)),
+                    ));
+                }
+                for &(field_name, kind) in fields {
+                    let kind = match text(d, kind)? {
+                        "str" => ColumnType::Str,
+                        "int" => ColumnType::Int,
+                        "float" => ColumnType::Float,
+                        "date" => ColumnType::Date,
+                        "datetime" => ColumnType::DateTime,
+                        _ => return Err(PrepareError::Internal),
+                    };
+                    source_findings.push(PreflightFinding::RedundantSourceType {
+                        dataset: text(d, name)?.into(),
+                        field: text(d, field_name)?.into(),
+                        kind,
+                    });
+                }
+            }
+        }
+    }
+    Ok(source_findings)
+}
+
+fn build_sources<'a>(
+    d: &'a Document,
+    inputs: &[(usize, usize)],
+    odm_inputs: &std::collections::BTreeSet<&'a str>,
+    producers: Option<&[crate::producer_admission::Declaration]>,
+) -> Result<(Vec<SourceDeclaration>, Vec<SourceInterpretation>), PrepareError> {
+    let mut sources = Vec::new();
+    let mut source_interpretations = Vec::new();
+    for &(name, selected) in inputs {
+        source_interpretations.push(if odm_inputs.contains(text(d, name)?) {
+            SourceInterpretation::Odm
+        } else {
+            SourceInterpretation::Ordinary
+        });
+        let mut source_types = Vec::new();
+        if let Some(id) = d
+            .field(selected, "types")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            let fields = mapping(d, id)?;
+            if fields.len() > crate::limits::Limits::COLUMNS {
+                return Err(PrepareError::limit(
+                    "source_fields",
+                    crate::limits::Limits::COLUMNS,
+                    Some(fields.len()),
+                    Some(&format!("input.{}.types", text(d, name)?)),
+                ));
+            }
+            for &(name, kind) in fields {
+                let kind = match text(d, kind)? {
+                    "str" => ColumnType::Str,
+                    "int" => ColumnType::Int,
+                    "float" => ColumnType::Float,
+                    "date" => ColumnType::Date,
+                    "datetime" => ColumnType::DateTime,
+                    _ => return Err(PrepareError::Internal),
+                };
+                source_types.push((text(d, name)?.into(), kind));
+            }
+        }
+        sources.push(SourceDeclaration {
+            name: text(d, name)?.into(),
+            types: source_types,
+            path: text(d, field(d, selected, "path")?)?.into(),
+            // Unsupported formats never produce an accepted plan.
+            profile: SourceProfile::from_path(text(d, field(d, selected, "path")?)?)
+                .unwrap_or(SourceProfile::Csv),
+            encoding: d
+                .field(selected, "encoding")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                .map(|id| text(d, id).map(String::from))
+                .transpose()?,
+            empty_string_present: d
+                .field(selected, "empty_string")
+                .is_some_and(|id| matches!(&d.nodes()[id], N::Text(value) if value == "present")),
+            ordinal: d
+                .field(selected, "ordinal")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                .map(|id| text(d, id).map(String::from))
+                .transpose()?,
+        });
+        if let Some(producer) = producers.and_then(|p| {
+            p.iter()
+                .find(|p| p.dataset() == text(d, name).unwrap_or(""))
+        }) {
+            // A producer's selected output contract is the sole type authority.
+            // The private metadata wrapper never exposes these as file reads.
+            sources.last_mut().ok_or(PrepareError::Internal)?.types = producer
+                .contract()
+                .fields()
+                .iter()
+                .map(|f| (f.name.clone(), f.kind))
+                .collect();
+        }
+    }
+    Ok((sources, source_interpretations))
+}
+
+struct PreparedOutputDeclarations {
+    output_order: Vec<(String, bool, bool)>,
+    output_path: String,
+    output_decimals: Option<String>,
+    projection: Vec<String>,
+    keys: Vec<usize>,
+    verifications: verifications::Verifications,
+    output_logs: OutputLogs,
+    intermediates: intermediates::Declarations,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepare_output_declarations(
+    d: &Document,
+    output: &TableSchema,
+    column_verifications: &[verifications::Verifications],
+    sources: &[SourceDeclaration],
+    driver_index: usize,
+    project: Option<&functions::Prepared>,
+    extraction: &str_extract::Prepared,
+    templates: &str_template::Prepared,
+    extra: &mut Vec<UnsupportedFeature>,
+) -> Result<PreparedOutputDeclarations, PrepareError> {
+    let root = d.root();
+    let output_id = field(d, root, "output")?;
+    let output_order = d
+        .field(output_id, "order_by")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        .map(|id| {
+            sequence(d, id)?
+                .iter()
+                .map(|&term| {
+                    if let N::Text(name) = &d.nodes()[term] {
+                        return Ok((name.clone(), false, false));
+                    }
+                    let name = text(d, field(d, term, "variable")?)?.into();
+                    let descending = d.field(term, "direction").is_some_and(
+                        |id| matches!(&d.nodes()[id], N::Text(value) if value == "desc"),
+                    );
+                    let nulls_first = d.field(term, "nulls").is_some_and(
+                        |id| matches!(&d.nodes()[id], N::Text(value) if value == "first"),
+                    );
+                    Ok((name, descending, nulls_first))
+                })
+                .collect::<Result<Vec<_>, PrepareError>>()
+        })
+        .transpose()?
+        .unwrap_or_default();
+    let output_path = String::from(text(d, field(d, output_id, "path")?)?);
+    // Retain the complete integer for output-declaration diagnostics, even
+    // when it exceeds REQ-0744's range. Build validation retains its existing
+    // post-verification phase; saved-file size is admitted at publication.
+    let output_decimals = d
+        .field(output_id, "decimals")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        .map(|id| match &d.nodes()[id] {
+            N::Integer(value) => Ok(value.clone()),
+            _ => Err(PrepareError::Internal),
+        })
+        .transpose()?;
+    // Output declaration errors retain their post-verification phase.
+    let projection = sequence(d, field(d, output_id, "columns")?)?
+        .iter()
+        .map(|&id| text(d, id).map(String::from))
+        .collect::<Result<Vec<_>, _>>()?;
+    let _columns = sequence(d, field(d, root, "columns")?)?;
+    let names = output
+        .columns()
+        .iter()
+        .enumerate()
+        .map(|(id, c)| (c.name.as_str(), id))
+        .collect::<BTreeMap<_, _>>();
+    let keys = sequence(d, field(d, root, "keys")?)?
+        .iter()
+        .map(|&id| {
+            let name = text(d, id)?;
+            names.get(name).copied().ok_or(PrepareError::Internal)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let verifications = verifications::Verifications::prepare(d, output)?;
+    let warnings = column_verifications
+        .iter()
+        .flat_map(|group| &group.declared_warning_paths)
+        .chain(&verifications.declared_warning_paths)
+        .cloned()
+        .collect::<Vec<_>>();
+    let (output_logs, log_findings) = OutputLogs::prepare(d, output_id, &output_path, warnings)?;
+    if !log_findings.is_empty() {
+        return Err(PrepareError::Invalid(
+            log_findings
+                .into_iter()
+                .map(PreflightFinding::Log)
+                .collect(),
+        ));
+    }
+    let intermediates = intermediates::Declarations::prepare(
+        d,
+        sources,
+        driver_index,
+        output,
+        &keys,
+        project,
+        extraction,
+        templates,
+        extra,
+    )?;
+    Ok(PreparedOutputDeclarations {
+        output_order,
+        output_path,
+        output_decimals,
+        projection,
+        keys,
+        verifications,
+        output_logs,
+        intermediates,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepare_column_declarations(
+    d: &Document,
+    columns: &[usize],
+    output: &TableSchema,
+    driver: &str,
+    project: Option<&functions::Prepared>,
+    intermediates: &intermediates::Declarations,
+    extraction: &str_extract::Prepared,
+    templates: &str_template::Prepared,
+    keys: &[usize],
+    extra: &mut Vec<UnsupportedFeature>,
+) -> Result<Vec<Declaration>, PrepareError> {
+    let mut declarations = Vec::new();
+    for (column, &id) in columns.iter().enumerate() {
+        let prefix = format!("columns.{}", output.columns()[column].name);
+
+        let derivation = d
+            .field(id, "derivation")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+            .ok_or(PrepareError::Internal)?;
+        let handler = literal_handler(d, derivation, &format!("{prefix}.derivation"))?;
+        let ops = mapping(d, field(d, derivation, "value")?)?;
+        let &[(op, payload)] = ops else {
+            return Err(PrepareError::Internal);
+        };
+        let op = text(d, op)?;
+        let path = format!("{prefix}.derivation.{op}");
+        let operation = match op {
+            "source" => {
+                let source = source_expressions::Declaration::prepare(
+                    d,
+                    payload,
+                    &path,
+                    extra,
+                    intermediates,
+                )?;
+                Some(Operation::Source(std::boxed::Box::new(source)))
+            }
+            "mapping" | "cut" => Some(Operation::MappingCut(std::boxed::Box::new(
+                mapping_cut::prepare(d, payload, op, &path, intermediates, extra)?,
+            ))),
+            "first_available" => {
+                let selection = source_expressions::FirstAvailable::prepare(
+                    d,
+                    payload,
+                    &path,
+                    extra,
+                    intermediates,
+                )?;
+                Some(Operation::FirstAvailable(std::boxed::Box::new(selection)))
+            }
+            "row_number"
+            | "rank"
+            | "row_value"
+            | "previous_non_missing"
+            | "locf"
+            | "baseline_flag" => Some(Operation::Window(std::boxed::Box::new(
+                windows::Declaration::prepare(d, payload, op, &path, extra)?,
+            ))),
+            _ => match derivations::prepare_value_with_driver(
+                d,
+                field(d, derivation, "value")?,
+                &format!("{prefix}.derivation"),
+                project,
+                intermediates,
+                keys.contains(&column),
+                0,
+                extraction,
+                templates,
+                Some(driver),
+            ) {
+                Ok(branch) => Some(*branch.operation),
+                Err(PrepareError::Unsupported(features)) => {
+                    extra.extend(features);
+                    None
+                }
+                Err(error) => return Err(error),
+            },
+        };
+        if let Some(operation) = operation {
+            declarations.push(Declaration {
+                handler,
+                path,
+                operation,
+            });
+        }
+    }
+    Ok(declarations)
+}
+
+type ColumnCatalog = (
+    Catalog,
+    Vec<crate::dataset::SecondarySource>,
+    Vec<Option<crate::dataset::Intermediate>>,
+    Vec<BindFinding>,
+);
+
+type BoundColumnDeclarations = (BTreeMap<usize, Assignment>, Vec<Option<Vec<usize>>>);
+
 impl PreparedSpecification {
     /// Reject unsupported declarations before requesting any source bytes. Effective
     /// source empty-string behavior is missing unless explicitly declared otherwise.
@@ -778,96 +1277,7 @@ impl PreparedSpecification {
     ) -> Result<Self, PrepareError> {
         let d = spec.document();
         let root = d.root();
-        for (field_name, limit) in [
-            ("columns", crate::limits::Limits::COLUMNS),
-            ("keys", crate::limits::Limits::KEYS),
-        ] {
-            let actual = sequence(d, field(d, root, field_name)?)?.len();
-            if actual > limit {
-                return Err(PrepareError::limit(
-                    field_name,
-                    limit,
-                    Some(actual),
-                    Some(field_name),
-                ));
-            }
-        }
-        let actual = mapping(d, field(d, root, "input")?)?.len();
-        if actual > crate::limits::Limits::INPUTS {
-            return Err(PrepareError::limit(
-                "inputs",
-                crate::limits::Limits::INPUTS,
-                Some(actual),
-                Some("input"),
-            ));
-        }
-        let output = field(d, root, "output")?;
-        let actual = sequence(d, field(d, output, "columns")?)?.len();
-        if actual > crate::limits::Limits::COLUMNS {
-            return Err(PrepareError::limit(
-                "projected_columns",
-                crate::limits::Limits::COLUMNS,
-                Some(actual),
-                Some("output.columns"),
-            ));
-        }
-        for &column in sequence(d, field(d, root, "columns")?)? {
-            let value = d
-                .field(column, "derivation")
-                .and_then(|id| d.field(id, "value"));
-            let operands = value
-                .and_then(|id| d.field(id, "first_available"))
-                .and_then(|id| d.field(id, "sources"))
-                .map(|id| sequence(d, id))
-                .transpose()?
-                .unwrap_or(&[]);
-            if operands.len() > crate::limits::Limits::SOURCE_OPERANDS {
-                let name = text(d, field(d, column, "name")?)?;
-                return Err(PrepareError::limit(
-                    "source_operands",
-                    crate::limits::Limits::SOURCE_OPERANDS,
-                    Some(operands.len()),
-                    Some(&format!(
-                        "columns.{name}.derivation.first_available.sources"
-                    )),
-                ));
-            }
-        }
-        // Own row-shape admission before filters or default expansion allocate a plan.
-        if let Some(rows) = d
-            .field(root, "rows")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        {
-            for (index, &row) in sequence(d, rows)?.iter().enumerate() {
-                for (resource, name, actual, maximum) in [
-                    (
-                        "group_keys",
-                        "group_by",
-                        d.field(row, "group_by")
-                            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                            .map(|id| sequence(d, id).map(<[_]>::len))
-                            .transpose()?
-                            .unwrap_or(0),
-                        crate::limits::Limits::KEYS,
-                    ),
-                    (
-                        "row_columns",
-                        "derivations",
-                        mapping(d, field(d, row, "derivations")?)?.len(),
-                        crate::limits::Limits::COLUMNS,
-                    ),
-                ] {
-                    if actual > maximum {
-                        return Err(PrepareError::limit(
-                            resource,
-                            maximum,
-                            Some(actual),
-                            Some(&format!("rows[{index}].{name}")),
-                        ));
-                    }
-                }
-            }
-        }
+        check_prepare_limits(d)?;
         match_values::declaration_admission(d)?;
         let mut findings = preflight(spec)?;
         findings.extend(odm::context_findings(spec)?);
@@ -952,7 +1362,6 @@ impl PreparedSpecification {
         let root_filter = root_filter::RootFilter::prepare(d, &mut extra)?;
         let inputs = mapping(d, field(d, root, "input")?)?;
         let odm_inputs = odm::inputs(d)?;
-        let mut source_findings = Vec::new();
         let driver = if has_rows {
             row_intermediates::common_driver(d, inputs)?
         } else {
@@ -966,103 +1375,8 @@ impl PreparedSpecification {
             .iter()
             .position(|&(name, _)| text(d, name).is_ok_and(|name| name == driver))
             .ok_or(PrepareError::Internal)?;
-        for &(name, id) in inputs {
-            let prefix = format!("input.{}", text(d, name)?);
-            let written = text(d, field(d, id, "path")?)?;
-            if let Some(failure) = crate::resource::written_path_failure(written) {
-                source_findings.push(PreflightFinding::Scalar(
-                    failure.diagnostic(text(d, name)?, written),
-                ));
-                continue;
-            }
-            let profile = SourceProfile::from_path(text(d, field(d, id, "path")?)?);
-            let sas = matches!(
-                profile,
-                Some(SourceProfile::Xport | SourceProfile::Sas7bdat)
-            );
-            let encoding = d
-                .field(id, "encoding")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null));
-            if sas != encoding.is_some() {
-                source_findings.push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
-                    code: crate::diagnostic::ConditionCode::SasSourceEncoding,
-                    spec_paths: vec![format!("{prefix}.encoding")],
-                    context: crate::diagnostic::Context::from([(
-                        "dataset".into(),
-                        crate::json::Value::String(text(d, name)?.into()),
-                    )]),
-                    source_span: None,
-                    operand_route: None,
-                }));
-            }
-            if profile == Some(SourceProfile::Csv)
-                && d.field(id, "empty_string")
-                    .is_some_and(|id| !matches!(&d.nodes()[id],N::Text(v) if v=="missing"))
-            {
-                source_findings.push(PreflightFinding::EmptyStringPresentUnsupported {
-                    dataset: text(d, name)?.into(),
-                });
-            }
-            if profile.is_none() {
-                source_findings.push(PreflightFinding::UnknownSourceProfile {
-                    dataset: text(d, name)?.into(),
-                    path: text(d, field(d, id, "path")?)?.into(),
-                });
-            }
-            if odm_inputs.contains(text(d, name)?) {
-                let declared = [
-                    ("types", crate::diagnostic::OdmDeclared::Types),
-                    ("schema", crate::diagnostic::OdmDeclared::Schema),
-                    ("ordinal", crate::diagnostic::OdmDeclared::Ordinal),
-                ]
-                .into_iter()
-                .find(|(field, _)| present(d, id, field));
-                if let Some((_, declared)) = declared {
-                    source_findings.push(PreflightFinding::Odm(
-                        crate::diagnostic::OdmFinding::Declared {
-                            dataset: text(d, name)?,
-                            declared,
-                        }
-                        .diagnostic(),
-                    ));
-                }
-                continue;
-            }
-            if producers.is_none() {
-                optional_features(d, id, &["schema"], &prefix, &mut extra);
-            }
-            if profile == Some(SourceProfile::Parquet) {
-                if let Some(types) = d
-                    .field(id, "types")
-                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                {
-                    let fields = mapping(d, types)?;
-                    if fields.len() > crate::limits::Limits::COLUMNS {
-                        return Err(PrepareError::limit(
-                            "source_fields",
-                            crate::limits::Limits::COLUMNS,
-                            Some(fields.len()),
-                            Some(&format!("input.{}.types", text(d, name)?)),
-                        ));
-                    }
-                    for &(field_name, kind) in fields {
-                        let kind = match text(d, kind)? {
-                            "str" => ColumnType::Str,
-                            "int" => ColumnType::Int,
-                            "float" => ColumnType::Float,
-                            "date" => ColumnType::Date,
-                            "datetime" => ColumnType::DateTime,
-                            _ => return Err(PrepareError::Internal),
-                        };
-                        source_findings.push(PreflightFinding::RedundantSourceType {
-                            dataset: text(d, name)?.into(),
-                            field: text(d, field_name)?.into(),
-                            kind,
-                        });
-                    }
-                }
-            }
-        }
+        let source_findings =
+            collect_source_findings(d, inputs, &odm_inputs, producers, &mut extra)?;
         if !source_findings.is_empty() {
             return Err(PrepareError::Invalid(source_findings));
         }
@@ -1071,153 +1385,22 @@ impl PreparedSpecification {
         if extra.iter().any(|feature| feature.operation == "parents") {
             return Err(PrepareError::Unsupported(extra));
         }
-        let mut sources = Vec::new();
-        let mut source_interpretations = Vec::new();
-        for &(name, selected) in inputs {
-            source_interpretations.push(if odm_inputs.contains(text(d, name)?) {
-                SourceInterpretation::Odm
-            } else {
-                SourceInterpretation::Ordinary
-            });
-            let mut source_types = Vec::new();
-            if let Some(id) = d
-                .field(selected, "types")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            {
-                let fields = mapping(d, id)?;
-                if fields.len() > crate::limits::Limits::COLUMNS {
-                    return Err(PrepareError::limit(
-                        "source_fields",
-                        crate::limits::Limits::COLUMNS,
-                        Some(fields.len()),
-                        Some(&format!("input.{}.types", text(d, name)?)),
-                    ));
-                }
-                for &(name, kind) in fields {
-                    let kind = match text(d, kind)? {
-                        "str" => ColumnType::Str,
-                        "int" => ColumnType::Int,
-                        "float" => ColumnType::Float,
-                        "date" => ColumnType::Date,
-                        "datetime" => ColumnType::DateTime,
-                        _ => return Err(PrepareError::Internal),
-                    };
-                    source_types.push((text(d, name)?.into(), kind));
-                }
-            }
-            sources.push(SourceDeclaration {
-                name: text(d, name)?.into(),
-                types: source_types,
-                path: text(d, field(d, selected, "path")?)?.into(),
-                // Unsupported formats never produce an accepted plan.
-                profile: SourceProfile::from_path(text(d, field(d, selected, "path")?)?)
-                    .unwrap_or(SourceProfile::Csv),
-                encoding: d
-                    .field(selected, "encoding")
-                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                    .map(|id| text(d, id).map(String::from))
-                    .transpose()?,
-                empty_string_present: d.field(selected, "empty_string").is_some_and(
-                    |id| matches!(&d.nodes()[id], N::Text(value) if value == "present"),
-                ),
-                ordinal: d
-                    .field(selected, "ordinal")
-                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                    .map(|id| text(d, id).map(String::from))
-                    .transpose()?,
-            });
-            if let Some(producer) = producers.and_then(|p| {
-                p.iter()
-                    .find(|p| p.dataset() == text(d, name).unwrap_or(""))
-            }) {
-                // A producer's selected output contract is the sole type authority.
-                // The private metadata wrapper never exposes these as file reads.
-                sources.last_mut().ok_or(PrepareError::Internal)?.types = producer
-                    .contract()
-                    .fields()
-                    .iter()
-                    .map(|f| (f.name.clone(), f.kind))
-                    .collect();
-            }
-        }
-        let output_id = field(d, root, "output")?;
-        let output_order = d
-            .field(output_id, "order_by")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            .map(|id| {
-                sequence(d, id)?
-                    .iter()
-                    .map(|&term| {
-                        if let N::Text(name) = &d.nodes()[term] {
-                            return Ok((name.clone(), false, false));
-                        }
-                        let name = text(d, field(d, term, "variable")?)?.into();
-                        let descending = d.field(term, "direction").is_some_and(
-                            |id| matches!(&d.nodes()[id], N::Text(value) if value == "desc"),
-                        );
-                        let nulls_first = d.field(term, "nulls").is_some_and(
-                            |id| matches!(&d.nodes()[id], N::Text(value) if value == "first"),
-                        );
-                        Ok((name, descending, nulls_first))
-                    })
-                    .collect::<Result<Vec<_>, PrepareError>>()
-            })
-            .transpose()?
-            .unwrap_or_default();
-        let output_path = String::from(text(d, field(d, output_id, "path")?)?);
-        // Retain the complete integer for output-declaration diagnostics, even
-        // when it exceeds REQ-0744's range. Build validation retains its existing
-        // post-verification phase; saved-file size is admitted at publication.
-        let output_decimals = d
-            .field(output_id, "decimals")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            .map(|id| match &d.nodes()[id] {
-                N::Integer(value) => Ok(value.clone()),
-                _ => Err(PrepareError::Internal),
-            })
-            .transpose()?;
-        // Output declaration errors retain their post-verification phase.
-        let projection = sequence(d, field(d, output_id, "columns")?)?
-            .iter()
-            .map(|&id| text(d, id).map(String::from))
-            .collect::<Result<Vec<_>, _>>()?;
-        let columns = sequence(d, field(d, root, "columns")?)?;
-        let names = output
-            .columns()
-            .iter()
-            .enumerate()
-            .map(|(id, c)| (c.name.as_str(), id))
-            .collect::<BTreeMap<_, _>>();
-        let keys = sequence(d, field(d, root, "keys")?)?
-            .iter()
-            .map(|&id| {
-                let name = text(d, id)?;
-                names.get(name).copied().ok_or(PrepareError::Internal)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let verifications = verifications::Verifications::prepare(d, &output)?;
-        let warnings = column_verifications
-            .iter()
-            .flat_map(|group| &group.declared_warning_paths)
-            .chain(&verifications.declared_warning_paths)
-            .cloned()
-            .collect::<Vec<_>>();
-        let (output_logs, log_findings) =
-            OutputLogs::prepare(d, output_id, &output_path, warnings)?;
-        if !log_findings.is_empty() {
-            return Err(PrepareError::Invalid(
-                log_findings
-                    .into_iter()
-                    .map(PreflightFinding::Log)
-                    .collect(),
-            ));
-        }
-        let intermediates = intermediates::Declarations::prepare(
+        let (sources, source_interpretations) = build_sources(d, inputs, &odm_inputs, producers)?;
+        let PreparedOutputDeclarations {
+            output_order,
+            output_path,
+            output_decimals,
+            projection,
+            keys,
+            verifications,
+            output_logs,
+            intermediates,
+        } = prepare_output_declarations(
             d,
+            &output,
+            &column_verifications,
             &sources,
             driver_index,
-            &output,
-            &keys,
             project.as_ref(),
             &extraction,
             &templates,
@@ -1267,81 +1450,18 @@ impl PreparedSpecification {
             }
             .finish_checks();
         }
-        let mut declarations = Vec::new();
-        for (column, &id) in columns.iter().enumerate() {
-            let prefix = format!("columns.{}", output.columns()[column].name);
-
-            let derivation = d
-                .field(id, "derivation")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                .ok_or(PrepareError::Internal)?;
-            let handler = literal_handler(d, derivation, &format!("{prefix}.derivation"))?;
-            let ops = mapping(d, field(d, derivation, "value")?)?;
-            let &[(op, payload)] = ops else {
-                return Err(PrepareError::Internal);
-            };
-            let op = text(d, op)?;
-            let path = format!("{prefix}.derivation.{op}");
-            let operation = match op {
-                "source" => {
-                    let source = source_expressions::Declaration::prepare(
-                        d,
-                        payload,
-                        &path,
-                        &mut extra,
-                        &intermediates,
-                    )?;
-                    Some(Operation::Source(std::boxed::Box::new(source)))
-                }
-                "mapping" | "cut" => Some(Operation::MappingCut(std::boxed::Box::new(
-                    mapping_cut::prepare(d, payload, op, &path, &intermediates, &mut extra)?,
-                ))),
-                "first_available" => {
-                    let selection = source_expressions::FirstAvailable::prepare(
-                        d,
-                        payload,
-                        &path,
-                        &mut extra,
-                        &intermediates,
-                    )?;
-                    Some(Operation::FirstAvailable(std::boxed::Box::new(selection)))
-                }
-                "row_number"
-                | "rank"
-                | "row_value"
-                | "previous_non_missing"
-                | "locf"
-                | "baseline_flag" => Some(Operation::Window(std::boxed::Box::new(
-                    windows::Declaration::prepare(d, payload, op, &path, &mut extra)?,
-                ))),
-                _ => match derivations::prepare_value_with_driver(
-                    d,
-                    field(d, derivation, "value")?,
-                    &format!("{prefix}.derivation"),
-                    project.as_ref(),
-                    &intermediates,
-                    keys.contains(&column),
-                    0,
-                    &extraction,
-                    &templates,
-                    Some(driver),
-                ) {
-                    Ok(branch) => Some(*branch.operation),
-                    Err(PrepareError::Unsupported(features)) => {
-                        extra.extend(features);
-                        None
-                    }
-                    Err(error) => return Err(error),
-                },
-            };
-            if let Some(operation) = operation {
-                declarations.push(Declaration {
-                    handler,
-                    path,
-                    operation,
-                });
-            }
-        }
+        let declarations = prepare_column_declarations(
+            d,
+            columns,
+            &output,
+            driver,
+            project.as_ref(),
+            &intermediates,
+            &extraction,
+            &templates,
+            &keys,
+            &mut extra,
+        )?;
         if !extra.is_empty() {
             return Err(PrepareError::Unsupported(extra));
         }
@@ -1617,42 +1737,72 @@ impl PreparedSpecification {
             return Err(BindError::SourceCount);
         }
         let source = schemas[self.driver];
-        if let Some(rows) = &self.rows {
-            let mut findings = Vec::new();
-            let (secondary, intermediates) = self.intermediates.bind(
-                &self.sources,
-                self.driver,
-                schemas,
-                &self.output,
-                &self.keys,
-                Some(&rows.self_columns()),
-                self.project_calls.as_ref(),
-                &mut findings,
-            )?;
-            let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
-            return rows
-                .bind(
-                    self,
-                    source,
-                    &self.source().name,
-                    &self.output,
-                    &self.keys,
-                    &verifications,
-                    self.project_calls.as_ref(),
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    findings,
-                )
-                .and_then(|plan| {
-                    plan.with_column_verifications(self.column_verification_groups())
-                        .and_then(|plan| {
-                            plan.with_warning_verifications(self.warning_verification_paths())
-                        })
-                        .and_then(|plan| plan.with_output_order(self.bound_output_order()))
-                        .map_err(BindError::InvalidPlan)
-                });
+        if self.rows.is_some() {
+            return self.bind_rows_plan(schemas, source);
         }
+        let (catalog, secondary, intermediates, mut findings) =
+            self.bind_column_catalog(source, schemas)?;
+        let (assignments, dependencies) = self.bind_column_declarations(
+            &catalog,
+            source,
+            &secondary,
+            &intermediates,
+            &mut findings,
+        )?;
+        self.finish_column_plan(
+            assignments,
+            dependencies,
+            findings,
+            secondary,
+            intermediates,
+            source,
+        )
+    }
+
+    fn bind_rows_plan(
+        &self,
+        schemas: &[&TableSchema],
+        source: &TableSchema,
+    ) -> Result<DatasetPlan, BindError> {
+        let rows = self.rows.as_ref().ok_or(BindError::Internal)?;
+        let mut findings = Vec::new();
+        let (secondary, intermediates) = self.intermediates.bind(
+            &self.sources,
+            self.driver,
+            schemas,
+            &self.output,
+            &self.keys,
+            Some(&rows.self_columns()),
+            self.project_calls.as_ref(),
+            &mut findings,
+        )?;
+        let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
+        rows.bind(
+            self,
+            source,
+            &self.source().name,
+            &self.output,
+            &self.keys,
+            &verifications,
+            self.project_calls.as_ref(),
+            &self.intermediates,
+            secondary,
+            intermediates,
+            findings,
+        )
+        .and_then(|plan| {
+            plan.with_column_verifications(self.column_verification_groups())
+                .and_then(|plan| plan.with_warning_verifications(self.warning_verification_paths()))
+                .and_then(|plan| plan.with_output_order(self.bound_output_order()))
+                .map_err(BindError::InvalidPlan)
+        })
+    }
+
+    fn bind_column_catalog(
+        &self,
+        source: &TableSchema,
+        schemas: &[&TableSchema],
+    ) -> Result<ColumnCatalog, BindError> {
         let output_fields = self
             .output
             .columns()
@@ -1697,11 +1847,22 @@ impl PreparedSpecification {
             &secondary,
             &self.source().name,
         )?;
+        Ok((catalog, secondary, intermediates, findings))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn bind_column_declarations(
+        &self,
+        catalog: &Catalog,
+        source: &TableSchema,
+        secondary: &[crate::dataset::SecondarySource],
+        intermediates: &[Option<crate::dataset::Intermediate>],
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<BoundColumnDeclarations, BindError> {
         let mut assignments = BTreeMap::new();
         let mut dependencies = Vec::new();
         for (column, declaration) in self.declarations.iter().enumerate() {
-            let declarations_reported =
-                cases::padding_findings(&declaration.operation, &mut findings)?;
+            let declarations_reported = cases::padding_findings(&declaration.operation, findings)?;
             let mut edges = Vec::new();
             let path = &declaration.path;
             let reference_path = if matches!(
@@ -1713,6 +1874,353 @@ impl PreparedSpecification {
                 path.clone()
             };
             let start = findings.len();
+            let expression = match &declaration.operation {
+                Operation::Odm(operation) => odm::bind(
+                    operation,
+                    catalog,
+                    &self.source().name,
+                    None,
+                    crate::reference_scope::Phase::Column { groups: &[] },
+                    findings,
+                )?,
+                Operation::Aggregate(operation) => aggregates::bind(
+                    operation,
+                    catalog,
+                    &self.source().name,
+                    None,
+                    crate::reference_scope::Phase::Column { groups: &[] },
+                    &self.output,
+                    &self.intermediates,
+                    secondary,
+                    intermediates,
+                    self.project_calls.as_ref(),
+                    &mut edges,
+                    findings,
+                )?,
+                Operation::Flag(operation) => flags::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    &self.source().name,
+                    catalog,
+                    &self.intermediates,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                    declarations_reported,
+                )?,
+                Operation::Case(branches) => cases::bind(
+                    self,
+                    branches,
+                    column,
+                    catalog,
+                    source,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                    declarations_reported,
+                )?,
+                Operation::ProjectFunction(call) => {
+                    self.bind_project_function(*call, column, catalog, &mut edges, findings)?
+                }
+                Operation::Literal(value) => Some(Expression::Literal(value.clone())),
+                Operation::MappingCut(operation) => mapping_cut::bind(
+                    self,
+                    operation,
+                    column,
+                    catalog,
+                    source,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                )?,
+                Operation::Round(rounding) => rounding::bind(
+                    rounding,
+                    column,
+                    &self.keys,
+                    catalog,
+                    &self.intermediates,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                )?,
+                Operation::StrTemplate(operation) => str_template::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    catalog,
+                    &self.intermediates,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                )?,
+                Operation::Scalar(operation) => scalar::bind(
+                    self,
+                    operation,
+                    column,
+                    catalog,
+                    source,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                    declarations_reported,
+                )?,
+                Operation::StrContains(operation) => scalar::bind_contains(
+                    self,
+                    operation,
+                    column,
+                    catalog,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                )?,
+                Operation::StrExtract(operation) => str_extract::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    catalog,
+                    &self.intermediates,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                )?,
+                Operation::StrCase(operation) => str_case::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    catalog,
+                    &self.intermediates,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                )?,
+                Operation::StrPad(operation) => str_pad::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    catalog,
+                    &self.intermediates,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                )?,
+                Operation::Imputation(operation) => imputation::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    catalog,
+                    &self.intermediates,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                )?,
+                Operation::Temporal(operation) => temporal::bind(
+                    operation,
+                    column,
+                    &self.keys,
+                    catalog,
+                    &self.intermediates,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                )?,
+                Operation::Window(window) => window.bind(catalog, &mut edges, findings)?,
+                Operation::InvalidNumeric { expression, error } => {
+                    findings.push(BindFinding::Numeric {
+                        path: reference_path.clone(),
+                        expression: expression.clone(),
+                        error: error.clone(),
+                    });
+                    None
+                }
+                Operation::Source(declaration) => source_expressions::bind(
+                    self,
+                    declaration,
+                    column,
+                    path,
+                    catalog,
+                    source,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                )?,
+                Operation::FirstAvailable(selection) => self.bind_first_available(
+                    selection,
+                    column,
+                    path,
+                    catalog,
+                    source,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                )?,
+                Operation::Compute(compiled) => self.bind_compute(
+                    compiled,
+                    reference_path.clone(),
+                    catalog,
+                    secondary,
+                    intermediates,
+                    &mut edges,
+                    findings,
+                    start,
+                )?,
+            };
+            // Invalid declarations remain in the graph so independent cycles and
+            // key dependencies are still reported after the reference findings.
+            dependencies.push(Some(edges));
+            if let Some(expression) = expression {
+                assignments.insert(
+                    column,
+                    Assignment {
+                        column,
+                        expression,
+                        path: path.clone(),
+                    },
+                );
+            }
+        }
+        Ok((assignments, dependencies))
+    }
+
+    fn bind_project_function(
+        &self,
+        call: usize,
+        column: usize,
+        catalog: &Catalog,
+        edges: &mut Vec<usize>,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<Option<Expression>, BindError> {
+        let expression = {
+            let calls = self.project_calls.as_ref().ok_or(BindError::Internal)?;
+            let record = self.keys.contains(&column);
+            let context = crate::project_call_binding::Context {
+                source_dataset: 0,
+                source_mode: if record {
+                    crate::project_call_binding::SourceMode::Record
+                } else {
+                    crate::project_call_binding::SourceMode::Collect
+                },
+                available_outputs: None,
+                scope: crate::reference_scope::Scope {
+                    drivers: &[self.source().name.as_str()],
+                    current_driver: true,
+                    reach: if record {
+                        crate::reference_scope::Reach::Record
+                    } else {
+                        crate::reference_scope::Reach::Relation
+                    },
+                    joined: false,
+                    phase: crate::reference_scope::Phase::Column { groups: &[] },
+                },
+            };
+            match crate::project_call_binding::bind(calls, call, catalog, context) {
+                Ok(bound) => {
+                    edges.extend(bound.dependencies);
+                    Some(Expression::ProjectFunction(bound.function))
+                }
+                Err(crate::project_call_binding::Error::Findings(errors)) => {
+                    findings.extend(functions::bind_findings(calls, call, errors, None)?);
+                    None
+                }
+                Err(crate::project_call_binding::Error::Reference(error)) => {
+                    return Err(BindError::Catalog(error))
+                }
+                Err(_) => return Err(BindError::Internal),
+            }
+        };
+        Ok(expression)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn bind_first_available(
+        &self,
+        selection: &source_expressions::FirstAvailable,
+        column: usize,
+        path: &str,
+        catalog: &Catalog,
+        source: &TableSchema,
+        secondary: &[crate::dataset::SecondarySource],
+        intermediates: &[Option<crate::dataset::Intermediate>],
+        edges: &mut Vec<usize>,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<Option<Expression>, BindError> {
+        let expression = {
+            let mut operands = Vec::new();
+            for (index, operand) in selection.sources.iter().enumerate() {
+                let operand_path = format!("{path}.sources[{index}]");
+                if let Some(expression) = source_expressions::bind(
+                    self,
+                    operand,
+                    column,
+                    &operand_path,
+                    catalog,
+                    source,
+                    secondary,
+                    intermediates,
+                    edges,
+                    findings,
+                )? {
+                    // Distinct-value collection failures belong to first_available.
+                    // Recursive operands retain their own expression and handler paths.
+                    let read = match expression {
+                        Expression::Collect {
+                            column,
+                            identifier,
+                            filter,
+                            selection: None,
+                        } => crate::dataset::SelectionRead::Collect {
+                            column,
+                            identifier,
+                            filter: filter.map(std::boxed::Box::new),
+                        },
+                        expression => crate::dataset::SelectionRead::Expression(
+                            std::boxed::Box::new(crate::dataset::Assignment {
+                                column,
+                                expression,
+                                path: operand_path.clone(),
+                            }),
+                        ),
+                    };
+                    operands.push(crate::dataset::SelectionSource {
+                        path: operand_path.clone(),
+                        read,
+                    });
+                }
+            }
+            Some(Expression::FirstAvailable(std::boxed::Box::new(
+                crate::dataset::FirstAvailable::new(operands, selection.missing.clone()),
+            )))
+        };
+        Ok(expression)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn bind_compute(
+        &self,
+        compiled: &CompiledNumeric,
+        reference_path: String,
+        catalog: &Catalog,
+        secondary: &[crate::dataset::SecondarySource],
+        intermediates: &[Option<crate::dataset::Intermediate>],
+        edges: &mut Vec<usize>,
+        findings: &mut Vec<BindFinding>,
+        start: usize,
+    ) -> Result<Option<Expression>, BindError> {
+        let expression = {
             let bind = |name: &str,
                         findings: &mut Vec<BindFinding>|
              -> Result<Option<reference_binding::Binding>, BindError> {
@@ -1738,362 +2246,93 @@ impl PreparedSpecification {
                 }
                 Ok(binding)
             };
-            let expression = match &declaration.operation {
-                Operation::Odm(operation) => odm::bind(
-                    operation,
-                    &catalog,
-                    &self.source().name,
-                    None,
-                    crate::reference_scope::Phase::Column { groups: &[] },
-                    &mut findings,
-                )?,
-                Operation::Aggregate(operation) => aggregates::bind(
-                    operation,
-                    &catalog,
-                    &self.source().name,
-                    None,
-                    crate::reference_scope::Phase::Column { groups: &[] },
-                    &self.output,
-                    &self.intermediates,
-                    &secondary,
-                    &intermediates,
-                    self.project_calls.as_ref(),
-                    &mut edges,
-                    &mut findings,
-                )?,
-                Operation::Flag(operation) => flags::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    &self.source().name,
-                    &catalog,
-                    &self.intermediates,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                    declarations_reported,
-                )?,
-                Operation::Case(branches) => cases::bind(
-                    self,
-                    branches,
-                    column,
-                    &catalog,
-                    source,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                    declarations_reported,
-                )?,
-                Operation::ProjectFunction(call) => {
-                    let calls = self.project_calls.as_ref().ok_or(BindError::Internal)?;
-                    let record = self.keys.contains(&column);
-                    let context = crate::project_call_binding::Context {
-                        source_dataset: 0,
-                        source_mode: if record {
-                            crate::project_call_binding::SourceMode::Record
-                        } else {
-                            crate::project_call_binding::SourceMode::Collect
-                        },
-                        available_outputs: None,
-                        scope: crate::reference_scope::Scope {
-                            drivers: &[self.source().name.as_str()],
-                            current_driver: true,
-                            reach: if record {
-                                crate::reference_scope::Reach::Record
-                            } else {
-                                crate::reference_scope::Reach::Relation
-                            },
-                            joined: false,
-                            phase: crate::reference_scope::Phase::Column { groups: &[] },
-                        },
-                    };
-                    match crate::project_call_binding::bind(calls, *call, &catalog, context) {
-                        Ok(bound) => {
-                            edges.extend(bound.dependencies);
-                            Some(Expression::ProjectFunction(bound.function))
-                        }
-                        Err(crate::project_call_binding::Error::Findings(errors)) => {
-                            findings.extend(functions::bind_findings(calls, *call, errors, None)?);
-                            None
-                        }
-                        Err(crate::project_call_binding::Error::Reference(error)) => {
-                            return Err(BindError::Catalog(error))
-                        }
-                        Err(_) => return Err(BindError::Internal),
-                    }
-                }
-                Operation::Literal(value) => Some(Expression::Literal(value.clone())),
-                Operation::MappingCut(operation) => mapping_cut::bind(
-                    self,
-                    operation,
-                    column,
-                    &catalog,
-                    source,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                )?,
-                Operation::Round(rounding) => rounding::bind(
-                    rounding,
-                    column,
-                    &self.keys,
-                    &catalog,
-                    &self.intermediates,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                )?,
-                Operation::StrTemplate(operation) => str_template::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    &catalog,
-                    &self.intermediates,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                )?,
-                Operation::Scalar(operation) => scalar::bind(
-                    self,
-                    operation,
-                    column,
-                    &catalog,
-                    source,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                    declarations_reported,
-                )?,
-                Operation::StrContains(operation) => scalar::bind_contains(
-                    self,
-                    operation,
-                    column,
-                    &catalog,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                )?,
-                Operation::StrExtract(operation) => str_extract::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    &catalog,
-                    &self.intermediates,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                )?,
-                Operation::StrCase(operation) => str_case::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    &catalog,
-                    &self.intermediates,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                )?,
-                Operation::StrPad(operation) => str_pad::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    &catalog,
-                    &self.intermediates,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                )?,
-                Operation::Imputation(operation) => imputation::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    &catalog,
-                    &self.intermediates,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                )?,
-                Operation::Temporal(operation) => temporal::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    &catalog,
-                    &self.intermediates,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                )?,
-                Operation::Window(window) => window.bind(&catalog, &mut edges, &mut findings)?,
-                Operation::InvalidNumeric { expression, error } => {
-                    findings.push(BindFinding::Numeric {
-                        path: reference_path.clone(),
-                        expression: expression.clone(),
-                        error: error.clone(),
-                    });
-                    None
-                }
-                Operation::Source(declaration) => source_expressions::bind(
-                    self,
-                    declaration,
-                    column,
-                    path,
-                    &catalog,
-                    source,
-                    &secondary,
-                    &intermediates,
-                    &mut edges,
-                    &mut findings,
-                )?,
-                Operation::FirstAvailable(selection) => {
-                    let mut operands = Vec::new();
-                    for (index, operand) in selection.sources.iter().enumerate() {
-                        let operand_path = format!("{path}.sources[{index}]");
-                        if let Some(expression) = source_expressions::bind(
-                            self,
-                            operand,
-                            column,
-                            &operand_path,
-                            &catalog,
-                            source,
-                            &secondary,
-                            &intermediates,
-                            &mut edges,
-                            &mut findings,
-                        )? {
-                            // Distinct-value collection failures belong to first_available.
-                            // Recursive operands retain their own expression and handler paths.
-                            let read = match expression {
-                                Expression::Collect {
-                                    column,
-                                    identifier,
-                                    filter,
-                                    selection: None,
-                                } => crate::dataset::SelectionRead::Collect {
-                                    column,
-                                    identifier,
-                                    filter: filter.map(std::boxed::Box::new),
-                                },
-                                expression => crate::dataset::SelectionRead::Expression(
-                                    std::boxed::Box::new(crate::dataset::Assignment {
-                                        column,
-                                        expression,
-                                        path: operand_path.clone(),
-                                    }),
-                                ),
-                            };
-                            operands.push(crate::dataset::SelectionSource {
-                                path: operand_path.clone(),
-                                read,
-                            });
-                        }
-                    }
-                    Some(Expression::FirstAvailable(std::boxed::Box::new(
-                        crate::dataset::FirstAvailable::new(operands, selection.missing.clone()),
-                    )))
-                }
-                Operation::Compute(compiled) => {
-                    // The reference emits expression-local qualification findings first,
-                    // then validates bare references, preserving written occurrence order.
-                    for identifier in compiled.identifiers().filter(|name| {
-                        name.contains('.') && self.intermediates.reference(name).is_none()
-                    }) {
-                        findings.push(BindFinding::QualifiedNumericReference {
+            // The reference emits expression-local qualification findings first,
+            // then validates bare references, preserving written occurrence order.
+            for identifier in compiled
+                .identifiers()
+                .filter(|name| name.contains('.') && self.intermediates.reference(name).is_none())
+            {
+                findings.push(BindFinding::QualifiedNumericReference {
+                    path: reference_path.clone(),
+                    expression: compiled.expression().into(),
+                    identifier: identifier.into(),
+                });
+            }
+            let mut bindings = Vec::new();
+            for name in compiled
+                .identifiers()
+                .filter(|name| self.intermediates.reference(name).is_some())
+            {
+                let (index, field) = self
+                    .intermediates
+                    .reference(name)
+                    .ok_or(BindError::Internal)?;
+                if let Some(item) = &intermediates[index] {
+                    edges.extend(row_intermediates::dependencies(index, intermediates)?);
+                    if let Some(column) = item.source_column(secondary, field) {
+                        bindings.push(Binding {
+                            name: name.into(),
+                            read: Read::Intermediate { index, column },
+                        });
+                    } else {
+                        findings.push(BindFinding::UnknownReference {
                             path: reference_path.clone(),
-                            expression: compiled.expression().into(),
-                            identifier: identifier.into(),
+                            name: name.into(),
                         });
                     }
-                    let mut bindings = Vec::new();
-                    for name in compiled
-                        .identifiers()
-                        .filter(|name| self.intermediates.reference(name).is_some())
-                    {
-                        let (index, field) = self
-                            .intermediates
-                            .reference(name)
-                            .ok_or(BindError::Internal)?;
-                        if let Some(item) = &intermediates[index] {
-                            edges.extend(row_intermediates::dependencies(index, &intermediates)?);
-                            if let Some(column) = item.source_column(&secondary, field) {
-                                bindings.push(Binding {
-                                    name: name.into(),
-                                    read: Read::Intermediate { index, column },
-                                });
-                            } else {
-                                findings.push(BindFinding::UnknownReference {
-                                    path: reference_path.clone(),
-                                    name: name.into(),
-                                });
-                            }
-                        } else {
-                            findings.push(BindFinding::UnknownReference {
-                                path: reference_path.clone(),
-                                name: name.into(),
-                            });
-                        }
-                    }
-                    for name in compiled.identifiers().filter(|name| !name.contains('.')) {
-                        if let Some(binding) = bind(name, &mut findings)? {
-                            let read = match binding {
-                                reference_binding::Binding::Output { column, .. } => {
-                                    edges.push(column);
-                                    Read::Column(column)
-                                }
-                                reference_binding::Binding::Dataset { field, .. } => {
-                                    Read::Source(field)
-                                }
-                            };
-                            bindings.push(Binding {
-                                name: name.into(),
-                                read,
-                            });
-                        }
-                    }
-                    static_types::numeric(
-                        compiled,
-                        &bindings,
-                        &self.intermediates,
-                        &catalog,
-                        &secondary,
-                        &intermediates,
-                        &mut findings,
-                    )?;
-                    if findings.len() == start {
-                        Some(Expression::Compute(
-                            BoundNumeric::new(compiled.clone(), bindings)
-                                .map_err(BindError::InvalidNumericBinding)?,
-                        ))
-                    } else {
-                        None
-                    }
+                } else {
+                    findings.push(BindFinding::UnknownReference {
+                        path: reference_path.clone(),
+                        name: name.into(),
+                    });
                 }
-            };
-            // Invalid declarations remain in the graph so independent cycles and
-            // key dependencies are still reported after the reference findings.
-            dependencies.push(Some(edges));
-            if let Some(expression) = expression {
-                assignments.insert(
-                    column,
-                    Assignment {
-                        column,
-                        expression,
-                        path: path.clone(),
-                    },
-                );
             }
-        }
+            for name in compiled.identifiers().filter(|name| !name.contains('.')) {
+                if let Some(binding) = bind(name, findings)? {
+                    let read = match binding {
+                        reference_binding::Binding::Output { column, .. } => {
+                            edges.push(column);
+                            Read::Column(column)
+                        }
+                        reference_binding::Binding::Dataset { field, .. } => Read::Source(field),
+                    };
+                    bindings.push(Binding {
+                        name: name.into(),
+                        read,
+                    });
+                }
+            }
+            static_types::numeric(
+                compiled,
+                &bindings,
+                &self.intermediates,
+                catalog,
+                secondary,
+                intermediates,
+                findings,
+            )?;
+            if findings.len() == start {
+                Some(Expression::Compute(
+                    BoundNumeric::new(compiled.clone(), bindings)
+                        .map_err(BindError::InvalidNumericBinding)?,
+                ))
+            } else {
+                None
+            }
+        };
+        Ok(expression)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn finish_column_plan(
+        &self,
+        mut assignments: BTreeMap<usize, Assignment>,
+        dependencies: Vec<Option<Vec<usize>>>,
+        mut findings: Vec<BindFinding>,
+        secondary: Vec<crate::dataset::SecondarySource>,
+        intermediates: Vec<Option<crate::dataset::Intermediate>>,
+        source: &TableSchema,
+    ) -> Result<DatasetPlan, BindError> {
         let analysis = column_dependencies::analyze(&dependencies, &self.keys, false)
             .map_err(BindError::DependencyPolicy)?;
         if !analysis.diagnostics.is_empty() {
