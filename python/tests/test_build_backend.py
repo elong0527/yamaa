@@ -145,6 +145,8 @@ def _make_archive_with_extra(
         ("pkg-0.1/evil_link", tarfile.SYMTYPE, "/etc/passwd"),
         ("pkg-0.1/hard_link", tarfile.LNKTYPE, "/etc/passwd"),
         ("pkg-0.1/fifo", tarfile.FIFOTYPE, ""),
+        ("pkg-0.1/device", tarfile.CHRTYPE, ""),
+        ("pkg-0.1/block_device", tarfile.BLKTYPE, ""),
     ],
 )
 def test_preserve_workspace_rejects_non_regular_entries(
@@ -217,7 +219,7 @@ def _make_sparse_archive(tmp_path: Path, sparse_format: str) -> Path:
 
 
 @pytest.mark.parametrize("sparse_format", ["gnu", "pax-0.1", "pax-1.0"])
-def test_preserve_workspace_rejects_sparse_entries(
+def test_preserve_workspace_rewrites_sparse_entries_as_regular(
     tmp_path: Path, sparse_format: str
 ) -> None:
     workspace = _make_workspace(tmp_path)
@@ -228,10 +230,16 @@ def test_preserve_workspace_rejects_sparse_entries(
         assert entry.isfile()
         assert entry.issparse()
         assert source.extractfile(entry).read() == b"\0\0ABC"
-    original = archive.read_bytes()
-    with pytest.raises(ValueError, match="must not contain links or special files"):
-        preserve_workspace(archive, workspace)
-    assert archive.read_bytes() == original
+    preserve_workspace(archive, workspace)
+    with tarfile.open(archive) as source:
+        entry = source.getmember("pkg-0.1/sparse.txt")
+        # The sparse member is rewritten as a regular member whose bytes
+        # are the fully expanded sparse contents, not the stored extent.
+        assert entry.isfile()
+        assert not entry.issparse()
+        assert entry.type == tarfile.REGTYPE
+        assert source.extractfile(entry).read() == b"\0\0ABC"
+    assert _archive_payloads(archive)["pkg-0.1/sparse.txt"] == b"\0\0ABC"
     assert list(tmp_path.glob("*.tar.gz")) == [archive]
 
 
