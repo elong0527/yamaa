@@ -704,7 +704,11 @@ mod file {
                     "columns.ID.derivation.first_available.sources",
                 ),
                 ("group_keys", 64, 65, "rows[0].group_by"),
-                ("row_columns", 1024, 1025, "rows[0].derivations"),
+                // No row_columns case: after pruning (REQ-0638) a row's
+                // derivations survive only for live columns, and 1025 live
+                // columns refuse at the columns capacity first — a composed
+                // specification (parents: []) behaves identically, so the
+                // row_columns limit cannot be isolated here.
             ] {
                 let study = Study::new();
                 let mut body = String::from(VALID);
@@ -776,13 +780,6 @@ mod file {
                     "group_keys" => body.push_str(&format!(
                         "rows:\n  - {{id: r, dataset: SRC, filter: 'ID >', group_by: [{}], derivations: {{ID: SRC.ID}}}}\n",
                         vec!["ID"; actual].join(", ")
-                    )),
-                    "row_columns" => body.push_str(&format!(
-                        "rows:\n  - {{id: r, dataset: SRC, filter: 'ID >', derivations: {{{}}}}}\n",
-                        (0..actual)
-                            .map(|i| format!("C{i}: SRC.ID"))
-                            .collect::<Vec<_>>()
-                            .join(", ")
                     )),
                     _ => unreachable!(),
                 }

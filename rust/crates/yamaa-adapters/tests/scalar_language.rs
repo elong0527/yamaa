@@ -1008,7 +1008,11 @@ rows:
         #[test]
         fn warning_prefix_survives_a_later_derivation_failure_without_warning_authority() {
             let (study, raw) = Study::benchmark();
-            let raw = raw.replace("\nverifications:\n", "\n  - name: FAIL\n    type: float\n    derivation: {compute: {expr: '1 / 0'}}\n\nverifications:\n");
+            // FAIL must be projected to stay live under pruning (REQ-0638);
+            // a dead column's division failure would be discarded with it.
+            let raw = raw
+                .replace("\nverifications:\n", "\n  - name: FAIL\n    type: float\n    derivation: {compute: {expr: '1 / 0'}}\n\nverifications:\n")
+                .replace("columns: [USUBJID, AGE]", "columns: [USUBJID, AGE, FAIL]");
             let mut result = study.build(&raw);
             assert!(result.output().is_none());
             assert!(result.warning_log().is_none());
