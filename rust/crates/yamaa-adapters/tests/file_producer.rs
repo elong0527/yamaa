@@ -105,7 +105,7 @@ mod file {
             file_graph::FileGraph,
             file_producer_build::{Attempt, BoundaryFailure, FileBuild},
             file_resources::{Error as ResourceError, Resources},
-            project_source::{self, CapturePort, Kind, OwnedEnvironment, Reply, Request},
+            project_source::{self, Kind, OwnedEnvironment, ProjectCapturePort, Reply, Request},
             shipped_schema,
             specification_source::Source,
         };
@@ -654,7 +654,7 @@ columns:
         struct LockCapture {
             language: Language,
         }
-        impl CapturePort for LockCapture {
+        impl ProjectCapturePort for LockCapture {
             type Error = ();
             fn capture(&mut self, request: Request<'_>) -> Result<Reply, ()> {
                 assert_eq!(request.kind, Kind::Lock);

@@ -3,7 +3,7 @@
 use crate::{
     domain::{self, CheckedSpecification},
     project_activation::{self, ActivationPort, Bindings, Failure},
-    specification_run::{CapturedAttempt, PortError, SourceDecoder, SourcePort},
+    specification_run::{CapturedAttempt, PortError, SourceDecoder, SpecificationSourcePort},
 };
 use crate::{
     project_environment::ExecutionEnvironment,
@@ -39,7 +39,7 @@ impl CheckedProject<'_> {
     }
     /// Repeat lock, binding and all complete cases on each build. Source capture
     /// uses already activated handles and preserves the original host payloads.
-    pub fn build_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
+    pub fn build_into<A: ActivationPort, P: SpecificationSourcePort, D: SourceDecoder>(
         &self,
         activation: &mut A,
         source: &mut P,
@@ -104,7 +104,7 @@ impl CheckedOwnedProject {
     pub fn check_diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
         self.checked.check_diagnostics()
     }
-    pub fn build_into<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
+    pub fn build_into<A: ActivationPort, P: SpecificationSourcePort, D: SourceDecoder>(
         &self,
         activation: &mut A,
         source: &mut P,
@@ -126,7 +126,7 @@ impl CheckedOwnedProject {
         )
     }
 }
-fn build<A: ActivationPort, P: SourcePort, D: SourceDecoder>(
+fn build<A: ActivationPort, P: SpecificationSourcePort, D: SourceDecoder>(
     (checked, environment): (&CheckedSpecification, &ExecutionEnvironment),
     activation: &mut A,
     source: &mut P,

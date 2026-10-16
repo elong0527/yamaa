@@ -13,7 +13,7 @@ use std::{
 use yamaa_core::{
     project_activation::{ActivationPort, Failure, Observations},
     project_domain::{self, CheckedOwnedProject, RejectedOwnedProject},
-    specification_run::{CapturedAttempt, SourcePort},
+    specification_run::{CapturedAttempt, SpecificationSourcePort},
 };
 use yamaa_core::{project_environment::ExecutionEnvironment, specification::PreparedSpecification};
 
@@ -115,7 +115,7 @@ impl PreparedRun {
 
     /// Own evidence outside the host boundary before granting activation or study
     /// authority. No prior attempt, binding or successful test is reused here.
-    pub fn execute_with_ports<A: ActivationPort, P: SourcePort>(
+    pub fn execute_with_ports<A: ActivationPort, P: SpecificationSourcePort>(
         &self,
         activation: &mut A,
         source: &mut P,

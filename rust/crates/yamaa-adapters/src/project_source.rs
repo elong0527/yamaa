@@ -1,7 +1,7 @@
 //! Captured YAML codec and compatibility results for engine project preparation.
 use crate::specification_source::{CapturedDocument, CapturedSchema, Error, Source};
 pub use application::{
-    CapturePort, DecodeTarget, Kind, LockCapture, Origin, Reply, Request, SourceOrigins,
+    DecodeTarget, Kind, LockCapture, Origin, ProjectCapturePort, Reply, Request, SourceOrigins,
 };
 use std::sync::Arc;
 use yamaa_core::project_preparation as application;
@@ -169,7 +169,7 @@ pub enum Failure<E> {
 }
 
 pub(crate) struct Decoder(pub(crate) Arc<CapturedSchema>);
-impl application::DecodePort for Decoder {
+impl application::ProjectDecodePort for Decoder {
     type Error = Error;
     type Document = CapturedDocument;
     fn decode(&mut self, source: Source, target: DecodeTarget) -> Result<CapturedDocument, Error> {
@@ -190,7 +190,7 @@ impl application::DecodePort for Decoder {
 }
 
 /// Decode through the captured schema codec; the engine owns ordering and admission.
-pub fn prepare<P: CapturePort>(
+pub fn prepare<P: ProjectCapturePort>(
     schema: Arc<CapturedSchema>,
     source: Source,
     host: Language,

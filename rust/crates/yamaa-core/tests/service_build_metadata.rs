@@ -1560,7 +1560,7 @@ mod service {
             dataset::ExecutionError,
             specification_run::{
                 self as run, CapturedAttempt, PortError, RunError, SourceDecoder, SourceIssue,
-                SourcePort,
+                SpecificationSourcePort,
             },
         };
         use yamaa_core::{
@@ -1656,7 +1656,7 @@ mod service {
             trace: Trace,
             reads: usize,
         }
-        impl SourcePort for Port {
+        impl SpecificationSourcePort for Port {
             fn resource_failure(
                 &self,
                 _error: &Self::Error,

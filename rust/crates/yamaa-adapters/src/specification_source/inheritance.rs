@@ -2,7 +2,7 @@
 use super::*;
 use yamaa_core::{inheritance_capture as application, inheritance_preparation as lifecycle};
 
-pub use application::CapturePort as InheritancePort;
+pub use application::InheritanceCapturePort as InheritancePort;
 pub type CapturedParent = application::CapturedParent<DecodedYaml>;
 pub type SourceFailure<E> = application::SourceFailure<E, Error>;
 #[derive(Debug)]
@@ -19,7 +19,7 @@ pub enum InheritanceError<E> {
     },
 }
 pub(super) struct Decoder;
-impl application::DecodePort for Decoder {
+impl application::InheritanceDecodePort for Decoder {
     type Raw = DecodedYaml;
     type Error = Error;
     fn decode(&mut self, identity: &str, bytes: &[u8]) -> Result<DecodedYaml, Error> {

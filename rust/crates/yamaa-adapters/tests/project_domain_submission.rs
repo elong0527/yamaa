@@ -2050,7 +2050,9 @@ mod project {
         use std::{rc::Rc, sync::Arc};
         use yamaa_adapters::{
             project_environment_diagnostics::{admission, Error as ProjectionError},
-            project_source::{self, CaptureFailure, CapturePort, Failure, Kind, Reply, Request},
+            project_source::{
+                self, CaptureFailure, Failure, Kind, ProjectCapturePort, Reply, Request,
+            },
             specification_source::{CapturedSchema, Source},
         };
         use yamaa_core::json::Value;
@@ -2085,7 +2087,7 @@ mod project {
             wide: bool,
             shape: bool,
         }
-        impl CapturePort for Port {
+        impl ProjectCapturePort for Port {
             type Error = Rc<()>;
             fn capture(&mut self, request: Request<'_>) -> Result<Reply, Rc<()>> {
                 self.reads += 1;

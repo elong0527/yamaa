@@ -4,7 +4,7 @@ use function_invocation::Argument;
 use function_invocation::FunctionPort;
 use function_invocation::HostError;
 use output::{ArtifactEncoder, ArtifactPort};
-use run::{SourceDecoder, SourcePort};
+use run::{SourceDecoder, SpecificationSourcePort};
 use std::{collections::VecDeque, sync::Arc};
 use yamaa_core::function_signature::InvocationPlan;
 use yamaa_core::function_signature::ProjectInvocationPlan;
@@ -29,7 +29,7 @@ impl<E> ScriptedMetadata<E> {
         }
     }
 }
-impl<E> metadata::CapturePort for ScriptedMetadata<E> {
+impl<E> metadata::ProjectCapturePort for ScriptedMetadata<E> {
     type Error = E;
     fn is_interrupt(&self, error: &E) -> bool {
         (self.interrupt_if)(error)
@@ -73,7 +73,7 @@ impl<E> ScriptedMetadataDecoder<E> {
         }
     }
 }
-impl<E> metadata::DecodePort for ScriptedMetadataDecoder<E> {
+impl<E> metadata::ProjectDecodePort for ScriptedMetadataDecoder<E> {
     type Error = E;
     type Document = MetadataDocument;
     fn decode(
@@ -126,7 +126,7 @@ impl<E> ScriptedSource<E> {
         }
     }
 }
-impl<E> SourcePort for ScriptedSource<E> {
+impl<E> SpecificationSourcePort for ScriptedSource<E> {
     type Error = E;
     fn resource_failure(&self, _error: &E) -> Option<yamaa_core::resource::ResourceFailure> {
         None

@@ -9,7 +9,7 @@ struct MetadataOpaque(Box<str>);
 
 #[test]
 fn shared_metadata_capture_fake_consumes_owned_outcomes_once_and_logs_before_failure() {
-    use metadata::CapturePort;
+    use metadata::ProjectCapturePort;
     let log = EventLog::default();
     let mut port = ScriptedMetadata::new(log.clone());
     port.interrupt_if = |e: &MetadataOpaque| e.0.as_ref() == "interrupt";
@@ -53,7 +53,7 @@ fn shared_metadata_capture_fake_consumes_owned_outcomes_once_and_logs_before_fai
 
 #[test]
 fn shared_metadata_decoder_fake_retains_source_and_document_and_moves_nonclone_errors() {
-    use metadata::DecodePort;
+    use metadata::ProjectDecodePort;
     use yamaa_core::schema::{Document, DocumentNode};
     let log = EventLog::default();
     let mut decoder = ScriptedMetadataDecoder::new(log.clone());

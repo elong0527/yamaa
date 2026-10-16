@@ -64,8 +64,8 @@ pub fn prepare<E, D, P>(
 ) -> PreparationResult<P::Error, E::Error, E::Raw, E::Locations>
 where
     E: EntryCodec,
-    D: inheritance_capture::DecodePort<Raw = E::Raw, Error = E::Error>,
-    P: inheritance_capture::CapturePort,
+    D: inheritance_capture::InheritanceDecodePort<Raw = E::Raw, Error = E::Error>,
+    P: inheritance_capture::InheritanceCapturePort,
 {
     let raw = entry.decode(&source).map_err(Error::Entry)?;
     let content = if E::document(&raw)

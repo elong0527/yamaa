@@ -972,7 +972,7 @@ mod classification_tests {
     }
 }
 
-impl yamaa_core::specification_run::SourcePort for Resources {
+impl yamaa_core::specification_run::SpecificationSourcePort for Resources {
     type Error = Error;
     fn owned_table(
         &self,

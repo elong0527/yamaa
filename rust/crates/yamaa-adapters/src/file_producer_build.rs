@@ -323,7 +323,7 @@ impl StudyPort for Study<'_> {
         &self,
         error: &Self::Error,
     ) -> Option<yamaa_core::resource::ResourceFailure> {
-        use yamaa_core::specification_run::SourcePort;
+        use yamaa_core::specification_run::SpecificationSourcePort;
         self.resources.resource_failure(error)
     }
     fn inspect(&mut self, node: &Node, source: &SourceDeclaration) -> Result<(), Self::Error> {

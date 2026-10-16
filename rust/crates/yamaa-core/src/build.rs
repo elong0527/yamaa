@@ -48,7 +48,7 @@ fn capture_root<R>(
 where
     R: MetadataAdmissionPort
         + crate::file_preparation::NativePort<Error = <R as MetadataAdmissionPort>::Error>
-        + crate::project_preparation::CapturePort<Error = <R as MetadataAdmissionPort>::Error>,
+        + crate::project_preparation::ProjectCapturePort<Error = <R as MetadataAdmissionPort>::Error>,
 {
     let identity = crate::file_preparation::NativePort::resolve_entry(reader, None, written)?;
     let bytes = crate::file_preparation::NativePort::capture_entry(reader, None, written)?;
@@ -67,19 +67,19 @@ pub enum EnvironmentFailure<E, D, X> {
 
 pub(crate) type EnvironmentPreparation<R, D> = Result<
     crate::project_preparation::PreparedEnvironment<
-        <D as crate::project_preparation::DecodePort>::Document,
+        <D as crate::project_preparation::ProjectDecodePort>::Document,
     >,
     EnvironmentFailure<
         <R as MetadataAdmissionPort>::Error,
-        <D as crate::project_preparation::DecodePort>::Document,
-        <D as crate::project_preparation::DecodePort>::Error,
+        <D as crate::project_preparation::ProjectDecodePort>::Document,
+        <D as crate::project_preparation::ProjectDecodePort>::Error,
     >,
 >;
 
 /// Compose the shared native reader and structural metadata codec with the
 /// existing environment application. No activation, study, output or publisher
 /// port is accepted at this boundary.
-pub fn prepare_environment<R, D: crate::project_preparation::DecodePort>(
+pub fn prepare_environment<R, D: crate::project_preparation::ProjectDecodePort>(
     reader: &mut R,
     decoder: &mut D,
     written: &str,
@@ -88,7 +88,7 @@ pub fn prepare_environment<R, D: crate::project_preparation::DecodePort>(
 where
     R: MetadataAdmissionPort
         + crate::file_preparation::NativePort<Error = <R as MetadataAdmissionPort>::Error>
-        + crate::project_preparation::CapturePort<Error = <R as MetadataAdmissionPort>::Error>,
+        + crate::project_preparation::ProjectCapturePort<Error = <R as MetadataAdmissionPort>::Error>,
 {
     let source = capture_root(reader, written).map_err(EnvironmentFailure::Resource)?;
     crate::project_preparation::prepare(decoder, source, host, reader)
