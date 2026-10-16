@@ -155,18 +155,7 @@ requires a fresh PR and head, even if the base was later changed back to main.
 PRs above 300 changed files require bounded coverage below, including when a
 shared head already has a successful status. Triage findings outside inline
 threads as well.
-The trusted-main `review.yml` workflow publishes the `review-completion` status
-for current open PRs targeting main. It refreshes after PR/status/discussion
-events and on a five-minute schedule for review and thread changes. It never
-checks out PR code; a formal review submission is optional for clean reviews.
-
-The workflow does not configure repository rules. Server enforcement requires a
-maintainer to make `review-completion` from GitHub Actions a required status on
-main, require CodeRabbit's own status, and require conversation resolution.
-The fresh manual check remains mandatory, including during bootstrap and when
-scheduled runs are delayed. An administrator must configure these rules
-separately; the workflow's token cannot administer repository rules.
-
+The fresh manual check above remains mandatory before every merge.
 An atomic change above CodeRabbit's 300-file review limit can use bounded
 review-only PRs. Each review PR must have a distinct head commit with the
 **complete target head tree**, a synthetic base in this repository, and at
