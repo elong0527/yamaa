@@ -202,6 +202,411 @@ pub(super) fn padding_findings(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn bind_when(
+    spec: &PreparedSpecification,
+    branch: &Branch,
+    column: usize,
+    catalog: &Catalog,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+    declarations_reported: bool,
+) -> Result<Option<crate::bound_expression::BoundPredicate>, BindError> {
+    let Some(compiled) = branch.when.as_ref() else {
+        return Ok(None);
+    };
+    let plan = match compiled {
+        Ok(plan) => plan,
+        Err(invalid) => {
+            if !declarations_reported {
+                findings.push(BindFinding::Predicate(invalid.diagnostic()?));
+            }
+            return Ok(None);
+        }
+    };
+    case_predicates::bind(
+        spec,
+        plan,
+        column,
+        catalog,
+        secondary,
+        intermediates,
+        edges,
+        findings,
+    )
+}
+
+fn bind_project_operation(
+    spec: &PreparedSpecification,
+    call: &usize,
+    column: usize,
+    catalog: &Catalog,
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<Expression>, BindError> {
+    let calls = spec.project_calls.as_ref().ok_or(BindError::Internal)?;
+    let record = spec.keys.contains(&column);
+    let context = project_call_binding::Context {
+        source_dataset: 0,
+        source_mode: if record {
+            project_call_binding::SourceMode::Record
+        } else {
+            project_call_binding::SourceMode::Collect
+        },
+        available_outputs: None,
+        scope: crate::reference_scope::Scope {
+            drivers: &[spec.source().name.as_str()],
+            current_driver: true,
+            reach: if record {
+                crate::reference_scope::Reach::Record
+            } else {
+                crate::reference_scope::Reach::Relation
+            },
+            joined: false,
+            phase: crate::reference_scope::Phase::Column { groups: &[] },
+        },
+    };
+    Ok(match project_call_binding::bind(calls, *call, catalog, context) {
+        Ok(bound) => {
+            edges.extend(bound.dependencies);
+            Some(Expression::ProjectFunction(bound.function))
+        }
+        Err(project_call_binding::Error::Findings(errors)) => {
+            findings.extend(functions::bind_findings(calls, *call, errors, None)?);
+            None
+        }
+        Err(project_call_binding::Error::Reference(error)) => {
+            return Err(BindError::Catalog(error))
+        }
+        Err(_) => return Err(BindError::Internal),
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bind_compute_operation(
+    spec: &PreparedSpecification,
+    branch: &Branch,
+    compiled: &CompiledNumeric,
+    catalog: &Catalog,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+    start: usize,
+) -> Result<Option<Expression>, BindError> {
+    let mut bindings = Vec::new();
+    for name in compiled.identifiers() {
+        if let Some((index, field)) = spec.intermediates.reference(name) {
+            if let Some(item) = &intermediates[index] {
+                edges.extend(row_intermediates::dependencies(index, intermediates)?);
+                if let Some(column) = item.source_column(secondary, field) {
+                    bindings.push(Binding {
+                        name: name.into(),
+                        read: Read::Intermediate { index, column },
+                    });
+                    continue;
+                }
+            }
+            findings.push(BindFinding::UnknownReference {
+                path: format!("{}.expr", branch.path),
+                name: name.into(),
+            });
+            continue;
+        }
+        match catalog.bind(name) {
+            Some(reference_binding::Binding::Output { column, .. }) => {
+                edges.push(column);
+                bindings.push(Binding {
+                    name: name.into(),
+                    read: Read::Column(column),
+                });
+            }
+            _ => findings.push(BindFinding::UnknownReference {
+                path: format!("{}.expr", branch.path),
+                name: name.into(),
+            }),
+        }
+    }
+    static_types::numeric(
+        compiled,
+        &bindings,
+        &spec.intermediates,
+        catalog,
+        secondary,
+        intermediates,
+        findings,
+    )?;
+    Ok(if findings.len() == start {
+        Some(Expression::Compute(
+            BoundNumeric::new(compiled.clone(), bindings)
+                .map_err(BindError::InvalidNumericBinding)?,
+        ))
+    } else {
+        None
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bind_operation(
+    spec: &PreparedSpecification,
+    branch: &Branch,
+    column: usize,
+    catalog: &Catalog,
+    driver: &TableSchema,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+    declarations_reported: bool,
+    start: usize,
+) -> Result<Option<Expression>, BindError> {
+    Ok(match branch.operation.as_ref() {
+        Operation::InvalidNumeric { expression, error } => {
+            if !declarations_reported {
+                findings.push(BindFinding::Numeric {
+                    path: format!("{}.expr", branch.path),
+                    expression: expression.clone(),
+                    error: error.clone(),
+                });
+            }
+            None
+        }
+        Operation::Literal(value) => Some(Expression::Literal(value.clone())),
+        Operation::Window(window) => window.bind(catalog, edges, findings)?,
+        Operation::Flag(operation) => flags::bind(
+            operation,
+            column,
+            &spec.keys,
+            &spec.source().name,
+            catalog,
+            &spec.intermediates,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+            declarations_reported,
+        )?,
+        Operation::Case(branches) => bind(
+            spec,
+            branches,
+            column,
+            catalog,
+            driver,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+            declarations_reported,
+        )?,
+        Operation::ProjectFunction(call) => {
+            bind_project_operation(spec, call, column, catalog, edges, findings)?
+        }
+        Operation::StrTemplate(operation) => str_template::bind(
+            operation,
+            column,
+            &spec.keys,
+            catalog,
+            &spec.intermediates,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+        )?,
+        Operation::Scalar(operation) => scalar::bind(
+            spec,
+            operation,
+            column,
+            catalog,
+            driver,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+            declarations_reported,
+        )?,
+        Operation::StrContains(operation) => scalar::bind_contains(
+            spec,
+            operation,
+            column,
+            catalog,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+        )?,
+        Operation::StrExtract(operation) => str_extract::bind(
+            operation,
+            column,
+            &spec.keys,
+            catalog,
+            &spec.intermediates,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+        )?,
+        Operation::MappingCut(operation) => mapping_cut::bind(
+            spec,
+            operation,
+            column,
+            catalog,
+            driver,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+        )?,
+        Operation::StrCase(operation) => str_case::bind(
+            operation,
+            column,
+            &spec.keys,
+            catalog,
+            &spec.intermediates,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+        )?,
+        Operation::StrPad(operation) => str_pad::bind(
+            operation,
+            column,
+            &spec.keys,
+            catalog,
+            &spec.intermediates,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+        )?,
+        Operation::Imputation(operation) => imputation::bind(
+            operation,
+            column,
+            &spec.keys,
+            catalog,
+            &spec.intermediates,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+        )?,
+        Operation::Temporal(operation) => temporal::bind(
+            operation,
+            column,
+            &spec.keys,
+            catalog,
+            &spec.intermediates,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+        )?,
+        Operation::Round(rounding) => rounding::bind(
+            rounding,
+            column,
+            &spec.keys,
+            catalog,
+            &spec.intermediates,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+        )?,
+        Operation::Source(source) => source_expressions::bind(
+            spec,
+            source,
+            column,
+            &branch.path,
+            catalog,
+            driver,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+        )?,
+        Operation::Aggregate(operation) => aggregates::bind(
+            operation,
+            catalog,
+            &spec.source().name,
+            None,
+            crate::reference_scope::Phase::Column { groups: &[] },
+            &spec.output,
+            &spec.intermediates,
+            secondary,
+            intermediates,
+            spec.project_calls.as_ref(),
+            edges,
+            findings,
+        )?,
+        Operation::Compute(compiled) => bind_compute_operation(
+            spec, branch, compiled, catalog, secondary, intermediates, edges, findings, start,
+        )?,
+        Operation::FirstAvailable(selection) => derivations::bind_selection(
+            selection,
+            &branch.path,
+            catalog,
+            None,
+            column,
+            &spec.output,
+            &spec.intermediates,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+        )?,
+        _ => return Err(BindError::Internal),
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bind_branch(
+    spec: &PreparedSpecification,
+    branch: &Branch,
+    column: usize,
+    catalog: &Catalog,
+    driver: &TableSchema,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+    declarations_reported: bool,
+    start: usize,
+) -> Result<Option<CaseBranch>, BindError> {
+    let when = bind_when(
+        spec,
+        branch,
+        column,
+        catalog,
+        secondary,
+        intermediates,
+        edges,
+        findings,
+        declarations_reported,
+    )?;
+    let expression = bind_operation(
+        spec,
+        branch,
+        column,
+        catalog,
+        driver,
+        secondary,
+        intermediates,
+        edges,
+        findings,
+        declarations_reported,
+        start,
+    )?;
+    Ok(expression.map(|expression| CaseBranch {
+        when,
+        assignment: std::boxed::Box::new(Assignment {
+            column,
+            expression,
+            path: branch.path.clone(),
+        }),
+    }))
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
     spec: &PreparedSpecification,
     branches: &[Branch],
@@ -217,320 +622,20 @@ pub(super) fn bind(
     let start = findings.len();
     let mut result = Vec::new();
     for branch in branches {
-        let when = branch
-            .when
-            .as_ref()
-            .map(|compiled| {
-                let plan = match compiled {
-                    Ok(plan) => plan,
-                    Err(invalid) => {
-                        if !declarations_reported {
-                            findings.push(BindFinding::Predicate(invalid.diagnostic()?));
-                        }
-                        return Ok(None);
-                    }
-                };
-                case_predicates::bind(
-                    spec,
-                    plan,
-                    column,
-                    catalog,
-                    secondary,
-                    intermediates,
-                    edges,
-                    findings,
-                )
-            })
-            .transpose()?
-            .flatten();
-        let expression = match branch.operation.as_ref() {
-            Operation::InvalidNumeric { expression, error } => {
-                if !declarations_reported {
-                    findings.push(BindFinding::Numeric {
-                        path: format!("{}.expr", branch.path),
-                        expression: expression.clone(),
-                        error: error.clone(),
-                    });
-                }
-                None
-            }
-            Operation::Literal(value) => Some(Expression::Literal(value.clone())),
-            Operation::Window(window) => window.bind(catalog, edges, findings)?,
-            Operation::Flag(operation) => flags::bind(
-                operation,
-                column,
-                &spec.keys,
-                &spec.source().name,
-                catalog,
-                &spec.intermediates,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-                declarations_reported,
-            )?,
-            Operation::Case(branches) => bind(
-                spec,
-                branches,
-                column,
-                catalog,
-                driver,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-                declarations_reported,
-            )?,
-            Operation::ProjectFunction(call) => {
-                let calls = spec.project_calls.as_ref().ok_or(BindError::Internal)?;
-                let record = spec.keys.contains(&column);
-                let context = project_call_binding::Context {
-                    source_dataset: 0,
-                    source_mode: if record {
-                        project_call_binding::SourceMode::Record
-                    } else {
-                        project_call_binding::SourceMode::Collect
-                    },
-                    available_outputs: None,
-                    scope: crate::reference_scope::Scope {
-                        drivers: &[spec.source().name.as_str()],
-                        current_driver: true,
-                        reach: if record {
-                            crate::reference_scope::Reach::Record
-                        } else {
-                            crate::reference_scope::Reach::Relation
-                        },
-                        joined: false,
-                        phase: crate::reference_scope::Phase::Column { groups: &[] },
-                    },
-                };
-                match project_call_binding::bind(calls, *call, catalog, context) {
-                    Ok(bound) => {
-                        edges.extend(bound.dependencies);
-                        Some(Expression::ProjectFunction(bound.function))
-                    }
-                    Err(project_call_binding::Error::Findings(errors)) => {
-                        findings.extend(functions::bind_findings(calls, *call, errors, None)?);
-                        None
-                    }
-                    Err(project_call_binding::Error::Reference(error)) => {
-                        return Err(BindError::Catalog(error))
-                    }
-                    Err(_) => return Err(BindError::Internal),
-                }
-            }
-            Operation::StrTemplate(operation) => str_template::bind(
-                operation,
-                column,
-                &spec.keys,
-                catalog,
-                &spec.intermediates,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-            )?,
-            Operation::Scalar(operation) => scalar::bind(
-                spec,
-                operation,
-                column,
-                catalog,
-                driver,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-                declarations_reported,
-            )?,
-            Operation::StrContains(operation) => scalar::bind_contains(
-                spec,
-                operation,
-                column,
-                catalog,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-            )?,
-            Operation::StrExtract(operation) => str_extract::bind(
-                operation,
-                column,
-                &spec.keys,
-                catalog,
-                &spec.intermediates,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-            )?,
-            Operation::MappingCut(operation) => mapping_cut::bind(
-                spec,
-                operation,
-                column,
-                catalog,
-                driver,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-            )?,
-            Operation::StrCase(operation) => str_case::bind(
-                operation,
-                column,
-                &spec.keys,
-                catalog,
-                &spec.intermediates,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-            )?,
-            Operation::StrPad(operation) => str_pad::bind(
-                operation,
-                column,
-                &spec.keys,
-                catalog,
-                &spec.intermediates,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-            )?,
-            Operation::Imputation(operation) => imputation::bind(
-                operation,
-                column,
-                &spec.keys,
-                catalog,
-                &spec.intermediates,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-            )?,
-            Operation::Temporal(operation) => temporal::bind(
-                operation,
-                column,
-                &spec.keys,
-                catalog,
-                &spec.intermediates,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-            )?,
-            Operation::Round(rounding) => rounding::bind(
-                rounding,
-                column,
-                &spec.keys,
-                catalog,
-                &spec.intermediates,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-            )?,
-            Operation::Source(source) => source_expressions::bind(
-                spec,
-                source,
-                column,
-                &branch.path,
-                catalog,
-                driver,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-            )?,
-            Operation::Aggregate(operation) => aggregates::bind(
-                operation,
-                catalog,
-                &spec.source().name,
-                None,
-                crate::reference_scope::Phase::Column { groups: &[] },
-                &spec.output,
-                &spec.intermediates,
-                secondary,
-                intermediates,
-                spec.project_calls.as_ref(),
-                edges,
-                findings,
-            )?,
-            Operation::Compute(compiled) => {
-                let mut bindings = Vec::new();
-                for name in compiled.identifiers() {
-                    if let Some((index, field)) = spec.intermediates.reference(name) {
-                        if let Some(item) = &intermediates[index] {
-                            edges.extend(row_intermediates::dependencies(index, intermediates)?);
-                            if let Some(column) = item.source_column(secondary, field) {
-                                bindings.push(Binding {
-                                    name: name.into(),
-                                    read: Read::Intermediate { index, column },
-                                });
-                                continue;
-                            }
-                        }
-                        findings.push(BindFinding::UnknownReference {
-                            path: format!("{}.expr", branch.path),
-                            name: name.into(),
-                        });
-                        continue;
-                    }
-                    match catalog.bind(name) {
-                        Some(reference_binding::Binding::Output { column, .. }) => {
-                            edges.push(column);
-                            bindings.push(Binding {
-                                name: name.into(),
-                                read: Read::Column(column),
-                            });
-                        }
-                        _ => findings.push(BindFinding::UnknownReference {
-                            path: format!("{}.expr", branch.path),
-                            name: name.into(),
-                        }),
-                    }
-                }
-                static_types::numeric(
-                    compiled,
-                    &bindings,
-                    &spec.intermediates,
-                    catalog,
-                    secondary,
-                    intermediates,
-                    findings,
-                )?;
-                if findings.len() == start {
-                    Some(Expression::Compute(
-                        BoundNumeric::new(compiled.clone(), bindings)
-                            .map_err(BindError::InvalidNumericBinding)?,
-                    ))
-                } else {
-                    None
-                }
-            }
-            Operation::FirstAvailable(selection) => derivations::bind_selection(
-                selection,
-                &branch.path,
-                catalog,
-                None,
-                column,
-                &spec.output,
-                &spec.intermediates,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-            )?,
-            _ => return Err(BindError::Internal),
-        };
-        if let Some(expression) = expression {
-            result.push(CaseBranch {
-                when,
-                assignment: std::boxed::Box::new(Assignment {
-                    column,
-                    expression,
-                    path: branch.path.clone(),
-                }),
-            });
+        if let Some(bound) = bind_branch(
+            spec,
+            branch,
+            column,
+            catalog,
+            driver,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+            declarations_reported,
+            start,
+        )? {
+            result.push(bound);
         }
     }
     Ok((findings.len() == start).then_some(Expression::Case(result)))
