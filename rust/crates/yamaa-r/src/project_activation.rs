@@ -275,12 +275,17 @@ impl ActivationPort for Port<'_> {
 }
 
 /// Caller-supplied registry port: bindings come from an explicit map of
+/// (staged for the registry activation path; dataset execution still uses
+/// the locked port, so this surface is intentionally not yet constructed
+/// by an entry point in this crate).
 /// logical call strings to already-resolved R functions, never from a
 /// namespace lookup. Declared-lock auditing stays separate: this port
 /// refuses lock verification rather than silently skipping it.
+#[allow(dead_code)]
 pub struct RegistryPort {
     registry: std::collections::BTreeMap<String, Function>,
 }
+#[allow(dead_code)]
 impl RegistryPort {
     pub fn new(registry: std::collections::BTreeMap<String, Function>) -> Self {
         Self { registry }
@@ -334,6 +339,7 @@ impl RegistryPort {
             .map_err(|error| HostError::InvalidResult(Error::Scalar(error)))
     }
 }
+#[allow(dead_code)]
 impl ActivationPort for RegistryPort {
     type Handle = Function;
     type Error = Error;
@@ -366,6 +372,7 @@ impl ActivationPort for RegistryPort {
         Self::invoke_scalar(handle, arguments)
     }
 }
+#[allow(dead_code)]
 impl yamaa_core::function_batch::BatchFunctionPort for RegistryPort {
     type Handle = Function;
     type Error = Error;

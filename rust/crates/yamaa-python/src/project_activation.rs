@@ -28,6 +28,7 @@ pub enum Error {
     Result(CallbackError),
     Protocol,
     /// A caller-supplied registry has no binding for the requested call.
+    #[allow(dead_code)]
     MissingBinding(String),
 }
 /// Borrow the exact captured lock snapshot for this activation. No construction
@@ -140,14 +141,19 @@ impl ActivationPort for Port<'_, '_> {
 }
 
 /// Caller-supplied registry port: bindings come from an explicit mapping
+/// (staged for the registry activation path; dataset execution still uses
+/// the locked port, so this surface is intentionally not yet constructed
+/// by an entry point in this crate).
 /// of logical call strings to Python callables, never from importing a
 /// module. Declared-lock auditing stays separate: this port refuses lock
 /// verification instead of silently skipping it, because a registry
 /// activation that requested a lock must use the locked port above.
+#[allow(dead_code)]
 pub struct RegistryPort<'py> {
     py: Python<'py>,
     registry: std::collections::HashMap<String, Py<PyAny>>,
 }
+#[allow(dead_code)]
 impl<'py> RegistryPort<'py> {
     pub fn new(py: Python<'py>, registry: std::collections::HashMap<String, Py<PyAny>>) -> Self {
         Self { py, registry }
@@ -159,6 +165,7 @@ impl<'py> RegistryPort<'py> {
             .ok_or_else(|| Error::MissingBinding(call.to_owned()))
     }
 }
+#[allow(dead_code)]
 impl ActivationPort for RegistryPort<'_> {
     type Handle = Py<PyAny>;
     type Error = Error;
@@ -208,6 +215,7 @@ impl ActivationPort for RegistryPort<'_> {
             .map_err(|error| HostError::InvalidResult(Error::Result(error)))
     }
 }
+#[allow(dead_code)]
 impl RegistryPort<'_> {
     fn helper_registry_check(
         &self,
@@ -225,6 +233,7 @@ impl RegistryPort<'_> {
         Ok(())
     }
 }
+#[allow(dead_code)]
 impl BatchFunctionPort for RegistryPort<'_> {
     type Handle = Py<PyAny>;
     type Error = Error;
