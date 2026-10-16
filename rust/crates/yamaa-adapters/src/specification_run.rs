@@ -245,8 +245,9 @@ impl application::SourceDecoder for SourceDecoder {
 }
 
 /// A frame has already admitted physical types at the Arrow boundary. Preserve
-/// those values, enforce explicit source declarations and reuse ODM/ordinal
-/// and producer-contract admission before ordinary binding and execution.
+/// those values, enforce explicit source declarations and reuse ODM/ordinal,
+/// empty-string and producer-contract admission before ordinary binding and
+/// execution.
 pub(crate) fn decode_frame(
     source: &SourceDeclaration,
     table: ArrowTable,
@@ -294,7 +295,7 @@ pub(crate) fn decode_frame(
     } else {
         table
     };
-    crate::source_ordinal::append(source, table)
+    crate::source_ordinal::append(source, empty_string_convention(source, table)?)
 }
 
 pub(crate) fn decode_source(
@@ -422,9 +423,6 @@ fn decode_parquet(
     odm: bool,
 ) -> Result<ArrowTable, Error> {
     use crate::parquet_source;
-    use arrow_array::{Array, ArrayRef, RecordBatch, StringArray};
-    use std::sync::Arc;
-    use yamaa_core::table::TableAccess;
     let table = if odm {
         parquet_source::parse_odm(bytes)
     } else {
@@ -434,40 +432,169 @@ fn decode_parquet(
         parquet_source::Error::OdmFields(fields) => Error::OdmFields(fields),
         error => Error::ParquetSource(error),
     })?;
-    // The compiler owns the input policy. Preserve buffers when no empty value
-    // needs a new validity bit; all strings were admitted by the bounded codec.
-    let batches = table
-        .batches()
-        .iter()
-        .map(|batch| {
-            let arrays: Vec<ArrayRef> = batch
-                .columns()
-                .iter()
-                .map(|array| {
-                    let Some(strings) = array.as_any().downcast_ref::<StringArray>() else {
-                        return array.clone();
-                    };
-                    if !strings
-                        .iter()
-                        .flatten()
-                        .any(|text| source.text_is_missing(text))
-                    {
-                        return array.clone();
-                    }
-                    Arc::new(StringArray::from_iter(strings.iter().map(|value| {
-                        value.filter(|value| !source.text_is_missing(value))
-                    }))) as ArrayRef
-                })
-                .collect();
-            RecordBatch::try_new(batch.schema(), arrays).map_err(|error| {
-                Error::Source(TextTableError::Table(
-                    crate::arrow_table::TableError::Arrow(error),
-                ))
-            })
+    // All strings were admitted by the bounded codec.
+    empty_string_convention(source, table)
+}
+
+/// Apply the dataset's empty-string convention after the profile decodes, so
+/// equal logical input yields equal values whichever transport carried it.
+/// Only a text array holding a convention-missing zero-length value gains a
+/// new validity bitmap; its offsets, value buffers and physical type (including
+/// imported large/view strings) stay shared. An unaffected table is returned
+/// unchanged.
+fn empty_string_convention(
+    source: &SourceDeclaration,
+    table: ArrowTable,
+) -> Result<ArrowTable, Error> {
+    use arrow_array::{
+        cast::AsArray, ArrayRef, LargeStringArray, RecordBatch, StringArray, StringViewArray,
+    };
+    use arrow_schema::ArrowError;
+    use std::sync::Arc;
+    use yamaa_core::table::TableAccess;
+    let normalize = |array: &ArrayRef| -> Option<Result<ArrayRef, ArrowError>> {
+        Some(if let Some(strings) = array.as_string_opt::<i32>() {
+            let nulls = convention_nulls(source, || strings.iter())?;
+            let (offsets, values, _) = strings.clone().into_parts();
+            StringArray::try_new(offsets, values, Some(nulls)).map(|array| Arc::new(array) as _)
+        } else if let Some(strings) = array.as_string_opt::<i64>() {
+            let nulls = convention_nulls(source, || strings.iter())?;
+            let (offsets, values, _) = strings.clone().into_parts();
+            LargeStringArray::try_new(offsets, values, Some(nulls))
+                .map(|array| Arc::new(array) as _)
+        } else {
+            let strings = array.as_string_view_opt()?;
+            let nulls = convention_nulls(source, || strings.iter())?;
+            let (views, buffers, _) = strings.clone().into_parts();
+            StringViewArray::try_new(views, buffers, Some(nulls)).map(|array| Arc::new(array) as _)
         })
-        .collect::<Result<Vec<_>, _>>()?;
-    ArrowTable::try_new(table.schema().clone(), batches)
+    };
+    let arrow_error = |error| {
+        Error::Source(TextTableError::Table(
+            crate::arrow_table::TableError::Arrow(error),
+        ))
+    };
+    let mut changed = false;
+    let mut batches = Vec::with_capacity(table.batches().len());
+    for batch in table.batches() {
+        let mut arrays = Vec::with_capacity(batch.num_columns());
+        for array in batch.columns() {
+            arrays.push(match normalize(array) {
+                Some(normalized) => {
+                    changed = true;
+                    normalized.map_err(arrow_error)?
+                }
+                None => array.clone(),
+            });
+        }
+        batches.push(RecordBatch::try_new(batch.schema(), arrays).map_err(arrow_error)?);
+    }
+    if !changed {
+        return Ok(table);
+    }
+    // A change implies at least one batch, whose schema every batch shares.
+    let physical = batches[0].schema();
+    ArrowTable::try_new_with_schema(table.schema().clone(), batches, physical)
         .map_err(|error| Error::Source(TextTableError::Table(error)))
+}
+
+/// The validity a text array needs under the convention, or `None` when no
+/// present value is convention-missing and the array stays as it is.
+fn convention_nulls<'a, I: Iterator<Item = Option<&'a str>>>(
+    source: &SourceDeclaration,
+    values: impl Fn() -> I,
+) -> Option<arrow_buffer::NullBuffer> {
+    values()
+        .flatten()
+        .any(|text| source.text_is_missing(text))
+        .then(|| {
+            arrow_buffer::NullBuffer::new(
+                values()
+                    .map(|value| value.is_some_and(|text| !source.text_is_missing(text)))
+                    .collect(),
+            )
+        })
+}
+
+#[cfg(test)]
+mod empty_string_tests {
+    use super::*;
+    use arrow_array::{
+        cast::AsArray, Array, ArrayRef, LargeStringArray, RecordBatch, StringArray, StringViewArray,
+    };
+    use arrow_schema::{Field, Schema};
+    use std::sync::Arc;
+    use yamaa_core::{
+        specification::{SourceInterpretation, SourceProfile},
+        table::{Column, TableAccess, TableSchema, ValueRef},
+        value::ColumnType,
+    };
+
+    fn source(empty_string_present: bool) -> SourceDeclaration {
+        SourceDeclaration {
+            name: "SRC".into(),
+            path: "input.parquet".into(),
+            types: vec![],
+            profile: SourceProfile::Parquet,
+            encoding: None,
+            empty_string_present,
+            ordinal: None,
+        }
+    }
+
+    fn frame(array: ArrayRef) -> ArrowTable {
+        let schema = TableSchema::new(vec![Column {
+            name: "S".into(),
+            kind: ColumnType::Str,
+        }])
+        .unwrap();
+        let physical = Arc::new(Schema::new(vec![Field::new(
+            "S",
+            array.data_type().clone(),
+            true,
+        )]));
+        let batch = RecordBatch::try_new(physical.clone(), vec![array]).unwrap();
+        ArrowTable::try_new_with_schema(schema, vec![batch], physical).unwrap()
+    }
+
+    #[test]
+    fn frames_apply_the_declared_convention_to_every_text_layout() {
+        let values = vec![Some(""), Some("x"), None];
+        for array in [
+            Arc::new(StringArray::from(values.clone())) as ArrayRef,
+            Arc::new(LargeStringArray::from(values.clone())),
+            Arc::new(StringViewArray::from(values.clone())),
+        ] {
+            let kind = array.data_type().clone();
+            let missing = decode_frame(
+                &source(false),
+                frame(array.clone()),
+                SourceInterpretation::Ordinary,
+                None,
+            )
+            .unwrap();
+            assert_eq!(missing.cell(0, 0).unwrap(), ValueRef::Missing, "{kind}");
+            assert_eq!(missing.cell(1, 0).unwrap(), ValueRef::Str("x"), "{kind}");
+            assert_eq!(missing.cell(2, 0).unwrap(), ValueRef::Missing, "{kind}");
+            let normalized = missing.batches()[0].column(0);
+            assert_eq!(normalized.data_type(), &kind);
+            if let (Some(before), Some(after)) = (
+                array.as_string_opt::<i32>(),
+                normalized.as_string_opt::<i32>(),
+            ) {
+                assert_eq!(before.values().as_ptr(), after.values().as_ptr());
+            }
+            let present = decode_frame(
+                &source(true),
+                frame(array),
+                SourceInterpretation::Ordinary,
+                None,
+            )
+            .unwrap();
+            assert_eq!(present.cell(0, 0).unwrap(), ValueRef::Str(""), "{kind}");
+            assert_eq!(present.cell(2, 0).unwrap(), ValueRef::Missing, "{kind}");
+        }
+    }
 }
 
 #[cfg(test)]

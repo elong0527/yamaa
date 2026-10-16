@@ -315,6 +315,15 @@ impl<D: SourceDecoder> SourceDecoder for NodeDecoder<'_, D> {
         interpretation: crate::specification::SourceInterpretation,
         contract: Option<&crate::producer_contract::Contract>,
     ) -> Option<Result<Self::Table, Self::Error>> {
+        // Producer-linked sources never offer an owned table, so they always
+        // take the byte path that validates their producer contract.
+        debug_assert!(
+            self.node
+                .producers()
+                .iter()
+                .all(|producer| producer.dataset() != source.name),
+            "producer-linked source offered an owned table"
+        );
         self.decoder
             .decode_owned(source, table, interpretation, contract)
             .map(|result| result.map_err(DecodeError::Codec))

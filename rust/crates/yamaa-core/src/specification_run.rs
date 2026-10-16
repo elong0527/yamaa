@@ -453,12 +453,15 @@ fn execute_inner_into<P: SourcePort, D: SourceDecoder>(
         let interpretation = prepared
             .source_interpretation(index)
             .expect("admitted source interpretation");
-        let decoded = owned.as_ref().and_then(|table| {
+        let owned_decoded = owned.as_ref().and_then(|table| {
             decoder.decode_owned(declaration, table.as_ref(), interpretation, None)
         });
-        let decoded =
-            decoded.unwrap_or_else(|| decoder.decode(declaration, bytes, interpretation, None));
-        if owned.is_some() {
+        // Only a table the owned decoder accepted replaces the byte snapshot;
+        // a byte fallback keeps the bytes it actually decoded.
+        let used_owned = owned_decoded.is_some();
+        let decoded = owned_decoded
+            .unwrap_or_else(|| decoder.decode(declaration, bytes, interpretation, None));
+        if used_owned {
             observed.snapshot = None;
             observed.owned_snapshot = owned;
         }
