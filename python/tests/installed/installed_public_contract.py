@@ -468,5 +468,219 @@ class PublicContract(unittest.TestCase):
             yamaa.define(None, "sdtm")
 
 
+class ResolvedSpecificationContract(unittest.TestCase):
+    def test_original_origins_survive_inheritance_materialization_and_window_expansion(
+        self,
+    ):
+        with tempfile.TemporaryDirectory(prefix="yamaa-resolved-origins-") as temporary:
+            root = Path(temporary).resolve()
+            base = root / "base.yaml"
+            child = root / "child.yaml"
+            base.write_text(
+                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\n"
+                "columns: [{name: ID, type: str, derivation: {mapping: {source: RAW.ID, dict: {A: Alpha}}}}]\n"
+                "output: {path: result.csv, columns: [ID]}\n",
+                encoding="utf-8",
+            )
+            child.write_text(
+                "schema_version: '1.0'\nparents: base.yaml\n", encoding="utf-8"
+            )
+            direct = yamaa.resolve_specification(base).to_dict()["entries"][0][
+                "origins"
+            ]
+            inherited = yamaa.resolve_specification(child).to_dict()["entries"][0][
+                "origins"
+            ]
+            pointer = "/columns/0/derivation/value/mapping/case_sensitive"
+            self.assertEqual(direct[pointer]["source_kind"], "schema_default")
+            self.assertEqual(inherited[pointer], direct[pointer])
+            self.assertTrue(inherited["/input/RAW"]["generated"])
+            base.write_text(
+                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\n"
+                "windows: {W: {order_by: [RAW.ID]}}\n"
+                "columns: [{name: ID, type: int, derivation: RAW.ID}]\n"
+                "output: {path: result.csv, columns: [ID]}\n",
+                encoding="utf-8",
+            )
+            child.write_text(
+                "schema_version: '1.0'\nparents: base.yaml\n"
+                "columns: [{name: N, type: int, derivation: {row_number: {window: W}}}]\n"
+                "output: {path: result.csv, columns: [ID, N]}\n",
+                encoding="utf-8",
+            )
+            origins = yamaa.resolve_specification(child).to_dict()["entries"][0][
+                "origins"
+            ]
+            prefix = "/columns/1/derivation/value/row_number/window"
+            self.assertEqual(origins[prefix]["declaring_source"], child.as_posix())
+            self.assertEqual(
+                origins[prefix + "/order_by/0/variable"]["declaring_source"],
+                base.as_posix(),
+            )
+            self.assertEqual(
+                origins[prefix + "/order_by/0/direction"]["source_kind"],
+                "schema_default",
+            )
+            self.assertTrue(
+                origins["/columns/0/derivation/value/source/variable"]["generated"]
+            )
+
+    def test_explicit_environment_is_admitted_without_activating_its_callable(self):
+        with tempfile.TemporaryDirectory(
+            prefix="yamaa-resolved-environment-"
+        ) as temporary:
+            root = Path(temporary).resolve()
+            source = root / "spec.yaml"
+            environment = root / "environment.yaml"
+            source.write_text(
+                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+                "input: {RAW: {path: missing.csv, types: {ID: int, V: str}}}\n"
+                "columns: [{name: ID, type: int, derivation: RAW.ID}, "
+                "{name: V, type: str, derivation: {function: {name: text, args: {x: RAW.V}}}}]\n"
+                "output: {path: output.csv, columns: [ID, V]}\n",
+                encoding="utf-8",
+            )
+            environment.write_text(
+                "schema_version: '1.0'\nlanguage: python\nfunctions:\n"
+                "  text:\n    function: uninstalled_resolved_fixture.identity\n"
+                "    description: Identity.\n    params: [{name: x, type: str}]\n"
+                "    returns: str\n    tests:\n"
+                "      - {id: normal, covers: [normal], args: {x: a}, result: a}\n"
+                "      - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n"
+                "      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+                encoding="utf-8",
+            )
+            with (
+                patch.object(
+                    host,
+                    "resolve_callable",
+                    side_effect=AssertionError("unexpected activation"),
+                ),
+                patch.object(
+                    host,
+                    "verify_versions",
+                    side_effect=AssertionError("unexpected verification"),
+                ),
+            ):
+                artifact = yamaa.resolve_specification(source, environment=environment)
+            self.assertEqual(artifact.to_dict()["environment"], environment.as_posix())
+
+    def test_two_studies_keep_producer_entry_bindings_used_by_domain(self):
+        with tempfile.TemporaryDirectory(
+            prefix="yamaa-resolved-producers-"
+        ) as temporary:
+            root = Path(temporary).resolve()
+            (root / "shared").mkdir()
+            (root / "shared/producer.yaml").write_text(
+                "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\n"
+                "input: {RAW: {path: input/raw.csv, relative_to: entry, types: {ID: int}}}\n"
+                "columns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\n"
+                "output: {path: output/produced.csv, relative_to: entry, columns: [ID]}\n",
+                encoding="utf-8",
+            )
+            (root / "shared/consumer.yaml").write_text(
+                "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\n"
+                "input: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\n"
+                "columns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\n"
+                "output: {path: output/final.csv, relative_to: entry, columns: [ID]}\n",
+                encoding="utf-8",
+            )
+            for wrapper, identifier in (("A", 17), ("B", 29)):
+                study = root / wrapper
+                (study / "input").mkdir(parents=True)
+                (study / "input/raw.csv").write_text(
+                    f"ID\n{identifier}\n", encoding="utf-8"
+                )
+                (study / "spec.yaml").write_text(
+                    "schema_version: '1.0'\nparents: ../shared/consumer.yaml\n",
+                    encoding="utf-8",
+                )
+                (study / "producer.yaml").write_text(
+                    "schema_version: '1.0'\nparents: ../shared/producer.yaml\n",
+                    encoding="utf-8",
+                )
+                artifact = yamaa.resolve_specification(study / "spec.yaml")
+                root_entry, producer = artifact.to_dict()["entries"]
+                self.assertEqual(
+                    root_entry["producers"], {"P": (study / "producer.yaml").as_posix()}
+                )
+                resource = next(
+                    item
+                    for item in producer["resources"]
+                    if item["role"] == "input_data"
+                )
+                self.assertEqual(
+                    resource["location"]["path"], (study / "input/raw.csv").as_posix()
+                )
+                result = yamaa.domain(study / "spec.yaml")
+                self.assertTrue(result.issues.is_empty(), result.issues)
+                self.assertEqual(result.output["ID"].to_list(), [identifier])
+                self.assertFalse((study / "output").exists())
+
+    def test_owned_inspection_and_explicit_round_trip_without_sources_or_callbacks(
+        self,
+    ):
+        with tempfile.TemporaryDirectory(prefix="yamaa-resolved-public-") as temporary:
+            root = Path(temporary).resolve()
+            spec = root / "spec.yaml"
+            spec.write_text(
+                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+                "input: {RAW: {path: missing/raw.csv, types: {ID: int}}}\n"
+                "columns: [{name: ID, type: int, derivation: RAW.ID}]\n"
+                "output: {path: absent/output.csv, columns: [ID]}\n",
+                encoding="utf-8",
+            )
+            with (
+                patch.object(
+                    host,
+                    "resolve_callable",
+                    side_effect=AssertionError("unexpected activation"),
+                ),
+                patch.object(
+                    host,
+                    "verify_versions",
+                    side_effect=AssertionError("unexpected verification"),
+                ),
+            ):
+                artifact = yamaa.resolve_specification(spec)
+            facts = artifact.to_dict()
+            self.assertEqual(facts["format"], "yamaa.resolved-specification")
+            self.assertEqual(facts["artifact_version"], 1)
+            self.assertEqual(facts["replay"], "inspection_only")
+            self.assertEqual(facts["entry"], spec.as_posix())
+            resources = facts["entries"][0]["resources"]
+            source = next(item for item in resources if item["role"] == "input_data")
+            self.assertEqual(
+                source["location"],
+                {"kind": "local", "path": (root / "missing/raw.csv").as_posix()},
+            )
+            self.assertFalse((root / "absent").exists())
+            serialized = artifact.to_json()
+            facts["entries"][0]["specification"]["domain"] = "MUTATED"
+            self.assertEqual(
+                artifact.to_dict()["entries"][0]["specification"]["domain"], "TEST"
+            )
+            spec.unlink()
+            previous = Path.cwd()
+            try:
+                import os
+
+                os.chdir(root.parent)
+                restored = yamaa.ResolvedSpecification.from_json(serialized)
+                self.assertEqual(restored.to_json(), serialized)
+                self.assertEqual(restored.to_dict(), artifact.to_dict())
+            finally:
+                os.chdir(previous)
+            with self.assertRaises(yamaa.ResolvedSpecificationError) as error:
+                yamaa.resolve_specification(spec)
+            self.assertGreater(error.exception.issues.height, 0)
+            invalid = json.loads(serialized)
+            invalid["artifact_version"] = 2
+            with self.assertRaises(ValueError):
+                yamaa.ResolvedSpecification.from_json(json.dumps(invalid))
+            with self.assertRaises(ValueError):
+                yamaa.ResolvedSpecification.from_json("schema_version: '1.0'")
+
+
 if __name__ == "__main__":
     unittest.main()

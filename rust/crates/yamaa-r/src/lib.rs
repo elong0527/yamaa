@@ -12,6 +12,7 @@ mod project_activation;
 mod project_result;
 mod public_table;
 mod report_fields;
+mod resolved_artifact;
 mod scalars;
 
 #[extendr]
@@ -25,4 +26,5 @@ extendr_module! {
     use domain_entry;
     use define_entry;
     use scalars;
+    use resolved_artifact;
 }

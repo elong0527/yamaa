@@ -9,6 +9,11 @@ if TYPE_CHECKING:
     from yamaa._domain import DomainError, check, domain
     from yamaa._odm.parquet import write_odm_parquet
     from yamaa._odm.readers import read_odm
+    from yamaa._resolved_specification import (
+        ResolvedSpecification,
+        ResolvedSpecificationError,
+        resolve_specification,
+    )
 
 _EXPORTS = {
     "read_odm": ("yamaa._odm.readers", "read_odm"),
@@ -18,6 +23,12 @@ _EXPORTS = {
     "domain": ("yamaa._domain", "domain"),
     "check": ("yamaa._domain", "check"),
     "DomainError": ("yamaa._domain", "DomainError"),
+    "resolve_specification": ("yamaa._resolved_specification", "resolve_specification"),
+    "ResolvedSpecification": ("yamaa._resolved_specification", "ResolvedSpecification"),
+    "ResolvedSpecificationError": (
+        "yamaa._resolved_specification",
+        "ResolvedSpecificationError",
+    ),
 }
 
 
@@ -40,10 +51,13 @@ __version__ = _distribution_version("yamaa")
 __all__ = [
     "DefineError",
     "DomainError",
+    "ResolvedSpecification",
+    "ResolvedSpecificationError",
     "__version__",
     "check",
     "define",
     "domain",
     "read_odm",
+    "resolve_specification",
     "write_odm_parquet",
 ]

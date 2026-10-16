@@ -2,8 +2,8 @@
 use crate::inheritance::{self, Layer, Source, SourcePort};
 use crate::schema::{
     Document, DocumentError, DocumentNode as N, InheritanceDependencyError, LayerCompositionError,
-    LayerProvenance, NormalizationError, SchemaDiagnostic, SchemaOrigin, SchemaStructure,
-    SpecificationDocument, ValidationError, WindowReference,
+    LayerNodeOrigin, LayerProvenance, NormalizationError, SchemaDiagnostic, SchemaOrigin,
+    SchemaSource, SchemaStructure, SpecificationDocument, ValidationError, WindowReference,
 };
 
 /// The host respells paths using captured canonical file identities, without reopening them.
@@ -99,6 +99,7 @@ pub struct PreparedInheritance {
     provenance: Vec<LayerProvenance>,
     normalization_input: Document,
     origins: Vec<SchemaOrigin>,
+    original_origins: Vec<LayerNodeOrigin>,
     windows: Vec<WindowReference>,
 }
 impl PreparedInheritance {
@@ -116,6 +117,12 @@ impl PreparedInheritance {
     }
     pub fn origins(&self) -> &[SchemaOrigin] {
         &self.origins
+    }
+    /// Every final occurrence retains its original raw-layer or schema-default
+    /// origin across materialization, window expansion, pruning and normalization.
+    /// Diagnostic origins above continue to address the retained final-pass input.
+    pub fn original_origins(&self) -> &[LayerNodeOrigin] {
+        &self.original_origins
     }
     pub fn windows(&self) -> &[WindowReference] {
         &self.windows
@@ -218,6 +225,21 @@ pub fn prepare<P: PathPort>(
     let composed = schema
         .compose_layers(&contributions)
         .map_err(Error::Composition)?;
+    let composed_origins = composed
+        .node_origins
+        .iter()
+        .map(|&original| {
+            let Some(layer) = original.layer else {
+                return original;
+            };
+            let mut origin = layers[layer].origins[original.origin.node];
+            origin.generated |= original.origin.generated;
+            LayerNodeOrigin {
+                layer: matches!(origin.source, SchemaSource::Input).then_some(layer),
+                origin,
+            }
+        })
+        .collect::<Vec<_>>();
     let expanded = schema
         .expand_named_windows(&composed.document, false)
         .map_err(|error| {
@@ -228,6 +250,11 @@ pub fn prepare<P: PathPort>(
                 &layers,
             ))
         })?;
+    let expanded_origins = expanded
+        .origins
+        .iter()
+        .map(|&node| composed_origins[node])
+        .collect::<Vec<_>>();
     let pruned = schema
         .resolve_inheritance_dependencies(&expanded.document)
         .map_err(|error| {
@@ -238,6 +265,11 @@ pub fn prepare<P: PathPort>(
                 &layers,
             ))
         })?;
+    let pruned_origins = pruned
+        .origins
+        .iter()
+        .map(|&origin| LayerNodeOrigin::through(origin, &expanded_origins))
+        .collect::<Vec<_>>();
     let normalized = schema
         .normalize_resolved_document(&pruned.document)
         .map_err(|error| {
@@ -248,6 +280,11 @@ pub fn prepare<P: PathPort>(
                 &layers,
             ))
         })?;
+    let normalized_origins = normalized
+        .origins
+        .iter()
+        .map(|&origin| LayerNodeOrigin::through(origin, &pruned_origins))
+        .collect::<Vec<_>>();
     let expanded = schema
         .expand_named_windows(&normalized.document, true)
         .map_err(|error| {
@@ -258,6 +295,11 @@ pub fn prepare<P: PathPort>(
                 &layers,
             ))
         })?;
+    let original_origins = expanded
+        .origins
+        .iter()
+        .map(|&node| normalized_origins[node])
+        .collect();
     let origins = expanded
         .origins
         .iter()
@@ -272,6 +314,7 @@ pub fn prepare<P: PathPort>(
         provenance: composed.provenance,
         normalization_input: pruned.document,
         origins,
+        original_origins,
         windows: expanded.references,
     })
 }
