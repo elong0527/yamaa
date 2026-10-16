@@ -437,20 +437,13 @@ fn finding(value: Finding<'_>, findings: &mut Vec<BindFinding>) -> Result<(), Bi
     Ok(())
 }
 #[allow(clippy::too_many_arguments)]
-pub(super) fn bind(
-    declaration: &Declaration,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
+fn validate_header<'a>(
+    declaration: &'a Declaration,
     phase: Phase<'_>,
-    output: &TableSchema,
-    named: &intermediates::Declarations,
-    secondary: &[SecondarySource],
+    driver: &str,
     intermediates: &[Option<crate::dataset::Intermediate>],
-    project: Option<&crate::project_calls::ProjectCalls>,
-    edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
-) -> Result<Option<Expression>, BindError> {
+) -> Result<Option<(&'a CompiledAggregate, Vec<String>)>, BindError> {
     let compiled = match &declaration.compiled {
         Ok(compiled) => compiled,
         Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
@@ -614,103 +607,24 @@ pub(super) fn bind(
         )?;
         return Ok(None);
     }
-    let before = findings.len();
-    let donor = if let Some(relation) = relation {
-        if relation == driver {
-            AggregateSource::Primary
-        } else if let Some(index) = secondary.iter().position(|source| source.name == relation) {
-            AggregateSource::Secondary(index)
-        } else {
-            let reference = declaration
-                .derive_references
-                .iter()
-                .map(String::as_str)
-                .chain(
-                    declaration
-                        .filter
-                        .iter()
-                        .filter(|_| declaration.derive.is_some())
-                        .filter_map(|(_, plan)| plan.as_ref().ok())
-                        .flat_map(|plan| plan.identifiers()),
-                )
-                .chain(compiled.identifiers())
-                .find(|name| {
-                    name.split_once('.')
-                        .is_some_and(|(owner, _)| owner == relation)
-                });
-            findings.push(BindFinding::UnknownReference {
-                path: declaration.expression_path.clone(),
-                name: reference.map_or_else(|| format!("{relation}.*"), String::from),
-            });
-            return Ok(None);
-        }
-    } else {
-        AggregateSource::Primary
-    };
-    let donor_schema = match (relation, donor) {
-        (Some(_), AggregateSource::Secondary(index)) => secondary[index].schema.clone(),
-        (Some(relation), AggregateSource::Primary) => TableSchema::new(
-            catalog
-                .fields(relation)
-                .ok_or(BindError::Internal)?
-                .iter()
-                .map(|field| crate::table::Column {
-                    name: field.name.into(),
-                    kind: field.column_type,
-                })
-                .collect(),
-        )
-        .map_err(|_| BindError::Internal)?,
-        (None, _) => output.clone(),
-    };
-    let resolve = |name: &str,
-                   path: &str,
-                   findings: &mut Vec<BindFinding>|
-     -> Result<Option<(usize, ColumnType)>, BindError> {
-        let bound = match (relation, donor) {
-            (None, _) => match catalog.bind(name) {
-                Some(reference_binding::Binding::Output {
-                    column,
-                    column_type,
-                }) => Some((column, column_type)),
-                _ => None,
-            },
-            (Some(relation), AggregateSource::Secondary(index)) => name
-                .strip_prefix(relation)
-                .and_then(|tail| tail.strip_prefix('.'))
-                .and_then(|field| {
-                    secondary[index]
-                        .schema
-                        .columns()
-                        .iter()
-                        .enumerate()
-                        .find(|(_, column)| column.name == field)
-                        .map(|(index, column)| (index, column.kind))
-                }),
-            (Some(_), AggregateSource::Primary) => match catalog.bind(name) {
-                Some(reference_binding::Binding::Dataset {
-                    field, column_type, ..
-                }) => Some((field, column_type)),
-                _ => None,
-            },
-        };
-        if bound.is_none() {
-            findings.push(BindFinding::UnknownReference {
-                path: path.into(),
-                name: name.into(),
-            });
-        }
-        Ok(bound)
-    };
-    let grain = match phase {
-        Phase::Row {
-            group_by: Some(groups),
-        } => groups.to_vec(),
-        _ => declaration.groups.iter().map(String::as_str).collect(),
-    };
-    // The enclosing row already reports invalid group fields at its authored
-    // declaration. Its failed grain cannot grant an aggregate relation, and
-    // must not be reported again under an invented aggregate.group_by path.
+    Ok(Some((compiled, relations)))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bind_groups_and_operands(
+    compiled: &CompiledAggregate,
+    declaration: &Declaration,
+    relation: Option<&str>,
+    donor: AggregateSource,
+    catalog: &Catalog,
+    secondary: &[SecondarySource],
+    donor_schema: &TableSchema,
+    grain: &[&str],
+    phase: Phase<'_>,
+    resolve: &(dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Result<Option<(usize, ColumnType)>, BindError> + '_),
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<(Vec<usize>, Vec<AggregateBinding>)>, BindError> {
     if matches!(phase, Phase::Row { .. })
         && grain.iter().any(|name| {
             !catalog.bind(name).is_some_and(|binding| {
@@ -848,7 +762,19 @@ pub(super) fn bind(
             .into_iter()
             .map(BindFinding::AggregateDiagnostic),
     );
-    let filter = match &declaration.filter {
+    Ok(Some((group_columns, bindings)))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bind_filter(
+    declaration: &Declaration,
+    resolve: &(dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Result<Option<(usize, ColumnType)>, BindError> + '_),
+    relation: Option<&str>,
+    before: usize,
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<BoundPredicate>, BindError> {
+    Ok(match &declaration.filter {
         Some((_, Ok(plan))) => {
             let mut bound = Vec::new();
             let mut seen = std::collections::BTreeSet::new();
@@ -893,8 +819,29 @@ pub(super) fn bind(
         }
         Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
         None => None,
-    };
-    let bound_relation = match phase {
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bound_relation(
+    phase: Phase<'_>,
+    relation: Option<&str>,
+    donor: AggregateSource,
+    group_columns: Vec<usize>,
+    declaration: &Declaration,
+    compiled: &CompiledAggregate,
+    catalog: &Catalog,
+    secondary: &[SecondarySource],
+    output: &TableSchema,
+    driver: &str,
+    row: Option<&str>,
+    project: Option<&crate::project_calls::ProjectCalls>,
+    named: &intermediates::Declarations,
+    intermediates: &[Option<crate::dataset::Intermediate>],
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<AggregateRelation>, BindError> {
+    Ok(Some(match phase {
         Phase::Row { .. } => AggregateRelation::CurrentGroup,
         Phase::Column { .. } if relation.is_none() => AggregateRelation::Output {
             group_by: group_columns,
@@ -1062,6 +1009,166 @@ pub(super) fn bind(
                 group_by: group_columns,
             }
         }
+    }))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn bind(
+    declaration: &Declaration,
+    catalog: &Catalog,
+    driver: &str,
+    row: Option<&str>,
+    phase: Phase<'_>,
+    output: &TableSchema,
+    named: &intermediates::Declarations,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
+    project: Option<&crate::project_calls::ProjectCalls>,
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<Expression>, BindError> {
+    let Some((compiled, relations)) =
+        validate_header(declaration, phase, driver, intermediates, findings)?
+    else {
+        return Ok(None);
+    };
+    let relation = if declaration.derive.is_some() {
+        declaration.derive_relations.first().map(String::as_str)
+    } else {
+        relations.first().map(String::as_str)
+    };
+    let before = findings.len();
+    let donor = if let Some(relation) = relation {
+        if relation == driver {
+            AggregateSource::Primary
+        } else if let Some(index) = secondary.iter().position(|source| source.name == relation) {
+            AggregateSource::Secondary(index)
+        } else {
+            let reference = declaration
+                .derive_references
+                .iter()
+                .map(String::as_str)
+                .chain(
+                    declaration
+                        .filter
+                        .iter()
+                        .filter(|_| declaration.derive.is_some())
+                        .filter_map(|(_, plan)| plan.as_ref().ok())
+                        .flat_map(|plan| plan.identifiers()),
+                )
+                .chain(compiled.identifiers())
+                .find(|name| {
+                    name.split_once('.')
+                        .is_some_and(|(owner, _)| owner == relation)
+                });
+            findings.push(BindFinding::UnknownReference {
+                path: declaration.expression_path.clone(),
+                name: reference.map_or_else(|| format!("{relation}.*"), String::from),
+            });
+            return Ok(None);
+        }
+    } else {
+        AggregateSource::Primary
+    };
+    let donor_schema = match (relation, donor) {
+        (Some(_), AggregateSource::Secondary(index)) => secondary[index].schema.clone(),
+        (Some(relation), AggregateSource::Primary) => TableSchema::new(
+            catalog
+                .fields(relation)
+                .ok_or(BindError::Internal)?
+                .iter()
+                .map(|field| crate::table::Column {
+                    name: field.name.into(),
+                    kind: field.column_type,
+                })
+                .collect(),
+        )
+        .map_err(|_| BindError::Internal)?,
+        (None, _) => output.clone(),
+    };
+    let resolve = |name: &str,
+                   path: &str,
+                   findings: &mut Vec<BindFinding>|
+     -> Result<Option<(usize, ColumnType)>, BindError> {
+        let bound = match (relation, donor) {
+            (None, _) => match catalog.bind(name) {
+                Some(reference_binding::Binding::Output {
+                    column,
+                    column_type,
+                }) => Some((column, column_type)),
+                _ => None,
+            },
+            (Some(relation), AggregateSource::Secondary(index)) => name
+                .strip_prefix(relation)
+                .and_then(|tail| tail.strip_prefix('.'))
+                .and_then(|field| {
+                    secondary[index]
+                        .schema
+                        .columns()
+                        .iter()
+                        .enumerate()
+                        .find(|(_, column)| column.name == field)
+                        .map(|(index, column)| (index, column.kind))
+                }),
+            (Some(_), AggregateSource::Primary) => match catalog.bind(name) {
+                Some(reference_binding::Binding::Dataset {
+                    field, column_type, ..
+                }) => Some((field, column_type)),
+                _ => None,
+            },
+        };
+        if bound.is_none() {
+            findings.push(BindFinding::UnknownReference {
+                path: path.into(),
+                name: name.into(),
+            });
+        }
+        Ok(bound)
+    };
+    let grain = match phase {
+        Phase::Row {
+            group_by: Some(groups),
+        } => groups.to_vec(),
+        _ => declaration.groups.iter().map(String::as_str).collect(),
+    };
+    let Some((group_columns, bindings)) = bind_groups_and_operands(
+        compiled,
+        declaration,
+        relation,
+        donor,
+        catalog,
+        secondary,
+        &donor_schema,
+        &grain,
+        phase,
+        &resolve,
+        edges,
+        findings,
+    )?
+    else {
+        return Ok(None);
+    };
+    let filter = bind_filter(declaration, &resolve, relation, before, edges, findings)?;
+    let Some(bound_relation) = bound_relation(
+        phase,
+        relation,
+        donor,
+        group_columns,
+        declaration,
+        compiled,
+        catalog,
+        secondary,
+        output,
+        driver,
+        row,
+        project,
+        named,
+        intermediates,
+        edges,
+        findings,
+    )?
+    else {
+        return Ok(None);
     };
     if findings.len() != before {
         return Ok(None);
