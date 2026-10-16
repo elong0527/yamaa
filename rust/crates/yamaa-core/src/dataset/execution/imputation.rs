@@ -1,4 +1,4 @@
-//! Bounded imputation evaluates a lower bound only after a partial source needs it.
+//! Bounded imputation evaluates its bounds only after a partial source needs them.
 use super::*;
 use crate::dataset::ImputationStep;
 pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
@@ -86,8 +86,19 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                 Ok(value.clone())
             }
             ImputationStep::Bound(completed) => {
-                let bound = evaluate_raw(table, &operands[1], candidate, plan, row, state)?;
-                operation.apply_bound(completed, ValueRef::from(&bound))
+                let (mut not_before, mut not_after) = (Value::Missing, Value::Missing);
+                for ((field, _), operand) in operation.bounds().zip(&operands[1..]) {
+                    let value = evaluate_raw(table, operand, candidate, plan, row, state)?;
+                    match field {
+                        "not_before" => not_before = value,
+                        _ => not_after = value,
+                    }
+                }
+                operation.apply_bounds(
+                    completed,
+                    ValueRef::from(&not_before),
+                    ValueRef::from(&not_after),
+                )
             }
         },
         Err(diagnostic) => Err(diagnostic),

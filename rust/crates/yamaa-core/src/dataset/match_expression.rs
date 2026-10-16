@@ -166,7 +166,7 @@ fn contains_window(expression: &Expression, depth: usize) -> Result<bool, PlanEr
     match expression {
         Expression::Window(_) | Expression::ContextWindow(_) => Ok(true),
         Expression::Case(_) => Err(PlanError::InvalidIntermediate),
-        Expression::Imputation { operation, .. } if operation.bound_source().is_some() => {
+        Expression::Imputation { operation, .. } if operation.bounds().next().is_some() => {
             Err(PlanError::InvalidIntermediate)
         }
         Expression::SourceBinding { source, .. }

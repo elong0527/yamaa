@@ -1694,7 +1694,7 @@ fn validate_operand_assignment(
             operands,
             operation,
         } => {
-            if operands.len() != 1 + usize::from(operation.bound_source().is_some()) {
+            if operands.len() != 1 + operation.bounds().count() {
                 return Err(PlanError::InvalidColumns);
             }
             for operand in operands {

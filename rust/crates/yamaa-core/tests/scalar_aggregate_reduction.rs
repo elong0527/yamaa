@@ -706,6 +706,7 @@ mod scalar {
                 kind,
                 "SRC.TEXT".into(),
                 bound.then(|| "REF".into()),
+                None,
                 "columns.DATE.derivation.impute".into(),
                 missing,
                 invalid,
@@ -775,7 +776,11 @@ mod scalar {
                     panic!("bound")
                 };
                 let result = bounded
-                    .apply_bound(completed, ValueRef::Date(lower.parse().unwrap()))
+                    .apply_bounds(
+                        completed,
+                        ValueRef::Date(lower.parse().unwrap()),
+                        ValueRef::Missing,
+                    )
                     .unwrap();
                 assert_eq!(
                     result,
@@ -809,6 +814,141 @@ mod scalar {
             );
         }
 
+        fn date(text: &str) -> ValueRef<'static> {
+            ValueRef::Date(text.parse().unwrap())
+        }
+        fn bounded(not_before: bool, not_after: bool, day: D<'_>) -> Imputation {
+            Imputation::new(
+                date_policy_kind(P::Year, day),
+                "SRC.TEXT".into(),
+                not_before.then(|| "LOW".into()),
+                not_after.then(|| "HIGH".into()),
+                "columns.DATE.derivation.impute".into(),
+                None,
+                None,
+            )
+            .unwrap()
+        }
+        fn bounded_result(
+            op: &Imputation,
+            text: &str,
+            not_before: ValueRef<'_>,
+            not_after: ValueRef<'_>,
+        ) -> Value {
+            let S::Bound(completed) = op.source_value(ValueRef::Str(text)).unwrap() else {
+                panic!("bound")
+            };
+            let result = op.apply_bounds(completed, not_before, not_after).unwrap();
+            if let Value::Date(date) = result {
+                assert_eq!(date.collected_precision(), completed.collected_precision());
+            }
+            result
+        }
+        #[test]
+        fn upper_bound_moves_only_supplied_components_within_the_collected_interval() {
+            let last = bounded(false, true, D::Position("last"));
+            for (text, upper, expected) in [
+                ("2025-03", "2025-03-12", Some("2025-03-12")),
+                ("2025-03", "2025-03-31", Some("2025-03-31")),
+                ("2025-03", "2025-04-20", Some("2025-03-31")),
+                ("2025-03", "2025-03-01", Some("2025-03-01")),
+                ("2025-03", "2025-02-28", None),
+                ("2024-02", "2024-02-29", Some("2024-02-29")),
+                ("2024-02", "2024-02-28", Some("2024-02-28")),
+                ("2025", "2025-02-10", Some("2025-02-10")),
+                ("2025", "2025-01-01", Some("2025-01-01")),
+                ("2025", "2024-12-31", None),
+                ("2025", "2026-01-15", Some("2025-06-30")),
+            ] {
+                assert_eq!(
+                    bounded_result(&last, text, ValueRef::Missing, date(upper)),
+                    expected.map_or(Value::Missing, |text| Value::Date(text.parse().unwrap())),
+                    "{text} not after {upper}"
+                );
+            }
+            assert_eq!(
+                bounded_result(&last, "2025-03", ValueRef::Missing, ValueRef::Missing),
+                Value::Date("2025-03-31".parse().unwrap())
+            );
+            // A complete source never reaches a bound, whatever the bound says.
+            assert_eq!(
+                last.source_value(ValueRef::Str("2025-03-28")),
+                Ok(S::Value(Value::Date("2025-03-28".parse().unwrap())))
+            );
+            // A completion already on or before the bound stands.
+            let first = bounded(false, true, D::Position("first"));
+            assert_eq!(
+                bounded_result(&first, "2025-03", ValueRef::Missing, date("2025-03-12")),
+                Value::Date("2025-03-01".parse().unwrap())
+            );
+        }
+        #[test]
+        fn paired_bounds_keep_a_completion_between_them_or_leave_it_missing() {
+            let both = bounded(true, true, D::Number("15"));
+            for (text, lower, upper, expected) in [
+                ("2025-03", "2025-03-05", "2025-03-25", Some("2025-03-15")),
+                ("2025-03", "2025-03-20", "2025-03-25", Some("2025-03-20")),
+                ("2025-03", "2025-03-01", "2025-03-10", Some("2025-03-10")),
+                ("2025-03", "2025-03-12", "2025-03-12", Some("2025-03-12")),
+                ("2025-03", "2025-02-01", "2025-04-30", Some("2025-03-15")),
+                ("2025-03", "2025-03-20", "2025-03-10", None),
+                ("2025-03", "2025-04-01", "2025-05-01", None),
+                ("2025-03", "2025-01-01", "2025-02-28", None),
+                ("2025", "2025-07-01", "2025-08-31", Some("2025-07-01")),
+                ("2025", "2025-02-01", "2025-05-31", Some("2025-05-31")),
+            ] {
+                assert_eq!(
+                    bounded_result(&both, text, date(lower), date(upper)),
+                    expected.map_or(Value::Missing, |text| Value::Date(text.parse().unwrap())),
+                    "{text} between {lower} and {upper}"
+                );
+            }
+            for (lower, upper, expected) in [
+                (ValueRef::Missing, date("2025-03-10"), "2025-03-10"),
+                (date("2025-03-20"), ValueRef::Missing, "2025-03-20"),
+                (ValueRef::Missing, ValueRef::Missing, "2025-03-15"),
+            ] {
+                assert_eq!(
+                    bounded_result(&both, "2025-03", lower, upper),
+                    Value::Date(expected.parse().unwrap())
+                );
+            }
+            // An undeclared bound is no bound, whatever value reaches it.
+            let lower_only = bounded(true, false, D::Number("15"));
+            assert_eq!(
+                bounded_result(&lower_only, "2025-03", date("2025-03-01"), ValueRef::Int(1)),
+                Value::Date("2025-03-15".parse().unwrap())
+            );
+        }
+        #[test]
+        fn a_non_date_bound_names_its_own_field() {
+            use yamaa_core::json::Value as JsonValue;
+            let both = bounded(true, true, D::Number("15"));
+            for (lower, upper, field, source) in [
+                (
+                    ValueRef::Str("2025-03-01"),
+                    date("2025-03-20"),
+                    "not_before",
+                    "LOW",
+                ),
+                (date("2025-03-01"), ValueRef::Int(20), "not_after", "HIGH"),
+            ] {
+                let S::Bound(completed) = both.source_value(ValueRef::Str("2025-03")).unwrap()
+                else {
+                    panic!("bound")
+                };
+                let error = both.apply_bounds(completed, lower, upper).unwrap_err();
+                assert_eq!(error.definition().condition, "incompatible_input_type");
+                assert_eq!(error.definition().requirement, Some("REQ-0606"));
+                assert_eq!(
+                    error.spec_paths,
+                    [format!("columns.DATE.derivation.impute.{field}")]
+                );
+                assert_eq!(error.context["source"], JsonValue::String(source.into()));
+                assert_eq!(error.context["expected"], JsonValue::String("date".into()));
+            }
+        }
+
         #[test]
         fn original_zero_year_month_prefix_retains_both_operation_diagnostics() {
             use yamaa_core::json::Value as JsonValue;
@@ -820,7 +960,8 @@ mod scalar {
                 (K::DatePrecision, "date_precision"),
             ] {
                 let path = format!("columns.DATE.derivation.{name}");
-                let op = Imputation::new(kind, "S".into(), None, path.clone(), None, None).unwrap();
+                let op = Imputation::new(kind, "S".into(), None, None, path.clone(), None, None)
+                    .unwrap();
                 let error = op.source_value(ValueRef::Str("0000-01")).unwrap_err();
                 assert_eq!(error.definition().condition, "invalid_date_text");
                 assert_eq!(error.definition().requirement, Some("REQ-0588"));
@@ -988,7 +1129,14 @@ mod scalar {
         #[test]
         fn constructor_retains_complete_metadata_and_rejects_invalid_shapes() {
             let oversized = "x".repeat(100_000);
-            for field in ["source", "bound", "path", "missing", "invalid"] {
+            for field in [
+                "source",
+                "not_before",
+                "not_after",
+                "path",
+                "missing",
+                "invalid",
+            ] {
                 assert!(
                     Imputation::new(
                         date_policy_kind(P::Year, D::Position("first")),
@@ -997,10 +1145,15 @@ mod scalar {
                         } else {
                             "SRC.D".into()
                         },
-                        Some(if field == "bound" {
+                        Some(if field == "not_before" {
                             oversized.clone()
                         } else {
                             "SRC.B".into()
+                        }),
+                        Some(if field == "not_after" {
+                            oversized.clone()
+                        } else {
+                            "SRC.C".into()
                         }),
                         if field == "path" {
                             oversized.clone()
@@ -1018,6 +1171,7 @@ mod scalar {
                 K::DatePrecision,
                 oversized[..oversized.len() / 2].to_owned(),
                 None,
+                None,
                 oversized[..oversized.len() / 2].to_owned(),
                 None,
                 None,
@@ -1027,6 +1181,7 @@ mod scalar {
                 K::DatePrecision,
                 String::new(),
                 None,
+                None,
                 "path".into(),
                 None,
                 None
@@ -1035,24 +1190,39 @@ mod scalar {
             assert!(Imputation::new(
                 K::DatePrecision,
                 "SRC.D".into(),
+                None,
                 None,
                 String::new(),
                 None,
                 None
             )
             .is_none());
-            assert!(Imputation::new(
-                K::DatePrecision,
-                "SRC.D".into(),
-                Some("SRC.B".into()),
-                "path".into(),
-                None,
-                None
-            )
-            .is_none());
+            for (not_before, not_after) in [(Some("SRC.B"), None), (None, Some("SRC.B"))] {
+                assert!(Imputation::new(
+                    K::DatePrecision,
+                    "SRC.D".into(),
+                    not_before.map(String::from),
+                    not_after.map(String::from),
+                    "path".into(),
+                    None,
+                    None
+                )
+                .is_none());
+                assert!(Imputation::new(
+                    date_policy_kind(P::Year, D::Position("first")),
+                    "SRC.D".into(),
+                    not_before.map(|_| String::new()),
+                    not_after.map(|_| String::new()),
+                    "path".into(),
+                    None,
+                    None
+                )
+                .is_none());
+            }
             assert!(Imputation::new(
                 K::ToDate,
                 "SRC.D".into(),
+                None,
                 None,
                 "path".into(),
                 Some(Value::Missing),

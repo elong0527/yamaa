@@ -425,8 +425,10 @@ fn reject_deferred_owners(branch: &cases::Branch, extra: &mut Vec<UnsupportedFea
         Operation::Odm(_) => Some("odm"),
         Operation::Flag(_) => Some("flag"),
         Operation::FirstAvailable(_) => Some("first_available"),
-        Operation::Imputation(operation) if operation.bound_source().is_some() => {
-            reject(extra, "not_before", format!("{}.not_before", branch.path));
+        Operation::Imputation(operation) if operation.bounds().next().is_some() => {
+            for (field, _) in operation.bounds() {
+                reject(extra, field, format!("{}.{field}", branch.path));
+            }
             None
         }
         Operation::Scalar(declaration) => {

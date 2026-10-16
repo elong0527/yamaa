@@ -2226,6 +2226,7 @@ mod execution {
                 kind,
                 "SRC.TEXT".into(),
                 Some("SRC.REF".into()),
+                None,
                 "columns.DATE.derivation.date_impute".into(),
                 missing,
                 invalid,
@@ -2346,6 +2347,7 @@ mod execution {
                 date_policy(Some("6"), D::Number("31"), P::Year, "impute").unwrap(),
                 "SRC.TEXT".into(),
                 Some("SRC.REF".into()),
+                None,
                 "columns.DATE.derivation.date_impute".into(),
                 None,
                 Some(Value::Missing),
@@ -2413,6 +2415,104 @@ mod execution {
             assert_eq!(*table.reads.borrow(), [0, 1, 2]);
         }
 
+        /// Declare the named bounds, each reading the table's REF date (2024-02-20).
+        fn bounded_plan(table: &Table, not_before: bool, not_after: bool) -> DatasetPlan {
+            let path = "columns.DATE.derivation.date_impute";
+            let operation = Imputation::new(
+                date_policy(Some("6"), D::Position("last"), P::Year, "impute").unwrap(),
+                "SRC.TEXT".into(),
+                not_before.then(|| "SRC.REF".into()),
+                not_after.then(|| "SRC.REF".into()),
+                path.into(),
+                None,
+                None,
+            )
+            .unwrap();
+            let mut operands = vec![Assignment {
+                column: 1,
+                path: format!("{path}.source"),
+                expression: Expression::Source(1),
+            }];
+            for (field, _) in operation.bounds() {
+                operands.push(Assignment {
+                    column: 1,
+                    path: format!("{path}.{field}"),
+                    expression: Expression::Source(2),
+                });
+            }
+            DatasetPlan::new(
+                table.schema.clone(),
+                schema(&[("ID", T::Int), ("DATE", T::Date)]),
+                vec![RowTemplate {
+                    mode: RowMode::Records,
+                    assignments: vec![
+                        Assignment {
+                            column: 0,
+                            path: "columns.ID.derivation".into(),
+                            expression: Expression::Source(0),
+                        },
+                        Assignment {
+                            column: 1,
+                            path: "columns.DATE.derivation".into(),
+                            expression: Expression::Imputation {
+                                operation,
+                                operands,
+                            },
+                        },
+                    ],
+                    filter: None,
+                }],
+                vec![],
+                vec![0],
+                vec![],
+            )
+            .unwrap()
+        }
+        #[test]
+        fn upper_and_paired_bounds_read_their_operands_in_declaration_order() {
+            for (text, not_before, not_after, expected, reads) in [
+                ("2024-02", false, true, Some("2024-02-20"), &[0, 1, 2][..]),
+                ("2024-02", true, true, Some("2024-02-20"), &[0, 1, 2, 2][..]),
+                ("2024-01", false, true, Some("2024-01-31"), &[0, 1, 2][..]),
+                ("2024-03", false, true, None, &[0, 1, 2][..]),
+                ("2024-01", true, true, None, &[0, 1, 2, 2][..]),
+                ("2024-02-25", false, true, Some("2024-02-25"), &[0, 1][..]),
+            ] {
+                let table = make_table(Value::Str(text.into()));
+                let attempt = bounded_plan(&table, not_before, not_after).execute(
+                    &table,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None,
+                );
+                assert_eq!(
+                    attempt.result.unwrap().dataset.rows(),
+                    [vec![
+                        Value::Int(1),
+                        expected.map_or(Value::Missing, |date| Value::Date(date.parse().unwrap()))
+                    ]],
+                    "{text}"
+                );
+                assert_eq!(*table.reads.borrow(), reads, "{text}");
+            }
+            let mut table = make_table(Value::Str("2024-02".into()));
+            table.bad_column = 2;
+            *table.fail.borrow_mut() = Some(Failure(Box::new(4), Rc::new(())));
+            let ExecutionError::Cell { path, .. } = *bounded_plan(&table, false, true)
+                .execute(
+                    &table,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None,
+                )
+                .result
+                .unwrap_err()
+            else {
+                panic!("bound read failure")
+            };
+            assert_eq!(path, "columns.DATE.derivation.date_impute.not_after");
+        }
+
         #[test]
         fn recovered_datetime_literal_is_converted_once_and_its_handler_is_counted() {
             let table = make_table(Value::Missing);
@@ -2421,6 +2521,7 @@ mod execution {
                     time: yamaa_core::dataset::TimeRule::First,
                 },
                 "SRC.TEXT".into(),
+                None,
                 None,
                 "impute".into(),
                 Some(Value::Str("2024-02-29T12:13".into())),

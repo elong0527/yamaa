@@ -537,6 +537,9 @@ expressions:
         - not_before:
             type: variable
             description: See REQ-1105.
+        - not_after:
+            type: variable
+            description: See REQ-1105.
         - missing:
             type: literal_value
             description: See REQ-1105.

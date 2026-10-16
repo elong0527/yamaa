@@ -696,6 +696,8 @@ def describe_date_impute(node, ctx=None, depth=0):
     )
     if node.get("not_before"):
         text += ", never before " + str(node["not_before"])
+    if node.get("not_after"):
+        text += ", never after " + str(node["not_after"])
     text += handler_phrase(node, "missing", "a missing source")
     text += handler_phrase(node, "invalid", "invalid text")
     if "missing" not in node and "invalid" not in node:
