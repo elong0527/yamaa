@@ -38,27 +38,21 @@ pub trait MetadataAdmissionPort {
 /// Every build YAML resource uses the same native reader and original error
 /// carrier. Existing document and environment applications own parsing and
 /// dependency traversal; the reader owns physical capture and alias equality.
-pub trait ResourceReader:
-    MetadataAdmissionPort
-    + crate::file_preparation::NativePort<Error = <Self as MetadataAdmissionPort>::Error>
-    + crate::project_preparation::CapturePort<Error = <Self as MetadataAdmissionPort>::Error>
+///
+/// Root metadata follows the same resolve/capture/copy order as original
+/// file preparation. Relative dependency requests retain their declaring file.
+fn capture_root<R>(
+    reader: &mut R,
+    written: &str,
+) -> Result<crate::project_preparation::Source, <R as MetadataAdmissionPort>::Error>
+where
+    R: MetadataAdmissionPort
+        + crate::file_preparation::NativePort<Error = <R as MetadataAdmissionPort>::Error>
+        + crate::project_preparation::CapturePort<Error = <R as MetadataAdmissionPort>::Error>,
 {
-    /// Root metadata follows the same resolve/capture/copy order as original
-    /// file preparation. Relative dependency requests retain their declaring file.
-    fn capture_root(
-        &mut self,
-        written: &str,
-    ) -> Result<crate::project_preparation::Source, <Self as MetadataAdmissionPort>::Error> {
-        let identity = crate::file_preparation::NativePort::resolve_entry(self, None, written)?;
-        let bytes = crate::file_preparation::NativePort::capture_entry(self, None, written)?;
-        Ok(crate::project_preparation::Source { identity, bytes })
-    }
-}
-impl<T> ResourceReader for T where
-    T: MetadataAdmissionPort
-        + crate::file_preparation::NativePort<Error = <T as MetadataAdmissionPort>::Error>
-        + crate::project_preparation::CapturePort<Error = <T as MetadataAdmissionPort>::Error>
-{
+    let identity = crate::file_preparation::NativePort::resolve_entry(reader, None, written)?;
+    let bytes = crate::file_preparation::NativePort::capture_entry(reader, None, written)?;
+    Ok(crate::project_preparation::Source { identity, bytes })
 }
 
 /// Root capture and environment preparation keep separate original failure
@@ -85,15 +79,18 @@ pub(crate) type EnvironmentPreparation<R, D> = Result<
 /// Compose the shared native reader and structural metadata codec with the
 /// existing environment application. No activation, study, output or publisher
 /// port is accepted at this boundary.
-pub fn prepare_environment<R: ResourceReader, D: crate::project_preparation::DecodePort>(
+pub fn prepare_environment<R, D: crate::project_preparation::DecodePort>(
     reader: &mut R,
     decoder: &mut D,
     written: &str,
     host: crate::project_function::Language,
-) -> EnvironmentPreparation<R, D> {
-    let source = reader
-        .capture_root(written)
-        .map_err(EnvironmentFailure::Resource)?;
+) -> EnvironmentPreparation<R, D>
+where
+    R: MetadataAdmissionPort
+        + crate::file_preparation::NativePort<Error = <R as MetadataAdmissionPort>::Error>
+        + crate::project_preparation::CapturePort<Error = <R as MetadataAdmissionPort>::Error>,
+{
+    let source = capture_root(reader, written).map_err(EnvironmentFailure::Resource)?;
     crate::project_preparation::prepare(decoder, source, host, reader)
         .map_err(EnvironmentFailure::Preparation)
 }
