@@ -356,75 +356,39 @@ fn temporal_cell(
         .column(1)
         .as_any()
         .downcast_ref::<UInt8Array>()
-        .ok_or(TableError::TemporalChildType {
-            batch,
-            column,
-            row,
-        })?;
+        .ok_or(TableError::TemporalChildType { batch, column, row })?;
     if precision.is_null(row) || array.column(0).is_null(row) {
-        return Err(TableError::TemporalMissingChild {
-            batch,
-            column,
-            row,
-        });
+        return Err(TableError::TemporalMissingChild { batch, column, row });
     }
     if kind == ColumnType::Date {
         let values = array
             .column(0)
             .as_any()
             .downcast_ref::<Date32Array>()
-            .ok_or(TableError::TemporalChildType {
-                batch,
-                column,
-                row,
-            })?;
+            .ok_or(TableError::TemporalChildType { batch, column, row })?;
         let precision = match precision.value(row) {
             0 => DatePrecision::Year,
             1 => DatePrecision::Month,
             2 => DatePrecision::Day,
-            _ => {
-                return Err(TableError::TemporalPrecision {
-                    batch,
-                    column,
-                    row,
-                })
-            }
+            _ => return Err(TableError::TemporalPrecision { batch, column, row }),
         };
         date_from_days(i64::from(values.value(row)), precision)
             .map(ValueRef::Date)
-            .ok_or(TableError::TemporalRange {
-                batch,
-                column,
-                row,
-            })
+            .ok_or(TableError::TemporalRange { batch, column, row })
     } else {
         let values = array
             .column(0)
             .as_any()
             .downcast_ref::<TimestampSecondArray>()
-            .ok_or(TableError::TemporalChildType {
-                batch,
-                column,
-                row,
-            })?;
+            .ok_or(TableError::TemporalChildType { batch, column, row })?;
         let precision = match precision.value(row) {
             0 => DateTimePrecision::Day,
             1 => DateTimePrecision::Second,
-            _ => {
-                return Err(TableError::TemporalPrecision {
-                    batch,
-                    column,
-                    row,
-                })
-            }
+            _ => return Err(TableError::TemporalPrecision { batch, column, row }),
         };
         datetime_from_seconds(values.value(row), precision)
             .map(ValueRef::DateTime)
-            .ok_or(TableError::TemporalRange {
-                batch,
-                column,
-                row,
-            })
+            .ok_or(TableError::TemporalRange { batch, column, row })
     }
 }
 

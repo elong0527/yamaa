@@ -533,10 +533,7 @@ mod table {
                 let input = batch(&schema, vec![Arc::new(array)]);
                 let result = ArrowTable::try_new(schema.clone(), vec![input]);
                 if precision {
-                    assert!(matches!(
-                        result,
-                        Err(TableError::TemporalPrecision { .. })
-                    ));
+                    assert!(matches!(result, Err(TableError::TemporalPrecision { .. })));
                 } else {
                     assert!(matches!(result, Err(TableError::TemporalRange { .. })));
                 }
