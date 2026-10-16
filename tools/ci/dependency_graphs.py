@@ -240,7 +240,12 @@ def run_graph(source, destination, graph, python, prepare_only=False):
         )
         (destination / "r-session.txt").write_text(
             subprocess.check_output(
-                ["Rscript", "--vanilla", "-e", "sessionInfo()"],
+                [
+                    "Rscript",
+                    "--vanilla",
+                    "-e",
+                    'packages <- trimws(sub("[[:space:]]*[(][^)]*[)]", "", strsplit(read.dcf("R/yamaa/DESCRIPTION")[1,"Suggests"], ",", fixed=TRUE)[[1]])); for (package in packages) cat(package, as.character(packageVersion(package)), "\\n"); sessionInfo()',
+                ],
                 cwd=destination,
                 env=environment,
                 text=True,
