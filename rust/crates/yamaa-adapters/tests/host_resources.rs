@@ -48,6 +48,22 @@ fn explicit_reference_reuses_held_bytes_across_aliases_and_refuses_changes() {
     assert!(fresh_attempt.capture("one.csv").unwrap().1);
 }
 
+#[test]
+fn absent_and_cancelled_resources_remain_explicit_without_captures() {
+    let backend = Arc::new(MemoryResolver::default());
+    let resources = Resources::with_resolver(backend.clone(), "spec.yaml");
+    assert_eq!(
+        resources.inspect("missing.csv"),
+        Err(Error::Host(Failure::Missing))
+    );
+    backend.cancel();
+    assert_eq!(
+        resources.inspect("missing.csv"),
+        Err(Error::Host(Failure::Cancelled))
+    );
+    assert_eq!(resources.capture_reads(), 0);
+}
+
 fn frame(
     float: f64,
     date_precision: DatePrecision,

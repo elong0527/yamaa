@@ -1,10 +1,18 @@
 """Installed host resource controls using independently authored synthetic data."""
+
+import tempfile
 import unittest
+from pathlib import Path
 
 import pyarrow as pa
 
 from yamaa import check, domain
-from yamaa.resources import MemoryResolver, ResourceFailure, ResourceResolver, SyntheticRemoteResolver
+from yamaa.resources import (
+    MemoryResolver,
+    ResourceFailure,
+    ResourceResolver,
+    SyntheticRemoteResolver,
+)
 
 SPEC = b"""schema_version: '1.0'
 domain: TEST
@@ -17,17 +25,58 @@ output: {path: out.csv, columns: [ID]}
 
 
 class HostResources(unittest.TestCase):
+    def test_nested_entry_and_absolute_output_retain_logical_locations(self):
+        spec = SPEC.replace(b"raw.csv", b"../raw.csv").replace(
+            b"out.csv", b"/dest/out.csv"
+        )
+        resolver = MemoryResolver({"study/spec.yaml": spec, "raw.csv": b"ID\n7\n"})
+        result = domain("study/spec.yaml", resolver=resolver)
+        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertTrue(result.save())
+        self.assertEqual(resolver.outputs, {"memory:/dest/out.csv": b"ID\n7\n"})
+
+    def test_local_host_callback_uses_explicit_references_and_native_snapshots(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "spec.yaml").write_bytes(SPEC)
+            (root / "raw.csv").write_bytes(b"ID\n7\n")
+            outputs = MemoryResolver()
+
+            def callback(request):
+                if request.kind == "output":
+                    return outputs._request(request)
+                key = (root / request.written).resolve()
+                if not key.is_file():
+                    raise ResourceFailure("missing")
+                from yamaa.resources import ResourceResult
+
+                return ResourceResult(
+                    key.as_uri(),
+                    key.read_bytes() if request.operation == "capture" else None,
+                )
+
+            result = domain("spec.yaml", resolver=ResourceResolver(callback))
+            (root / "raw.csv").unlink()
+            self.assertEqual(result.output["ID"].to_list(), [7])
+            self.assertTrue(result.save())
+            self.assertEqual(outputs.outputs["memory:/out.csv"], b"ID\n7\n")
+
     def test_frame_exporter_interrupt_preserves_original_object(self):
         interruption = KeyboardInterrupt("frame exporter interrupted")
+
         class Frame:
             def __arrow_c_stream__(self):
                 raise interruption
+
         resolver = MemoryResolver({"spec.yaml": SPEC})
         resolver.put_frame("raw.csv", Frame())
         with self.assertRaises(KeyboardInterrupt) as raised:
             domain("spec.yaml", resolver=resolver)
         self.assertIs(raised.exception, interruption)
-    def test_memory_and_synthetic_remote_publish_held_bytes_without_reopening_inputs(self):
+
+    def test_memory_and_synthetic_remote_publish_held_bytes_without_reopening_inputs(
+        self,
+    ):
         for backend in (MemoryResolver, SyntheticRemoteResolver):
             with self.subTest(backend=backend):
                 resolver = backend({"spec.yaml": SPEC, "raw.csv": b"ID\n7\n"})
@@ -35,15 +84,30 @@ class HostResources(unittest.TestCase):
                 self.assertTrue(result.issues.is_empty(), result.issues)
                 self.assertEqual(result.output["ID"].to_list(), [7])
                 records = result.resource_provenance
-                self.assertEqual([(r.declaring, r.written) for r in records], [("/", "spec.yaml"), ("/spec.yaml", "raw.csv")])
-                self.assertTrue(all(r.reference.startswith(resolver.prefix) for r in records))
+                self.assertEqual(
+                    [(r.declaring, r.written) for r in records],
+                    [("/", "spec.yaml"), ("/spec.yaml", "raw.csv")],
+                )
+                self.assertTrue(
+                    all(r.reference.startswith(resolver.prefix) for r in records)
+                )
                 resolver.objects.clear()
                 self.assertTrue(result.save())
-                self.assertEqual(resolver.outputs, {resolver.prefix + "out.csv": b"ID\n7\n"})
+                self.assertEqual(
+                    resolver.outputs, {resolver.prefix + "out.csv": b"ID\n7\n"}
+                )
                 self.assertEqual(resolver.staging, {})
 
-    def test_owned_arrow_frame_uses_native_types_nulls_ordinal_and_retains_buffers(self):
-        resolver = MemoryResolver({"spec.yaml": SPEC.replace(b"RAW: raw.csv", b"RAW: {path: raw.csv, ordinal: POSITION}")})
+    def test_owned_arrow_frame_uses_native_types_nulls_ordinal_and_retains_buffers(
+        self,
+    ):
+        resolver = MemoryResolver(
+            {
+                "spec.yaml": SPEC.replace(
+                    b"RAW: raw.csv", b"RAW: {path: raw.csv, ordinal: POSITION}"
+                )
+            }
+        )
         frame = pa.table({"ID": pa.array([7, 8], type=pa.int64())})
         resolver.put_frame("raw.csv", frame)
         result = domain("spec.yaml", resolver=resolver)
@@ -58,26 +122,38 @@ class HostResources(unittest.TestCase):
     def test_missing_is_structured_and_check_does_not_capture_study_data(self):
         backend = MemoryResolver({"spec.yaml": SPEC})
         requests = []
+
         def callback(request):
             requests.append(request)
             return backend._request(request)
+
         resolver = ResourceResolver(callback)
         checked = check("spec.yaml", resolver=resolver)
         self.assertTrue(checked.issues.is_empty(), checked.issues)
-        self.assertFalse(any(r.operation == "capture" and r.kind == "input" for r in requests))
+        self.assertFalse(
+            any(r.operation == "capture" and r.kind == "input" for r in requests)
+        )
         result = domain("spec.yaml", resolver=resolver)
         self.assertIsNone(result.output)
         self.assertIn("resource_path_missing", result.issues["condition"].to_list())
 
-    def test_changed_metadata_reference_is_refused_and_new_attempt_accepts_new_version(self):
+    def test_changed_metadata_reference_is_refused_and_new_attempt_accepts_new_version(
+        self,
+    ):
         backend = MemoryResolver({"spec.yaml": SPEC, "raw.csv": b"ID\n7\n"})
         changed = False
+
         def callback(request):
             nonlocal changed
-            if request.operation == "capture" and request.reference is not None and not changed:
+            if (
+                request.operation == "capture"
+                and request.reference is not None
+                and not changed
+            ):
                 changed = True
                 backend.put("spec.yaml", SPEC)
             return backend._request(request)
+
         result = domain("spec.yaml", resolver=ResourceResolver(callback))
         self.assertIsNone(result.output)
         self.assertTrue(result.issues.height)
@@ -87,10 +163,12 @@ class HostResources(unittest.TestCase):
     def test_interrupt_identity_and_cleanup_after_commit_cancellation(self):
         backend = MemoryResolver({"spec.yaml": SPEC, "raw.csv": b"ID\n7\n"})
         interruption = KeyboardInterrupt("synthetic")
+
         def callback(request):
             if request.operation == "commit":
                 raise interruption
             return backend._request(request)
+
         result = domain("spec.yaml", resolver=ResourceResolver(callback))
         with self.assertRaises(KeyboardInterrupt) as raised:
             result.save()
@@ -99,9 +177,13 @@ class HostResources(unittest.TestCase):
         self.assertEqual(backend.staging, {})
 
     def test_partial_publication_preserves_order_and_failed_stage_cleanup(self):
-        spec = SPEC.replace(b"path: out.csv", b"path: out.csv, verification_log: checks.parquet, warning_log: warnings.parquet")
+        spec = SPEC.replace(
+            b"path: out.csv",
+            b"path: out.csv, verification_log: checks.parquet, warning_log: warnings.parquet",
+        )
         backend = MemoryResolver({"spec.yaml": spec, "raw.csv": b"ID\n7\n"})
         commits = []
+
         def callback(request):
             if request.operation == "stage" and request.written == "out.csv":
                 backend._request(request)
@@ -110,21 +192,41 @@ class HostResources(unittest.TestCase):
             if request.operation == "commit":
                 commits.append(result.reference)
             return result
+
         result = domain("spec.yaml", resolver=ResourceResolver(callback))
         self.assertFalse(result.save())
-        self.assertEqual(commits, ["memory:/checks.parquet", "memory:/warnings.parquet"])
+        self.assertEqual(
+            commits, ["memory:/checks.parquet", "memory:/warnings.parquet"]
+        )
         self.assertNotIn("memory:/out.csv", backend.outputs)
         self.assertEqual(backend.staging, {})
 
     def test_inherited_and_producer_resources_use_each_owning_logical_entry(self):
-        producer = SPEC.replace(b"raw.csv", b"../raw/data.csv").replace(b"out.csv", b"../out/producer.csv")
-        consumer = SPEC.replace(b"RAW: raw.csv", b"RAW: {path: ../out/producer.csv, schema: ../producer/root.yaml}").replace(b"out.csv", b"../out/consumer.csv")
-        backend = SyntheticRemoteResolver({"consumer/root.yaml": consumer, "producer/root.yaml": producer, "raw/data.csv": b"ID\n7\n"})
+        producer = SPEC.replace(b"raw.csv", b"../raw/data.csv").replace(
+            b"out.csv", b"../out/producer.csv"
+        )
+        consumer = SPEC.replace(
+            b"RAW: raw.csv",
+            b"RAW: {path: ../out/producer.csv, schema: ../producer/root.yaml}",
+        ).replace(b"out.csv", b"../out/consumer.csv")
+        backend = SyntheticRemoteResolver(
+            {
+                "consumer/root.yaml": consumer,
+                "producer/root.yaml": producer,
+                "raw/data.csv": b"ID\n7\n",
+            }
+        )
         result = domain("consumer/root.yaml", resolver=backend)
         self.assertTrue(result.issues.is_empty(), result.issues)
         self.assertEqual(result.output["ID"].to_list(), [7])
         self.assertTrue(result.save())
-        self.assertEqual(backend.outputs, {"object://synthetic/out/producer.csv": b"ID\n7\n", "object://synthetic/out/consumer.csv": b"ID\n7\n"})
+        self.assertEqual(
+            backend.outputs,
+            {
+                "object://synthetic/out/producer.csv": b"ID\n7\n",
+                "object://synthetic/out/consumer.csv": b"ID\n7\n",
+            },
+        )
 
 
 if __name__ == "__main__":

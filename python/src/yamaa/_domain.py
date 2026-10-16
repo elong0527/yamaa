@@ -72,7 +72,8 @@ def domain(
 ) -> Domain:
     resolver = None if resolver is None else resolver._session()
     native = _domain_file(
-        fspath(specification), None if environment is None else fspath(environment),
+        fspath(specification),
+        None if environment is None else fspath(environment),
         None if resolver is None else resolver._dispatch,
     )
     try:
@@ -105,7 +106,8 @@ def check(
     resolver = None if resolver is None else resolver._session()
     result = Check(
         _check_file(
-            fspath(specification), None if environment is None else fspath(environment),
+            fspath(specification),
+            None if environment is None else fspath(environment),
             None if resolver is None else resolver._dispatch,
         )
     )

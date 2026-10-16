@@ -100,6 +100,12 @@ impl Publisher {
                 let staged = resolver.request(request(Operation::Stage, reference, Some(bytes)));
                 let token = staged
                     .as_ref()
+                    .ok()
+                    .filter(|reply| {
+                        !reply.reference.is_empty()
+                            && reply.bytes.is_none()
+                            && reply.frame.is_none()
+                    })
                     .map_or(reference.as_str(), |reply| reply.reference.as_str());
                 let result = match &staged {
                     Ok(reply)

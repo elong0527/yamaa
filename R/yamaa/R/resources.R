@@ -46,6 +46,9 @@ yamaa_resource_resolver <- function(callback) {
       class(request) <- "yamaa_resource_request"
       reply <- callback(request)
       if (!inherits(reply, "yamaa_resource_result")) yamaa_resource_failure("rejected")
+      if (request$operation == "capture") {
+        if (is.null(reply$data) == is.null(reply$frame)) yamaa_resource_failure("rejected")
+      } else if (!is.null(reply$data) || !is.null(reply$frame)) yamaa_resource_failure("rejected")
       frame <- if (is.null(reply$frame)) NULL else if (inherits(reply$frame, "yamaa_owned_frame")) {
         nanoarrow::basic_array_stream(reply$frame$batches, schema = reply$frame$schema)
       } else nanoarrow::as_nanoarrow_array_stream(reply$frame)

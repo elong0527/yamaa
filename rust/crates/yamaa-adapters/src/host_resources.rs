@@ -75,6 +75,8 @@ pub enum Failure {
 /// Stage creates a private provisional object; Commit atomically publishes it;
 /// Abort must remove it after any failed/interrupting Stage or Commit. Abort is
 /// idempotent and may receive the target reference when Stage did not return.
+/// Implementations must return closed failures and must not panic. Python and R
+/// adapters contain exceptions/conditions, retaining their original objects.
 pub trait Resolver: Send + Sync {
     fn request(&self, request: Request<'_>) -> Result<Reply, Failure>;
 }

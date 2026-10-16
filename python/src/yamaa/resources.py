@@ -5,9 +5,9 @@ declaring identity and path to its own immutable local, URI or memory identity.
 Credentials stay inside the callback and are never part of retained provenance.
 """
 
+import posixpath
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-import posixpath
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -41,8 +41,20 @@ class ResourceProvenance:
 class ResourceFailure(Exception):
     """An explicitly classified resource failure; messages are never inspected."""
 
-    def __init__(self, reason: Literal["missing", "changed", "cancelled", "rejected", "publication", "cleanup"]):
-        if reason not in {"missing", "changed", "cancelled", "rejected", "publication", "cleanup"}:
+    def __init__(
+        self,
+        reason: Literal[
+            "missing", "changed", "cancelled", "rejected", "publication", "cleanup"
+        ],
+    ):
+        if reason not in {
+            "missing",
+            "changed",
+            "cancelled",
+            "rejected",
+            "publication",
+            "cleanup",
+        }:
             raise ValueError("unknown resource failure")
         super().__init__(reason)
         self.reason = reason
@@ -74,14 +86,36 @@ class ResourceResolver:
     def _dispatch(self, values):
         try:
             reply = self._callback(ResourceRequest(**values))
-            if not isinstance(reply, ResourceResult) or not isinstance(reply.reference, str) or not reply.reference or "\x00" in reply.reference:
+            if (
+                not isinstance(reply, ResourceResult)
+                or not isinstance(reply.reference, str)
+                or not reply.reference
+                or "\x00" in reply.reference
+            ):
                 raise ResourceFailure("rejected")
             if reply.data is not None and not isinstance(reply.data, bytes):
                 raise ResourceFailure("rejected")
             if values["operation"] == "capture":
+                if (reply.data is None) == (reply.frame is None):
+                    raise ResourceFailure("rejected")
+            elif reply.data is not None or reply.frame is not None:
+                raise ResourceFailure("rejected")
+            if values["operation"] == "capture":
                 key = (values["declaring"], values["written"], values["kind"])
-                self._provenance.setdefault(key, ResourceProvenance(*key, reply.reference, "frame" if reply.frame is not None else "bytes"))
-            return {"reference": reply.reference, "data": reply.data, "frame": reply.frame, "failure": None}
+                self._provenance.setdefault(
+                    key,
+                    ResourceProvenance(
+                        *key,
+                        reply.reference,
+                        "frame" if reply.frame is not None else "bytes",
+                    ),
+                )
+            return {
+                "reference": reply.reference,
+                "data": reply.data,
+                "frame": reply.frame,
+                "failure": None,
+            }
         except ResourceFailure as error:
             return {"failure": error.reason}
         except BaseException as error:
@@ -89,7 +123,11 @@ class ResourceResolver:
             # Cleanup still calls the callback before this owner propagates it.
             if self._pending is None:
                 self._pending = error
-            return {"failure": "cancelled" if isinstance(error, (KeyboardInterrupt, SystemExit)) else "rejected"}
+            return {
+                "failure": "cancelled"
+                if isinstance(error, (KeyboardInterrupt, SystemExit))
+                else "rejected"
+            }
 
     def _raise_pending(self):
         error, self._pending = self._pending, None
@@ -104,7 +142,9 @@ class ResourceResolver:
 class MemoryResolver(ResourceResolver):
     """Deterministic immutable input snapshots and atomic in-memory outputs."""
 
-    def __init__(self, objects: Mapping[str, bytes] | None = None, *, prefix: str = "memory:/"):
+    def __init__(
+        self, objects: Mapping[str, bytes] | None = None, *, prefix: str = "memory:/"
+    ):
         self.prefix = prefix.rstrip("/") + "/"
         self.objects: dict[str, ResourceResult] = {}
         self.outputs: dict[str, bytes] = {}
@@ -120,19 +160,25 @@ class MemoryResolver(ResourceResolver):
         if not isinstance(data, bytes):
             raise TypeError("resource data must be immutable bytes")
         self._next += 1
-        self.objects[key] = ResourceResult(reference or f"{self.prefix}{key}#v{self._next}", data)
+        self.objects[key] = ResourceResult(
+            reference or f"{self.prefix}{key}#v{self._next}", data
+        )
 
     def put_frame(self, key: str, frame, *, reference: str | None = None):
         """Retain an immutable Arrow-compatible frame without IPC serialization."""
         self._next += 1
-        self.objects[key] = ResourceResult(reference or f"{self.prefix}{key}#v{self._next}", frame=frame)
+        self.objects[key] = ResourceResult(
+            reference or f"{self.prefix}{key}#v{self._next}", frame=frame
+        )
 
     def _key(self, declaring: str, written: str) -> str:
         if written.startswith(self.prefix):
             return urlsplit(written).path.lstrip("/")
         if declaring.startswith(self.prefix):
-            declaring = declaring[len(self.prefix):].split("#", 1)[0]
-        return posixpath.normpath(posixpath.join(posixpath.dirname(declaring), written)).lstrip("/")
+            declaring = declaring[len(self.prefix) :].split("#", 1)[0]
+        return posixpath.normpath(
+            posixpath.join(posixpath.dirname(declaring), written)
+        ).lstrip("/")
 
     def _request(self, request: ResourceRequest) -> ResourceResult:
         if request.operation == "abort":
@@ -152,7 +198,11 @@ class MemoryResolver(ResourceResolver):
                 raise ResourceFailure("missing") from None
             if request.reference is not None and request.reference != result.reference:
                 raise ResourceFailure("changed")
-            return ResourceResult(result.reference, result.data if request.operation == "capture" else None, result.frame if request.operation == "capture" else None)
+            return ResourceResult(
+                result.reference,
+                result.data if request.operation == "capture" else None,
+                result.frame if request.operation == "capture" else None,
+            )
         if request.operation == "target":
             return ResourceResult(self.prefix + key)
         if request.operation == "stage":
@@ -179,4 +229,12 @@ class SyntheticRemoteResolver(MemoryResolver):
         super().__init__(objects, prefix="object://synthetic/")
 
 
-__all__ = ["MemoryResolver", "ResourceFailure", "ResourceProvenance", "ResourceRequest", "ResourceResolver", "ResourceResult", "SyntheticRemoteResolver"]
+__all__ = [
+    "MemoryResolver",
+    "ResourceFailure",
+    "ResourceProvenance",
+    "ResourceRequest",
+    "ResourceResolver",
+    "ResourceResult",
+    "SyntheticRemoteResolver",
+]

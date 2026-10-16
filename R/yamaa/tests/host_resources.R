@@ -16,6 +16,14 @@ for (constructor in list(yamaa_memory_resolver, yamaa_synthetic_remote_resolver)
     length(resolver$backend$staging) == 0L)
 }
 
+nested_spec <- sub("raw.csv", "../raw.csv", spec, fixed = TRUE)
+nested_spec <- sub("out.csv", "/dest/out.csv", nested_spec, fixed = TRUE)
+resolver <- yamaa_memory_resolver(list("study/spec.yaml" = charToRaw(nested_spec),
+  "raw.csv" = charToRaw("ID\n7\n")))
+result <- yamaa_domain("study/spec.yaml", resolver = resolver)
+stopifnot(nrow(result$issues) == 0L, isTRUE(result$save()),
+  identical(resolver$backend$outputs[["memory:/dest/out.csv"]], charToRaw("ID\n7\n")))
+
 # Reusing a stream input stores its arrays/schema, then creates a fresh stream
 # for each capture, including repeated source aliases and later attempts.
 frame_spec <- sub("input: \\{RAW: raw.csv\\}", "base: RAW\ninput: {RAW: raw.csv, SECOND: raw.csv}", spec)

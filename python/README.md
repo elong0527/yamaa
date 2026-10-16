@@ -2,7 +2,7 @@
 
 The `yamaa` distribution contains the Python facade and shared Rust engine.
 Its public API consists of `domain`, `check`, `define`, their result/error APIs,
-package version metadata, and the two ODM file helpers.
+package version metadata, host resource resolvers and the two ODM file helpers.
 
 ```python
 import yamaa
@@ -25,7 +25,68 @@ dataset or `output` declaration to select the study entry's directory under the
 [local path policy](../rules/storage/resources.md). An input setting applies to
 both its data path and producer `schema` link; output settings cover all logs
 and the primary artifact.
-There is no upward project-root discovery or public backend selector in this API.
+There is no upward project-root discovery.
+
+## Host resources
+
+Pass `resolver=` to `domain` or `check` to supply metadata, study inputs and
+Save destinations from a host backend. Default calls keep the native local-file
+resolver. A custom callback can read local files or retrieve remote objects;
+it returns an explicit immutable reference plus bytes or an Arrow-compatible
+frame. Authored paths keep their local spelling. A returned URI identifies the
+host's object and is never interpreted as a filesystem path by the engine.
+
+```python
+from pathlib import Path
+from yamaa.resources import MemoryResolver, SyntheticRemoteResolver
+
+resources = MemoryResolver({
+    "spec.yaml": Path("spec.yaml").read_bytes(),
+    "raw.csv": b"ID\n7\n",
+})
+# Alternatively: resources.put_frame("raw.csv", immutable_arrow_or_polars_frame)
+built = yamaa.domain("spec.yaml", resolver=resources)
+built.resource_provenance
+built.save()
+resources.outputs  # exact held artifact bytes, keyed by their target reference
+```
+
+`SyntheticRemoteResolver` uses versioned `object://synthetic/` references with
+the same deterministic behavior and needs no service credentials. Replace an
+object with `put` or `put_frame`; a new build accepts its new version. Frames
+use Arrow C Stream ownership without IPC or temporary input files. Supported
+physical fields are UTF-8, Int64, Float64, Date32 and timestamps in whole seconds
+without a timezone. Unsupported narrowing, timezone removal and fractional-second
+truncation require an explicit preserving conversion by the host.
+
+For another backend, wrap a callback in `ResourceResolver`. It receives a frozen
+`ResourceRequest` and returns `ResourceResult` or raises a classified
+`ResourceFailure`. Logical declaring locations begin at `/`; later requests
+retain each metadata or producer entry's own location. The operation contract is:
+
+| Operation | Result |
+| --- | --- |
+| `inspect` | Object reference, without reading study data. |
+| `capture` | Reference plus immutable bytes or a frame. |
+| `target` | Output reference, without publishing. |
+| `stage` | Private provisional token for the held output bytes. |
+| `commit` | Atomically publish that token; return the held target reference. |
+| `abort` | Remove the provisional token after failure or interruption. |
+
+Abort is idempotent and must also accept a target reference when Stage raises
+before returning a token. Save preflights every target and publishes logs before
+primary output, and producers before consumers. A later failure keeps the completed
+prefix and cleans the current provisional object. Source resources are never
+reopened at Save. Original callback exceptions and interrupts propagate after
+cleanup, including errors raised while exporting a frame.
+
+Snapshots belong to one attempt. Reusing a logical request or reference compares
+the original reference and held bytes or exact frame values, including float bits
+and temporal precision. A changed identity or content is refused. Provenance
+retains the first capture's logical location, authored spelling, reference and
+representation; frames have typed evidence rather than fabricated empty source
+bytes. Credentials stay inside the backend callback. There are no content hashes
+or digest fields: explicit references and held-content comparison are the policy.
 
 Project functions need their installed callable and declared conformance tests.
 The environment's packaging `lock` is optional. Declare it to verify installed
