@@ -6,7 +6,7 @@ source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-contract")
 stopifnot(identical(as.character(packageVersion("yamaa")), "0.4.0"),
   identical(yamaa:::.core_version(), as.character(packageVersion("yamaa"))))
-stopifnot(identical(sort(getNamespaceExports("yamaa")), c("yamaa_check", "yamaa_define", "yamaa_domain")))
+stopifnot(identical(sort(getNamespaceExports("yamaa")), c("yamaa_check", "yamaa_define", "yamaa_domain", "yamaa_memory_resolver", "yamaa_resource_failure", "yamaa_resource_resolver", "yamaa_resource_result", "yamaa_synthetic_remote_resolver")))
 check_issues <- function(result) {
   value <- result$issues
   stopifnot(is.data.frame(value),
