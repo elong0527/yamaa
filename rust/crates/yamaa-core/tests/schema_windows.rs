@@ -994,10 +994,12 @@ mod schema {
                         handlers[1].handler.spec_path,
                         "columns.VALUE.derivation.unconvertible"
                     );
-                    assert_eq!(
-                        plan.templates()[1].assignments[0].path,
-                        plan.templates()[2].assignments[0].path
-                    );
+                    // Unneeded defaults stay column-phase per template: the two
+                    // inheriting templates carry no row assignments and share
+                    // the single column-phase default.
+                    assert!(plan.templates()[1].assignments.is_empty());
+                    assert!(plan.templates()[2].assignments.is_empty());
+                    assert_eq!(plan.columns()[1].path, "columns.VALUE.derivation.literal");
                 }
             }
         }

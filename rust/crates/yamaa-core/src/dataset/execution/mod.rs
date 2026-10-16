@@ -1254,9 +1254,15 @@ impl DatasetPlan {
         records: &mut Vec<CheckRecord>,
     ) -> Result<(), Box<ExecutionError<T::Error>>> {
         intermediate_run.begin_columns(self)?;
-        let mut completed = vec![false; self.output().columns().len()];
-        for assignment in &self.templates()[0].assignments {
-            completed[assignment.column] = true;
+        let mut completed = vec![true; self.output().columns().len()];
+        for template in self.templates() {
+            let mut present = vec![false; self.output().columns().len()];
+            for assignment in &template.assignments {
+                present[assignment.column] = true;
+            }
+            for (column, done) in completed.iter_mut().enumerate() {
+                *done &= present[column];
+            }
         }
         let mut next_column = 0;
         self.check_columns(candidates, &completed, &mut next_column, records)?;
@@ -1265,6 +1271,9 @@ impl DatasetPlan {
             let mut numbers =
                 windows::Evaluation::new(assignment, candidates, self, table, handlers)?;
             for row in 0..candidates.len() {
+                if candidates[row].completed[assignment.column] {
+                    continue;
+                }
                 let number = if let Some(run) = &mut numbers {
                     Some(run.value(row, candidates, table, assignment, self)?)
                 } else {

@@ -463,8 +463,6 @@ pub enum PlanError {
     DuplicateAssignment,
     #[error("dataset incomplete row")]
     IncompleteRow,
-    #[error("dataset inconsistent row columns")]
-    InconsistentRowColumns,
     #[error("dataset non group source")]
     NonGroupSource,
     #[error("dataset ungrouped reduction")]
@@ -1043,8 +1041,9 @@ fn current_record_read(
 }
 impl DatasetPlan {
     /// Admit the complete single-source plan before any source data is accessed.
-    /// Every template completes the same row-phase columns. Remaining assignments
-    /// execute a whole column at a time, in supplied resolved declaration order.
+    /// Each template completes its own row-phase columns. Remaining assignments
+    /// execute a whole column at a time, in supplied resolved declaration order,
+    /// completing the rows whose template did not derive them up front.
     pub fn new(
         source: TableSchema,
         output: TableSchema,
@@ -1200,7 +1199,6 @@ impl DatasetPlan {
         if publication {
             validate_columns(&keys, width)?;
         }
-        let mut row_columns = None;
         for (template_index, template) in templates.iter().enumerate() {
             let (template_source, mode) =
                 template.mode.context(&source, &secondary, &intermediates)?;
@@ -1329,14 +1327,15 @@ impl DatasetPlan {
                         .map_err(PlanError::Filter)?;
                 }
             }
-            if row_columns
-                .as_ref()
-                .is_some_and(|previous| previous != &available)
-            {
-                return Err(PlanError::InconsistentRowColumns);
-            }
-            row_columns = Some(available.clone());
+            // Row-phase columns are tracked per template: one template may
+            // derive a default up front while another completes it
+            // column-phase. Each template plus the shared columns must cover
+            // every output column; the shared columns below skip the templates
+            // that already derived them.
             for assignment in &columns {
+                if available[assignment.column] {
+                    continue;
+                }
                 odm::validate_template(
                     &assignment.expression,
                     template,
