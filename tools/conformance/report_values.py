@@ -8,7 +8,6 @@ executes no candidate engine or reference evaluator and is not a host API.
 from __future__ import annotations
 
 import datetime
-import io
 import itertools
 import json
 import struct
@@ -102,7 +101,9 @@ class SourceReadObservation(Observation):
 
 def _expected_parquet(payload):
     """Read committed artifact truth independently; this is no source-profile evaluator."""
-    table = pq.read_table(io.BytesIO(payload))
+    # Keep the read within this held-file boundary: the dataset reader can leave
+    # Python-backed I/O running during interpreter shutdown on PyArrow 23.
+    table = pq.ParquetFile(pa.BufferReader(payload)).read(use_threads=False)
     kinds = {
         pa.string(): "str",
         pa.large_string(): "str",
