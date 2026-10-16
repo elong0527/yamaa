@@ -955,9 +955,10 @@ S1,002,2024-06
         }
     }
     mod check_output_validation {
-        //! `check` reports the output-declaration findings that `domain` reaches at
-        //! its output stage (#2295): the same first issue, in both host routes.
-        //! Committed negative benchmarks and `expected/error.yaml` remain the oracle.
+        //! `check` reports the validation findings that `domain` reaches without
+        //! study data: output declarations (#2295), formula qualification and column
+        //! order. The same first issue, in both host routes. Committed negative
+        //! benchmarks and `expected/error.yaml` remain the oracle.
         use std::{
             fs,
             path::{Path, PathBuf},
@@ -1179,6 +1180,282 @@ S1,002,2024-06
                         "{name} ({runtime}): check/domain first issue"
                     );
                     assert_eq!(checked, oracle, "{name} ({runtime}): first issue");
+                }
+            }
+        }
+
+        /// The partial oracle of `expected/error.yaml`: phase, condition and spec
+        /// paths exactly, the requirement when one is written, and every written
+        /// context field.
+        fn matches_oracle(
+            oracle: &yamaa_core::json::Value,
+            issue: &yamaa_core::json::Value,
+        ) -> bool {
+            fn subset(want: &yamaa_core::json::Value, got: &yamaa_core::json::Value) -> bool {
+                match (want, got) {
+                    (
+                        yamaa_core::json::Value::Object(want),
+                        yamaa_core::json::Value::Object(got),
+                    ) => want
+                        .iter()
+                        .all(|(key, value)| got.get(key).is_some_and(|got| subset(value, got))),
+                    _ => want == got,
+                }
+            }
+            ["phase", "condition", "spec_paths"]
+                .into_iter()
+                .all(|field| oracle[field] == issue[field])
+                && oracle
+                    .get("requirement")
+                    .is_none_or(|requirement| *requirement == issue["requirement"])
+                && oracle
+                    .get("context")
+                    .is_none_or(|context| subset(context, &issue["context"]))
+        }
+
+        /// Validation negatives whose finding `check` does not report, with what the
+        /// finding is decided from. `domain` reaches each of them once it reads or
+        /// binds the inputs. A case that `check` starts to report fails until it
+        /// leaves this list.
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 22] = [
+            (
+                "negative-adlb-computed-param",
+                "a cycle through an aggregate and a case",
+            ),
+            ("negative-cut-coded", "the stored type of an input field"),
+            (
+                "negative-dose-intensity",
+                "an aggregate field outside a reduction",
+            ),
+            (
+                "negative-first-available-self",
+                "a cycle through first_available",
+            ),
+            (
+                "negative-keys-missing",
+                "a key column that reads a cut of a non-key column",
+            ),
+            (
+                "negative-lookup-bad-range",
+                "the declared types of a lookup range",
+            ),
+            (
+                "negative-lookup-mismatched",
+                "the fields stored in the current input",
+            ),
+            (
+                "negative-lookup-unknown-key",
+                "the fields stored in the lookup input",
+            ),
+            (
+                "negative-odm-schema-ambiguous",
+                "the fields stored in the ODM input",
+            ),
+            (
+                "negative-odm-schema-missing",
+                "the fields stored in the ODM input",
+            ),
+            ("negative-path-missing", "whether the input file exists"),
+            (
+                "negative-path-symlink",
+                "whether the input file is a symbolic link",
+            ),
+            (
+                "negative-review-date-text",
+                "the types compared in a flag condition",
+            ),
+            (
+                "negative-review-unknown-date",
+                "an unknown name in a flag condition",
+            ),
+            (
+                "negative-row-aggregate-keys",
+                "the scope of a grouped row aggregate",
+            ),
+            (
+                "negative-row-value-self",
+                "a cycle through first_available and row_value",
+            ),
+            (
+                "negative-source-missing-field",
+                "a source filter name that is not an input field",
+            ),
+            (
+                "negative-source-ordinal-collision",
+                "the fields stored in the input",
+            ),
+            (
+                "negative-source-trivial-filter",
+                "a source filter on an output column",
+            ),
+            (
+                "negative-source-undeclared-field",
+                "the fields stored in the input",
+            ),
+            (
+                "negative-sum-non-numeric",
+                "the declared type of an aggregate operand",
+            ),
+            (
+                "negative-types-unknown-field",
+                "the fields stored in the input",
+            ),
+        ];
+
+        /// Validation negatives this harness does not run, with the reason.
+        const NOT_BUILT_HERE: [(&str, &str); 1] = [(
+            "negative-function-contract",
+            "domain activates its project functions only in a host",
+        )];
+
+        /// Every committed validation-phase negative benchmark that conformance runs.
+        fn validation_benchmarks() -> Vec<String> {
+            let root = benchmarks_root();
+            let mut selected = Vec::new();
+            for entry in fs::read_dir(&root).unwrap() {
+                let entry = entry.unwrap();
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let oracle = entry.path().join("expected/error.yaml");
+                if !name.starts_with("negative-") || !oracle.exists() {
+                    continue;
+                }
+                let metadata = expected(&entry.path().join("benchmark.yaml"));
+                if expected(&oracle)["phase"] == "validation"
+                    && metadata["conformance"]["excluded"].is_null()
+                {
+                    selected.push(name);
+                }
+            }
+            selected.sort();
+            selected
+        }
+
+        /// `check` reports every validation finding of a committed negative that
+        /// `domain` reaches without study data: the same first issue in both host
+        /// routes, matching `expected/error.yaml`. Benchmarks run in place, so
+        /// parents, links and relative paths keep their authored meaning.
+        #[test]
+        fn check_matches_domain_on_validation_benchmarks() {
+            let selected = validation_benchmarks();
+            for (name, _) in NOT_REPORTED_BY_CHECK.iter().chain(&NOT_BUILT_HERE) {
+                assert!(selected.iter().any(|s| s == name), "{name}: not selected");
+            }
+            let root = benchmarks_root();
+            let mut compared = Vec::new();
+            for name in &selected {
+                if NOT_BUILT_HERE.iter().any(|(n, _)| n == name) {
+                    continue;
+                }
+                let case = root.join(name);
+                let spec = case.join("spec.yaml").to_str().unwrap().to_owned();
+                let oracle = expected(&case.join("expected/error.yaml"));
+                let missed = NOT_REPORTED_BY_CHECK.iter().find(|(n, _)| n == name);
+                for runtime in ["python", "r"] {
+                    if let Some((_, reason)) = missed {
+                        let checked = file_application::check(
+                            Request {
+                                specification: &spec,
+                                environment: None,
+                            },
+                            identity(runtime, name, &spec),
+                        );
+                        assert!(
+                            !checked
+                                .first()
+                                .is_some_and(|i| matches_oracle(&oracle, &issue(i))),
+                            "{name} ({runtime}): check reports {reason}; remove the exclusion"
+                        );
+                        continue;
+                    }
+                    let (checked, built) = first_issues(&spec, name, runtime);
+                    assert_eq!(
+                        checked, built,
+                        "{name} ({runtime}): check/domain first issue"
+                    );
+                    assert!(
+                        matches_oracle(&oracle, &checked),
+                        "{name} ({runtime}): first issue {checked:?} vs expected/error.yaml {oracle:?}"
+                    );
+                }
+                if missed.is_none() {
+                    compared.push(name.as_str());
+                }
+            }
+            for name in ["negative-direct-dose-read", "negative-forward-reference"] {
+                assert!(compared.contains(&name), "{name}: not compared");
+            }
+        }
+
+        /// Formula reads bind without a source schema, so when nothing else is wrong
+        /// `check` reports exactly what `domain` reports: each qualified name that is
+        /// not a record lookup, then column order over the formulas' reads.
+        #[test]
+        fn check_reports_formula_qualification_and_column_order() {
+            let qualified = |expr: &str, identifier: &str| yamaa_adapters::json!({"phase":"validation","condition":"qualified_identifier","requirement":"REQ-0442","spec_paths":["columns.A.derivation.compute.expr"],"context":{"expr":expr,"identifier":identifier}});
+            let forward = |dependency: &str| yamaa_adapters::json!({"phase":"validation","condition":"forward_reference","requirement":"REQ-0071","spec_paths":["columns.A.derivation.compute"],"context":{"column":"A","dependency":dependency}});
+            let cycle = yamaa_adapters::json!({"phase":"validation","condition":"dependency_cycle","requirement":"REQ-0072","spec_paths":["columns.A.derivation.compute","columns.B.derivation.compute"],"context":{"cycle":["A","B","A"]}});
+            let rows: [(&str, &str, &str, Vec<yamaa_core::json::Value>); 4] = [
+                (
+                    "qualified-then-forward",
+                    "A, B",
+                    "  - {name: A, type: float, derivation: {compute: {expr: 'B + DM.AGE + DM.WT'}}}\n  - {name: B, type: float, derivation: DM.AGE}\n",
+                    vec![
+                        qualified("B + DM.AGE + DM.WT", "DM.AGE"),
+                        qualified("B + DM.AGE + DM.WT", "DM.WT"),
+                        forward("B"),
+                    ],
+                ),
+                (
+                    "forward-in-written-order",
+                    "A, B, C",
+                    "  - {name: A, type: float, derivation: {compute: {expr: 'C - B'}}}\n  - {name: B, type: float, derivation: DM.AGE}\n  - {name: C, type: float, derivation: DM.WT}\n",
+                    vec![forward("C"), forward("B")],
+                ),
+                (
+                    "cycle",
+                    "A, B",
+                    "  - {name: A, type: float, derivation: {compute: {expr: 'B + 1'}}}\n  - {name: B, type: float, derivation: {compute: {expr: 'A + 1'}}}\n",
+                    vec![cycle],
+                ),
+                (
+                    "earlier-column",
+                    "B, A",
+                    "  - {name: B, type: float, derivation: DM.AGE}\n  - {name: A, type: float, derivation: {compute: {expr: 'B * 2'}}}\n",
+                    vec![],
+                ),
+            ];
+            for (name, outputs, columns, oracle) in rows {
+                let fixture = Fixture::new(name);
+                fs::create_dir(fixture.0.join("input")).unwrap();
+                fs::write(
+                    fixture.0.join("input/dm.csv"),
+                    "USUBJID,AGE,WT\nU1,34,70.5\n",
+                )
+                .unwrap();
+                fs::write(
+                    fixture.0.join("spec.yaml"),
+                    format!(
+                        "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: {{path: input/dm.csv, types: {{AGE: float, WT: float}}}}}}\noutput: {{path: out.csv, columns: [USUBJID, {outputs}]}}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n{columns}"
+                    ),
+                )
+                .unwrap();
+                let spec = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+                let request = || Request {
+                    specification: &spec,
+                    environment: None,
+                };
+                for runtime in ["python", "r"] {
+                    let checked =
+                        file_application::check(request(), identity(runtime, name, &spec));
+                    let built =
+                        match file_application::domain(request(), identity(runtime, name, &spec)) {
+                            Ok(result) => result.issues().to_vec(),
+                            Err(failure) => failure,
+                        };
+                    let checked = checked.iter().map(issue).collect::<Vec<_>>();
+                    let built = built.iter().map(issue).collect::<Vec<_>>();
+                    assert_eq!(checked, oracle, "{name} ({runtime}): check");
+                    assert_eq!(built, oracle, "{name} ({runtime}): domain");
                 }
             }
         }
