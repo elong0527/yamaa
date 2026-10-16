@@ -213,7 +213,7 @@ def render_markdown_tokens(markdown, tokens, source_url):
                 if (
                     target
                     and not urlsplit(target).scheme
-                    and not target.startswith(("#", "//"))
+                    and not target.startswith(("#", "/"))
                 ):
                     child.attrSet(attribute, source_url + "/" + target)
             # Keep generated pages self-contained: show image references as links.
