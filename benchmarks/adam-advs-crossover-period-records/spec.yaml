@@ -1,0 +1,115 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  VS: {path: input/vs.csv, types: {VSSEQ: int, VSSTRESN: float}}
+  ADSL:
+    path: input/adsl.csv
+    types: {AP01SDT: date, AP01SDTM: datetime, AP02SDT: date,
+            AP02SDTM: datetime}
+base: VS
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, VSSEQ, PARAMCD, AVAL, ADT, ADTM, APERIOD, TRTA]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: VS.VSSEQ
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: VS.VSTESTCD
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: VS.VSSTRESN
+
+  # The collection date, whether or not a time was collected.
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation:
+      to_date:
+        source: VS.VSDTC
+
+  # The collection moment, only when a time was collected: no time is
+  # supplied for a date-only collection.
+  - name: ADTM
+    type: datetime
+    label: Analysis Datetime
+    derivation:
+      case:
+        - when: "str_contains(VS.VSDTC, 'T')"
+          then: VS.VSDTC
+
+  # Each period runs from its start up to, but not including, the next
+  # period's start; the last period a subject started has no end. Testing
+  # the later period first makes every start inclusive and every next start
+  # exclusive. A record with a time is compared with the start datetimes,
+  # a date-only record with the start dates. A comparison with a missing
+  # start is unknown, so a subject who never started period 2 stays in
+  # period 1, and a record with no date, or before the first start, gets no
+  # period.
+  - name: APERIOD
+    type: int
+    label: Period
+    derivation:
+      case:
+        - when: >-
+            ADTM >= ADSL.AP02SDTM
+            OR (ADTM IS NULL AND ADT >= ADSL.AP02SDT)
+          then: {literal: 2}
+        - when: >-
+            ADTM >= ADSL.AP01SDTM
+            OR (ADTM IS NULL AND ADT >= ADSL.AP01SDT)
+          then: {literal: 1}
+    verifications:
+      allowed_values:
+        values: [1, 2]
+
+  # The actual treatment of the record's period.
+  - name: TRTA
+    type: str
+    label: Actual Treatment
+    derivation:
+      case:
+        - when: "APERIOD = 1"
+          then: ADSL.TRT01A
+        - when: "APERIOD = 2"
+          then: ADSL.TRT02A
+    verifications:
+      allowed_values:
+        values: [DRUG A, PLACEBO]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VSSEQ]
+  - row_count:
+      min: 8
+      max: 8
+  - all_or_none:
+      id: period-and-treatment-together
+      columns: [APERIOD, TRTA]
+  - assert:
+      id: no-period-without-a-date
+      when: "ADT IS NULL"
+      require: "APERIOD IS NULL"
+  - assert:
+      id: a-moment-has-its-date
+      when: "ADTM IS NOT NULL"
+      require: "ADT IS NOT NULL"
