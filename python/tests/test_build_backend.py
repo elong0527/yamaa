@@ -531,6 +531,41 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "vendor/package paths"):
                     list(backend.local_patch_sources(workspace))
 
+    def test_local_patch_sources_ignore_ancestor_build_or_cache_names(self):
+        for ancestor in ("target", ".git", "__pycache__"):
+            with self.subTest(ancestor=ancestor):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory) / ancestor / "checkout"
+                    root.mkdir(parents=True)
+                    workspace, package, _ = self.patch_fixture(root)
+                    sources = list(backend.local_patch_sources(workspace))
+                    self.assertEqual(len(sources), 8)
+                    junk = package / "target" / "junk.rs"
+                    junk.parent.mkdir()
+                    junk.write_bytes(b"fn junk() {}\n")
+                    with self.assertRaisesRegex(ValueError, "build or cache files"):
+                        list(backend.local_patch_sources(workspace))
+
+    def test_native_fixture_scan_ignores_ancestor_build_or_cache_names(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "target" / "checkout"
+            root.mkdir(parents=True)
+            workspace, source, original, name = self.compile_fixture(root)
+            source.write_text(
+                "fn main() { let _ = include_str!("
+                + json.dumps(str(original.resolve()))
+                + "); }\n"
+            )
+            with self.assertRaisesRegex(ValueError, "unescaped relative paths"):
+                backend.native_test_fixtures(workspace)
+            source.write_text(
+                "fn main() { let _ = include_str!("
+                + json.dumps("../../../../" + name)
+                + "); }\n"
+            )
+            selected = backend.native_test_fixtures(workspace)
+            self.assertEqual(selected[1], (name, original))
+
     def test_extra_local_patch_build_script_cannot_enter_a_source_archive(self):
         with tempfile.TemporaryDirectory() as directory:
             workspace, _, archive = self.patch_fixture(Path(directory))

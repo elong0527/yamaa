@@ -58,8 +58,12 @@ def native_test_fixtures(workspace: Path):
     invocation = re.compile(r"\s*!\s*([\(\[\{])\s*")
     argument = re.compile(r'"((?:[^"\\]|\\.)*)"\s*,?\s*([\)\]\}])')
     closing = {"(": ")", "[": "]", "{": "}"}
-    for source in sorted((workspace / "crates").rglob("*.rs")):
-        if any(part in {"target", ".git", "__pycache__"} for part in source.parts):
+    crates = workspace / "crates"
+    for source in sorted(crates.rglob("*.rs")):
+        if any(
+            part in {"target", ".git", "__pycache__"}
+            for part in source.relative_to(crates).parts
+        ):
             continue
         text = source.read_text(encoding="utf-8")
         for directive in include.finditer(text):
@@ -155,7 +159,10 @@ def local_patch_sources(workspace: Path):
         for path in sorted(root.rglob("*")):
             if path.is_symlink():
                 raise ValueError("local Cargo patch sources must not be symlinks")
-            if any(part in {"target", ".git", "__pycache__"} for part in path.parts):
+            if any(
+                part in {"target", ".git", "__pycache__"}
+                for part in path.relative_to(root).parts
+            ):
                 raise ValueError("local Cargo patch contains build or cache files")
             if path.name == "Cargo.lock" or path.suffix == ".pyc":
                 raise ValueError("local Cargo patch contains build or cache files")
