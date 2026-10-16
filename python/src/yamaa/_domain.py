@@ -1,12 +1,25 @@
 """Public argument and data-frame conversion for the shared Rust lifecycle."""
 
+from __future__ import annotations
+
 from os import PathLike, fspath
+from typing import TYPE_CHECKING
 
 import polars as pl
-import pyarrow as pa
+
+if TYPE_CHECKING:
+    import pyarrow as pa
 
 from yamaa._native import DomainError, _check_file, _domain_file
 from yamaa._native_results import issues_frame
+
+
+def _arrow_view(data) -> pa.Table | None:
+    if data is None:
+        return None
+    import pyarrow as pa
+
+    return pa.table(data)
 
 
 class Domain:
@@ -24,8 +37,7 @@ class Domain:
     @property
     def output_arrow(self) -> pa.Table | None:
         """Share retained immutable buffers through the Arrow C Stream protocol."""
-        data = self._native.output()
-        return None if data is None else pa.table(data)
+        return _arrow_view(self._native.output())
 
     @property
     def issues(self) -> pl.DataFrame:
@@ -42,8 +54,7 @@ class Domain:
 
     @property
     def verification_log_arrow(self) -> pa.Table | None:
-        data = self._native.log(False)
-        return None if data is None else pa.table(data)
+        return _arrow_view(self._native.log(False))
 
     @property
     def warning_log(self) -> pl.DataFrame | None:
@@ -52,8 +63,7 @@ class Domain:
 
     @property
     def warning_log_arrow(self) -> pa.Table | None:
-        data = self._native.log(True)
-        return None if data is None else pa.table(data)
+        return _arrow_view(self._native.log(True))
 
     def save(self) -> bool:
         """Publish held logs and output; a failed build raises DomainError."""
