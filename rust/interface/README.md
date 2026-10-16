@@ -1,0 +1,305 @@
+# Shared host interface
+
+[bindings.yaml](bindings.yaml) is the authoritative declaration input for the
+Python and R binding generators. It uses a closed, declarative YAML IDL that
+generates Rust-level PyO3/extendr registration and host declarations. This is the
+design for [#2689](https://github.com/elong0527/yamaa/issues/2689). Implementation
+and installed-host compatibility checks follow in
+[#2690](https://github.com/elong0527/yamaa/issues/2690),
+[#2691](https://github.com/elong0527/yamaa/issues/2691),
+[#2692](https://github.com/elong0527/yamaa/issues/2692) and
+[#2693](https://github.com/elong0527/yamaa/issues/2693). Current Python and R
+registrations and behavior remain handwritten until those changes land.
+
+## Boundary choice and source ownership
+
+Choose Rust-level generated host glue. Each host package builds the shared
+engine, adapters and its binding crate together with the selected toolchain and
+lock. Rust values never cross between independently built shared libraries.
+There is no stable Rust binary layout promise. A separately loadable C engine
+would additionally need a handle table, allocator API, C record layouts and a
+callback ABI; none is needed to generate the current host declarations. The
+existing Arrow C Data/Stream interface remains the standard C ABI for tables.
+Its ownership contract below applies to both generated host boundaries.
+
+The IDL owns export names, ordered arguments, defaults, host projections, Rust
+implementation paths, feature names and semantic pairings. The adjacent document
+owns negotiation and lifetime rules. Shared adapters/core own execution,
+diagnostics, resource authority, scalar admission and publication. PyO3/extendr
+own their interpreter registration machinery. Generated declarations must invoke
+the existing Rust implementations; they must not generate a second engine or
+duplicate semantic validation in Python or R.
+
+The record owner is [#2674](https://github.com/elong0527/yamaa/issues/2674), split
+from [#2591](https://github.com/elong0527/yamaa/issues/2591). Its approved decisions
+specify a boundary version starting at 1 in `yamaa-adapters`, severity
+`error`/`warning` (all current conditions are errors), and unchanged optional core
+span/route geometry. The `records` import names roles, not guessed Rust symbols
+or a second schema. Once that owner delivers its public types, bind the roles to
+their actual Rust paths before implementing the generators. An unresolved
+import is a generation error. The imported version constant is the single
+runtime source for both hosts; neither generator embeds a separately maintained
+version number. `format_version` versions the IDL grammar only.
+
+## Definition grammar and generation
+
+Format 1 has the top-level keys shown in the definition: `format`,
+`format_version`, `boundary`, `contract`, `imports`, `handshake`, `python`, `r`,
+`operations`, and `host_only`. Reject unknown keys, duplicate mapping keys,
+aliases, arbitrary YAML tags, unknown type tokens, duplicate exports, invalid
+Rust paths, unresolved imports and operation references to absent exports.
+Argument mapping order is positional order; sequence order is emission order.
+Strings contain identifiers and types, never executable generator snippets.
+The R group's `module` supplies the implementation path for its functions;
+the root `yamaa` group's function is defined in the crate root. The only
+argument-default syntax is `type = literal`, with `None` for optional values
+and `false`/`true` for booleans; generators parse these literals without eval.
+
+Type expressions use `optional<T>`, `list<T>` and ordered `tuple<T, ...>`.
+`text` is owned Unicode, `bytes`/`raw` is owned arbitrary bytes, `bool` is a
+boolean, `i32` is signed 32-bit, `index` is a checked nonnegative Rust `usize`,
+and `unit` has no payload. Host projections preserve these distinctions:
+Python uses `str`, `bytes`, `int`, `None`, lists and tuples; R's `raw`, `robj`,
+`r_list` and `r_function` denote `Raw`, `Robj`, `List` and `Function` in extendr.
+`host_object`, `host_callback` and `host_exception` are interpreter-rooted
+objects, never serialized addresses. Named Python classes refer to owned native
+handles. `arrow_stream_capsule` is the named `arrow_array_stream` PyCapsule.
+
+The `python` and `r` sections inventory the complete current registration lists,
+including class methods, private qualification accessors, exceptions, version
+metadata, R scalar helpers and resolved-artifact readers. `issue_projection`
+describes the existing five-field tuple; `r_reply` describes the existing
+`{value, error}` list and `r_scalar_reply` its `{tag, payload, error}` variant.
+These are migration inputs, not the new public record schemas. R result payloads
+continue to be converted by their existing implementations. The definition does
+not treat a Rust `Result`, `Vec`, `String`, enum or trait as a C-layout type.
+
+`operations` maps equivalent semantic operations despite different calling
+conventions. Python's optional resolver corresponds to R's separate resolved
+entry points; Python table exporters correspond to R's frame and destination
+stream accessors. R `domain_arrow` selects output/verification/warning with
+`kind` 0/1/2. R's producer evidence is a projection of the retained attempt;
+Python additionally exposes that owner and its methods. `host_only` declares
+intentional helpers. Generating both hosts does not mean inventing a public
+scalar-helper API in Python or a style API in R. extendr-generated `wrap__*`,
+metadata, registration and finalizer functions are framework machinery, not
+additional engine operations. Public package facades remain the owners of
+ordinary Python/R argument presentation.
+
+The follow-up generator belongs at `tools/packaging/generate_bindings.py` and
+must support a read-only default comparison and explicit `--write`, following
+`generate_shipped_schema.py`. Python output includes `_native.pyi` and the Rust
+registration layer; R output includes extendr registrations and the native-call
+wrapper layer. Emit `Generated by ... Do not edit` headers, deterministic UTF-8
+bytes, and direct byte comparisons. Do not add content digests. Reconcile the
+current registrations against this input when introducing generation; omission
+of a class method or private export is drift too. Later CI must regenerate both
+hosts from the same checked-out definition and imported record source. This
+design adds neither a generator nor CI changes.
+
+## Version and feature handshake
+
+Generated facades negotiate once at initialization, before resolving source
+paths, reading files, activating project code, invoking resolvers, importing
+Arrow pointers or creating an execution handle. Every generated callable also
+requires an initialized successful negotiation; importing `_native` or invoking
+an R `.Call` wrapper directly must not bypass the gate. Release/finalizer paths
+and the handshake itself are exempt. `core_version()` and `_CORE_VERSION`
+remain informational engine package versions, not compatibility evidence.
+
+The request contains an unsigned boundary version and ordered lists of required
+and optional feature identifiers. The native side returns the imported result
+record containing the accepted version, supported features, enabled requested
+features and informational core version. The response representation is generated
+from the same imported record contract. The facade checks the returned version
+and required set before making any execution call. Negotiation has no IO,
+callbacks, activation or publication side effects.
+
+Use exact version equality. Reject zero, malformed, older, newer and unknown
+versions; never guess a compatible range or retry with a lower version. The
+native implementation checks equality before interpreting feature-dependent
+payloads. Every refused negotiation uses the frozen bootstrap envelope below;
+the facade constructs the typed refusal using its own imported schema. No peer
+decodes an unknown record layout. If a legacy native package has no handshake
+entry point, the facade refuses with `missing_interface` before any other call.
+
+The bootstrap envelope is a plain named host object with `accepted` (boolean),
+`requested_version` (integer or null for malformed input), `supported_version`
+(integer, or null when the native handshake is absent), `reason` (one of
+`version_mismatch`, `malformed_request`, `missing_feature`, `missing_interface`),
+and `missing_features` (ordered strings). `accepted` is always false here.
+It is used only
+when negotiation refuses and carries no diagnostic schema, execution payload,
+handle, pointer or exception text. Its field meanings are frozen across boundary
+versions. The bootstrap-to-record mapping is generated from the shared adapter
+classification, using core `application_issue::rejected("interface", reason)`
+as its source, into the facade's imported diagnostic and result types. The
+version/feature facts become owned structured context. The generated mapping
+does not call an incompatible native record decoder or infer registry fields
+in handwritten host code.
+This uses the registry's `ApplicationRejected` identity, null requirement and
+absent span/route; it does not define another diagnostic code or record shape.
+Failure is raised as `InterfaceError` in Python or `yamaa_interface_error` in R,
+carrying that imported record. These are new generated-boundary errors, not
+current registrations. Direct native handshake callers receive the same
+bootstrap refusal and use the mapping for their own supported record version.
+
+| Request | Outcome |
+| --- | --- |
+| Supported exact version and all required features available | Accept and enable required features plus the supported optional intersection. |
+| Any unsupported version, including a newer facade with an older native library | Refuse before record decoding or execution; include both versions in bootstrap facts. |
+| Native library has no handshake entry point | Refuse as `missing_interface`; supported version is unavailable. |
+| Unknown or unavailable required feature | Refuse with missing features in request order. |
+| Unknown or unavailable optional feature | Leave disabled; report the supported/accepted sets explicitly. |
+| Duplicate identifiers within or across feature lists, invalid versions or invalid request field types | Refuse as `malformed_request`. |
+
+`structured_records` and `arrow_c_stream` are mandatory for the generated
+boundary. Optional identifiers and their owners are listed in the IDL. Format
+features report the actual compiled adapter capabilities, not just declaration
+presence. A facade that needs an optional feature must require it in its
+negotiation or refuse the operation locally before calling native code. A
+successful handshake never proves source authority, lock conformance or a
+successful build. It cannot be reused across a replaced native module.
+
+Breaking signature, ownership, field meaning, required-field, variant or
+diagnostic-interpretation changes require a new boundary version in the record
+owner. Additive optional operations can use a new feature identifier; imported
+record extension/ordering rules remain those of #2674. Never reuse a feature
+identifier with different semantics. A missing mandatory feature is a failed
+handshake even if both packages report the same release version.
+
+## Imported records and errors
+
+Diagnostic, result and plan records come exclusively from the `records` import.
+The generator projects their named fields into both hosts. It must retain the
+owner's code/phase/requirement/severity mapping, diagnostic and path ordering,
+structured context, and absent-versus-present span/route rules. No host sorts,
+deduplicates, caps or reconstructs findings from message strings. Context and
+record values own their text, arrays, objects and exact numbers. Integers wider
+than a host's ordinary numeric type retain their numeric identity through the
+record owner's exact representation; R binary64 must never silently narrow
+them. Missing values remain distinct from zero and empty text. The old issue
+DataFrames are presentation projections until the record migration in
+[#2675](https://github.com/elong0527/yamaa/issues/2675) and
+[#2676](https://github.com/elong0527/yamaa/issues/2676).
+
+Semantic failures are imported diagnostic/result records, including failed
+builds with retained evidence. Invalid arguments, expired/wrong-kind handles,
+busy or poisoned owners, conversion failures and caught native panics are typed
+boundary refusals using the shared `ApplicationRejected` classification; they
+do not invent a language requirement. Native unwinds and R longjmps must not
+cross the host boundary. Ordinary callback exceptions/conditions stay rooted on
+their originating attempt and can be inspected after projection failure.
+Formatting a secondary error must not replace that original object.
+
+Version refusal uses the bootstrap mapping above. Ordinary callable boundary
+failures use the negotiated imported records directly. Argument failures before
+negotiation carry bootstrap facts and are mapped by the facade. A fatal process
+abort or allocation abort cannot be turned into a recoverable record.
+
+The imported plan record is inspection metadata, not execution authority.
+Reusable compile/run handles and their source/activation freshness policy belong
+to [#2592](https://github.com/elong0527/yamaa/issues/2592) and its split. Neither
+the resolved JSON artifact nor a previous accepted result authorizes another
+run. Adding a plan handle requires a declared operation and capability here.
+
+## Ownership, threading and cancellation
+
+| Object | Owner and lifetime |
+| --- | --- |
+| Input text/bytes | Borrow only during a synchronous call; clone into a retained Rust owner before returning or retaining for a callback. |
+| Diagnostic/result/plan metadata | Owned values independent of temporary interpreter buffers and of later calls. |
+| Domain/Define/producer handle | Owning PyO3 object or rooted R external pointer; drop/finalize once, invalidate before dropping state. No caller dereferences a stale address. |
+| Callback/resolver/host failure | Strong interpreter root held by the attempt that may call or inspect it; release on its owning interpreter thread. |
+| Arrow stream or emitted schema/array | Current holder of the moved standard header, with independent references to immutable buffers. |
+
+Handles are process-local, host-local and kind checked. Do not serialize them,
+use them after finalization, exchange them between Python/R or treat an address
+as authority. Access during an existing mutable borrow or after poisoning
+returns a refusal. Result accessors own their outputs; dropping the parent
+cannot invalidate an acquired producer owner, copied record or exported table.
+Inspection and evidence access grant no Save capability. Save uses the held
+build's ordered publication path and reports operational refusal separately from
+attempting to save a failed build.
+
+Calls are synchronous. Python callbacks require the originating interpreter and
+GIL; R callbacks execute only on the originating R thread. A `Send + Sync`
+resource trait does not permit running an R closure on a worker. Do not hold
+a mutable result borrow across a reentrant host call. Reentry to the same busy
+owner refuses; unrelated owned results remain usable. Generated glue must root
+callbacks for all native uses and contain exceptions/conditions before Rust
+resumes. Finalizers do not invoke project code or start publication.
+
+Cancellation is control flow, distinct from a semantic finding. Retain the
+original Python interrupt/SystemExit or R interrupt on the current attempt,
+stop new work when observed, unwind native temporaries normally, and rethrow the
+original object after returning to the host. A resolver's `Cancelled` result
+stops work without fabricating a host exception when none exists. No background
+kill, asynchronous cancellation token or new public cancel API is promised.
+
+On failed conversion, cancellation or callback failure, release temporary native
+owners, Arrow schemas/arrays/streams and callback roots exactly once. Owners
+transferred into a retained attempt or consumer remain alive until that owner
+is released. Close or abort provisional publication through the existing resolver
+protocol; retain already committed artifacts and actual attempt evidence.
+Cancellation does not roll back a prior commit or permit later Save from a
+failed attempt. Cleanup failure is retained alongside the original failure,
+never used to erase it. A completed export already owned by a consumer remains
+valid if a later call on the build is cancelled.
+
+## Arrow C Data/Stream handoff
+
+Use the existing [host handoff](../README.md#arrow-host-handoff) implemented in
+[the shared bridge](../crates/yamaa-adapters/src/arrow_bridge.rs), with PyArrow
+>=23.0.1, Polars >=1.43.2 and R nanoarrow >=0.8.0. The generated declarations
+must preserve these shapes:
+
+| Transfer | Ownership transition |
+| --- | --- |
+| Python export | `_ArrowTable.__arrow_c_stream__()` creates a fresh named capsule owning a stream header shell and independent reader cursor. |
+| Python import | Check the protocol result's capsule type/name, then move its stream header while the capsule is rooted. Clear the source release callback. |
+| R export | Fill a fresh `nanoarrow_allocate_array_stream()` destination; reject a null pointer or an already live stream. Nanoarrow owns the shell. |
+| R import | Root a valid `nanoarrow_array_stream`, move the standard header and clear the source callback; the original R owner keeps only its shell. |
+| Stream schema/next batch | Each successful emitted schema/array has its own release callback. End of stream is an array with `release == NULL`, distinct from an empty batch. |
+
+The current owner invokes each non-null release callback once. Moving ownership
+sets the source release to null; a moved-from destructor frees only its own
+shell. On stream errors, release every successfully obtained live schema/array
+and the stream. Copy any borrowed `get_last_error` text before the next stream
+call or release. Early stream release drops unread batches. Imported arrays own
+buffer references independently and outlive their stream, exporter and build.
+Repeated exports use independent cursors over shared immutable buffers.
+
+Arrow-rs callbacks in the existing bridge do not call Python/R or need a build
+handle. Foreign callbacks remain the foreign producer's responsibility; consumers
+must honor any producer thread/lifetime constraints, keep its required runtime
+alive and contain its failures before returning across the C ABI. No native
+callback may unwind or longjmp across that ABI. Forged native pointers are
+outside the ABI contract; host class/name checks cannot validate arbitrary
+memory. Never overwrite a live destination or release a moved header twice.
+
+Preserve signed Int64 extrema, Float64, UTF-8 (including NUL, large/view arrays),
+nulls, slices, empty batches and chunks. Public dates use Date32 days and
+zone-free datetimes whole TimestampSecond values. Other types, fractional units
+or timezones require an explicit preserving conversion before import. Requested
+Python export schema conversion is refused. Nonfinite floats become missing
+under the existing engine rule. Buffer sharing covers retained public Arrow
+value/validity buffers; imported temporals allocate their precision child.
+Build materialization, Polars conversion and R frame/exact-i64/NUL views can
+copy. Conversions preserve values or raise an error. The generator must reuse
+these adapters rather than promise zero copies for those conversions.
+
+## Follow-up verification
+
+The generation steps must compare this definition with both actual registration
+surfaces, then preserve existing installed-host behavior while using the
+imported record contract as it lands. The compatibility step must cover the
+handshake table (including older native/newer facade), refusal before IO or
+callbacks, wrong-kind/busy/expired owners, original callback failures,
+cancellation during conversion/publication, and post-failure cleanup. Reuse
+the existing Arrow pointer, release, early-release, failed-conversion and
+repeated-import/export controls from
+[#2646](https://github.com/elong0527/yamaa/pull/2646), adding generated-boundary
+coverage where needed. Diagnostic full-registry and cross-host payload parity
+remain owned by [#2677](https://github.com/elong0527/yamaa/issues/2677). No test
+may derive benchmark expected values from the implementation.
