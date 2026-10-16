@@ -1,3 +1,37 @@
+# Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
+# (the same pattern tidyverse/dplyr uses in its R-CMD-check.yaml), adapted
+# for yamaa in three ways:
+#
+# 1. The R package is not standalone in this repository: R/yamaa only
+#    becomes a buildable source package after the shared Rust crates are
+#    staged into it, so the staged tree is what gets built and checked.
+# 2. DESCRIPTION requires R >= 4.6.1 and a Rust toolchain (cargo /
+#    rustc >= 1.90), so dplyr's oldrel-* matrix entries cannot run here;
+#    the matrix keeps release on all three operating systems plus devel
+#    on Ubuntu, and installs the pinned Rust toolchain before checking.
+# 3. Like the existing native qualification in native.yml, this runs as
+#    a regular build every two hours (offset to :47 so it does not pile
+#    onto the native run at :17), not only on push / pull request.
+
+on:
+  schedule:
+    - cron: '47 */2 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'R/**'
+      - 'crates/**'
+      - 'rust/**'
+      - 'Cargo.lock'
+      - '.github/workflows/R-CMD-check.yaml'
+  pull_request:
+    paths:
+      - 'R/**'
+      - 'crates/**'
+      - 'rust/**'
+      - 'Cargo.lock'
+      - '.github/workflows/R-CMD-check.yaml'
 
 name: R-CMD-check
 
