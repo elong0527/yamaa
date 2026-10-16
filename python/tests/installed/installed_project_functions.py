@@ -128,9 +128,16 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
             with zipfile.ZipFile(wheel, "w") as archive:
                 for name, content in members.items():
                     archive.writestr(name, content)
+            # `uv run` exports its own path as UV, so `make test-python UV=...`
+            # reaches here even when uv is not on PATH.
+            uv = os.environ.get("UV") or shutil.which("uv")
+            if not uv:
+                self.fail(
+                    "uv was not found: set UV to the uv executable or put uv on PATH"
+                )
             installed = subprocess.run(
                 [
-                    "uv",
+                    uv,
                     "pip",
                     "install",
                     "--python",
