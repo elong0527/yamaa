@@ -904,6 +904,20 @@ class TestValidatorCLI(unittest.TestCase):
         index.write_text(row.replace("description", "wrong description"))
         self.assertTrue(OWNER_EDITORIAL.validate_examples_index(self.root_dir))
 
+    def test_example_index_accepts_full_title_with_colon(self):
+        # The derived index (build_index) uses the benchmark README's full
+        # title as the description, so a title containing a colon must not
+        # be flagged just because the after-colon part differs from it.
+        examples = self.root_dir / "benchmarks"
+        case = examples / "good"
+        case.mkdir(parents=True)
+        (case / "README.md").write_text("# Good: description\n")
+        index = examples / "README.md"
+        index.write_text("| [`good`](good/) | Good: description |\n")
+        self.assertEqual(OWNER_EDITORIAL.validate_examples_index(self.root_dir), [])
+        index.write_text("| [`good`](good/) | Other: description |\n")
+        self.assertTrue(OWNER_EDITORIAL.validate_examples_index(self.root_dir))
+
     def test_example_index_is_derived_not_committed(self):
         # The committed README carries no index table; the index is derived
         # from the case directories, so a case absent from the committed
