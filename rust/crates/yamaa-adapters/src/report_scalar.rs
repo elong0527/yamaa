@@ -19,6 +19,122 @@ impl ScalarValue {
     pub(crate) fn from_core(value: Value) -> Self {
         Self(Scalar::from_core(value))
     }
+
+    /// Project to the owned JSON tree directly, in the same shape the serde
+    /// representation produces, without a text round trip.
+    pub(crate) fn to_json(&self) -> yamaa_core::json::Value {
+        use yamaa_core::json::Value as Json;
+        let (key, value) = match &self.0 {
+            Scalar::Missing(()) => ("missing", Json::Null),
+            Scalar::Int(text) => ("int", Json::String(text.clone())),
+            Scalar::Float(text) => ("float", Json::String(text.clone())),
+            Scalar::Str(text) => ("str", Json::String(text.clone())),
+            Scalar::Bool(value) => ("bool", Json::Bool(*value)),
+            Scalar::Date(temporal) => (
+                "date",
+                Json::Object(
+                    [
+                        ("text".into(), Json::String(temporal.text.clone())),
+                        (
+                            "precision".into(),
+                            Json::String(
+                                match temporal.precision {
+                                    DateCollected::Year => "year",
+                                    DateCollected::Month => "month",
+                                    DateCollected::Day => "day",
+                                }
+                                .into(),
+                            ),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+            ),
+            Scalar::Datetime(temporal) => (
+                "datetime",
+                Json::Object(
+                    [
+                        ("text".into(), Json::String(temporal.text.clone())),
+                        (
+                            "precision".into(),
+                            Json::String(
+                                match temporal.precision {
+                                    DateTimeCollected::Day => "day",
+                                    DateTimeCollected::Second => "second",
+                                }
+                                .into(),
+                            ),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+            ),
+        };
+        Json::Object([(key.into(), value)].into_iter().collect())
+    }
+
+    /// Admit an owned JSON tree in the serde representation's shape directly,
+    /// without a text round trip.
+    pub(crate) fn from_json(value: &yamaa_core::json::Value) -> Result<Self, Error> {
+        use yamaa_core::json::Value as Json;
+        let invalid = Error::InvalidScalar;
+        let object = value.as_object().ok_or(invalid)?;
+        if object.len() != 1 {
+            return Err(invalid);
+        }
+        let (key, payload) = object.iter().next().unwrap();
+        let temporal = |payload: &Json| -> Result<(String, String), Error> {
+            let fields = payload.as_object().ok_or(invalid)?;
+            if fields.len() != 2 {
+                return Err(invalid);
+            }
+            let text = fields
+                .get("text")
+                .and_then(Json::as_str)
+                .ok_or(invalid)?
+                .to_owned();
+            let precision = fields
+                .get("precision")
+                .and_then(Json::as_str)
+                .ok_or(invalid)?
+                .to_owned();
+            Ok((text, precision))
+        };
+        let scalar = match (key.as_str(), payload) {
+            ("missing", Json::Null) => Scalar::Missing(()),
+            ("int", Json::String(text)) => Scalar::Int(text.clone()),
+            ("float", Json::String(text)) => Scalar::Float(text.clone()),
+            ("str", Json::String(text)) => Scalar::Str(text.clone()),
+            ("bool", Json::Bool(value)) => Scalar::Bool(*value),
+            ("date", payload) => {
+                let (text, precision) = temporal(payload)?;
+                Scalar::Date(Temporal {
+                    text,
+                    precision: match precision.as_str() {
+                        "year" => DateCollected::Year,
+                        "month" => DateCollected::Month,
+                        "day" => DateCollected::Day,
+                        _ => return Err(invalid),
+                    },
+                })
+            }
+            ("datetime", payload) => {
+                let (text, precision) = temporal(payload)?;
+                Scalar::Datetime(Temporal {
+                    text,
+                    precision: match precision.as_str() {
+                        "day" => DateTimeCollected::Day,
+                        "second" => DateTimeCollected::Second,
+                        _ => return Err(invalid),
+                    },
+                })
+            }
+            _ => return Err(invalid),
+        };
+        Ok(Self(scalar))
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

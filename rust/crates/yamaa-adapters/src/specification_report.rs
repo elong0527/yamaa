@@ -1,5 +1,6 @@
 //! Format observed bounded standalone runs and publish through explicit host authority.
 //! Classified resource findings retain observations; opaque host failures stay opaque.
+use crate::json;
 use crate::{
     report_scalar::ScalarValue,
     report_storage::{StoredReport, StoredTable},
@@ -7,7 +8,7 @@ use crate::{
     specification_run::{CapturedAttempt, PortError},
     specification_run_view::RunView,
 };
-use yamaa_core::json::{json, Map, Value};
+use yamaa_core::json::{Map, Value};
 use yamaa_core::specification_run::SourceOrigin;
 use yamaa_core::{table::TableAccess, value::Value as Scalar};
 
@@ -36,7 +37,7 @@ impl From<crate::source_diagnostics::SourceProjectionError> for Error {
     }
 }
 fn plain(value: &Value) -> Result<Value, Error> {
-    if let Ok(scalar) = serde_json::from_str::<ScalarValue>(&value.to_string()) {
+    if let Ok(scalar) = ScalarValue::from_json(value) {
         return Ok(
             match scalar.into_core().map_err(|_| Error::InvalidObservation)? {
                 Scalar::Missing => Value::Null,
@@ -185,8 +186,8 @@ pub fn failure<E>(
             if response.table.is_some() {
                 return Err(Error::UnsupportedOutcome);
             }
-            let value: Value =
-                serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
+            let value: Value = crate::json_wire::decode(&response.outcome)
+                .map_err(|_| Error::InvalidObservation)?;
             if !response.retained_verifications.is_empty() {
                 verifications.extend(
                     check_observations(
@@ -287,7 +288,7 @@ pub fn failure<E>(
     let mut report = envelope(run, attempt, &id)?;
     if let Ok(response) = &attempt.result {
         let value: Value =
-            serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
+            crate::json_wire::decode(&response.outcome).map_err(|_| Error::InvalidObservation)?;
         set_handler_counts(&mut report, &value)?;
     }
     set_diagnostics(&mut report, diagnostics);
@@ -806,7 +807,7 @@ fn observations<E>(
         return failure(run, attempt, id.borrow());
     };
     let value: Value =
-        serde_json::from_str(&response.outcome).map_err(|_| Error::InvalidObservation)?;
+        crate::json_wire::decode(&response.outcome).map_err(|_| Error::InvalidObservation)?;
     let mut report = envelope(run, attempt, id)?;
     let completed = &response
         .execution

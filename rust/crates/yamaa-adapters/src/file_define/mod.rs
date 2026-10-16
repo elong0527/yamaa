@@ -340,6 +340,13 @@ impl Ports for NativePorts {
     fn decode_parquet(&mut self, bytes: &[u8]) -> Result<Self::Parquet, Self::ParquetError> {
         read_parquet(bytes)
     }
+    fn render_dataset_json<T: yamaa_core::table::TableAccess>(
+        &mut self,
+        document: &yamaa_core::submission_json::DatasetJsonDocument,
+        table: &T,
+    ) -> Result<Vec<u8>, yamaa_core::submission_composition::Finding> {
+        crate::submission_json::render(document, table)
+    }
     fn target(&self, path: &str, declaring: &str, written: &str) -> Result<Self::Target, Failure> {
         self.resources()
             .publication_target_from(declaring, written)

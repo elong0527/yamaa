@@ -82,10 +82,14 @@ public_table <- function(frame) {
 issue_rows <- function(frame) lapply(seq_len(nrow(frame)), function(index) list(
   phase=frame$phase[[index]], condition=frame$condition[[index]], requirement=frame$requirement[[index]],
   spec_paths=as.list(frame$spec_paths[[index]]), context=raw_json(frame$context[[index]])))
+# Read every plan column as text. Otherwise read.delim() types a column that is
+# blank on every row as logical NA (blank fields are missing in logical and
+# numeric columns even with na.strings = character()), and nzchar(NA) is TRUE.
+read_plan <- function(directory) read.delim(file.path(directory, "r.tsv"), colClasses = "character",
+  check.names = FALSE, quote = "", na.strings = character(), fileEncoding = "UTF-8")
 run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
   if (length(args) != 4L) stop("usage: public_conformance.R PLAN FIXTURES OUTPUT SOURCE_REVISION")
-  plan <- read.delim(file.path(args[[1L]], "r.tsv"), stringsAsFactors = FALSE,
-    check.names = FALSE, quote = "", na.strings = character(), fileEncoding = "UTF-8")
+  plan <- read_plan(args[[1L]])
   fixtures <- normalizePath(args[[2L]], mustWork = TRUE, winslash = "/")
   written <- args[[3L]]
   if (!grepl("^(/|[[:alpha:]]:)", written)) written <- file.path(getwd(), written)

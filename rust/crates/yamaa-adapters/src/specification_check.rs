@@ -49,11 +49,11 @@ mod tests {
             })
             .unwrap();
         let run = PreparedRun::prepare(document).unwrap();
-        let expected: yamaa_core::json::Value = serde_json::from_str(include_str!(
+        let expected: yamaa_core::json::Value = crate::json_wire::decode(include_str!(
             "../tests/fixtures/check_invalid_regex_truth.json"
         ))
         .unwrap();
-        let expected = serde_json::to_string(&expected).unwrap();
+        let expected = crate::json_wire::encode(&expected);
         assert_eq!(issues(&run).unwrap(), expected);
         assert_eq!(issues(&run).unwrap(), expected);
     }

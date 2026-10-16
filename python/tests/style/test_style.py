@@ -741,6 +741,13 @@ def test_command_line_exit_status(
     assert packed.read_text(encoding="utf-8") == CANONICAL
     with pytest.raises(SystemExit):
         main([*schema, "--select", "no_such_finding", str(clean)])
+    # A `--select` naming nothing must not silently pass a file with
+    # findings: an empty or commas-only value selects no findings and
+    # would exit 0. The same malformed value is refused for `--ignore`.
+    for option in ("--select", "--ignore"):
+        for value in ("", ",", " , "):
+            with pytest.raises(SystemExit):
+                main([*schema, option, value, str(packed)])
 
 
 def test_every_finding_is_named_by_its_contract_requirement() -> None:

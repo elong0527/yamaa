@@ -166,8 +166,7 @@ reduction: those contexts reduce rows the specification already constructed.
 value, not another reduced relation. The binding still evaluates once per
 record of the aggregate's one relation, and each record sees the same
 intermediate value for its row. A binding that reads a named intermediate
-without `keep` is an error. The R engine does not implement this requirement
-yet; it is Python-only for now.
+without `keep` is an error.
 
 ### Row-relative range narrowing
 

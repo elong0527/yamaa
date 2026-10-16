@@ -1044,6 +1044,7 @@ ADAM_DATASETS = frozenset(
         "ADLB",
         "ADLBC",
         "ADOE",
+        "ADPC",
         "ADPP",
         "ADQS",
         "ADRS",

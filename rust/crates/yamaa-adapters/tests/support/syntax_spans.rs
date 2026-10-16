@@ -1,5 +1,6 @@
 //! Source-site projection for typed development observations, with no parsing.
-use yamaa_core::json::{json, Value};
+use yamaa_adapters::json;
+use yamaa_core::json::Value;
 use yamaa_core::numeric_parser::SourceSpan;
 
 pub fn span(text: &str, site: SourceSpan) -> Value {

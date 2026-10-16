@@ -323,7 +323,7 @@ fn preparation_boundary(
         let Ok(message) = crate::specification_diagnostics::inheritance_failure_ref(error) else {
             return refused("prepare");
         };
-        let Ok(value) = serde_json::from_str::<yamaa_core::json::Value>(&message) else {
+        let Ok(value) = crate::json_wire::decode(&message) else {
             return refused("prepare");
         };
         return if value["outcome"]["status"] == "resource_limit" {
@@ -382,7 +382,7 @@ mod resource_tests {
             let error = Error::Project(file_project::Error::Environment(EnvironmentFailure::Root(
                 cause,
             )));
-            let mut context = yamaa_core::json::json!({
+            let mut context = crate::json!({
                 "stage":"environment", "code":"resource_limit", "resource":resource, "limit":limit,
             });
             if let Some(actual) = actual {
@@ -400,7 +400,7 @@ mod resource_tests {
                 );
                 assert_eq!(rows[0].requirement, None);
                 assert_eq!(rows[0].spec_paths, ["$"]);
-                assert_eq!(rows[0].context, context.to_string());
+                assert_eq!(rows[0].context, crate::json_wire::encode(&context));
             }
         }
     }
@@ -420,8 +420,8 @@ mod resource_tests {
         assert_eq!(project, original);
         assert_eq!(project.len(), 1);
         assert_eq!(
-            serde_json::from_str::<yamaa_core::json::Value>(&project[0].context).unwrap(),
-            yamaa_core::json::json!({"stage":"prepare", "code":"inventory"})
+            crate::json_wire::decode(&project[0].context).unwrap(),
+            crate::json!({"stage":"prepare", "code":"inventory"})
         );
     }
 
@@ -439,7 +439,7 @@ mod resource_tests {
                     identity: "/study/input/dm.csv".into(),
                     error: crate::file_resources::Error::Changed,
                 },
-                yamaa_core::json::json!({
+                crate::json!({
                     "stage":"prepare", "code":"resource_changed", "source":"/study/input/dm.csv",
                 }),
             ),
@@ -448,7 +448,7 @@ mod resource_tests {
                     node: 1,
                     error: Admission::Limit(limit()),
                 })),
-                yamaa_core::json::json!({
+                crate::json!({
                     "stage":"prepare", "code":"resource_limit", "resource":"inputs",
                     "limit":16, "actual":17, "source":"/study/producer.yaml",
                 }),
@@ -458,7 +458,7 @@ mod resource_tests {
                     node: 0,
                     error: P::Admission(Admission::Limit(limit())),
                 }),
-                yamaa_core::json::json!({
+                crate::json!({
                     "stage":"prepare", "code":"resource_limit", "resource":"inputs",
                     "limit":16, "actual":17, "source":"/study/adsl.yaml",
                 }),
@@ -468,7 +468,7 @@ mod resource_tests {
                     node: 1,
                     reason: "contradictory_snapshot",
                 }),
-                yamaa_core::json::json!({
+                crate::json!({
                     "stage":"check", "code":"graph_boundary", "reason":"contradictory_snapshot",
                     "source":"/study/producer.yaml",
                 }),
@@ -478,21 +478,21 @@ mod resource_tests {
                     node: None,
                     reason: "root",
                 })),
-                yamaa_core::json::json!({"stage":"check", "code":"graph_boundary", "reason":"root"}),
+                crate::json!({"stage":"check", "code":"graph_boundary", "reason":"root"}),
             ),
             (
                 G::Graph(A::Metadata {
                     node: 0,
                     error: P::Boundary,
                 }),
-                yamaa_core::json::json!({
+                crate::json!({
                     "stage":"check", "code":"graph_boundary", "reason":"producer_admission",
                     "source":"/study/adsl.yaml",
                 }),
             ),
             (
                 G::Boundary("input_origin"),
-                yamaa_core::json::json!({
+                crate::json!({
                     "stage":"prepare", "code":"graph_boundary", "reason":"input_origin",
                 }),
             ),
@@ -509,7 +509,7 @@ mod resource_tests {
             );
             assert_eq!(rows[0].requirement, None);
             assert_eq!(
-                serde_json::from_str::<yamaa_core::json::Value>(&rows[0].context).unwrap(),
+                crate::json_wire::decode(&rows[0].context).unwrap(),
                 context,
                 "{error:?}"
             );
@@ -542,8 +542,8 @@ mod resource_tests {
         );
         assert_eq!(issue.requirement, None);
         assert_eq!(
-            serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap(),
-            yamaa_core::json::json!({
+            crate::json_wire::decode(&issue.context).unwrap(),
+            crate::json!({
                 "code":"resource_limit", "stage":"prepare", "phase":"validation", "resource":"semantic_depth", "limit":128,
             })
         );

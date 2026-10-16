@@ -1,10 +1,11 @@
 //! Convert retained native check observations into governed owned log artifacts.
 //! Neither host supplies these records, and no constructor accepts a publisher.
+use crate::json;
 use crate::{
     public_table::PublicTable, specification_report::Error, specification_run_view::RunView,
 };
 use std::{collections::BTreeMap, sync::Arc};
-use yamaa_core::json::{json, Value};
+use yamaa_core::json::Value;
 use yamaa_core::{
     dataset::VerificationSeverity,
     table::TableAccess,
@@ -38,6 +39,160 @@ impl HeldLog {
 }
 fn invalid<T>() -> Result<T, Error> {
     Err(Error::InvalidObservation)
+}
+
+/// Governed JSON byte projection for prepared log cells. Core owns record
+/// admission, count/severity rules and scalar semantics; this writer owns
+/// only the authored ordering, escaping and float/integer byte behavior of
+/// DETAILS/OFFENDING_KEYS values.
+#[derive(Default)]
+struct GovernedWriter {
+    output: String,
+}
+impl GovernedWriter {
+    fn write(&mut self, text: &str) {
+        self.output.push_str(text);
+    }
+    fn string(&mut self, text: &str) {
+        self.write("\"");
+        for character in text.chars() {
+            match character {
+                '"' => self.write("\\\""),
+                '\\' => self.write("\\\\"),
+                '\u{8}' => self.write("\\b"),
+                '\u{c}' => self.write("\\f"),
+                '\n' => self.write("\\n"),
+                '\r' => self.write("\\r"),
+                '\t' => self.write("\\t"),
+                c if (' '..='~').contains(&c) => {
+                    self.write(std::str::from_utf8(&[c as u8]).expect("ASCII"))
+                }
+                c => {
+                    for unit in c.encode_utf16(&mut [0; 2]) {
+                        self.write(&std::format!("\\u{unit:04x}"));
+                    }
+                }
+            }
+        }
+        self.write("\"")
+    }
+    fn json(&mut self, value: &Value) -> Result<(), core::Error> {
+        match value {
+            Value::Null => self.write("null"),
+            Value::Bool(value) => self.write(if *value { "true" } else { "false" }),
+            Value::String(value) => self.string(value),
+            Value::Number(number) if !number.is_integer() => {
+                let value = number
+                    .as_f64()
+                    .and_then(yamaa_core::value::FiniteFloat::new)
+                    .ok_or(core::Error::InvalidRecord)?;
+                self.write(&yamaa_core::conversion::float_text(value))
+            }
+            Value::Number(number) => self.write(number.as_str()),
+            Value::Array(values) => return self.sequence(values),
+            Value::Object(values) => return self.object(values),
+        }
+        Ok(())
+    }
+    fn sequence(&mut self, values: &[Value]) -> Result<(), core::Error> {
+        self.write("[");
+        for (index, value) in values.iter().enumerate() {
+            if index > 0 {
+                self.write(",");
+            }
+            self.json(value)?;
+        }
+        self.write("]");
+        Ok(())
+    }
+    fn object<'a>(
+        &mut self,
+        values: impl IntoIterator<Item = (&'a String, &'a Value)>,
+    ) -> Result<(), core::Error> {
+        self.write("{");
+        for (index, (name, value)) in values.into_iter().enumerate() {
+            if index > 0 {
+                self.write(",");
+            }
+            self.string(name);
+            self.write(":");
+            self.json(value)?;
+        }
+        self.write("}");
+        Ok(())
+    }
+}
+fn governed(
+    write: impl FnOnce(&mut GovernedWriter) -> Result<(), core::Error>,
+) -> Result<String, core::Error> {
+    let mut writer = GovernedWriter::default();
+    write(&mut writer)?;
+    Ok(writer.output)
+}
+
+/// Encode prepared typed rows into governed text cells and assemble the
+/// final tables through the core schema owner.
+pub(crate) fn project(prepared: core::Prepared) -> Result<core::Logs, core::Error> {
+    fn rows(
+        prepared: Vec<Vec<core::PreparedCell>>,
+    ) -> Result<Vec<Vec<yamaa_core::value::Value>>, core::Error> {
+        prepared
+            .into_iter()
+            .map(|row| {
+                row.into_iter()
+                    .map(|cell| {
+                        Ok(match cell {
+                            core::PreparedCell::Missing => yamaa_core::value::Value::Missing,
+                            core::PreparedCell::Text(text) => yamaa_core::value::Value::Str(text),
+                            core::PreparedCell::Count(count) => {
+                                yamaa_core::value::Value::Int(count)
+                            }
+                            core::PreparedCell::Details(details) => {
+                                yamaa_core::value::Value::Str(governed(|writer| {
+                                    writer.object(&details)
+                                })?)
+                            }
+                            core::PreparedCell::Keys(keys) => {
+                                yamaa_core::value::Value::Str(governed(|writer| {
+                                    writer.sequence(&keys)
+                                })?)
+                            }
+                        })
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+    Ok(core::assemble(
+        prepared.verification.map(rows).transpose()?,
+        prepared.warning.map(rows).transpose()?,
+    ))
+}
+
+fn core_logs(
+    records: &[Record],
+    artifact: &str,
+    verification: bool,
+    warning: bool,
+    success: bool,
+) -> Result<core::Logs, Error> {
+    let prepared =
+        core::prepare(records, artifact, verification, warning, success).map_err(map_core_error)?;
+    project(prepared).map_err(map_core_error)
+}
+
+fn map_core_error(error: core::Error) -> Error {
+    match error {
+        core::Error::Limit(error) => {
+            Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                error.resource,
+                error.limit,
+                error.actual,
+                Vec::new(),
+            ))
+        }
+        core::Error::InvalidRecord => Error::InvalidObservation,
+    }
 }
 fn text(record: &Value, field: &str) -> Result<String, Error> {
     record[field]
@@ -215,24 +370,13 @@ pub(crate) fn prepare_into(
         return Ok(());
     }
     let records = records(report)?;
-    let logs = core::build(
+    let logs = core_logs(
         &records,
         run.compiled().output_path(),
         declarations.verification().is_some(),
         false,
         success,
-    )
-    .map_err(|error| match error {
-        core::Error::Limit(error) => {
-            Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                error.resource,
-                error.limit,
-                error.actual,
-                Vec::new(),
-            ))
-        }
-        core::Error::InvalidRecord => Error::InvalidObservation,
-    })?;
+    )?;
     output.verification = logs
         .verification
         .map(|table| {
@@ -246,18 +390,7 @@ pub(crate) fn prepare_into(
         .transpose()?;
     // The verification capability is retained before warning preparation enters.
     let warning = if let Some(path) = declarations.warning().filter(|_| success) {
-        core::build(&records, run.compiled().output_path(), false, true, true)
-            .map_err(|error| match error {
-                core::Error::Limit(error) => {
-                    Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                        error.resource,
-                        error.limit,
-                        error.actual,
-                        Vec::new(),
-                    ))
-                }
-                core::Error::InvalidRecord => Error::InvalidObservation,
-            })
+        core_logs(&records, run.compiled().output_path(), false, true, true)
             .and_then(|logs| held(path, logs.warning.expect("declared warning log")))
             .map(Some)
     } else {
@@ -317,4 +450,137 @@ pub(crate) fn location_findings(
         }
     }
     findings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use yamaa_core::table::ValueRef;
+
+    fn range_failed() -> yamaa_core::diagnostic::Definition {
+        yamaa_core::diagnostic::ConditionCode::VerificationRangeFailed.definition()
+    }
+    fn held() -> Record {
+        Record {
+            path: "columns.AGE.verifications[0].not_missing".into(),
+            id: None,
+            check: "not_missing".into(),
+            target: Some("AGE".into()),
+            requirement: yamaa_core::diagnostic::ConditionCode::VerificationAllowedValuesFailed
+                .definition()
+                .requirement
+                .expect("registered requirement")
+                .into(),
+            severity: VerificationSeverity::Error,
+            evaluated: 8,
+            failure: None,
+        }
+    }
+    fn warning() -> Record {
+        Record {
+            path: "columns.AGE.verifications[1].range".into(),
+            id: Some("é🙂".into()),
+            check: "range".into(),
+            target: Some("AGE".into()),
+            requirement: range_failed()
+                .requirement
+                .expect("registered requirement")
+                .into(),
+            severity: VerificationSeverity::Warning,
+            evaluated: 8,
+            failure: Some(Failure {
+                condition: range_failed().condition.into(),
+                count: 7,
+                keys: (0..7)
+                    .map(|n| Value::Object([("ID".into(), Value::from(n))].into_iter().collect()))
+                    .collect(),
+                details: BTreeMap::from([
+                    ("z".into(), Value::String("é🙂\n\t\0\"\\".into())),
+                    ("minimum".into(), Value::from(i64::MIN)),
+                ]),
+            }),
+        }
+    }
+    fn logs(records: &[Record]) -> core::Logs {
+        project(core::prepare(records, "out.csv", true, true, true).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn governed_projection_preserves_ascii_details_and_all_keys() {
+        let logs = logs(&[held(), warning()]);
+        let verification = logs.verification.unwrap();
+        assert_eq!(verification.row_count(), 2);
+        assert_eq!(verification.cell(0, 3).unwrap(), ValueRef::Missing);
+        assert_eq!(verification.cell(0, 8).unwrap(), ValueRef::Str("held"));
+        assert_eq!(verification.cell(0, 9).unwrap(), ValueRef::Missing);
+        assert_eq!(verification.cell(0, 11).unwrap(), ValueRef::Int(0));
+        assert_eq!(verification.cell(0, 12).unwrap(), ValueRef::Str("{}"));
+        let expected =
+            "{\"minimum\":-9223372036854775808,\"z\":\"\\u00e9\\ud83d\\ude42\\n\\t\\u0000\\\"\\\\\"}";
+        assert_eq!(verification.cell(1, 12).unwrap(), ValueRef::Str(expected));
+        let warning = logs.warning.unwrap();
+        assert_eq!(warning.row_count(), 1);
+        assert_eq!(warning.schema().columns().len(), 10);
+        assert_eq!(warning.cell(0, 7).unwrap(), ValueRef::Int(7));
+        assert_eq!(
+            warning.cell(0, 8).unwrap(),
+            ValueRef::Str(
+                "[{\"ID\":0},{\"ID\":1},{\"ID\":2},{\"ID\":3},{\"ID\":4},{\"ID\":5},{\"ID\":6}]"
+            )
+        );
+        assert_eq!(warning.cell(0, 9).unwrap(), ValueRef::Str(expected));
+    }
+
+    #[test]
+    fn governed_projection_preserves_canonical_numbers_and_temporal_values() {
+        let mut record = warning();
+        record.failure.as_mut().unwrap().details = BTreeMap::from([
+            (
+                "date".into(),
+                Value::from(yamaa_core::value::Value::Date(
+                    "2025-01-02".parse().unwrap(),
+                )),
+            ),
+            (
+                "datetime".into(),
+                Value::from(yamaa_core::value::Value::DateTime(
+                    "2025-01-02T03:04".parse().unwrap(),
+                )),
+            ),
+            (
+                "integer_float".into(),
+                Value::from(yamaa_core::value::Value::float(1.0)),
+            ),
+            (
+                "large".into(),
+                Value::from(yamaa_core::value::Value::float(1.0e20)),
+            ),
+            (
+                "negzero".into(),
+                Value::from(yamaa_core::value::Value::float(-0.0)),
+            ),
+            (
+                "tiny".into(),
+                Value::from(yamaa_core::value::Value::float(1.0e-7)),
+            ),
+            (
+                "wide".into(),
+                Value::Number(
+                    "12345678901234567890123456789012345678901234567890"
+                        .parse()
+                        .unwrap(),
+                ),
+            ),
+        ]);
+        let logs = logs(&[record]);
+        let expected = r#"{"date":"2025-01-02","datetime":"2025-01-02T03:04:00","integer_float":1,"large":100000000000000000000,"negzero":-0,"tiny":0.0000001,"wide":12345678901234567890123456789012345678901234567890}"#;
+        assert_eq!(
+            logs.verification.as_ref().unwrap().cell(0, 12).unwrap(),
+            ValueRef::Str(expected)
+        );
+        assert_eq!(
+            logs.warning.as_ref().unwrap().cell(0, 9).unwrap(),
+            ValueRef::Str(expected)
+        );
+    }
 }

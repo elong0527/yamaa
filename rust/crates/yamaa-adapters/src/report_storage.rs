@@ -199,7 +199,7 @@ impl StoredReport {
         .expect("admitted immutable report serialization")
     }
     pub fn observations_value(&self, build: bool) -> Value {
-        serde_json::from_str(&self.observations_json(build))
+        crate::json_wire::decode(&self.observations_json(build))
             .expect("admitted immutable report JSON")
     }
 }
@@ -257,9 +257,9 @@ impl Serialize for ReportView<'_> {
                     },
                 )?;
             } else if self.build && name == "artifacts" {
-                map.serialize_entry(name, &[] as &[Value])?;
+                map.serialize_entry(name, &[] as &[crate::json_wire::WireValue<'_>])?;
             } else {
-                map.serialize_entry(name, value)?;
+                map.serialize_entry(name, &crate::json_wire::WireValue(value))?;
             }
         }
         map.end()
@@ -296,7 +296,7 @@ impl Serialize for TableView<'_> {
             if name == "rows" {
                 map.serialize_entry(name, self.rows)?;
             } else {
-                map.serialize_entry(name, value)?;
+                map.serialize_entry(name, &crate::json_wire::WireValue(value))?;
             }
         }
         map.end()
@@ -395,9 +395,9 @@ mod tests {
             r#"[[{"type":"float","value":"8000000000000000"},{"type":"missing","value":null}]]"#;
         let rows: Arc<RawValue> = Arc::from(RawValue::from_string(raw.to_owned()).unwrap());
         let first = StoredReport::with_tables(
-            yamaa_core::json::json!({"tables":[],"artifacts":[{"path":"out.csv"}]}),
+            crate::json!({"tables":[],"artifacts":[{"path":"out.csv"}]}),
             vec![StoredTable {
-                metadata: yamaa_core::json::json!({"name":"ROOT","rows":null}),
+                metadata: crate::json!({"name":"ROOT","rows":null}),
                 rows: Arc::clone(&rows),
             }],
         );
@@ -407,9 +407,9 @@ mod tests {
         let value = clone.observations_value(true);
         assert_eq!(
             value["tables"][0]["rows"],
-            serde_json::from_str::<Value>(raw).unwrap()
+            crate::json_wire::decode(raw).unwrap()
         );
-        assert_eq!(value["artifacts"], yamaa_core::json::json!([]));
+        assert_eq!(value["artifacts"], crate::json!([]));
         assert_eq!(
             clone.observations_value(false)["artifacts"][0]["path"],
             "out.csv"

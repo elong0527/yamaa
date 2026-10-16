@@ -1,6 +1,7 @@
 //! Encode an already admitted borrowed core context tree into the issue envelope.
 use crate::issue_rows::{InvalidIssue, Issue};
-use yamaa_core::json::{json, Map, Value as Json};
+use crate::json;
+use yamaa_core::json::{Map, Value as Json};
 use yamaa_core::project_diagnostics::{Diagnostic, Fact};
 
 pub(crate) fn fact(value: Fact<'_>) -> Json {

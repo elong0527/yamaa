@@ -67,6 +67,10 @@ pub struct Resource {
 pub struct Entry {
     pub entry: String,
     pub schema_version: String,
+    #[serde(
+        serialize_with = "crate::json_wire::serialize_value",
+        deserialize_with = "crate::json_wire::deserialize_value"
+    )]
     pub specification: Value,
     /// JSON object keys are sorted; this ledger preserves authored mapping order.
     pub mapping_order: BTreeMap<String, Vec<String>>,

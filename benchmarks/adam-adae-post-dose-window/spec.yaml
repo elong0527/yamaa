@@ -1,0 +1,107 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+  EX: {path: input/ex.csv, types: {EXSEQ: int, EXSTDTC: datetime}}
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, ASTDTM, DOSE24FL,
+    DOSENUM]
+
+intermediates:
+  # The dose whose window holds the onset. Doses are numbered per subject
+  # in order of start. A window opens at the dose start and closes 24 hours
+  # later, the closing moment itself outside; datetimes are whole seconds,
+  # so the last second before the close is the inclusive upper bound. When
+  # two windows hold the onset, the later dose start wins.
+  - id: DOSEWIN
+    dataset: EX
+    key: [STUDYID, USUBJID]
+    between: {value: ASTDTM, lower: EXSTDTC, upper: WINLAST}
+    order_by: [EX.EXSTDTC]
+    keep: last
+    no_match: null
+    derivations:
+      DOSENUM:
+        row_number:
+          window:
+            group_by: [EX.STUDYID, EX.USUBJID]
+            order_by: [EX.EXSTDTC, EX.EXSEQ]
+      WINEND: {datetime_shift: {source: EXSTDTC, amount: 24, unit: hour}}
+      WINLAST: {datetime_shift: {source: WINEND, amount: -1, unit: second}}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation: AE.AEDECOD
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      to_date:
+        source: AE.AESTDTC
+
+  # S when the onset was collected with a time of day, D for a date alone.
+  - name: ASTTPR
+    type: str
+    label: Onset Date/Time Collected Precision
+    derivation:
+      datetime_precision:
+        source: AE.AESTDTC
+        missing: null
+
+  # Only an onset collected with a time is a moment; no time is imputed,
+  # so a date alone leaves the onset moment empty and the event outside
+  # every window.
+  - name: ASTDTM
+    type: datetime
+    label: Analysis Start Date/Time
+    derivation:
+      case:
+        - when: "ASTTPR = 'S'"
+          then: AE.AESTDTC
+
+  - name: DOSENUM
+    type: int
+    label: Dose Number of the Window Holding Onset
+    derivation: DOSEWIN.DOSENUM
+
+  - name: DOSE24FL
+    type: str
+    label: Onset Within 24 h of Dose Start Flag
+    derivation:
+      flag: "DOSENUM IS NOT NULL"
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 8
+      max: 8
+  - assert:
+      id: flagged-onset-has-a-time
+      when: "DOSE24FL = 'Y'"
+      require: "ASTDTM IS NOT NULL"

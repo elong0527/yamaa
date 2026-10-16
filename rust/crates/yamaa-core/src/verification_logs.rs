@@ -1,10 +1,15 @@
 //! Fixed governed verification tables from completed check records, with no IO.
+//! Core owns record admission, count/severity rules, scalar semantics and the
+//! governed column schemas, and prepares typed rows. The governed JSON byte
+//! projection of DETAILS/OFFENDING_KEYS cells is owned by yamaa-adapters'
+//! `verification_logs` projection, which encodes the prepared cells and hands
+//! plain rows back to `assemble` here so table construction stays with the
+//! schema owner.
 use crate::{
-    conversion::float_text,
     dataset::VerificationSeverity,
     limits::{LimitExceeded, Limits},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
-    value::{ColumnType, FiniteFloat, Value},
+    value::{ColumnType, Value},
 };
 use std::convert::Infallible;
 use std::{
@@ -40,7 +45,7 @@ pub enum Error {
     Limit(#[from] LimitExceeded),
 }
 
-pub(crate) const VERIFICATION_COLUMNS: &[&str] = &[
+pub const VERIFICATION_COLUMNS: &[&str] = &[
     "REPORT_VERSION",
     "ARTIFACT",
     "SPEC_PATH",
@@ -55,7 +60,7 @@ pub(crate) const VERIFICATION_COLUMNS: &[&str] = &[
     "FAILURE_COUNT",
     "DETAILS",
 ];
-pub(crate) const WARNING_COLUMNS: &[&str] = &[
+pub const WARNING_COLUMNS: &[&str] = &[
     "LOG_VERSION",
     "ARTIFACT",
     "SEVERITY",
@@ -93,6 +98,37 @@ pub struct Logs {
     pub warning: Option<LogTable>,
 }
 
+/// Assemble governed tables from adapter-projected rows. The projection has
+/// already encoded every `PreparedCell::Details`/`PreparedCell::Keys` cell
+/// into its governed JSON text (a plain string cell here); column names,
+/// order and integer kinds remain owned by this module.
+pub fn assemble(verification: Option<Vec<Vec<Value>>>, warning: Option<Vec<Vec<Value>>>) -> Logs {
+    Logs {
+        verification: verification.map(|rows| table(VERIFICATION_COLUMNS, &[10, 11], rows)),
+        warning: warning.map(|rows| table(WARNING_COLUMNS, &[7], rows)),
+    }
+}
+
+/// One typed log cell before governed byte projection. Details and keys keep
+/// their owned JSON trees so the adapter projection can encode them with the
+/// governed ordering, escaping and float/integer behavior.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PreparedCell {
+    Missing,
+    Text(String),
+    Count(i64),
+    Details(BTreeMap<String, Json>),
+    Keys(Vec<Json>),
+}
+
+/// Typed governed rows: the complete result of core admission and row
+/// semantics, awaiting only the adapter byte projection of JSON cells.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Prepared {
+    pub verification: Option<Vec<Vec<PreparedCell>>>,
+    pub warning: Option<Vec<Vec<PreparedCell>>>,
+}
+
 fn validate_json(value: &Json, depth: usize) -> Result<(), Error> {
     Limits::semantic_depth(depth)?;
     match value {
@@ -120,88 +156,6 @@ fn validate_json(value: &Json, depth: usize) -> Result<(), Error> {
     }
     Ok(())
 }
-#[derive(Default)]
-struct Writer {
-    output: String,
-}
-impl Writer {
-    fn write(&mut self, text: &str) {
-        self.output.push_str(text);
-    }
-    fn string(&mut self, text: &str) {
-        self.write("\"");
-        for character in text.chars() {
-            match character {
-                '"' => self.write("\\\""),
-                '\\' => self.write("\\\\"),
-                '\u{8}' => self.write("\\b"),
-                '\u{c}' => self.write("\\f"),
-                '\n' => self.write("\\n"),
-                '\r' => self.write("\\r"),
-                '\t' => self.write("\\t"),
-                c if (' '..='~').contains(&c) => {
-                    self.write(std::str::from_utf8(&[c as u8]).expect("ASCII"))
-                }
-                c => {
-                    for unit in c.encode_utf16(&mut [0; 2]) {
-                        self.write(&std::format!("\\u{unit:04x}"));
-                    }
-                }
-            }
-        }
-        self.write("\"")
-    }
-    fn json(&mut self, value: &Json) -> Result<(), Error> {
-        match value {
-            Json::Null => self.write("null"),
-            Json::Bool(value) => self.write(if *value { "true" } else { "false" }),
-            Json::String(value) => self.string(value),
-            Json::Number(number) if !number.is_integer() => {
-                let value = number
-                    .as_f64()
-                    .and_then(FiniteFloat::new)
-                    .ok_or(Error::InvalidRecord)?;
-                self.write(&float_text(value))
-            }
-            Json::Number(number) => self.write(number.as_str()),
-            Json::Array(values) => return self.sequence(values),
-            Json::Object(values) => return self.object(values),
-        }
-        Ok(())
-    }
-    fn sequence(&mut self, values: &[Json]) -> Result<(), Error> {
-        self.write("[");
-        for (index, value) in values.iter().enumerate() {
-            if index > 0 {
-                self.write(",");
-            }
-            self.json(value)?;
-        }
-        self.write("]");
-        Ok(())
-    }
-    fn object<'a>(
-        &mut self,
-        values: impl IntoIterator<Item = (&'a String, &'a Json)>,
-    ) -> Result<(), Error> {
-        self.write("{");
-        for (index, (name, value)) in values.into_iter().enumerate() {
-            if index > 0 {
-                self.write(",");
-            }
-            self.string(name);
-            self.write(":");
-            self.json(value)?;
-        }
-        self.write("}");
-        Ok(())
-    }
-}
-fn encoded(write: impl FnOnce(&mut Writer) -> Result<(), Error>) -> Result<String, Error> {
-    let mut writer = Writer::default();
-    write(&mut writer)?;
-    Ok(writer.output)
-}
 fn table(names: &[&str], integers: &[usize], rows: Vec<Vec<Value>>) -> LogTable {
     LogTable {
         schema: TableSchema::new(
@@ -222,27 +176,25 @@ fn table(names: &[&str], integers: &[usize], rows: Vec<Vec<Value>>) -> LogTable 
         rows,
     }
 }
-fn text(value: &str) -> Value {
-    Value::Str(value.into())
+fn text(value: &str) -> PreparedCell {
+    PreparedCell::Text(value.into())
 }
-fn optional(value: Option<&str>) -> Value {
-    value.map_or(Value::Missing, text)
+fn optional(value: Option<&str>) -> PreparedCell {
+    value.map_or(PreparedCell::Missing, text)
 }
-fn count(value: usize) -> Result<Value, Error> {
-    i64::try_from(value)
-        .map(Value::Int)
-        .map_err(|_| Error::InvalidRecord)
+fn count(value: usize) -> Result<i64, Error> {
+    i64::try_from(value).map_err(|_| Error::InvalidRecord)
 }
 
 /// Validate the complete record set before allocating row copies. Failed runs
 /// retain verification rows only; declared empty logs retain the fixed schema.
-pub fn build(
+pub fn prepare(
     records: &[Record],
     artifact: &str,
     verification: bool,
     warning: bool,
     success: bool,
-) -> Result<Logs, Error> {
+) -> Result<Prepared, Error> {
     let warnings = records
         .iter()
         .filter(|record| {
@@ -308,9 +260,9 @@ pub fn build(
             Some(failure) => (
                 Some(failure.condition.as_str()),
                 failure.count,
-                encoded(|writer| writer.object(&failure.details))?,
+                PreparedCell::Details(failure.details.clone()),
             ),
-            None => (None, 0, "{}".into()),
+            None => (None, 0, PreparedCell::Details(BTreeMap::new())),
         };
         if verification {
             verification_rows.push(vec![
@@ -328,14 +280,13 @@ pub fn build(
                     "held"
                 }),
                 optional(condition),
-                count(record.evaluated)?,
-                count(failed)?,
-                text(&details),
+                PreparedCell::Count(count(record.evaluated)?),
+                PreparedCell::Count(count(failed)?),
+                details.clone(),
             ]);
         }
         if emits_warning {
             if let Some(failure) = &record.failure {
-                let keys = encoded(|writer| writer.sequence(&failure.keys))?;
                 warning_rows.push(vec![
                     text("1.0"),
                     text(artifact),
@@ -344,16 +295,15 @@ pub fn build(
                     text(&record.requirement),
                     text(&record.path),
                     optional(record.id.as_deref()),
-                    count(failed)?,
-                    text(&keys),
-                    text(&details),
+                    PreparedCell::Count(count(failed)?),
+                    PreparedCell::Keys(failure.keys.clone()),
+                    details,
                 ]);
             }
         }
     }
-    Ok(Logs {
-        verification: verification
-            .then(|| table(VERIFICATION_COLUMNS, &[10, 11], verification_rows)),
-        warning: (warning && success).then(|| table(WARNING_COLUMNS, &[7], warning_rows)),
+    Ok(Prepared {
+        verification: verification.then_some(verification_rows),
+        warning: (warning && success).then_some(warning_rows),
     })
 }

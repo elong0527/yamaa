@@ -7,7 +7,8 @@ pub(crate) enum Error {
 }
 // Stable outcomes keep language findings, policy refusal and transport defects separate.
 
-use yamaa_core::json::{json, Value};
+use crate::json;
+use yamaa_core::json::Value;
 use yamaa_core::{regex, schema::*};
 
 pub(crate) fn limit(phase: &str, resource: &str, limit: usize) -> Value {

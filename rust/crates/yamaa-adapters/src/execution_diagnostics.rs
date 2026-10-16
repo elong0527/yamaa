@@ -90,7 +90,7 @@ mod tests {
         let value = *failure(&error).unwrap();
         assert_eq!(value.as_object().unwrap().len(), 5);
         let issue = crate::issue_rows::Issue::from_diagnostic(value).unwrap();
-        let expected: Value = serde_json::from_str(include_str!(
+        let expected: Value = crate::json_wire::decode(include_str!(
             "../tests/fixtures/retired_probe_diagnostics.json"
         ))
         .unwrap();
@@ -100,8 +100,11 @@ mod tests {
             issue.requirement.as_deref(),
             expected["requirement"].as_str()
         );
-        let context: Value = serde_json::from_str(&issue.context).unwrap();
+        let context: Value = crate::json_wire::decode(&issue.context).unwrap();
         assert_eq!(context, expected["context"]);
-        assert_eq!(context["value_count"].to_string(), usize::MAX.to_string());
+        assert_eq!(
+            crate::json_wire::encode(&context["value_count"]),
+            usize::MAX.to_string()
+        );
     }
 }

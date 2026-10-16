@@ -45,6 +45,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     select = _names(arguments.select)
     ignore = _names(arguments.ignore) or set()
+    # A `--select` that names nothing (an empty or commas-only value, as a
+    # shell variable expanding to nothing produces) would otherwise check
+    # no findings at all and exit 0 on a file full of them: a silent pass.
+    # An empty `--ignore` is the same malformed argument, refused alike.
+    if arguments.select is not None and not select:
+        parser.error("--select names no style finding")
+    if arguments.ignore is not None and not ignore:
+        parser.error("--ignore names no style finding")
     unknown = sorted(((select or set()) | ignore) - FINDINGS.keys())
     if unknown:
         parser.error(f"unknown style finding: {', '.join(unknown)}")

@@ -141,8 +141,16 @@ def main():
             # The references are generated at docs build time and are not
             # committed; an absent file is current by construction. A file
             # materialized by a local build must still match its sources.
-            if path.exists() and path.read_text(encoding="ascii") != text:
-                stale.append(str(path.relative_to(args.root)))
+            if path.exists():
+                try:
+                    current = path.read_text(encoding="ascii")
+                except UnicodeDecodeError:
+                    # The generated text is pure ASCII, so a materialized
+                    # reference with non-ASCII bytes is stale by definition;
+                    # report it instead of dying with a traceback.
+                    current = None
+                if current != text:
+                    stale.append(str(path.relative_to(args.root)))
         else:
             path.write_text(text, encoding="ascii")
     for path in stale:

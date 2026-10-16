@@ -1,10 +1,11 @@
 //! Resolve shared inherited findings while preserving opaque host failures.
 use super::{capture_failure, captured_schema};
+use crate::json;
 use crate::{
     schema_outcomes as errors,
     specification_source::{InheritanceError, SourceFailure},
 };
-use yamaa_core::json::{json, Value};
+use yamaa_core::json::Value;
 use yamaa_core::schema::{
     Document, InheritanceDependencyError, InheritanceReferenceError, NormalizationError,
     SchemaStructure,

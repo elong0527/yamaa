@@ -60,7 +60,7 @@ mod execution {
                 .map(|issue| {
                     let mut value = issue.as_value();
                     assert!(value["context"].is_string());
-                    value["context"] = serde_json::from_str(&issue.context).unwrap();
+                    value["context"] = yamaa_adapters::json_wire::decode(&issue.context).unwrap();
                     value
                 })
                 .collect()
@@ -94,11 +94,11 @@ columns:
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([])
+                yamaa_adapters::json!([])
             );
             assert_eq!(
                 result.observations()["verifications"],
-                yamaa_core::json::json!([])
+                yamaa_adapters::json!([])
             );
             assert!(result.save().unwrap());
             assert_eq!(
@@ -120,7 +120,7 @@ columns:
             assert_eq!(
                 issues,
                 vec![
-                    yamaa_core::json::json!({"phase":"derivation","condition":"multiple_values_per_key","requirement":"REQ-0075","spec_paths":["columns.VALUE.derivation.case[0].when"],"context":{"identifier":"SRC.V","value_count":2,"keys":[{"ID":"a"}]}})
+                    yamaa_adapters::json!({"phase":"derivation","condition":"multiple_values_per_key","requirement":"REQ-0075","spec_paths":["columns.VALUE.derivation.case[0].when"],"context":{"identifier":"SRC.V","value_count":2,"keys":[{"ID":"a"}]}})
                 ]
             );
             assert!(result.save().is_err());
@@ -280,10 +280,12 @@ columns:
         #[test]
         fn independently_authored_installed_host_truth_has_the_same_complete_native_observations() {
             let truth: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/case_predicates.json")).unwrap();
-            let dispositions: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/case_predicate_dispositions.json"))
+                yamaa_adapters::json_wire::decode(include_str!("fixtures/case_predicates.json"))
                     .unwrap();
+            let dispositions: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
+                include_str!("fixtures/case_predicate_dispositions.json"),
+            )
+            .unwrap();
             for name in dispositions["cases"].as_object().unwrap().keys() {
                 assert!(
                     truth["cases"].get(name).is_some(),
@@ -309,10 +311,10 @@ columns:
                     .unwrap();
                 let findings = findings(&result);
                 assert_eq!(
-                    yamaa_core::json::json!(findings),
+                    yamaa_adapters::json!(findings),
                     case.get("findings")
                         .cloned()
-                        .unwrap_or_else(|| yamaa_core::json::json!([])),
+                        .unwrap_or_else(|| yamaa_adapters::json!([])),
                     "{name}"
                 );
                 if let Some(csv) = case.get("csv") {
@@ -332,7 +334,8 @@ columns:
 
         fn lookup_fixture(name: &str) -> (Fixture, String) {
             let truth: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/case_predicates.json")).unwrap();
+                yamaa_adapters::json_wire::decode(include_str!("fixtures/case_predicates.json"))
+                    .unwrap();
             let case = &truth["cases"][name];
             let fixture = Fixture::new();
             for (filename, contents) in case["inputs"].as_object().unwrap() {
@@ -348,7 +351,7 @@ columns:
             assert!(result.issues().is_empty());
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.VALUE.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"columns.VALUE.derivation.source.no_match","handler":"no_match","count":1}
                 ])
@@ -405,7 +408,7 @@ columns:
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([])
+                yamaa_adapters::json!([])
             );
             assert!(result.output().is_none());
             assert!(result.save().is_err());
@@ -442,8 +445,8 @@ columns:
                     vec![format!("verifications[0].assert.{field}")]
                 );
                 assert_eq!(
-                    serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap(),
-                    yamaa_core::json::json!({"identifier": "P.MISSING"})
+                    yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                    yamaa_adapters::json!({"identifier": "P.MISSING"})
                 );
                 assert!(result.output().is_none());
                 assert!(result.save().is_err());
@@ -538,7 +541,7 @@ columns:
             fs::write(fixture.0.join("alt.csv"), "ID,SEQ,CUT\n1,1,4\n3,1,2\n").unwrap();
         }
         fn finding(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_core::json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
         }
         #[test]
         fn complete_root_outputs_and_handler_geometry_are_current_row_specific() {
@@ -553,7 +556,7 @@ columns:
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":2},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
@@ -595,7 +598,7 @@ columns:
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"rows[0].derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"rows[0].derivations.A.source.no_match","handler":"no_match","count":1},
@@ -621,7 +624,7 @@ columns:
             assert_eq!(
                 issues,
                 [
-                    yamaa_core::json::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0120","spec_paths":["intermediates[0].filter"],"context":{"identifier":"SRC.CUT","intermediate":"P"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0120","spec_paths":["intermediates[0].filter"],"context":{"identifier":"SRC.CUT","intermediate":"P"}})
                 ]
             );
             assert!(!fixture.0.join("result.csv").exists());
@@ -641,7 +644,7 @@ columns:
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":4},
                     {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":4}
                 ])
@@ -656,7 +659,7 @@ columns:
             assert_eq!(
                 issues,
                 [
-                    yamaa_core::json::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0120","spec_paths":["intermediates[0].filter"],"context":{"identifier":"TIME","intermediate":"P","suggestion":"D.TIME"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0120","spec_paths":["intermediates[0].filter"],"context":{"identifier":"TIME","intermediate":"P","suggestion":"D.TIME"}})
                 ]
             );
         }
@@ -730,10 +733,10 @@ columns:
             }
         }
         fn issues(issues: &[yamaa_adapters::issue_rows::Issue]) -> Vec<yamaa_core::json::Value> {
-            issues.iter().map(|i|yamaa_core::json::json!({"phase":i.phase,"condition":i.condition,"requirement":i.requirement,"spec_paths":i.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&i.context).unwrap()})).collect()
+            issues.iter().map(|i|yamaa_adapters::json!({"phase":i.phase,"condition":i.condition,"requirement":i.requirement,"spec_paths":i.spec_paths,"context":yamaa_adapters::json_wire::decode(&i.context).unwrap()})).collect()
         }
         fn reference() -> yamaa_core::json::Value {
-            serde_json::from_str(include_str!("fixtures/flag_reference.json")).unwrap()
+            yamaa_adapters::json_wire::decode(include_str!("fixtures/flag_reference.json")).unwrap()
         }
         #[test]
         fn six_unchanged_original_positive_documents_match_csv_and_full_handlers() {
@@ -938,7 +941,7 @@ columns:
                 Ok(result) => result.issues().to_vec(),
                 Err(records) => records,
             };
-            records.iter().map(|issue| yamaa_core::json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()})).collect()
+            records.iter().map(|issue| yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})).collect()
         }
         const BODY: &str = r#"schema_version: '1.0'
 domain: TEST
@@ -978,7 +981,7 @@ columns:
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
@@ -993,7 +996,7 @@ columns:
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![
-                    yamaa_core::json::json!({"phase":"validation", "condition":"rename_only_intermediate", "requirement":"REQ-1248", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P","dataset":"DONOR"}})
+                    yamaa_adapters::json!({"phase":"validation", "condition":"rename_only_intermediate", "requirement":"REQ-1248", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P","dataset":"DONOR"}})
                 ]
             );
             assert!(!fixture.0.join("src.csv").exists());
@@ -1015,7 +1018,7 @@ columns:
                 assert_eq!(
                     issues(fixture.run(&authored)),
                     vec![
-                        yamaa_core::json::json!({"phase":"validation", "condition":"rename_only_intermediate", "requirement":"REQ-1248", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P","dataset":"DONOR"}})
+                        yamaa_adapters::json!({"phase":"validation", "condition":"rename_only_intermediate", "requirement":"REQ-1248", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P","dataset":"DONOR"}})
                     ]
                 );
                 assert!(!fixture.0.join("src.csv").exists());
@@ -1032,7 +1035,7 @@ columns:
                 assert_eq!(
                     issues(fixture.run(&BODY.replace(line, ""))),
                     vec![
-                        yamaa_core::json::json!({"phase":"validation", "condition":"unpaired_fields", "requirement":"REQ-0119", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P", "declared":[declared], "missing":[missing]}})
+                        yamaa_adapters::json!({"phase":"validation", "condition":"unpaired_fields", "requirement":"REQ-0119", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P", "declared":[declared], "missing":[missing]}})
                     ]
                 );
             }
@@ -1049,7 +1052,7 @@ columns:
             assert_eq!(
                 issues(fixture.run(&unused)),
                 vec![
-                    yamaa_core::json::json!({"phase":"validation", "condition":"no_applicable_keys", "requirement":"REQ-0153", "spec_paths":["intermediates[0]"], "context":{"dataset":"DONOR", "keys":["ID","PARAM"], "hint":"declare the `key` explicitly"}})
+                    yamaa_adapters::json!({"phase":"validation", "condition":"no_applicable_keys", "requirement":"REQ-0153", "spec_paths":["intermediates[0]"], "context":{"dataset":"DONOR", "keys":["ID","PARAM"], "hint":"declare the `key` explicitly"}})
                 ]
             );
             fs::write(fixture.0.join("donor.csv"), "ID,PARAM,SEQ,A,B\nx,0,0,a,b\n").unwrap();
@@ -1057,7 +1060,7 @@ columns:
             assert_eq!(
                 issues(fixture.run(&mismatched)),
                 vec![
-                    yamaa_core::json::json!({"phase":"validation", "condition":"incompatible_input_type", "requirement":"REQ-0151", "spec_paths":["intermediates[0]"], "context":{"source":"ID", "expected":"int", "actual":"str"}})
+                    yamaa_adapters::json!({"phase":"validation", "condition":"incompatible_input_type", "requirement":"REQ-0151", "spec_paths":["intermediates[0]"], "context":{"source":"ID", "expected":"int", "actual":"str"}})
                 ]
             );
         }
@@ -1151,7 +1154,7 @@ columns:
             assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(),b"ID,A,B\n9007199254740992,lower,lower\n9007199254740993,exact,exact\n-9223372036854775808,,\n");
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
@@ -1232,13 +1235,14 @@ columns:
             }
         }
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_core::json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
         }
         #[test]
         fn independent_original_language_captures_match_all_output_bytes_and_complete_findings() {
-            let cases: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/intermediate_key_reference.json"))
-                    .unwrap();
+            let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/intermediate_key_reference.json"
+            ))
+            .unwrap();
             for (name, case) in cases.as_object().unwrap() {
                 let fixture = Fixture::new();
                 let mut result = fixture.run(name, case);
@@ -1265,13 +1269,14 @@ columns:
 
         #[test]
         fn resolved_source_keys_still_refuse_the_original_bad_donor_filter() {
-            let cases: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/intermediate_key_reference.json"))
-                    .unwrap();
+            let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/intermediate_key_reference.json"
+            ))
+            .unwrap();
             let mut case = cases["dependency_before_bad_filter"].clone();
             // Eliminate the independently captured key-cardinality failure, leaving the
             // same authored bad filter and a matched donor record for it to evaluate.
-            case["inputs"]["src.csv"] = yamaa_core::json::json!("ID,N\na,7\n");
+            case["inputs"]["src.csv"] = yamaa_adapters::json!("ID,N\na,7\n");
             let fixture = Fixture::new();
             let mut result = fixture.run("resolved-source-key-bad-filter", &case);
             assert_eq!(
@@ -1280,7 +1285,7 @@ columns:
             );
             assert_eq!(
                 result.issues().iter().map(issue_json).collect::<Vec<_>>(),
-                yamaa_core::json::json!([{
+                yamaa_adapters::json!([{
                     "phase": "validation",
                     "condition": "incompatible_input_type",
                     "requirement": "REQ-0190",
@@ -1298,12 +1303,13 @@ columns:
 
         #[test]
         fn ordinary_source_keys_keep_static_filter_types_before_key_cardinality() {
-            let cases: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/intermediate_key_reference.json"))
-                    .unwrap();
+            let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/intermediate_key_reference.json"
+            ))
+            .unwrap();
             let mut case = cases["dependency_before_bad_filter"].clone();
             case["specification"] =
-                yamaa_core::json::json!(case["specification"].as_str().unwrap().replace(
+                yamaa_adapters::json!(case["specification"].as_str().unwrap().replace(
                     "key: {K: {str_pad: {source: SRC.N, width: 8}}}",
                     "key: {KINT: SRC.N}"
                 ));
@@ -1315,7 +1321,7 @@ columns:
             );
             assert_eq!(
         result.issues().iter().map(issue_json).collect::<Vec<_>>(),
-        yamaa_core::json::json!([{
+        yamaa_adapters::json!([{
             "phase": "validation", "condition": "incompatible_input_type", "requirement": "REQ-0190",
             "spec_paths": ["intermediates[0].filter"], "context": {"left_type": "int", "right_type": "str"},
         }]).as_array().unwrap().as_slice()
@@ -1327,9 +1333,10 @@ columns:
 
         #[test]
         fn deferred_filter_types_refuse_empty_missing_and_unread_selectors() {
-            let cases: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/intermediate_key_reference.json"))
-                    .unwrap();
+            let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/intermediate_key_reference.json"
+            ))
+            .unwrap();
             for variant in [
                 "empty_donor",
                 "empty_driver",
@@ -1339,35 +1346,35 @@ columns:
                 "boolean_missing",
             ] {
                 let mut case = cases["dependency_before_bad_filter"].clone();
-                case["inputs"]["src.csv"] = yamaa_core::json::json!("ID,N\na,7\n");
+                case["inputs"]["src.csv"] = yamaa_adapters::json!("ID,N\na,7\n");
                 match variant {
-            "empty_donor" => case["inputs"]["tab.csv"] = yamaa_core::json::json!("K,KINT,KNUM,VAL\n"),
-            "empty_driver" => case["inputs"]["src.csv"] = yamaa_core::json::json!("ID,N\n"),
+            "empty_donor" => case["inputs"]["tab.csv"] = yamaa_adapters::json!("K,KINT,KNUM,VAL\n"),
+            "empty_driver" => case["inputs"]["src.csv"] = yamaa_adapters::json!("ID,N\n"),
             "missing_filter_operand" => {
                 case["inputs"]["tab.csv"] =
-                    yamaa_core::json::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n")
+                    yamaa_adapters::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n")
             }
             "unused" => {
-                case["specification"] = yamaa_core::json::json!(case["specification"]
+                case["specification"] = yamaa_adapters::json!(case["specification"]
                     .as_str()
                     .unwrap()
                     .replace("derivation: LOOK.VAL", "derivation: {literal: ok}"))
             }
             "unread_branch" => {
-                case["specification"] = yamaa_core::json::json!(case["specification"]
+                case["specification"] = yamaa_adapters::json!(case["specification"]
                     .as_str()
                     .unwrap()
                     .replace("derivation: LOOK.VAL", "derivation: {case: [{when: 'FALSE', then: {source: LOOK.VAL}}, {otherwise: {literal: ok}}]}"))
             }
             "boolean_missing" => {
-                case["inputs"]["tab.csv"] = yamaa_core::json::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n");
-                case["specification"] = yamaa_core::json::json!(case["specification"].as_str().unwrap().replace("TAB.KINT > 'bad'", "FALSE AND TAB.KINT > 'bad'"));
+                case["inputs"]["tab.csv"] = yamaa_adapters::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n");
+                case["specification"] = yamaa_adapters::json!(case["specification"].as_str().unwrap().replace("TAB.KINT > 'bad'", "FALSE AND TAB.KINT > 'bad'"));
             }
             _ => unreachable!(),
         }
                 let fixture = Fixture::new();
                 let mut result = fixture.run(variant, &case);
-                let expected = yamaa_core::json::json!([{"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0190","spec_paths":["intermediates[0].filter"],"context":{"left_type":"int","right_type":"str"}}]);
+                let expected = yamaa_adapters::json!([{"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0190","spec_paths":["intermediates[0].filter"],"context":{"left_type":"int","right_type":"str"}}]);
                 assert_eq!(
                     result.issues().iter().map(issue_json).collect::<Vec<_>>(),
                     expected.as_array().unwrap().as_slice(),
@@ -1400,13 +1407,14 @@ columns:
 
         #[test]
         fn expression_keys_without_type_refusals_keep_successful_selection_and_saves() {
-            let cases: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/intermediate_key_reference.json"))
-                    .unwrap();
+            let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/intermediate_key_reference.json"
+            ))
+            .unwrap();
             for filter in ["filter: \"TAB.KINT > 0\"", ""] {
                 let mut case = cases["dependency_before_bad_filter"].clone();
-                case["inputs"]["src.csv"] = yamaa_core::json::json!("ID,N\na,7\n");
-                case["specification"] = yamaa_core::json::json!(case["specification"]
+                case["inputs"]["src.csv"] = yamaa_adapters::json!("ID,N\na,7\n");
+                case["specification"] = yamaa_adapters::json!(case["specification"]
                     .as_str()
                     .unwrap()
                     .replace("filter: \"TAB.KINT > 'bad'\"", filter));
@@ -1562,7 +1570,7 @@ columns:
             assert_eq!(fs::read(f.0.join("result.csv")).unwrap(), b"ID,SEQ,X,A,B\n1,1,3,later,paired\n1,2,4,later,paired\n1,3,,absent,absent\n1,4,6,absent,absent\n2,1,3,absent,absent\n1,5,2,edge,\n");
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":3},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
@@ -1581,7 +1589,7 @@ columns:
             assert_eq!(fs::read(f.0.join("result.csv")).unwrap(), b"ID,SEQ,X,A,B\n1,1,3,later,paired\n1,2,4,later,paired\n1,3,,absent,absent\n1,4,6,missing-bound,hidden\n2,1,3,absent,absent\n1,5,2,later,paired\n");
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":3},
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":2},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":3},
@@ -1600,17 +1608,18 @@ columns:
                     .iter()
                     .map(|issue| {
                         let mut value = issue.as_value();
-                        value["context"] = serde_json::from_str(&issue.context).unwrap();
+                        value["context"] =
+                            yamaa_adapters::json_wire::decode(&issue.context).unwrap();
                         value
                     })
                     .collect::<Vec<_>>(),
                 [
-                    yamaa_core::json::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0125","spec_paths":["columns.B.derivation.source"],"context":{"identifier":"P.LOW"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0125","spec_paths":["columns.B.derivation.source"],"context":{"identifier":"P.LOW"}})
                 ]
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([])
+                yamaa_adapters::json!([])
             );
             assert!(matches!(result.save(), Err(file_application::FailedBuild)));
             assert!(!f.0.join("result.csv").exists());
@@ -1637,7 +1646,7 @@ columns:
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
                     {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
                 ])
@@ -1658,7 +1667,7 @@ columns:
             assert_eq!(fs::read(f.0.join("result.csv")).unwrap(), b"ID,SEQ,X,A,B\n1,1,3,later,paired\n1,2,4,later,paired\n1,3,,absent,absent\n1,4,6,absent,absent\n2,1,3,absent,absent\n1,5,2,edge,\n");
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"rows[0].derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"rows[0].derivations.A.source.no_match","handler":"no_match","count":3},
@@ -1689,7 +1698,7 @@ columns:
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
                     {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
                 ])
@@ -1718,7 +1727,7 @@ columns:
             // Predicate normalization retains the literal value and discards recovery sites.
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([])
+                yamaa_adapters::json!([])
             );
         }
 
@@ -1745,7 +1754,7 @@ columns:
     );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
                     {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
                 ])
@@ -1771,19 +1780,19 @@ columns:
                 .iter()
                 .map(|issue| {
                     let mut value = issue.as_value();
-                    value["context"] = serde_json::from_str(&issue.context).unwrap();
+                    value["context"] = yamaa_adapters::json_wire::decode(&issue.context).unwrap();
                     value
                 })
                 .collect::<Vec<_>>();
             assert_eq!(
                 findings,
                 [
-                    yamaa_core::json::json!({"phase":"validation","condition":"incomparable_range_types","requirement":"REQ-0121","spec_paths":["intermediates[0].between"],"context":{"intermediate":"EPOCHDEF","value_type":"date","lower_type":"int","upper_type":"int"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"incomparable_range_types","requirement":"REQ-0121","spec_paths":["intermediates[0].between"],"context":{"intermediate":"EPOCHDEF","value_type":"date","lower_type":"int","upper_type":"int"}})
                 ]
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([])
+                yamaa_adapters::json!([])
             );
             assert!(matches!(result.save(), Err(file_application::FailedBuild)));
             assert!(!f.0.join("vs.csv").exists());
@@ -1901,21 +1910,21 @@ columns:
                     "duplicate_order_term",
                     "output.order_by[2]",
                     "REQ-0224",
-                    yamaa_core::json::json!({"column":"USUBJID"}),
+                    yamaa_adapters::json!({"column":"USUBJID"}),
                 ),
                 (
                     "negative-order-unknown-column",
                     "undeclared_column",
                     "output.order_by[1]",
                     "REQ-0224",
-                    yamaa_core::json::json!({"column":"VISITNUM"}),
+                    yamaa_adapters::json!({"column":"VISITNUM"}),
                 ),
                 (
                     "negative-source-unknown-format",
                     "source_profile_unknown",
                     "input.DM.path",
                     "REQ-0852",
-                    yamaa_core::json::json!({"dataset":"DM", "path":"input/dm.txt"}),
+                    yamaa_adapters::json!({"dataset":"DM", "path":"input/dm.txt"}),
                 ),
             ] {
                 let fixture = Fixture::new(name);
@@ -1939,7 +1948,7 @@ columns:
                 );
                 assert_eq!(issue.spec_paths, [path], "{name}");
                 assert_eq!(
-                    serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap(),
+                    yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
                     context,
                     "{name}"
                 );
@@ -1973,8 +1982,8 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
             );
             assert_eq!(issues[0].spec_paths, ["input.SRC.empty_string"]);
             assert_eq!(
-                serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap(),
-                yamaa_core::json::json!({"dataset":"SRC"})
+                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
+                yamaa_adapters::json!({"dataset":"SRC"})
             );
             assert!(!fixture.0.join("result.csv").exists());
         }
@@ -2066,8 +2075,8 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
             );
             assert_eq!(issue.spec_paths, ["filter"]);
             assert_eq!(
-                serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap(),
-                yamaa_core::json::json!({"identifier":"ID", "available_phase":"column_derivation", "required_phase":"row_filter"})
+                yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                yamaa_adapters::json!({"identifier":"ID", "available_phase":"column_derivation", "required_phase":"row_filter"})
             );
             let mut spec = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
             spec.push_str("rows: [{id: records, dataset: SRC, derivations: {}}]\n");
@@ -2131,8 +2140,8 @@ columns:
             );
             assert_eq!(issues[0].spec_paths, ["input.SOURCE.ordinal"]);
             assert_eq!(
-                serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap(),
-                yamaa_core::json::json!({"dataset":"SOURCE", "field":"SourceOrdinal"})
+                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
+                yamaa_adapters::json!({"dataset":"SOURCE", "field":"SourceOrdinal"})
             );
 
             let fixture = authored(
@@ -2160,8 +2169,8 @@ columns: [{name: ID, type: str, derivation: {odm: {item: SRC.ITEM}}}]
             );
             assert_eq!(issues[0].spec_paths, ["input.SRC.ordinal"]);
             assert_eq!(
-                serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap(),
-                yamaa_core::json::json!({"dataset":"SRC", "declared":"ordinal"})
+                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
+                yamaa_adapters::json!({"dataset":"SRC", "declared":"ordinal"})
             );
         }
 
@@ -2330,7 +2339,7 @@ columns:
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":2},
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
                     {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":2},
@@ -2356,7 +2365,7 @@ columns:
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_core::json::json!([
+                yamaa_adapters::json!([
                     {"spec_path":"rows[0].derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"rows[0].derivations.A.source.no_match","handler":"no_match","count":2},
@@ -2393,13 +2402,14 @@ columns:
             }
         }
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_core::json::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
         }
         #[test]
         fn complete_independent_record_contexts_and_unchanged_original() {
-            let reference: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("fixtures/row_intermediate_reference.json"))
-                    .unwrap();
+            let reference: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
+                include_str!("fixtures/row_intermediate_reference.json"),
+            )
+            .unwrap();
             for (name, case) in reference["cases"]
                 .as_object()
                 .unwrap()
@@ -2453,7 +2463,7 @@ columns:
                     result.observations()["handler_counts"],
                     case.get("handler_counts")
                         .cloned()
-                        .unwrap_or_else(|| yamaa_core::json::json!([])),
+                        .unwrap_or_else(|| yamaa_adapters::json!([])),
                     "{name} complete handler ledger"
                 );
                 if let Some(csv) = case.get("csv") {

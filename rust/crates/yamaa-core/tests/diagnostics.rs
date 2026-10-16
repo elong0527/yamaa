@@ -680,7 +680,7 @@ mod diagnostics {
         }
 
         #[test]
-        fn scalar_json_context_preserves_wire_types_and_exact_number_spellings() {
+        fn scalar_json_context_preserves_typed_kinds_and_exact_number_spellings() {
             let context = std::collections::BTreeMap::from([
                 ("bool", yamaa_core::json::Value::from(Value::Bool(true))),
                 (
@@ -703,9 +703,35 @@ mod diagnostics {
                     yamaa_core::json::Value::from(Value::Str("001".into())),
                 ),
             ]);
+            // The exact wire spelling of this tree is asserted by the adapter
+            // wire tests; core owns the typed kinds and number tokens.
+            assert_eq!(context["bool"], yamaa_core::json::Value::Bool(true));
             assert_eq!(
-                serde_json::to_string(&context).unwrap(),
-                r#"{"bool":true,"date":"2025-01-02","datetime":"2025-01-02T03:04:00","float":1.0,"max":9223372036854775807,"min":-9223372036854775808,"missing":null,"negzero":-0.0,"text":"001"}"#,
+                context["date"],
+                yamaa_core::json::Value::String("2025-01-02".into())
+            );
+            assert_eq!(
+                context["datetime"],
+                yamaa_core::json::Value::String("2025-01-02T03:04:00".into())
+            );
+            assert_eq!(
+                context["float"].as_number().unwrap().as_str(),
+                "1.0",
+                "float token"
+            );
+            assert_eq!(
+                context["max"].as_number().unwrap().as_str(),
+                "9223372036854775807"
+            );
+            assert_eq!(
+                context["min"].as_number().unwrap().as_str(),
+                "-9223372036854775808"
+            );
+            assert_eq!(context["missing"], yamaa_core::json::Value::Null);
+            assert_eq!(context["negzero"].as_number().unwrap().as_str(), "-0.0");
+            assert_eq!(
+                context["text"],
+                yamaa_core::json::Value::String("001".into())
             );
         }
     }

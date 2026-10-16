@@ -360,8 +360,8 @@ columns:
                 );
                 assert_eq!(issue.spec_paths, ["input.FIRST.ordinal"]);
                 assert_eq!(
-                    serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap(),
-                    yamaa_core::json::json!({"dataset":"FIRST", "field":"ID"})
+                    yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                    yamaa_adapters::json!({"dataset":"FIRST", "field":"ID"})
                 );
             }
         }
@@ -399,7 +399,7 @@ columns:
                     );
                     assert_eq!(
                         result.observations()["publication"],
-                        yamaa_core::json::json!({"status":"success","entered":[{"node":1,"published":true},{"node":0,"published":true}],"error":null})
+                        yamaa_adapters::json!({"status":"success","entered":[{"node":1,"published":true},{"node":0,"published":true}],"error":null})
                     );
                     assert_eq!(result.output().unwrap(), output);
                     assert!(result.issues().is_empty());
@@ -474,7 +474,7 @@ columns:
                 assert!(result.output().is_some());
                 assert_eq!(
                     result.observations()["publication"]["entered"],
-                    yamaa_core::json::json!([])
+                    yamaa_adapters::json!([])
                 );
             }
         }
@@ -927,12 +927,12 @@ columns:
             assert_eq!(value["outcome"], "success");
             assert_eq!(
                 value["activation"],
-                yamaa_core::json::json!({"lock":"not_requested","bindings":[],"tests":[]})
+                yamaa_adapters::json!({"lock":"not_requested","bindings":[],"tests":[]})
             );
             assert_eq!(value["artifacts"][0]["profile"], "parquet");
             assert_eq!(
                 value["artifacts"][0]["records"],
-                yamaa_core::json::json!(["[\"ID\", \"VALUE\"]", "[1, 13]", "[2, 17]"])
+                yamaa_adapters::json!(["[\"ID\", \"VALUE\"]", "[1, 13]", "[2, 17]"])
             );
             assert_eq!(value["artifacts"][1]["content"], "ID,VALUE\n1,13\n2,17\n");
         }
@@ -1473,7 +1473,7 @@ columns:
                     runtime,
                     ..report_id()
                 };
-                let expected = yamaa_core::json::Value::Array((0..filter_count).map(|index| yamaa_core::json::json!({
+                let expected = yamaa_core::json::Value::Array((0..filter_count).map(|index| yamaa_adapters::json!({
                     "phase": "validation", "condition": "incompatible_input_type",
                     "requirement": "REQ-0190", "spec_paths": [format!("intermediates[{index}].filter")],
                     "context": {"left_type": "date", "right_type": "str"},
@@ -1855,10 +1855,10 @@ columns:
                 assert_eq!(report["outcome"], "failure");
                 assert_eq!(report["diagnostics"].as_array().unwrap().len(), 1);
                 assert_eq!(report["diagnostics"][0]["condition"], condition);
-                assert_eq!(report["artifacts"], yamaa_core::json::json!([]));
+                assert_eq!(report["artifacts"], yamaa_adapters::json!([]));
                 if !matches!(mode, Mode::LiveFailure) {
                     assert!(attempt.graph.nodes.is_empty());
-                    assert_eq!(report["source_reads"], yamaa_core::json::json!([]));
+                    assert_eq!(report["source_reads"], yamaa_adapters::json!([]));
                     assert_eq!(
                         report["diagnostics"][0]["context"]["source"],
                         "held/environment.yaml"
@@ -1871,11 +1871,11 @@ columns:
                     assert_eq!(attempt.graph.nodes.len(), 1);
                     assert_eq!(
                         report["diagnostics"][0]["spec_paths"],
-                        yamaa_core::json::json!(["columns.VALUE.derivation.function"])
+                        yamaa_adapters::json!(["columns.VALUE.derivation.function"])
                     );
                     assert_eq!(
                         report["diagnostics"][0]["context"]["keys"],
-                        yamaa_core::json::json!([{"ID":1}])
+                        yamaa_adapters::json!([{"ID":1}])
                     );
                 }
                 assert_eq!(
@@ -2014,7 +2014,7 @@ columns:
             columns: &[&str],
             rows: &[&[&str]],
         ) -> yamaa_core::json::Value {
-            use yamaa_core::json::json;
+            use yamaa_adapters::json;
             let kinds = columns
                 .iter()
                 .map(|&column| if column == "ID" { "int" } else { "float" })
@@ -2024,8 +2024,8 @@ columns:
         }
         #[test]
         fn native_complete_reports_pin_independent_rounded_truth_and_union_after_all_owners_drop() {
+            use yamaa_adapters::json;
             use yamaa_adapters::producer_report::attempt_report;
-            use yamaa_core::json::json;
             let study = Study::new();
             study.rounded();
             let mut build = study.build(Language::Python);
@@ -2112,8 +2112,8 @@ columns:
 
         #[test]
         fn complete_failed_reports_keep_entered_producer_and_consumer_check_and_source_prefixes() {
+            use yamaa_adapters::json;
             use yamaa_adapters::producer_report::attempt_report;
-            use yamaa_core::json::json;
             for mode in 0..4 {
                 let study = Study::new();
                 study.rounded();
@@ -2414,7 +2414,7 @@ columns:
             assert_eq!(report["artifacts"].as_array().unwrap().len(), 2);
             assert_eq!(
                 report["tables"][0]["rows"][0][1],
-                yamaa_core::json::json!({"type":"str","value":text})
+                yamaa_adapters::json!({"type":"str","value":text})
             );
             assert!(!study.0.join("generated").exists());
         }
