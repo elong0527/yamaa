@@ -751,7 +751,7 @@ impl Rows {
                 .unwrap_or(driver);
             if let Some((_, Ok(plan))) = &filters[row_index] {
                 for read in plan.identifiers() {
-                    if !selector_reads && named_read(&read, row_driver) {
+                    if !selector_reads && named_read(read, row_driver) {
                         selector_reads = true;
                     }
                     if !secondary_reads
