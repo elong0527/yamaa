@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! Scalar contracts.
 #[allow(dead_code)]
 mod support;
@@ -1031,6 +1032,7 @@ rows:
         }
 
         #[test]
+        #[cfg(feature = "parquet")]
         fn parquet_logs_preserve_governed_logical_rows_and_integer_columns() {
             let (study, raw) = Study::benchmark();
             let mut result = study.build(

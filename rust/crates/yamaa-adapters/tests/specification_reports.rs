@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! Native specification run assertions.
 #[allow(dead_code)]
 mod support;

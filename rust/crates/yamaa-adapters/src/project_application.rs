@@ -351,7 +351,7 @@ fn preparation_boundary(
         .unwrap_or_else(|_| refused("prepare"))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "yaml"))]
 mod resource_tests {
     use super::*;
 

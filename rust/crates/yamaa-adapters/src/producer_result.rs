@@ -536,7 +536,7 @@ fn root_output<E>(attempt: &NativeAttempt<E>) -> Result<(PublicTable, Vec<u8>), 
     Ok((table, bytes))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "yaml"))]
 mod log_tests {
     use super::*;
     use crate::{

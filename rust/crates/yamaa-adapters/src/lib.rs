@@ -18,6 +18,7 @@ pub mod scalar_bytes;
 
 pub mod style_values;
 pub mod yaml_decode;
+#[cfg(feature = "yaml")]
 mod yaml_source;
 
 pub mod csv_artifact;

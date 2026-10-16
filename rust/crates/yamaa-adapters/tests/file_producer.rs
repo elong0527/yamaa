@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! File contracts.
 #[allow(dead_code)]
 mod support;
@@ -188,7 +189,11 @@ mod file {
 
         #[test]
         fn native_uneven_csv_and_parquet_graphs_keep_each_tables_actual_rows() {
-            for format in ["csv", "parquet"] {
+            for format in [
+                "csv",
+                #[cfg(feature = "parquet")]
+                "parquet",
+            ] {
                 let study = Study::new();
                 study.write(
                     "raw/raw.csv",
@@ -878,6 +883,7 @@ columns:
         }
 
         #[test]
+        #[cfg(feature = "parquet")]
         fn native_parquet_round_trip_uses_held_artifact_and_a_functionless_graph_grants_no_activation(
         ) {
             let study = Study::new();

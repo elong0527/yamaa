@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! Scalar contracts.
 #[allow(dead_code)]
 mod support;

@@ -128,9 +128,10 @@ fn admit_page_counts(
 
 fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     let frame = framing::admit(bytes)?;
-    let metadata = Arc::new(
-        ParquetMetaDataReader::decode_metadata(frame.metadata).map_err(|_| Error::Malformed)?,
-    );
+    let metadata = Arc::new({
+        let native = compact::native_metadata(frame.metadata)?;
+        ParquetMetaDataReader::decode_metadata(&native).map_err(|_| Error::Malformed)?
+    });
     let hint = metadata::admit(metadata.file_metadata().key_value_metadata())?;
     let columns = metadata.file_metadata().schema_descr().columns();
     // ODM field admission uses metadata alone. Ordinary profile findings keep
@@ -206,7 +207,7 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
                 })
         })
         .collect();
-    let raw = physical::read(bytes, &keep, &arrow_schema)?;
+    let raw = physical::read(bytes, &metadata, &keep, &arrow_schema)?;
     let group_rows = metadata
         .row_groups()
         .iter()

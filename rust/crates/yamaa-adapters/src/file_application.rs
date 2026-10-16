@@ -721,7 +721,7 @@ pub fn domain(request: Request<'_>, identity: Identity<'_>) -> Result<Domain, Fa
         .map_err(crate::issue_rows::collect)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "yaml"))]
 mod tests {
     use super::*;
     use crate::file_configuration;

@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! Native specification run assertions.
 #[allow(dead_code)]
 mod support;
@@ -6,6 +7,7 @@ mod execution {
         use crate::support::specification_run::*;
 
         #[test]
+        #[cfg(feature = "parquet")]
         fn parquet_input_policy_and_owned_source_observations_use_the_shared_build_path() {
             use yamaa_adapters::specification_run::{PreparedRun, SourcePort};
             use yamaa_core::specification::SourceDeclaration;
