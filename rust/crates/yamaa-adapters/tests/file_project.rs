@@ -2196,6 +2196,72 @@ mod file {
         }
 
         #[test]
+        fn inherited_producer_types_rejection_names_the_declaring_parent_on_check_and_domain() {
+            let study = Study::new();
+            study.write(
+                "parent.yaml",
+                "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: {path: input/dm.csv, types: {RANDDT: date}}\noutput:\n  path: adsl.csv\n  columns: [USUBJID, RANDDT]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n  - name: RANDDT\n    type: date\n    label: Date of Randomization\n    derivation: DM.RANDDT\n",
+            );
+            study.write(
+                "producer/dm.yaml",
+                "schema_version: \"1.0\"\ndomain: DM\nkeys: [USUBJID]\ninput:\n  RAW: {path: ../raw/dm_raw.csv, types: {RANDDT: date}}\noutput:\n  path: ../input/dm.csv\n  columns: [USUBJID, RANDDT]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n  - name: RANDDT\n    type: date\n    label: Date of Randomization\n    derivation: RAW.RANDDT\n",
+            );
+            study.write(
+                "root.yaml",
+                "schema_version: \"1.0\"\nparents: parent.yaml\ninput:\n  DM: {schema: producer/dm.yaml}\n",
+            );
+            let error = study.rejected();
+            let rows = producer_check::rejected(&error, Language::Python).unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].condition, "redundant_field_type");
+            assert_eq!(rows[0].requirement.as_deref(), Some("REQ-0523"));
+            assert_eq!(rows[0].spec_paths, ["input.DM.types.RANDDT"]);
+            assert_eq!(
+                yamaa_adapters::json_wire::decode(&rows[0].context).unwrap(),
+                yamaa_adapters::json!({"dataset":"DM", "declaring_sources":[study.path("parent.yaml")], "entry":study.path("root.yaml"), "field":"RANDDT", "source":study.path("root.yaml"), "type":"date"})
+            );
+            assert_eq!(
+                yamaa_adapters::project_application::check(
+                    &study.path("root.yaml"),
+                    &study.path("environment.yaml"),
+                    Language::Python
+                ),
+                rows
+            );
+            let entry = study.path("root.yaml");
+            let identity = || yamaa_adapters::specification_report::Identity {
+                runtime: "test",
+                runtime_version: "1",
+                engine_version: "0.1.0",
+                example: "test",
+                specification: &entry,
+                base_directory: ".",
+            };
+            assert_eq!(
+                yamaa_adapters::file_application::check(
+                    yamaa_core::domain_entry::Request {
+                        specification: &entry,
+                        environment: None,
+                    },
+                    identity(),
+                ),
+                rows
+            );
+            assert_eq!(
+                yamaa_adapters::file_application::domain(
+                    yamaa_core::domain_entry::Request {
+                        specification: &entry,
+                        environment: None,
+                    },
+                    identity(),
+                )
+                .err()
+                .unwrap(),
+                rows
+            );
+        }
+
+        #[test]
         fn actual_compilation_failure_and_cycle_are_projected_without_recompilation() {
             for cycle in [false, true] {
                 let study = Study::new();
