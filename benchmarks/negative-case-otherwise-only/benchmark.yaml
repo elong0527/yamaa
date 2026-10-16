@@ -1,0 +1,8 @@
+lifecycle: draft
+standard: ADaM
+domain: ADSL
+validation:
+  rule: R007
+  validator: schema
+covers:
+- case
