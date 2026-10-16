@@ -35,25 +35,145 @@ def _people(entries):
     return people
 
 
+def _split_r_arguments(text):
+    """Split an R call's argument text on top-level commas.
+
+    Returns the raw argument strings, or None when quotes or parentheses
+    are unbalanced."""
+    arguments = []
+    depth = 0
+    quoted = False
+    escaped = False
+    start = 0
+    for index, char in enumerate(text):
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth < 0:
+                return None
+        elif char == "," and depth == 0:
+            arguments.append(text[start:index])
+            start = index + 1
+    if quoted or depth != 0:
+        return None
+    arguments.append(text[start:])
+    return arguments
+
+
+def _r_string(value):
+    """Return the contents of a double-quoted R string literal, else None."""
+    match = re.fullmatch(r'"((?:[^"\\]|\\.)*)"', value.strip())
+    if match is None:
+        return None
+    return re.sub(r"\\(.)", r"\1", match.group(1))
+
+
+def _r_person(arguments):
+    """Build one (name, email-or-None, roles) triple from person() arguments.
+
+    Positional arguments map to given, family, middle in order; email and
+    role must be named. Any argument the parser cannot account for returns
+    None."""
+    fields = {}
+    positional = ("given", "family", "middle")
+    for index, argument in enumerate(arguments):
+        named = re.match(r"^([A-Za-z]+)\s*=\s*(.+)$", argument.strip(), re.S)
+        if named:
+            key, raw = named.group(1), named.group(2)
+        elif index < len(positional):
+            key, raw = positional[index], argument
+        else:
+            return None
+        if key in fields or key not in ("given", "family", "middle", "email", "role"):
+            return None
+        if key == "role":
+            raw = raw.strip()
+            if raw.startswith("c(") and raw.endswith(")"):
+                parts = _split_r_arguments(raw[2:-1])
+                if parts is None:
+                    return None
+                values = [_r_string(part) for part in parts if part.strip()]
+                if any(value is None for value in values):
+                    return None
+                fields[key] = set(values)
+            else:
+                value = _r_string(raw)
+                if value is None:
+                    return None
+                fields[key] = {value}
+        else:
+            value = _r_string(raw)
+            if value is None:
+                return None
+            fields[key] = value
+    given, family = fields.get("given"), fields.get("family")
+    if given is None or family is None:
+        return None
+    name = " ".join(part for part in (given, fields.get("middle"), family) if part)
+    return (name, fields.get("email"), fields.get("role", set()))
+
+
 def _r_people(description):
-    """Parse the Authors@R persons as (name, email-or-None, roles) triples."""
+    """Parse the Authors@R persons as (name, email-or-None, roles) triples.
+
+    Every entry must be accounted for: a person() call the parser cannot
+    fully read, or any other content in the field, fails the parse (None)
+    so the caller reports a violation instead of comparing a truncated
+    list against the selected people."""
     field = re.search(r"(?ms)^Authors@R: (.*?)(?=^\S)", description)
     if field is None:
         return None
+    text = field.group(1).strip()
+    if text.startswith("c(") and text.endswith(")"):
+        text = text[2:-1].strip()
     people = []
-    pattern = r'person\("([^"]+)",\s*"([^"]+)"([^)]*)\)'
-    for match in re.finditer(pattern, field.group(1)):
-        rest = match.group(3)
-        email = re.search(r'email\s*=\s*"([^"]+)"', rest)
-        role = re.search(r"role\s*=\s*(.+)$", rest)
-        roles = set(re.findall(r'"([^"]+)"', role.group(1))) if role else set()
-        people.append(
-            (
-                f"{match.group(1)} {match.group(2)}",
-                email.group(1) if email else None,
-                roles,
-            )
-        )
+    position = 0
+    while position < len(text):
+        match = re.match(r"person\s*\(", text[position:])
+        if match is None:
+            return None
+        start = position + match.end()
+        depth = 1
+        quoted = False
+        escaped = False
+        index = start
+        while index < len(text) and depth:
+            char = text[index]
+            if quoted:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    quoted = False
+            elif char == '"':
+                quoted = True
+            elif char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+            index += 1
+        if depth or quoted:
+            return None
+        arguments = _split_r_arguments(text[start : index - 1])
+        if arguments is None:
+            return None
+        person = _r_person(arguments)
+        if person is None:
+            return None
+        people.append(person)
+        rest = re.match(r"\s*(,)?\s*", text[index:])
+        position = index + rest.end()
     return people
 
 
@@ -102,8 +222,8 @@ def author_violations(root):
                     f"{member}: authors do not inherit the workspace author list"
                 )
     holders = (
-        ("LICENSE", r"Copyright \(c\) \d{4} " + COLLECTIVE_HOLDER + r"\n"),
-        ("mkdocs.yml", r"(?m)^copyright:.*" + COLLECTIVE_HOLDER),
+        ("LICENSE", r"(?m)Copyright \(c\) \d{4} " + COLLECTIVE_HOLDER + r"$"),
+        ("mkdocs.yml", r"(?m)^copyright:.*" + COLLECTIVE_HOLDER + r"$"),
         ("R/yamaa/LICENSE", r"(?m)^COPYRIGHT HOLDER: " + COLLECTIVE_HOLDER + r"$"),
     )
     for relative, pattern in holders:

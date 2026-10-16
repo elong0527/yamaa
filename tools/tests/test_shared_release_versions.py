@@ -99,6 +99,17 @@ class CoherentRelease(unittest.TestCase):
             checker.violations(self.root),
         )
 
+    def test_extended_copyright_holder_is_refused(self):
+        for relative in ("LICENSE", "mkdocs.yml", "R/yamaa/LICENSE"):
+            path = self.root / relative
+            original = path.read_text()
+            self.change(relative, "yamaa contributors", "yamaa contributors and others")
+            self.assertIn(
+                f"{relative}: copyright holder is not 'yamaa contributors'",
+                checker.violations(self.root),
+            )
+            path.write_text(original)
+
     def test_python_author_drift_is_refused(self):
         self.change(
             "python/pyproject.toml",
@@ -115,6 +126,18 @@ class CoherentRelease(unittest.TestCase):
             "R/yamaa/DESCRIPTION",
             'person("Peng", "Zhang", role = "ctb")',
             'person("Peng", "Zhang", role = "aut")',
+        )
+        self.assertIn(
+            "R/yamaa/DESCRIPTION: author list differs from the selected author list",
+            checker.violations(self.root),
+        )
+
+    def test_r_author_appended_with_named_arguments_is_refused(self):
+        self.change(
+            "R/yamaa/DESCRIPTION",
+            'person("Jingwei", "Xiong", role = "ctb"))',
+            'person("Jingwei", "Xiong", role = "ctb"),\n'
+            '    person(given = "Another", family = "Contributor", role = "ctb"))',
         )
         self.assertIn(
             "R/yamaa/DESCRIPTION: author list differs from the selected author list",
