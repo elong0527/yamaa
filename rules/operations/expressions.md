@@ -230,7 +230,9 @@ under [Execution lifecycle](../execution/lifecycle.md), which owns the phase inv
 declares `when` and `then` except that one item may declare `otherwise`
 instead; the `otherwise` item, when present, is the last item. A `case`
 with no `when`/`then` item, more than one `otherwise` item, or an
-`otherwise` item in any other position: fail.
+`otherwise` item in any other position: fail as `invalid_field_type`, at the
+`case` when it has no `when`/`then` item and at each `otherwise` item that
+is not the last item.
 
 <a id="req-1257"></a>
 

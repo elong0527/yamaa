@@ -86,11 +86,14 @@ impl Failure {
     }
 }
 /// A resolver may serve local objects, opaque URI identities or warehouse data.
-/// Stage creates a private provisional object; Commit atomically publishes it;
-/// Abort must remove it after any failed/interrupting Stage or Commit. Abort is
-/// idempotent and may receive the target reference when Stage did not return.
-/// Implementations must return closed failures and must not panic. Python and R
-/// adapters contain exceptions/conditions, retaining their original objects.
+/// Stage creates a private provisional object and returns its staging token;
+/// Commit atomically publishes it; Abort removes it after a failed Commit or
+/// an interrupted Stage that returned a token. Stage is atomic by contract:
+/// a failed Stage must not leave provisional output, so Abort receives only
+/// the staging token and never the target reference. Abort is idempotent and
+/// token-scoped. Implementations must return closed failures and must not
+/// panic. Python and R adapters contain exceptions/conditions, retaining their
+/// original objects.
 pub trait Resolver: Send + Sync {
     fn request(&self, request: Request<'_>) -> Result<Reply, Failure>;
 }
@@ -343,6 +346,7 @@ pub struct MemoryResolver {
     staged: Mutex<StagedObjects>,
     published: Mutex<BTreeMap<String, Arc<[u8]>>>,
     cancelled: std::sync::atomic::AtomicBool,
+    next_stage: std::sync::atomic::AtomicU64,
 }
 type StagedObjects = BTreeMap<String, (String, Arc<[u8]>)>;
 impl MemoryResolver {
@@ -387,10 +391,13 @@ impl Resolver for MemoryResolver {
     fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
         if request.operation == Operation::Abort {
             let reference = request.reference.ok_or(Failure::Rejected)?;
+            // Attempt-owned cleanup: delete only the staged token. Never match
+            // on the target identity, so overlapping publishes to the same
+            // target cannot delete each other's provisional output.
             self.staged
                 .lock()
                 .map_err(|_| Failure::Cleanup)?
-                .retain(|token, (target, _)| token != reference && target != reference);
+                .retain(|token, _| token != reference);
             return Ok(Reply {
                 reference: request.reference.unwrap().into(),
                 bytes: None,
@@ -430,18 +437,19 @@ impl Resolver for MemoryResolver {
                 .map(|path| empty(format!("memory:{path}"))),
             Operation::Stage => {
                 let reference = request.reference.ok_or(Failure::Rejected)?;
-                let token = format!("stage:{reference}");
+                let bytes = Arc::from(request.bytes.ok_or(Failure::Rejected)?);
+                // Unique per-attempt token: overlapping publishes to the same
+                // target stage independently, so a late Abort by one attempt
+                // can never remove another attempt's provisional output.
+                let sequence = self
+                    .next_stage
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let token = format!("stage:{sequence}:{reference}");
                 let mut staged = self.staged.lock().map_err(|_| Failure::Publication)?;
                 if staged.contains_key(&token) {
                     return Err(Failure::Publication);
                 }
-                staged.insert(
-                    token.clone(),
-                    (
-                        reference.into(),
-                        Arc::from(request.bytes.ok_or(Failure::Rejected)?),
-                    ),
-                );
+                staged.insert(token.clone(), (reference.into(), bytes));
                 Ok(empty(token))
             }
             Operation::Commit => {

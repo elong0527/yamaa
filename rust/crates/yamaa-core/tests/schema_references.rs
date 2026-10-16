@@ -2030,6 +2030,159 @@ mod schema {
             assert_eq!(result[0].definition().requirement, Some("REQ-0320"));
         }
 
+        fn case_bundle(registry: &'static str) -> SchemaStructure {
+            let required = |kind: &'static str| {
+                V::map(vec![
+                    ("type", V::text(kind)),
+                    ("required", V::boolean(true)),
+                ])
+            };
+            bundle(
+                vec![field("derive", "expression")],
+                vec![
+                    ("expression", V::map(vec![("registry", V::text(registry))])),
+                    (
+                        registry,
+                        V::map(vec![
+                            ("case", descriptor("list[case_item_class]")),
+                            ("literal", descriptor("int")),
+                        ]),
+                    ),
+                    (
+                        "case_item_class",
+                        V::map(vec![(
+                            "type",
+                            V::List(vec![
+                                V::text("case_branch_class"),
+                                V::text("case_otherwise_class"),
+                            ]),
+                        )]),
+                    ),
+                    (
+                        "case_branch_class",
+                        V::List(vec![
+                            V::map(vec![("when", required("str"))]),
+                            V::map(vec![("then", required("case_result"))]),
+                        ]),
+                    ),
+                    (
+                        "case_otherwise_class",
+                        V::List(vec![V::map(vec![("otherwise", required("case_result"))])]),
+                    ),
+                    (
+                        "case_result",
+                        V::map(vec![(
+                            "type",
+                            V::List(vec![V::text("int"), V::text("expression")]),
+                        )]),
+                    ),
+                ],
+            )
+        }
+        fn branch(then: V) -> V {
+            V::map(vec![("when", V::text("AGE >= 65")), ("then", then)])
+        }
+        fn otherwise(value: V) -> V {
+            V::map(vec![("otherwise", value)])
+        }
+        fn case(items: Vec<V>) -> V {
+            V::map(vec![("case", V::List(items))])
+        }
+
+        #[test]
+        fn case_item_order_is_a_req_0339_finding_after_every_item_matched_its_class() {
+            let schema = case_bundle("expressions");
+            for items in [
+                vec![branch(V::integer(1)), otherwise(V::integer(0))],
+                vec![branch(V::integer(1))],
+                vec![
+                    branch(V::integer(1)),
+                    branch(V::integer(2)),
+                    otherwise(V::integer(0)),
+                ],
+            ] {
+                assert!(validate(&schema, "derive", case(items), false).is_empty());
+            }
+            let no_branch = "at least one when/then item";
+            let not_last = "otherwise only as the last item";
+            for (items, expected) in [
+                (
+                    vec![otherwise(V::integer(0))],
+                    vec![("derive.case", no_branch)],
+                ),
+                (vec![], vec![("derive.case", no_branch)]),
+                (
+                    vec![otherwise(V::integer(0)), branch(V::integer(1))],
+                    vec![("derive.case[0]", not_last)],
+                ),
+                (
+                    vec![
+                        branch(V::integer(1)),
+                        otherwise(V::integer(0)),
+                        otherwise(V::integer(2)),
+                    ],
+                    vec![("derive.case[1]", not_last)],
+                ),
+                (
+                    vec![otherwise(V::integer(0)), otherwise(V::integer(2))],
+                    vec![("derive.case", no_branch), ("derive.case[0]", not_last)],
+                ),
+                (
+                    vec![
+                        branch(case(vec![otherwise(V::integer(1))])),
+                        otherwise(V::integer(0)),
+                    ],
+                    vec![("derive.case[0].then.case", no_branch)],
+                ),
+            ] {
+                for fragment in [false, true] {
+                    let result = validate(&schema, "derive", case(items.clone()), fragment);
+                    let actual: Vec<_> = result
+                        .iter()
+                        .map(|d| {
+                            let definition = d.definition();
+                            assert_eq!(
+                                (
+                                    definition.phase,
+                                    definition.condition,
+                                    definition.requirement
+                                ),
+                                ("validation", "invalid_field_type", Some("REQ-0339"))
+                            );
+                            let [("expected", C::Text(text))] = d.context.as_slice() else {
+                                panic!("expected context: {d:?}");
+                            };
+                            (d.path.as_str(), text.as_str())
+                        })
+                        .collect();
+                    assert_eq!(actual, expected, "fragment={fragment}");
+                }
+            }
+            // Item findings come first; the order rule waits for well-formed items.
+            let result = validate(
+                &schema,
+                "derive",
+                case(vec![otherwise(V::text("N"))]),
+                false,
+            );
+            assert!(!result.is_empty());
+            assert!(
+                result
+                    .iter()
+                    .all(|d| d.definition().requirement != Some("REQ-0339")),
+                "{result:?}"
+            );
+            // The rule belongs to the expression registry's case, not to a like-named entry.
+            let other = case_bundle("operations");
+            assert!(validate(
+                &other,
+                "derive",
+                case(vec![otherwise(V::integer(0))]),
+                false
+            )
+            .is_empty());
+        }
+
         #[test]
         fn typed_dictionary_keys_have_independent_key_and_value_paths() {
             let schema = bundle(vec![field("mapping", "dict[str, int]")], vec![]);
