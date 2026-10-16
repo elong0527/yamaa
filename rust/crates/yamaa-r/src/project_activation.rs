@@ -273,3 +273,128 @@ impl ActivationPort for Port<'_> {
             .map_err(|error| HostError::InvalidResult(Error::Scalar(error)))
     }
 }
+
+/// Caller-supplied registry port: bindings come from an explicit map of
+/// logical call strings to already-resolved R functions, never from a
+/// namespace lookup. Declared-lock auditing stays separate: this port
+/// refuses lock verification rather than silently skipping it.
+pub struct RegistryPort {
+    registry: std::collections::BTreeMap<String, Function>,
+}
+impl RegistryPort {
+    pub fn new(registry: std::collections::BTreeMap<String, Function>) -> Self {
+        Self { registry }
+    }
+    fn invoke_scalar(
+        handle: &Function,
+        arguments: &[Argument<'_>],
+    ) -> std::result::Result<Value, HostError<Error>> {
+        let mut encoded = Vec::with_capacity(arguments.len());
+        for argument in arguments {
+            let value = match argument.value {
+                ValueRef::Missing => Value::Missing,
+                ValueRef::Int(value) => Value::Int(value),
+                ValueRef::Float(value) => Value::Float(value),
+                ValueRef::Str(value) => Value::Str(value.into()),
+                ValueRef::Bool(value) => Value::Bool(value),
+                ValueRef::Date(value) => Value::Date(value),
+                ValueRef::DateTime(value) => Value::DateTime(value),
+            };
+            let value = scalar_bytes::encode(value);
+            encoded.push((
+                argument.name,
+                Robj::from(list!(
+                    tag = value.tag,
+                    payload = Raw::from_bytes(&value.payload)
+                )),
+            ));
+        }
+        let result =
+            reply(handle, pairlist!(encoded = List::from_pairs(encoded))).map_err(|error| {
+                match error {
+                    Error::Representation(_) => HostError::InvalidResult(error),
+                    _ => HostError::Raised(error),
+                }
+            })?;
+        let result = result
+            .as_list()
+            .filter(|list| list.len() == 2)
+            .ok_or(HostError::InvalidResult(Error::Protocol))?;
+        let tag = result
+            .elt(0)
+            .map_err(|error| HostError::InvalidResult(Error::Boundary(error)))?
+            .as_integer()
+            .ok_or(HostError::InvalidResult(Error::Protocol))?;
+        let payload = result
+            .elt(1)
+            .map_err(|error| HostError::InvalidResult(Error::Boundary(error)))?
+            .as_raw()
+            .ok_or(HostError::InvalidResult(Error::Protocol))?;
+        scalar_bytes::decode(tag, payload.as_slice())
+            .map_err(|error| HostError::InvalidResult(Error::Scalar(error)))
+    }
+}
+impl ActivationPort for RegistryPort {
+    type Handle = Function;
+    type Error = Error;
+    fn verify_lock(
+        &mut self,
+        _language: Language,
+        _lock: &LockReference,
+        _functions: &[ProjectFunctionIdentity],
+    ) -> std::result::Result<(), Error> {
+        Err(Error::Protocol)
+    }
+    fn bind(
+        &mut self,
+        identity: &ProjectFunctionIdentity,
+        _signature: &LogicalSignature,
+    ) -> std::result::Result<Function, Error> {
+        self.registry
+            .get(&identity.call)
+            .cloned()
+            .ok_or(Error::Protocol)
+    }
+    fn is_interrupt(&self, error: &Error) -> bool {
+        matches!(error, Error::Interrupt(_))
+    }
+    fn invoke(
+        &mut self,
+        handle: &Function,
+        arguments: &[Argument<'_>],
+    ) -> std::result::Result<Value, HostError<Error>> {
+        Self::invoke_scalar(handle, arguments)
+    }
+}
+impl yamaa_core::function_batch::BatchFunctionPort for RegistryPort {
+    type Handle = Function;
+    type Error = Error;
+    fn is_interrupt(&self, error: &Error) -> bool {
+        matches!(error, Error::Interrupt(_))
+    }
+    /// R batch fallback: the installed R envelope is scalar, so this port
+    /// invokes the bound function once per row in batch order. Results
+    /// are scalar results by construction; the core still validates the
+    /// returned length and exact types before accepting any output. A
+    /// native vectorized R envelope is a maintainer follow-up, not a
+    /// silently different contract.
+    fn call_batch(
+        &mut self,
+        handle: &Function,
+        arguments: &[yamaa_core::function_batch::BatchArgument],
+    ) -> std::result::Result<Vec<Value>, HostError<Error>> {
+        let rows = arguments.first().map_or(0, |a| a.values.len());
+        let mut results = Vec::with_capacity(rows);
+        for row in 0..rows {
+            let borrowed: Vec<Argument<'_>> = arguments
+                .iter()
+                .map(|argument| Argument {
+                    name: &argument.name,
+                    value: ValueRef::from(&argument.values[row]),
+                })
+                .collect();
+            results.push(Self::invoke_scalar(handle, &borrowed)?);
+        }
+        Ok(results)
+    }
+}

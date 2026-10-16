@@ -134,7 +134,9 @@ pub mod standalone_preparation;
 
 pub mod numeric_lifecycle;
 
+pub mod function_batch;
 pub mod function_invocation;
+pub mod host_function_registry;
 
 pub mod structural_preparation;
 

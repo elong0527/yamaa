@@ -117,3 +117,46 @@
   })
   list(verify = verify, resolve = resolve)
 }
+
+# Caller-supplied registry resolution: the registry is a named list or an
+# environment mapping the full logical call string to a function. A missing
+# binding is a refusal; there is no fallback to namespace resolution, and
+# declared-lock auditing stays a separate, optional step.
+.yamaa_resolve_registry_function <- function(registry, call, parameters) {
+  if (length(call) != 1L || !is.character(call) || is.na(call)) {
+    stop("expected one callable name", call. = FALSE)
+  }
+  target <- if (is.environment(registry)) {
+    if (exists(call, envir = registry, inherits = FALSE)) {
+      get(call, envir = registry, inherits = FALSE)
+    }
+  } else {
+    registry[[call, exact = TRUE]]
+  }
+  if (is.null(target)) stop("registered binding is missing", call. = FALSE)
+  if (!is.function(target)) stop("registered member is not callable", call. = FALSE)
+  signature <- if (is.primitive(target)) args(target) else target
+  if (!is.function(signature)) {
+    stop("registered callable has no concrete call signature", call. = FALSE)
+  }
+  actual <- formals(signature)
+  names <- names(actual)
+  if (anyDuplicated(parameters) || "..." %in% names ||
+      !setequal(names, parameters)) {
+    stop("registered callable signature differs from params", call. = FALSE)
+  }
+  target
+}
+
+# Vectorized batch call over named columns: every column must have the
+# same length and the result must have exactly that length. The shared
+# engine re-validates length and exact result types before accepting any
+# output; this helper refuses ragged columns and wrong-length results.
+.yamaa_call_batch <- function(target, columns) {
+  lengths <- lengths(columns)
+  if (length(unique(lengths)) > 1L) stop("batch columns differ in length", call. = FALSE)
+  rows <- if (length(lengths)) lengths[[1L]] else 0L
+  returned <- do.call(target, columns)
+  if (length(returned) != rows) stop("batch callable returned the wrong length", call. = FALSE)
+  returned
+}
