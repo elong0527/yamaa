@@ -11,7 +11,13 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT AND Unicode-3.0"
 license-files = ["LICENSE-UNICODE.txt", "LICENSE-WINDOWS.txt", "LICENSE-READSTAT.txt", "LICENSE-YAML.txt"]
-authors = [{ name = "yamaa contributors" }]
+authors = [
+  { name = "Yilong Zhang", email = "elong0527@gmail.com" },
+  { name = "Ming-Chun Chen", email = "hellomingchun@gmail.com" },
+  { name = "Peng Zhang" },
+  { name = "Bingjun Wang" },
+  { name = "Jingwei Xiong" },
+]
 dependencies = [
   "lxml>=6.1.0",
   # 1.43.2 is the first installable release that decodes the IEEE 754 total-order

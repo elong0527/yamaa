@@ -1,0 +1,6 @@
+# Canonical commit identities for contributors who have committed under
+# more than one name or email address. The canonical identity is the one
+# used in the package author lists.
+Yilong Zhang <elong0527@gmail.com>
+Yilong Zhang <elong0527@gmail.com> <flywest.info@gmail.com>
+Yilong Zhang <elong0527@gmail.com> <elong527@gmail.com>

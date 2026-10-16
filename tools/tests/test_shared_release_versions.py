@@ -1,4 +1,5 @@
-"""Refuse incoherent host/core versions and ambiguous packaging owners."""
+"""Refuse incoherent host/core versions, drifting author lists and
+ambiguous packaging owners."""
 
 import shutil
 import tempfile
@@ -17,9 +18,12 @@ class CoherentRelease(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         paths = [
+            "LICENSE",
+            "mkdocs.yml",
             "python/pyproject.toml",
             "python/uv.lock",
             "R/yamaa/DESCRIPTION",
+            "R/yamaa/LICENSE",
             "rust/Cargo.toml",
             "rust/Cargo.lock",
         ]
@@ -87,6 +91,42 @@ class CoherentRelease(unittest.TestCase):
                 checker.violations(self.root),
             )
             path.write_text(original)
+
+    def test_collective_holder_drift_is_refused(self):
+        self.change("LICENSE", "yamaa contributors", "yamaa authors")
+        self.assertIn(
+            "LICENSE: copyright holder is not 'yamaa contributors'",
+            checker.violations(self.root),
+        )
+
+    def test_python_author_drift_is_refused(self):
+        self.change(
+            "python/pyproject.toml",
+            '{ name = "Peng Zhang" }',
+            '{ name = "P. Zhang" }',
+        )
+        self.assertIn(
+            "python/pyproject.toml: author list differs from the selected author list",
+            checker.violations(self.root),
+        )
+
+    def test_r_contributor_promoted_to_author_is_refused(self):
+        self.change(
+            "R/yamaa/DESCRIPTION",
+            'person("Peng", "Zhang", role = "ctb")',
+            'person("Peng", "Zhang", role = "aut")',
+        )
+        self.assertIn(
+            "R/yamaa/DESCRIPTION: author list differs from the selected author list",
+            checker.violations(self.root),
+        )
+
+    def test_cargo_author_drift_is_refused(self):
+        self.change("rust/Cargo.toml", '"Peng Zhang",', '"P. Zhang",')
+        self.assertIn(
+            "rust/Cargo.toml: author list differs from the selected author list",
+            checker.violations(self.root),
+        )
 
     def test_ambiguous_python_distribution_is_refused(self):
         path = self.root / "python/uv.lock"
