@@ -91,8 +91,10 @@ impl BatchFunctionPort for VectorPort {
     fn call_batch(
         &mut self,
         _handle: &(),
+        rows: usize,
         arguments: &[BatchArgument],
     ) -> Result<Vec<Value>, HostError<Payload>> {
+        assert_eq!(rows, arguments.first().map_or(0, |a| a.values.len()));
         self.calls += 1;
         self.seen_rows = arguments.first().map_or(0, |a| a.values.len());
         self.seen = arguments
@@ -557,8 +559,10 @@ fn batch_value_contract_keeps_exact_types_and_temporal_precision() {
         fn call_batch(
             &mut self,
             _handle: &(),
+            rows: usize,
             arguments: &[BatchArgument],
         ) -> Result<Vec<Value>, HostError<Payload>> {
+            assert_eq!(rows, arguments[0].values.len());
             Ok(arguments[0].values.clone())
         }
     }
@@ -604,5 +608,39 @@ fn batch_value_contract_keeps_exact_types_and_temporal_precision() {
     assert_eq!(
         invoke_batch(&dt_plan, &(), &rows, &mut port).unwrap(),
         [Value::DateTime(moment)]
+    );
+}
+
+#[test]
+fn zero_parameter_batch_uses_the_explicit_row_count() {
+    let constant_plan = ProjectInvocationPlan::new(
+        ProjectFunctionIdentity {
+            name: "constant".into(),
+            call: "synthetic.constant".into(),
+        },
+        vec![],
+        ColumnType::Int,
+        false,
+    )
+    .unwrap();
+    struct ConstantPort;
+    impl BatchFunctionPort for ConstantPort {
+        type Handle = ();
+        type Error = Payload;
+        fn call_batch(
+            &mut self,
+            _handle: &(),
+            rows: usize,
+            arguments: &[BatchArgument],
+        ) -> Result<Vec<Value>, HostError<Payload>> {
+            assert!(arguments.is_empty());
+            Ok((0..rows).map(|i| Value::Int(i as i64)).collect())
+        }
+    }
+    let rows = vec![row(&[]), row(&[]), row(&[])];
+    let mut port = ConstantPort;
+    assert_eq!(
+        invoke_batch(&constant_plan, &(), &rows, &mut port).unwrap(),
+        [Value::Int(0), Value::Int(1), Value::Int(2)]
     );
 }

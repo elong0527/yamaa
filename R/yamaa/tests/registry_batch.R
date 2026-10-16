@@ -22,6 +22,11 @@ reject(
   yamaa:::.yamaa_resolve_registry_function(registry, "synthetic::add", "x"),
   "signature differs"
 )
+reject(
+  yamaa:::.yamaa_resolve_registry_function(
+    list("synthetic::add" = add, "synthetic::add" = add), "synthetic::add", c("x", "y")),
+  "duplicated"
+)
 vector_add <- function(x, y) x + ifelse(is.na(y), 0, y)
 # Authored truth: NA is the accepting-missing null and counts as 0.
 columns <- list(x = c(1, 3, 4), y = c(2, 10, NA))

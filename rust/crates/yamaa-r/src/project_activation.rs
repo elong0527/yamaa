@@ -27,6 +27,8 @@ pub enum Error {
     Lock(Vec<Finding>),
     Boundary(extendr_api::Error),
     Protocol,
+    /// A caller-supplied registry has no binding for the requested call.
+    MissingBinding(String),
 }
 impl Error {
     /// Mechanical SDK facts, distinct from projected semantic issues. Original
@@ -99,6 +101,11 @@ impl Error {
                 list!(kind = "sdk_boundary", condition = condition).into_robj()
             }
             Self::Protocol => list!(kind = "protocol").into_robj(),
+            Self::MissingBinding(call) => list!(
+                kind = "missing_binding",
+                call = Raw::from_bytes(call.as_bytes())
+            )
+            .into_robj(),
         }
     }
 }
@@ -354,12 +361,26 @@ impl ActivationPort for RegistryPort {
     fn bind(
         &mut self,
         identity: &ProjectFunctionIdentity,
-        _signature: &LogicalSignature,
+        signature: &LogicalSignature,
     ) -> std::result::Result<Function, Error> {
-        self.registry
+        let handle = self
+            .registry
             .get(&identity.call)
             .cloned()
-            .ok_or(Error::Protocol)
+            .ok_or_else(|| Error::MissingBinding(identity.call.clone()))?;
+        // Parity with the Python registry port: the registered function's
+        // formals must name exactly the logical parameters.
+        let formals = handle.formals().ok_or(Error::Protocol)?;
+        let actual: std::collections::BTreeSet<&str> = formals.names().collect();
+        let expected: std::collections::BTreeSet<&str> = signature
+            .parameters()
+            .iter()
+            .map(|parameter| parameter.name.as_str())
+            .collect();
+        if actual.contains("...") || actual != expected {
+            return Err(Error::Protocol);
+        }
+        Ok(handle)
     }
     fn is_interrupt(&self, error: &Error) -> bool {
         matches!(error, Error::Interrupt(_))
@@ -388,9 +409,9 @@ impl yamaa_core::function_batch::BatchFunctionPort for RegistryPort {
     fn call_batch(
         &mut self,
         handle: &Function,
+        rows: usize,
         arguments: &[yamaa_core::function_batch::BatchArgument],
     ) -> std::result::Result<Vec<Value>, HostError<Error>> {
-        let rows = arguments.first().map_or(0, |a| a.values.len());
         let mut results = Vec::with_capacity(rows);
         for row in 0..rows {
             let borrowed: Vec<Argument<'_>> = arguments

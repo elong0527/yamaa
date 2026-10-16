@@ -65,9 +65,13 @@ pub trait BatchFunctionPort {
     fn is_interrupt(&self, _error: &Self::Error) -> bool {
         false
     }
+    /// `rows` is the number of rows the callback is given; it is explicit
+    /// because a function with no parameters has no columns to infer it
+    /// from, and ports must not guess it.
     fn call_batch(
         &mut self,
         handle: &Self::Handle,
+        rows: usize,
         arguments: &[BatchArgument],
     ) -> Result<Vec<Value>, HostError<Self::Error>>;
 }
@@ -94,11 +98,9 @@ where
     fn call_batch(
         &mut self,
         _handle: &(),
+        rows: usize,
         arguments: &[BatchArgument],
     ) -> Result<Vec<Value>, HostError<E>> {
-        let rows = arguments
-            .first()
-            .map_or(0, |argument| argument.values.len());
         let mut results = Vec::with_capacity(rows);
         for row in 0..rows {
             let borrowed: Vec<crate::function_invocation::Argument<'_>> = arguments
@@ -294,16 +296,18 @@ pub fn invoke_batch<P: BatchFunctionPort>(
     if active.is_empty() {
         return Ok(results);
     }
-    let returned = port.call_batch(handle, &arguments).map_err(|error| {
-        scalar_failure(
-            plan.identity(),
-            None,
-            match error {
-                HostError::Raised(payload) => FailureKind::CallFailed(payload),
-                HostError::InvalidResult(payload) => FailureKind::InvalidHostResult(payload),
-            },
-        )
-    })?;
+    let returned = port
+        .call_batch(handle, active.len(), &arguments)
+        .map_err(|error| {
+            scalar_failure(
+                plan.identity(),
+                None,
+                match error {
+                    HostError::Raised(payload) => FailureKind::CallFailed(payload),
+                    HostError::InvalidResult(payload) => FailureKind::InvalidHostResult(payload),
+                },
+            )
+        })?;
     if returned.len() != active.len() {
         return Err(BatchFailure {
             identity: plan.identity().clone(),

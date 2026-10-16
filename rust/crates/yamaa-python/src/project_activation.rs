@@ -250,9 +250,9 @@ impl BatchFunctionPort for RegistryPort<'_> {
     fn call_batch(
         &mut self,
         handle: &Py<PyAny>,
+        rows: usize,
         arguments: &[BatchArgument],
     ) -> Result<Vec<Value>, HostError<Error>> {
-        let rows = arguments.first().map_or(0, |a| a.values.len());
         let kwargs = PyDict::new(self.py);
         for argument in arguments {
             let column = PyList::empty(self.py);

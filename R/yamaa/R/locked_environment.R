@@ -126,6 +126,9 @@
   if (length(call) != 1L || !is.character(call) || is.na(call)) {
     stop("expected one callable name", call. = FALSE)
   }
+  if (!is.environment(registry) && anyDuplicated(names(registry))) {
+    stop("registry names are duplicated", call. = FALSE)
+  }
   target <- if (is.environment(registry)) {
     if (exists(call, envir = registry, inherits = FALSE)) {
       get(call, envir = registry, inherits = FALSE)
