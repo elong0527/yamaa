@@ -735,9 +735,11 @@ impl Rows {
         // fail `unmatched_key` for them (REQ-1264). Named reads by a filter,
         // a row derivation, or another default already promote the match
         // columns they need through `default_dependencies`.
-        let named_read = |read: &str| -> bool {
+        // A reference owned by the template's own driver binds as a source
+        // read, never as an intermediate read, so it admits no selector.
+        let named_read = |read: &str, row_driver: &str| -> bool {
             let owner = read.split_once('.').map_or(read, |(owner, _)| owner);
-            intermediates.contains(owner)
+            owner != row_driver && intermediates.contains(owner)
         };
         let mut secondary_reads = false;
         let mut selector_reads = false;
@@ -749,7 +751,7 @@ impl Rows {
                 .unwrap_or(driver);
             if let Some((_, Ok(plan))) = &filters[row_index] {
                 for read in plan.identifiers() {
-                    if !selector_reads && named_read(&read) {
+                    if !selector_reads && named_read(&read, row_driver) {
                         selector_reads = true;
                     }
                     if !secondary_reads
@@ -776,7 +778,7 @@ impl Rows {
                     0,
                 )?;
                 for read in &reads {
-                    if !selector_reads && named_read(read) {
+                    if !selector_reads && named_read(read, row_driver) {
                         selector_reads = true;
                     }
                     if !secondary_reads
