@@ -51,6 +51,61 @@ pub(crate) fn classified_resource(diagnostic: &yamaa_core::diagnostic::Diagnosti
     vec![Issue::from_core(diagnostic.clone()).expect("classified resource finding")]
 }
 pub(crate) fn resource_failure(stage: &str, error: &crate::file_resources::Error) -> Failure {
+    with_source(resource_diagnostic(stage, error), None)
+}
+/// A failure observed on an already captured file also names that file.
+pub(crate) fn resource_failure_from(
+    stage: &str,
+    error: &crate::file_resources::Error,
+    source: &str,
+) -> Failure {
+    with_source(resource_diagnostic(stage, error), Some(source))
+}
+/// A typed limit keeps its resource facts and, when known, its owning source.
+pub(crate) fn resource_limit_from(
+    stage: &str,
+    limit: &yamaa_core::limits::LimitExceeded,
+    source: Option<&str>,
+) -> Failure {
+    with_source(limit_diagnostic(stage, limit), source)
+}
+/// An internal graph invariant names its fixed reason and, when known, the
+/// source document; it never claims a language or resource cause.
+pub(crate) fn graph_boundary(stage: &str, reason: &str, source: Option<&str>) -> Failure {
+    let mut diagnostic = yamaa_core::application_issue::rejected(stage, "graph_boundary");
+    diagnostic
+        .context
+        .insert("reason".into(), Value::String(reason.into()));
+    with_source(diagnostic, source)
+}
+fn with_source(
+    mut diagnostic: yamaa_core::diagnostic::Diagnostic,
+    source: Option<&str>,
+) -> Failure {
+    if let Some(source) = source {
+        diagnostic
+            .context
+            .insert("source".into(), Value::String(source.into()));
+    }
+    vec![Issue::from_core(diagnostic).expect("application issue")]
+}
+fn limit_diagnostic(
+    stage: &str,
+    limit: &yamaa_core::limits::LimitExceeded,
+) -> yamaa_core::diagnostic::Diagnostic {
+    yamaa_core::application_issue::resource_rejected(
+        stage,
+        "resource_limit",
+        limit.resource,
+        limit.limit,
+        limit.actual,
+        Vec::new(),
+    )
+}
+fn resource_diagnostic(
+    stage: &str,
+    error: &crate::file_resources::Error,
+) -> yamaa_core::diagnostic::Diagnostic {
     use crate::file_resources::Error as E;
     let code = match error {
         E::Missing => "resource_missing",
@@ -64,18 +119,9 @@ pub(crate) fn resource_failure(stage: &str, error: &crate::file_resources::Error
         E::Symlink => "resource_link",
         E::Changed => "resource_changed",
         E::InvalidLock => "invalid_packaging_lock",
-        E::Limit(error) => {
-            return resource_rejected(
-                stage,
-                "resource_limit",
-                error.resource,
-                error.limit,
-                error.actual,
-                Vec::new(),
-            )
-        }
+        E::Limit(limit) => return limit_diagnostic(stage, limit),
     };
-    rejected(stage, code)
+    yamaa_core::application_issue::rejected(stage, code)
 }
 pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Failure {
     use crate::file_publication::Error as E;
