@@ -1176,7 +1176,7 @@ mod schema {
                 assert_eq!(diagnostic.spec_paths, [path]);
                 assert_eq!(
                     diagnostic.context["predicate"],
-                    yamaa_core::json::json!("ID >")
+                    yamaa_core::json::Value::from("ID >")
                 );
             }
         }
@@ -1301,7 +1301,7 @@ mod schema {
             );
             assert_eq!(
                 diagnostic.context["predicate"],
-                yamaa_core::json::json!("SRC.ID =")
+                yamaa_core::json::Value::from("SRC.ID =")
             );
         }
 

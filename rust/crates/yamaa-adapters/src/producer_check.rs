@@ -311,7 +311,8 @@ fn inheritance_issues<'a>(
         .map_err(|_| Error::Original(owner))?;
     // Typed cause selection precedes projection; this protocol check validates
     // completeness, never chooses a preparation/execution route from error text.
-    let value: yamaa_core::json::Value = serde_json::from_str(&encoded).map_err(|_| invalid())?;
+    let value: yamaa_core::json::Value =
+        crate::json_wire::decode(&encoded).map_err(|_| invalid())?;
     let outcome = &value["outcome"];
     if outcome["status"] != "invalid" {
         return Err(Error::Original(owner));

@@ -106,8 +106,8 @@ impl RootResult {
 
         let admitted = (|| {
             let mut value = self.observations.clone();
-            value["publication"] = yamaa_core::json::json!({"status":"failure",
-                "entered":publication.artifacts().iter().map(|item|yamaa_core::json::json!({"node":item.node(),"published":false})).collect::<Vec<_>>(),
+            value["publication"] = crate::json!({"status":"failure",
+                "entered":publication.artifacts().iter().map(|item|crate::json!({"node":item.node(),"published":false})).collect::<Vec<_>>(),
                 "error":null});
             let locations = publication
                 .artifacts()
@@ -340,15 +340,14 @@ impl RootResult {
                         actual.map_or(request.field, |entry| entry.field)
                     )];
                     let mut context: Value =
-                        serde_json::from_str(&issue.context).expect("native issue context");
-                    context["node"] =
-                        yamaa_core::json::json!(actual.map_or(request.node, |entry| entry.node));
-                    context["path"] = yamaa_core::json::json!(
+                        crate::json_wire::decode(&issue.context).expect("native issue context");
+                    context["node"] = crate::json!(actual.map_or(request.node, |entry| entry.node));
+                    context["path"] = crate::json!(
                         actual.map_or(request.path.as_str(), |entry| entry.path.as_str())
                     );
-                    context["entered"] = yamaa_core::json::json!(entered);
-                    context["completed"] = yamaa_core::json::json!(completed);
-                    issue.context = context.to_string();
+                    context["entered"] = crate::json!(entered);
+                    context["completed"] = crate::json!(completed);
+                    issue.context = crate::json_wire::encode(&context);
                 }
             }
         }
@@ -464,8 +463,7 @@ pub fn prepare_owned_classified<'a, E>(
             ..
         }) if has_verification => {
             observations["outcome"] = Value::String("failure".into());
-            observations["error"] =
-                yamaa_core::json::json!({"stage":"output","code":"output_projection"});
+            observations["error"] = crate::json!({"stage":"output","code":"output_projection"});
             let finding = crate::specification_diagnostics::portable_diagnostic(
                 yamaa_core::application_issue::rejected("output", "output_projection"),
             );
@@ -845,10 +843,10 @@ mod log_tests {
             );
             assert_eq!(issues[0].requirement, None);
             assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
-            let context: Value = serde_json::from_str(&issues[0].context).unwrap();
+            let context: Value = crate::json_wire::decode(&issues[0].context).unwrap();
             assert_eq!(
                 context,
-                yamaa_core::json::json!({"stage":"capture", "code":"resource_limit", "resource":"source_bytes",
+                crate::json!({"stage":"capture", "code":"resource_limit", "resource":"source_bytes",
                 "limit":10_737_418_240_u64,"actual":10_737_418_241_u64,"dataset":"SRC","path":"input.csv"}),
                 "{route}"
             );
@@ -1111,7 +1109,7 @@ mod log_tests {
                     "actual publication failure must report REQ-0764"
                 );
                 assert_eq!(normative[0].spec_paths, ["output.warning_log"]);
-                let context: Value = serde_json::from_str(&normative[0].context).unwrap();
+                let context: Value = crate::json_wire::decode(&normative[0].context).unwrap();
                 assert_eq!(context["node"], 0);
                 assert_eq!(context["path"], "generated/root-warnings.csv");
                 assert_eq!(context["entered"], 5);
@@ -1162,7 +1160,7 @@ mod log_tests {
                     .iter()
                     .enumerate()
                     .map(|(position, (node, field, name))| {
-                        yamaa_core::json::json!({
+                        crate::json!({
                             "node":node, "field":field, "path":format!("generated/{name}"),
                             "published":position + 1 < boundary
                         })
@@ -1170,7 +1168,7 @@ mod log_tests {
                     .collect::<Vec<_>>();
                 assert_eq!(
                     report["publication"]["entered"],
-                    yamaa_core::json::json!(expected)
+                    yamaa_core::json::Value::Array(expected)
                 );
                 assert_eq!(report["artifacts"].as_array().unwrap().len(), boundary - 1);
                 assert_eq!(execution(report.clone()), before);

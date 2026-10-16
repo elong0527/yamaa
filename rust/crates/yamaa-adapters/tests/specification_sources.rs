@@ -332,8 +332,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn original_yaml_run_returns_complete_independent_portable_failures() {
+            use yamaa_adapters::json;
             use yamaa_adapters::specification_run::PreparedRun;
-            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             for (name, condition, requirement, column, expr, keys) in [
@@ -376,7 +376,7 @@ output: {{path: output.csv, columns: [I, S]}}
                         .unwrap();
                     assert!(response.table.is_none());
                     assert_eq!(
-                        serde_json::from_str::<yamaa_core::json::Value>(&response.outcome).unwrap(),
+                        yamaa_adapters::json_wire::decode(&response.outcome).unwrap(),
                         expected
                     );
                 }
@@ -430,8 +430,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn compiler_diagnostics_match_independent_reference_paths_context_and_phase() {
+            use yamaa_adapters::json;
             use yamaa_adapters::specification_run::PreparedRun;
-            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/negative-zero-division");
@@ -498,7 +498,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let response = run.execute_csv(&data).unwrap();
             let response: yamaa_core::json::Value =
-                serde_json::from_str(&response.outcome).unwrap();
+                yamaa_adapters::json_wire::decode(&response.outcome).unwrap();
             assert_eq!(
                 response["outcome"]["diagnostic"]["condition"],
                 "division_by_zero"
@@ -507,8 +507,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn preflight_reports_all_findings_in_reference_order_before_source_access() {
+            use yamaa_adapters::json;
             use yamaa_adapters::specification_run::PreparedRun;
-            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let raw =
@@ -547,10 +547,11 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(fields.len(), 3);
                 let error =
                     PreparedRun::prepare(prepare(&schema, fields[1].as_bytes())).unwrap_err();
-                let actual: Value =
-                    serde_json::from_str(&specification_diagnostics::failure(&error, None))
-                        .unwrap();
-                let expected: Value = serde_json::from_str(fields[2]).unwrap();
+                let actual: Value = yamaa_adapters::json_wire::decode(
+                    &specification_diagnostics::failure(&error, None),
+                )
+                .unwrap();
+                let expected: Value = yamaa_adapters::json_wire::decode(fields[2]).unwrap();
                 assert_eq!(actual, expected, "{}", fields[0]);
                 count += 1;
             }
@@ -629,8 +630,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn binding_collects_ordered_findings_before_dependency_diagnostics() {
+            use yamaa_adapters::json;
             use yamaa_adapters::specification_run::PreparedRun;
-            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/negative-zero-division");
@@ -829,15 +830,16 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(port.reads, 1);
                 // Independently authored complete failure truth; benchmark source and
                 // diagnostic declarations also receive a separate reference comparison.
-                let mut expected: yamaa_core::json::Value = serde_json::from_slice(
-                    &std::fs::read(
-                        Path::new(env!("CARGO_MANIFEST_DIR"))
-                            .join("tests/fixtures/specs")
-                            .join(format!("{name}.json")),
+                let mut expected: yamaa_core::json::Value =
+                    yamaa_adapters::json_wire::decode_slice(
+                        &std::fs::read(
+                            Path::new(env!("CARGO_MANIFEST_DIR"))
+                                .join("tests/fixtures/specs")
+                                .join(format!("{name}.json")),
+                        )
+                        .unwrap(),
                     )
-                    .unwrap(),
-                )
-                .unwrap();
+                    .unwrap();
                 let actual = specification_report::failure(
                     &run,
                     &attempt,
@@ -851,15 +853,15 @@ output: {{path: output.csv, columns: [I, S]}}
                     },
                 )
                 .unwrap();
-                expected["backend"] = yamaa_core::json::json!("rust");
+                expected["backend"] = yamaa_adapters::json!("rust");
                 assert_eq!(actual.observations_value(false), expected, "{name}");
             }
         }
 
         #[test]
         fn declared_source_types_preserve_ingestion_diagnostics_before_formula_errors() {
+            use yamaa_adapters::json;
             use yamaa_adapters::specification_run::PreparedRun;
-            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/negative-zero-division");
@@ -990,8 +992,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path() {
+            use yamaa_adapters::json;
             use yamaa_adapters::specification_run::PreparedRun;
-            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
@@ -1069,11 +1071,12 @@ output: {{path: output.csv, columns: [I, S]}}
         #[test]
         fn original_success_report_follows_actual_atomic_publication_and_output_failures_do_not_publish(
         ) {
+            use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, CompleteError, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
-            use yamaa_core::json::{json, Value as Json};
+            use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
             struct Captured {
                 bytes: Arc<[u8]>,
@@ -1162,9 +1165,10 @@ output: {{path: output.csv, columns: [I, S]}}
                 base_directory: ".",
             };
             let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
-            let expected: Json =
-                serde_json::from_str(include_str!("fixtures/specs/adam-adlb-ordered-sum.json"))
-                    .unwrap();
+            let expected: Json = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/specs/adam-adlb-ordered-sum.json"
+            ))
+            .unwrap();
             let attempt = run.execute_with_port(&mut port, Scope::default());
             let report =
                 specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
@@ -1235,9 +1239,10 @@ output: {{path: output.csv, columns: [I, S]}}
                 &mut publisher,
             )
             .unwrap();
-            let original: Json =
-                serde_json::from_str(include_str!("fixtures/specs/adam-adlb-ordered-sum.json"))
-                    .unwrap();
+            let original: Json = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/specs/adam-adlb-ordered-sum.json"
+            ))
+            .unwrap();
             let rows = original["tables"][1]["rows"].as_array().unwrap();
             let keys=[0,1,2,12,3,4,5,13,6,14,7,8,9,15,10,11,16].into_iter().map(|row|json!({"STUDYID":rows[row][0]["value"],"USUBJID":rows[row][1]["value"],"PARAMCD":rows[row][3]["value"],"AVISIT":rows[row][2]["value"]})).collect::<Vec<_>>();
             let diagnostic = json!({"phase":"verification","condition":"unique_failed","requirement":"REQ-0381","spec_paths":["verifications[0].unique"],"context":{"columns":["USUBJID"],"failure_count":5,"keys":&keys[..5]}});
@@ -1258,11 +1263,12 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
+            use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
-            use yamaa_core::json::{json, Value as Json};
+            use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 bytes: Arc<[u8]>,
@@ -1440,8 +1446,8 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
+            use yamaa_adapters::json;
             use yamaa_adapters::specification_run::PreparedRun;
-            use yamaa_core::json::json;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let raw =
@@ -1521,11 +1527,12 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
+            use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
-            use yamaa_core::json::{json, Value as Json};
+            use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 bytes: Arc<[u8]>,
@@ -1580,9 +1587,10 @@ output: {{path: output.csv, columns: [I, S]}}
                 base_directory: ".",
             };
             for all_missing in [false, true] {
-                let mut expected: Json =
-                    serde_json::from_str(include_str!("fixtures/specs/adam-adlb-ordered-sum.json"))
-                        .unwrap();
+                let mut expected: Json = yamaa_adapters::json_wire::decode(include_str!(
+                    "fixtures/specs/adam-adlb-ordered-sum.json"
+                ))
+                .unwrap();
                 expected["tables"][0]["types"][6] = json!("str");
                 let mut source = String::new();
                 for (i, line) in input.lines().enumerate() {
@@ -1649,11 +1657,12 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
+            use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
-            use yamaa_core::json::{json, Value as Json};
+            use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 bytes: Arc<[u8]>,
@@ -1728,9 +1737,10 @@ output: {{path: output.csv, columns: [I, S]}}
                 &mut host,
             )
             .unwrap();
-            let expected: Json =
-                serde_json::from_str(include_str!("fixtures/specs/adam-adlb-ordered-sum.json"))
-                    .unwrap();
+            let expected: Json = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/specs/adam-adlb-ordered-sum.json"
+            ))
+            .unwrap();
             assert_eq!(actual, expected);
             assert_eq!(host.reads, 1);
             assert_eq!(
@@ -1874,11 +1884,12 @@ output: {{path: output.csv, columns: [I, S]}}
         #[test]
         fn original_lookup_complete_report_uses_all_captured_sources_and_actual_handlers() {
             use std::collections::BTreeMap;
+            use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
-            use yamaa_core::json::{json, Value as Json};
+            use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 content: BTreeMap<String, Arc<[u8]>>,
@@ -1964,9 +1975,10 @@ output: {{path: output.csv, columns: [I, S]}}
                 };
                 let actual =
                     specification_report::complete(&prepared, &attempt, id, &mut host).unwrap();
-                let mut expected: Json =
-                    serde_json::from_str(include_str!("fixtures/specs/schema-lookup.json"))
-                        .unwrap();
+                let mut expected: Json = yamaa_adapters::json_wire::decode(include_str!(
+                    "fixtures/specs/schema-lookup.json"
+                ))
+                .unwrap();
                 for source in expected["source_reads"].as_array_mut().unwrap() {
                     source["snapshots_created"] = json!(created);
                 }
@@ -1982,11 +1994,12 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn original_lookup_failures_match_independent_diagnostics_and_completed_observations() {
+            use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
-            use yamaa_core::json::{json, Value as Json};
+            use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 case: std::path::PathBuf,
@@ -2028,8 +2041,10 @@ output: {{path: output.csv, columns: [I, S]}}
             let case = root.join("benchmarks/schema-lookup");
             let schema = schema(&root.join("yaml"));
             let original = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
-            let cases: Vec<Json> =
-                serde_json::from_str(include_str!("fixtures/specs/lookup-failures.json")).unwrap();
+            let cases: Vec<Json> = yamaa_adapters::json_wire::decode_array(include_str!(
+                "fixtures/specs/lookup-failures.json"
+            ))
+            .unwrap();
             for variant in cases {
                 let raw = original.replace(
                     variant["before"].as_str().unwrap(),
@@ -2055,9 +2070,10 @@ output: {{path: output.csv, columns: [I, S]}}
                     &mut host,
                 )
                 .unwrap();
-                let mut expected: Json =
-                    serde_json::from_str(include_str!("fixtures/specs/schema-lookup.json"))
-                        .unwrap();
+                let mut expected: Json = yamaa_adapters::json_wire::decode(include_str!(
+                    "fixtures/specs/schema-lookup.json"
+                ))
+                .unwrap();
                 expected["outcome"] = json!("failure");
                 expected["nodes"][0]["outcome"] = json!("failure");
                 for field in ["diagnostics", "handler_counts"] {
@@ -2070,7 +2086,12 @@ output: {{path: output.csv, columns: [I, S]}}
                     .as_array_mut()
                     .unwrap()
                     .retain(|table| table["stage"] == "source");
-                assert_eq!(actual, expected, "{}", variant["name"]);
+                assert_eq!(
+                    actual,
+                    expected,
+                    "{}",
+                    yamaa_adapters::json_wire::encode(&variant["name"])
+                );
                 assert_eq!(host.requests, ["DM", "AE", "MEDDRA"]);
             }
         }
@@ -2167,23 +2188,24 @@ output: {{path: output.csv, columns: [I, S]}}
                 .execute_csv(&std::fs::read(case.join("input/dm.csv")).unwrap())
                 .err()
                 .unwrap();
-            let actual: yamaa_core::json::Value = serde_json::from_str(
+            let actual: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
                 &specification_diagnostics::failure(&error, Some(run.source())),
             )
             .unwrap();
             assert_eq!(
                 actual,
-                yamaa_core::json::json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"bind","code":"source_count"}})
+                yamaa_adapters::json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"bind","code":"source_count"}})
             );
         }
 
         #[test]
         fn original_window_yaml_compiles_and_publishes_complete_independent_report() {
+            use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, ArtifactPort, Identity},
                 specification_run::{PreparedRun, SourcePort},
             };
-            use yamaa_core::json::{json, Value as Json};
+            use yamaa_core::json::Value as Json;
             use yamaa_core::specification::SourceDeclaration;
             struct Host {
                 bytes: Arc<[u8]>,
@@ -2258,7 +2280,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     &mut host,
                 )
                 .unwrap();
-                let mut expected: Json = serde_json::from_str(include_str!(
+                let mut expected: Json = yamaa_adapters::json_wire::decode(include_str!(
                     "fixtures/specs/schema-window-functions.json"
                 ))
                 .unwrap();

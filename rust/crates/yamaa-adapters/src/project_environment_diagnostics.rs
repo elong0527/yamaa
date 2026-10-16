@@ -291,7 +291,7 @@ fn decode_issues(
     let mut rows = crate::file_application::preparation_failure(message);
     for row in &mut rows {
         let mut context: yamaa_core::json::Value =
-            serde_json::from_str(&row.context).map_err(|_| Error::Projection)?;
+            crate::json_wire::decode(&row.context).map_err(|_| Error::Projection)?;
         for (key, value) in [
             ("entry", entry),
             ("path", written),
@@ -299,7 +299,7 @@ fn decode_issues(
         ] {
             context[key] = value.into();
         }
-        row.context = context.to_string();
+        row.context = crate::json_wire::encode(&context);
     }
     Ok(rows)
 }

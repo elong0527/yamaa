@@ -12,9 +12,10 @@ mod execution {
             path::PathBuf,
             sync::atomic::{AtomicUsize, Ordering},
         };
+        use yamaa_adapters::json;
         use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
-        use yamaa_core::json::{json, Value};
+        use yamaa_core::json::Value;
 
         struct Fixture(PathBuf);
         impl Fixture {
@@ -77,7 +78,8 @@ mod execution {
                     .iter()
                     .map(|issue| {
                         let mut value = issue.as_value();
-                        value["context"] = serde_json::from_str(&issue.context).unwrap();
+                        value["context"] =
+                            yamaa_adapters::json_wire::decode(&issue.context).unwrap();
                         value
                     })
                     .collect(),
@@ -371,16 +373,17 @@ mod execution {
             }
         }
         fn issues(rows: &[yamaa_adapters::issue_rows::Issue]) -> yamaa_core::json::Value {
-            yamaa_core::json::json!(rows.iter().map(|row| yamaa_core::json::json!({
+            yamaa_adapters::json!(rows.iter().map(|row| yamaa_adapters::json!({
         "phase":row.phase,"condition":row.condition,"requirement":row.requirement,
-        "spec_paths":row.spec_paths,"context":serde_json::from_str::<yamaa_core::json::Value>(&row.context).unwrap()
+        "spec_paths":row.spec_paths,"context":yamaa_adapters::json_wire::decode(&row.context).unwrap()
     })).collect::<Vec<_>>())
         }
         #[test]
         fn row_count_lookups_preserve_typed_scopes_metadata_and_filter_order() {
-            let truth: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("../../../tests/host-fixtures/cases.json"))
-                    .unwrap();
+            let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "../../../tests/host-fixtures/cases.json"
+            ))
+            .unwrap();
             for case in truth["families"]["original-specifications"]["row_count_lookups"]
                 .as_array()
                 .unwrap()
@@ -415,31 +418,36 @@ mod execution {
                     issues(&file_application::check(request(), identity())),
                     case["check_issues"],
                     "{}",
-                    case["name"]
+                    yamaa_adapters::json_wire::encode(&case["name"])
                 );
                 let mut result = file_application::domain(request(), identity()).unwrap();
-                assert_eq!(issues(&result.issues()), case["issues"], "{}", case["name"]);
+                assert_eq!(
+                    issues(&result.issues()),
+                    case["issues"],
+                    "{}",
+                    yamaa_adapters::json_wire::encode(&case["name"])
+                );
                 let expected = case["verifications"]
                     .as_array()
                     .unwrap()
                     .iter()
                     .cloned()
                     .map(|mut record| {
-                        record["specification"] = yamaa_core::json::json!(path);
+                        record["specification"] = yamaa_adapters::json!(path);
                         record
                     })
                     .collect::<Vec<_>>();
                 assert_eq!(
                     result.observations()["verifications"],
-                    yamaa_core::json::json!(expected),
+                    yamaa_adapters::json!(expected),
                     "{}",
-                    case["name"]
+                    yamaa_adapters::json_wire::encode(&case["name"])
                 );
                 assert_eq!(
                     result.observations()["handler_counts"],
                     case["handler_counts"],
                     "{}",
-                    case["name"]
+                    yamaa_adapters::json_wire::encode(&case["name"])
                 );
                 if let Some(csv) = case["csv"].as_str() {
                     assert!(result.save().unwrap());
@@ -633,8 +641,8 @@ mod execution {
                     assert_eq!(issue.requirement.as_deref(), Some("REQ-0510"));
                     assert_eq!(issue.spec_paths, ["rows[0].derivations.VALUE.aggregate"]);
                     assert_eq!(
-                        serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap(),
-                        yamaa_core::json::json!({"expr": format!("{reducer}(SRC.V)"),
+                        yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                        yamaa_adapters::json!({"expr": format!("{reducer}(SRC.V)"),
                     "reducer": reducer, "source": "SRC.V", "expected": "numeric", "actual": "str"})
                     );
                     assert!(result.output().is_none());
@@ -669,8 +677,7 @@ mod execution {
             assert_eq!(issues.len(), 1);
             assert_eq!(issues[0].condition, "phase_boundary");
             assert_eq!(
-                serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap()
-                    ["available_phase"],
+                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap()["available_phase"],
                 "window_derivation"
             );
             assert!(!f.0.join("output.csv").exists());
@@ -816,12 +823,13 @@ rows:
             path::PathBuf,
             sync::atomic::{AtomicUsize, Ordering},
         };
+        use yamaa_adapters::json;
         use yamaa_adapters::{
             file_application, file_preparation::FileSpecification, file_resources::Resources,
             issue_rows::Issue, specification_report::Identity,
         };
         use yamaa_core::domain_entry::Request;
-        use yamaa_core::json::{json, Value};
+        use yamaa_core::json::Value;
 
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         struct Study(PathBuf);
@@ -860,7 +868,8 @@ rows:
                 rows.iter()
                     .map(|issue| {
                         let mut value = issue.as_value();
-                        value["context"] = serde_json::from_str(&issue.context).unwrap();
+                        value["context"] =
+                            yamaa_adapters::json_wire::decode(&issue.context).unwrap();
                         value
                     })
                     .collect(),
@@ -1094,8 +1103,7 @@ rows:
                     assert_eq!(issue.condition, "conversion_failed");
                     assert_eq!(issue.requirement.as_deref(), Some("REQ-0013"));
                     assert_eq!(
-                        serde_json::from_str::<yamaa_core::json::Value>(&issue.context).unwrap()
-                            ["value"],
+                        yamaa_adapters::json_wire::decode(&issue.context).unwrap()["value"],
                         true
                     );
                 }
@@ -1149,16 +1157,17 @@ rows:
             }
         }
         fn rows(issues: &[Issue]) -> yamaa_core::json::Value {
-            issues.iter().map(|row| yamaa_core::json::json!({
+            issues.iter().map(|row| yamaa_adapters::json!({
         "phase": row.phase, "condition": row.condition, "requirement": row.requirement,
-        "spec_paths": row.spec_paths, "context": serde_json::from_str::<yamaa_core::json::Value>(&row.context).unwrap()
+        "spec_paths": row.spec_paths, "context": yamaa_adapters::json_wire::decode(&row.context).unwrap()
     })).collect()
         }
         #[test]
         fn row_joins_preserve_original_driver_key_scope_and_constructed_output_keys() {
-            let truth: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("../../../tests/host-fixtures/cases.json"))
-                    .unwrap();
+            let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "../../../tests/host-fixtures/cases.json"
+            ))
+            .unwrap();
             for case in truth["families"]["original-specifications"]["row_join_keys"]
                 .as_array()
                 .unwrap()
@@ -1198,10 +1207,15 @@ rows:
                         rows(&file_application::check(request(), identity())),
                         case["check_issues"],
                         "{}",
-                        case["name"]
+                        yamaa_adapters::json_wire::encode(&case["name"])
                     );
                     let mut result = file_application::domain(request(), identity()).unwrap();
-                    assert_eq!(rows(&result.issues()), case["issues"], "{}", case["name"]);
+                    assert_eq!(
+                        rows(&result.issues()),
+                        case["issues"],
+                        "{}",
+                        yamaa_adapters::json_wire::encode(&case["name"])
+                    );
                     if let Some(csv) = case["csv"].as_str() {
                         assert!(result.output().is_some());
                         assert!(result.save().unwrap());
@@ -1209,7 +1223,7 @@ rows:
                             fs::read(fixture.0.join("out.csv")).unwrap(),
                             csv.as_bytes(),
                             "{}",
-                            case["name"]
+                            yamaa_adapters::json_wire::encode(&case["name"])
                         );
                         fs::remove_file(fixture.0.join("out.csv")).unwrap();
                     } else {
@@ -1309,9 +1323,9 @@ rows:
             assert_eq!(issues[0].condition, "row_count_failed");
             assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0385"));
             let context: yamaa_core::json::Value =
-                serde_json::from_str(&issues[0].context).unwrap();
+                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
             assert_eq!(context["failure_count"], 2);
-            assert_eq!(context["counts"], yamaa_core::json::json!([2, 0]));
+            assert_eq!(context["counts"], yamaa_adapters::json!([2, 0]));
             assert_eq!(context["keys"].as_array().unwrap().len(), 2);
         }
         #[test]
@@ -1393,15 +1407,15 @@ verifications:
             let check = &result.observations()["verifications"][0];
             assert_eq!(
                 check["failure"]["context"]["counts"],
-                yamaa_core::json::json!([0, 0, 0, 0, 0])
+                yamaa_adapters::json!([0, 0, 0, 0, 0])
             );
             assert_eq!(
                 check["failure"]["log_context"]["counts"],
-                yamaa_core::json::json!([0, 0, 0, 0, 0, 0])
+                yamaa_adapters::json!([0, 0, 0, 0, 0, 0])
             );
             assert_eq!(
                 check["failure"]["log_context"]["denominators"],
-                yamaa_core::json::json!([1, 1, 1, 1, 1, 1])
+                yamaa_adapters::json!([1, 1, 1, 1, 1, 1])
             );
             assert_eq!(
                 check["failure"]["offending_keys"].as_array().unwrap().len(),
@@ -1658,8 +1672,8 @@ columns:
         assert_eq!(issues[0].condition, "missing_key");
         assert_eq!(issues[0].spec_paths, ["keys[1]"]);
         assert_eq!(
-            serde_json::from_str::<yamaa_core::json::Value>(&issues[0].context).unwrap(),
-            yamaa_core::json::json!({"column": "A", "missing_count": 1,
+            yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
+            yamaa_adapters::json!({"column": "A", "missing_count": 1,
                 "keys": [{"B": "present", "A": null}]})
         );
         assert!(result.output().is_none());
@@ -1922,9 +1936,10 @@ rows:
 
         #[test]
         fn temporal_operations_match_shared_host_truth_before_and_after_source_capture() {
-            let truth: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("../../../tests/host-fixtures/cases.json"))
-                    .unwrap();
+            let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "../../../tests/host-fixtures/cases.json"
+            ))
+            .unwrap();
             for case in truth["families"]["original-specifications"]["temporal_arithmetic"]
                 .as_array()
                 .unwrap()
@@ -2038,9 +2053,10 @@ rows:
         }
         #[test]
         fn typed_intermediate_conversion_and_static_checks_match_independent_host_truth() {
-            let truth: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("../../../tests/host-fixtures/cases.json"))
-                    .unwrap();
+            let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "../../../tests/host-fixtures/cases.json"
+            ))
+            .unwrap();
             for case in truth["families"]["original-specifications"]["typed_intermediates"]
                 .as_array()
                 .unwrap()
@@ -2108,7 +2124,8 @@ rows:
                         assert_eq!(
                             count,
                             case["unconvertible_count"].as_u64().unwrap(),
-                            "{name}: {observations}"
+                            "{name}: {}",
+                            yamaa_adapters::json_wire::encode(&observations)
                         );
                     }
                     Err(issues) => {
@@ -2124,9 +2141,10 @@ rows:
 
         #[test]
         fn transitive_nested_conversion_handlers_survive_success_and_failure() {
-            let truth: yamaa_core::json::Value =
-                serde_json::from_str(include_str!("../../../tests/host-fixtures/cases.json"))
-                    .unwrap();
+            let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "../../../tests/host-fixtures/cases.json"
+            ))
+            .unwrap();
             let case = truth["families"]["original-specifications"]["typed_intermediates"]
                 .as_array()
                 .unwrap()

@@ -71,8 +71,8 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot_in_both
         assert_eq!(finding.requirement.as_deref(), Some("REQ-0788"));
         assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
         assert_eq!(
-            serde_json::from_str::<yamaa_core::json::Value>(&finding.context).unwrap(),
-            yamaa_core::json::json!({"path":"dm.csv"})
+            crate::json_wire::decode(&finding.context).unwrap(),
+            crate::json!({"path":"dm.csv"})
         );
     }
     assert_eq!(resources.capture_reads(), 1);
@@ -157,8 +157,8 @@ fn changed_define_metadata_uses_original_root_spec_parent_and_dictionary_occurre
             assert_eq!(findings[0].requirement.as_deref(), Some("REQ-0788"));
             assert_eq!(findings[0].spec_paths, [field]);
             assert_eq!(
-                serde_json::from_str::<yamaa_core::json::Value>(&findings[0].context).unwrap(),
-                yamaa_core::json::json!({"path":written})
+                crate::json_wire::decode(&findings[0].context).unwrap(),
+                crate::json!({"path":written})
             );
         }
         assert_eq!(ports.resources().capture_reads(), reads);
@@ -240,8 +240,8 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     assert_eq!(result.issues()[0].requirement.as_deref(), Some("REQ-0764"));
     assert_eq!(result.issues()[0].spec_paths, ["define"]);
     assert_eq!(
-        serde_json::from_str::<yamaa_core::json::Value>(&result.issues()[0].context).unwrap(),
-        yamaa_core::json::json!({"artifact":1,"cause":error.message()})
+        crate::json_wire::decode(&result.issues()[0].context).unwrap(),
+        crate::json!({"artifact":1,"cause":error.message()})
     );
     assert_eq!(result.capture_reads(), reads);
     assert!(result.save().is_err());

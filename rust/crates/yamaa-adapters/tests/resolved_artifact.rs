@@ -259,9 +259,9 @@ fn held_facts_round_trip_after_sources_are_deleted_without_recompilation() {
             .to_json()
             .unwrap()
     );
-    let mut value: Value = serde_json::from_str(&json).unwrap();
+    let mut value: Value = yamaa_adapters::json_wire::decode(&json).unwrap();
     value["artifact_version"] = Value::from(99);
-    assert!(ResolvedArtifact::from_json(&value.to_string()).is_err());
+    assert!(ResolvedArtifact::from_json(&yamaa_adapters::json_wire::encode(&value)).is_err());
     assert!(ResolvedArtifact::from_json(PRODUCER).is_err());
 }
 
@@ -352,7 +352,7 @@ fn wire_validation_rejects_incomplete_or_invented_ledgers_and_preserves_large_nu
         "version",
         "unknown_field",
     ] {
-        let mut value: Value = serde_json::from_str(&json).unwrap();
+        let mut value: Value = yamaa_adapters::json_wire::decode(&json).unwrap();
         let entry = &mut value["entries"][0];
         match modification {
             "missing_origin" => {
@@ -371,10 +371,10 @@ fn wire_validation_rejects_incomplete_or_invented_ledgers_and_preserves_large_nu
                 entry["mapping_order"]["/not-a-mapping"] = Value::Array(Vec::new());
             }
             "duplicate_key" => {
-                entry["mapping_order"]["/input"] = yamaa_core::json::json!(["RAW", "RAW"]);
+                entry["mapping_order"]["/input"] = yamaa_adapters::json!(["RAW", "RAW"]);
             }
             "invented_key" => {
-                entry["mapping_order"]["/input"] = yamaa_core::json::json!(["INVENTED"]);
+                entry["mapping_order"]["/input"] = yamaa_adapters::json!(["INVENTED"]);
             }
             "version" => {
                 entry["schema_version"] = Value::String("99".into());
@@ -385,7 +385,7 @@ fn wire_validation_rejects_incomplete_or_invented_ledgers_and_preserves_large_nu
             _ => unreachable!(),
         }
         assert!(
-            ResolvedArtifact::from_json(&value.to_string()).is_err(),
+            ResolvedArtifact::from_json(&yamaa_adapters::json_wire::encode(&value)).is_err(),
             "{modification}"
         );
     }

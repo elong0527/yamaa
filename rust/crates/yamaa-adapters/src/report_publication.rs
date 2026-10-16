@@ -1,7 +1,8 @@
 //! Publication owns its outcome fields before entering a publisher.
 //! Completion preserves the actual prefix and moves the owned error details.
+use crate::json;
 use crate::{report_storage::StoredReport, specification_report::Error};
-use yamaa_core::json::{json, Value};
+use yamaa_core::json::Value;
 
 const CODES: [&str; 6] = [
     "publication_incomplete",

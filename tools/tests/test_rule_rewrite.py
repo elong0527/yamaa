@@ -180,6 +180,31 @@ class RuleRewriteTests(unittest.TestCase):
                 self.assertIn(f"ERROR: {error}", result.stdout.splitlines())
                 self.assertEqual(result.stderr, "")
 
+    def test_check_reports_non_ascii_reference_as_stale(self):
+        # A materialized reference with non-ASCII bytes can never match the
+        # generated ASCII text; --check must report it as stale, not crash.
+        path = self.root / "rules/reference/schema-fields.md"
+        path.write_bytes(b"# Schema fields\n\ncaf\xc3\xa9\n")
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.generate_rule_reference",
+                "--root",
+                str(self.root),
+                "--check",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "ERROR: regenerate rules/reference/schema-fields.md",
+            result.stdout.splitlines(),
+        )
+        self.assertEqual(result.stderr, "")
+
     def test_description_without_descriptor_type_is_also_checked(self):
         path = self.root / "yaml/schema_shared.yaml"
         path.write_text(path.read_text() + "\nnavigation:\n    description: null\n")

@@ -1,6 +1,7 @@
 //! Private typed string-template observations for independently authored fixtures.
+use yamaa_adapters::json;
 use yamaa_core::json::Value as JsonValue;
-use yamaa_core::json::{json, Value};
+use yamaa_core::json::Value;
 use yamaa_core::text_template::{AdmissionError, Part, StringTemplate};
 
 pub fn observe(text: &str) -> Value {

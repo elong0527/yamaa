@@ -1,0 +1,133 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  EX: {path: input/ex.csv, types: {EXSEQ: int}}
+  DS: {path: input/ds.csv, types: {DSSEQ: int}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, EOP01STT, DCP01RS, EOP02STT, DCP02RS]
+
+# Each period's own disposition event: the DISPOSITION EVENT record whose
+# epoch is that period's treatment epoch. Other categories, and the records
+# of other epochs such as the end-of-study event, never count. Nothing here
+# chooses between two records for one period, so a second one stops the run.
+intermediates:
+  - id: P01DS
+    dataset: DS
+    filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT 1'"
+    no_match: null
+
+  - id: P02DS
+    dataset: DS
+    filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT 2'"
+    no_match: null
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # A subject entered a period when it has an exposure record in that
+  # period's epoch. COUNT over no record is missing, never zero.
+  - name: P01EXN
+    type: int
+    label: Exposure Records in Period 01
+    derivation:
+      aggregate:
+        filter: "EX.EPOCH = 'TREATMENT 1'"
+        expr: "COUNT(EX.*)"
+
+  - name: P02EXN
+    type: int
+    label: Exposure Records in Period 02
+    derivation:
+      aggregate:
+        filter: "EX.EPOCH = 'TREATMENT 2'"
+        expr: "COUNT(EX.*)"
+
+  - name: P01DECOD
+    type: str
+    label: Period 01 Disposition Term
+    derivation: P01DS.DSDECOD
+
+  - name: P02DECOD
+    type: str
+    label: Period 02 Disposition Term
+    derivation: P02DS.DSDECOD
+
+  # Entered and completed, entered and stopped for another reason, or
+  # entered with no disposition event yet. A period the subject never
+  # entered has no status: no branch applies.
+  - name: EOP01STT
+    type: str
+    label: End of Period 01 Status
+    derivation:
+      case:
+        - when: "P01EXN IS NOT NULL AND P01DECOD = 'COMPLETED'"
+          then: {literal: COMPLETED}
+        - when: "P01EXN IS NOT NULL AND P01DECOD IS NOT NULL"
+          then: {literal: DISCONTINUED}
+        - when: "P01EXN IS NOT NULL"
+          then: {literal: ONGOING}
+    verifications:
+      allowed_values:
+        values: [COMPLETED, DISCONTINUED, ONGOING]
+
+  # The reason is the standardized term, not the reported text.
+  - name: DCP01RS
+    type: str
+    label: Reason for Discont from Period 01
+    derivation:
+      case:
+        - when: "EOP01STT = 'DISCONTINUED'"
+          then: P01DECOD
+
+  - name: EOP02STT
+    type: str
+    label: End of Period 02 Status
+    derivation:
+      case:
+        - when: "P02EXN IS NOT NULL AND P02DECOD = 'COMPLETED'"
+          then: {literal: COMPLETED}
+        - when: "P02EXN IS NOT NULL AND P02DECOD IS NOT NULL"
+          then: {literal: DISCONTINUED}
+        - when: "P02EXN IS NOT NULL"
+          then: {literal: ONGOING}
+    verifications:
+      allowed_values:
+        values: [COMPLETED, DISCONTINUED, ONGOING]
+
+  - name: DCP02RS
+    type: str
+    label: Reason for Discont from Period 02
+    derivation:
+      case:
+        - when: "EOP02STT = 'DISCONTINUED'"
+          then: P02DECOD
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 7
+      max: 7
+  # A disposition event for a period the subject never entered contradicts
+  # the exposure records; the run stops instead of dropping it.
+  - assert:
+      id: period-one-event-needs-entry
+      when: "P01DECOD IS NOT NULL"
+      require: "P01EXN IS NOT NULL"
+  - assert:
+      id: period-two-event-needs-entry
+      when: "P02DECOD IS NOT NULL"
+      require: "P02EXN IS NOT NULL"

@@ -19,7 +19,10 @@ pub(crate) use yamaa_core::dataset::{self, DatasetPlan};
 
 /// Rows of a converted readable JSON fixture (formerly hex-encoded TSV).
 pub(crate) fn fixture_rows(truth: &str) -> Vec<yamaa_core::json::Value> {
-    serde_json::from_str(truth).unwrap()
+    match yamaa_adapters::json_wire::decode(truth).unwrap() {
+        yamaa_core::json::Value::Array(rows) => rows,
+        _ => panic!("fixture rows are a JSON array"),
+    }
 }
 
 /// Exact bytes of a fixture text cell; the two non-UTF-8 cells in the whole
@@ -172,9 +175,9 @@ pub(crate) fn independent_failed_reports(
                     (
                         fields[0].to_owned(),
                         fields[1].to_owned(),
-                        serde_json::from_str(fields[2]).unwrap(),
+                        yamaa_adapters::json_wire::decode(fields[2]).unwrap(),
                         (fields.len() == 4)
-                            .then(|| fixture_bytes(&yamaa_core::json::json!({"hex": fields[3]}))),
+                            .then(|| fixture_bytes(&yamaa_adapters::json!({"hex": fields[3]}))),
                     )
                 })
                 .collect()
@@ -292,7 +295,7 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
         drop(attempt);
         let expected: yamaa_core::json::Value = row["expected"].clone();
         let mut unsaved = expected.clone();
-        unsaved["artifacts"] = yamaa_core::json::json!([]);
+        unsaved["artifacts"] = yamaa_adapters::json!([]);
         assert_eq!(
             result.observations(),
             unsaved,
@@ -429,10 +432,10 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
                 let mut phase_boundaries = 0;
                 for finding in values.as_array().unwrap() {
                     if finding["condition"] == "phase_boundary" {
-                        assert_eq!(finding["requirement"], yamaa_core::json::json!("REQ-0068"));
+                        assert_eq!(finding["requirement"], yamaa_adapters::json!("REQ-0068"));
                         assert_eq!(
                             finding["spec_paths"],
-                            yamaa_core::json::json!(["rows[0].filter"])
+                            yamaa_adapters::json!(["rows[0].filter"])
                         );
                         phase_boundaries += 1;
                     }
@@ -441,7 +444,7 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
             }
         }
         let mut unsaved = expected.clone();
-        unsaved["artifacts"] = yamaa_core::json::json!([]);
+        unsaved["artifacts"] = yamaa_adapters::json!([]);
         assert_eq!(result.observations(), unsaved, "{}", case);
         if port.expected.is_empty() {
             assert!(result.output().is_none());

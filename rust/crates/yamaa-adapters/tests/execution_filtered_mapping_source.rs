@@ -64,7 +64,7 @@ fn issue_rows(issues: &[Issue]) -> Value {
             .iter()
             .map(|issue| {
                 let mut value = issue.as_value();
-                value["context"] = serde_json::from_str(&issue.context).unwrap();
+                value["context"] = yamaa_adapters::json_wire::decode(&issue.context).unwrap();
                 value
             })
             .collect(),
@@ -148,7 +148,7 @@ fn mapping_source_selection_without_its_pair_is_rejected() {
         assert!(domain.save().is_err(), "{source}");
         assert_eq!(
             issue_rows(&domain.issues()),
-            yamaa_core::json::json!([{
+            yamaa_adapters::json!([{
                 "phase": "validation",
                 "condition": "unpaired_fields",
                 "requirement": "REQ-0119",

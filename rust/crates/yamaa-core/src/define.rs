@@ -60,6 +60,13 @@ pub trait Ports {
         written: &str,
     ) -> Result<Self::Bytes, Self::Error>;
     fn decode_parquet(&mut self, bytes: &[u8]) -> Result<Self::Parquet, Self::ParquetError>;
+    /// Encode one admitted Dataset-JSON document over its held table. Core
+    /// owns admission and the typed document; the port owns only the bytes.
+    fn render_dataset_json<T: TableAccess>(
+        &mut self,
+        document: &crate::submission_json::DatasetJsonDocument,
+        table: &T,
+    ) -> Result<Vec<u8>, Finding>;
     fn target(
         &self,
         path: &str,
@@ -444,12 +451,14 @@ impl<P: Ports> Application<P> {
                         .map_err(|error| {
                             published_typed_csv_failure(&error, dataset.id(), written)
                         })?;
-                    crate::submission_json::render(
+                    crate::submission_json::admit(&composed, dataset, &table)
+                        .map_err(|finding| Failure::Metadata(vec![finding]))?;
+                    let document = crate::submission_json::document(
                         &composed,
                         dataset,
-                        &table,
                         &ports.define_name(&define_location),
-                    )
+                    );
+                    ports.render_dataset_json(&document, &table)
                 } else if location.to_ascii_lowercase().ends_with(".parquet") {
                     let table = ports.decode_parquet(bytes.as_ref()).map_err(|_| {
                         Failure::Metadata(vec![Finding::cause(
@@ -461,12 +470,14 @@ impl<P: Ports> Application<P> {
                     Limits::table(table.row_count(), table.schema().columns().len()).map_err(
                         |error| published_boundary_failure(error, dataset.id(), written),
                     )?;
-                    crate::submission_json::render(
+                    crate::submission_json::admit(&composed, dataset, &table)
+                        .map_err(|finding| Failure::Metadata(vec![finding]))?;
+                    let document = crate::submission_json::document(
                         &composed,
                         dataset,
-                        &table,
                         &ports.define_name(&define_location),
-                    )
+                    );
+                    ports.render_dataset_json(&document, &table)
                 } else {
                     return Err(Failure::Metadata(vec![Finding::cause(
                         ConditionCode::ApplicationUnsupported,

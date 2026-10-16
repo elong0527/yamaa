@@ -28,7 +28,7 @@ fn text(value: Option<&Value>, field: &'static str) -> Result<String, Error> {
 }
 pub fn decode_renv(bytes: &[u8]) -> Result<RenvLock, Error> {
     yamaa_core::limits::Limits::spec_bytes(bytes.len()).map_err(Error::Limit)?;
-    let root: Value = serde_json::from_slice(bytes).map_err(Error::Json)?;
+    let root: Value = crate::json_wire::decode_slice(bytes).map_err(Error::Json)?;
     // JSON syntax is established first; the shared decoder then enforces
     // duplicate-key/node/text/depth bounds throughout this JSON subset of YAML.
     decode_yaml(bytes).map_err(Error::Document)?;
