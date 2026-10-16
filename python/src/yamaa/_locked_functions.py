@@ -382,7 +382,18 @@ def invoke_batch_callable(target, columns):
     list or tuple of exactly that length. Anything else is refused here,
     and the shared engine re-validates length and exact result types
     before accepting any output.
+
+    A column is a list or tuple of row values, mirroring the return rule
+    below: a string or bytes column would otherwise be split into its
+    characters or byte values and silently read as one row per element,
+    and a non-sequence column leaked a raw TypeError from ``len`` instead
+    of the InvalidBinding every other batch refusal uses.
     """
+    if not isinstance(columns, Mapping):
+        raise InvalidBinding("batch", "batch columns must be a mapping")
+    for column in columns.values():
+        if isinstance(column, (str, bytes)) or not isinstance(column, (list, tuple)):
+            raise InvalidBinding("batch", "batch column is not a sequence")
     lengths = {len(column) for column in columns.values()}
     if len(lengths) > 1:
         raise InvalidBinding("batch", "batch columns differ in length")
