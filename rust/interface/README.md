@@ -8,8 +8,8 @@ and installed-host compatibility checks follow in
 [#2690](https://github.com/elong0527/yamaa/issues/2690),
 [#2691](https://github.com/elong0527/yamaa/issues/2691),
 [#2692](https://github.com/elong0527/yamaa/issues/2692) and
-[#2693](https://github.com/elong0527/yamaa/issues/2693). Current registrations
-and behavior remain handwritten until those changes land.
+[#2693](https://github.com/elong0527/yamaa/issues/2693). Current Python and R
+registrations and behavior remain handwritten until those changes land.
 
 ## Boundary choice and source ownership
 
