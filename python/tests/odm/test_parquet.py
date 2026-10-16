@@ -138,6 +138,28 @@ def test_existing_output_requires_explicit_overwrite(
     assert pl.read_parquet(output).height == 3
 
 
+def test_directory_output_is_refused_with_or_without_overwrite(
+    odm13_path: Path, tmp_path: Path
+) -> None:
+    # A directory named like the output is not a file overwrite can
+    # replace: it gets the same upfront FileExistsError as an existing
+    # file without overwrite, not a raw IsADirectoryError from the
+    # staged replace after conversion.
+    output = tmp_path / "clinical-items.parquet"
+    output.mkdir()
+
+    with pytest.raises(FileExistsError):
+        write_odm_parquet(odm13_path, output)
+    with pytest.raises(FileExistsError):
+        write_odm_parquet(odm13_path, output, overwrite=True)
+
+    assert output.is_dir()
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "clinical-items.parquet",
+        "odm13.xml",
+    ]
+
+
 def test_late_arriving_destination_is_preserved(
     odm13_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
