@@ -22,6 +22,9 @@ Python, R and Cargo versions move together;
 `tools.packaging.check_shared_release_versions` checks that they agree. The
 previous Python release is the `yamaa-py-0.3.0` tag.
 
+The [versioning and conformance policy](versioning.md) defines compatibility
+increments, deprecation windows and exact suite selection after fresh 0.4.0.
+
 ## Publication
 
 After the final commit is on main and its complete native qualification has

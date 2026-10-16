@@ -7,6 +7,9 @@ test oracle; reproduce a discrepancy independently before changing that truth.
 Breaking changes are allowed for 0.4.0. Remove obsolete interfaces and their
 callers together instead of keeping compatibility aliases.
 
+The [versioning and conformance policy](docs/versioning.md) governs later API,
+language, schema and suite changes, including deprecations and stable citations.
+
 ## Where changes belong
 
 | Area | Responsibility |

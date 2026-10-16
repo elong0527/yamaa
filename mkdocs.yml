@@ -93,5 +93,6 @@ nav:
   - Engine:
       - Contributing: https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md
       - Release and migration: release.md
+      - Versioning and conformance: versioning.md
       - Python package: https://github.com/elong0527/yamaa/tree/main/python
       - R package: https://github.com/elong0527/yamaa/tree/main/R/yamaa
