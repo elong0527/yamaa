@@ -1516,14 +1516,26 @@ columns:
                     .unwrap_or_else(|error| {
                         panic!("{runtime}: typed producer filter cause was refused: {error:?}")
                     });
-                assert_eq!(result.observations()["diagnostics"], expected);
+                // The whole-build union is entry-relative (#2713): the
+                // producer's findings carry the schema link that reaches
+                // them, while the producer node's own report section keeps
+                // its local paths beside its specification name.
+                let merged = yamaa_core::json::Value::Array((0..filter_count).map(|index| yamaa_adapters::json!({
+                    "phase": "validation", "condition": "incompatible_input_type",
+                    "requirement": "REQ-0190", "spec_paths": [format!("input.ADSL.schema.intermediates[{index}].filter")],
+                    "context": {"left_type": "date", "right_type": "str"},
+                })).collect());
+                assert_eq!(result.observations()["diagnostics"], merged);
                 assert_eq!(result.observations()["nodes"][0]["diagnostics"], expected);
                 assert_eq!(result.observations()["nodes"][0]["specification"], producer);
                 assert_eq!(result.issues().len(), filter_count);
                 for (index, issue) in result.issues().iter().enumerate() {
                     assert_eq!(issue.condition, "incompatible_input_type");
                     assert_eq!(issue.requirement, Some("REQ-0190".into()));
-                    assert_eq!(issue.spec_paths, [format!("intermediates[{index}].filter")]);
+                    assert_eq!(
+                        issue.spec_paths,
+                        [format!("input.ADSL.schema.intermediates[{index}].filter")]
+                    );
                 }
                 assert_eq!(
                     producer_result::prepare_owned_classified(&attempt, id(), &[])
@@ -1545,6 +1557,235 @@ columns:
                 );
                 assert_eq!(activation.trace, Vec::<String>::new());
             }
+        }
+
+        #[test]
+        fn linked_producer_binding_findings_carry_the_schema_link_prefix() {
+            use yamaa_adapters::producer_result::{self, RootResult};
+
+            fn build_at(study: &Study, entry: &str) -> RootResult {
+                let mut build = FileGraph::prepare(
+                    Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
+                    entry,
+                    environment(Language::Python),
+                    shipped_schema::capture().unwrap(),
+                )
+                .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error()))
+                .into_build();
+                let attempt = build.build_owned_reported(
+                    &mut Activation::new(study, Mode::Pass),
+                    report_id(),
+                    scope(),
+                );
+                producer_result::prepare_owned_classified(&attempt, report_id(), &[])
+                    .unwrap_or_else(|error| panic!("root projection refused: {error:?}"))
+            }
+            fn producer_yaml(when: &str) -> String {
+                format!(
+                    "schema_version: '1.0'\ndomain: BASE\nkeys: [USUBJID]\ninput: {{RAW: {{path: ../raw/raw.csv, types: {{USUBJID: str, WEIGHT: float}}}}}}\nbase: RAW\ncolumns:\n  - {{name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}}\n  - {{name: WEIGHT, type: float, label: Weight, derivation: RAW.WEIGHT}}\n  - {{name: WTFL, type: str, label: Weight Recorded, derivation: {{case: [{{when: \"{when}\", then: {{literal: \"Y\"}}}}]}}}}\noutput: {{path: ../generated/base.csv, columns: [USUBJID, WEIGHT, WTFL]}}\n"
+                )
+            }
+            fn consumer_yaml(schema: &str, artifact: &str) -> String {
+                format!(
+                    "schema_version: '1.0'\ndomain: SUMM\nkeys: [USUBJID]\ninput: {{BASE: {{path: ../generated/{artifact}, schema: {schema}}}}}\nbase: BASE\ncolumns:\n  - {{name: USUBJID, type: str, label: Subject, derivation: BASE.USUBJID}}\n  - {{name: WEIGHT, type: float, label: Weight, derivation: BASE.WEIGHT}}\n  - {{name: WTFL, type: str, label: Weight Recorded, derivation: {{case: [{{when: \"WEIGHT IS NOT NULL\", then: {{literal: \"Y\"}}}}]}}}}\noutput: {{path: ../generated/summ.csv, columns: [USUBJID, WEIGHT, WTFL]}}\n"
+                )
+            }
+            fn study_with(when: &str, chain: bool) -> Study {
+                let study = Study::new();
+                study.write("raw/raw.csv", "USUBJID,WEIGHT\nA1,72.5\nA2,\n");
+                study.write("producer/base.yaml", producer_yaml(when));
+                if chain {
+                    study.write(
+                        "mid/mid.yaml",
+                        consumer_yaml("../producer/base.yaml", "base.csv")
+                            .replace("domain: SUMM", "domain: MID")
+                            .replace("../generated/summ.csv", "../generated/mid.csv"),
+                    );
+                    study.write(
+                        "consumer/root.yaml",
+                        consumer_yaml("../mid/mid.yaml", "mid.csv"),
+                    );
+                } else {
+                    study.write(
+                        "consumer/root.yaml",
+                        consumer_yaml("../producer/base.yaml", "base.csv"),
+                    );
+                }
+                study
+            }
+            let row = |paths: &[&str]| {
+                yamaa_adapters::json!({
+                    "phase": "validation", "condition": "incompatible_input_type",
+                    "requirement": "REQ-0190", "spec_paths": paths,
+                    "context": {"left_type": "float", "right_type": "str"},
+                })
+            };
+
+            // The issue's example: the producer compares a float with text.
+            // Its own build keeps the authored path; the consumer's row is
+            // prefixed with the link, and the producer node's own report
+            // section keeps its local paths.
+            let study = study_with("WEIGHT > 'heavy'", false);
+            let direct = build_at(&study, "producer/base.yaml");
+            assert!(direct.output().is_none());
+            assert_eq!(
+                direct.observations()["diagnostics"],
+                yamaa_core::json::Value::Array(vec![row(&[
+                    "columns.WTFL.derivation.case[0].when"
+                ])])
+            );
+            let consumer = build_at(&study, "consumer/root.yaml");
+            assert!(consumer.output().is_none());
+            assert_eq!(consumer.issues().len(), 1);
+            assert_eq!(
+                consumer.issues()[0].spec_paths,
+                ["input.BASE.schema.columns.WTFL.derivation.case[0].when"]
+            );
+            assert_eq!(
+                consumer.observations()["diagnostics"],
+                yamaa_core::json::Value::Array(vec![row(&[
+                    "input.BASE.schema.columns.WTFL.derivation.case[0].when"
+                ])])
+            );
+            let observations = consumer.observations();
+            let producer_section = observations["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|node| {
+                    node["specification"]
+                        .as_str()
+                        .is_some_and(|identity| identity.ends_with("producer/base.yaml"))
+                })
+                .expect("producer node section");
+            assert_eq!(
+                producer_section["diagnostics"],
+                yamaa_core::json::Value::Array(vec![row(&[
+                    "columns.WTFL.derivation.case[0].when"
+                ])])
+            );
+
+            // The unknown-field variant prefixes the same way.
+            let study = study_with("HEIGHT IS NOT NULL", false);
+            let consumer = build_at(&study, "consumer/root.yaml");
+            assert_eq!(consumer.issues().len(), 1);
+            assert_eq!(consumer.issues()[0].condition, "unknown_field");
+            assert_eq!(consumer.issues()[0].requirement, Some("REQ-0189".into()));
+            assert_eq!(
+                consumer.issues()[0].spec_paths,
+                ["input.BASE.schema.columns.WTFL.derivation.case[0].when"]
+            );
+            assert_eq!(consumer.issues()[0].context, "{\"identifier\":\"HEIGHT\"}");
+
+            // A three-level chain accumulates one link segment per hop, and
+            // the middle specification as entry carries exactly one.
+            let study = study_with("WEIGHT > 'heavy'", true);
+            let middle = build_at(&study, "mid/mid.yaml");
+            assert_eq!(
+                middle.issues()[0].spec_paths,
+                ["input.BASE.schema.columns.WTFL.derivation.case[0].when"]
+            );
+            let consumer = build_at(&study, "consumer/root.yaml");
+            assert_eq!(consumer.issues().len(), 1);
+            assert_eq!(
+                consumer.issues()[0].spec_paths,
+                ["input.BASE.schema.input.BASE.schema.columns.WTFL.derivation.case[0].when"]
+            );
+
+            // A valid producer: both builds succeed and no row is prefixed
+            // or invented.
+            let study = study_with("WEIGHT IS NOT NULL", false);
+            let direct = build_at(&study, "producer/base.yaml");
+            assert!(direct.issues().is_empty());
+            assert!(direct.output().is_some());
+            let consumer = build_at(&study, "consumer/root.yaml");
+            assert!(consumer.issues().is_empty());
+            assert!(consumer.output().is_some());
+        }
+
+        #[test]
+        fn linked_producer_contract_findings_keep_their_single_link_prefix() {
+            // The producer binds, but its WTFL column has no label, so the
+            // consumer's contract check (REQ-0534) reports it. That finding
+            // is authored from the consumer's perspective and already
+            // carries exactly one link segment; #2713 must neither change
+            // it nor prefix it a second time.
+            let study = Study::new();
+            study.write("raw/raw.csv", "USUBJID,WEIGHT\nA1,72.5\nA2,\n");
+            study.write(
+                "producer/base.yaml",
+                "schema_version: '1.0'\ndomain: BASE\nkeys: [USUBJID]\ninput: {RAW: {path: ../raw/raw.csv, types: {USUBJID: str, WEIGHT: float}}}\nbase: RAW\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: WEIGHT, type: float, label: Weight, derivation: RAW.WEIGHT}\n  - {name: WTFL, type: str, derivation: {case: [{when: \"WEIGHT IS NOT NULL\", then: {literal: \"Y\"}}]}}\noutput: {path: ../generated/base.csv, columns: [USUBJID, WEIGHT, WTFL]}\n",
+            );
+            study.write(
+                "consumer/root.yaml",
+                "schema_version: '1.0'\ndomain: SUMM\nkeys: [USUBJID]\ninput: {BASE: {path: ../generated/base.csv, schema: ../producer/base.yaml}}\nbase: BASE\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: BASE.USUBJID}\n  - {name: WEIGHT, type: float, label: Weight, derivation: BASE.WEIGHT}\n  - {name: WTFL, type: str, label: Weight Recorded, derivation: BASE.WTFL}\noutput: {path: ../generated/summ.csv, columns: [USUBJID, WEIGHT, WTFL]}\n",
+            );
+            // Graph admission refuses the build with the original REQ-0534
+            // diagnostic, exactly as authored from the consumer.
+            let rejected = match FileGraph::prepare(
+                Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
+                "consumer/root.yaml",
+                environment(Language::Python),
+                shipped_schema::capture().unwrap(),
+            ) {
+                Ok(_) => panic!("invalid producer contract must refuse the graph"),
+                Err(error) => error,
+            };
+            let yamaa_adapters::file_graph::Error::Graph(
+                yamaa_adapters::producer_graph::Error::Graph(
+                    yamaa_core::producer_graph::Error::Admission {
+                        error: yamaa_core::producer_admission::Error::Invalid(diagnostics),
+                        ..
+                    },
+                ),
+            ) = rejected.error()
+            else {
+                panic!("contract admission refusal: {:?}", rejected.error());
+            };
+            assert_eq!(diagnostics.len(), 1);
+            let diagnostic = &diagnostics[0];
+            assert_eq!(
+                diagnostic.code,
+                yamaa_core::diagnostic::ConditionCode::ProducerInvalidContract
+            );
+            assert_eq!(
+                diagnostic.spec_paths,
+                ["input.BASE.schema.columns.WTFL.label"]
+            );
+            assert_eq!(
+                diagnostic.context["dataset"],
+                yamaa_core::json::Value::String("BASE".into())
+            );
+            assert_eq!(
+                diagnostic.context["field"],
+                yamaa_core::json::Value::String("WTFL".into())
+            );
+            assert_eq!(
+                diagnostic.context["reason"],
+                yamaa_core::json::Value::String("label".into())
+            );
+            // The static-check facade surfaces the same row as an issue.
+            let issues = yamaa_adapters::file_application::check(
+                yamaa_core::domain_entry::Request {
+                    specification: &study.path("consumer/root.yaml"),
+                    environment: None,
+                },
+                report_id(),
+            );
+            let contract = issues
+                .iter()
+                .find(|issue| issue.condition == "invalid_producer_contract")
+                .unwrap_or_else(|| panic!("contract issue missing: {issues:?}"));
+            assert_eq!(contract.requirement, Some("REQ-0534".into()));
+            assert_eq!(
+                contract.spec_paths,
+                ["input.BASE.schema.columns.WTFL.label"]
+            );
+            let context: yamaa_core::json::Value =
+                yamaa_adapters::json_wire::decode(&contract.context).unwrap();
+            assert_eq!(context["dataset"], "BASE");
+            assert_eq!(context["field"], "WTFL");
+            assert_eq!(context["reason"], "label");
         }
 
         #[test]
