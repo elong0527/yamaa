@@ -458,13 +458,20 @@ mod tests {
     use super::*;
     use yamaa_core::table::ValueRef;
 
+    fn range_failed() -> yamaa_core::diagnostic::Definition {
+        yamaa_core::diagnostic::ConditionCode::VerificationRangeFailed.definition()
+    }
     fn held() -> Record {
         Record {
             path: "columns.AGE.verifications[0].not_missing".into(),
             id: None,
             check: "not_missing".into(),
             target: Some("AGE".into()),
-            requirement: "REQ-0376".into(),
+            requirement: yamaa_core::diagnostic::ConditionCode::VerificationAllowedValuesFailed
+                .definition()
+                .requirement
+                .expect("registered requirement")
+                .into(),
             severity: VerificationSeverity::Error,
             evaluated: 8,
             failure: None,
@@ -476,11 +483,14 @@ mod tests {
             id: Some("é🙂".into()),
             check: "range".into(),
             target: Some("AGE".into()),
-            requirement: "REQ-0377".into(),
+            requirement: range_failed()
+                .requirement
+                .expect("registered requirement")
+                .into(),
             severity: VerificationSeverity::Warning,
             evaluated: 8,
             failure: Some(Failure {
-                condition: "range_failed".into(),
+                condition: range_failed().condition.into(),
                 count: 7,
                 keys: (0..7)
                     .map(|n| Value::Object([("ID".into(), Value::from(n))].into_iter().collect()))
