@@ -13,7 +13,7 @@ license = "MIT AND Unicode-3.0"
 license-files = ["LICENSE-UNICODE.txt", "LICENSE-WINDOWS.txt", "LICENSE-READSTAT.txt", "LICENSE-YAML.txt"]
 authors = [
   { name = "Yilong Zhang", email = "elong0527@gmail.com" },
-  { name = "Ming-Chun Chen", email = "hellomingchun@gmail.com" },
+  { name = "Ming-Chun Chen" },
   { name = "Peng Zhang" },
   { name = "Bingjun Wang" },
   { name = "Jingwei Xiong" },

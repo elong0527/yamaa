@@ -15,7 +15,7 @@ from tools.paths import ROOT
 # order; the R DESCRIPTION alone assigns the roles.
 SELECTED_PEOPLE = [
     ("Yilong Zhang", "elong0527@gmail.com"),
-    ("Ming-Chun Chen", "hellomingchun@gmail.com"),
+    ("Ming-Chun Chen", None),
     ("Peng Zhang", None),
     ("Bingjun Wang", None),
     ("Jingwei Xiong", None),
