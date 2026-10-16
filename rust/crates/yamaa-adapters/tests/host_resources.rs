@@ -1,9 +1,11 @@
 use arrow_array::{Float64Array, RecordBatch};
 use std::sync::Arc;
+#[cfg(feature = "yaml")]
+use yamaa_adapters::host_resources::{Operation, Reply, Request, Resolver};
 use yamaa_adapters::{
     arrow_table::{self, ArrowTable},
     file_resources::{Error, Resources},
-    host_resources::{Failure, MemoryResolver, Operation, Reply, Request, Resolver},
+    host_resources::{Failure, MemoryResolver},
 };
 use yamaa_core::{
     table::{Column, TableSchema},
