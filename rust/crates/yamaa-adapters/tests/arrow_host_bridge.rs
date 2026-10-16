@@ -1,7 +1,8 @@
 //! Independently authored C Data/Stream values and ownership controls.
 use arrow_array::{
-    new_empty_array, Array, ArrayRef, Date32Array, Float64Array, Int64Array, RecordBatch,
-    RecordBatchOptions, RecordBatchReader, StringArray, TimestampSecondArray,
+    new_empty_array, Array, ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray,
+    RecordBatch, RecordBatchOptions, RecordBatchReader, StringArray, StringViewArray,
+    TimestampSecondArray,
 };
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef, TimeUnit};
 use std::{
@@ -59,10 +60,10 @@ fn stream(
 fn truth() -> RecordBatch {
     let arrays: Vec<ArrayRef> = vec![
         Arc::new(StringArray::from(vec![
-            Some("a\0🦀"),
+            Some("a\0\u{1f980}"),
             None,
             Some(""),
-            Some("β"),
+            Some("\u{03b2}"),
         ])),
         Arc::new(Int64Array::from(vec![
             Some(i64::MIN),
@@ -100,6 +101,23 @@ fn truth() -> RecordBatch {
 #[test]
 fn all_logical_values_nulls_slices_and_empty_chunks_share_the_original_buffers() {
     let original = truth();
+    let pointers = |batch: &RecordBatch| {
+        batch
+            .columns()
+            .iter()
+            .map(|array| {
+                let data = array.to_data();
+                (
+                    data.buffers()
+                        .iter()
+                        .map(|buffer| buffer.as_ptr())
+                        .collect::<Vec<_>>(),
+                    data.nulls().map(|nulls| nulls.buffer().as_ptr()),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let all_pointers = pointers(&original);
     let chunks = vec![
         original.slice(0, 0),
         original.slice(0, 2),
@@ -122,9 +140,9 @@ fn all_logical_values_nulls_slices_and_empty_chunks_share_the_original_buffers()
             .collect::<Vec<_>>(),
         [0, 2, 0, 2, 0]
     );
-    assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str("a\0🦀"));
+    assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str("a\0\u{1f980}"));
     assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Str(""));
-    assert_eq!(table.cell(3, 0).unwrap(), ValueRef::Str("β"));
+    assert_eq!(table.cell(3, 0).unwrap(), ValueRef::Str("\u{03b2}"));
     for column in 0..5 {
         assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing);
     }
@@ -158,6 +176,7 @@ fn all_logical_values_nulls_slices_and_empty_chunks_share_the_original_buffers()
         let first = reader.next().unwrap().unwrap();
         // Releasing the reader early leaves imported C Data arrays alive.
         drop(reader);
+        assert_eq!(pointers(&first), all_pointers);
         assert_eq!(
             first.column(1).to_data().buffers()[0].as_ptr(),
             integer_pointer
@@ -176,6 +195,50 @@ fn all_logical_values_nulls_slices_and_empty_chunks_share_the_original_buffers()
             -719_162
         );
         assert!(first.column(3).is_null(1));
+    }
+}
+
+#[test]
+fn large_and_view_utf8_share_payloads_across_foreign_stream_import_and_export() {
+    let text = "a\0\u{1f980} long UTF-8 payload that cannot fit in an inline string view";
+    for array in [
+        Arc::new(LargeStringArray::from(vec![Some(text), None, Some("")])) as ArrayRef,
+        Arc::new(StringViewArray::from(vec![Some(text), None, Some("")])) as ArrayRef,
+    ] {
+        let pointer = if let Some(array) = array.as_any().downcast_ref::<LargeStringArray>() {
+            array.value(0).as_ptr()
+        } else {
+            array
+                .as_any()
+                .downcast_ref::<StringViewArray>()
+                .unwrap()
+                .value(0)
+                .as_ptr()
+        };
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "S",
+            array.data_type().clone(),
+            true,
+        )]));
+        let batch = RecordBatch::try_new(schema.clone(), vec![array]).unwrap();
+        let table =
+            arrow_bridge::import_public_stream(arrow_bridge::export_stream(schema, vec![batch]))
+                .unwrap();
+        let ValueRef::Str(value) = table.cell(0, 0).unwrap() else {
+            panic!()
+        };
+        assert_eq!(value, text);
+        assert_eq!(value.as_ptr(), pointer);
+        assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing);
+        assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Str(""));
+        let public = PublicTable::from_snapshot(&table).unwrap();
+        let imported = arrow_bridge::import_public_stream(public.stream()).unwrap();
+        drop(table);
+        drop(public);
+        let ValueRef::Str(value) = imported.cell(0, 0).unwrap() else {
+            panic!()
+        };
+        assert_eq!(value.as_ptr(), pointer);
     }
 }
 

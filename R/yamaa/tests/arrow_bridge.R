@@ -39,7 +39,7 @@ run_arrow_bridge <- function() {
     c("l", "u", "l", "g", "tdD", "tss:")))
   first <- source$get_next()
   source$release()
-  stopifnot(!nanoarrow::nanoarrow_pointer_is_valid(source), identical(first$length, 3))
+  stopifnot(!nanoarrow::nanoarrow_pointer_is_valid(source), identical(first$length, 3L))
   buffers <- function(array) lapply(array$children, function(child) {
     vapply(child$buffers, function(buffer) nanoarrow::nanoarrow_pointer_addr_chr(buffer$data), character(1L))
   })
@@ -54,7 +54,11 @@ run_arrow_bridge <- function() {
   }
   # A failed host conversion releases its stream; the retained build is usable.
   failed <- result$output_arrow
-  error <- tryCatch(as.data.frame(failed), error = identity)
+  convert <- function(stream) {
+    on.exit(stream$release())
+    nanoarrow::convert_array_stream(stream, to = integer())
+  }
+  error <- tryCatch(convert(failed), error = identity)
   stopifnot(inherits(error, "error"), !nanoarrow::nanoarrow_pointer_is_valid(failed),
     identical(as.character(result$output$I), as.character(frame$I)))
   # Native Arrow consumers move stream ownership and retain imported arrays.
@@ -85,7 +89,7 @@ run_arrow_bridge <- function() {
   writeBin(charToRaw("ID,S,I,F,D,T\n"), file.path(root, "input.csv"))
   result <- yamaa_domain(file.path(root, "spec.yaml"))
   stream <- result$output_arrow
-  stopifnot(identical(stream$get_next()$length, 0), is.null(stream$get_next()),
+  stopifnot(identical(stream$get_next()$length, 0L), is.null(stream$get_next()),
     identical(nrow(result$output), 0L))
   stream$release()
 }

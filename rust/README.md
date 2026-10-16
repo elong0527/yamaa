@@ -71,7 +71,7 @@ construction, and logical-type inspection. The canonical lock and manifests
 continue to select 60; using 57 requires adapting this boundary and qualifying
 that dependency graph. Keep malformed-schema rejection and the closed output
 profile when adapting the boundary.
-# Arrow host handoff
+## Arrow host handoff
 
 The host bridge uses Arrow-rs 60.0.0 C Data/Stream callbacks, PyArrow >=23.0.1
 and R nanoarrow >=0.8.0. An exported stream owns a reader with an independent
@@ -86,7 +86,9 @@ Python uses a named `arrow_array_stream` PyCapsule. PyO3 owns its header shell;
 capsule destruction releases an unconsumed stream, or frees an already consumed
 shell. R fills a fresh `nanoarrow_allocate_array_stream()` header. Nanoarrow
 owns that allocation and invokes the Arrow-rs release callback on explicit
-release, failed conversion or garbage collection. No callback calls back into
+release or garbage collection, including after a failed conversion. Low-level
+consumers should use an exit handler to release a stream they stop consuming.
+No callback calls back into
 Python or R, so buffer destruction requires neither interpreter nor build
 handle. Native consumers/exporters must obey the Arrow ABI; forged pointers
 are outside this memory-safety contract.
