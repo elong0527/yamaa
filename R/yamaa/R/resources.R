@@ -114,10 +114,9 @@ yamaa_memory_resolver <- function(objects = list(), prefix = "memory:/") {
   }
   resolver <- yamaa_resource_resolver(function(request) {
     if (request$operation == "abort") {
+      # Attempt-owned cleanup: delete only the staged token, never the target,
+      # so overlapping publishes cannot delete each other's provisional output.
       backend$staging[[request$reference]] <- NULL
-      for (token in names(backend$staging)) {
-        if (identical(backend$staging[[token]]$reference, request$reference)) backend$staging[[token]] <- NULL
-      }
       return(yamaa_resource_result(request$reference))
     }
     if (backend$cancelled) yamaa_resource_failure("cancelled")

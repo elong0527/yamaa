@@ -186,7 +186,7 @@ class HostResources(unittest.TestCase):
 
         def callback(request):
             if request.operation == "stage" and request.written == "out.csv":
-                backend._request(request)
+                # Stage is atomic: a failed Stage leaves no provisional output.
                 raise ResourceFailure("publication")
             result = backend._request(request)
             if request.operation == "commit":
@@ -200,6 +200,27 @@ class HostResources(unittest.TestCase):
         )
         self.assertNotIn("memory:/out.csv", backend.outputs)
         self.assertEqual(backend.staging, {})
+
+    def test_abort_removes_only_the_staging_token(self):
+        from yamaa.resources import ResourceRequest
+
+        backend = MemoryResolver()
+        first = backend._request(
+            ResourceRequest("stage", "output", "/spec.yaml", "out.csv", "memory:/out.csv", b"ID\n7\n")
+        )
+        second = backend._request(
+            ResourceRequest("stage", "output", "/spec.yaml", "out.csv", "memory:/out.csv", b"ID\n8\n")
+        )
+        self.assertEqual(len(backend.staging), 2)
+        # Abort by the target identity must not delete either attempt.
+        backend._request(
+            ResourceRequest("abort", "output", "/spec.yaml", "out.csv", "memory:/out.csv")
+        )
+        self.assertEqual(len(backend.staging), 2)
+        backend._request(
+            ResourceRequest("abort", "output", "/spec.yaml", "out.csv", first.reference)
+        )
+        self.assertEqual(list(backend.staging), [second.reference])
 
     def test_inherited_and_producer_resources_use_each_owning_logical_entry(self):
         producer = SPEC.replace(b"raw.csv", b"../raw/data.csv").replace(

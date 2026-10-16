@@ -72,11 +72,14 @@ pub enum Failure {
     Cleanup,
 }
 /// A resolver may serve local objects, opaque URI identities or warehouse data.
-/// Stage creates a private provisional object; Commit atomically publishes it;
-/// Abort must remove it after any failed/interrupting Stage or Commit. Abort is
-/// idempotent and may receive the target reference when Stage did not return.
-/// Implementations must return closed failures and must not panic. Python and R
-/// adapters contain exceptions/conditions, retaining their original objects.
+/// Stage creates a private provisional object and returns its staging token;
+/// Commit atomically publishes it; Abort removes it after a failed Commit or
+/// an interrupted Stage that returned a token. Stage is atomic by contract:
+/// a failed Stage must not leave provisional output, so Abort receives only
+/// the staging token and never the target reference. Abort is idempotent and
+/// token-scoped. Implementations must return closed failures and must not
+/// panic. Python and R adapters contain exceptions/conditions, retaining their
+/// original objects.
 pub trait Resolver: Send + Sync {
     fn request(&self, request: Request<'_>) -> Result<Reply, Failure>;
 }
@@ -373,10 +376,13 @@ impl Resolver for MemoryResolver {
     fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
         if request.operation == Operation::Abort {
             let reference = request.reference.ok_or(Failure::Rejected)?;
+            // Attempt-owned cleanup: delete only the staged token. Never match
+            // on the target identity, so overlapping publishes to the same
+            // target cannot delete each other's provisional output.
             self.staged
                 .lock()
                 .map_err(|_| Failure::Cleanup)?
-                .retain(|token, (target, _)| token != reference && target != reference);
+                .retain(|token, _| token != reference);
             return Ok(Reply {
                 reference: request.reference.unwrap().into(),
                 bytes: None,
