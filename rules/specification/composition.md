@@ -17,7 +17,7 @@ file**. The entry file and every file reached through `parents` are
 **layers**. A layer contributes the root fields and keyed declarations it
 writes. The **resolved specification** is the complete mapping produced from
 all contributions. An entry file that declares no `parents` is a composition
-of one layer — itself — and is composed, pruned and validated on the same
+of one layer, itself, and is composed, pruned and validated on the same
 terms as a multi-layer composition.
 
 <a id="req-0615"></a>
