@@ -243,6 +243,59 @@ def test_preserve_workspace_rewrites_sparse_entries_as_regular(
     assert list(tmp_path.glob("*.tar.gz")) == [archive]
 
 
+@pytest.mark.parametrize("sparse_format", ["pax-0.1", "pax-1.0"])
+def test_preserve_workspace_rejects_conflicting_sparse_size(
+    tmp_path: Path, sparse_format: str
+) -> None:
+    # An ordinary PAX size that disagrees with the sparse logical size
+    # must be rejected before extraction: extractfile() already returns
+    # the overridden length, so the post-read length check cannot catch it.
+    workspace = _make_workspace(tmp_path)
+    contents = bytearray()
+    for name, payload in _BASE_ENTRIES:
+        entry = tarfile.TarInfo(name)
+        entry.size = len(payload)
+        contents.extend(entry.tobuf())
+        contents.extend(payload)
+        contents.extend(bytes(-len(payload) % tarfile.BLOCKSIZE))
+    entry = tarfile.TarInfo("pkg-0.1/sparse.txt")
+    payload = b"ABC"
+    entry.size = len(payload)
+    if sparse_format == "pax-0.1":
+        entry.pax_headers = {
+            "GNU.sparse.size": "5",
+            "GNU.sparse.numblocks": "1",
+            "GNU.sparse.name": entry.name,
+            "GNU.sparse.map": "2,3",
+            "path": entry.name,
+            "size": "99",
+        }
+    else:
+        assert sparse_format == "pax-1.0"
+        entry.pax_headers = {
+            "GNU.sparse.major": "1",
+            "GNU.sparse.minor": "0",
+            "GNU.sparse.realsize": "5",
+            "GNU.sparse.name": entry.name,
+            "path": entry.name,
+            "size": "99",
+        }
+        payload = b"1\n2\n3\n".ljust(tarfile.BLOCKSIZE, b"\0") + payload
+        entry.size = len(payload)
+    header = entry.tobuf(format=tarfile.PAX_FORMAT)
+    contents.extend(header)
+    contents.extend(payload)
+    contents.extend(bytes(-len(payload) % tarfile.BLOCKSIZE))
+    contents.extend(bytes(2 * tarfile.BLOCKSIZE))
+    archive = tmp_path / "sdist.tar.gz"
+    archive.write_bytes(gzip.compress(contents))
+    original = archive.read_bytes()
+    with pytest.raises(ValueError, match="conflicting size metadata"):
+        preserve_workspace(archive, workspace)
+    assert archive.read_bytes() == original
+    assert list(tmp_path.glob("*.tar.gz")) == [archive]
+
+
 def test_preserve_workspace_rejects_trailing_slash_member_file(
     tmp_path: Path,
 ) -> None:

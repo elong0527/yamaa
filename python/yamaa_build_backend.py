@@ -339,6 +339,21 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
             with tarfile.open(temporary, "w:gz") as target:
                 for entry in entries:
                     if entry.issparse():
+                        logical_size = entry.pax_headers.get(
+                            "GNU.sparse.realsize",
+                            entry.pax_headers.get("GNU.sparse.size"),
+                        )
+                        pax_size = entry.pax_headers.get("size")
+                        if logical_size is not None and pax_size is not None:
+                            try:
+                                sizes_match = int(pax_size) == int(logical_size)
+                            except ValueError:
+                                sizes_match = False
+                            if not sizes_match:
+                                raise ValueError(
+                                    "source archive sparse member has "
+                                    "conflicting size metadata"
+                                )
                         # Read the fully expanded bytes before clearing
                         # the sparse map: extractfile() needs the map to
                         # reconstruct the holes, and its length must
@@ -360,6 +375,7 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
                             key: value
                             for key, value in entry.pax_headers.items()
                             if not key.startswith("GNU.sparse")
+                            and key not in ("path", "size")
                         }
                         if entry.name == manifest_name:
                             payload_bytes = manifest
