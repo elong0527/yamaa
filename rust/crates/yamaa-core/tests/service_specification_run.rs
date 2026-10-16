@@ -8,7 +8,8 @@ mod service {
         use yamaa_core::{
             dataset::ExecutionError,
             specification_run::{
-                self as run, CapturedAttempt, PortError, RunError, SourceDecoder, SourcePort,
+                self as run, CapturedAttempt, PortError, RunError, SourceDecoder,
+                SpecificationSourcePort,
             },
         };
         use yamaa_core::{
@@ -97,7 +98,7 @@ mod service {
             regress: bool,
             payload: Rc<()>,
         }
-        impl SourcePort for Port {
+        impl SpecificationSourcePort for Port {
             fn resource_failure(
                 &self,
                 _error: &Self::Error,
@@ -875,7 +876,7 @@ mod service {
                 fail: Option<String>,
                 payload: Rc<()>,
             }
-            impl SourcePort for Capture {
+            impl SpecificationSourcePort for Capture {
                 fn resource_failure(
                     &self,
                     _error: &Self::Error,
@@ -986,7 +987,7 @@ mod service {
                 counter_change: bool,
                 panic_at: Option<String>,
             }
-            impl SourcePort for Inspection {
+            impl SpecificationSourcePort for Inspection {
                 type Error = InspectError;
                 fn resource_failure(
                     &self,

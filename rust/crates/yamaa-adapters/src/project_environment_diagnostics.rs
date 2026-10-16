@@ -390,7 +390,7 @@ mod tests {
     use yamaa_core::{limits::Limits, project_function::Language};
 
     struct Missing;
-    impl project_source::CapturePort for Missing {
+    impl project_source::ProjectCapturePort for Missing {
         type Error = file_resources::Error;
         fn capture(
             &mut self,

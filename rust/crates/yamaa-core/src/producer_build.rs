@@ -5,7 +5,7 @@ use crate::{
     dataset::{self, Execution},
     project_activation::{self, ActivationPort, Bindings, Observations},
     specification_output::{self as output, ArtifactEncoder, OutputReport, PreparedOutput},
-    specification_run::{self as run, CapturedAttempt, SourceDecoder, SourcePort},
+    specification_run::{self as run, CapturedAttempt, SourceDecoder, SpecificationSourcePort},
 };
 use crate::{
     producer_graph::{Node, PreparedGraph},
@@ -434,7 +434,9 @@ impl<P: StudyPort, D, T: TableAccess, R, RE, CE> Sources<'_, P, D, T, R, RE, CE>
             .ok_or(CaptureError::ProducerUnavailable { producer })
     }
 }
-impl<P: StudyPort, D, T: TableAccess, R, RE, CE> SourcePort for Sources<'_, P, D, T, R, RE, CE> {
+impl<P: StudyPort, D, T: TableAccess, R, RE, CE> SpecificationSourcePort
+    for Sources<'_, P, D, T, R, RE, CE>
+{
     type Error = CaptureError<P::Error>;
     fn owned_table(
         &self,

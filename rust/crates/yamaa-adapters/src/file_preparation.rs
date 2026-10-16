@@ -338,7 +338,9 @@ struct Documents {
 impl yamaa_core::file_preparation::DocumentPort<ResourceError> for Documents {
     type Prepared = crate::specification_source::PreparedDocument;
     type Error = InheritanceError<ResourceError>;
-    fn prepare<P: yamaa_core::inheritance_capture::CapturePort<Error = ResourceError>>(
+    fn prepare<
+        P: yamaa_core::inheritance_capture::InheritanceCapturePort<Error = ResourceError>,
+    >(
         &mut self,
         source: Source,
         display: String,
@@ -611,7 +613,9 @@ mod dispatch_policy_tests {
     impl yamaa_core::file_preparation::DocumentPort<ResourceError> for ChangeAfterSuccess {
         type Prepared = crate::specification_source::PreparedDocument;
         type Error = InheritanceError<ResourceError>;
-        fn prepare<P: yamaa_core::inheritance_capture::CapturePort<Error = ResourceError>>(
+        fn prepare<
+            P: yamaa_core::inheritance_capture::InheritanceCapturePort<Error = ResourceError>,
+        >(
             &mut self,
             source: Source,
             display: String,

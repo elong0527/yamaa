@@ -12,7 +12,7 @@ mod table {
         use arrow_schema::{DataType, Field, Schema};
         use std::sync::Arc;
         use yamaa_adapters::arrow_table::{
-            date_array, datetime_array, physical_schema, ArrowTable, TableError, TemporalCellError,
+            date_array, datetime_array, physical_schema, ArrowTable, TableError,
         };
         use yamaa_core::table_reduction::{reduce_column, TableReductionError};
         use yamaa_core::{
@@ -250,16 +250,33 @@ mod table {
         #[test]
         /// Reject malformed visible data but honor parent-null masking.
         fn visible_temporal_payloads_are_validated_before_any_use() {
-            for (values, precisions, reason) in [
-                (vec![0, 0], vec![2, 3], TemporalCellError::Precision),
-                (vec![0, i32::MIN], vec![2, 2], TemporalCellError::Range),
-                (vec![0, 2932897], vec![2, 2], TemporalCellError::Range),
+            for (values, precisions, precision) in [
+                (vec![0, 0], vec![2, 3], true),
+                (vec![0, i32::MIN], vec![2, 2], false),
+                (vec![0, 2932897], vec![2, 2], false),
             ] {
                 let schema = logical_schema(&[("D", CT::Date)]);
                 let input = batch(&schema, vec![Arc::new(raw_dates(values, precisions, None))]);
-                assert!(
-                    matches!(ArrowTable::try_new(schema,vec![input]),Err(TableError::Temporal { batch:0,column:0,row:1,reason: actual }) if actual == reason)
-                );
+                let result = ArrowTable::try_new(schema, vec![input]);
+                if precision {
+                    assert!(matches!(
+                        result,
+                        Err(TableError::TemporalPrecision {
+                            batch: 0,
+                            column: 0,
+                            row: 1
+                        })
+                    ));
+                } else {
+                    assert!(matches!(
+                        result,
+                        Err(TableError::TemporalRange {
+                            batch: 0,
+                            column: 0,
+                            row: 1
+                        })
+                    ));
+                }
             }
             // Null parent masks even an invalid raw day and unknown precision.
             let schema = logical_schema(&[("D", CT::Date)]);
@@ -497,12 +514,12 @@ mod table {
             let DataType::Struct(fields) = physical.field(0).data_type() else {
                 panic!("struct required")
             };
-            for (seconds, code, reason) in [
-                (i64::MIN, 1, TemporalCellError::Range),
-                (i64::MAX, 1, TemporalCellError::Range),
-                (-62135596801, 1, TemporalCellError::Range),
-                (253402300800, 1, TemporalCellError::Range),
-                (0, 2, TemporalCellError::Precision),
+            for (seconds, code, precision) in [
+                (i64::MIN, 1, false),
+                (i64::MAX, 1, false),
+                (-62135596801, 1, false),
+                (253402300800, 1, false),
+                (0, 2, true),
             ] {
                 let array = StructArray::try_new(
                     fields.clone(),
@@ -514,9 +531,12 @@ mod table {
                 )
                 .unwrap();
                 let input = batch(&schema, vec![Arc::new(array)]);
-                assert!(
-                    matches!(ArrowTable::try_new(schema.clone(),vec![input]),Err(TableError::Temporal { reason:actual,.. }) if actual == reason)
-                );
+                let result = ArrowTable::try_new(schema.clone(), vec![input]);
+                if precision {
+                    assert!(matches!(result, Err(TableError::TemporalPrecision { .. })));
+                } else {
+                    assert!(matches!(result, Err(TableError::TemporalRange { .. })));
+                }
             }
             let seconds = [-62135596800, -86401, -86400, -1, 0, 253402300799];
             let expected = [
@@ -883,7 +903,9 @@ mod table {
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::specification::{PreparedSpecification, SourceDeclaration};
-        use yamaa_core::{specification_output::SaveError, specification_run::SourcePort};
+        use yamaa_core::{
+            specification_output::SaveError, specification_run::SpecificationSourcePort,
+        };
 
         const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: output.csv, columns: [ID, VALUE, DOUBLE], decimals: PRECISION}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DOUBLE, type: float, derivation: {compute: {expr: 'VALUE + VALUE'}}}\n";
         fn prepared(precision: &str, path: &str, expression: &str) -> PreparedRun {
@@ -901,7 +923,7 @@ mod table {
             PreparedRun::prepare(document).unwrap()
         }
         struct Study(usize);
-        impl SourcePort for Study {
+        impl SpecificationSourcePort for Study {
             fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                 Ok(())
             }
@@ -2598,7 +2620,7 @@ mod table {
         use std::sync::Arc;
         use yamaa_adapters::{
             specification_report::{self, ArtifactPort, Identity},
-            specification_run::{PreparedRun, SourcePort},
+            specification_run::{PreparedRun, SpecificationSourcePort},
             specification_source::Source,
         };
         use yamaa_core::application_observer::Scope;
@@ -2607,7 +2629,7 @@ mod table {
         struct Port {
             captures: usize,
         }
-        impl SourcePort for Port {
+        impl SpecificationSourcePort for Port {
             fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
                 Ok(())
             }

@@ -63,6 +63,14 @@ def main():
         )
         run(sys.executable, "-m", "tools.commands.docs", "dashboards")
         run(sys.executable, "-m", "tools.commands.docs", "build")
+        run(
+            sys.executable,
+            "-m",
+            "pytest",
+            "evaluations/harbor/tests/test_harbor_evaluation.py"
+            "::test_every_sdtm_and_adam_benchmark_has_its_prompts_with_the_evaluation",
+            "-q",
+        )
 
 
 if __name__ == "__main__":

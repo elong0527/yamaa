@@ -775,6 +775,185 @@ S1,002,2024-06
             }
         }
     }
+    mod case_item_order {
+        //! REQ-0339 case item order is one validation finding at every expression site,
+        //! with the same issue from check and domain in both shared host routes. Paths
+        //! follow the schema validator: keyed list members are named by `name` or `id`.
+        use std::{
+            fs,
+            path::PathBuf,
+            sync::atomic::{AtomicUsize, Ordering},
+        };
+        use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+        use yamaa_core::{domain_entry::Request, json::Value};
+
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        struct Fixture(PathBuf);
+        impl Fixture {
+            fn new(body: &str) -> Self {
+                let root = std::env::temp_dir().join(format!(
+                    "yamaa-case-item-order-{}-{}",
+                    std::process::id(),
+                    NEXT.fetch_add(1, Ordering::Relaxed)
+                ));
+                fs::create_dir(&root).unwrap();
+                fs::write(
+                    root.join("spec.yaml"),
+                    format!(
+                        "schema_version: '1.0'\ndomain: ADSL\nbase: DM\nkeys: [USUBJID]\ninput:\n  DM: {{path: dm.csv, types: {{AGE: int}}}}\n  EX: {{path: ex.csv, types: {{DOSE: float}}}}\noutput: {{path: out.csv, columns: [USUBJID, FL]}}\n{body}"
+                    ),
+                )
+                .unwrap();
+                fs::write(root.join("dm.csv"), "USUBJID,AGE\nA,34\nB,70\n").unwrap();
+                fs::write(root.join("ex.csv"), "USUBJID,DOSE\nA,5\nB,10\n").unwrap();
+                Self(root)
+            }
+            fn specification(&self) -> String {
+                self.0.join("spec.yaml").to_str().unwrap().to_owned()
+            }
+        }
+        impl Drop for Fixture {
+            fn drop(&mut self) {
+                fs::remove_dir_all(&self.0).unwrap();
+            }
+        }
+
+        fn identity<'a>(runtime: &'a str, specification: &'a str) -> Identity<'a> {
+            Identity {
+                runtime,
+                runtime_version: "test",
+                engine_version: yamaa_core::VERSION,
+                example: "case-item-order",
+                specification,
+                base_directory: ".",
+            }
+        }
+
+        fn rows(issues: &[Issue]) -> Value {
+            Value::Array(
+                issues
+                    .iter()
+                    .map(|row| {
+                        yamaa_adapters::json!({
+                            "phase": row.phase, "condition": row.condition, "requirement": row.requirement,
+                            "spec_paths": row.spec_paths, "context": yamaa_adapters::json_wire::decode(&row.context).unwrap()
+                        })
+                    })
+                    .collect(),
+            )
+        }
+
+        fn issues(fixture: &Fixture) -> Vec<(String, Value)> {
+            let specification = fixture.specification();
+            let mut result = Vec::new();
+            for runtime in ["python", "r"] {
+                let request = || Request {
+                    specification: &specification,
+                    environment: None,
+                };
+                let checked = file_application::check(request(), identity(runtime, &specification));
+                let built =
+                    match file_application::domain(request(), identity(runtime, &specification)) {
+                        Ok(domain) => domain.issues(),
+                        Err(issues) => issues,
+                    };
+                result.push((format!("{runtime}/check"), rows(&checked)));
+                result.push((format!("{runtime}/domain"), rows(&built)));
+            }
+            result
+        }
+
+        fn finding(path: &str, expected: &str) -> Value {
+            yamaa_adapters::json!({
+                "phase": "validation", "condition": "invalid_field_type", "requirement": "REQ-0339",
+                "spec_paths": [path], "context": {"expected": expected}
+            })
+        }
+
+        const NO_BRANCH: &str = "at least one when/then item";
+        const NOT_LAST: &str = "otherwise only as the last item";
+        const ONLY: &str = "{case: [{otherwise: {literal: N}}]}";
+
+        fn column(derivation: &str) -> String {
+            format!("columns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n  - {{name: FL, type: str, derivation: {derivation}}}\n")
+        }
+
+        #[test]
+        fn case_item_order_reports_req_0339_at_each_expression_site() {
+            let sites = [
+                (column(ONLY), "columns.FL.derivation.case", NO_BRANCH),
+                (column("{case: []}"), "columns.FL.derivation.case", NO_BRANCH),
+                (
+                    column("{case: [{otherwise: {literal: N}}, {when: 'DM.AGE >= 65', then: {literal: Y}}]}"),
+                    "columns.FL.derivation.case[0]",
+                    NOT_LAST,
+                ),
+                (
+                    column("{case: [{when: 'DM.AGE >= 65', then: {literal: Y}}, {otherwise: {literal: N}}, {otherwise: {literal: U}}]}"),
+                    "columns.FL.derivation.case[1]",
+                    NOT_LAST,
+                ),
+                (
+                    column(&format!("{{case: [{{when: 'DM.AGE >= 65', then: {ONLY}}}, {{otherwise: {{literal: N}}}}]}}")),
+                    "columns.FL.derivation.case[0].then.case",
+                    NO_BRANCH,
+                ),
+                (
+                    format!("columns:\n  - {{name: USUBJID, type: str}}\n  - {{name: FL, type: str}}\nrows:\n  - {{id: subject, dataset: DM, derivations: {{USUBJID: DM.USUBJID, FL: {ONLY}}}}}\n"),
+                    "rows.subject.derivations.FL.case",
+                    NO_BRANCH,
+                ),
+                (
+                    format!("intermediates:\n  - {{id: DOSED, dataset: EX, key: [USUBJID], derivations: {{GROUP: {ONLY}}}}}\n{}", column("DOSED.GROUP")),
+                    "intermediates.DOSED.derivations.GROUP.case",
+                    NO_BRANCH,
+                ),
+                (
+                    column(&format!("{{aggregate: {{key: [USUBJID], filter: 'EX.DOSE > 0', derive: [{{name: LEVEL, type: str, derivation: {ONLY}}}], expr: 'MAX(LEVEL)'}}}}")),
+                    "columns.FL.derivation.aggregate.derive.LEVEL.derivation.case",
+                    NO_BRANCH,
+                ),
+            ];
+            for (body, path, expected) in sites {
+                let fixture = Fixture::new(&body);
+                for (route, actual) in issues(&fixture) {
+                    assert_eq!(
+                        actual,
+                        yamaa_adapters::json!([finding(path, expected)]),
+                        "{route}: {body}"
+                    );
+                }
+                assert!(!fixture.0.join("out.csv").exists());
+            }
+        }
+
+        #[test]
+        fn case_with_only_otherwise_items_reports_the_case_and_each_misplaced_item() {
+            let fixture = Fixture::new(&column(
+                "{case: [{otherwise: {literal: N}}, {otherwise: {literal: U}}]}",
+            ));
+            for (route, actual) in issues(&fixture) {
+                assert_eq!(
+                    actual,
+                    yamaa_adapters::json!([
+                        finding("columns.FL.derivation.case", NO_BRANCH),
+                        finding("columns.FL.derivation.case[0]", NOT_LAST),
+                    ]),
+                    "{route}"
+                );
+            }
+        }
+
+        #[test]
+        fn ordered_case_items_still_build() {
+            let fixture = Fixture::new(&column(
+                "{case: [{when: 'DM.AGE >= 65', then: {literal: Y}}, {otherwise: {literal: N}}]}",
+            ));
+            for (route, actual) in issues(&fixture) {
+                assert_eq!(actual, yamaa_adapters::json!([]), "{route}");
+            }
+        }
+    }
     mod check_output_validation {
         //! `check` reports the output-declaration findings that `domain` reaches at
         //! its output stage (#2295): the same first issue, in both host routes.

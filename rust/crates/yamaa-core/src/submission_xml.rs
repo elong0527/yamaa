@@ -316,6 +316,150 @@ fn variants(dataset: &model::Dataset) -> impl Iterator<Item = (&model::Column, S
     })
 }
 
+/// Append one item-group definition per dataset, in dataset order.
+fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
+    let section = &study.section;
+    for dataset in &study.datasets {
+        let id = &dataset.id;
+        let sub = &dataset.metadata;
+        let mut group = Element::new("ItemGroupDef", &format!("datasets.{id}.submission"))
+            .attr("OID", format!("IG.{id}"))
+            .attr("Name", id)
+            .optional(
+                "Domain",
+                if section.family == crate::project_environment::Submission::Adam {
+                    None
+                } else {
+                    Some(&dataset.domain)
+                },
+            )
+            .attr(
+                "Purpose",
+                if section.family == crate::project_environment::Submission::Adam {
+                    "Analysis"
+                } else {
+                    "Tabulation"
+                },
+            )
+            .optional("SASDatasetName", model::sas_name(id).then_some(id))
+            .attr("Repeating", yes(sub.repeating.value))
+            .attr("IsReferenceData", yes(sub.reference_data.value))
+            .attr("def:Structure", &sub.structure.value)
+            .attr("def:ArchiveLocationID", format!("LF.{id}"))
+            .attr(
+                "def:StandardOID",
+                format!("STD.{}", section.standard.name.value.name()),
+            )
+            .optional(
+                "def:CommentOID",
+                sub.comment.as_ref().map(|_| format!("COM.{id}")),
+            )
+            .optional("def:HasNoData", sub.has_no_data.value.then_some("Yes"));
+        group.translated("Description", &sub.label.value, language);
+        for (index, column) in dataset.columns.iter().enumerate() {
+            let name = &column.declaration.name.value;
+            let meta = column
+                .declaration
+                .submission
+                .as_ref()
+                .expect("composed column");
+            group.push(
+                Element::new("ItemRef", &group.path)
+                    .attr("ItemOID", format!("IT.{id}.{name}"))
+                    .attr("OrderNumber", index + 1)
+                    .attr("Mandatory", yes(column.mandatory))
+                    .optional("KeySequence", column.key_sequence)
+                    .optional("Role", meta.role.as_ref().map(|v| &v.value))
+                    .optional(
+                        "MethodOID",
+                        meta.method.as_ref().map(|_| format!("MT.{id}.{name}")),
+                    ),
+            );
+        }
+        let mut class = Element::new("def:Class", &group.path).attr("Name", sub.class.value.name());
+        if let Some(subclass) = &sub.subclass {
+            class.push(
+                Element::new("def:SubClass", &group.path).attr("Name", subclass.value.name()),
+            );
+        }
+        group.push(class);
+        group.leaf(
+            id,
+            &dataset.href,
+            dataset.href.rsplit('/').next().unwrap_or(&dataset.href),
+            None,
+        );
+        metadata.push(group);
+    }
+}
+
+/// Append one code-list definition per bound codelist, in catalogue order.
+fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
+    for list in &study.codelists {
+        let c = &list.declaration;
+        let mut code = Element::new("CodeList", &format!("codelists.{}", c.id))
+            .attr("OID", format!("CL.{}", c.id))
+            .attr("Name", &c.name)
+            .attr(
+                "DataType",
+                match c.data_type {
+                    ct::DataType::Text => "text",
+                    ct::DataType::Integer => "integer",
+                    ct::DataType::Float => "float",
+                },
+            )
+            .optional(
+                "def:StandardOID",
+                list.standard.as_ref().map(|id| format!("STD.{id}")),
+            )
+            .optional(
+                "def:IsNonStandard",
+                (list.standard.is_none() && c.items.is_some()).then_some("Yes"),
+            )
+            .optional("SASFormatName", c.format_name.as_ref());
+        for item in c.items.as_deref().unwrap_or(&[]) {
+            let mut node = Element::new(
+                if item.decode.is_some() {
+                    "CodeListItem"
+                } else {
+                    "EnumeratedItem"
+                },
+                &code.path,
+            )
+            .attr("CodedValue", scalar(&item.value))
+            .optional("Rank", item.rank)
+            .optional("def:ExtendedValue", item.extended.then_some("Yes"));
+            if let Some(decode) = &item.decode {
+                node.translated("Decode", decode, language);
+            }
+            if let Some(alias) = &item.alias {
+                node.push(
+                    Element::new("Alias", &code.path)
+                        .attr("Context", "nci:ExtCodeID")
+                        .attr("Name", alias),
+                );
+            }
+            code.push(node);
+        }
+        if let Some(external) = &c.external {
+            code.push(
+                Element::new("ExternalCodeList", &code.path)
+                    .attr("Dictionary", &external.dictionary)
+                    .attr("Version", &external.version)
+                    .optional("href", external.href.as_ref()),
+            );
+        }
+        if let Some(alias) = &c.alias {
+            code.push(
+                Element::new("Alias", &code.path)
+                    .attr("Context", "nci:ExtCodeID")
+                    .attr("Name", alias),
+            );
+        }
+        metadata.push(code);
+    }
+}
+
 /// The writer's closed element construction fixes official schema order and
 /// references. Composition admits required attributes, numeric ranges, types,
 /// keys and cross-references; character admission happens before bytes escape.
@@ -449,78 +593,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             }
         }
     }
-    for dataset in &study.datasets {
-        let id = &dataset.id;
-        let sub = &dataset.metadata;
-        let mut group = Element::new("ItemGroupDef", &format!("datasets.{id}.submission"))
-            .attr("OID", format!("IG.{id}"))
-            .attr("Name", id)
-            .optional(
-                "Domain",
-                if section.family == crate::project_environment::Submission::Adam {
-                    None
-                } else {
-                    Some(&dataset.domain)
-                },
-            )
-            .attr(
-                "Purpose",
-                if section.family == crate::project_environment::Submission::Adam {
-                    "Analysis"
-                } else {
-                    "Tabulation"
-                },
-            )
-            .optional("SASDatasetName", model::sas_name(id).then_some(id))
-            .attr("Repeating", yes(sub.repeating.value))
-            .attr("IsReferenceData", yes(sub.reference_data.value))
-            .attr("def:Structure", &sub.structure.value)
-            .attr("def:ArchiveLocationID", format!("LF.{id}"))
-            .attr(
-                "def:StandardOID",
-                format!("STD.{}", section.standard.name.value.name()),
-            )
-            .optional(
-                "def:CommentOID",
-                sub.comment.as_ref().map(|_| format!("COM.{id}")),
-            )
-            .optional("def:HasNoData", sub.has_no_data.value.then_some("Yes"));
-        group.translated("Description", &sub.label.value, language);
-        for (index, column) in dataset.columns.iter().enumerate() {
-            let name = &column.declaration.name.value;
-            let meta = column
-                .declaration
-                .submission
-                .as_ref()
-                .expect("composed column");
-            group.push(
-                Element::new("ItemRef", &group.path)
-                    .attr("ItemOID", format!("IT.{id}.{name}"))
-                    .attr("OrderNumber", index + 1)
-                    .attr("Mandatory", yes(column.mandatory))
-                    .optional("KeySequence", column.key_sequence)
-                    .optional("Role", meta.role.as_ref().map(|v| &v.value))
-                    .optional(
-                        "MethodOID",
-                        meta.method.as_ref().map(|_| format!("MT.{id}.{name}")),
-                    ),
-            );
-        }
-        let mut class = Element::new("def:Class", &group.path).attr("Name", sub.class.value.name());
-        if let Some(subclass) = &sub.subclass {
-            class.push(
-                Element::new("def:SubClass", &group.path).attr("Name", subclass.value.name()),
-            );
-        }
-        group.push(class);
-        group.leaf(
-            id,
-            &dataset.href,
-            dataset.href.rsplit('/').next().unwrap_or(&dataset.href),
-            None,
-        );
-        metadata.push(group);
-    }
+    push_item_groups(&mut metadata, study, language);
     for dataset in &study.datasets {
         for (column, identity) in variants(dataset) {
             let mut item = item_definition(
@@ -542,69 +615,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             metadata.push(item);
         }
     }
-    for list in &study.codelists {
-        let c = &list.declaration;
-        let mut code = Element::new("CodeList", &format!("codelists.{}", c.id))
-            .attr("OID", format!("CL.{}", c.id))
-            .attr("Name", &c.name)
-            .attr(
-                "DataType",
-                match c.data_type {
-                    ct::DataType::Text => "text",
-                    ct::DataType::Integer => "integer",
-                    ct::DataType::Float => "float",
-                },
-            )
-            .optional(
-                "def:StandardOID",
-                list.standard.as_ref().map(|id| format!("STD.{id}")),
-            )
-            .optional(
-                "def:IsNonStandard",
-                (list.standard.is_none() && c.items.is_some()).then_some("Yes"),
-            )
-            .optional("SASFormatName", c.format_name.as_ref());
-        for item in c.items.as_deref().unwrap_or(&[]) {
-            let mut node = Element::new(
-                if item.decode.is_some() {
-                    "CodeListItem"
-                } else {
-                    "EnumeratedItem"
-                },
-                &code.path,
-            )
-            .attr("CodedValue", scalar(&item.value))
-            .optional("Rank", item.rank)
-            .optional("def:ExtendedValue", item.extended.then_some("Yes"));
-            if let Some(decode) = &item.decode {
-                node.translated("Decode", decode, language);
-            }
-            if let Some(alias) = &item.alias {
-                node.push(
-                    Element::new("Alias", &code.path)
-                        .attr("Context", "nci:ExtCodeID")
-                        .attr("Name", alias),
-                );
-            }
-            code.push(node);
-        }
-        if let Some(external) = &c.external {
-            code.push(
-                Element::new("ExternalCodeList", &code.path)
-                    .attr("Dictionary", &external.dictionary)
-                    .attr("Version", &external.version)
-                    .optional("href", external.href.as_ref()),
-            );
-        }
-        if let Some(alias) = &c.alias {
-            code.push(
-                Element::new("Alias", &code.path)
-                    .attr("Context", "nci:ExtCodeID")
-                    .attr("Name", alias),
-            );
-        }
-        metadata.push(code);
-    }
+    push_codelists(&mut metadata, study, language);
     for dataset in &study.datasets {
         for (column, name) in variants(dataset) {
             let meta = column

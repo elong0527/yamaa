@@ -1,7 +1,7 @@
 //! One planning capture per resolved dictionary identity, with original policy failures.
 use crate::{
     inheritance::SourceError,
-    inheritance_capture::{CapturePort, DecodePort},
+    inheritance_capture::{InheritanceCapturePort, InheritanceDecodePort},
     inheritance_preparation::PreparedInheritance,
     project_preparation::Source,
 };
@@ -92,13 +92,13 @@ pub struct Prepared<R> {
     pub model: SpecificationDocument,
     pub captures: Vec<Captured<R>>,
 }
-struct Run<'a, P: CapturePort, D: DecodePort> {
+struct Run<'a, P: InheritanceCapturePort, D: InheritanceDecodePort> {
     port: &'a mut P,
     decoder: &'a mut D,
     seeds: &'a [Seed<'a, D::Raw>],
     captures: Vec<Captured<D::Raw>>,
 }
-impl<P: CapturePort, D: DecodePort> Run<'_, P, D> {
+impl<P: InheritanceCapturePort, D: InheritanceDecodePort> Run<'_, P, D> {
     fn capture_failure(
         &self,
         reference: MappingDictionaryReference,
@@ -180,7 +180,7 @@ impl<P: CapturePort, D: DecodePort> Run<'_, P, D> {
 pub type PreparationResult<E, X, R> = Result<Option<Prepared<R>>, Box<Error<E, X, R>>>;
 /// Metadata only. Failed parsing/admission keeps the entered capture prefix and
 /// original host error; no study source, callback or publication authority is entered.
-pub fn prepare<P: CapturePort, D: DecodePort>(
+pub fn prepare<P: InheritanceCapturePort, D: InheritanceDecodePort>(
     schema: &SchemaStructure,
     model: &SpecificationDocument,
     origins: Origins<'_>,

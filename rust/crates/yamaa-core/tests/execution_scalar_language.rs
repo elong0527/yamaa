@@ -543,7 +543,8 @@ mod execution {
             application_observer::{Noop, Scope},
             function_invocation::NoFunctions,
             specification_run::{
-                self as run, CapturedAttempt, PortError, RunError, SourceDecoder, SourcePort,
+                self as run, CapturedAttempt, PortError, RunError, SourceDecoder,
+                SpecificationSourcePort,
             },
         };
         use yamaa_core::{
@@ -629,7 +630,7 @@ mod execution {
             marker: Rc<()>,
             fail_at: Option<&'static str>,
         }
-        impl SourcePort for Port {
+        impl SpecificationSourcePort for Port {
             fn resource_failure(
                 &self,
                 _error: &Self::Error,

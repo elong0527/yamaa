@@ -629,6 +629,610 @@ fn validate_row_phases(
             .collect(),
     ))
 }
+fn resolve_reference(
+    reference: &str,
+    path: &str,
+    source: &TableSchema,
+    name: &str,
+    findings: &mut Vec<BindFinding>,
+) -> Option<usize> {
+    let selected = reference
+        .split_once('.')
+        .filter(|(dataset, _)| *dataset == name)
+        .and_then(|(_, field)| source.columns().iter().position(|c| c.name == field));
+    if selected.is_none() {
+        findings.push(BindFinding::UnknownReference {
+            path: path.into(),
+            name: reference.into(),
+        });
+    }
+    selected
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bind_assignment(
+    source: &TableSchema,
+    name: &str,
+    catalog: &Catalog,
+    declaration: &RowDeclaration,
+    phase: Phase<'_>,
+    row: Option<&str>,
+    available: Option<&[usize]>,
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+    declarations_reported: bool,
+    project: Option<&crate::project_calls::ProjectCalls>,
+    output: &TableSchema,
+    named: &intermediates::Declarations,
+    secondary: &[crate::dataset::SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
+) -> Result<Option<Assignment>, BindError> {
+    let expression = match &declaration.operation {
+        RowOperation::ProjectFunction(call) => {
+            let project = project.ok_or(BindError::Internal)?;
+            match crate::project_call_binding::bind(
+                project,
+                *call,
+                catalog,
+                crate::project_call_binding::Context {
+                    source_dataset: 0,
+                    source_mode: crate::project_call_binding::SourceMode::Record,
+                    available_outputs: available,
+                    scope: Scope {
+                        drivers: &[name],
+                        current_driver: true,
+                        reach: Reach::Scalar,
+                        joined: false,
+                        phase,
+                    },
+                },
+            ) {
+                Ok(bound) => {
+                    edges.extend(bound.dependencies);
+                    Some(Expression::ProjectFunction(bound.function))
+                }
+                Err(crate::project_call_binding::Error::Findings(errors)) => {
+                    findings.extend(functions::bind_findings(project, *call, errors, row)?);
+                    None
+                }
+                Err(crate::project_call_binding::Error::Reference(error)) => {
+                    return Err(BindError::Catalog(error))
+                }
+                Err(_) => return Err(BindError::Internal),
+            }
+        }
+        RowOperation::Output(reference) => {
+            if let Some(finding) = catalog
+                .validate_output(reference, None, available, &[0])
+                .map_err(BindError::Catalog)?
+            {
+                findings.push(BindFinding::OutputReference {
+                    path: declaration.path.clone(),
+                    name: reference.clone(),
+                    finding,
+                });
+                None
+            } else {
+                let Some(reference_binding::Binding::Output { column, .. }) =
+                    catalog.bind(reference)
+                else {
+                    return Err(BindError::Internal);
+                };
+                edges.push(column);
+                Some(Expression::Column(column))
+            }
+        }
+        RowOperation::Shared(branch) => derivations::bind_row(
+            &branch.operation,
+            &branch.path,
+            declaration.column,
+            catalog,
+            name,
+            row,
+            phase,
+            available,
+            edges,
+            findings,
+            declarations_reported,
+            output,
+            project,
+            named,
+            secondary,
+            intermediates,
+        )?,
+        RowOperation::Source(reference) => {
+            if reference
+                .split_once('.')
+                .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
+            {
+                source_expressions::bind_catalog_join(
+                    reference,
+                    &declaration.path,
+                    catalog,
+                    row,
+                    available,
+                    edges,
+                    findings,
+                )?
+            } else if named.reference(reference).is_some()
+                && reference
+                    .split_once('.')
+                    .is_none_or(|(owner, _)| owner != name)
+            {
+                row_intermediates::bind(
+                    reference,
+                    &declaration.path,
+                    named,
+                    secondary,
+                    intermediates,
+                    output,
+                    catalog,
+                    available,
+                    edges,
+                    findings,
+                )?
+            } else if let Some(column) =
+                resolve_reference(reference, &declaration.path, source, name, findings)
+            {
+                let scoped = reference_scope::validate(
+                    catalog,
+                    reference,
+                    None,
+                    Scope {
+                        drivers: &[name],
+                        current_driver: false,
+                        reach: Reach::Scalar,
+                        joined: false,
+                        phase,
+                    },
+                )
+                .map_err(BindError::Catalog)?;
+                let valid = scoped.is_empty();
+                findings.extend(scoped.into_iter().map(|finding| {
+                    BindFinding::QualifiedReference {
+                        path: declaration.path.clone(),
+                        name: reference.clone(),
+                        row: row.map(String::from),
+                        finding,
+                    }
+                }));
+                valid.then_some(Expression::Source(column))
+            } else {
+                None
+            }
+        }
+    };
+    Ok(expression.map(|expression| Assignment {
+        column: declaration.column,
+        expression,
+        path: declaration.path.clone(),
+    }))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bind_template_filter(
+    predicate: Option<&crate::predicate::Plan>,
+    grouped: bool,
+    template: &Template,
+    filter_path: &str,
+    named: &intermediates::Declarations,
+    secondary: &[crate::dataset::SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
+    row_catalog: &Catalog,
+    available: &[usize],
+    row_source: &TableSchema,
+    assignments: &[Assignment],
+    output: &TableSchema,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<BoundPredicate>, BindError> {
+    let mut bindings = Vec::new();
+    let before_filter = findings.len();
+    if let Some(plan) = predicate {
+        let mut seen = std::collections::BTreeSet::new();
+        for identifier in plan.identifiers() {
+            if !seen.insert(identifier) {
+                continue;
+            }
+            if identifier.contains('.') {
+                if !grouped
+                    && named.reference(identifier).is_some()
+                    && identifier
+                        .split_once('.')
+                        .is_none_or(|(owner, _)| owner != template.driver)
+                {
+                    let mut edges = Vec::new();
+                    if let Some(Expression::Intermediate { index, column }) =
+                        row_intermediates::bind(
+                            identifier,
+                            filter_path,
+                            named,
+                            secondary,
+                            intermediates,
+                            output,
+                            row_catalog,
+                            Some(available),
+                            &mut edges,
+                            findings,
+                        )?
+                    {
+                        bindings.push(Binding {
+                            name: identifier.into(),
+                            read: Read::Intermediate { index, column },
+                        });
+                    }
+                } else if !grouped
+                    && identifier
+                        .split_once('.')
+                        .is_some_and(|(owner, _)| row_catalog.joined(owner).is_some())
+                {
+                    if let Some(Expression::Joined(read)) = source_expressions::bind_catalog_join(
+                        identifier,
+                        filter_path,
+                        row_catalog,
+                        Some(&template.id),
+                        Some(available),
+                        &mut Vec::new(),
+                        findings,
+                    )? {
+                        bindings.push(Binding {
+                            name: identifier.into(),
+                            read: Read::Joined(read),
+                        });
+                    }
+                } else if !grouped {
+                    if let Some(column) = resolve_reference(
+                        identifier,
+                        filter_path,
+                        row_source,
+                        &template.driver,
+                        findings,
+                    ) {
+                        bindings.push(Binding {
+                            name: identifier.into(),
+                            read: Read::Source(column),
+                        });
+                    }
+                }
+            } else if let Some(declaration) = template
+                .declarations
+                .iter()
+                .find(|declaration| output.columns()[declaration.column].name == identifier)
+            {
+                bindings.push(Binding {
+                    name: identifier.into(),
+                    read: Read::Column(declaration.column),
+                });
+            } else {
+                findings.push(BindFinding::RowFilterPhase {
+                    path: filter_path.to_string(),
+                    identifier: identifier.into(),
+                    row: template.id.clone(),
+                    grouped,
+                    qualified: false,
+                });
+            }
+        }
+    }
+    // Invalid templates never reach executable-plan admission. Keep semantic findings
+    // instead of manufacturing a transport error for their incomplete bindings.
+    let filter = if findings.len() != before_filter
+        || grouped
+            && predicate.is_some_and(|plan| {
+                plan.identifiers()
+                    .into_iter()
+                    .any(|name| name.contains('.'))
+            }) {
+        None
+    } else {
+        predicate
+            .map(|plan| BoundPredicate::new_contextual(plan.clone(), bindings, Vec::new()))
+            .transpose()
+            .map_err(BindError::InvalidPredicateBinding)?
+    };
+    if let Some(filter) = filter.as_ref().filter(|_| !grouped) {
+        let bound = intermediates
+            .iter()
+            .filter_map(Option::as_ref)
+            .cloned()
+            .collect::<Vec<_>>();
+        let deferred = crate::dataset::window_stages(assignments, output.columns().len(), &bound);
+        for binding in filter.bindings() {
+            let lookup_match = match binding.read {
+                Read::Intermediate { index, .. } => {
+                    row_intermediates::dependencies(index, intermediates)?
+                        .into_iter()
+                        .find(|&column| deferred.get(column).copied().unwrap_or(false))
+                }
+                _ => None,
+            };
+            if lookup_match.is_some()
+                || crate::dataset::read_requires_window(&binding.read, &deferred, &bound)
+            {
+                let mut context: crate::diagnostic::Context = [
+                    (
+                        "identifier".into(),
+                        crate::json::Value::String(binding.name.clone()),
+                    ),
+                    (
+                        "row".into(),
+                        crate::json::Value::String(template.id.clone()),
+                    ),
+                    (
+                        "available_phase".into(),
+                        crate::json::Value::String("window_derivation".into()),
+                    ),
+                    (
+                        "required_phase".into(),
+                        crate::json::Value::String("row_filter".into()),
+                    ),
+                ]
+                .into();
+                if let Some(column) = lookup_match {
+                    context.insert(
+                        "lookup_match".into(),
+                        crate::json::Value::String(output.columns()[column].name.clone()),
+                    );
+                }
+                findings.push(BindFinding::Scalar(crate::diagnostic::Diagnostic {
+                    code: crate::diagnostic::ConditionCode::RowFilterPhaseBoundary,
+                    spec_paths: vec![filter_path.to_string()],
+                    context,
+                    source_span: None,
+                    operand_route: None,
+                }));
+            }
+        }
+    }
+    Ok(filter)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bind_template(
+    template: &Template,
+    index: usize,
+    source: &TableSchema,
+    name: &str,
+    keys: &[usize],
+    named: &intermediates::Declarations,
+    secondary: &[crate::dataset::SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
+    output: &TableSchema,
+    project: Option<&crate::project_calls::ProjectCalls>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<RowTemplate>, BindError> {
+    let filter_path = format!("rows[{index}].filter");
+    if named
+        .reference(&format!("{}.driver", template.driver))
+        .is_some_and(|(index, _)| intermediates.get(index).is_some_and(Option::is_none))
+        && !findings.is_empty()
+    {
+        return Ok(None);
+    }
+    let (driver_index, row_source, named_driver) = row_drivers::select(
+        source,
+        name,
+        secondary,
+        &template.driver,
+        named,
+        intermediates,
+    )?;
+    if let Some(named_driver) = named_driver {
+        named.driver_findings(
+            &template.driver,
+            &format!("rows[{index}].dataset"),
+            intermediates[named_driver]
+                .as_ref()
+                .ok_or(BindError::Internal)?,
+            secondary,
+            findings,
+        )?;
+    }
+    let row_catalog = row_drivers::catalog_visible(
+        output,
+        row_source,
+        &template.driver,
+        named_driver.and_then(|index| intermediates[index].as_ref()),
+    )?;
+    let row_catalog =
+        row_drivers::extend_catalog(row_catalog, source, name, keys, secondary, &template.driver)?;
+    let row_catalog = row_catalog.with_row_joins(&template.driver, template.groups.as_deref());
+    let mode = match &template.groups {
+        None => RowMode::Records,
+        Some(groups) => RowMode::Groups(
+            groups
+                .iter()
+                .enumerate()
+                .filter_map(|(position, name)| {
+                    let resolved = resolve_reference(
+                        name,
+                        &format!("rows[{index}].group_by[{position}]"),
+                        row_source,
+                        &template.driver,
+                        findings,
+                    );
+                    resolved.filter(|&column| {
+                        let visible = named_driver
+                            .and_then(|index| intermediates[index].as_ref())
+                            .is_none_or(|item| item.admits_column(column));
+                        if !visible {
+                            findings.push(BindFinding::Lookup(LookupFinding::reference(
+                                &format!("rows[{index}].group_by[{position}]"),
+                                name,
+                                Some(&template.driver),
+                                ReferenceCause::Value,
+                                None,
+                            )));
+                        }
+                        visible
+                    })
+                })
+                .collect(),
+        ),
+    };
+    let predicate = match &template.filter {
+        Some((
+            text,
+            Err(predicate_compiler::Error::Parse(crate::predicate_parser::ParseError::Grammar {
+                position,
+                failure,
+                ..
+            })),
+        )) => {
+            findings.push(BindFinding::Lookup(LookupFinding::grammar(
+                &filter_path,
+                text,
+                position.character,
+                failure,
+            )));
+            None
+        }
+        Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
+        Some((_, Ok(plan))) => Some(plan),
+        None => None,
+    };
+    let grouped = template.groups.is_some();
+    // Qualified grouped-filter failures precede derivation binding, as in reference planning.
+    if let Some(plan) = predicate.filter(|_| grouped) {
+        let mut seen = std::collections::BTreeSet::new();
+        for identifier in plan
+            .identifiers()
+            .into_iter()
+            .filter(|name| name.contains('.'))
+        {
+            if !seen.insert(identifier) {
+                continue;
+            }
+            findings.push(BindFinding::RowFilterPhase {
+                path: filter_path.to_string(),
+                identifier: identifier.into(),
+                row: template.id.clone(),
+                grouped,
+                qualified: true,
+            });
+        }
+    }
+    let group_names = template
+        .groups
+        .as_ref()
+        .map(|g| g.iter().map(String::as_str).collect::<Vec<_>>());
+    let phase = Phase::Row {
+        group_by: group_names.as_deref(),
+    };
+    let available = template
+        .declarations
+        .iter()
+        .map(|d| d.column)
+        .collect::<Vec<_>>();
+    let mut graph = std::vec![Vec::new(); output.columns().len()];
+    let mut assignments = BTreeMap::new();
+    // Reference planning validates one complete row template's authored
+    // derivations before resolving any of that template's references.
+    let mut declaration_findings = Vec::new();
+    let mut declarations_reported = false;
+    for declaration in &template.declarations {
+        if let RowOperation::Shared(branch) = &declaration.operation {
+            declarations_reported |=
+                cases::padding_findings(&branch.operation, &mut declaration_findings)?;
+        }
+    }
+    if declarations_reported {
+        for declaration in &template.declarations {
+            if let RowOperation::Shared(branch) = &declaration.operation {
+                derivations::declaration_findings(&branch.operation, &branch.path, findings)?;
+            }
+        }
+    }
+    for declaration in &template.declarations {
+        if let Some(value) = bind_assignment(
+            row_source,
+            &template.driver,
+            &row_catalog,
+            declaration,
+            phase,
+            Some(&template.id),
+            Some(&available),
+            &mut graph[declaration.column],
+            findings,
+            declarations_reported,
+            project,
+            output,
+            named,
+            secondary,
+            intermediates,
+        )? {
+            assignments.insert(declaration.column, value);
+        }
+    }
+    let analyzed = crate::dependency_analysis::analyze(&graph).map_err(|_| BindError::Internal)?;
+    if let Some(cycle) = analyzed.cycle {
+        let mut paths = std::vec![""; output.columns().len()];
+        for declaration in &template.declarations {
+            paths[declaration.column] = declaration.path.as_str();
+        }
+        let repeated = findings.iter().any(|finding| {
+            let BindFinding::Dependencies {
+                paths: prior_paths,
+                diagnostics,
+                ..
+            } = finding
+            else {
+                return false;
+            };
+            diagnostics.iter().any(|diagnostic| {
+                matches!(diagnostic, column_dependencies::Diagnostic::Cycle { columns }
+                if columns == &cycle && cycle.iter().all(|&column| {
+                    prior_paths.get(column).map(String::as_str) == paths.get(column).copied()
+                }))
+            })
+        });
+        if !repeated {
+            findings.push(BindFinding::Dependencies {
+                columns: output.columns().iter().map(|c| c.name.clone()).collect(),
+                paths: paths.into_iter().map(String::from).collect(),
+                diagnostics: std::vec![column_dependencies::Diagnostic::Cycle { columns: cycle }],
+            });
+        }
+    }
+    let assignments: Vec<Assignment> = analyzed
+        .order
+        .into_iter()
+        .filter_map(|column| assignments.remove(&column))
+        .collect();
+    let filter = bind_template_filter(
+        predicate,
+        grouped,
+        template,
+        &filter_path,
+        named,
+        secondary,
+        intermediates,
+        &row_catalog,
+        &available,
+        row_source,
+        &assignments,
+        output,
+        findings,
+    )?;
+    Ok(Some(RowTemplate {
+        mode: if let Some(index) = named_driver {
+            RowMode::IntermediateDriver {
+                index,
+                source: driver_index,
+                mode: std::boxed::Box::new(mode),
+            }
+        } else if driver_index == 0 {
+            mode
+        } else {
+            RowMode::Driver {
+                source: driver_index,
+                mode: std::boxed::Box::new(mode),
+            }
+        },
+        assignments,
+        filter,
+    }))
+}
+
 impl Rows {
     pub(super) fn self_columns(&self) -> Vec<usize> {
         self.templates[0]
@@ -1070,558 +1674,23 @@ impl Rows {
             .map(|g| g.iter().map(String::as_str).collect::<Vec<_>>())
             .collect::<Vec<_>>();
         let column_groups = groups.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let resolve = |reference: &str,
-                       path: &str,
-                       source: &TableSchema,
-                       name: &str,
-                       findings: &mut Vec<BindFinding>| {
-            let selected = reference
-                .split_once('.')
-                .filter(|(dataset, _)| *dataset == name)
-                .and_then(|(_, field)| source.columns().iter().position(|c| c.name == field));
-            if selected.is_none() {
-                findings.push(BindFinding::UnknownReference {
-                    path: path.into(),
-                    name: reference.into(),
-                });
-            }
-            selected
-        };
-        let assignment = |source: &TableSchema,
-                          name: &str,
-                          catalog: &Catalog,
-                          declaration: &RowDeclaration,
-                          phase: Phase<'_>,
-                          row: Option<&str>,
-                          available: Option<&[usize]>,
-                          edges: &mut Vec<usize>,
-                          findings: &mut Vec<BindFinding>,
-                          declarations_reported: bool|
-         -> Result<Option<Assignment>, BindError> {
-            let expression = match &declaration.operation {
-                RowOperation::ProjectFunction(call) => {
-                    let project = project.ok_or(BindError::Internal)?;
-                    match crate::project_call_binding::bind(
-                        project,
-                        *call,
-                        catalog,
-                        crate::project_call_binding::Context {
-                            source_dataset: 0,
-                            source_mode: crate::project_call_binding::SourceMode::Record,
-                            available_outputs: available,
-                            scope: Scope {
-                                drivers: &[name],
-                                current_driver: true,
-                                reach: Reach::Scalar,
-                                joined: false,
-                                phase,
-                            },
-                        },
-                    ) {
-                        Ok(bound) => {
-                            edges.extend(bound.dependencies);
-                            Some(Expression::ProjectFunction(bound.function))
-                        }
-                        Err(crate::project_call_binding::Error::Findings(errors)) => {
-                            findings.extend(functions::bind_findings(project, *call, errors, row)?);
-                            None
-                        }
-                        Err(crate::project_call_binding::Error::Reference(error)) => {
-                            return Err(BindError::Catalog(error))
-                        }
-                        Err(_) => return Err(BindError::Internal),
-                    }
-                }
-                RowOperation::Output(reference) => {
-                    if let Some(finding) = catalog
-                        .validate_output(reference, None, available, &[0])
-                        .map_err(BindError::Catalog)?
-                    {
-                        findings.push(BindFinding::OutputReference {
-                            path: declaration.path.clone(),
-                            name: reference.clone(),
-                            finding,
-                        });
-                        None
-                    } else {
-                        let Some(reference_binding::Binding::Output { column, .. }) =
-                            catalog.bind(reference)
-                        else {
-                            return Err(BindError::Internal);
-                        };
-                        edges.push(column);
-                        Some(Expression::Column(column))
-                    }
-                }
-                RowOperation::Shared(branch) => derivations::bind_row(
-                    &branch.operation,
-                    &branch.path,
-                    declaration.column,
-                    catalog,
-                    name,
-                    row,
-                    phase,
-                    available,
-                    edges,
-                    findings,
-                    declarations_reported,
-                    output,
-                    project,
-                    named,
-                    &secondary,
-                    &intermediates,
-                )?,
-                RowOperation::Source(reference) => {
-                    if reference
-                        .split_once('.')
-                        .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
-                    {
-                        source_expressions::bind_catalog_join(
-                            reference,
-                            &declaration.path,
-                            catalog,
-                            row,
-                            available,
-                            edges,
-                            findings,
-                        )?
-                    } else if named.reference(reference).is_some()
-                        && reference
-                            .split_once('.')
-                            .is_none_or(|(owner, _)| owner != name)
-                    {
-                        row_intermediates::bind(
-                            reference,
-                            &declaration.path,
-                            named,
-                            &secondary,
-                            &intermediates,
-                            output,
-                            catalog,
-                            available,
-                            edges,
-                            findings,
-                        )?
-                    } else if let Some(column) =
-                        resolve(reference, &declaration.path, source, name, findings)
-                    {
-                        let scoped = reference_scope::validate(
-                            catalog,
-                            reference,
-                            None,
-                            Scope {
-                                drivers: &[name],
-                                current_driver: false,
-                                reach: Reach::Scalar,
-                                joined: false,
-                                phase,
-                            },
-                        )
-                        .map_err(BindError::Catalog)?;
-                        let valid = scoped.is_empty();
-                        findings.extend(scoped.into_iter().map(|finding| {
-                            BindFinding::QualifiedReference {
-                                path: declaration.path.clone(),
-                                name: reference.clone(),
-                                row: row.map(String::from),
-                                finding,
-                            }
-                        }));
-                        valid.then_some(Expression::Source(column))
-                    } else {
-                        None
-                    }
-                }
-            };
-            Ok(expression.map(|expression| Assignment {
-                column: declaration.column,
-                expression,
-                path: declaration.path.clone(),
-            }))
-        };
         let mut templates = Vec::new();
         for (index, template) in self.templates.iter().enumerate() {
-            let filter_path = format!("rows[{index}].filter");
-            if named
-                .reference(&format!("{}.driver", template.driver))
-                .is_some_and(|(index, _)| intermediates.get(index).is_some_and(Option::is_none))
-                && !findings.is_empty()
-            {
-                continue;
-            }
-            let (driver_index, row_source, named_driver) = row_drivers::select(
-                source,
-                name,
-                &secondary,
-                &template.driver,
-                named,
-                &intermediates,
-            )?;
-            if let Some(named_driver) = named_driver {
-                named.driver_findings(
-                    &template.driver,
-                    &format!("rows[{index}].dataset"),
-                    intermediates[named_driver]
-                        .as_ref()
-                        .ok_or(BindError::Internal)?,
-                    &secondary,
-                    &mut findings,
-                )?;
-            }
-            let row_catalog = row_drivers::catalog_visible(
-                output,
-                row_source,
-                &template.driver,
-                named_driver.and_then(|index| intermediates[index].as_ref()),
-            )?;
-            let row_catalog = row_drivers::extend_catalog(
-                row_catalog,
+            if let Some(bound) = bind_template(
+                template,
+                index,
                 source,
                 name,
                 keys,
+                named,
                 &secondary,
-                &template.driver,
-            )?;
-            let row_catalog =
-                row_catalog.with_row_joins(&template.driver, template.groups.as_deref());
-            let mode = match &template.groups {
-                None => RowMode::Records,
-                Some(groups) => RowMode::Groups(
-                    groups
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(position, name)| {
-                            let resolved = resolve(
-                                name,
-                                &format!("rows[{index}].group_by[{position}]"),
-                                row_source,
-                                &template.driver,
-                                &mut findings,
-                            );
-                            resolved.filter(|&column| {
-                                let visible = named_driver
-                                    .and_then(|index| intermediates[index].as_ref())
-                                    .is_none_or(|item| item.admits_column(column));
-                                if !visible {
-                                    findings.push(BindFinding::Lookup(LookupFinding::reference(
-                                        &format!("rows[{index}].group_by[{position}]"),
-                                        name,
-                                        Some(&template.driver),
-                                        ReferenceCause::Value,
-                                        None,
-                                    )));
-                                }
-                                visible
-                            })
-                        })
-                        .collect(),
-                ),
-            };
-            let predicate = match &template.filter {
-                Some((
-                    text,
-                    Err(predicate_compiler::Error::Parse(
-                        crate::predicate_parser::ParseError::Grammar {
-                            position, failure, ..
-                        },
-                    )),
-                )) => {
-                    findings.push(BindFinding::Lookup(LookupFinding::grammar(
-                        &filter_path,
-                        text,
-                        position.character,
-                        failure,
-                    )));
-                    None
-                }
-                Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
-                Some((_, Ok(plan))) => Some(plan),
-                None => None,
-            };
-            let grouped = template.groups.is_some();
-            // Qualified grouped-filter failures precede derivation binding, as in reference planning.
-            if let Some(plan) = predicate.filter(|_| grouped) {
-                let mut seen = std::collections::BTreeSet::new();
-                for identifier in plan
-                    .identifiers()
-                    .into_iter()
-                    .filter(|name| name.contains('.'))
-                {
-                    if !seen.insert(identifier) {
-                        continue;
-                    }
-                    findings.push(BindFinding::RowFilterPhase {
-                        path: filter_path.clone(),
-                        identifier: identifier.into(),
-                        row: template.id.clone(),
-                        grouped,
-                        qualified: true,
-                    });
-                }
+                &intermediates,
+                output,
+                project,
+                &mut findings,
+            )? {
+                templates.push(bound);
             }
-            let group_names = template
-                .groups
-                .as_ref()
-                .map(|g| g.iter().map(String::as_str).collect::<Vec<_>>());
-            let phase = Phase::Row {
-                group_by: group_names.as_deref(),
-            };
-            let available = template
-                .declarations
-                .iter()
-                .map(|d| d.column)
-                .collect::<Vec<_>>();
-            let mut graph = std::vec![Vec::new(); output.columns().len()];
-            let mut assignments = BTreeMap::new();
-            // Reference planning validates one complete row template's authored
-            // derivations before resolving any of that template's references.
-            let mut declaration_findings = Vec::new();
-            let mut declarations_reported = false;
-            for declaration in &template.declarations {
-                if let RowOperation::Shared(branch) = &declaration.operation {
-                    declarations_reported |=
-                        cases::padding_findings(&branch.operation, &mut declaration_findings)?;
-                }
-            }
-            if declarations_reported {
-                for declaration in &template.declarations {
-                    if let RowOperation::Shared(branch) = &declaration.operation {
-                        derivations::declaration_findings(
-                            &branch.operation,
-                            &branch.path,
-                            &mut findings,
-                        )?;
-                    }
-                }
-            }
-            for declaration in &template.declarations {
-                if let Some(value) = assignment(
-                    row_source,
-                    &template.driver,
-                    &row_catalog,
-                    declaration,
-                    phase,
-                    Some(&template.id),
-                    Some(&available),
-                    &mut graph[declaration.column],
-                    &mut findings,
-                    declarations_reported,
-                )? {
-                    assignments.insert(declaration.column, value);
-                }
-            }
-            let analyzed =
-                crate::dependency_analysis::analyze(&graph).map_err(|_| BindError::Internal)?;
-            if let Some(cycle) = analyzed.cycle {
-                let mut paths = std::vec![""; output.columns().len()];
-                for declaration in &template.declarations {
-                    paths[declaration.column] = declaration.path.as_str();
-                }
-                let repeated = findings.iter().any(|finding| {
-                    let BindFinding::Dependencies { paths: prior_paths, diagnostics, .. } = finding else {
-                        return false;
-                    };
-                    diagnostics.iter().any(|diagnostic| {
-                        matches!(diagnostic, column_dependencies::Diagnostic::Cycle { columns }
-                            if columns == &cycle && cycle.iter().all(|&column| {
-                                prior_paths.get(column).map(String::as_str) == paths.get(column).copied()
-                            }))
-                    })
-                });
-                if !repeated {
-                    findings.push(BindFinding::Dependencies {
-                        columns: output.columns().iter().map(|c| c.name.clone()).collect(),
-                        paths: paths.into_iter().map(String::from).collect(),
-                        diagnostics: std::vec![column_dependencies::Diagnostic::Cycle {
-                            columns: cycle
-                        }],
-                    });
-                }
-            }
-            let assignments: Vec<Assignment> = analyzed
-                .order
-                .into_iter()
-                .filter_map(|column| assignments.remove(&column))
-                .collect();
-            let mut bindings = Vec::new();
-            let before_filter = findings.len();
-            if let Some(plan) = predicate {
-                let mut seen = std::collections::BTreeSet::new();
-                for identifier in plan.identifiers() {
-                    if !seen.insert(identifier) {
-                        continue;
-                    }
-                    if identifier.contains('.') {
-                        if !grouped
-                            && named.reference(identifier).is_some()
-                            && identifier
-                                .split_once('.')
-                                .is_none_or(|(owner, _)| owner != template.driver)
-                        {
-                            let mut edges = Vec::new();
-                            if let Some(Expression::Intermediate { index, column }) =
-                                row_intermediates::bind(
-                                    identifier,
-                                    &filter_path,
-                                    named,
-                                    &secondary,
-                                    &intermediates,
-                                    output,
-                                    &row_catalog,
-                                    Some(&available),
-                                    &mut edges,
-                                    &mut findings,
-                                )?
-                            {
-                                bindings.push(Binding {
-                                    name: identifier.into(),
-                                    read: Read::Intermediate { index, column },
-                                });
-                            }
-                        } else if !grouped
-                            && identifier
-                                .split_once('.')
-                                .is_some_and(|(owner, _)| row_catalog.joined(owner).is_some())
-                        {
-                            if let Some(Expression::Joined(read)) =
-                                source_expressions::bind_catalog_join(
-                                    identifier,
-                                    &filter_path,
-                                    &row_catalog,
-                                    Some(&template.id),
-                                    Some(&available),
-                                    &mut Vec::new(),
-                                    &mut findings,
-                                )?
-                            {
-                                bindings.push(Binding {
-                                    name: identifier.into(),
-                                    read: Read::Joined(read),
-                                });
-                            }
-                        } else if !grouped {
-                            if let Some(column) = resolve(
-                                identifier,
-                                &filter_path,
-                                row_source,
-                                &template.driver,
-                                &mut findings,
-                            ) {
-                                bindings.push(Binding {
-                                    name: identifier.into(),
-                                    read: Read::Source(column),
-                                });
-                            }
-                        }
-                    } else if let Some(declaration) = template
-                        .declarations
-                        .iter()
-                        .find(|declaration| output.columns()[declaration.column].name == identifier)
-                    {
-                        bindings.push(Binding {
-                            name: identifier.into(),
-                            read: Read::Column(declaration.column),
-                        });
-                    } else {
-                        findings.push(BindFinding::RowFilterPhase {
-                            path: filter_path.clone(),
-                            identifier: identifier.into(),
-                            row: template.id.clone(),
-                            grouped,
-                            qualified: false,
-                        });
-                    }
-                }
-            }
-            // Invalid templates never reach executable-plan admission. Keep semantic findings
-            // instead of manufacturing a transport error for their incomplete bindings.
-            let filter = if findings.len() != before_filter
-                || grouped
-                    && predicate.is_some_and(|plan| {
-                        plan.identifiers()
-                            .into_iter()
-                            .any(|name| name.contains('.'))
-                    }) {
-                None
-            } else {
-                predicate
-                    .map(|plan| BoundPredicate::new_contextual(plan.clone(), bindings, Vec::new()))
-                    .transpose()
-                    .map_err(BindError::InvalidPredicateBinding)?
-            };
-            if let Some(filter) = filter.as_ref().filter(|_| !grouped) {
-                let bound = intermediates
-                    .iter()
-                    .filter_map(Option::as_ref)
-                    .cloned()
-                    .collect::<Vec<_>>();
-                let deferred =
-                    crate::dataset::window_stages(&assignments, output.columns().len(), &bound);
-                for binding in filter.bindings() {
-                    let lookup_match = match binding.read {
-                        Read::Intermediate { index, .. } => {
-                            row_intermediates::dependencies(index, &intermediates)?
-                                .into_iter()
-                                .find(|&column| deferred.get(column).copied().unwrap_or(false))
-                        }
-                        _ => None,
-                    };
-                    if lookup_match.is_some()
-                        || crate::dataset::read_requires_window(&binding.read, &deferred, &bound)
-                    {
-                        let mut context: crate::diagnostic::Context = [
-                            (
-                                "identifier".into(),
-                                crate::json::Value::String(binding.name.clone()),
-                            ),
-                            (
-                                "row".into(),
-                                crate::json::Value::String(template.id.clone()),
-                            ),
-                            (
-                                "available_phase".into(),
-                                crate::json::Value::String("window_derivation".into()),
-                            ),
-                            (
-                                "required_phase".into(),
-                                crate::json::Value::String("row_filter".into()),
-                            ),
-                        ]
-                        .into();
-                        if let Some(column) = lookup_match {
-                            context.insert(
-                                "lookup_match".into(),
-                                crate::json::Value::String(output.columns()[column].name.clone()),
-                            );
-                        }
-                        findings.push(BindFinding::Scalar(crate::diagnostic::Diagnostic {
-                            code: crate::diagnostic::ConditionCode::RowFilterPhaseBoundary,
-                            spec_paths: vec![filter_path.clone()],
-                            context,
-                            source_span: None,
-                            operand_route: None,
-                        }));
-                    }
-                }
-            }
-            templates.push(RowTemplate {
-                mode: if let Some(index) = named_driver {
-                    RowMode::IntermediateDriver {
-                        index,
-                        source: driver_index,
-                        mode: std::boxed::Box::new(mode),
-                    }
-                } else if driver_index == 0 {
-                    mode
-                } else {
-                    RowMode::Driver {
-                        source: driver_index,
-                        mode: std::boxed::Box::new(mode),
-                    }
-                },
-                assignments,
-                filter,
-            });
         }
         let mut odm_contexts: Option<std::rc::Rc<[crate::dataset::OdmTemplateScope]>> = None;
         let mut columns = Vec::new();
@@ -1633,7 +1702,7 @@ impl Rows {
                 }
             }
             let mut edges = Vec::new();
-            if let Some(mut value) = assignment(
+            if let Some(mut value) = bind_assignment(
                 source,
                 name,
                 &catalog,
@@ -1646,6 +1715,11 @@ impl Rows {
                 &mut edges,
                 &mut findings,
                 false,
+                project,
+                output,
+                named,
+                &secondary,
+                &intermediates,
             )? {
                 crate::dataset::odm::visit_mut(&mut value.expression, &mut |bound| {
                     if odm_contexts.is_none() {
