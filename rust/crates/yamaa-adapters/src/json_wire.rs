@@ -73,6 +73,18 @@ pub fn decode_slice(bytes: &[u8]) -> Result<Value, Error> {
     serde_json::from_slice::<WireValueOwned>(bytes).map(|wire| wire.0)
 }
 
+/// Serde field adapter: serialize an owned tree through the wire wrapper,
+/// for use with `#[serde(serialize_with = "...")]` on a `Value` field.
+pub fn serialize_value<S: Serializer>(value: &Value, serializer: S) -> Result<S::Ok, S::Error> {
+    WireValue(value).serialize(serializer)
+}
+
+/// Serde field adapter: decode an owned tree through the wire wrapper,
+/// for use with `#[serde(deserialize_with = "...")]` on a `Value` field.
+pub fn deserialize_value<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Value, D::Error> {
+    WireValueOwned::deserialize(deserializer).map(|wire| wire.0)
+}
+
 /// Decode JSON text whose top level is an array, into owned rows.
 pub fn decode_array(text: &str) -> Result<Vec<Value>, Error> {
     match decode(text)? {
