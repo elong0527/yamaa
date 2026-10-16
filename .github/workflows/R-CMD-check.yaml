@@ -26,6 +26,8 @@ on:
       - 'Cargo.lock'
       - 'yaml/grammar/**'
       - 'tools/staging/**'
+      - 'tools/ci/toolchain.py'
+      - 'tools/paths.py'
       - '.github/workflows/R-CMD-check.yaml'
   pull_request:
     paths:
@@ -35,6 +37,8 @@ on:
       - 'Cargo.lock'
       - 'yaml/grammar/**'
       - 'tools/staging/**'
+      - 'tools/ci/toolchain.py'
+      - 'tools/paths.py'
       - '.github/workflows/R-CMD-check.yaml'
 
 name: R-CMD-check
