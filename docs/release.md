@@ -130,14 +130,29 @@ owns decoding behavior.
 
 ## Approved decisions
 
-- Keep Python `domain`/`check`/`define`, result/error types, version metadata and
-  `read_odm`/`write_odm_parquet`; keep the R equivalents, including
-  `yamaa_define`. Legacy evaluators, probes, resolved-spec/IO/authoring
-  extensions and `cdiscbuilder` are retired. The style CLI remains private and
-  native-backed.
+- Keep Python `domain`/`check`/`define`/`resolve_specification`, result/error
+  types, version metadata and `read_odm`/`write_odm_parquet`; keep the R
+  equivalents, including `yamaa_define`, `yamaa_resolve_specification` and
+  `yamaa_read_resolved_specification`. `resolve_specification` publicly
+  produces the retained resolved-specification artifact; the retired resolved
+  specification interfaces are the legacy evaluators and probes. Legacy
+  IO/authoring extensions and `cdiscbuilder` are retired. The style CLI remains
+  private and native-backed.
 - Keep Python `environment` keyword-only, wrong argument types as `TypeError`,
   R argument failures as `yamaa_argument_error`, and missing specifications as
-  issue rows. Check returns issues, without a public resolved-spec producer.
+  issue rows. Check returns issues. Python `domain`/`check` and R
+  `yamaa_domain`/`yamaa_check` accept a host resource resolver through the
+  keyword-only `resolver=` argument: Python's `yamaa.resources` module
+  (`ResourceResolver`, `MemoryResolver`, `SyntheticRemoteResolver`) and R's
+  `yamaa_resource_resolver`, `yamaa_memory_resolver`,
+  `yamaa_synthetic_remote_resolver`, `yamaa_resource_result` and
+  `yamaa_resource_failure`.
+- Expose Build results as Arrow C Stream views in both hosts: Python returns
+  PyArrow tables through the Arrow PyCapsule interface (`output_arrow`,
+  `verification_log_arrow`, `warning_log_arrow`), and R returns nanoarrow array
+  streams from the same read-only attributes, with a nanoarrow 0.8.0 floor.
+- Keep the Rust adapter features `yaml`, `parquet` and `readstat` independent,
+  all enabled by default; the Python and R packages enable all three.
 - Preserve full signed-i64 values and separate missingness, lossless R
   `yamaa_int64_vector`/`yamaa_utf8_vector`, preserve-or-error conversions and
   JSON-text diagnostic context.
