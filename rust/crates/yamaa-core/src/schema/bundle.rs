@@ -389,6 +389,227 @@ impl Builder {
     }
 }
 
+struct CollectedDeclarations {
+    version: Option<String>,
+    kinds: BTreeMap<String, i32>,
+    raw_classes: Vec<Named>,
+    raw_aliases: Vec<Named>,
+    raw_registries: Vec<RawRegistry>,
+}
+
+impl Builder {
+    /// Traverse the include closure and collect raw declarations in stage order.
+    fn collect(
+        &mut self,
+        entry: usize,
+        module_names: &BTreeMap<String, usize>,
+    ) -> Result<CollectedDeclarations, BundleError> {
+        let mut completed = BTreeSet::new();
+        let mut pending = vec![(entry, Vec::<usize>::new())];
+        let mut version: Option<String> = None;
+        let mut kinds = BTreeMap::new();
+        let mut raw_classes = Vec::new();
+        let mut raw_aliases = Vec::new();
+        let mut raw_registries: Vec<RawRegistry> = Vec::new();
+        while let Some((module, ancestors)) = pending.pop() {
+            let raw = Raw {
+                module,
+                node: self.modules[module].document.root(),
+            };
+            if ancestors.contains(&module) {
+                let mut cycle: Vec<_> = ancestors
+                    .iter()
+                    .map(|&i| self.modules[i].name.clone())
+                    .collect();
+                cycle.push(self.modules[module].name.clone());
+                return Err(self.fail(raw, "$", BundleIssueKind::IncludeCycle(cycle)));
+            }
+            if !completed.insert(module) {
+                continue;
+            }
+            if ancestors.len() >= crate::limits::Limits::SEMANTIC_DEPTH {
+                return Err(BundleError::Limit {
+                    resource: BundleResource::Depth,
+                    limit: crate::limits::Limits::SEMANTIC_DEPTH,
+                });
+            }
+            let N::Mapping(entries) = self.node(raw) else {
+                return Err(self.fail(raw, "$", BundleIssueKind::ExpectedMapping));
+            };
+            let entries = entries.clone();
+            let Some(v) = self.field(raw, "version")? else {
+                return Err(self.fail(raw, "$", BundleIssueKind::Version));
+            };
+            let N::Text(v) = self.node(v) else {
+                return Err(self.fail(raw, "$", BundleIssueKind::Version));
+            };
+            if v.is_empty() {
+                return Err(self.fail(raw, "$", BundleIssueKind::Version));
+            }
+            let v = v.clone();
+            if let Some(expected) = &version {
+                if *expected != v {
+                    return Err(self.fail(
+                        raw,
+                        "$",
+                        BundleIssueKind::VersionMismatch {
+                            expected: expected.clone(),
+                            actual: v,
+                        },
+                    ));
+                }
+            } else {
+                version = Some(v);
+            }
+            if let Some(includes) = self.field(raw, "includes")? {
+                let N::Sequence(items) = self.node(includes) else {
+                    return Err(self.fail(raw, "includes", BundleIssueKind::IncludesList));
+                };
+                let items = items.clone();
+                for node in items {
+                    let N::Text(name) = self.node(Raw { module, node }) else {
+                        return Err(self.fail(
+                            raw,
+                            "includes",
+                            BundleIssueKind::UnsafeInclude { node },
+                        ));
+                    };
+                    if !safe_include(name) {
+                        return Err(self.fail(
+                            raw,
+                            "includes",
+                            BundleIssueKind::UnsafeInclude { node },
+                        ));
+                    }
+                    let Some(&target) = module_names.get(name) else {
+                        let name = name.clone();
+                        return Err(self.fail(
+                            raw,
+                            "includes",
+                            BundleIssueKind::MissingInclude(name),
+                        ));
+                    };
+                    let mut chain = ancestors.clone();
+                    chain.push(module);
+                    pending.push((target, chain));
+                }
+            }
+            for (key, node) in entries {
+                let N::Text(name) = self.node(Raw { module, node: key }) else {
+                    return Err(self.fail(raw, "$", BundleIssueKind::DeclarationName));
+                };
+                if matches!(name.as_str(), "version" | "includes") {
+                    continue;
+                }
+                if name.is_empty() {
+                    return Err(self.fail(raw, "$", BundleIssueKind::DeclarationName));
+                }
+                let name = name.clone();
+                let value = Raw { module, node };
+                let kind = match self.node(value) {
+                    N::Sequence(_) => 0,
+                    N::Mapping(_) => {
+                        let type_value = self.field(value, "type")?;
+                        let registry = self.field(value, "registry")?;
+                        let alias = type_value.is_some_and(|r| match self.node(r) {
+                            N::Text(_) => true,
+                            N::Sequence(items) => items.iter().all(|&id| {
+                                matches!(self.modules[module].document.nodes()[id], N::Text(_))
+                            }),
+                            _ => false,
+                        }) || registry
+                            .is_some_and(|r| matches!(self.node(r), N::Text(_)));
+                        if alias {
+                            1
+                        } else {
+                            2
+                        }
+                    }
+                    _ => {
+                        return Err(self.fail(
+                            value,
+                            &name,
+                            BundleIssueKind::UnknownDeclaration(name.clone()),
+                        ))
+                    }
+                };
+                if let Some(&previous) = kinds.get(&name) {
+                    if previous != 2 || kind != 2 {
+                        return Err(self.fail(
+                            value,
+                            &name,
+                            BundleIssueKind::DuplicateDeclaration(name.clone()),
+                        ));
+                    }
+                }
+                kinds.insert(name.clone(), kind);
+                match kind {
+                    0 => raw_classes.push(Named { name, raw: value }),
+                    1 => raw_aliases.push(Named { name, raw: value }),
+                    _ => {
+                        let index = raw_registries
+                            .iter()
+                            .position(|r| r.name == name)
+                            .unwrap_or_else(|| {
+                                let i = raw_registries.len();
+                                raw_registries.push(RawRegistry {
+                                    name: name.clone(),
+                                    module,
+                                    entries: Vec::new(),
+                                });
+                                i
+                            });
+                        let N::Mapping(items) = self.node(value) else {
+                            unreachable!()
+                        };
+                        let items = items.clone();
+                        for (key, payload) in items {
+                            let key = Raw { module, node: key };
+                            let payload = Raw {
+                                module,
+                                node: payload,
+                            };
+                            for &(previous, _) in &raw_registries[index].entries {
+                                if super::document::scalar_keys_equal(
+                                    self.node(previous),
+                                    self.node(key),
+                                ) {
+                                    let label = match self.node(key) {
+                                        N::Text(text) => text.clone(),
+                                        _ => "<non-text>".into(),
+                                    };
+                                    return Err(self.fail(
+                                        value,
+                                        &name,
+                                        BundleIssueKind::DuplicateRegistryEntry(label),
+                                    ));
+                                }
+                            }
+                            raw_registries[index].entries.push((key, payload));
+                        }
+                    }
+                }
+            }
+        }
+        for module in 0..self.modules.len() {
+            if !completed.contains(&module) {
+                let raw = Raw {
+                    module,
+                    node: self.modules[module].document.root(),
+                };
+                return Err(self.fail(raw, "$", BundleIssueKind::UnusedModule));
+            }
+        }
+        Ok(CollectedDeclarations {
+            version,
+            kinds,
+            raw_classes,
+            raw_aliases,
+            raw_registries,
+        })
+    }
+}
+
 impl SchemaStructure {
     /// Load the complete provided include closure, then resolve structural references.
     /// The caller must enforce filesystem/symlink authority before supplying decoded modules.
@@ -427,202 +648,13 @@ impl SchemaStructure {
             issues: Vec::new(),
             references: Vec::new(),
         };
-        let mut completed = BTreeSet::new();
-        let mut pending = vec![(entry, Vec::<usize>::new())];
-        let mut version: Option<String> = None;
-        let mut kinds = BTreeMap::new();
-        let mut raw_classes = Vec::new();
-        let mut raw_aliases = Vec::new();
-        let mut raw_registries: Vec<RawRegistry> = Vec::new();
-        while let Some((module, ancestors)) = pending.pop() {
-            let raw = Raw {
-                module,
-                node: builder.modules[module].document.root(),
-            };
-            if ancestors.contains(&module) {
-                let mut cycle: Vec<_> = ancestors
-                    .iter()
-                    .map(|&i| builder.modules[i].name.clone())
-                    .collect();
-                cycle.push(builder.modules[module].name.clone());
-                return Err(builder.fail(raw, "$", BundleIssueKind::IncludeCycle(cycle)));
-            }
-            if !completed.insert(module) {
-                continue;
-            }
-            if ancestors.len() >= crate::limits::Limits::SEMANTIC_DEPTH {
-                return Err(BundleError::Limit {
-                    resource: BundleResource::Depth,
-                    limit: crate::limits::Limits::SEMANTIC_DEPTH,
-                });
-            }
-            let N::Mapping(entries) = builder.node(raw) else {
-                return Err(builder.fail(raw, "$", BundleIssueKind::ExpectedMapping));
-            };
-            let entries = entries.clone();
-            let Some(v) = builder.field(raw, "version")? else {
-                return Err(builder.fail(raw, "$", BundleIssueKind::Version));
-            };
-            let N::Text(v) = builder.node(v) else {
-                return Err(builder.fail(raw, "$", BundleIssueKind::Version));
-            };
-            if v.is_empty() {
-                return Err(builder.fail(raw, "$", BundleIssueKind::Version));
-            }
-            let v = v.clone();
-            if let Some(expected) = &version {
-                if *expected != v {
-                    return Err(builder.fail(
-                        raw,
-                        "$",
-                        BundleIssueKind::VersionMismatch {
-                            expected: expected.clone(),
-                            actual: v,
-                        },
-                    ));
-                }
-            } else {
-                version = Some(v);
-            }
-            if let Some(includes) = builder.field(raw, "includes")? {
-                let N::Sequence(items) = builder.node(includes) else {
-                    return Err(builder.fail(raw, "includes", BundleIssueKind::IncludesList));
-                };
-                let items = items.clone();
-                for node in items {
-                    let N::Text(name) = builder.node(Raw { module, node }) else {
-                        return Err(builder.fail(
-                            raw,
-                            "includes",
-                            BundleIssueKind::UnsafeInclude { node },
-                        ));
-                    };
-                    if !safe_include(name) {
-                        return Err(builder.fail(
-                            raw,
-                            "includes",
-                            BundleIssueKind::UnsafeInclude { node },
-                        ));
-                    }
-                    let Some(&target) = module_names.get(name) else {
-                        let name = name.clone();
-                        return Err(builder.fail(
-                            raw,
-                            "includes",
-                            BundleIssueKind::MissingInclude(name),
-                        ));
-                    };
-                    let mut chain = ancestors.clone();
-                    chain.push(module);
-                    pending.push((target, chain));
-                }
-            }
-            for (key, node) in entries {
-                let N::Text(name) = builder.node(Raw { module, node: key }) else {
-                    return Err(builder.fail(raw, "$", BundleIssueKind::DeclarationName));
-                };
-                if matches!(name.as_str(), "version" | "includes") {
-                    continue;
-                }
-                if name.is_empty() {
-                    return Err(builder.fail(raw, "$", BundleIssueKind::DeclarationName));
-                }
-                let name = name.clone();
-                let value = Raw { module, node };
-                let kind = match builder.node(value) {
-                    N::Sequence(_) => 0,
-                    N::Mapping(_) => {
-                        let type_value = builder.field(value, "type")?;
-                        let registry = builder.field(value, "registry")?;
-                        let alias = type_value.is_some_and(|r| match builder.node(r) {
-                            N::Text(_) => true,
-                            N::Sequence(items) => items.iter().all(|&id| {
-                                matches!(builder.modules[module].document.nodes()[id], N::Text(_))
-                            }),
-                            _ => false,
-                        }) || registry
-                            .is_some_and(|r| matches!(builder.node(r), N::Text(_)));
-                        if alias {
-                            1
-                        } else {
-                            2
-                        }
-                    }
-                    _ => {
-                        return Err(builder.fail(
-                            value,
-                            &name,
-                            BundleIssueKind::UnknownDeclaration(name.clone()),
-                        ))
-                    }
-                };
-                if let Some(&previous) = kinds.get(&name) {
-                    if previous != 2 || kind != 2 {
-                        return Err(builder.fail(
-                            value,
-                            &name,
-                            BundleIssueKind::DuplicateDeclaration(name.clone()),
-                        ));
-                    }
-                }
-                kinds.insert(name.clone(), kind);
-                match kind {
-                    0 => raw_classes.push(Named { name, raw: value }),
-                    1 => raw_aliases.push(Named { name, raw: value }),
-                    _ => {
-                        let index = raw_registries
-                            .iter()
-                            .position(|r| r.name == name)
-                            .unwrap_or_else(|| {
-                                let i = raw_registries.len();
-                                raw_registries.push(RawRegistry {
-                                    name: name.clone(),
-                                    module,
-                                    entries: Vec::new(),
-                                });
-                                i
-                            });
-                        let N::Mapping(items) = builder.node(value) else {
-                            unreachable!()
-                        };
-                        let items = items.clone();
-                        for (key, payload) in items {
-                            let key = Raw { module, node: key };
-                            let payload = Raw {
-                                module,
-                                node: payload,
-                            };
-                            for &(previous, _) in &raw_registries[index].entries {
-                                if super::document::scalar_keys_equal(
-                                    builder.node(previous),
-                                    builder.node(key),
-                                ) {
-                                    let label = match builder.node(key) {
-                                        N::Text(text) => text.clone(),
-                                        _ => "<non-text>".into(),
-                                    };
-                                    return Err(builder.fail(
-                                        value,
-                                        &name,
-                                        BundleIssueKind::DuplicateRegistryEntry(label),
-                                    ));
-                                }
-                            }
-                            raw_registries[index].entries.push((key, payload));
-                        }
-                    }
-                }
-            }
-        }
-        for module in 0..builder.modules.len() {
-            if !completed.contains(&module) {
-                let raw = Raw {
-                    module,
-                    node: builder.modules[module].document.root(),
-                };
-                return Err(builder.fail(raw, "$", BundleIssueKind::UnusedModule));
-            }
-        }
+        let CollectedDeclarations {
+            version,
+            kinds,
+            raw_classes,
+            raw_aliases,
+            raw_registries,
+        } = builder.collect(entry, &module_names)?;
         let class_names: BTreeMap<_, _> = raw_classes
             .iter()
             .enumerate()
