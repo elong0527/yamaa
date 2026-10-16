@@ -199,6 +199,7 @@ breaking callers.
 ```rust
 pub struct Engine { /* resolver + host configuration, Arc-shared */ }
 
+#[non_exhaustive]
 pub struct EngineOptions {
     pub resolver: Option<Arc<dyn ResourceResolver>>,
     pub host_language: HostLanguage,
@@ -208,9 +209,26 @@ pub struct EngineOptions {
     pub observer: Option<Arc<dyn Progress>>,
 }
 
+impl EngineOptions {
+    pub fn new(
+        host_language: HostLanguage,
+        runtime_name: String,
+        runtime_version: String,
+    ) -> Self;
+    pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self;
+    pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self;
+    pub fn with_observer(mut self, observer: Arc<dyn Progress>) -> Self;
+}
+
+#[non_exhaustive]
 pub struct Request<'a> {
     pub specification: &'a str,    // entry path or resolver reference
     pub environment: Option<&'a str>,
+}
+
+impl<'a> Request<'a> {
+    pub fn new(specification: &'a str) -> Self;
+    pub fn with_environment(mut self, environment: &'a str) -> Self;
 }
 
 impl Engine {
@@ -224,11 +242,17 @@ impl Engine {
         -> Result<ResolvedSpecification, Error>;
 }
 
+#[non_exhaustive]
 pub struct DefineRequest<'a> {
     pub environment: &'a str,
     pub standard: &'a str,
     pub created: Option<&'a str>,
     pub installed: &'a str,
+}
+
+impl<'a> DefineRequest<'a> {
+    pub fn new(environment: &'a str, standard: &'a str, installed: &'a str) -> Self;
+    pub fn with_created(mut self, created: &'a str) -> Self;
 }
 
 pub struct Build { /* owned attempt state */ }
@@ -250,6 +274,10 @@ impl DefineBuild {
 pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
 ```
 
+- `EngineOptions`, `Request` and `DefineRequest` are `#[non_exhaustive]`, so
+  external crates cannot use struct literals; the `new` plus `with_*`
+  constructors above are the only way to build them, which keeps additive
+  field changes non-breaking.
 - `check` is infallible at the boundary, as today's `check_with_resolver` is:
   admission and preparation failures come back as diagnostics in the returned
   `Report`, never as a second error channel.
