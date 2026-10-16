@@ -90,8 +90,29 @@ def prepare(source, destination, graph):
         raise ValueError("Dependency graphs must be outside the source checkout")
     if destination.exists():
         raise ValueError(f"Graph destination already exists: {destination}")
+    # Conformance tooling records the source revision. Give the copy its own Git
+    # refs/index; sharing read-only objects does not share checkout mutations.
+    subprocess.run(
+        [
+            "git",
+            "clone",
+            "--shared",
+            "--no-checkout",
+            "--quiet",
+            str(source),
+            str(destination),
+        ],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(destination), "reset", "--mixed", "--quiet", "HEAD"],
+        check=True,
+    )
     shutil.copytree(
-        source, destination, ignore=shutil.ignore_patterns(*IGNORED, "*.egg-info")
+        source,
+        destination,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(*IGNORED, "*.egg-info"),
     )
     workspace = tomllib.loads((destination / "rust/Cargo.toml").read_text())
     if graph == "minimum":
@@ -154,7 +175,7 @@ def run_graph(source, destination, graph, python, prepare_only=False):
     if not prepare_only:
         missing = [
             command
-            for command in ("cargo", "uv", "R", "Rscript")
+            for command in ("git", "cargo", "uv", "R", "Rscript")
             if not shutil.which(command)
         ]
         if missing:

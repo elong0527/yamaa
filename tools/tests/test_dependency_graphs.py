@@ -1,6 +1,7 @@
 """The dependency lanes must select floors without changing release inputs."""
 
 import json
+import subprocess
 import tempfile
 import tomllib
 import unittest
@@ -45,6 +46,17 @@ class DependencyGraphsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             stage = Path(temporary) / "graph"
             self.assertEqual(prepare(ROOT, stage, "minimum"), "1.90")
+            self.assertTrue((stage / ".git").is_dir())
+            self.assertEqual(
+                subprocess.check_output(["git", "-C", str(stage), "rev-parse", "HEAD"]),
+                subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"]),
+            )
+            self.assertEqual(
+                subprocess.check_output(
+                    ["git", "-C", str(stage), "ls-files", "rust/Cargo.toml"]
+                ),
+                b"rust/Cargo.toml\n",
+            )
             adapters = tomllib.loads(
                 (stage / "rust/crates/yamaa-adapters/Cargo.toml").read_text()
             )["dependencies"]
