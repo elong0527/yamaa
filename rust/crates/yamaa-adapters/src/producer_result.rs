@@ -683,8 +683,15 @@ mod log_tests {
                     fatal_leaf,
                 ),
             );
+            // ID also reads SHARED so pruning (REQ-0638) keeps the
+            // intermediate, and with it the aliased B producer link, in the
+            // resolved model.
             let root = yaml("{A: {path: generated/producer.csv, schema: producer.yaml}, B: {path: generated/producer.csv, schema: ./producer.yaml}}", "A", "root", fatal_root)
-                .replace("columns:\n", "intermediates: [{id: SHARED, dataset: B, key: [ID], no_match: null}]\ncolumns:\n");
+                .replace("columns:\n", "intermediates: [{id: SHARED, dataset: B, key: [ID], no_match: null}]\ncolumns:\n")
+                .replace(
+                    "derivation: A.ID",
+                    "derivation: {first_available: {sources: [A.ID, SHARED.ID]}}",
+                );
             self.write("root.yaml", root);
         }
         fn graph(

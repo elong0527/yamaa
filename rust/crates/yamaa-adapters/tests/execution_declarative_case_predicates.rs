@@ -649,11 +649,12 @@ columns:
                     {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":4}
                 ])
             );
+            // Only B is neutralised: A still derives P.A, so pruning
+            // (REQ-0638) keeps P live and its filter is still refused.
             let issues = refusal(
                 &fixture,
                 &BODY
                     .replace("D.TIME < SRC.CUT", "TIME < SRC.CUT")
-                    .replace("derivation: P.A", "derivation: {literal: unused}")
                     .replace("derivation: P.B", "derivation: {literal: unused}"),
             );
             assert_eq!(
@@ -1045,8 +1046,9 @@ columns:
             let fixture = Fixture::new();
             fs::write(fixture.0.join("src.csv"), "ID\n1\n").unwrap();
             fs::write(fixture.0.join("donor.csv"), "OTHER,SEQ,A,B\nx,0,a,b\n").unwrap();
+            // Only B is neutralised: A still derives P.A, so pruning
+            // (REQ-0638) keeps P live and key admission still runs for it.
             let unused = BODY
-                .replace("derivation: P.A", "derivation: {literal: a}")
                 .replace("derivation: P.B", "derivation: {literal: b}")
                 .replace("types: {ID: float, SEQ: int}", "types: {SEQ: int}");
             assert_eq!(
@@ -1374,6 +1376,21 @@ columns:
         }
                 let fixture = Fixture::new();
                 let mut result = fixture.run(variant, &case);
+                if variant == "unused" {
+                    // Option B (REQ-0638, REQ-0641): no column reads LOOK, so
+                    // pruning discards the intermediate together with its
+                    // ill-typed filter; the specification builds instead of
+                    // refusing the dead declaration.
+                    assert!(result.issues().is_empty(), "{variant}");
+                    assert!(result.output().is_some(), "{variant}");
+                    assert!(result.save().unwrap(), "{variant}");
+                    assert!(fixture.0.join("out.csv").exists(), "{variant}");
+                    for path in case["inputs"].as_object().unwrap().keys() {
+                        fs::remove_file(fixture.0.join(path)).unwrap();
+                    }
+                    assert!(fixture.check().is_empty(), "check without data: {variant}");
+                    continue;
+                }
                 let expected = yamaa_adapters::json!([{"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0190","spec_paths":["intermediates[0].filter"],"context":{"left_type":"int","right_type":"str"}}]);
                 assert_eq!(
                     result.issues().iter().map(issue_json).collect::<Vec<_>>(),

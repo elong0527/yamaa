@@ -1150,7 +1150,13 @@ mod project {
                 "LEAF",
                 "right.csv",
             );
-            let root_text = text("{RIGHT: {path: right.csv, schema: right.yaml}, LEFT: {path: left.csv, schema: left.yaml}, AGAIN: {path: left.csv, schema: './left.yaml'}}", "RIGHT", "root.csv");
+            // VALUE reads all three producer datasets so pruning (REQ-0638)
+            // keeps every supplied link declared in the resolved model.
+            let root_text = text("{RIGHT: {path: right.csv, schema: right.yaml}, LEFT: {path: left.csv, schema: left.yaml}, AGAIN: {path: left.csv, schema: './left.yaml'}}", "RIGHT", "root.csv")
+                .replace(
+                    "derivation: RIGHT.VALUE",
+                    "derivation: {first_available: {sources: [RIGHT.VALUE, LEFT.VALUE, AGAIN.VALUE]}}",
+                );
             let leaf = document("/leaf.yaml", &leaf_text);
             let left = document("/left.yaml", &left_text);
             let right = document("/right.yaml", &right_text);

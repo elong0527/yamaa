@@ -2,10 +2,11 @@
 //!
 //! Physical decoding and occurrence locations remain codec authority. This service
 //! neither captures sources nor grants data, function, path or publication authority.
+use crate::diagnostic::ConditionCode;
 use crate::schema::{
-    Document, ExpandedWindows, InheritanceDependencyError, NormalizationError, NormalizedDocument,
-    SchemaDiagnostic, SchemaOrigin, SchemaSource, SchemaStructure, SpecificationDocument,
-    ValidationError, WindowReference,
+    Document, DocumentNode, ExpandedWindows, InheritanceDependencyError, NormalizationError,
+    NormalizedDocument, SchemaContext, SchemaDiagnostic, SchemaOrigin, SchemaSource,
+    SchemaStructure, SpecificationDocument, ValidationError, WindowReference,
 };
 
 /// Map each origin through the previous pass's origin list, mirroring
@@ -144,6 +145,17 @@ pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStanda
         Ok(normalized) => normalized,
         Err(error) => return Err(normalization_failure(error, raw)),
     };
+    // A specification without `parents` is a composition of one layer
+    // (REQ-0614), so it admits the same repeated-identifier findings as any
+    // other layer (REQ-0659) before pruning can discard a duplicated
+    // declaration and hide the repetition.
+    let repeated = repeated_identifier_findings(schema, &normalized.document);
+    if !repeated.is_empty() {
+        return Err(normalization_failure(
+            NormalizationError::Invalid(repeated),
+            normalized.document,
+        ));
+    }
     let expanded = match schema.expand_named_windows(&normalized.document, false) {
         Ok(expanded) => expanded,
         Err(error) => return Err(normalization_failure(error, normalized.document)),
@@ -182,6 +194,48 @@ pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStanda
         origins,
         windows,
     })
+}
+
+/// Repeated identifiers inside one keyed collection (columns by name, rows
+/// and intermediates by id), in schema field order, mirroring the layer
+/// admission check (REQ-0659) a composed specification passes through.
+fn repeated_identifier_findings(
+    schema: &SchemaStructure,
+    document: &Document,
+) -> Vec<SchemaDiagnostic> {
+    let mut findings = Vec::new();
+    for field in &schema.root_class().fields {
+        let identity = match field.name.as_str() {
+            "columns" => "name",
+            "rows" | "intermediates" => "id",
+            _ => continue,
+        };
+        let Some(list) = document.field(document.root(), &field.name) else {
+            continue;
+        };
+        let DocumentNode::Sequence(items) = &document.nodes()[list] else {
+            continue;
+        };
+        let mut seen: Vec<&str> = Vec::new();
+        for &item in items {
+            let Some(id) = document.field(item, identity) else {
+                continue;
+            };
+            let DocumentNode::Text(name) = &document.nodes()[id] else {
+                continue;
+            };
+            if seen.contains(&name.as_str()) {
+                findings.push(SchemaDiagnostic {
+                    path: format!("{}.{name}.{identity}", field.name),
+                    code: ConditionCode::SchemaLayerIdentifierRepeated,
+                    context: vec![("identifier", SchemaContext::Text(name.clone()))],
+                });
+            } else {
+                seen.push(name);
+            }
+        }
+    }
+    findings
 }
 
 /// Keep the window references recorded before pruning whose declaring

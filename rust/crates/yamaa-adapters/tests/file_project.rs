@@ -2095,7 +2095,12 @@ mod file {
                     false,
                 ),
             );
-            study.write("root.yaml", &yaml("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}", "L", "root.csv", true));
+            // VALUE reads all three producer datasets so pruning (REQ-0638)
+            // keeps every link of the diamond in the resolved model.
+            study.write("root.yaml", &yaml("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}", "L", "root.csv", true).replace(
+                "derivation: L.VALUE",
+                "derivation: {first_available: {sources: [L.VALUE, R.VALUE, Q.VALUE]}}",
+            ));
             let graph = study.prepare().unwrap();
             assert_eq!(graph.capture_reads(), 5); // one environment + four canonical nodes
             assert_eq!(graph.graph().metadata().order(), [3, 1, 2, 0]);
@@ -2932,16 +2937,24 @@ mod file {
         #[test]
         fn selected_invalid_original_declarations_never_fall_back_to_ordinary_compilation() {
             use file_workflow::SelectionError;
-            for (input, expected) in [
-                ("{RAW: {path: never-read.csv, schema: null}}", "REQ-0287"),
-                ("{P: {path: wrong.csv, schema: leaf.yaml}}", "REQ-0534"),
+            // The entry's columns read the declared dataset (base), so the
+            // producer link survives pruning (REQ-0638) and graph contract
+            // validation still precedes ordinary compilation.
+            for (input, base, expected) in [
+                (
+                    "{RAW: {path: never-read.csv, schema: null}}",
+                    "RAW",
+                    "REQ-0287",
+                ),
+                ("{P: {path: wrong.csv, schema: leaf.yaml}}", "P", "REQ-0534"),
                 (
                     "{P: {path: leaf.csv, schema: leaf.yaml, types: {ID: int}}}",
+                    "P",
                     "REQ-0523",
                 ),
             ] {
                 let study = Study::new();
-                study.write("root.yaml", &yaml(input, "RAW", "root.csv", false));
+                study.write("root.yaml", &yaml(input, base, "root.csv", false));
                 study.write(
                     "leaf.yaml",
                     &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),

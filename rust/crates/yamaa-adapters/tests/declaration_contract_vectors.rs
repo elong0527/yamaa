@@ -1698,6 +1698,14 @@ mod declaration {
             let mut authored = window();
             authored["intermediates"] =
                 json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":null}]);
+            // Pruning (REQ-0638) keeps only declarations a resolved column
+            // reads: LK reads LOOK and is itself an output column, so the
+            // intermediate under test survives standalone preparation.
+            authored["output"]["columns"] = json!(["ID", "PREV", "LK"]);
+            authored["columns"].as_array_mut().unwrap().insert(
+                4,
+                json!({"name":"LK","type":"int","label":"Lookup value","derivation":"LOOK.VAL"}),
+            );
             let source = source(yamaa_adapters::json_wire::encode(&authored).into_bytes());
             let raw_pointer = source.bytes.as_ptr();
             let mut host = new_host(b"unused");
@@ -1711,12 +1719,13 @@ mod declaration {
                 json!({
                     "schema_version":"1.0","domain":"OUT","base":"SRC","keys":["ID"],
                     "input":{"SRC":{"path":"input.csv","types":{"SEQ":"int","VAL":"int"},"empty_string":"missing","relative_to":"declaring"}},
-                    "output":{"path":"out.csv","relative_to":"declaring","columns":["ID","PREV"]},
+                    "output":{"path":"out.csv","relative_to":"declaring","columns":["ID","PREV","LK"]},
                     "columns":[
                         {"name":"ID","type":"str","label":"ID","derivation":{"value":{"source":{"variable":"SRC.ID"}}}},
                         {"name":"G","type":"str","label":"G","derivation":{"value":{"source":{"variable":"SRC.G"}}}},
                         {"name":"SEQ","type":"int","label":"SEQ","derivation":{"value":{"source":{"variable":"SRC.SEQ"}}}},
                         {"name":"VAL","type":"int","label":"VAL","derivation":{"value":{"source":{"variable":"SRC.VAL"}}}},
+                        {"name":"LK","type":"int","label":"Lookup value","derivation":{"value":{"source":{"variable":"LOOK.VAL"}}}},
                         {"name":"PREV","type":"int","label":"Previous value","derivation":{"value":{"row_value":{"source":"VAL","offset":-1,"window":{"group_by":["G"],"order_by":[{"variable":"SEQ","direction":"asc","nulls":"last"}]}}}}}
                     ],
                     "intermediates":[{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":null}]
@@ -2098,6 +2107,9 @@ mod declaration {
             );
             let mut source = spec(json!({"literal":1}));
             source["intermediates"] = json!([{"id":"AGES","dataset":"ODM","derivations":{"AGE":{"odm":"ODM.IT.DM.AGE"}}}]);
+            // AGE reads AGES so pruning (REQ-0638) keeps the intermediate
+            // live and its ODM context is still refused.
+            source["columns"][1]["derivation"] = json!("AGES.AGE");
             let observed = observe(source, &[]);
             assert_eq!(observed["issues"][0]["condition"], "invalid_odm_context");
             assert_eq!(
@@ -2424,7 +2436,9 @@ mod declaration {
             assert_eq!(captured.document(), Some(&decoded.document));
             let expected:Value=yamaa_adapters::json_wire::decode("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":\"REQ-0281\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
             assert_eq!(outcome(&error), invalid(json!([expected])));
-            let text="schema_version: '1.0'\ninput: {}\nkeys: []\noutput: {}\ncolumns:\n  - {name: Z, type: int, derivation: {value: {row_number: {window: SECOND}}}}\n  - {name: A, type: int, derivation: {value: {row_number: {window: FIRST}}}}\n";
+            // Output names both columns so pruning (REQ-0638) keeps them live
+            // and strict window expansion still reports their unknown windows.
+            let text="schema_version: '1.0'\ninput: {}\nkeys: []\noutput: {columns: [Z, A]}\ncolumns:\n  - {name: Z, type: int, derivation: {value: {row_number: {window: SECOND}}}}\n  - {name: A, type: int, derivation: {value: {row_number: {window: FIRST}}}}\n";
             let entry = source(text);
             let bytes = entry.bytes.as_ptr();
             let identity = entry.identity.as_ptr();

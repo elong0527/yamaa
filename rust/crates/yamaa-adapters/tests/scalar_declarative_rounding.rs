@@ -2179,6 +2179,11 @@ columns:
                 columns.push(yamaa_adapters::json!({"name":format!("V{index}"),"type":"str","derivation":{"str_template":format!("{{{}","a".repeat(1600))}}));
                 paths.push(format!("columns.V{index}.derivation.str_template"));
             }
+            // The added columns must be live under pruning (REQ-0638) for
+            // their template findings to be reported at all.
+            let mut projected = spec["output"]["columns"].as_array().unwrap().clone();
+            projected.extend((0..55).map(|index| yamaa_adapters::json!(format!("V{index}"))));
+            spec["output"]["columns"] = yamaa_adapters::json!(projected);
             admission(spec, paths);
             let mut spec = reference()["row-template"]["specification"].clone();
             spec["columns"][4]["derivation"] =

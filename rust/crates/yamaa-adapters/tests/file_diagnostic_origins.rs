@@ -715,6 +715,17 @@ mod file {
                                 "  - {{name: C{i}, type: int, derivation: {{literal: 1}}}}\n"
                             ));
                         }
+                        // The generated columns must be live under pruning
+                        // (REQ-0638) for the resolved-column capacity to be
+                        // what the compiler refuses.
+                        let projected = (1..actual)
+                            .map(|i| format!("C{i}"))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        body = body.replace(
+                            "columns: [ID]}",
+                            &format!("columns: [ID, {projected}]}}"),
+                        );
                     }
                     "inputs" => {
                         let inputs = (0..actual)
@@ -1263,7 +1274,13 @@ mod file {
                     "right.csv",
                 ),
             );
-            let root = yaml("{RIGHT: {path: right.csv, schema: right.yaml}, LEFT: {path: left.csv, schema: left.yaml}, AGAIN: {path: left.csv, schema: './left.yaml'}}", "RIGHT", "root.csv");
+            // VALUE reads all three producer datasets so pruning (REQ-0638)
+            // keeps every link of the diamond in the resolved model.
+            let root = yaml("{RIGHT: {path: right.csv, schema: right.yaml}, LEFT: {path: left.csv, schema: left.yaml}, AGAIN: {path: left.csv, schema: './left.yaml'}}", "RIGHT", "root.csv")
+                .replace(
+                    "derivation: RIGHT.VALUE",
+                    "derivation: {first_available: {sources: [RIGHT.VALUE, LEFT.VALUE, AGAIN.VALUE]}}",
+                );
             study.write("root.yaml", &root);
             let graph = study.graph().unwrap();
             assert_eq!(graph.capture_reads(), 4);

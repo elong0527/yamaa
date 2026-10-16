@@ -1463,6 +1463,15 @@ columns:
                         "\ncolumns:\n",
                         "\n  - id: SECOND\n    dataset: EX\n    derivations: {EXSTDT: {to_date: {source: EXSTDTC}}}\n    filter: \"EX.EXSTDT >= 'also-not-a-date'\"\n    no_match: null\ncolumns:\n",
                     );
+                    // SECOND must stay live under pruning (REQ-0638) for its
+                    // filter finding to be reported: TRTSDT2 reads it and is
+                    // itself an output column.
+                    let source = source
+                        .replace(
+                            "  - {name: TRTSDT, type: date, label: First Dose Date, derivation: EXP.EXSTDT}\n",
+                            "  - {name: TRTSDT, type: date, label: First Dose Date, derivation: EXP.EXSTDT}\n  - {name: TRTSDT2, type: date, label: Second Dose Date, derivation: SECOND.EXSTDT}\n",
+                        )
+                        .replace("columns: [USUBJID, TRTSDT]}", "columns: [USUBJID, TRTSDT, TRTSDT2]}");
                     fs::write(path, source).unwrap();
                 }
                 study.write("consumer/root.yaml", "schema_version: '1.0'\ndomain: ADEX\nkeys: [USUBJID]\ninput: {ADSL: {path: ../generated/adsl.csv, schema: ../producer/p.yaml}}\nbase: ADSL\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: ADSL.USUBJID}\n  - {name: TRTSDT, type: date, label: First Dose Date, derivation: ADSL.TRTSDT}\noutput: {path: ../generated/consumer.csv, columns: [USUBJID, TRTSDT]}\n");

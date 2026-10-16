@@ -957,10 +957,9 @@
             {
               "phase": "validation",
               "condition": "duplicate_identifier",
-              "requirement": "REQ-1056",
+              "requirement": "REQ-0659",
               "spec_paths": [
-                "rows[1].id",
-                "rows[0].id"
+                "rows.repeated.id"
               ],
               "context": {
                 "identifier": "repeated"
@@ -970,7 +969,7 @@
         },
         {
           "name": "lookup_domain_collision",
-          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\nintermediates: [{id: OUT, dataset: SRC}]\n",
+          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: OUT.ID}\nintermediates: [{id: OUT, dataset: SRC}]\n",
           "issues": [
             {
               "phase": "validation",
@@ -988,7 +987,7 @@
         },
         {
           "name": "unknown_lookup_dataset",
-          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\nintermediates: [{id: LOOK, dataset: MISSING}]\n",
+          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\nintermediates: [{id: LOOK, dataset: MISSING}]\n",
           "issues": [
             {
               "phase": "validation",
@@ -1011,10 +1010,9 @@
             {
               "phase": "validation",
               "condition": "duplicate_identifier",
-              "requirement": "REQ-0113",
+              "requirement": "REQ-0659",
               "spec_paths": [
-                "intermediates[1].id",
-                "intermediates[0].id"
+                "intermediates.LOOK.id"
               ],
               "context": {
                 "identifier": "LOOK"
@@ -1175,13 +1173,14 @@
           "issues": [
             {
               "phase": "validation",
-              "condition": "unknown_field",
+              "condition": "unresolvable_name",
               "requirement": "REQ-0189",
               "spec_paths": [
                 "columns.DTHFL.derivation.case[0].when"
               ],
               "context": {
-                "identifier": "DTHFL2"
+                "identifier": "DTHFL2",
+                "suggestion": "SRC.DTHFL2"
               }
             }
           ],
@@ -1546,24 +1545,8 @@
             "src.csv": "V,G\n3,3\n4,4\n"
           },
           "check_issues": [],
-          "issues": [
-            {
-              "phase": "validation",
-              "condition": "no_applicable_keys",
-              "requirement": "REQ-0153",
-              "spec_paths": [
-                "intermediates[0]"
-              ],
-              "context": {
-                "dataset": "SRC",
-                "keys": [
-                  "K"
-                ],
-                "hint": "declare the `key` explicitly"
-              }
-            }
-          ],
-          "csv": null
+          "issues": [],
+          "csv": "K\n3\n4\n"
         },
         {
           "name": "mixed_driver_lookup_without_keys",
@@ -3195,13 +3178,7 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,unused\n2,unused\n",
-          "handlers": [
-            {
-              "count": 0,
-              "handler": "missing",
-              "spec_path": "intermediates[0].key.M.str_case.missing"
-            }
-          ]
+          "handlers": []
         },
         {
           "name": "distinct-key-windows-and-consuming-window-have-separate-cache-identities",

@@ -49,7 +49,7 @@
   },
   {
     "case": "intermediate_invalid_context",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\nintermediates:\n  - id: DONOR\n    dataset: SRC\n    derivations:\n      V: {odm: SRC.IT.TEST.OID}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL, AUX]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: SRC.IT.TEST.OID}}\n  - {name: AUX, type: str, label: Auxiliary, derivation: DONOR.V}\nintermediates:\n  - id: DONOR\n    dataset: SRC\n    derivations:\n      V: {odm: SRC.IT.TEST.OID}\n",
     "expected": {
       "outcome": {
         "diagnostics": [
