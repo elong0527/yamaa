@@ -71,7 +71,6 @@ construction, and logical-type inspection. The canonical lock and manifests
 continue to select 60; using 57 requires adapting this boundary and qualifying
 that dependency graph. Keep malformed-schema rejection and the closed output
 profile when adapting the boundary.
-
 ## Arrow host handoff
 
 The host bridge uses Arrow-rs 60.0.0 C Data/Stream callbacks, PyArrow >=23.0.1
