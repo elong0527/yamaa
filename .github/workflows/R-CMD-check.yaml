@@ -28,6 +28,14 @@ on:
       - 'tools/staging/**'
       - 'tools/ci/toolchain.py'
       - 'tools/paths.py'
+      - 'tools/benchmark.py'
+      - 'tools/conformance/supplemental_inventory.py'
+      - 'tools/conformance/host_fixtures.py'
+      - 'benchmarks/**'
+      - 'python/yamaa_build_backend.py'
+      - 'python/uv.lock'
+      - 'python/tests/installed/**'
+      - 'pyproject.toml'
       - '.github/workflows/R-CMD-check.yaml'
   pull_request:
     paths:
@@ -39,6 +47,14 @@ on:
       - 'tools/staging/**'
       - 'tools/ci/toolchain.py'
       - 'tools/paths.py'
+      - 'tools/benchmark.py'
+      - 'tools/conformance/supplemental_inventory.py'
+      - 'tools/conformance/host_fixtures.py'
+      - 'benchmarks/**'
+      - 'python/yamaa_build_backend.py'
+      - 'python/uv.lock'
+      - 'python/tests/installed/**'
+      - 'pyproject.toml'
       - '.github/workflows/R-CMD-check.yaml'
 
 name: R-CMD-check
