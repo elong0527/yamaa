@@ -3,9 +3,27 @@
 //! Physical decoding and occurrence locations remain codec authority. This service
 //! neither captures sources nor grants data, function, path or publication authority.
 use crate::schema::{
-    Document, ExpandedWindows, NormalizationError, NormalizedDocument, SchemaDiagnostic,
-    SchemaOrigin, SchemaStructure, SpecificationDocument, ValidationError, WindowReference,
+    Document, ExpandedWindows, InheritanceDependencyError, NormalizationError, NormalizedDocument,
+    SchemaDiagnostic, SchemaOrigin, SchemaSource, SchemaStructure, SpecificationDocument,
+    ValidationError, WindowReference,
 };
+
+/// Map each origin through the previous pass's origin list, mirroring
+/// `LayerNodeOrigin::through`: input origins resolve to the earlier arena,
+/// schema-default origins are retained as authored.
+fn through(origins: &[SchemaOrigin], prior: &[SchemaOrigin]) -> Vec<SchemaOrigin> {
+    origins
+        .iter()
+        .map(|&origin| match origin.source {
+            SchemaSource::Input => {
+                let mut mapped = prior[origin.node];
+                mapped.generated |= origin.generated;
+                mapped
+            }
+            SchemaSource::Default { .. } => origin,
+        })
+        .collect()
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -13,6 +31,8 @@ pub enum Error {
     InheritanceRequired,
     #[error("standalone preparation normalize: {0:?}")]
     Normalize(Box<FailureContext>),
+    #[error("standalone preparation dependencies: {0:?}")]
+    Dependencies(Box<DependencyFailureContext>),
     #[error("standalone preparation validation: {0:?}")]
     Validation(ValidationError),
     /// Final model findings have no document-value references.
@@ -30,6 +50,29 @@ pub struct FailureContext {
 fn normalization_failure(error: NormalizationError, input: Document) -> Error {
     let input = matches!(&error, NormalizationError::Invalid(_)).then_some(input);
     Error::Normalize(Box::new(FailureContext { error, input }))
+}
+
+/// The pruning pass retains its input arena only for authored semantic findings,
+/// mirroring the inheritance lifecycle's dependency failure context.
+#[derive(Debug)]
+pub struct DependencyFailureContext {
+    pub error: InheritanceDependencyError,
+    pub input: Option<Document>,
+}
+fn dependency_failure(error: InheritanceDependencyError, input: Document) -> Error {
+    use crate::schema::InheritanceReferenceError;
+    let retained = matches!(
+        &error,
+        InheritanceDependencyError::Normalization(NormalizationError::Invalid(_))
+            | InheritanceDependencyError::Reference(InheritanceReferenceError::Normalization(
+                NormalizationError::Invalid(_)
+            ))
+    )
+    .then_some(input);
+    Error::Dependencies(Box::new(DependencyFailureContext {
+        error,
+        input: retained,
+    }))
 }
 
 /// Retain the original raw allocation and every final occurrence's origin.
@@ -83,9 +126,16 @@ fn expand(
     Ok((expanded, origins))
 }
 
-/// Parent presence (including null) precedes normalization. Normalization, strict
-/// window expansion and model admission preserve the source provenance.
+/// Parent presence (including null) precedes normalization. Normalization,
+/// pruning and strict window expansion preserve the source provenance.
 /// No study data is read during preparation.
+///
+/// A specification without `parents` is a composition of one layer (REQ-0614):
+/// after normalization it is pruned on the same terms as a composed
+/// specification (REQ-0638–REQ-0641), so a dead declaration's unresolved
+/// reference is discarded with it and semantic validation runs on the pruned
+/// document. Declaration order remains the resolved order (REQ-0060); the
+/// pruning pass does not reorder columns.
 pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStandalone, Error> {
     if raw.field(raw.root(), "parents").is_some() {
         return Err(Error::InheritanceRequired);
@@ -94,7 +144,29 @@ pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStanda
         Ok(normalized) => normalized,
         Err(error) => return Err(normalization_failure(error, raw)),
     };
-    let (expanded, origins) = expand(schema, normalized)?;
+    let expanded = match schema.expand_named_windows(&normalized.document, false) {
+        Ok(expanded) => expanded,
+        Err(error) => return Err(normalization_failure(error, normalized.document)),
+    };
+    let expanded_origins = expanded
+        .origins
+        .iter()
+        .map(|&id| normalized.origins[id])
+        .collect::<Vec<_>>();
+    let pruned = match schema.prune_inheritance_dependencies(&expanded.document) {
+        Ok(pruned) => pruned,
+        Err(error) => return Err(dependency_failure(error, expanded.document)),
+    };
+    let pruned_origins = through(&pruned.origins, &expanded_origins);
+    let resolved = match schema.normalize_resolved_document(&pruned.document) {
+        Ok(resolved) => resolved,
+        Err(error) => return Err(normalization_failure(error, pruned.document)),
+    };
+    let resolved = NormalizedDocument {
+        document: resolved.document,
+        origins: through(&resolved.origins, &pruned_origins),
+    };
+    let (expanded, origins) = expand(schema, resolved)?;
     let model = SpecificationDocument::admit(expanded.document)
         .map_err(Error::Validation)?
         .map_err(Error::Model)?;

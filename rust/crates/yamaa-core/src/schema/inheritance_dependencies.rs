@@ -595,6 +595,27 @@ impl SchemaStructure {
         &self,
         input: &Document,
     ) -> Result<NormalizedDocument, InheritanceDependencyError> {
+        self.prune_dependencies(input, true)
+    }
+
+    /// Prune unreachable declarations without ordering the survivors (REQ-0638–0641).
+    ///
+    /// A specification that declares no `parents` is a composition of one layer and
+    /// is pruned on the same terms as a composed specification; its declaration
+    /// order remains the resolved order (REQ-0060), so no ordering validation or
+    /// reordering from `resolve_inheritance_dependencies` applies here.
+    pub fn prune_inheritance_dependencies(
+        &self,
+        input: &Document,
+    ) -> Result<NormalizedDocument, InheritanceDependencyError> {
+        self.prune_dependencies(input, false)
+    }
+
+    fn prune_dependencies(
+        &self,
+        input: &Document,
+        order: bool,
+    ) -> Result<NormalizedDocument, InheritanceDependencyError> {
         if !matches!(input.nodes()[input.root()], N::Mapping(_)) {
             return Err(ValidationError::InvalidDescriptor.into());
         }
@@ -618,7 +639,21 @@ impl SchemaStructure {
         };
         run.initialize()?;
         run.reachable()?;
-        run.order()?;
+        if order {
+            run.order()?;
+        } else {
+            // Keep the surviving columns in their initial collection order.
+            run.ordered_columns = run
+                .columns
+                .iter()
+                .filter(|column| {
+                    run.live_columns
+                        .iter()
+                        .any(|live| live.as_str() == column.name)
+                })
+                .map(|column| column.node)
+                .collect();
+        }
         let root = run.copy(input.root(), 0)?;
         let document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;
         Ok(NormalizedDocument {
