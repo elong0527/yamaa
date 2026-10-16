@@ -144,7 +144,7 @@ run_column_ceilings <- function() {
     # Dropping the C1024 declaration must also drop it from the live output
     # list, otherwise the repaired specification would fail on the dangling
     # output reference instead of the remaining C0002 type error.
-    repaired[startsWith(repaired, "output:")] <- gsub(", C1024\]", "]", repaired[startsWith(repaired, "output:")])
+    repaired[startsWith(repaired, "output:")] <- gsub(", C1024\\]", "]", repaired[startsWith(repaired, "output:")])
     writeLines(repaired, spec)
     for (operation in list(yamaa_check, yamaa_domain)) {
       issue <- operation(spec, environment = environment)$issues
