@@ -107,9 +107,17 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install repository tools and the pinned Rust toolchain
+      # Activation writes RUSTUP_TOOLCHAIN to GITHUB_ENV, which only takes
+      # effect in later steps; the Windows gnu target must be added to the
+      # pinned toolchain, so installation runs in its own step (as in
+      # native.yml).
+      - name: Install repository tools
         run: |
           python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
+
+      - name: Install the pinned Rust toolchain
+        run: |
           python -m tools.ci.toolchain --install
           if [ "${{ runner.os }}" = Windows ]; then
             rustup target add x86_64-pc-windows-gnu
@@ -124,6 +132,11 @@ jobs:
 
       - name: Install the shared grammar fixture codec and PyYAML
         run: python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
+
+      # The package tests resolve yamaabenchmarks::project_value from the
+      # benchmark R environments, exactly as make test-r installs it.
+      - name: Install the benchmark project-function package
+        run: R CMD INSTALL --library="${R_LIBS_USER}" rust/tests/project-programs/r
 
       - name: Stage standalone R package
         run: python -m tools.staging.stage_r_package "r-cmd-check/yamaa"
