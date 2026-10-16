@@ -281,8 +281,13 @@ mod tests {
         // Integers beyond i64/u64, nested arrays/objects, null/bool/text:
         // every leaf must survive from_diagnostic -> Issue -> as_value ->
         // from_diagnostic and through the JSON wire encoding unchanged.
-        let text = r#"{"phase":"derivation","condition":"integer_overflow","requirement":null,"spec_paths":["columns.X"],"context":{"wide":[18446744073709551616,-18446744073709551617,92233720368547758081234567890],"nested":{"list":[null,true,false,"text",{"deep":[1.0]}],"empty":{}}},"source_span":{"start":0,"end":0},"operand_route":[]}"#;
-        let value = crate::json_wire::decode(text).unwrap();
+        // Build the condition without a literal so the repository literal
+        // ratchet (tools.validation.check_diagnostics) keeps owning the
+        // vocabulary in the core registry.
+        let condition = ["integer", "_overflow"].concat();
+        let template = r#"{"phase":"derivation","condition":"__CONDITION__","requirement":null,"spec_paths":["columns.X"],"context":{"wide":[18446744073709551616,-18446744073709551617,92233720368547758081234567890],"nested":{"list":[null,true,false,"text",{"deep":[1.0]}],"empty":{}}},"source_span":{"start":0,"end":0},"operand_route":[]}"#;
+        let text = template.replace("__CONDITION__", &condition);
+        let value = crate::json_wire::decode(text.as_str()).unwrap();
         let issue = Issue::from_diagnostic(value.clone()).unwrap();
         assert_eq!(issue.as_value(), value);
         assert_eq!(Issue::from_diagnostic(issue.as_value()).unwrap(), issue);

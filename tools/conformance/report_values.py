@@ -151,6 +151,13 @@ class ArtifactObservation(_FrozenModel):
     content: str = ""
 
 
+class SourceSpanObservation(_FrozenModel):
+    """Byte offsets carried from the core diagnostic when recorded."""
+
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+
+
 class DiagnosticObservation(_FrozenModel):
     """One structured failure in the shape the committed contracts use."""
 
@@ -159,6 +166,8 @@ class DiagnosticObservation(_FrozenModel):
     spec_paths: tuple[str, ...] = Field(min_length=1)
     requirement: str | None
     context: dict[str, JsonValue]
+    source_span: SourceSpanObservation | None = None
+    operand_route: tuple[str, ...] | None = None
 
 
 class UnsupportedObservation(_FrozenModel):
@@ -652,7 +661,13 @@ def parse_report(text: str) -> ExampleReport:
     raw = json.loads(text)
 
     def complete(value, model):
-        if not isinstance(value, dict) or set(value) != set(model.model_fields):
+        if not isinstance(value, dict):
+            raise ValueError("complete report fields differ: " + model.__name__)
+        fields = model.model_fields
+        required = {name for name, field in fields.items() if field.is_required()}
+        allowed = set(fields)
+        actual = set(value)
+        if not required.issubset(actual) or not actual.issubset(allowed):
             raise ValueError("complete report fields differ: " + model.__name__)
 
     complete(raw, ExampleReport)
