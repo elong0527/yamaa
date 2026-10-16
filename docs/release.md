@@ -66,6 +66,33 @@ with the minimum versions. SAS datasets and Transport are input formats;
 the published dataset profiles remain CSV and Parquet. Dataset-JSON and
 Define-XML are generated through the public study-document API.
 
+## Supported dependency combinations
+
+The Rust workspace declares MSRV 1.90 and builds with Rust 1.90.0. Canonical
+release builds use `rust/Cargo.lock`, including unchanged copies in both source
+packages. Arrow and Parquet are supported at exactly 60.0.0 with flatbuffers
+25.12.19. Arrow/Parquet 57 (and other Rust Arrow major versions) are unsupported:
+the adapter's version-specific APIs have not been adapted and qualified for
+those graphs. Broadening that range requires separate adapter and installed-host
+qualification first. Portable libm remains exactly 0.2.16, and the reviewed
+local saphyr-parser patch remains part of every graph.
+
+Python supports CPython 3.12 through 3.14 with the runtime ranges in
+`python/pyproject.toml`. Their declared floors are lxml 6.1.0, Polars 1.43.2,
+py-yaml12 0.2, PyArrow 23.0.1, Pydantic 2.12.4, packaging 25 and PyYAML 6.0.3.
+Polars 1.35 and 1.42.1 cannot read the current writer's saved Parquet and are
+outside the supported range. R uses R 4.6.1 and the shared Rust graph; its host
+qualification readers are the `Suggests` dependencies in `R/yamaa/DESCRIPTION`.
+
+The continuous [dependency graph lanes](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#ci-and-release-qualification)
+test declared direct minima and newest compatible selections on Linux with
+CPython 3.12 and 3.14 and R 4.6.1. Cargo transitive dependencies use the newest
+MSRV-compatible resolution in both lanes; local patches and exact pins are
+preserved. Python runtime/test floors are exact in the minimum lane, while
+Python transitives are resolved compatibly. These isolated graphs do not change
+`rust/Cargo.lock` or `python/uv.lock`. The full native matrix separately qualifies
+the locked release across supported platforms and Python versions.
+
 ## Publication
 
 After the final commit is on main and its complete native qualification has

@@ -1,0 +1,285 @@
+"""Resolve and test minimum/newest dependencies in an external repository copy."""
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+from packaging.requirements import Requirement
+
+from tools.paths import ROOT
+
+LOCKS = ("rust/Cargo.lock", "python/uv.lock")
+IGNORED = {
+    ".git",
+    ".venv",
+    ".venv-docs",
+    "target",
+    ".cache",
+    ".build",
+    "build",
+    "site",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+}
+
+
+def minimum_cargo(requirement):
+    """Accept the repository's explicit lower bounds; fail on unknown syntax."""
+    match = re.fullmatch(
+        r"(?:\^|=|>=)?\s*(\d+\.\d+\.\d+)(?:\s*,\s*<\s*[\d.]+)?", requirement
+    )
+    if not match:
+        raise ValueError(f"Cargo requirement needs an explicit minimum: {requirement}")
+    return "=" + match[1]
+
+
+def pin_manifest(path, patched):
+    """Pin registry dependencies, retaining local paths and reviewed patches."""
+    document = tomllib.loads(path.read_text())
+    replacements = {}
+    sections = [document]
+    sections.extend(document.get("target", {}).values())
+    for section in sections:
+        for key in ("dependencies", "build-dependencies", "dev-dependencies"):
+            for name, dependency in section.get(key, {}).items():
+                if (
+                    name in patched
+                    or isinstance(dependency, dict)
+                    and "path" in dependency
+                ):
+                    continue
+                version = (
+                    dependency if isinstance(dependency, str) else dependency["version"]
+                )
+                replacements[(name, version)] = minimum_cargo(version)
+    text = path.read_text()
+    for (name, version), minimum in replacements.items():
+        # Current dependency entries are single-line strings or inline tables.
+        pattern = rf'(?m)^(\s*{re.escape(name)}\s*=\s*(?:\{{[^\n]*?version\s*=\s*)?")({re.escape(version)})(")'
+        text, count = re.subn(
+            pattern, lambda match: match[1] + minimum + match[3], text
+        )
+        if not count:
+            raise ValueError(f"Cannot pin {name} in {path}")
+    path.write_text(text)
+
+
+def minimum_python(requirement):
+    parsed = Requirement(requirement)
+    bounds = [
+        item.version for item in parsed.specifier if item.operator in (">=", "==")
+    ]
+    if len(bounds) != 1 or "*" in bounds[0]:
+        raise ValueError(
+            f"Python requirement needs one explicit minimum: {requirement}"
+        )
+    parsed.specifier = type(parsed.specifier)("==" + bounds[0])
+    return str(parsed)
+
+
+def prepare(source, destination, graph):
+    source, destination = source.resolve(), destination.resolve()
+    if destination == source or source in destination.parents:
+        raise ValueError("Dependency graphs must be outside the source checkout")
+    if destination.exists():
+        raise ValueError(f"Graph destination already exists: {destination}")
+    shutil.copytree(
+        source, destination, ignore=shutil.ignore_patterns(*IGNORED, "*.egg-info")
+    )
+    workspace = tomllib.loads((destination / "rust/Cargo.toml").read_text())
+    if graph == "minimum":
+        patched = set(workspace.get("patch", {}).get("crates-io", {}))
+        for member in workspace["workspace"]["members"]:
+            pin_manifest(destination / "rust" / member / "Cargo.toml", patched)
+    (destination / "rust/Cargo.lock").unlink()
+    python = tomllib.loads((destination / "python/pyproject.toml").read_text())
+    requirements = (
+        python["project"]["dependencies"]
+        + python["project"]["optional-dependencies"]["test"]
+    )
+    if graph == "minimum":
+        requirements = list(map(minimum_python, requirements))
+    # Documentation tools are development-only, already exact in the manifest.
+    requirements += [
+        item for item in python["dependency-groups"]["tooling"] if item != "yamaa-tools"
+    ]
+    requirements += python["build-system"]["requires"]
+    (destination / "requirements.in").write_text("\n".join(requirements) + "\n")
+    return workspace["workspace"]["package"]["rust-version"]
+
+
+def assert_msrv(metadata, msrv):
+    def version(value):
+        return tuple(map(int, (value.split(".") + ["0", "0"])[:3]))
+
+    incompatible = [
+        f"{package['name']} {package['version']} (Rust {package['rust_version']})"
+        for package in metadata["packages"]
+        if package.get("rust_version")
+        and version(package["rust_version"]) > version(msrv)
+    ]
+    if incompatible:
+        raise ValueError(f"Graph exceeds Rust {msrv}: {', '.join(incompatible)}")
+
+
+def assert_patches(metadata, workspace):
+    patches = (
+        tomllib.loads((workspace / "Cargo.toml").read_text())
+        .get("patch", {})
+        .get("crates-io", {})
+    )
+    for name, patch in patches.items():
+        if "path" not in patch:
+            raise ValueError(f"Expected a reviewed local patch for {name}")
+        expected = (workspace / patch["path"] / "Cargo.toml").resolve()
+        selected = [
+            package for package in metadata["packages"] if package["name"] == name
+        ]
+        if (
+            len(selected) != 1
+            or Path(selected[0]["manifest_path"]).resolve() != expected
+            or selected[0]["source"] is not None
+        ):
+            raise ValueError(f"Graph did not select the reviewed local patch: {name}")
+
+
+def run_graph(source, destination, graph, python, prepare_only=False):
+    if not prepare_only:
+        missing = [
+            command
+            for command in ("cargo", "uv", "R", "Rscript")
+            if not shutil.which(command)
+        ]
+        if missing:
+            raise RuntimeError(
+                "Install the development prerequisites before testing a graph: "
+                + ", ".join(missing)
+            )
+    originals = {lock: (source / lock).read_bytes() for lock in LOCKS}
+    try:
+        msrv = prepare(source, destination, graph)
+        if prepare_only:
+            return
+        environment = os.environ | {
+            "CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS": "fallback"
+        }
+
+        def run(*arguments, cwd=destination):
+            subprocess.run(arguments, cwd=cwd, env=environment, check=True)
+
+        rust = destination / "rust"
+        run("cargo", "generate-lockfile", cwd=rust)
+        metadata = json.loads(
+            subprocess.check_output(
+                ["cargo", "metadata", "--locked", "--format-version", "1"],
+                cwd=rust,
+                env=environment,
+            )
+        )
+        assert_msrv(metadata, msrv)
+        assert_patches(metadata, rust)
+        (destination / "cargo-metadata.json").write_text(
+            json.dumps(metadata, indent=2) + "\n"
+        )
+        run("uv", "venv", "--python", python, str(destination / "python/.venv"))
+        interpreter = str(
+            destination
+            / "python/.venv"
+            / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        )
+        run(
+            "uv",
+            "pip",
+            "compile",
+            "requirements.in",
+            "--python",
+            interpreter,
+            "--resolution",
+            "lowest-direct" if graph == "minimum" else "highest",
+            "--output-file",
+            "requirements.txt",
+        )
+        run("uv", "pip", "install", "--python", interpreter, "-r", "requirements.txt")
+        run(
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            interpreter,
+            "--no-deps",
+            "--no-build-isolation",
+            "--config-setting",
+            "build-args=--profile=dev",
+            str(destination / "python"),
+        )
+        run(
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            interpreter,
+            "--no-deps",
+            "--editable",
+            str(destination),
+            str(destination / "rust/tests/project-programs/python"),
+        )
+        (destination / "python-installed.txt").write_text(
+            subprocess.check_output(
+                ["uv", "pip", "freeze", "--python", interpreter],
+                cwd=destination,
+                env=environment,
+                text=True,
+            )
+        )
+        (destination / "r-session.txt").write_text(
+            subprocess.check_output(
+                ["Rscript", "--vanilla", "-e", "sessionInfo()"],
+                cwd=destination,
+                env=environment,
+                text=True,
+            )
+        )
+        environment["PYO3_PYTHON"] = interpreter
+        run("cargo", "test", "--locked", "--workspace", cwd=rust)
+        run(
+            "cargo",
+            "test",
+            "--locked",
+            "-p",
+            "yamaa-adapters",
+            "--no-default-features",
+            cwd=rust,
+        )
+        run(interpreter, "-m", "tools.commands.python_tests")
+        run(interpreter, "-m", "tools.commands.r_tests")
+    finally:
+        for lock, original in originals.items():
+            if (source / lock).read_bytes() != original:
+                raise RuntimeError(f"Dependency graph changed the source lock: {lock}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--graph", choices=("minimum", "newest"), required=True)
+    parser.add_argument("--destination", type=Path, required=True)
+    parser.add_argument("--python", default=sys.executable)
+    parser.add_argument("--prepare-only", action="store_true")
+    arguments = parser.parse_args()
+    run_graph(
+        ROOT,
+        arguments.destination,
+        arguments.graph,
+        arguments.python,
+        arguments.prepare_only,
+    )
+
+
+if __name__ == "__main__":
+    main()
