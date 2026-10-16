@@ -22,10 +22,12 @@ argument_failure <- function(code) {
   seen <- tryCatch({ force(code); NULL }, error = identity)
   stopifnot(inherits(seen, "yamaa_argument_error"), is.character(conditionMessage(seen)))
 }
-stopifnot(identical(names(formals(yamaa_domain)), c("specification", "environment")),
-  identical(names(formals(yamaa_check)), c("specification", "environment")),
+stopifnot(identical(names(formals(yamaa_domain)), c("specification", "environment", "resolver")),
+  identical(names(formals(yamaa_check)), c("specification", "environment", "resolver")),
   identical(formals(yamaa_domain)$environment, NULL),
   identical(formals(yamaa_check)$environment, NULL),
+  identical(formals(yamaa_domain)$resolver, NULL),
+  identical(formals(yamaa_check)$resolver, NULL),
   identical(names(formals(yamaa_define)), fixture_strings(host_truth[["define_argument_names"]])))
 for (value in list(NULL, 7L, TRUE, NA_character_, character(), c("a", "b"),
   structure("a", class = "path"), structure("a", names = "path"))) {

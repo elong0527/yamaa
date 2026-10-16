@@ -107,7 +107,7 @@ yamaa_memory_resolver <- function(objects = list(), prefix = "memory:/") {
     result <- character()
     for (part in parts) {
       if (part %in% c("", ".")) next
-      if (part == "..") { result <- head(result, -1L); next }
+      if (part == "..") { result <- utils::head(result, -1L); next }
       result <- c(result, part)
     }
     paste(result, collapse = "/")
