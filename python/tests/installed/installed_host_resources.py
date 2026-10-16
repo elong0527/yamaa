@@ -227,6 +227,13 @@ class HostResources(unittest.TestCase):
                 "object://synthetic/out/consumer.csv": b"ID\n7\n",
             },
         )
+        backend.put_frame(
+            "raw/data.csv", pa.table({"ID": pa.array([7], type=pa.int64())})
+        )
+        framed = domain("consumer/root.yaml", resolver=backend)
+        self.assertTrue(framed.issues.is_empty(), framed.issues)
+        self.assertEqual(framed.output["ID"].to_list(), [7])
+        self.assertTrue(framed.save())
 
 
 if __name__ == "__main__":

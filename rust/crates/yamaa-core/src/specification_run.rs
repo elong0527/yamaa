@@ -214,6 +214,9 @@ pub fn inspection_declaration_diagnostics<'a, E>(
 pub struct CapturedSource<T> {
     pub read: SourceRead,
     pub snapshot: Option<Arc<[u8]>>,
+    /// An imported immutable table is retained as typed ownership evidence,
+    /// independently of decoding/projection, rather than fake encoded bytes.
+    pub owned_snapshot: Option<Arc<dyn std::any::Any + Send + Sync>>,
     pub table: Option<T>,
 }
 impl<T> CapturedSource<T> {
@@ -227,6 +230,7 @@ impl<T> CapturedSource<T> {
                 snapshots_created: None,
             },
             snapshot: None,
+            owned_snapshot: None,
             table: None,
         }
     }
@@ -456,6 +460,7 @@ fn execute_inner_with_observer_into<P: SourcePort, D: SourceDecoder>(
             decoded.unwrap_or_else(|| decoder.decode(declaration, bytes, interpretation, None));
         if owned.is_some() {
             observed.snapshot = None;
+            observed.owned_snapshot = owned;
         }
         match decoded {
             Ok(table) => {

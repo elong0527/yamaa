@@ -326,10 +326,11 @@ impl Resources {
 #[derive(Default)]
 pub struct MemoryResolver {
     objects: Mutex<BTreeMap<(String, String), Reply>>,
-    staged: Mutex<BTreeMap<String, (String, Arc<[u8]>)>>,
+    staged: Mutex<StagedObjects>,
     published: Mutex<BTreeMap<String, Arc<[u8]>>>,
     cancelled: std::sync::atomic::AtomicBool,
 }
+type StagedObjects = BTreeMap<String, (String, Arc<[u8]>)>;
 impl MemoryResolver {
     pub fn insert_frame(
         &self,

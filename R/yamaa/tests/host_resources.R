@@ -10,6 +10,9 @@ for (constructor in list(yamaa_memory_resolver, yamaa_synthetic_remote_resolver)
   result <- yamaa_domain("spec.yaml", resolver = resolver)
   stopifnot(nrow(result$issues) == 0L, identical(as.character(result$output$ID), "7"))
   stopifnot(any(vapply(result$resource_provenance, function(x) x$written == "raw.csv", logical(1))))
+  stopifnot(length(result$resource_provenance) == 2L,
+    identical(result$resource_provenance[[1L]]$declaring, "/"),
+    identical(result$resource_provenance[[2L]]$declaring, "/spec.yaml"))
   resolver$backend$objects <- list()
   stopifnot(isTRUE(result$save()), length(resolver$backend$outputs) == 1L,
     identical(resolver$backend$outputs[[1L]], charToRaw("ID\n7\n")),
@@ -40,6 +43,22 @@ stopifnot(nrow(yamaa_check("spec.yaml", resolver = missing)$issues) == 0L)
 result <- yamaa_domain("spec.yaml", resolver = missing)
 stopifnot(is.null(result$output), "resource_path_missing" %in% result$issues$condition)
 
+versioned <- yamaa_memory_resolver(objects)
+replaced <- FALSE
+resolver <- yamaa_resource_resolver(function(request) {
+  if (request$operation == "capture" && !is.null(request$reference) && !replaced) {
+    replaced <<- TRUE
+    versioned$backend$put("spec.yaml", objects[["spec.yaml"]])
+  }
+  versioned$request(request)
+})
+result <- yamaa_domain("spec.yaml", resolver = resolver)
+stopifnot(is.null(result$output), nrow(result$issues) > 0L,
+  length(result$resource_provenance) == 1L,
+  identical(result$resource_provenance[[1L]]$reference, "memory:/spec.yaml#v1"))
+fresh <- yamaa_domain("spec.yaml", resolver = versioned)
+stopifnot(nrow(fresh$issues) == 0L, identical(as.character(fresh$output$ID), "7"))
+
 interruption <- structure(list(message = "synthetic interrupt", call = NULL),
   class = c("interrupt", "condition"))
 source_resolver <- yamaa_memory_resolver(objects)
@@ -62,3 +81,6 @@ result <- yamaa_domain("consumer/root.yaml", resolver = resolver)
 stopifnot(nrow(result$issues) == 0L, isTRUE(result$save()),
   identical(resolver$backend$outputs[["object://synthetic/out/producer.csv"]], charToRaw("ID\n7\n")),
   identical(resolver$backend$outputs[["object://synthetic/out/consumer.csv"]], charToRaw("ID\n7\n")))
+resolver$backend$put("raw/data.csv", NULL, frame = data.frame(ID = 7))
+result <- yamaa_domain("consumer/root.yaml", resolver = resolver)
+stopifnot(nrow(result$issues) == 0L, identical(as.character(result$output$ID), "7"), isTRUE(result$save()))

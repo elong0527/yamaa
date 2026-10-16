@@ -146,6 +146,7 @@ impl PreparedRun {
                 .map(|source| CapturedSource {
                     read: source.read,
                     snapshot: source.snapshot,
+                    owned_snapshot: source.owned_snapshot,
                     table: source.table.map(|table| table.0),
                 })
                 .collect(),
