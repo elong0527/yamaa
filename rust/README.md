@@ -186,7 +186,7 @@ the boundary. Core keeps its current boundary (no I/O, no `unsafe`, no Arrow).
 The Python and R hosts are the first clients (#2657 and #2689 target this one
 definition). When a host needs something the facade lacks, that is a gap to
 fill in the facade, not a reason to reach past it. The facade wraps the
-existing prepare, bind, execute and publish workflow — there is no second
+existing prepare, bind, execute and publish workflow - there is no second
 admission or evaluation route. All physical access goes through a resolver;
 local files are just the default resolver.
 
@@ -291,7 +291,7 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   facade type is `ResolvedSpecification`; the internal `ResolvedArtifact`
   (above) is its implementation and wire format, not a public type.
 - `compile` and `run` are reserved names, not part of the first surface. They
-  land with the reusable plan handle (#2654, #2679–#2682) as
+  land with the reusable plan handle (#2654, #2679-#2682) as
   `Engine::compile(&self, &Request<'_>) -> Result<Plan, Error>` and
   `Plan::run(&self, &RunRequest<'_>, &CancellationToken) -> Result<Build, Error>`,
   wrapping the existing `project_run::PreparedRun` instead of inventing a
@@ -344,7 +344,7 @@ pub struct Report { pub diagnostics: Vec<Diagnostic> }  // #[non_exhaustive]
 This is the public form of today's `issue_rows::Issue` (phase, condition,
 requirement, spec paths, context). `DiagnosticContext` is a structured value
 map, not a formatted string; the structured context and geometry work in
-#2674–#2677 enriches its contents without changing this shape. The boundary
+#2674-#2677 enriches its contents without changing this shape. The boundary
 version and record definition in #2674 must conform to this struct; the
 cross-host parity tests are #2677.
 
@@ -367,8 +367,8 @@ pub enum Error {                  // #[non_exhaustive]
 
 `ResolverFailure`, `FunctionError` and `TableError` are small facade-owned
 types (also `#[non_exhaustive]`) carrying a stable code and a message. Internal
-error enums — `file_workflow::SelectionError`, `file_resources::Error`,
-`yaml_decode::DecodeFailure`, the `file_define::Failure` family and the rest —
+error enums - `file_workflow::SelectionError`, `file_resources::Error`,
+`yaml_decode::DecodeFailure`, the `file_define::Failure` family and the rest -
 never appear in a facade signature; #2658's per-module consolidation is what
 makes this conversion table finite.
 
@@ -410,7 +410,7 @@ today: the stable codes (`yaml_reader_unavailable`,
 - All public enums and option/request structs are `#[non_exhaustive]`.
 - Between 0.x minor versions the facade may add types, variants and fields.
   It may not remove, rename or change the signature of a public item, except
-  when a language-semantics change requires it — and then the break is called
+  when a language-semantics change requires it - and then the break is called
   out in the release notes for that version. Patch releases never break the
   facade.
 - A committed API inventory of the facade crate is generated (for example
@@ -430,9 +430,9 @@ depend on the facade by git or path dependency:
 yamaa = { path = "rust/crates/yamaa", default-features = false, features = ["yaml"] }
 ```
 
-Publishing to crates.io is not decided here. It depends on #2583 — the
+Publishing to crates.io is not decided here. It depends on #2583 - the
 workspace `[patch.crates-io]` vendored `saphyr-parser` cannot be published as
-a patch — and on the provenance terms of the vendored ReadStat C sources.
+a patch - and on the provenance terms of the vendored ReadStat C sources.
 Until #2583 lands, git/path is the distribution route.
 
 ### Host-usage mapping
@@ -444,35 +444,35 @@ default.
 
 | Module used today | Facade disposition |
 | --- | --- |
-| `application_measurements` | Internal — a host-side timing helper; the facade `Report` carries no measurements in the first surface. |
-| `arrow_bridge` | Facade — `Table::stream` and stream import on `Table`; the FFI types themselves are not re-exported. |
-| `arrow_table` | Internal — the engine's table representation; `Table` is the public form. |
-| `callback` | Facade — the `ProjectFunctions` trait and `FunctionError`; `BoundaryError`/`CallbackError` convert into `FunctionError`. |
-| `file_application` | Facade — `Engine::check`/`Engine::build`; `Application` and `ApplicationError` are internal. |
-| `file_define` | Facade — `Engine::define` and `DefineBuild::save`; its `Failure` converts into `Error`. |
-| `file_graph` | Internal — producer graph state behind `Build` and the future `Plan`. |
-| `file_preparation` | Internal — `FileSpecification` is a prepared internal form. |
-| `file_producer_build` | Internal — attempt state behind `Build`. |
-| `file_project` | Internal — project state behind `Build` and the future `Plan`. |
-| `file_resources` | Internal — its `Error` converts into `ResolverFailure`/`Error::Internal`. |
-| `file_workflow` | Internal — `SelectionError` converts into diagnostics/`Error`. |
-| `host_resources` | Facade — the `ResourceResolver` trait, `MemoryResolver`, and the resolver request/reply/failure types. |
-| `ipc_table` | Internal — `TableError` converts into the facade `TableError`; `Table::ipc` is the public IPC route. |
-| `issue_rows` | Facade — `Diagnostic` and `Report` are the public form of `Issue`; the module itself is internal. |
-| `producer_attempt` | Internal — host-failure traversal; failures surface as `Error::Host`. |
-| `producer_result` | Facade — `Build` is its public form (`project_owned` stays an internal constructor). |
-| `project_application` | Internal — selection failures convert into diagnostics. |
-| `project_attempt` | Internal — same disposition as `producer_attempt`. |
-| `project_run` | Facade (future) — `Plan` wraps `PreparedRun` (#2679); `Attempt`/`PreparedRun` stay internal in the first surface. |
-| `public_table` | Facade — `Table`. |
-| `resolved_artifact` | Facade — `ResolvedSpecification` (#2725). |
-| `scalar_bytes` | Internal — scalar decoding is a conversion detail; project functions exchange facade `Scalar` values. |
-| `specification_report` | Facade — its `Identity` folds into `EngineOptions` (`runtime_name`/`runtime_version`); the module is internal. |
-| `style_values` | Internal — style comparison is applied inside the workflow from resolver-supplied resources. |
-| `yaml_decode` | Internal — `DecodeFailure` converts into diagnostics/`Error::Unavailable`. |
-| `yamaa_core::application_observer` | Facade — the `Progress` trait with facade `Phase`/`Outcome` enums; the `Scope` guard stays internal. |
-| `yamaa_core::domain_entry` | Internal — entry dispatch behind `Engine`. |
-| `yamaa_core::function_batch` | Facade — `ProjectFunctions` batch invocation with facade scalar arguments; `BatchFunctionPort` stays internal. |
-| `yamaa_core::function_invocation` | Facade — `FunctionError` is its public form; `HostError` stays internal. |
-| `yamaa_core::project_function` | Facade — `HostLanguage` and the facade `Scalar` value type; the core `Language` enum stays internal. |
-| `yamaa_core::VERSION` (crate root) | Facade — re-exported as `yamaa::VERSION` with the same value. |
+| `application_measurements` | Internal - a host-side timing helper; the facade `Report` carries no measurements in the first surface. |
+| `arrow_bridge` | Facade - `Table::stream` and stream import on `Table`; the FFI types themselves are not re-exported. |
+| `arrow_table` | Internal - the engine's table representation; `Table` is the public form. |
+| `callback` | Facade - the `ProjectFunctions` trait and `FunctionError`; `BoundaryError`/`CallbackError` convert into `FunctionError`. |
+| `file_application` | Facade - `Engine::check`/`Engine::build`; `Application` and `ApplicationError` are internal. |
+| `file_define` | Facade - `Engine::define` and `DefineBuild::save`; its `Failure` converts into `Error`. |
+| `file_graph` | Internal - producer graph state behind `Build` and the future `Plan`. |
+| `file_preparation` | Internal - `FileSpecification` is a prepared internal form. |
+| `file_producer_build` | Internal - attempt state behind `Build`. |
+| `file_project` | Internal - project state behind `Build` and the future `Plan`. |
+| `file_resources` | Internal - its `Error` converts into `ResolverFailure`/`Error::Internal`. |
+| `file_workflow` | Internal - `SelectionError` converts into diagnostics/`Error`. |
+| `host_resources` | Facade - the `ResourceResolver` trait, `MemoryResolver`, and the resolver request/reply/failure types. |
+| `ipc_table` | Internal - `TableError` converts into the facade `TableError`; `Table::ipc` is the public IPC route. |
+| `issue_rows` | Facade - `Diagnostic` and `Report` are the public form of `Issue`; the module itself is internal. |
+| `producer_attempt` | Internal - host-failure traversal; failures surface as `Error::Host`. |
+| `producer_result` | Facade - `Build` is its public form (`project_owned` stays an internal constructor). |
+| `project_application` | Internal - selection failures convert into diagnostics. |
+| `project_attempt` | Internal - same disposition as `producer_attempt`. |
+| `project_run` | Facade (future) - `Plan` wraps `PreparedRun` (#2679); `Attempt`/`PreparedRun` stay internal in the first surface. |
+| `public_table` | Facade - `Table`. |
+| `resolved_artifact` | Facade - `ResolvedSpecification` (#2725). |
+| `scalar_bytes` | Internal - scalar decoding is a conversion detail; project functions exchange facade `Scalar` values. |
+| `specification_report` | Facade - its `Identity` folds into `EngineOptions` (`runtime_name`/`runtime_version`); the module is internal. |
+| `style_values` | Internal - style comparison is applied inside the workflow from resolver-supplied resources. |
+| `yaml_decode` | Internal - `DecodeFailure` converts into diagnostics/`Error::Unavailable`. |
+| `yamaa_core::application_observer` | Facade - the `Progress` trait with facade `Phase`/`Outcome` enums; the `Scope` guard stays internal. |
+| `yamaa_core::domain_entry` | Internal - entry dispatch behind `Engine`. |
+| `yamaa_core::function_batch` | Facade - `ProjectFunctions` batch invocation with facade scalar arguments; `BatchFunctionPort` stays internal. |
+| `yamaa_core::function_invocation` | Facade - `FunctionError` is its public form; `HostError` stays internal. |
+| `yamaa_core::project_function` | Facade - `HostLanguage` and the facade `Scalar` value type; the core `Language` enum stays internal. |
+| `yamaa_core::VERSION` (crate root) | Facade - re-exported as `yamaa::VERSION` with the same value. |
