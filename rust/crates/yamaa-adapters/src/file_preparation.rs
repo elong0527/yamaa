@@ -250,6 +250,7 @@ pub fn opaque_resource_failure(attempt: &CapturedAttempt<ResourceError>) -> Opti
 }
 
 #[cfg(all(test, any(unix, windows)))]
+#[cfg(feature = "yaml")]
 mod profile_inspection_tests {
     use super::*;
     use std::{
@@ -353,7 +354,7 @@ impl yamaa_core::file_preparation::DocumentPort<ResourceError> for Documents {
         }
     }
 }
-#[cfg(test)]
+#[cfg(all(test, feature = "yaml"))]
 mod declaring_origin_tests {
     use super::*;
     use std::{
@@ -428,7 +429,7 @@ mod declaring_origin_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "yaml"))]
 mod dispatch_policy_tests {
     use super::*;
     use std::{

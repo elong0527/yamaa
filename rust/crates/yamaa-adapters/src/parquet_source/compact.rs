@@ -2,6 +2,8 @@
 //! Format: https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
 //! Parquet still validates its own schema.
 
+use std::borrow::Cow;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Error {
     Malformed,
@@ -27,7 +29,7 @@ impl<'a> Value<'a> {
         let Self::Struct(bytes) = self else {
             return Ok(None);
         };
-        let mut reader = Reader { bytes, position: 0 };
+        let mut reader = Reader::new(bytes);
         let mut previous = 0;
         let mut found = None;
         while let Some((key, value)) = reader.field(previous, 0)? {
@@ -67,10 +69,7 @@ impl<'a> IntoIterator for Sequence<'a> {
 
     fn into_iter(self) -> Self::IntoIter {
         Elements {
-            reader: Reader {
-                bytes: self.bytes,
-                position: 0,
-            },
+            reader: Reader::new(self.bytes),
             kind: self.kind,
             remaining: self.count,
         }
@@ -92,9 +91,26 @@ impl<'a> Iterator for Elements<'a> {
 struct Reader<'a> {
     bytes: &'a [u8],
     position: usize,
+    native_metadata: Option<Cow<'a, [u8]>>,
 }
 
 impl<'a> Reader<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        Self {
+            bytes,
+            position: 0,
+            native_metadata: None,
+        }
+    }
+
+    fn native_header(&mut self, position: usize, header: u8) {
+        if header != self.bytes[position] {
+            if let Some(bytes) = &mut self.native_metadata {
+                bytes.to_mut()[position] = header;
+            }
+        }
+    }
+
     fn take(&mut self, count: usize) -> Result<&'a [u8], Error> {
         let end = self.position.checked_add(count).ok_or(Error::Malformed)?;
         let value = self.bytes.get(self.position..end).ok_or(Error::Malformed)?;
@@ -202,6 +218,7 @@ impl<'a> Reader<'a> {
                 Value::Binary(self.take(length)?)
             }
             9 | 10 => {
+                let position = self.position;
                 let header = self.byte()?;
                 let count = if header >> 4 == 15 {
                     self.length()?
@@ -214,6 +231,9 @@ impl<'a> Reader<'a> {
                     return Err(Error::Malformed);
                 }
                 self.collection(count)?;
+                if kind == 1 && count != 0 {
+                    self.native_header(position, (header & 0xf0) | 3);
+                }
                 let start = self.position;
                 for _ in 0..count {
                     self.element(kind, depth + 1)?;
@@ -228,8 +248,12 @@ impl<'a> Reader<'a> {
                 let start = self.position;
                 let count = self.length()?;
                 if count != 0 {
+                    let position = self.position;
                     let kinds = self.byte()?;
                     self.collection(count.checked_mul(2).ok_or(Error::Malformed)?)?;
+                    let key = if kinds >> 4 == 1 { 3 } else { kinds >> 4 };
+                    let value = if kinds & 15 == 1 { 3 } else { kinds & 15 };
+                    self.native_header(position, (key << 4) | value);
                     for _ in 0..count {
                         self.element(kinds >> 4, depth + 1)?;
                         self.element(kinds & 15, depth + 1)?;
@@ -255,14 +279,53 @@ impl<'a> Reader<'a> {
 /// Every container and binary payload borrows the held input. Validate all
 /// children, including ignored metadata, without retaining a node per child.
 pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
-    let mut reader = Reader { bytes, position: 0 };
+    let mut reader = Reader::new(bytes);
     let value = reader.value(12, 0)?;
     Ok((value, reader.position))
+}
+
+/// Work around parquet 60.0.0's unknown-field collection skip: it treats a
+/// boolean element like an inline struct-field boolean and consumes no byte.
+/// The current Parquet footer schema has no known boolean collections. Present
+/// their validated one-byte elements as bytes only to the native decoder; keep
+/// the original metadata for admission and the original data pages for reads.
+/// This independently authored correction copies the footer only when needed,
+/// changes no extents or values, and never turns invalid booleans into bytes.
+pub(super) fn native_metadata(bytes: &[u8]) -> Result<Cow<'_, [u8]>, Error> {
+    let mut reader = Reader::new(bytes);
+    reader.native_metadata = Some(Cow::Borrowed(bytes));
+    reader.value(12, 0)?;
+    Ok(reader.native_metadata.unwrap())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_skip_compatibility_changes_only_boolean_collection_headers() {
+        // Inline true/false fields, an opaque binary payload, then a nested
+        // struct containing a bool list and bool->list<bool> map.
+        let bytes = [
+            0x11, 0x12, 0x18, 3, 0x11, 0x21, 0x11, 0x1c, 0x19, 0x21, 1, 2, 0x1b, 1, 0x19, 2, 0x21,
+            2, 1, 0, 0,
+        ];
+        let mut expected = bytes;
+        for (position, header) in [(9, 0x23), (14, 0x39), (16, 0x23)] {
+            expected[position] = header;
+        }
+        let native = native_metadata(&bytes).unwrap();
+        assert_eq!(native.as_ref(), expected);
+        assert!(matches!(native, Cow::Owned(_)));
+        // Ordinary metadata and empty collections keep borrowing the source.
+        for bytes in [&[0x11, 0x12, 0][..], &[0x19, 0x01, 0x1b, 0, 0]] {
+            assert!(matches!(native_metadata(bytes).unwrap(), Cow::Borrowed(_)));
+        }
+        assert_eq!(
+            native_metadata(&[0x19, 0x21, 1, 3, 0]),
+            Err(Error::Malformed)
+        );
+    }
 
     fn unsigned(mut value: usize, output: &mut Vec<u8>) {
         while value >= 128 {
@@ -470,7 +533,7 @@ mod tests {
         let Value::Struct(bytes) = value else {
             panic!();
         };
-        let mut fields = Reader { bytes, position: 0 };
+        let mut fields = Reader::new(bytes);
         assert_eq!(
             fields.field(0, 0).unwrap(),
             Some((1, Value::Integer(i64::MIN)))

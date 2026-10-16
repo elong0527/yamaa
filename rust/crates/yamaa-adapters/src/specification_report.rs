@@ -22,6 +22,7 @@ pub struct Identity<'a> {
 #[derive(Debug)]
 pub enum Error {
     UnsupportedOutcome,
+    CapabilityUnavailable { feature: &'static str },
     InvalidObservation,
     ResourceLimit(crate::resource_diagnostics::Refusal),
 }
@@ -790,6 +791,9 @@ impl yamaa_core::specification_output::ArtifactEncoder for Encoder<'_> {
             ),
             Some("parquet") => {
                 crate::parquet_artifact::render(dataset, projection).map_err(|error| match error {
+                    crate::parquet_artifact::Error::Unavailable => {
+                        Error::CapabilityUnavailable { feature: "parquet" }
+                    }
                     crate::parquet_artifact::Error::Limit {
                         resource,
                         limit,

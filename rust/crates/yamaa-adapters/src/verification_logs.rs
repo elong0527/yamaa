@@ -171,6 +171,9 @@ fn held(path: &str, table: core::LogTable) -> Result<HeldLog, Error> {
 }
 fn parquet_error(error: crate::parquet_artifact::Error<std::convert::Infallible>) -> Error {
     match error {
+        crate::parquet_artifact::Error::Unavailable => {
+            Error::CapabilityUnavailable { feature: "parquet" }
+        }
         crate::parquet_artifact::Error::Limit {
             resource,
             limit,

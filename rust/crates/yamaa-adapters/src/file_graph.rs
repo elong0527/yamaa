@@ -423,7 +423,7 @@ fn collect_nodes(
     Ok(nodes)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "yaml"))]
 mod inventory_rejection_tests {
     use super::*;
 

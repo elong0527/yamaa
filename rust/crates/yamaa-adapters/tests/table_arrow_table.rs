@@ -872,6 +872,7 @@ mod table {
             );
         }
     }
+    #[cfg(feature = "yaml")]
     mod csv_precision {
         use crate::support::ipc_snapshot;
         use std::{convert::Infallible, sync::Arc};
@@ -1632,6 +1633,7 @@ mod table {
             assert_eq!(table_snapshot(&bytes), Err(E::InvalidStream));
         }
     }
+    #[cfg(feature = "parquet")]
     mod parquet_artifact {
         use parquet::{
             basic::{Compression, LogicalType, Repetition, Type},
@@ -2102,8 +2104,229 @@ mod table {
             }
         }
     }
+    #[cfg(feature = "parquet")]
     mod parquet_source {
         //! Independently authored PyArrow containers exercise the held-byte input codec.
+        mod unknown_fields {
+            //! Independent Compact wire extensions of the authored PyArrow fixture.
+            //! No candidate writer supplies either the extension bytes or expected cells.
+            use yamaa_adapters::parquet_source::{parse, Error};
+            use yamaa_core::{
+                table::{TableAccess, ValueRef},
+                temporal::{DatePrecision, DateTimePrecision},
+                value::ColumnType,
+            };
+
+            const SOURCE: &[u8] = include_bytes!("fixtures/pq/none-1-0.parquet");
+
+            fn extended(kind: u8, payload: &[u8]) -> Vec<u8> {
+                // A known field follows the unknown value: num_rows = 3, explicit id 3.
+                extended_with_suffix(kind, payload, &[0x06, 6, 6])
+            }
+
+            fn extended_with_suffix(kind: u8, payload: &[u8], suffix: &[u8]) -> Vec<u8> {
+                let end = SOURCE.len() - 8;
+                let length = u32::from_le_bytes(SOURCE[end..end + 4].try_into().unwrap()) as usize;
+                let start = end - length;
+                assert_eq!(SOURCE[end - 1], 0); // root FileMetaData STOP
+                let mut bytes = SOURCE[..end - 1].to_vec();
+                bytes.extend([kind, 0xe0, 0xd4, 3]); // explicit unknown field 30000
+                bytes.extend(payload);
+                bytes.extend(suffix);
+                bytes.push(0);
+                let length = u32::try_from(bytes.len() - start).unwrap();
+                bytes.extend(length.to_le_bytes());
+                bytes.extend(b"PAR1");
+                assert_eq!(&bytes[..start], &SOURCE[..start]); // preserve all data pages
+                bytes
+            }
+
+            #[test]
+            fn exact_reported_boolean_list_footer_preserves_every_cell() {
+                let mut list = vec![0xf1, 0x80, 0x80, 4];
+                for _ in 0..32_768 {
+                    list.extend([1, 2]);
+                }
+                let bytes = extended_with_suffix(9, &list, &[]);
+                assert_eq!(bytes.len(), 67_625);
+                assert_eq!(
+                    u32::from_le_bytes(bytes[bytes.len() - 8..bytes.len() - 4].try_into().unwrap()),
+                    66_951
+                );
+                exact_cells(&bytes);
+            }
+
+            fn exact_cells(bytes: &[u8]) {
+                let table = parse(bytes).unwrap();
+                assert_eq!(table.row_count(), 3);
+                assert_eq!(
+                    table
+                        .schema()
+                        .columns()
+                        .iter()
+                        .map(|column| (column.name.as_str(), column.kind))
+                        .collect::<Vec<_>>(),
+                    [
+                        ("S", ColumnType::Str),
+                        ("I", ColumnType::Int),
+                        ("F", ColumnType::Float),
+                        ("D", ColumnType::Date),
+                        ("T", ColumnType::DateTime),
+                    ]
+                );
+                assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Str(""));
+                assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Str("β\0z"));
+                assert_eq!(table.cell(0, 1).unwrap(), ValueRef::Int(i64::MIN));
+                assert_eq!(table.cell(2, 1).unwrap(), ValueRef::Int(i64::MAX));
+                for column in 0..5 {
+                    assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing);
+                }
+                for (row, bits) in [(0, (-0.0f64).to_bits()), (2, 1)] {
+                    let ValueRef::Float(value) = table.cell(row, 2).unwrap() else {
+                        panic!("float cell")
+                    };
+                    assert_eq!(value.get().to_bits(), bits);
+                }
+                for (row, text) in [(0, "0001-01-01"), (2, "9999-12-31")] {
+                    let ValueRef::Date(value) = table.cell(row, 3).unwrap() else {
+                        panic!("date cell")
+                    };
+                    assert_eq!(value.to_string(), text);
+                    assert_eq!(value.collected_precision(), DatePrecision::Day);
+                }
+                for (row, fields) in [
+                    (0, (1969, 12, 31, 23, 59, 59)),
+                    (2, (9999, 12, 31, 23, 59, 59)),
+                ] {
+                    let ValueRef::DateTime(value) = table.cell(row, 4).unwrap() else {
+                        panic!("datetime cell")
+                    };
+                    assert_eq!(value.fields(), fields);
+                    assert_eq!(value.collected_precision(), DateTimePrecision::Second);
+                }
+            }
+
+            #[test]
+            fn unknown_boolean_lists_sets_and_maps_preserve_all_fifteen_cells() {
+                for count in [0, 1, 14, 15, 65_536] {
+                    let mut list = if count < 15 {
+                        vec![(count as u8) << 4 | 1]
+                    } else if count == 15 {
+                        vec![0xf1, 15]
+                    } else {
+                        vec![0xf1, 0x80, 0x80, 4]
+                    };
+                    list.extend((0..count).map(|index| 1 + (index % 2) as u8));
+                    for kind in [9, 10] {
+                        exact_cells(&extended(kind, &list));
+                    }
+                }
+                for kinds in [0x11, 0x13, 0x31] {
+                    // bool/bool, bool/byte, byte/bool
+                    let mut map = vec![0x80, 0x80, 4, kinds]; // 65,536 pairs
+                    for _ in 0..65_536 {
+                        map.extend([1, 2]);
+                    }
+                    exact_cells(&extended(11, &map));
+                }
+                exact_cells(&extended(11, &[0])); // empty map has no type header
+            }
+
+            #[test]
+            fn nested_unknown_boolean_values_keep_inline_booleans_and_later_known_fields() {
+                // list<struct> = [{true, false, map<bool,list<bool>>={false:[true,false]}}]
+                exact_cells(&extended(
+                    9,
+                    &[0x1c, 0x11, 0x12, 0x1b, 1, 0x19, 2, 0x21, 1, 2, 0],
+                ));
+                // map<list<bool>,map<byte,bool>> = {[false,true]: {-1:false}}
+                exact_cells(&extended(11, &[1, 0x9b, 0x21, 2, 1, 1, 0x31, 0xff, 2]));
+
+                // Append an unknown bool list inside the known root SchemaElement, before
+                // the next schema element. Check the authored wire prefix before editing.
+                let end = SOURCE.len() - 8;
+                let length = u32::from_le_bytes(SOURCE[end..end + 4].try_into().unwrap());
+                let start = end - length as usize;
+                assert_eq!(
+                    &SOURCE[start..start + 17],
+                    &[
+                        0x15, 4, 0x19, 0x6c, 0x35, 0, 0x18, 6, b's', b'c', b'h', b'e', b'm', b'a',
+                        0x15, 10, 0
+                    ]
+                );
+                let mut bytes = SOURCE[..start + 16].to_vec();
+                bytes.extend([9, 0xe0, 0xd4, 3, 0x21, 1, 2]);
+                bytes.extend(&SOURCE[start + 16..end]);
+                bytes.extend((length + 7).to_le_bytes());
+                bytes.extend(b"PAR1");
+                exact_cells(&bytes);
+            }
+
+            #[test]
+            fn malformed_boolean_collections_depth_and_footer_extent_remain_refused() {
+                for (kind, payload) in [
+                    (9, &[0x21, 1, 3][..]),                   // invalid list boolean
+                    (10, &[0x11, 0]),                         // invalid set boolean
+                    (11, &[1, 0x11, 3, 2]),                   // invalid boolean key
+                    (11, &[1, 0x11, 1, 3]),                   // invalid boolean value
+                    (9, &[0x12, 1]),        // false is not a collection element type
+                    (11, &[1, 0x21, 2, 1]), // invalid map key type
+                    (9, &[0xf1, 0xff, 0xff, 0xff, 0xff, 7]), // count exceeds held bytes
+                    (11, &[0xff, 0xff, 0xff, 0xff, 7, 0x11]), // map extent impossible
+                    (9, &[0xf1, 0x80, 0x80, 0x80, 0x80, 8]), // count exceeds i32
+                ] {
+                    assert!(matches!(
+                        parse(&extended(kind, payload)),
+                        Err(Error::Malformed)
+                    ));
+                }
+                let depth = yamaa_core::limits::Limits::SEMANTIC_DEPTH;
+                let mut nested = vec![0x1c; depth];
+                nested.extend([0x19, 0x11, 1]); // a bool collection beyond the depth limit
+                nested.extend(vec![0; depth + 1]);
+                assert!(matches!(
+                    parse(&extended(12, &nested)),
+                    Err(Error::Malformed)
+                ));
+
+                let valid = extended(9, &[0x21, 1, 2]);
+                let mut impossible_page = valid.clone();
+                // Authored first DATA_PAGE has a ten-byte body: extend both size claims
+                // without changing its held chunk boundary or the valid unknown field.
+                assert_eq!(&impossible_page[4..10], &[0x15, 0, 0x15, 20, 0x15, 20]);
+                impossible_page[7] = 126;
+                impossible_page[9] = 126;
+                assert!(matches!(parse(&impossible_page), Err(Error::Malformed)));
+                for removed in [1, 8, 9, 12] {
+                    assert!(matches!(
+                        parse(&valid[..valid.len() - removed]),
+                        Err(Error::Malformed)
+                    ));
+                }
+                let mut impossible_footer = valid;
+                let end = impossible_footer.len() - 8;
+                impossible_footer[end..end + 4].copy_from_slice(&u32::MAX.to_le_bytes());
+                assert!(matches!(parse(&impossible_footer), Err(Error::Malformed)));
+            }
+
+            #[test]
+            fn known_schema_and_row_group_boolean_lists_remain_type_errors() {
+                for footer in [
+                    // version=1; schema=[true,false]; num_rows=0; row_groups=[]
+                    &[0x15, 2, 0x19, 0x21, 1, 2, 0x16, 0, 0x19, 0x0c, 0][..],
+                    // schema=[{num_children:0}]; num_rows=0; row_groups=[true,false]
+                    &[
+                        0x15, 2, 0x19, 0x1c, 0x55, 0, 0, 0x16, 0, 0x19, 0x21, 1, 2, 0,
+                    ],
+                ] {
+                    let mut bytes = b"PAR1".to_vec();
+                    bytes.extend(footer);
+                    bytes.extend((footer.len() as u32).to_le_bytes());
+                    bytes.extend(b"PAR1");
+                    assert!(matches!(parse(&bytes), Err(Error::Malformed)));
+                }
+            }
+        }
         use std::path::Path;
         use yamaa_adapters::parquet_source::{parse, Error};
         use yamaa_core::{
@@ -2367,6 +2590,7 @@ mod table {
             assert!(matches!(parse(&broken), Err(Error::Malformed)));
         }
     }
+    #[cfg(feature = "yaml")]
     mod predicate_diagnostics {
         //! Complete original-document outcomes captured independently from Python.
         use std::sync::Arc;
