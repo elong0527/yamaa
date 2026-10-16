@@ -21,6 +21,9 @@ mod project {
                 Tree::Scalar(N::Integer(value.to_string())),
             )])
         }
+        fn text_literal(value: &str) -> Tree {
+            Tree::map(vec![("literal", Tree::text(value))])
+        }
         fn row(id: &str, mut derivations: Vec<(&str, Tree)>, groups: Option<Vec<&str>>) -> Tree {
             derivations.insert(
                 0,
@@ -887,6 +890,254 @@ mod project {
                 function.arguments()[0].input,
                 FunctionInput::Read(Read::Column(1))
             );
+        }
+
+        fn bound_assignment(
+            plan: &yamaa_core::dataset::DatasetPlan,
+            template: usize,
+            column: usize,
+        ) -> &yamaa_core::dataset::Assignment {
+            plan.templates()[template]
+                .assignments
+                .iter()
+                .find(|assignment| assignment.column == column)
+                .unwrap()
+        }
+
+        #[test]
+        fn shared_defaults_bind_per_template_with_own_paths_and_repeated_binds() {
+            // One large authored default is inherited by two of three
+            // templates; the remaining template overrides it, and NOTE is
+            // overridden by a different template than BIG.
+            let large = "shared-authored-default ".repeat(256);
+            let spec = specification_with_rows(
+                vec![
+                    ("BIG", "str", text_literal(&large)),
+                    ("NOTE", "str", text_literal("note-default")),
+                ],
+                vec![
+                    row("records", vec![("NOTE", text_literal("note-a"))], None),
+                    row(
+                        "override",
+                        vec![("BIG", text_literal("big-override"))],
+                        None,
+                    ),
+                    row("grouped", vec![], Some(vec!["SRC.ID"])),
+                ],
+            );
+            let prepared = PreparedSpecification::prepare(&spec).unwrap();
+            // Binding is per template and per bind call: repeated binds of
+            // the shared preparation must reproduce the same independently
+            // expected assignments, paths and grouping modes.
+            for _ in 0..2 {
+                let plan = prepared.bind(&source()).unwrap();
+                assert_eq!(plan.templates().len(), 3);
+                let big = |template: usize| bound_assignment(&plan, template, 1);
+                assert_eq!(
+                    big(0).expression,
+                    Expression::Literal(Value::Str(large.clone()))
+                );
+                assert_eq!(big(0).path, "columns.BIG.derivation.literal");
+                assert_eq!(
+                    big(1).expression,
+                    Expression::Literal(Value::Str("big-override".into()))
+                );
+                assert_eq!(big(1).path, "rows[1].derivations.BIG.literal");
+                assert_eq!(
+                    big(2).expression,
+                    Expression::Literal(Value::Str(large.clone()))
+                );
+                assert_eq!(big(2).path, "columns.BIG.derivation.literal");
+                assert!(matches!(
+                    plan.templates()[2].mode,
+                    yamaa_core::dataset::RowMode::Groups(_)
+                ));
+                let note = |template: usize| bound_assignment(&plan, template, 2);
+                assert_eq!(
+                    note(0).expression,
+                    Expression::Literal(Value::Str("note-a".into()))
+                );
+                assert_eq!(note(0).path, "rows[0].derivations.NOTE.literal");
+                assert_eq!(
+                    note(1).expression,
+                    Expression::Literal(Value::Str("note-default".into()))
+                );
+                assert_eq!(note(1).path, "columns.NOTE.derivation.literal");
+                assert_eq!(
+                    note(2).expression,
+                    Expression::Literal(Value::Str("note-default".into()))
+                );
+                assert_eq!(note(2).path, "columns.NOTE.derivation.literal");
+            }
+        }
+
+        #[test]
+        fn shared_defaults_execute_across_drivers_grouping_and_repeated_runs() {
+            // Three admitted drivers: the second template reads ALT, the
+            // third groups GRP; both inherit the same authored defaults.
+            let large = "shared-authored-default ".repeat(256);
+            let source_value = |variable: &str| {
+                Tree::map(vec![(
+                    "source",
+                    Tree::map(vec![("variable", Tree::text(variable))]),
+                )])
+            };
+            let derivation = |value: Tree| Tree::map(vec![("value", value)]);
+            let column = |name: &str, kind: &str, value: Tree| {
+                Tree::map(vec![
+                    ("name", Tree::text(name)),
+                    ("type", Tree::text(kind)),
+                    ("derivation", derivation(value)),
+                ])
+            };
+            let row = |id: &str,
+                       dataset: Option<&str>,
+                       groups: Option<Vec<&str>>,
+                       derivations: Vec<(&str, Tree)>| {
+                let mut fields = vec![
+                    ("id", Tree::text(id)),
+                    (
+                        "derivations",
+                        Tree::map(
+                            derivations
+                                .into_iter()
+                                .map(|(name, value)| (name, derivation(value)))
+                                .collect(),
+                        ),
+                    ),
+                ];
+                if let Some(dataset) = dataset {
+                    fields.push(("dataset", Tree::text(dataset)));
+                }
+                if let Some(groups) = groups {
+                    fields.push((
+                        "group_by",
+                        Tree::List(groups.into_iter().map(Tree::text).collect()),
+                    ));
+                }
+                Tree::map(fields)
+            };
+            let root = Tree::map(vec![
+                ("schema_version", Tree::text("1.0")),
+                ("domain", Tree::text("TEST")),
+                (
+                    "input",
+                    Tree::map(vec![
+                        ("SRC", Tree::map(vec![("path", Tree::text("src.csv"))])),
+                        ("ALT", Tree::map(vec![("path", Tree::text("alt.csv"))])),
+                        ("GRP", Tree::map(vec![("path", Tree::text("grp.csv"))])),
+                    ]),
+                ),
+                ("keys", Tree::List(vec![Tree::text("ID")])),
+                (
+                    "columns",
+                    Tree::List(vec![
+                        column("ID", "int", source_value("SRC.ID")),
+                        column("BIG", "str", text_literal(&large)),
+                        column("NOTE", "str", text_literal("note-default")),
+                    ]),
+                ),
+                (
+                    "output",
+                    Tree::map(vec![
+                        ("path", Tree::text("output.csv")),
+                        (
+                            "columns",
+                            Tree::List(vec![
+                                Tree::text("ID"),
+                                Tree::text("BIG"),
+                                Tree::text("NOTE"),
+                            ]),
+                        ),
+                    ]),
+                ),
+                (
+                    "rows",
+                    Tree::List(vec![
+                        row(
+                            "src-records",
+                            Some("SRC"),
+                            None,
+                            vec![
+                                ("ID", source_value("SRC.ID")),
+                                ("NOTE", text_literal("note-a")),
+                            ],
+                        ),
+                        row(
+                            "alt-records",
+                            Some("ALT"),
+                            None,
+                            vec![
+                                ("ID", source_value("ALT.ID")),
+                                ("BIG", text_literal("big-override")),
+                            ],
+                        ),
+                        row(
+                            "grp-grouped",
+                            Some("GRP"),
+                            Some(vec!["GRP.ID"]),
+                            vec![("ID", source_value("GRP.ID"))],
+                        ),
+                    ]),
+                ),
+            ]);
+            let document = root.document();
+            let spec = yamaa_core::schema::SpecificationDocument::admit(document)
+                .unwrap()
+                .unwrap();
+            let prepared = PreparedSpecification::prepare(&spec).unwrap();
+            let schema = crate::support::table_schema(&[("ID", ColumnType::Int)]);
+            let plan = prepared.bind_sources(&[&schema, &schema, &schema]).unwrap();
+            let src_table = crate::support::dataset::table(
+                &[("ID", ColumnType::Int)],
+                vec![vec![Value::Int(1)], vec![Value::Int(2)]],
+            );
+            let alt_table = crate::support::dataset::table(
+                &[("ID", ColumnType::Int)],
+                vec![vec![Value::Int(10)]],
+            );
+            let grp_table = crate::support::dataset::table(
+                &[("ID", ColumnType::Int)],
+                vec![vec![Value::Int(7)], vec![Value::Int(8)]],
+            );
+            let expected = vec![
+                vec![
+                    Value::Int(1),
+                    Value::Str(large.clone()),
+                    Value::Str("note-a".into()),
+                ],
+                vec![
+                    Value::Int(2),
+                    Value::Str(large.clone()),
+                    Value::Str("note-a".into()),
+                ],
+                vec![
+                    Value::Int(10),
+                    Value::Str("big-override".into()),
+                    Value::Str("note-default".into()),
+                ],
+                vec![
+                    Value::Int(7),
+                    Value::Str(large.clone()),
+                    Value::Str("note-default".into()),
+                ],
+                vec![
+                    Value::Int(8),
+                    Value::Str(large.clone()),
+                    Value::Str("note-default".into()),
+                ],
+            ];
+            // Repeated runs over one bound plan stay identical: sharing the
+            // prepared payload introduces no per-run cross-template state.
+            for _ in 0..2 {
+                let attempt = plan.execute(
+                    &src_table,
+                    &[&alt_table, &grp_table],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None,
+                );
+                assert_eq!(attempt.result.unwrap().dataset.rows(), expected.as_slice());
+            }
         }
     }
     mod specification_str_pad {
