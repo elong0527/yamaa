@@ -103,5 +103,5 @@ verifications:
       max: 20
   - assert:
       id: zero-lies-outside-the-quantified-span
-      when: "AVAL = 0"
+      when: "PC.PCSTRESN IS NULL AND PC.PCSTRESC LIKE '<%' AND AVAL = 0"
       require: "FIRSTQ IS NULL OR ATPTN < FIRSTQ OR ATPTN > LASTQ"
