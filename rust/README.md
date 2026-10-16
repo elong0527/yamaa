@@ -432,8 +432,9 @@ yamaa = { path = "rust/crates/yamaa", default-features = false, features = ["yam
 ```
 
 Publishing to crates.io is not decided here. It depends on #2583 -- the
-workspace `[patch.crates-io]` vendored `saphyr-parser` cannot be published as
-a patch -- and on the provenance terms of the vendored ReadStat C sources.
+workspace `[patch.crates-io]` vendored `saphyr-parser` and `parquet` cannot be
+published as patches -- and on the provenance terms of the vendored ReadStat
+C sources.
 Until #2583 lands, git/path is the distribution route.
 
 ### Host-usage mapping

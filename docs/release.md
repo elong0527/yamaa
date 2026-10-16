@@ -28,7 +28,7 @@ The minimum supported independent readers are:
 
 | Reader | Minimum | Saved formats qualified |
 | --- | --- | --- |
-| Python Polars | 1.43.2 | CSV text and Parquet |
+| Python Polars | 1.35.2 | CSV text and Parquet |
 | Python PyArrow | 23.0.1 | CSV text and Parquet |
 | R arrow | 23.0.1 | CSV text and Parquet |
 | Python standard library | Supported CPython above | Dataset-JSON 1.1 |
@@ -75,13 +75,16 @@ packages. Arrow and Parquet are supported at exactly 60.0.0 with flatbuffers
 the adapter's version-specific APIs have not been adapted and qualified for
 those graphs. Broadening that range requires separate adapter and installed-host
 qualification first. Portable libm remains exactly 0.2.16, and the reviewed
-local saphyr-parser patch remains part of every graph.
+local saphyr-parser and parquet patches remain part of every graph.
 
 Python supports CPython 3.12 through 3.14 with the runtime ranges in
-`python/pyproject.toml`. Their declared floors are lxml 6.1.0, Polars 1.43.2,
+`python/pyproject.toml`. Their declared floors are lxml 6.1.0, Polars 1.35.2,
 py-yaml12 0.2, PyArrow 23.0.1, Pydantic 2.12.4, packaging 25 and PyYAML 6.0.3.
-Polars 1.35 and 1.42.1 cannot read the current writer's saved Parquet and are
-outside the supported range. R uses R 4.6.1 and the shared Rust graph; its host
+The vendored parquet writer omits the footer's total-order `column_orders`,
+which Polars before 1.43.2 cannot decode, so Polars readers from 1.35.2 read
+the current writer's saved Parquet. Files saved by the pre-change writer still
+carry that field and still require Polars 1.43.2 or later to read with Polars.
+R uses R 4.6.1 and the shared Rust graph; its host
 qualification readers are the `Suggests` dependencies in `R/yamaa/DESCRIPTION`.
 
 The continuous [dependency graph lanes](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#ci-and-release-qualification)
@@ -116,10 +119,12 @@ the GitHub release assets remain the documented standalone download route.
 ## Source package contents
 
 Python and R source packages carry the same Rust workspace, static ReadStat
-bridge and patched YAML parser. SAS and Transport decoding runs in the shared
-adapter over captured source bytes; it needs no host reader fallback or dynamic
-ReadStat installation. The [ReadStat integration](https://github.com/elong0527/yamaa/blob/main/rust/crates/yamaa-adapters/vendor/readstat/README.md)
-and [YAML parser provenance](https://github.com/elong0527/yamaa/blob/main/rust/vendor/saphyr-parser/PROVENANCE.md)
+bridge and patched YAML and Parquet writers. SAS and Transport decoding runs
+in the shared adapter over captured source bytes; it needs no host reader
+fallback or dynamic ReadStat installation. The
+[ReadStat integration](https://github.com/elong0527/yamaa/blob/main/rust/crates/yamaa-adapters/vendor/readstat/README.md),
+[YAML parser provenance](https://github.com/elong0527/yamaa/blob/main/rust/vendor/saphyr-parser/PROVENANCE.md)
+and [Parquet writer provenance](https://github.com/elong0527/yamaa/blob/main/rust/vendor/parquet/PROVENANCE.md)
 own their source inventories, patches and licenses. Both parser authors' MIT
 notices remain in the distributed `LICENSE-YAML.txt`.
 

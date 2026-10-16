@@ -20,9 +20,10 @@ authors = [
 ]
 dependencies = [
   "lxml>=6.1.0",
-  # 1.43.2 is the first installable release that decodes the IEEE 754 total-order
-  # column metadata our locked Parquet writer records for floating-point columns.
-  "polars>=1.43.2",
+  # The vendored Parquet writer omits the footer's total-order column_orders,
+  # which Polars before 1.43.2 cannot decode; 1.35.2 is the oldest reader
+  # qualified against the saved output (1.35.0/1.35.1 are not installable).
+  "polars>=1.35.2",
   "py-yaml12>=0.2",
   "pyarrow>=23.0.1",
   "pydantic>=2.12.4",

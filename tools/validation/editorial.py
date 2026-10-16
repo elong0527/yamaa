@@ -278,6 +278,9 @@ UNICODE_DATA_AND_NOTICES = {
     "rust/crates/yamaa-python/LICENSE-UNICODE.txt",
     "R/yamaa/inst/LICENSE-UNICODE.txt",
     "python/LICENSE-UNICODE.txt",
+    # The vendored parquet release's own readme and notice bytes.
+    "rust/vendor/parquet/README.md",
+    "rust/vendor/parquet/NOTICE.txt",
 }
 ASCII_SOURCE_IGNORED_PARTS = {
     ".git",

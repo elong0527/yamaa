@@ -72,7 +72,7 @@ class DependencyGraphsTests(unittest.TestCase):
                 (stage / "python/uv.lock").read_bytes(), locks["python/uv.lock"]
             )
             requirements = (stage / "requirements.in").read_text().splitlines()
-            self.assertIn("polars==1.43.2", requirements)
+            self.assertIn("polars==1.35.2", requirements)
             self.assertIn("pyarrow==23.0.1", requirements)
             self.assertIn("pydantic==2.12.4", requirements)
         self.assertEqual(locks, {name: (ROOT / name).read_bytes() for name in locks})
@@ -89,7 +89,7 @@ class DependencyGraphsTests(unittest.TestCase):
                     (stage / path).read_bytes(), (ROOT / path).read_bytes()
                 )
             requirements = (stage / "requirements.in").read_text().splitlines()
-            self.assertIn("polars>=1.43.2", requirements)
+            self.assertIn("polars>=1.35.2", requirements)
             self.assertIn("pyarrow>=23.0.1", requirements)
             self.assertFalse((stage / "rust/Cargo.lock").exists())
 

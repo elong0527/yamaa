@@ -1,0 +1,28 @@
+--- a/src/file/metadata/writer.rs
++++ b/src/file/metadata/writer.rs
+@@ -184,7 +184,7 @@
+         let offset_indexes = self.finalize_offset_indexes()?;
+ 
+         // We only include ColumnOrder for leaf nodes.
+-        let column_orders = self
++        let column_orders: Vec<ColumnOrder> = self
+             .schema_descr
+             .columns()
+             .iter()
+@@ -200,7 +200,15 @@
+         // This field is optional, perhaps in cases where no min/max fields are set
+         // in any Statistics or ColumnIndex object in the whole file.
+         // But for simplicity we always set this field.
+-        let column_orders = Some(column_orders);
++        //
++        // yamaa patch (see PROVENANCE.md in this vendored crate): omit the
++        // field instead. Readers that predate the IEEE 754 total-order
++        // ColumnOrder union member (for example Polars before 1.43.2)
++        // refuse the whole footer when it is present, and yamaa writes no
++        // statistics for a declared order to govern, so the field carries
++        // no information in the files this crate writes for yamaa.
++        let _ = &column_orders;
++        let column_orders: Option<Vec<ColumnOrder>> = None;
+ 
+         let (row_groups, unencrypted_row_groups) = self
+             .object_writer
