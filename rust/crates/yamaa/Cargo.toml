@@ -25,3 +25,6 @@ yamaa-core = { path = "../yamaa-core" }
 # reader; format admission stays behind the forwarded features above.
 arrow-array = { version = "=60.0.0", default-features = false, features = ["ffi"] }
 arrow-schema = { version = "=60.0.0", default-features = false }
+
+[lints]
+workspace = true

@@ -16,3 +16,6 @@ ryu = { version = "1.0.20", default-features = false }
 libm = { version = "=0.2.16", default-features = false }
 # Exact decimal rounding intermediates.
 num-bigint = { version = "0.5.1", default-features = false }
+
+[lints]
+workspace = true
