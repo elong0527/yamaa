@@ -25,7 +25,7 @@ check_issues <- function(result, empty = TRUE) {
   if (empty) stopifnot(nrow(frame) == 0L)
 }
 refused <- function(result) tryCatch({ result$save(); FALSE }, yamaa_define_error = function(e) {
-  stopifnot(identical(e$issues, result$issues)); TRUE
+  stopifnot(identical(e$issues, result$issues), identical(e$diagnostics, result$diagnostics)); TRUE
 })
 original_path <- Sys.getenv("PATH")
 native_path <- tempfile("define-runtime-"); dir.create(native_path)
