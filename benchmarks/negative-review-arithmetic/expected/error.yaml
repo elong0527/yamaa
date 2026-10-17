@@ -1,7 +1,10 @@
 phase: validation
-condition: invalid_predicate
+condition: incompatible_input_type
 spec_paths:
   - columns.REVIEWFL.derivation.flag.condition
-requirement: REQ-0188
+requirement: REQ-0444
 context:
-  predicate: "ASTDT <= TRTEDT + 30"
+  expr: "ASTDT <= TRTEDT + 30"
+  source: TRTEDT
+  expected: numeric
+  actual: date

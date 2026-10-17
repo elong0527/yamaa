@@ -1,7 +1,6 @@
 use std::convert::Infallible;
-use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver};
+use yamaa_core::expression::{compile, Condition, Context, ErrorKind, Resolver as NumericResolver};
 use yamaa_core::numeric::{ArithmeticErrorKind, Number};
-use yamaa_core::numeric_compiler::compile_numeric;
 use yamaa_core::value::{Selection, Value};
 
 // Exact PortableLibmV1 inputs and results, including binary64 range boundaries,
@@ -50,12 +49,17 @@ fn portable_math_matches_exact_bits_and_domain_failures() {
             "POWER" => "POWER(A, B)",
             _ => panic!("unexpected function {function}"),
         };
-        let plan = compile_numeric(expression, "columns.VALUE.derivation.compute").unwrap();
+        let plan = compile(
+            expression,
+            Context::Compute,
+            "columns.VALUE.derivation.compute",
+        )
+        .unwrap();
         let mut resolver = Inputs {
             values: [input(left), input(right)],
             resolutions: Vec::new(),
         };
-        let result = plan.evaluate(&mut resolver);
+        let result = plan.evaluate_number(&mut resolver);
         match (*expected, result) {
             ("missing", Ok(Number::Missing)) => {}
             ("ln_of_nonpositive" | "invalid_power", Err(error)) => {
@@ -67,13 +71,14 @@ fn portable_math_matches_exact_bits_and_domain_failures() {
                     },
                 };
                 assert_eq!(
-                    error.evaluation.kind,
-                    EvaluationErrorKind::Numeric(NumericCondition::Arithmetic(kind)),
+                    error.kind,
+                    ErrorKind::Condition(Condition::Arithmetic(kind)),
                     "{name}"
                 );
-                assert_eq!(error.source_span.start, 0, "{name}");
-                assert_eq!(error.source_span.end, expression.len(), "{name}");
-                assert!(error.evaluation.location.operands.is_empty(), "{name}");
+                let span = error.source_span.expect("arithmetic span");
+                assert_eq!(span.start, 0, "{name}");
+                assert_eq!(span.end, expression.len(), "{name}");
+                assert!(error.route.is_empty(), "{name}");
             }
             (bits, Ok(Number::Float(value))) => {
                 assert_eq!(

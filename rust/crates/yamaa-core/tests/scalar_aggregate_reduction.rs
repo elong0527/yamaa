@@ -4,8 +4,8 @@ mod support;
 mod scalar {
     mod aggregate_reduction {
         use yamaa_core::{
-            aggregate_parser::Reducer,
             aggregate_reduction::{reduce_values, AggregateReductionError},
+            expression::Reducer,
             table::ValueRef,
             value::{Value, ValueType},
         };
@@ -218,7 +218,7 @@ mod scalar {
         use yamaa_core::temporal::{Date, DateTime, Precision};
         use yamaa_core::value::{ColumnType, FiniteFloat, Value, ValueType};
 
-        /// Apply the numeric grammar without inheriting Python's configurable digit cap.
+        /// Apply the grammar's number production without inheriting Python's configurable digit cap.
         #[test]
         fn long_integer_text_preserves_value_or_exact_range_diagnostic() {
             let leading_zeros = Value::Str("0".repeat(5000) + "1");
@@ -1818,14 +1818,11 @@ mod scalar {
         use std::collections::BTreeMap;
         use std::convert::Infallible;
 
-        use yamaa_core::evaluation::{
-            EvaluationErrorKind, NumericCondition, NumericNode, NumericPlan, NumericResolver,
-            Operand,
+        use yamaa_core::expression::{
+            compile, CompileError, Condition, Context, ErrorKind, EvaluationError, Failure,
+            Resolver as NumericResolver, Step,
         };
-        use yamaa_core::numeric::{
-            ArithmeticErrorKind, BinaryOperator as B, Number, UnaryOperator as U,
-        };
-        use yamaa_core::numeric_compiler::compile_numeric;
+        use yamaa_core::numeric::{ArithmeticErrorKind, Number};
         use yamaa_core::value::{Selection, Value, ValueType};
 
         const SPEC_PATH: &str = "columns.A.derivation.compute";
@@ -1842,55 +1839,6 @@ mod scalar {
                 "str" => Value::Str(text.into()),
                 "bool" => Value::Bool(text.parse().unwrap()),
                 _ => panic!("bad fixture value {token}"),
-            }
-        }
-
-        /// Convert test-only postfix notation into typed nodes, not the language grammar.
-        fn tree(postfix: &str) -> NumericNode {
-            let mut stack = Vec::new();
-            for token in postfix.split_whitespace() {
-                let node = if let Some(name) = token.strip_prefix('$') {
-                    NumericNode::Identifier(name.into())
-                } else if let Some(operator) = match token {
-                    "plus" => Some(U::Plus),
-                    "negate" => Some(U::Negate),
-                    "abs" => Some(U::Abs),
-                    _ => None,
-                } {
-                    NumericNode::Unary {
-                        operator,
-                        operand: Box::new(stack.pop().unwrap()),
-                    }
-                } else if let Some(operator) = match token {
-                    "add" => Some(B::Add),
-                    "subtract" => Some(B::Subtract),
-                    "multiply" => Some(B::Multiply),
-                    "divide" => Some(B::Divide),
-                    "modulo" => Some(B::Modulo),
-                    _ => None,
-                } {
-                    let right = Box::new(stack.pop().unwrap());
-                    let left = Box::new(stack.pop().unwrap());
-                    NumericNode::Binary {
-                        operator,
-                        left,
-                        right,
-                    }
-                } else {
-                    NumericNode::Literal(Number::try_from(&value(token)).unwrap())
-                };
-                stack.push(node);
-            }
-            assert_eq!(stack.len(), 1, "malformed test tree {postfix}");
-            stack.pop().unwrap()
-        }
-
-        /// Associate a caller-supplied tree with the original expression's provenance.
-        fn plan(expression: &str, postfix: &str) -> NumericPlan {
-            NumericPlan {
-                spec_path: SPEC_PATH.into(),
-                expression: expression.into(),
-                root: tree(postfix),
             }
         }
 
@@ -1944,18 +1892,18 @@ mod scalar {
         }
 
         /// Check portable condition metadata and encode exact failure-specific context.
-        fn encoded_condition(condition: &NumericCondition) -> String {
+        fn encoded_condition(condition: &Condition) -> String {
             let mut result = format!(
                 "error:{}:{}",
                 condition.condition(),
                 condition.requirement()
             );
             match condition {
-                NumericCondition::UnknownField { identifier } => {
+                Condition::NumericUnknownField { identifier } => {
                     assert_eq!(condition.phase(), "validation");
                     result.push_str(&format!(":{identifier}"));
                 }
-                NumericCondition::IncompatibleInput { identifier, actual } => {
+                Condition::NumericInput { identifier, actual } => {
                     assert_eq!(condition.phase(), "validation");
                     let actual = match actual {
                         ValueType::Str => "str",
@@ -1964,122 +1912,109 @@ mod scalar {
                     };
                     result.push_str(&format!(":{identifier}:{actual}"));
                 }
-                NumericCondition::LiteralOverflow { value } => {
-                    assert_eq!(condition.phase(), "derivation");
-                    result.push_str(&format!(":{value}"));
-                }
-                NumericCondition::Arithmetic(kind) => {
+                Condition::Arithmetic(kind) => {
                     assert_eq!(condition.phase(), "derivation");
                     if let ArithmeticErrorKind::IntegerOverflow { value } = kind {
                         result.push_str(&format!(":{value}"));
                     }
                 }
+                other => panic!("a formula raises no {other:?}"),
             }
             result
         }
 
-        /// Replay the same fixtures through either caller-supplied IR or actual source compilation.
+        /// Encode a refusal found before any value is read.
+        fn encoded_refusal(failure: &Failure) -> String {
+            format!("error:{}:{}", failure.condition(), failure.requirement())
+        }
+
+        fn route_text(route: &[Step]) -> String {
+            route
+                .iter()
+                .map(|step| match step {
+                    Step::Unary => "unary",
+                    Step::LeftOperand => "left",
+                    Step::RightOperand => "right",
+                    other => panic!("a formula takes no {other:?} step"),
+                })
+                .collect::<Vec<_>>()
+                .join(",")
+        }
+
+        /// Evaluate one written formula and check the failed node's exact extent.
         fn fixture_evaluate(
             expression: &str,
-            postfix: &str,
-            compiled: bool,
             resolver: &mut RecordingResolver,
-        ) -> Result<Number, Box<yamaa_core::evaluation::EvaluationError<Infallible>>> {
-            if compiled {
-                compile_numeric(expression, SPEC_PATH)
-                    .unwrap()
-                    .evaluate(resolver)
-                    .map_err(|failure| {
-                        assert!(failure.source_span.start < failure.source_span.end);
-                        assert!(expression
-                            .get(failure.source_span.start..failure.source_span.end)
-                            .is_some());
-                        failure.evaluation
-                    })
-            } else {
-                plan(expression, postfix)
-                    .evaluate(resolver)
-                    .map_err(Box::new)
+        ) -> Result<Result<Number, Box<EvaluationError<Infallible>>>, Failure> {
+            match compile(expression, Context::Compute, SPEC_PATH) {
+                Ok(plan) => Ok(plan.evaluate_number(resolver).inspect_err(|failure| {
+                    let span = failure.source_span.expect("a formula failure has a span");
+                    assert!(span.start < span.end);
+                    assert!(expression.get(span.start..span.end).is_some());
+                })),
+                Err(CompileError::Invalid { failure, .. }) => Err(failure),
+                Err(error) => panic!("fixture exceeds resource policy: {error:?}"),
             }
         }
 
-        /// Replay independent Python/Rust results, call traces and structural failure paths.
+        /// Encode one outcome and its structural route.
+        fn outcome(
+            expression: &str,
+            result: Result<Result<Number, Box<EvaluationError<Infallible>>>, Failure>,
+        ) -> (String, String) {
+            match result {
+                Ok(Ok(number)) => (encoded(number), String::new()),
+                Ok(Err(error)) => {
+                    let error = *error;
+                    assert_eq!(error.spec_path, SPEC_PATH);
+                    assert_eq!(error.expression, expression);
+                    let ErrorKind::Condition(condition) = error.kind;
+                    (encoded_condition(&condition), route_text(&error.route))
+                }
+                Err(failure) => (encoded_refusal(&failure), String::new()),
+            }
+        }
+
+        /// Replay independent results, call traces and structural failure paths.
         #[test]
         fn shared_evaluation_vectors() {
-            for compiled in [false, true] {
-                for row in include_str!("fixtures/evaluation.tsv").lines().skip(1) {
-                    let fields: Vec<_> = row.split('\t').collect();
-                    assert_eq!(fields.len(), 7);
-                    let mut resolver = RecordingResolver::new(fields[3]);
-                    let mut route = Vec::new();
-                    let actual =
-                        match fixture_evaluate(fields[1], fields[2], compiled, &mut resolver) {
-                            Ok(number) => encoded(number),
-                            Err(error) => {
-                                let error = *error;
-                                assert_eq!(error.location.spec_path, SPEC_PATH);
-                                assert_eq!(error.location.expression, fields[1]);
-                                route = error.location.operands;
-                                let EvaluationErrorKind::Numeric(condition) = error.kind;
-                                encoded_condition(&condition)
-                            }
-                        };
-                    assert_eq!(actual, fields[4], "{}", fields[0]);
-                    assert_eq!(
-                        resolver.trace.join(","),
-                        fields[5].trim_matches('-'),
-                        "{}",
-                        fields[0]
-                    );
-                    let route: Vec<_> = route
-                        .iter()
-                        .map(|position| match position {
-                            Operand::Unary => "unary",
-                            Operand::Left => "left",
-                            Operand::Right => "right",
-                        })
-                        .collect();
-                    assert_eq!(
-                        route.join(","),
-                        fields[6].trim_matches('-'),
-                        "{}",
-                        fields[0]
-                    );
-                }
+            for row in include_str!("fixtures/evaluation.tsv").lines().skip(1) {
+                let fields: Vec<_> = row.split('\t').collect();
+                assert_eq!(fields.len(), 7);
+                let mut resolver = RecordingResolver::new(fields[3]);
+                let (actual, route) =
+                    outcome(fields[1], fixture_evaluate(fields[1], &mut resolver));
+                assert_eq!(actual, fields[4], "{}", fields[0]);
+                assert_eq!(
+                    resolver.trace.join(","),
+                    fields[5].trim_matches('-'),
+                    "{}",
+                    fields[0]
+                );
+                assert_eq!(route, fields[6].trim_matches('-'), "{}", fields[0]);
             }
         }
 
-        /// Exercise the evaluator against every existing independently specified primitive case.
+        /// Exercise the evaluator against every independently specified primitive case.
         #[test]
         fn shared_arithmetic_vectors_through_typed_evaluation() {
-            for compiled in [false, true] {
-                for row in include_str!("fixtures/arithmetic.tsv").lines().skip(1) {
-                    let fields: Vec<_> = row.split('\t').collect();
-                    let mut resolver =
-                        RecordingResolver::new(&format!("L={};R={}", fields[3], fields[4]));
-                    let unary = matches!(fields[2], "plus" | "negate" | "abs");
-                    let postfix = format!("{} {}", if unary { "$L" } else { "$L $R" }, fields[2]);
-                    let actual =
-                        match fixture_evaluate(fields[1], &postfix, compiled, &mut resolver) {
-                            Ok(number) => encoded(number),
-                            Err(error) => {
-                                let error = *error;
-                                assert_eq!(error.location.expression, fields[1]);
-                                assert_eq!(error.location.spec_path, SPEC_PATH);
-                                assert!(error.location.operands.is_empty());
-                                let EvaluationErrorKind::Numeric(condition) = error.kind;
-                                encoded_condition(&condition)
-                            }
-                        };
-                    assert_eq!(actual, fields[5], "{}", fields[0]);
-                    assert_eq!(resolver.trace.join(","), if unary { "L" } else { "L,R" });
-                }
+            for row in include_str!("fixtures/arithmetic.tsv").lines().skip(1) {
+                let fields: Vec<_> = row.split('\t').collect();
+                let mut resolver =
+                    RecordingResolver::new(&format!("L={};R={}", fields[3], fields[4]));
+                let unary = matches!(fields[2], "plus" | "negate" | "abs");
+                let (actual, route) =
+                    outcome(fields[1], fixture_evaluate(fields[1], &mut resolver));
+                assert_eq!(actual, fields[5], "{}", fields[0]);
+                assert_eq!(route, "", "{}", fields[0]);
+                assert_eq!(resolver.trace.join(","), if unary { "L" } else { "L,R" });
             }
         }
 
         /// Cover every nonnumeric runtime type without silently converting a numeric string.
         #[test]
         fn identifiers_reject_every_nonnumeric_type() {
+            let plan = compile("+A", Context::Compute, SPEC_PATH).unwrap();
             for value in [
                 Value::Str("42".into()),
                 Value::Bool(true),
@@ -2091,11 +2026,11 @@ mod scalar {
                     values: [("A".into(), value)].into(),
                     trace: Vec::new(),
                 };
-                let failure = plan("+A", "$A plus").evaluate(&mut resolver).unwrap_err();
-                assert_eq!(failure.location.operands, [Operand::Unary]);
+                let failure = plan.evaluate_number(&mut resolver).unwrap_err();
+                assert_eq!(failure.route, [Step::Unary]);
                 assert_eq!(
                     failure.kind,
-                    EvaluationErrorKind::Numeric(NumericCondition::IncompatibleInput {
+                    ErrorKind::Condition(Condition::NumericInput {
                         identifier: "A".into(),
                         actual,
                     })
@@ -2135,16 +2070,17 @@ mod scalar {
                 }),
                 trace: Vec::new(),
             };
-            let failure = plan("L + (A * B)", "$L $A $B multiply add")
-                .evaluate(&mut resolver)
+            let failure = compile("L + (A * B)", Context::Compute, SPEC_PATH)
+                .unwrap()
+                .evaluate_number(&mut resolver)
                 .unwrap_err();
             assert_eq!(resolver.trace, ["L", "A"]);
-            assert_eq!(failure.location.spec_path, SPEC_PATH);
-            assert_eq!(failure.location.expression, "L + (A * B)");
-            assert_eq!(failure.location.operands, [Operand::Right, Operand::Left]);
+            assert_eq!(failure.spec_path, SPEC_PATH);
+            assert_eq!(failure.expression, "L + (A * B)");
+            assert_eq!(failure.route, [Step::RightOperand, Step::LeftOperand]);
             assert_eq!(
                 failure.kind,
-                EvaluationErrorKind::Resolution {
+                ErrorKind::Resolution {
                     identifier: "A".into(),
                     error: Failure {
                         condition: "multiple_matches",
@@ -2168,10 +2104,10 @@ mod scalar {
                     Ok(Selection::Present(Value::Int(self.0)))
                 }
             }
-            let plan = plan("A + A", "$A $A add");
+            let plan = compile("A + A", Context::Compute, SPEC_PATH).unwrap();
             let mut resolver = CountingResolver(0);
-            assert_eq!(plan.evaluate(&mut resolver), Ok(Number::Int(3)));
-            assert_eq!(plan.evaluate(&mut resolver), Ok(Number::Int(7)));
+            assert_eq!(plan.evaluate_number(&mut resolver), Ok(Number::Int(3)));
+            assert_eq!(plan.evaluate_number(&mut resolver), Ok(Number::Int(7)));
             assert_eq!(resolver.0, 4);
         }
 
@@ -2190,23 +2126,8 @@ mod scalar {
                 let fields: Vec<_> = row.split('\t').collect();
                 assert_eq!(fields.len(), 6);
                 let mut resolver = RecordingResolver::new(fields[2]);
-                let plan =
-                    yamaa_core::numeric_compiler::compile_numeric(fields[1], SPEC_PATH).unwrap();
-                let mut route = Vec::new();
-                let actual = match plan.evaluate(&mut resolver) {
-                    Ok(number) => encoded(number),
-                    Err(error) => {
-                        assert!(fields[1]
-                            .get(error.source_span.start..error.source_span.end)
-                            .is_some());
-                        let error = *error.evaluation;
-                        assert_eq!(error.location.expression, fields[1]);
-                        assert_eq!(error.location.spec_path, SPEC_PATH);
-                        route = error.location.operands;
-                        let EvaluationErrorKind::Numeric(condition) = error.kind;
-                        encoded_condition(&condition)
-                    }
-                };
+                let (actual, route) =
+                    outcome(fields[1], fixture_evaluate(fields[1], &mut resolver));
                 assert_eq!(actual, fields[3], "{}", fields[0]);
                 assert_eq!(
                     resolver.trace.join(","),
@@ -2214,15 +2135,6 @@ mod scalar {
                     "{}",
                     fields[0]
                 );
-                let route = route
-                    .iter()
-                    .map(|operand| match operand {
-                        Operand::Unary => "unary",
-                        Operand::Left => "left",
-                        Operand::Right => "right",
-                    })
-                    .collect::<Vec<_>>()
-                    .join(",");
                 assert_eq!(route, fields[5].trim_matches('-'), "{}", fields[0]);
             }
         }
@@ -2277,9 +2189,10 @@ mod scalar {
         use std::collections::{BTreeMap, VecDeque};
         use std::convert::Infallible;
 
-        use yamaa_core::predicate::{
-            Comparison as C, Condition, ErrorKind, Node, Plan, PlanError, Resolver, Route, Scalar,
-            Truth,
+        use crate::support::dataset::{predicate_text, Node, Scalar};
+        use yamaa_core::expression::{
+            compile, Comparison as C, CompileError, CompiledExpression, Condition, Context,
+            ErrorKind, Resolver, Resource, Step as Route, Truth,
         };
         use yamaa_core::temporal::{Date, DateTime, Precision};
         use yamaa_core::value::{Selection, Value, ValueType};
@@ -2320,14 +2233,13 @@ mod scalar {
             }
         }
 
-        /// Keep authored source context observable in failures.
-        fn plan(nodes: Vec<Node>) -> Plan {
+        /// Compile an authored arena's text; failures keep that text and path.
+        fn plan(nodes: Vec<Node>) -> CompiledExpression {
             let root = nodes.len() - 1;
-            Plan::new(
-                nodes,
-                root,
-                "rows[0].filter".into(),
-                "original predicate".into(),
+            compile(
+                &predicate_text(&nodes, root),
+                Context::Predicate,
+                "rows[0].filter",
             )
             .unwrap()
         }
@@ -2337,7 +2249,7 @@ mod scalar {
             Scalar::Identifier(name.into())
         }
 
-        /// Embed a normalized operand without host coercion.
+        /// Embed a literal operand without host coercion.
         fn lit(value: Value) -> Scalar {
             Scalar::Literal(value)
         }
@@ -2364,6 +2276,7 @@ mod scalar {
                     assert_eq!(left.or(*right), or[i][j]);
                 }
             }
+            // A bool value reaches a predicate only through a name.
             for (value, expected) in [
                 (Value::Missing, T),
                 (Value::Bool(false), F),
@@ -2371,14 +2284,25 @@ mod scalar {
             ] {
                 for negated in [false, true] {
                     let p = plan(vec![Node::IsNull {
-                        value: lit(value.clone()),
+                        value: id("v"),
                         negated,
                     }]);
                     assert_eq!(
-                        p.evaluate(&mut Port::default()).unwrap(),
+                        p.evaluate_truth(&mut Port::with(&[("v", value.clone())]))
+                            .unwrap(),
                         if negated { expected.negate() } else { expected }
                     );
                 }
+            }
+            for negated in [false, true] {
+                let p = plan(vec![Node::IsNull {
+                    value: lit(Value::Missing),
+                    negated,
+                }]);
+                assert_eq!(
+                    p.evaluate_truth(&mut Port::default()).unwrap(),
+                    if negated { F } else { T }
+                );
             }
         }
 
@@ -2455,7 +2379,7 @@ mod scalar {
                     let p = plan(vec![comparison(operator)]);
                     let mut port = Port::with(&[("a", a.clone()), ("b", b.clone())]);
                     assert_eq!(
-                        p.evaluate(&mut port).unwrap(),
+                        p.evaluate_truth(&mut port).unwrap(),
                         expected,
                         "{operator:?} {a:?} {b:?}"
                     );
@@ -2471,7 +2395,7 @@ mod scalar {
                 for (a, b) in [(Value::Missing, value.clone()), (value, Value::Missing)] {
                     assert_eq!(
                         plan(vec![comparison(C::Equal)])
-                            .evaluate(&mut Port::with(&[("a", a), ("b", b)]))
+                            .evaluate_truth(&mut Port::with(&[("a", a), ("b", b)]))
                             .unwrap(),
                         Truth::Unknown
                     );
@@ -2498,7 +2422,7 @@ mod scalar {
                 ),
             ] {
                 let error = plan(vec![comparison(C::Equal)])
-                    .evaluate(&mut Port::with(&[("a", a), ("b", b)]))
+                    .evaluate_truth(&mut Port::with(&[("a", a), ("b", b)]))
                     .unwrap_err();
                 assert_eq!(
                     error.kind,
@@ -2511,17 +2435,19 @@ mod scalar {
         #[test]
         fn eager_boolean_and_membership_failure_order() {
             for (truth, and) in [(false, true), (true, false)] {
-                let p = plan(vec![
+                let nodes = vec![
                     Node::Boolean(truth),
                     comparison(C::Equal),
                     if and { Node::And(0, 1) } else { Node::Or(0, 1) },
-                ]);
+                ];
+                let text = predicate_text(&nodes, 2);
+                let p = plan(nodes);
                 let mut port = Port::default();
-                let error = p.evaluate(&mut port).unwrap_err();
+                let error = p.evaluate_truth(&mut port).unwrap_err();
                 assert_eq!(port.trace, ["a"]);
                 assert_eq!(error.route, [Route::Right, Route::Left]);
                 assert_eq!(error.spec_path, "rows[0].filter");
-                assert_eq!(error.expression, "original predicate");
+                assert_eq!(error.expression, text);
                 assert_eq!(
                     error.kind,
                     ErrorKind::Condition(Condition::UnknownField {
@@ -2535,11 +2461,14 @@ mod scalar {
                 negated: false,
             }]);
             let mut port = Port::with(&[("a", Value::Int(1)), ("b", Value::Int(1))]);
-            assert_eq!(p.evaluate(&mut port).unwrap_err().route, [Route::Item(1)]);
+            assert_eq!(
+                p.evaluate_truth(&mut port).unwrap_err().route,
+                [Route::Item(1)]
+            );
             assert_eq!(port.trace, ["a", "b", "c"]);
             port = Port::with(&[("a", Value::Int(1)), ("b", Value::Str("1".into()))]);
             assert!(matches!(
-                p.evaluate(&mut port).unwrap_err().kind,
+                p.evaluate_truth(&mut port).unwrap_err().kind,
                 ErrorKind::Condition(Condition::IncompatiblePair { .. })
             ));
             assert_eq!(port.trace, ["a", "b"]);
@@ -2558,7 +2487,7 @@ mod scalar {
                             items,
                             negated
                         }])
-                        .evaluate(&mut Port::default())
+                        .evaluate_truth(&mut Port::default())
                         .unwrap(),
                         if negated { expected.negate() } else { expected }
                     );
@@ -2575,7 +2504,7 @@ mod scalar {
                 negated: false,
             }]);
             let mut port = Port::with(&[("x", Value::Int(2)), ("lo", Value::Str("bad".into()))]);
-            let error = p.evaluate(&mut port).unwrap_err();
+            let error = p.evaluate_truth(&mut port).unwrap_err();
             assert_eq!(port.trace, ["x", "lo", "x", "hi"]);
             assert_eq!(error.route, [Route::Upper]);
             assert_eq!(
@@ -2591,14 +2520,14 @@ mod scalar {
             ]);
             port.values
                 .insert("x".into(), [Value::Int(2), Value::Int(4)].into());
-            assert_eq!(p.evaluate(&mut port).unwrap(), Truth::False);
+            assert_eq!(p.evaluate_truth(&mut port).unwrap(), Truth::False);
             assert_eq!(port.trace, ["x", "lo", "x", "hi"]);
             port = Port::with(&[
                 ("x", Value::Missing),
                 ("lo", Value::Int(1)),
                 ("hi", Value::Int(3)),
             ]);
-            assert_eq!(p.evaluate(&mut port).unwrap(), Truth::Unknown);
+            assert_eq!(p.evaluate_truth(&mut port).unwrap(), Truth::Unknown);
         }
 
         /// This deliberately lacks Clone, proving an opaque port failure is moved intact.
@@ -2616,7 +2545,7 @@ mod scalar {
         #[test]
         fn opaque_resolution_and_condition_metadata() {
             let error = plan(vec![comparison(C::Equal)])
-                .evaluate(&mut FailingPort)
+                .evaluate_truth(&mut FailingPort)
                 .unwrap_err();
             assert_eq!(
                 error.kind,
@@ -2648,7 +2577,7 @@ mod scalar {
                     "incompatible_input_type",
                     "REQ-0190",
                 ),
-                (Condition::DanglingEscape, "invalid_predicate", "REQ-0191"),
+                (Condition::DanglingEscape, "invalid_expression", "REQ-0191"),
             ] {
                 assert_eq!(
                     (
@@ -2662,7 +2591,7 @@ mod scalar {
         }
 
         /// Construct LIKE over literals without involving a regex library.
-        fn like(value: &str, pattern: &str, escape: Option<char>) -> Plan {
+        fn like(value: &str, pattern: &str, escape: Option<char>) -> CompiledExpression {
             plan(vec![Node::Like {
                 value: lit(Value::Str(value.into())),
                 pattern: lit(Value::Str(pattern.into())),
@@ -2692,14 +2621,30 @@ mod scalar {
             ] {
                 assert_eq!(
                     like(value, pattern, escape)
-                        .evaluate(&mut Port::default())
+                        .evaluate_truth(&mut Port::default())
                         .unwrap(),
                     expected,
                     "{value:?} {pattern:?}"
                 );
             }
-            let error = like("no match", "abc!", Some('!'))
-                .evaluate(&mut Port::default())
+            // A literal pattern's dangling escape is refused before any value
+            // is read; a resolved pattern's fails when it is matched.
+            assert!(matches!(
+                compile(
+                    "'no match' LIKE 'abc!' ESCAPE '!'",
+                    Context::Predicate,
+                    "rows[0].filter"
+                ),
+                Err(CompileError::Invalid { .. })
+            ));
+            let p = plan(vec![Node::Like {
+                value: lit(Value::Str("no match".into())),
+                pattern: id("p"),
+                escape: Some('!'),
+                negated: false,
+            }]);
+            let error = p
+                .evaluate_truth(&mut Port::with(&[("p", Value::Str("abc!".into()))]))
                 .unwrap_err();
             assert_eq!(error.kind, ErrorKind::Condition(Condition::DanglingEscape));
             let p = plan(vec![Node::Like {
@@ -2708,15 +2653,20 @@ mod scalar {
                 escape: None,
                 negated: true,
             }]);
-            assert_eq!(p.evaluate(&mut Port::default()).unwrap(), Truth::Unknown);
+            assert_eq!(
+                p.evaluate_truth(&mut Port::default()).unwrap(),
+                Truth::Unknown
+            );
             let p = plan(vec![Node::Like {
                 value: lit(Value::Str("a".into())),
-                pattern: lit(Value::Bool(false)),
+                pattern: id("p"),
                 escape: None,
                 negated: false,
             }]);
             assert_eq!(
-                p.evaluate(&mut Port::default()).unwrap_err().kind,
+                p.evaluate_truth(&mut Port::with(&[("p", Value::Bool(false))]))
+                    .unwrap_err()
+                    .kind,
                 ErrorKind::Condition(Condition::ExpectedText {
                     actual: ValueType::Bool
                 })
@@ -2765,7 +2715,7 @@ mod scalar {
                     };
                     assert_eq!(
                         like(&value, &pattern, None)
-                            .evaluate(&mut Port::default())
+                            .evaluate_truth(&mut Port::default())
                             .unwrap(),
                         expected,
                         "{value:?} {pattern:?}"
@@ -2775,51 +2725,33 @@ mod scalar {
         }
 
         #[test]
-        fn structural_admission_preserves_coordinates_and_fixed_semantic_depth() {
-            let admit = |nodes: Vec<Node>| {
-                Plan::new(nodes.clone(), nodes.len() - 1, String::new(), String::new())
-            };
+        fn empty_membership_and_fixed_semantic_depth_are_refused_before_values() {
+            assert!(matches!(
+                compile("NULL IN ()", Context::Predicate, "rows[0].filter"),
+                Err(CompileError::Invalid { .. })
+            ));
+            let edge = format!("{}TRUE", "NOT ".repeat(127));
+            let edge = compile(&edge, Context::Predicate, "rows[0].filter").unwrap();
             assert_eq!(
-                admit(vec![Node::Not(0)]).unwrap_err(),
-                PlanError::InvalidChild
+                edge.evaluate_truth(&mut Port::default()).unwrap(),
+                Truth::False
             );
-            assert_eq!(
-                admit(vec![Node::In {
-                    value: lit(Value::Missing),
-                    items: vec![],
-                    negated: false
-                }])
-                .unwrap_err(),
-                PlanError::EmptyMembership
-            );
-            // Shared arena references do not create an artificial expanded-work quota.
-            let mut shared = vec![Node::Boolean(true)];
-            for i in 0..20 {
-                shared.push(Node::And(i, i));
-            }
-            assert!(admit(shared).is_ok());
-            let mut nodes = vec![Node::Boolean(true)];
-            for i in 0..127 {
-                nodes.push(Node::Not(i));
-            }
-            let edge = admit(nodes.clone()).unwrap();
-            assert_eq!(edge.evaluate(&mut Port::default()).unwrap(), Truth::False);
-            nodes.push(Node::Not(127));
-            assert_eq!(
-                admit(nodes).unwrap_err(),
-                PlanError::Limit(yamaa_core::limits::LimitExceeded {
-                    resource: "semantic_depth",
+            let deep = format!("{}TRUE", "NOT ".repeat(128));
+            assert!(matches!(
+                compile(&deep, Context::Predicate, "rows[0].filter"),
+                Err(CompileError::Limit {
+                    resource: Resource::Depth,
                     limit: 128,
-                    actual: Some(129),
+                    ..
                 })
-            );
+            ));
         }
 
         #[test]
         fn repeated_like_and_text_comparisons_keep_the_original_truth_and_reads() {
             let p = like("abc", "%", None);
             for _ in 0..2 {
-                assert_eq!(p.evaluate(&mut Port::default()).unwrap(), Truth::True);
+                assert_eq!(p.evaluate_truth(&mut Port::default()).unwrap(), Truth::True);
             }
             let node = Node::Like {
                 value: lit(Value::Str("abc".into())),
@@ -2828,16 +2760,16 @@ mod scalar {
                 negated: false,
             };
             let p = plan(vec![node, Node::Or(0, 0)]);
-            assert_eq!(p.evaluate(&mut Port::default()).unwrap(), Truth::True);
+            assert_eq!(p.evaluate_truth(&mut Port::default()).unwrap(), Truth::True);
             let p = plan(vec![comparison(C::Equal)]);
             let mut port = Port::with(&[
                 ("a", Value::Str("a".repeat(40))),
                 ("b", Value::Str("a".repeat(40))),
             ]);
-            assert_eq!(p.evaluate(&mut port).unwrap(), Truth::True);
+            assert_eq!(p.evaluate_truth(&mut port).unwrap(), Truth::True);
             assert_eq!(port.trace, ["a", "b"]);
             assert_eq!(
-                p.evaluate(&mut Port::with(&[
+                p.evaluate_truth(&mut Port::with(&[
                     ("a", Value::Str("a".into())),
                     ("b", Value::Str("a".into()))
                 ]))
@@ -2869,84 +2801,6 @@ mod scalar {
             }
         }
 
-        /// The fixture's small postfix notation constructs typed IR; it is not a parser
-        /// for the language. The Python test separately parses the authored expression.
-        fn fixture_tree(text: &str) -> Vec<Node> {
-            let mut nodes = Vec::new();
-            let mut predicates = Vec::new();
-            let mut operands = Vec::new();
-            for token in text.split_whitespace() {
-                let node = match token {
-                    "true" | "false" => Node::Boolean(token == "true"),
-                    "not" => Node::Not(predicates.pop().unwrap()),
-                    "and" | "or" => {
-                        let right = predicates.pop().unwrap();
-                        let left = predicates.pop().unwrap();
-                        if token == "and" {
-                            Node::And(left, right)
-                        } else {
-                            Node::Or(left, right)
-                        }
-                    }
-                    "eq" => {
-                        let right = operands.pop().unwrap();
-                        let left = operands.pop().unwrap();
-                        Node::Compare {
-                            operator: C::Equal,
-                            left,
-                            right,
-                        }
-                    }
-                    "between" => {
-                        let upper = operands.pop().unwrap();
-                        let lower = operands.pop().unwrap();
-                        let value = operands.pop().unwrap();
-                        Node::Between {
-                            value,
-                            lower,
-                            upper,
-                            negated: false,
-                        }
-                    }
-                    _ if token.starts_with("in:") => {
-                        let count = token[3..].parse::<usize>().unwrap();
-                        let items = operands.split_off(operands.len() - count);
-                        Node::In {
-                            value: operands.pop().unwrap(),
-                            items,
-                            negated: false,
-                        }
-                    }
-                    _ if token == "like" || token.starts_with("like:") => {
-                        let escape = token.strip_prefix("like:").map(|hex| {
-                            char::from_u32(u32::from_str_radix(hex, 16).unwrap()).unwrap()
-                        });
-                        let pattern = operands.pop().unwrap();
-                        let value = operands.pop().unwrap();
-                        Node::Like {
-                            value,
-                            pattern,
-                            escape,
-                            negated: false,
-                        }
-                    }
-                    _ => {
-                        operands.push(if let Some(name) = token.strip_prefix('$') {
-                            id(name)
-                        } else {
-                            lit(fixture_value(token))
-                        });
-                        continue;
-                    }
-                };
-                predicates.push(nodes.len());
-                nodes.push(node);
-            }
-            assert!(operands.is_empty());
-            assert_eq!(predicates, [nodes.len() - 1]);
-            nodes
-        }
-
         #[test]
         fn shared_reference_truth_and_occurrence_traces() {
             for line in include_str!("fixtures/predicate_evaluation.tsv")
@@ -2955,40 +2809,27 @@ mod scalar {
             {
                 let fields: Vec<_> = line.split('\t').collect();
                 assert_eq!(fields.len(), 6);
-                let nodes = fixture_tree(fields[2]);
-                let p = Plan::new(
-                    nodes.clone(),
-                    nodes.len() - 1,
-                    "rows[0].filter".into(),
-                    fields[1].into(),
-                )
-                .unwrap();
-                let compiled =
-                    yamaa_core::predicate_compiler::compile(fields[1], "rows[0].filter").unwrap();
-                // Both independently authored typed IR and original syntax must satisfy
-                // the same truth and read trace; neither supplies the other's oracle.
-                for p in [p, compiled] {
-                    let mut port = Port::default();
-                    if fields[3] != "-" {
-                        for binding in fields[3].split(';') {
-                            let (name, value) = binding.split_once('=').unwrap();
-                            port.values
-                                .insert(name.into(), [fixture_value(value)].into());
-                        }
+                let p = compile(fields[1], Context::Predicate, "rows[0].filter").unwrap();
+                let mut port = Port::default();
+                if fields[3] != "-" {
+                    for binding in fields[3].split(';') {
+                        let (name, value) = binding.split_once('=').unwrap();
+                        port.values
+                            .insert(name.into(), [fixture_value(value)].into());
                     }
-                    let result = p.evaluate(&mut port);
-                    let actual = match &result {
-                        Ok(Truth::True) => "TRUE",
-                        Ok(Truth::False) => "FALSE",
-                        Ok(Truth::Unknown) => "UNKNOWN",
-                        Err(error) => match &error.kind {
-                            ErrorKind::Condition(condition) => condition.condition(),
-                            _ => panic!("unexpected failure {error:?}"),
-                        },
-                    };
-                    assert_eq!(actual, fields[4], "{}", fields[0]);
-                    assert_eq!(port.trace.join(","), fields[5], "{}", fields[0]);
                 }
+                let result = p.evaluate_truth(&mut port);
+                let actual = match &result {
+                    Ok(Truth::True) => "TRUE",
+                    Ok(Truth::False) => "FALSE",
+                    Ok(Truth::Unknown) => "UNKNOWN",
+                    Err(error) => match &error.kind {
+                        ErrorKind::Condition(condition) => condition.condition(),
+                        _ => panic!("unexpected failure {error:?}"),
+                    },
+                };
+                assert_eq!(actual, fields[4], "{}", fields[0]);
+                assert_eq!(port.trace.join(","), fields[5], "{}", fields[0]);
             }
         }
 
@@ -2998,7 +2839,7 @@ mod scalar {
             let mut port =
                 Port::with(&[("a", Value::Str("x".into())), ("b", Value::Str("x".into()))]);
             for _ in 0..2 {
-                assert_eq!(p.evaluate(&mut port).unwrap(), Truth::True);
+                assert_eq!(p.evaluate_truth(&mut port).unwrap(), Truth::True);
             }
             assert_eq!(port.trace, ["a", "b", "a", "b"]);
         }
@@ -3017,9 +2858,9 @@ mod scalar {
             fn resolve_value(
                 &mut self,
                 _: &str,
-            ) -> Result<yamaa_core::predicate::Resolved<'_>, Self::Error> {
+            ) -> Result<yamaa_core::expression::Resolved<'_>, Self::Error> {
                 self.calls += 1;
-                Ok(yamaa_core::predicate::Resolved::Borrowed(
+                Ok(yamaa_core::expression::Resolved::Borrowed(
                     yamaa_core::table::ValueRef::Str(&self.text),
                 ))
             }
@@ -3032,17 +2873,18 @@ mod scalar {
                 text: "large".repeat(100),
                 calls: 0,
             };
-            assert_eq!(p.evaluate(&mut port).unwrap(), Truth::True);
+            assert_eq!(p.evaluate_truth(&mut port).unwrap(), Truth::True);
             assert_eq!(port.calls, 2);
-            assert_eq!(p.identifiers(), ["a", "b"]);
+            assert_eq!(p.identifiers().collect::<Vec<_>>(), ["a", "b"]);
         }
     }
     mod predicate_contains {
         //! Independent REQ-1244 truth, error ordering and linear-time matching.
+        use crate::support::dataset::{predicate_text, Node, Scalar};
         use yamaa_core::{
-            portable_regex::CompileError,
-            predicate::{
-                Condition, ErrorKind, Node, Plan, PlanError, Resolver, Route, Scalar, Truth,
+            expression::{
+                compile, CompileError, CompiledExpression, Condition, Context, ErrorKind, Failure,
+                Resolver, Step as Route, Truth,
             },
             value::{Selection, Value, ValueType},
         };
@@ -3071,14 +2913,13 @@ mod scalar {
                 pattern: pattern.into(),
             }
         }
-        /// Admit the entire arena before constructing or invoking any resolver.
-        fn plan(nodes: Vec<Node>) -> Plan {
+        /// Admit the entire text before constructing or invoking any resolver.
+        fn plan(nodes: Vec<Node>) -> CompiledExpression {
             let root = nodes.len() - 1;
-            Plan::new(
-                nodes,
-                root,
-                "rows[0].filter".into(),
-                "str_contains(s, 'a')".into(),
+            compile(
+                &predicate_text(&nodes, root),
+                Context::Predicate,
+                "rows[0].filter",
             )
             .unwrap()
         }
@@ -3106,12 +2947,12 @@ mod scalar {
                 let p = plan(vec![contains(pattern)]);
                 let mut source = port(Value::Str(subject.into()));
                 assert_eq!(
-                    p.evaluate(&mut source).unwrap(),
+                    p.evaluate_truth(&mut source).unwrap(),
                     expected,
                     "{pattern}: {subject}"
                 );
                 assert_eq!(source.reads, ["s"]);
-                assert_eq!(p.identifiers(), ["s"]);
+                assert_eq!(p.identifiers().collect::<Vec<_>>(), ["s"]);
             }
             for negated in [false, true] {
                 let mut nodes = vec![contains("a")];
@@ -3120,14 +2961,14 @@ mod scalar {
                 }
                 let p = plan(nodes);
                 assert_eq!(
-                    p.evaluate(&mut port(Value::Missing)).unwrap(),
+                    p.evaluate_truth(&mut port(Value::Missing)).unwrap(),
                     Truth::Unknown
                 );
                 for (value, actual) in [
                     (Value::Int(1), ValueType::Int),
                     (Value::Bool(false), ValueType::Bool),
                 ] {
-                    let error = p.evaluate(&mut port(value)).unwrap_err();
+                    let error = p.evaluate_truth(&mut port(value)).unwrap_err();
                     let condition = Condition::ContainsExpectedText { actual };
                     assert_eq!(error.kind, ErrorKind::Condition(condition.clone()));
                     assert_eq!(condition.condition(), "incompatible_input_type");
@@ -3141,31 +2982,28 @@ mod scalar {
             }
         }
 
+        /// Every pattern literal is compiled once with the text, before any value is read.
         #[test]
         fn contains_admits_every_literal_including_unreachable_nodes() {
-            let error = Plan::new(
-                vec![contains("["), Node::Boolean(false)],
-                1,
-                "p".into(),
-                "text".into(),
-            )
-            .unwrap_err();
+            let text = predicate_text(&[contains("["), Node::Boolean(false), Node::And(1, 0)], 2);
             assert!(matches!(
-                error,
-                PlanError::Regex {
-                    node: 0,
-                    error: CompileError::Invalid { .. }
-                }
+                compile(&text, Context::Predicate, "p"),
+                Err(CompileError::Invalid {
+                    failure: Failure::InvalidRegex { .. },
+                    ..
+                })
             ));
             let pattern = format!("(a){}b", "(a|aa)".repeat(8));
             plan(vec![contains(&pattern)]);
-            Plan::new(
-                vec![contains(&pattern); 512],
-                511,
-                "p".into(),
-                "text".into(),
-            )
-            .unwrap();
+            // 512 pattern literals in a balanced disjunction each compile once.
+            let mut terms = vec![predicate_text(&[contains(&pattern)], 0); 512];
+            while terms.len() > 1 {
+                terms = terms
+                    .chunks(2)
+                    .map(|pair| format!("({} OR {})", pair[0], pair[1]))
+                    .collect();
+            }
+            compile(&terms[0], Context::Predicate, "p").unwrap();
         }
 
         #[test]
@@ -3174,7 +3012,7 @@ mod scalar {
                 let p = plan(vec![Node::Boolean(first), contains("a"), combine]);
                 let mut source = port(Value::Missing);
                 source.failure = true;
-                let error = p.evaluate(&mut source).unwrap_err();
+                let error = p.evaluate_truth(&mut source).unwrap_err();
                 assert_eq!(source.reads, ["s"]);
                 assert_eq!(error.route, [Route::Right, Route::Value]);
                 assert_eq!(
@@ -3187,11 +3025,11 @@ mod scalar {
             }
             let p = plan(vec![contains("(a+)+$")]);
             assert_eq!(
-                p.evaluate(&mut port(Value::Missing)).unwrap(),
+                p.evaluate_truth(&mut port(Value::Missing)).unwrap(),
                 Truth::Unknown
             );
             assert_eq!(
-                p.evaluate(&mut port(Value::Int(0))).unwrap_err().kind,
+                p.evaluate_truth(&mut port(Value::Int(0))).unwrap_err().kind,
                 ErrorKind::Condition(Condition::ContainsExpectedText {
                     actual: ValueType::Int
                 })
@@ -3203,19 +3041,22 @@ mod scalar {
             let single = plan(vec![contains("a+")]);
             for _ in 0..2 {
                 let mut source = port(Value::Str("aaaa".into()));
-                assert_eq!(single.evaluate(&mut source).unwrap(), Truth::True);
+                assert_eq!(single.evaluate_truth(&mut source).unwrap(), Truth::True);
                 assert_eq!(source.reads, ["s"]);
             }
             let repeated = plan(vec![contains("a+"), contains("a+"), Node::And(0, 1)]);
             let mut source = port(Value::Str("aaaa".into()));
-            assert_eq!(repeated.evaluate(&mut source).unwrap(), Truth::True);
+            assert_eq!(repeated.evaluate_truth(&mut source).unwrap(), Truth::True);
             assert_eq!(source.reads, ["s", "s"]);
             // (a+)+$ cannot match before the final "!": a linear-time FALSE,
             // where the retired step budget refused the whole predicate.
             let catastrophic = plan(vec![contains("a+"), contains("(a+)+$"), Node::And(0, 1)]);
             for _ in 0..2 {
                 let mut source = port(Value::Str("a".repeat(100_000) + "!"));
-                assert_eq!(catastrophic.evaluate(&mut source).unwrap(), Truth::False);
+                assert_eq!(
+                    catastrophic.evaluate_truth(&mut source).unwrap(),
+                    Truth::False
+                );
                 assert_eq!(source.reads, ["s", "s"]);
             }
         }

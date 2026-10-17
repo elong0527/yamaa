@@ -87,10 +87,10 @@ rule, grammar, or fixture:
   identifier, as required by the
   [terminology contract](../rules/profiles/terminology.md).
 - Change a closed grammar in its `grammar/` file first. The rule's grammar
-  block is rendered from that file, each parser's closed vocabulary is
-  compared with it, and both implementations replay its vectors, so a change
-  made anywhere else fails validation. Add a vector for every behavior the
-  change decides.
+  block is rendered from that file, the shared parser's closed vocabulary is
+  compared with it, and both hosts replay its vectors, so a change made
+  anywhere else fails validation. Add a vector for every behavior the change
+  decides, in each context that decides it.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.

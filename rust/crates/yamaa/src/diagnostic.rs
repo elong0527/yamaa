@@ -281,10 +281,10 @@ mod tests {
     #[test]
     fn present_zero_geometry_differs_from_absent_geometry() {
         let mut zero = issue();
-        zero.source_span = Some(yamaa_core::numeric_parser::SourceSpan { start: 0, end: 0 });
+        zero.source_span = Some(yamaa_core::expression::SourceSpan { start: 0, end: 0 });
         zero.operand_route = Some(Vec::new());
         let mut located = issue();
-        located.source_span = Some(yamaa_core::numeric_parser::SourceSpan { start: 3, end: 9 });
+        located.source_span = Some(yamaa_core::expression::SourceSpan { start: 3, end: 9 });
         located.operand_route = Some(vec!["left".into(), "argument:1".into()]);
         let report = Report::from_issues(&[issue(), zero, located]);
         let [absent, zero, located] = report.diagnostics.as_slice() else {

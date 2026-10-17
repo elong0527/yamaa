@@ -55,10 +55,9 @@ conditions:
   incomparable_sources: {phases: [validation]}
   incompatible_input_type: {phases: [validation]}
   inheritance_cycle: {phases: [validation]}
-  integer_overflow: {phases: [derivation, parse, validation]}
+  integer_overflow: {phases: [derivation, validation]}
   internal_column_in_keys: {phases: [validation]}
   invalid_aggregate_context: {phases: [validation]}
-  invalid_aggregate_expression: {phases: [validation]}
   invalid_calendar_date: {phases: [impute]}
   invalid_clear: {phases: [validation]}
   invalid_date_text: {phases: [impute, validation]}
@@ -66,16 +65,15 @@ conditions:
   # REQ-1189, REQ-1191 and REQ-1242
   invalid_derive_step: {phases: [validation]}
   invalid_duration_text: {phases: [impute]}
+  invalid_expression: {phases: [validation]}
   invalid_field_type: {phases: [validation]}
   invalid_function_argument: {phases: [derivation, validation]}
   invalid_function_result: {phases: [derivation]}
   invalid_intermediate_driver: {phases: [validation]}
-  invalid_numeric_expression: {phases: [validation]}
   invalid_odm_context: {phases: [validation]}
   invalid_operation_count: {phases: [validation]}
   invalid_parent_path: {phases: [validation]}
   invalid_power: {phases: [derivation]}
-  invalid_predicate: {phases: [validation]}
   invalid_producer_contract: {phases: [validation]}
   invalid_regex: {phases: [validation]}
   invalid_size: {phases: [validation]}

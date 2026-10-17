@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     bound_expression::{BoundPredicate, Read},
-    predicate::{self, Resolver},
+    expression::{ErrorKind, EvaluationError, Resolver, Truth},
     value::Selection,
 };
 
@@ -15,10 +15,10 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     row: usize,
     assignment: &Assignment,
     state: &mut EvaluationState<'_, T::Error>,
-) -> Result<predicate::Truth, Box<ExecutionError<T::Error>>> {
+) -> Result<Truth, Box<ExecutionError<T::Error>>> {
     predicate
         .plan()
-        .evaluate(&mut Context {
+        .evaluate_truth(&mut Context {
             predicate,
             table,
             candidate,
@@ -28,21 +28,23 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             state,
         })
         .map_err(|error| {
-            let predicate::EvaluationError {
+            let EvaluationError {
                 spec_path,
                 expression,
                 route,
+                source_span,
                 kind,
-            } = error;
+            } = *error;
             match kind {
-                predicate::ErrorKind::Resolution { error, .. } => error,
-                predicate::ErrorKind::Condition(condition) => Box::new(ExecutionError::Predicate {
+                ErrorKind::Resolution { error, .. } => error,
+                ErrorKind::Condition(condition) => Box::new(ExecutionError::Predicate {
                     source_row: candidate.members[0],
-                    error: predicate::EvaluationError {
+                    error: EvaluationError {
                         spec_path,
                         expression,
                         route,
-                        kind: predicate::ErrorKind::Condition(condition),
+                        source_span,
+                        kind: ErrorKind::Condition(condition),
                     },
                 }),
             }

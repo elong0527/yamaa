@@ -5,7 +5,7 @@ use super::{
     NormalizationResource, SchemaAliasKind, SchemaField, SchemaShape, SchemaStructure,
     TypeExpression, TypeNode, ValidationError,
 };
-use crate::{aggregate_parser, numeric_parser, predicate_parser};
+use crate::expression::{compile, CompileError, Context};
 
 /// Namespace selected by a schema role, rather than by the spelling of a string.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,11 +31,11 @@ pub enum InheritanceReferenceError {
     #[error("schema inheritance references normalization: {0:?}")]
     Normalization(NormalizationError),
     #[error("schema inheritance references numeric: {0:?}")]
-    Numeric(numeric_parser::ParseError),
+    Numeric(CompileError),
     #[error("schema inheritance references aggregate: {0:?}")]
-    Aggregate(aggregate_parser::ParseError),
+    Aggregate(CompileError),
     #[error("schema inheritance references predicate: {0:?}")]
-    Predicate(predicate_parser::ParseError),
+    Predicate(CompileError),
 }
 impl From<NormalizationError> for InheritanceReferenceError {
     fn from(error: NormalizationError) -> Self {
@@ -321,34 +321,34 @@ impl Run<'_> {
     fn language(&mut self, kind: &str, text: &str) -> Result<(), Error> {
         use InheritanceReferenceKind::Variable;
         match kind {
-            "numeric_expression" => match numeric_parser::parse_numeric(text) {
-                Ok(parsed) => {
-                    for name in parsed.identifiers() {
+            "numeric_expression" => match compile(text, Context::Compute, "") {
+                Ok(compiled) => {
+                    for name in compiled.identifiers() {
                         self.add(Variable, name)?;
                     }
                 }
-                Err(numeric_parser::ParseError::Grammar { .. }) => {}
+                Err(CompileError::Invalid { .. }) => {}
                 Err(error) => return Err(Error::Numeric(error)),
             },
-            "aggregate_expression" => match aggregate_parser::parse_aggregate(text) {
-                Ok(parsed) => {
-                    for name in parsed.identifiers() {
+            "aggregate_expression" => match compile(text, Context::Aggregate, "") {
+                Ok(compiled) => {
+                    for name in compiled.identifiers() {
                         self.add(Variable, name)?;
                     }
-                    for name in parsed.star_datasets() {
+                    for name in compiled.record_relations() {
                         self.add(Variable, &format!("{name}.*"))?;
                     }
                 }
-                Err(aggregate_parser::ParseError::Grammar { .. }) => {}
+                Err(CompileError::Invalid { .. }) => {}
                 Err(error) => return Err(Error::Aggregate(error)),
             },
-            "predicate" => match predicate_parser::parse_predicate(text) {
-                Ok(parsed) => {
-                    for name in parsed.identifiers() {
+            "predicate" => match compile(text, Context::Predicate, "") {
+                Ok(compiled) => {
+                    for name in compiled.identifiers() {
                         self.add(InheritanceReferenceKind::PredicateVariable, name)?;
                     }
                 }
-                Err(predicate_parser::ParseError::Grammar { .. }) => {}
+                Err(CompileError::Invalid { .. }) => {}
                 Err(error) => return Err(Error::Predicate(error)),
             },
             "string_template" => {

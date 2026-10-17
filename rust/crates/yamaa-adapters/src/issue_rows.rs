@@ -12,8 +12,8 @@
 //! zero span (`{"start":0,"end":0}`); an absent `operand_route` key differs
 //! from a present empty route. Geometry keys are omitted when absent so
 //! diagnostics without geometry keep their previous wire bytes.
+use yamaa_core::expression::SourceSpan;
 use yamaa_core::json::Value;
-use yamaa_core::numeric_parser::SourceSpan;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Issue {

@@ -1,12 +1,10 @@
-//! Construct diagnostic context at the numeric/conversion semantic boundary.
+//! Construct diagnostic context at the arithmetic and conversion boundary.
 
 use super::{ConditionCode, Context, Diagnostic};
 use crate::json::Value as JsonValue;
 use crate::{
     conversion::{ConversionError, ConversionReason},
-    evaluation::{EvaluationErrorKind, NumericCondition, Operand},
     numeric::{ArithmeticError, ArithmeticErrorKind},
-    numeric_compiler::CompiledEvaluationError,
     value::{ColumnType, Value, ValueType},
 };
 
@@ -78,71 +76,6 @@ impl ArithmeticErrorKind {
     }
 }
 
-impl NumericCondition {
-    pub fn diagnostic_code(&self) -> ConditionCode {
-        match self {
-            Self::UnknownField { .. } => ConditionCode::NumericUnknownField,
-            Self::IncompatibleInput { .. } => ConditionCode::NumericInputType,
-            Self::LiteralOverflow { .. } => ConditionCode::IntegerOverflow,
-            Self::Arithmetic(kind) => kind.diagnostic_code(),
-        }
-    }
-
-    /// Static operand kinds use the same cause and context as numeric evaluation.
-    pub(crate) fn static_diagnostic(&self, spec_path: &str, expression: &str) -> Diagnostic {
-        Diagnostic {
-            code: self.diagnostic_code(),
-            spec_paths: vec![spec_path.into()],
-            context: self.diagnostic_context(expression),
-            source_span: None,
-            operand_route: None,
-        }
-    }
-
-    fn diagnostic_context(&self, expression: &str) -> Context {
-        let mut context = Context::from([("expr".into(), text(expression))]);
-        match self {
-            Self::UnknownField { identifier } => {
-                context.insert("identifier".into(), text(identifier));
-            }
-            Self::IncompatibleInput { identifier, actual } => {
-                context.insert("source".into(), text(identifier));
-                context.insert("expected".into(), text("numeric"));
-                context.insert("actual".into(), text(type_name(*actual)));
-            }
-            Self::Arithmetic(ArithmeticErrorKind::InvalidPower {
-                base_bits,
-                exponent_bits,
-            }) => {
-                context.insert(
-                    "base".into(),
-                    scalar(Value::float(f64::from_bits(*base_bits))),
-                );
-                context.insert(
-                    "exponent".into(),
-                    scalar(Value::float(f64::from_bits(*exponent_bits))),
-                );
-            }
-            Self::Arithmetic(ArithmeticErrorKind::IntegerOverflow { value }) => {
-                context.insert("value".into(), text(value.to_string()));
-                context.insert("minimum".into(), scalar(Value::Int(i64::MIN)));
-                context.insert("maximum".into(), scalar(Value::Int(i64::MAX)));
-            }
-            Self::LiteralOverflow { value } => {
-                context.insert("value".into(), text(value));
-                context.insert("minimum".into(), scalar(Value::Int(i64::MIN)));
-                context.insert("maximum".into(), scalar(Value::Int(i64::MAX)));
-            }
-            Self::Arithmetic(
-                ArithmeticErrorKind::DivisionByZero
-                | ArithmeticErrorKind::SqrtOfNegative
-                | ArithmeticErrorKind::LnOfNonpositive,
-            ) => {}
-        }
-        context
-    }
-}
-
 impl ArithmeticError {
     /// Reductions use the same context as compiled numeric execution, without
     /// inventing a source span for an already-bound arithmetic operation.
@@ -150,37 +83,10 @@ impl ArithmeticError {
         Diagnostic {
             code: self.kind.diagnostic_code(),
             spec_paths: vec![spec_path],
-            context: NumericCondition::Arithmetic(self.kind).diagnostic_context(&self.expression),
+            context: crate::expression::Condition::Arithmetic(self.kind)
+                .diagnostic_context(&self.expression),
             source_span: None,
             operand_route: None,
         }
-    }
-}
-
-impl<E> CompiledEvaluationError<E> {
-    /// Borrow an opaque resolver error unchanged; only core-owned failures have a
-    /// normative diagnostic. A caller must retain its original boundary failure.
-    pub fn diagnostic(&self) -> Option<Diagnostic> {
-        let EvaluationErrorKind::Numeric(condition) = &self.evaluation.kind else {
-            return None;
-        };
-        Some(Diagnostic {
-            code: condition.diagnostic_code(),
-            spec_paths: vec![self.evaluation.location.spec_path.clone()],
-            context: condition.diagnostic_context(&self.evaluation.location.expression),
-            source_span: Some(self.source_span),
-            operand_route: Some(
-                self.evaluation
-                    .location
-                    .operands
-                    .iter()
-                    .map(|operand| match operand {
-                        Operand::Unary => "unary".into(),
-                        Operand::Left => "left".into(),
-                        Operand::Right => "right".into(),
-                    })
-                    .collect(),
-            ),
-        })
     }
 }

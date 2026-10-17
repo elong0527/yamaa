@@ -89,8 +89,8 @@
     "text": "\u2003\u00a0A + #",
     "expected": {
       "status": "invalid",
-      "condition": "invalid_numeric_expression",
-      "requirement": "REQ-0439",
+      "condition": "invalid_expression",
+      "requirement": "REQ-0188",
       "position": {
         "byte": 9,
         "character": 6
@@ -103,15 +103,13 @@
     "text": "\u2003aNd",
     "expected": {
       "status": "invalid",
-      "condition": "prohibited_construct",
-      "requirement": "REQ-0441",
+      "condition": "invalid_expression",
+      "requirement": "REQ-0188",
       "position": {
         "byte": 3,
         "character": 1
       },
-      "context": {
-        "construct": "boolean"
-      }
+      "context": {}
     }
   },
   {
@@ -136,8 +134,8 @@
     "text": "foo(1",
     "expected": {
       "status": "invalid",
-      "condition": "invalid_numeric_expression",
-      "requirement": "REQ-0439",
+      "condition": "invalid_expression",
+      "requirement": "REQ-0188",
       "position": {
         "byte": 5,
         "character": 5
@@ -297,8 +295,8 @@
     "text": "SUM(MIN(A)",
     "expected": {
       "status": "invalid",
-      "condition": "invalid_aggregate_expression",
-      "requirement": "REQ-0499",
+      "condition": "invalid_expression",
+      "requirement": "REQ-0188",
       "position": {
         "byte": 10,
         "character": 10
@@ -312,7 +310,7 @@
     "expected": {
       "status": "invalid",
       "condition": "prohibited_construct",
-      "requirement": "REQ-0512",
+      "requirement": "REQ-0441",
       "position": {
         "byte": 12,
         "character": 12
@@ -328,7 +326,7 @@
     "expected": {
       "status": "invalid",
       "condition": "prohibited_function",
-      "requirement": "REQ-0500",
+      "requirement": "REQ-0440",
       "position": {
         "byte": 0,
         "character": 0
@@ -404,7 +402,7 @@
     "text": "AEDECOD LIKE 'a' ESCAPE ''",
     "expected": {
       "status": "invalid",
-      "condition": "invalid_predicate",
+      "condition": "invalid_expression",
       "requirement": "REQ-0191",
       "position": {
         "byte": 24,
@@ -419,7 +417,7 @@
     "text": "AEDECOD LIKE 'a' ESCAPE '!!'",
     "expected": {
       "status": "invalid",
-      "condition": "invalid_predicate",
+      "condition": "invalid_expression",
       "requirement": "REQ-0191",
       "position": {
         "byte": 24,
@@ -434,7 +432,7 @@
     "text": "AEDECOD LIKE 'HEAD!' ESCAPE '!'",
     "expected": {
       "status": "invalid",
-      "condition": "invalid_predicate",
+      "condition": "invalid_expression",
       "requirement": "REQ-0191",
       "position": {
         "byte": 13,

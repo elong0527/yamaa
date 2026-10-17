@@ -9,7 +9,7 @@ pub(crate) use yamaa_adapters::{
 };
 use yamaa_core::application_observer::Scope;
 pub(crate) use yamaa_core::{
-    evaluation::EvaluationErrorKind,
+    expression::ErrorKind as EvaluationErrorKind,
     schema::{Document, DocumentNode as N, SpecificationDocument},
     table::{TableAccess, TableSchema},
     value::Value,

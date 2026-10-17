@@ -496,7 +496,7 @@
       "findings": [
         {
           "phase": "validation",
-          "condition": "invalid_predicate",
+          "condition": "invalid_expression",
           "spec_paths": [
             "columns.ELDFL.derivation.flag.condition"
           ],
@@ -581,15 +581,16 @@
       "findings": [
         {
           "phase": "validation",
-          "condition": "invalid_predicate",
+          "condition": "incompatible_input_type",
           "spec_paths": [
             "columns.REVIEWFL.derivation.flag.condition"
           ],
-          "requirement": "REQ-0188",
+          "requirement": "REQ-0444",
           "context": {
-            "predicate": "ASTDT <= TRTEDT + 30",
-            "position": 16,
-            "suggestion": "derive the value as a column with compute, then compare that column"
+            "expr": "ASTDT <= TRTEDT + 30",
+            "source": "TRTEDT",
+            "expected": "numeric",
+            "actual": "date"
           }
         }
       ]
@@ -784,7 +785,7 @@
       "findings": [
         {
           "phase": "validation",
-          "condition": "invalid_predicate",
+          "condition": "invalid_expression",
           "spec_paths": [
             "columns.F.derivation.flag.condition"
           ],
@@ -815,7 +816,7 @@
       "findings": [
         {
           "phase": "validation",
-          "condition": "invalid_predicate",
+          "condition": "invalid_expression",
           "spec_paths": [
             "columns.F.derivation.flag.condition"
           ],
@@ -933,7 +934,7 @@
       "findings": [
         {
           "phase": "validation",
-          "condition": "invalid_predicate",
+          "condition": "invalid_expression",
           "spec_paths": [
             "columns.F.derivation.flag.condition"
           ],
@@ -1212,7 +1213,7 @@
       "findings": [
         {
           "phase": "validation",
-          "condition": "invalid_predicate",
+          "condition": "invalid_expression",
           "spec_paths": [
             "columns.F.derivation.case[0].then.flag.condition"
           ],

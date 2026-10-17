@@ -3,7 +3,6 @@ use super::*;
 use crate::{
     bound_expression::BoundPredicate,
     dataset::{Intermediate, SecondarySource},
-    predicate::Plan,
 };
 
 fn unknown(path: &str, name: &str) -> BindFinding {
@@ -61,7 +60,7 @@ pub(super) fn retain_reference_owner(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
     spec: &PreparedSpecification,
-    plan: &Plan,
+    plan: &CompiledExpression,
     column: usize,
     catalog: &Catalog,
     secondary: &[SecondarySource],
@@ -152,7 +151,6 @@ pub(super) fn bind(
     }
     let kinds = plan
         .identifiers()
-        .into_iter()
         .map(|name| {
             static_types::kind(name, &spec.intermediates, catalog, secondary, intermediates)
                 .map(|kind| (name, kind))

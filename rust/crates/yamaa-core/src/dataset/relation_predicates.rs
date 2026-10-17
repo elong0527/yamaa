@@ -149,7 +149,7 @@ impl RelationPredicate {
     pub fn predicate(&self) -> &BoundPredicate {
         &self.predicate
     }
-    pub fn plan(&self) -> &crate::predicate::Plan {
+    pub fn plan(&self) -> &crate::expression::CompiledExpression {
         self.predicate.plan()
     }
     pub fn bindings(&self) -> &[Binding] {

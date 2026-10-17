@@ -4,7 +4,6 @@ use crate::json::Value as JsonValue;
 use crate::{
     bound_expression::BoundPredicate,
     diagnostic::{ConditionCode as C, Diagnostic},
-    predicate_compiler,
     value::Value,
 };
 mod row_sources;
@@ -22,7 +21,7 @@ pub(super) struct Declaration {
 #[derive(Clone, Debug)]
 struct Filter {
     expression: String,
-    compiled: Option<Result<crate::predicate::Plan, predicate_compiler::Error>>,
+    compiled: Option<Result<CompiledExpression, CompileError>>,
 }
 #[derive(Debug)]
 pub struct SourceFinding(Diagnostic);
@@ -138,24 +137,18 @@ impl Declaration {
                 .split_once('.')
                 .is_some_and(|(name, _)| !intermediates.contains(name))
             {
-                Some(predicate_compiler::compile(
+                Some(compile(
                     expression,
+                    ExpressionContext::Predicate,
                     &format!("{path}.filter"),
                 ))
             } else {
                 None
             };
             match compiled.as_ref() {
-                Some(Ok(_))
-                | Some(Err(predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::Grammar { .. },
-                )))
-                | None => {}
-                Some(Err(predicate_compiler::Error::Internal)) => {
-                    return Err(PrepareError::Internal)
-                }
+                Some(Ok(_)) | Some(Err(CompileError::Invalid { .. })) | None => {}
                 Some(Err(error)) => {
-                    return Err(PrepareError::predicate(
+                    return Err(PrepareError::expression(
                         error.clone(),
                         Some(&format!("{path}.filter")),
                     ))
@@ -267,17 +260,18 @@ impl Declaration {
         };
         let plan = match compiled.as_ref().ok_or(BindError::Internal)? {
             Ok(plan) => plan,
-            Err(predicate_compiler::Error::Parse(
-                crate::predicate_parser::ParseError::Grammar {
-                    position, failure, ..
-                },
-            )) => {
-                findings.push(BindFinding::Source(SourceFinding(
-                    failure.original_diagnostic(&path, expression, position.character),
-                )));
+            Err(CompileError::Invalid {
+                position, failure, ..
+            }) => {
+                findings.push(BindFinding::Source(SourceFinding(failure.diagnostic(
+                    ExpressionContext::Predicate,
+                    &path,
+                    expression,
+                    position.character,
+                ))));
                 return Ok(None);
             }
-            Err(error) => return Err(BindError::PredicatePolicy(error.clone())),
+            Err(error) => return Err(BindError::ExpressionPolicy(error.clone())),
         };
         let start = findings.len();
         let mut bindings = Vec::new();
@@ -360,17 +354,18 @@ impl Declaration {
         };
         let plan = match compiled.as_ref().ok_or(BindError::Internal)? {
             Ok(plan) => plan,
-            Err(predicate_compiler::Error::Parse(
-                crate::predicate_parser::ParseError::Grammar {
-                    position, failure, ..
-                },
-            )) => {
-                findings.push(BindFinding::Source(SourceFinding(
-                    failure.original_diagnostic(&path, expression, position.character),
-                )));
+            Err(CompileError::Invalid {
+                position, failure, ..
+            }) => {
+                findings.push(BindFinding::Source(SourceFinding(failure.diagnostic(
+                    ExpressionContext::Predicate,
+                    &path,
+                    expression,
+                    position.character,
+                ))));
                 return Ok(None);
             }
-            Err(error) => return Err(BindError::PredicatePolicy(error.clone())),
+            Err(error) => return Err(BindError::ExpressionPolicy(error.clone())),
         };
         let start = findings.len();
         let mut bindings = Vec::new();

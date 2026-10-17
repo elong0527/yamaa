@@ -103,8 +103,13 @@ fn read_matching<E>(
         for source_row in 0..table.row_count() {
             let truth =
                 crate::dataset::execution::predicates::evaluate(filter, table, source_row, &[])
-                    .map_err(|error| Box::new(ExecutionError::Predicate { source_row, error }))?;
-            if truth == crate::predicate::Truth::True {
+                    .map_err(|error| {
+                        Box::new(ExecutionError::Predicate {
+                            source_row,
+                            error: *error,
+                        })
+                    })?;
+            if truth == crate::expression::Truth::True {
                 eligible.push(source_row);
             }
         }

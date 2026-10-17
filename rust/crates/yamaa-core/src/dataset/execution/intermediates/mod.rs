@@ -512,8 +512,13 @@ fn eligibility<E>(
                 source_row,
                 &[],
             )
-            .map_err(|error| Box::new(ExecutionError::Predicate { source_row, error }))?;
-            if truth != crate::predicate::Truth::True {
+            .map_err(|error| {
+                Box::new(ExecutionError::Predicate {
+                    source_row,
+                    error: *error,
+                })
+            })?;
+            if truth != crate::expression::Truth::True {
                 continue;
             }
         }
@@ -960,7 +965,7 @@ fn resolve_choice<T: TableAccess + ?Sized>(
                             row,
                             assignment,
                             state,
-                        )? != crate::predicate::Truth::True
+                        )? != crate::expression::Truth::True
                         {
                             continue;
                         }

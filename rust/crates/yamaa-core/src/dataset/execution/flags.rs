@@ -3,7 +3,7 @@ use super::*;
 use crate::{
     bound_expression::Read,
     dataset::{Flag, FlagRead},
-    predicate::{self, Resolver},
+    expression::{ErrorKind, Resolver},
     value::Selection,
 };
 
@@ -18,7 +18,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let truth = flag
         .condition()
-        .evaluate(&mut Context {
+        .evaluate_truth(&mut Context {
             flag,
             table,
             candidate,
@@ -28,8 +28,8 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             state,
         })
         .map_err(|error| match error.kind {
-            predicate::ErrorKind::Resolution { error, .. } => error,
-            predicate::ErrorKind::Condition(_) => Box::new(ExecutionError::ScalarDiagnostic(
+            ErrorKind::Resolution { error, .. } => error,
+            ErrorKind::Condition(_) => Box::new(ExecutionError::ScalarDiagnostic(
                 crate::dataset::flag_condition_diagnostic(&error)
                     .expect("condition has a core flag projection"),
             )),

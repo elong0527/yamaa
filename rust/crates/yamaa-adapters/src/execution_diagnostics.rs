@@ -9,14 +9,14 @@ pub(crate) fn project(diagnostic: yamaa_core::diagnostic::Diagnostic) -> Result<
     ))
 }
 pub(crate) fn predicate<E>(
-    error: &yamaa_core::predicate::EvaluationError<CellError<E>>,
+    error: &yamaa_core::expression::EvaluationError<CellError<E>>,
 ) -> Result<Box<Value>, Error> {
     project(error.diagnostic().map_err(|_| Error::InvalidObservation)?)
 }
 pub(crate) fn numeric(
-    error: yamaa_core::numeric_compiler::CompiledEvaluationError<std::convert::Infallible>,
+    error: yamaa_core::expression::EvaluationError<std::convert::Infallible>,
 ) -> Result<Box<Value>, Error> {
-    project(error.diagnostic().ok_or(Error::Internal)?)
+    project(error.diagnostic().map_err(|_| Error::Internal)?)
 }
 pub(crate) fn arithmetic(
     error: yamaa_core::numeric::ArithmeticError,

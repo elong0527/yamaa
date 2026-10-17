@@ -9,11 +9,16 @@ mod diagnostics {
         use yamaa_core::{
             conversion::convert,
             diagnostic::CONDITIONS,
-            evaluation::{EvaluationErrorKind, NumericResolver},
-            numeric_compiler::compile_numeric,
-            numeric_parser::SourceSpan,
+            expression::{
+                compile, CompileError, CompiledExpression, Context,
+                ErrorKind as EvaluationErrorKind, Resolver as NumericResolver, SourceSpan,
+            },
             value::{ColumnType, Selection, Value},
         };
+
+        fn compile_numeric(text: &str, path: &str) -> Result<CompiledExpression, CompileError> {
+            compile(text, Context::Compute, path)
+        }
 
         struct Bindings;
         use crate::support::project_environment;
@@ -162,7 +167,7 @@ mod diagnostics {
                 ("POWER(-1, 0.5)", "derivation", "invalid_power", "REQ-0433"),
             ] {
                 let plan = compile_numeric(expression, "columns.X.compute").unwrap();
-                let error = plan.evaluate(&mut Bindings).unwrap_err();
+                let error = plan.evaluate_number(&mut Bindings).unwrap_err();
                 let diagnostic = error.diagnostic().unwrap();
                 let definition = diagnostic.definition();
                 assert_eq!(
@@ -601,7 +606,7 @@ mod diagnostics {
             let expression = "1 + (9223372036854775807 + 1)";
             let error = compile_numeric(expression, "columns.X.compute")
                 .unwrap()
-                .evaluate(&mut Bindings)
+                .evaluate_number(&mut Bindings)
                 .unwrap_err();
             let diagnostic = error.diagnostic().unwrap();
             assert_eq!(
@@ -615,14 +620,22 @@ mod diagnostics {
             );
             assert_eq!(diagnostic.context["minimum"], JsonValue::from(i64::MIN));
             assert_eq!(diagnostic.context["maximum"], JsonValue::from(i64::MAX));
-            let literal = compile_numeric("9223372036854775808", "columns.Y.compute")
-                .unwrap()
-                .evaluate(&mut Bindings)
-                .unwrap_err()
-                .diagnostic()
-                .unwrap();
-            assert_eq!(literal.code, diagnostic.code);
-            assert_eq!(literal.context["value"], diagnostic.context["value"]);
+            // A literal outside the int range is refused before any value is read.
+            let Err(CompileError::Invalid {
+                position, failure, ..
+            }) = compile_numeric("9223372036854775808", "columns.Y.compute")
+            else {
+                panic!("an overflowing literal is refused")
+            };
+            let literal = failure.diagnostic(
+                Context::Compute,
+                "columns.Y.compute",
+                "9223372036854775808",
+                position.character,
+            );
+            assert_eq!(literal.definition().phase, "validation");
+            assert_eq!(literal.definition().condition, "integer_overflow");
+            assert_eq!(literal.definition().requirement, Some("REQ-0014"));
         }
 
         #[test]
@@ -665,14 +678,14 @@ mod diagnostics {
             };
             let error = compile_numeric("BAD + LATER", "columns.X")
                 .unwrap()
-                .evaluate(&mut resolver)
+                .evaluate_number(&mut resolver)
                 .unwrap_err();
-            assert!(error.diagnostic().is_none());
+            assert!(error.diagnostic().is_err());
             assert_eq!(resolver.calls, ["BAD"]);
             let EvaluationErrorKind::Resolution {
                 identifier,
                 error: Failure(value),
-            } = error.evaluation.kind
+            } = error.kind
             else {
                 panic!("opaque failure replaced")
             };

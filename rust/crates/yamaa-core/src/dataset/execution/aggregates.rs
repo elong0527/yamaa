@@ -2,10 +2,10 @@
 use super::*;
 use crate::table_grouping::Key;
 use crate::{
-    aggregate_compiler::{AggregateOperand, AggregateResult, CompiledReduction},
-    aggregate_parser::Reducer,
     aggregate_reduction::{reduce_values, AggregateReductionError},
-    evaluation::NumericResolver,
+    expression::{
+        AggregateResult, Reducer, Reduction, ReductionOperand, Resolver as ExpressionResolver,
+    },
     value::Selection,
 };
 
@@ -135,8 +135,13 @@ fn filter<T: TableAccess + ?Sized>(
 ) -> Result<bool, Box<ExecutionError<T::Error>>> {
     if let Some(filter) = bound.filter() {
         return crate::dataset::execution::predicates::evaluate(filter, table, source_row, &[])
-            .map(|truth| truth == crate::predicate::Truth::True)
-            .map_err(|error| Box::new(ExecutionError::Predicate { source_row, error }));
+            .map(|truth| truth == crate::expression::Truth::True)
+            .map_err(|error| {
+                Box::new(ExecutionError::Predicate {
+                    source_row,
+                    error: *error,
+                })
+            });
     }
     Ok(true)
 }
@@ -299,25 +304,18 @@ fn narrow<T: TableAccess + ?Sized>(
         })
 }
 
+/// Read a relation record's field; the arithmetic over reductions reads the
+/// group's first record, and nothing when the group is empty.
 struct Resolver<'a, T: TableAccess + ?Sized> {
     bound: &'a BoundAggregate,
     table: &'a T,
     coordinate: Coordinate,
     source_row: Option<usize>,
-    reductions: &'a [Value],
 }
-impl<T: TableAccess + ?Sized> NumericResolver for Resolver<'_, T> {
+impl<T: TableAccess + ?Sized> ExpressionResolver for Resolver<'_, T> {
     type Error = Box<ExecutionError<T::Error>>;
     fn resolve(&mut self, identifier: &str) -> Result<Selection, Self::Error> {
-        let value = if let Some(index) = self
-            .bound
-            .expression()
-            .reductions()
-            .iter()
-            .position(|reduction| reduction.reference == identifier)
-        {
-            ValueRef::from(&self.reductions[index])
-        } else if let Some(row) = self.source_row {
+        let value = if let Some(row) = self.source_row {
             cell(
                 self.table,
                 self.bound,
@@ -400,15 +398,15 @@ fn reduce_selected<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?
     reductions
         .try_reserve_exact(bound.expression().reductions().len())
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
-    for reduction in bound.expression().reductions() {
+    for (index, reduction) in bound.expression().reductions().iter().enumerate() {
         let value = if members.is_empty() {
             Value::Missing
         } else {
             match &reduction.operand {
-                AggregateOperand::Records(_) => crate::reduction::count_records(members.len())
+                ReductionOperand::Records(_) => crate::reduction::count_records(members.len())
                     .map(Value::from)
                     .map_err(|_| Box::new(ExecutionError::Capacity))?,
-                AggregateOperand::Value(name) => {
+                ReductionOperand::Value(name) => {
                     let mut values = Vec::new();
                     values
                         .try_reserve_exact(members.len())
@@ -426,19 +424,21 @@ fn reduce_selected<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?
                         bound, reduction, &values, primary, candidate, plan, row, state,
                     )?
                 }
-                AggregateOperand::Numeric(expression) => {
+                ReductionOperand::Numeric => {
                     let mut values = Vec::new();
                     values
                         .try_reserve_exact(members.len())
                         .map_err(|_| Box::new(ExecutionError::Allocation))?;
                     for &source_row in members {
-                        let result = expression.evaluate(&mut Resolver {
-                            bound,
-                            table: donor,
-                            coordinate,
-                            source_row: Some(source_row),
-                            reductions: &[],
-                        });
+                        let result = bound.expression().evaluate_operand(
+                            index,
+                            &mut Resolver {
+                                bound,
+                                table: donor,
+                                coordinate,
+                                source_row: Some(source_row),
+                            },
+                        );
                         values.push(numeric::project_result(result, candidate, plan, row)?);
                     }
                     let refs = values.iter().map(ValueRef::from).collect::<Vec<_>>();
@@ -453,16 +453,18 @@ fn reduce_selected<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?
     // Every reducer runs before a lazy surrounding numeric expression resolves.
     match bound.expression().result() {
         AggregateResult::Reduction(index) => {
-            Ok(std::mem::replace(&mut reductions[*index], Value::Missing))
+            Ok(std::mem::replace(&mut reductions[index], Value::Missing))
         }
-        AggregateResult::Numeric(expression) => {
-            let result = expression.evaluate(&mut Resolver {
-                bound,
-                table: donor,
-                coordinate,
-                source_row: representative,
-                reductions: &reductions,
-            });
+        AggregateResult::Numeric => {
+            let result = bound.expression().evaluate_aggregate(
+                &mut Resolver {
+                    bound,
+                    table: donor,
+                    coordinate,
+                    source_row: representative,
+                },
+                &reductions,
+            );
             numeric::project_result(result, candidate, plan, row)
         }
     }
@@ -471,7 +473,7 @@ fn reduce_selected<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?
 #[allow(clippy::too_many_arguments)]
 fn fold<T: TableAccess + ?Sized>(
     bound: &BoundAggregate,
-    reduction: &CompiledReduction,
+    reduction: &Reduction,
     values: &[ValueRef<'_>],
     primary: &T,
     candidate: &Candidate,
@@ -498,7 +500,7 @@ fn fold<T: TableAccess + ?Sized>(
                 NumericReducer::Mean
             },
             source: match &reduction.operand {
-                AggregateOperand::Value(name) => name.clone(),
+                ReductionOperand::Value(name) => name.clone(),
                 _ => bound.expression().expression().into(),
             },
             actual,
@@ -583,7 +585,7 @@ fn fold<T: TableAccess + ?Sized>(
                 .filter_map(|value| value.value_type())
                 .collect::<Vec<_>>();
             let source = match &reduction.operand {
-                AggregateOperand::Value(name) => name.as_str(),
+                ReductionOperand::Value(name) => name.as_str(),
                 _ => bound.expression().expression(),
             };
             let diagnostic = crate::diagnostic::AggregateFinding::IncomparableSources {

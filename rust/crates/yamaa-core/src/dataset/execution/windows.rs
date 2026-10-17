@@ -184,8 +184,13 @@ impl Run {
                         source_row,
                         &candidates[member].values,
                     )
-                    .map_err(|error| Box::new(ExecutionError::Predicate { source_row, error }))?;
-                    if truth == crate::predicate::Truth::True {
+                    .map_err(|error| {
+                        Box::new(ExecutionError::Predicate {
+                            source_row,
+                            error: *error,
+                        })
+                    })?;
+                    if truth == crate::expression::Truth::True {
                         eligible.push(member);
                     }
                 }

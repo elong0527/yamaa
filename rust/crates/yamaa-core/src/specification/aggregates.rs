@@ -1,7 +1,6 @@
 //! R013 declarations select one of the three admitted relation contexts.
 use super::*;
 use crate::{
-    aggregate_compiler::{compile_aggregate, CompiledAggregate},
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
         AggregateBinding, AggregatePhase, AggregateRelation, AggregateRowContext, AggregateSource,
@@ -17,15 +16,12 @@ pub(super) struct Declaration {
     expression: String,
     expression_path: String,
     path: String,
-    compiled: Result<CompiledAggregate, crate::aggregate_parser::ParseError>,
+    compiled: Result<CompiledExpression, CompileError>,
     groups: Vec<String>,
     keys: Option<Vec<(String, match_values::Declaration)>>,
     empty_key: Option<AggregateEmptyKey>,
     output_keys: Vec<String>,
-    filter: Option<(
-        String,
-        Result<crate::predicate::Plan, crate::predicate_compiler::Error>,
-    )>,
+    filter: Option<(String, Result<CompiledExpression, CompileError>)>,
     derive: Option<Vec<DeriveDeclaration>>,
     derive_relations: Vec<String>,
     derive_references: Vec<String>,
@@ -196,9 +192,9 @@ pub(super) fn prepare(
     } else {
         format!("{path}.expr")
     };
-    let compiled = compile_aggregate(expr, &expression_path);
-    if let Err(error @ crate::aggregate_parser::ParseError::Limit { .. }) = &compiled {
-        return Err(PrepareError::aggregate_parse(
+    let compiled = compile(expr, ExpressionContext::Aggregate, &expression_path);
+    if let Err(error @ CompileError::Limit { .. }) = &compiled {
+        return Err(PrepareError::expression(
             error.clone(),
             Some(&expression_path),
         ));
@@ -376,7 +372,11 @@ pub(super) fn prepare(
                 let expr = text(d, id)?;
                 Ok((
                     expr.into(),
-                    crate::predicate_compiler::compile(expr, &format!("{path}.filter")),
+                    compile(
+                        expr,
+                        ExpressionContext::Predicate,
+                        &format!("{path}.filter"),
+                    ),
                 ))
             })
             .transpose()?
@@ -386,7 +386,6 @@ pub(super) fn prepare(
             derive_relations.extend(
                 filter
                     .identifiers()
-                    .into_iter()
                     .filter_map(|name| {
                         name.split_once('.')
                             .map(|(relation, _)| String::from(relation))
@@ -446,10 +445,10 @@ fn validate_header<'a>(
     driver: &str,
     intermediates: &[Option<crate::dataset::Intermediate>],
     findings: &mut Vec<BindFinding>,
-) -> Result<Option<(&'a CompiledAggregate, Vec<String>)>, BindError> {
+) -> Result<Option<(&'a CompiledExpression, Vec<String>)>, BindError> {
     let compiled = match &declaration.compiled {
         Ok(compiled) => compiled,
-        Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
+        Err(CompileError::Invalid { failure, .. }) => {
             findings.push(BindFinding::Aggregate {
                 path: declaration.expression_path.clone(),
                 expression: declaration.expression.clone(),
@@ -619,7 +618,7 @@ type GroupOperands = (Vec<usize>, Vec<AggregateBinding>);
 
 #[allow(clippy::too_many_arguments)]
 fn bind_groups_and_operands(
-    compiled: &CompiledAggregate,
+    compiled: &CompiledExpression,
     declaration: &Declaration,
     relation: Option<&str>,
     donor: AggregateSource,
@@ -810,11 +809,9 @@ fn bind_filter(
         }
         Some((
             expr,
-            Err(crate::predicate_compiler::Error::Parse(
-                crate::predicate_parser::ParseError::Grammar {
-                    position, failure, ..
-                },
-            )),
+            Err(CompileError::Invalid {
+                position, failure, ..
+            }),
         )) => {
             findings.push(BindFinding::Lookup(LookupFinding::grammar(
                 &format!("{}.filter", declaration.path),
@@ -824,7 +821,7 @@ fn bind_filter(
             )));
             None
         }
-        Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
+        Some((_, Err(error))) => return Err(BindError::ExpressionPolicy(error.clone())),
         None => None,
     })
 }
@@ -836,7 +833,7 @@ fn bound_relation(
     donor: AggregateSource,
     group_columns: Vec<usize>,
     declaration: &Declaration,
-    compiled: &CompiledAggregate,
+    compiled: &CompiledExpression,
     catalog: &Catalog,
     secondary: &[SecondarySource],
     output: &TableSchema,
@@ -1550,7 +1547,7 @@ impl Declaration {
     pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
         match &self.compiled {
             Ok(_) => (),
-            Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
+            Err(CompileError::Invalid { failure, .. }) => {
                 findings.push(BindFinding::Aggregate {
                     path: self.expression_path.clone(),
                     expression: self.expression.clone(),
