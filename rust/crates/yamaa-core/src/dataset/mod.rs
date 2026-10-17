@@ -967,9 +967,12 @@ fn current_record_read(
                         .iter()
                         .flat_map(|key| key.value.reads())
                         .any(|read| matches!(read, MatchRead::Record { .. }))
-                        || item
-                            .current_fields()
-                            .any(|field| matches!(field.read, CurrentRead::Record { .. }))
+                        // Like a secondary key read, a row-phase current field
+                        // on a secondary port reads that input's own records.
+                        || item.current_fields().any(|field| {
+                            matches!(field.read, CurrentRead::Record { source, .. }
+                                if source == 0 || scope == RecordReadScope::All)
+                        })
                 })
         }
         Expression::SourceBinding { source, .. } => {
