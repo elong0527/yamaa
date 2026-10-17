@@ -39,6 +39,7 @@ handshake entry point is not among the definition's current Python exports.
 """
 
 import argparse
+import keyword
 import re
 
 import yaml
@@ -175,7 +176,11 @@ def _resolve_records_import(definition):
     if records.get("crate") != "yamaa-adapters":
         raise ValueError("the records import must name the yamaa-adapters crate")
     roles = records.get("roles")
-    if not isinstance(roles, list) or set(roles) != set(_RECORD_ROLES):
+    if (
+        not isinstance(roles, list)
+        or not all(isinstance(role, str) for role in roles)
+        or set(roles) != set(_RECORD_ROLES)
+    ):
         raise ValueError(f"records roles must be exactly {sorted(_RECORD_ROLES)}")
     lib_rs = (ADAPTERS / "lib.rs").read_text(encoding="utf-8")
     if "pub mod diagnostic_record;" not in lib_rs:
@@ -200,7 +205,11 @@ def _validate_args(owner, args):
     if args is None:
         return
     if not isinstance(args, dict) or not all(
-        isinstance(spec, str) for spec in args.values()
+        isinstance(name, str)
+        and name.isidentifier()
+        and not keyword.iskeyword(name)
+        and isinstance(spec, str)
+        for name, spec in args.items()
     ):
         raise ValueError(f"args for {owner} must map argument names to type text")
 
@@ -215,6 +224,7 @@ def _validate_python(definition):
         raise ValueError("unexpected Python registration path")
     if "issue_projection" in python and not isinstance(python["issue_projection"], str):
         raise ValueError("bindings.yaml python.issue_projection must be type text")
+    type_texts = []
     exports = python.get("exports")
     if not isinstance(exports, list):
         raise ValueError("bindings.yaml python.exports must be a list")
@@ -234,12 +244,16 @@ def _validate_python(definition):
             _NAME.fullmatch(part) for part in rust.split("::")
         ):
             raise ValueError(f"invalid Rust path for {name}: {rust!r}")
-        if kind == "constant" and not isinstance(export.get("type"), str):
-            raise ValueError(f"Python constant {name} must declare type text")
+        if kind == "constant":
+            if not isinstance(export.get("type"), str):
+                raise ValueError(f"Python constant {name} must declare type text")
+            type_texts.append(export["type"])
         if kind == "function":
             if not isinstance(export.get("returns"), str):
                 raise ValueError(f"Python function {name} must declare return text")
             _validate_args(f"Python function {name}", export.get("args"))
+            type_texts.append(export["returns"])
+            type_texts.extend((export.get("args") or {}).values())
         if kind == "class":
             methods = export.get("methods", [])
             if not isinstance(methods, list):
@@ -260,6 +274,8 @@ def _validate_python(definition):
                         f"method {name}.{method_name} must declare return text"
                     )
                 _validate_args(f"method {name}.{method_name}", method.get("args"))
+                type_texts.append(method["returns"])
+                type_texts.extend((method.get("args") or {}).values())
                 method_names.append(method_name)
             if len(method_names) != len(set(method_names)):
                 raise ValueError(f"duplicate methods on Python class {name}")
@@ -267,6 +283,13 @@ def _validate_python(definition):
             raise ValueError(f"Python exception {name} must derive from Exception")
     if len(names) != len(set(names)):
         raise ValueError("duplicate Python exports in bindings.yaml")
+    if "issue_projection" not in python and any(
+        re.search(r"\bissue_projection\b", text) for text in type_texts
+    ):
+        raise ValueError(
+            "bindings.yaml uses the issue_projection type without declaring "
+            "python.issue_projection"
+        )
 
 
 def _validate_operations(definition):
@@ -370,8 +393,14 @@ def _python_type(node, definition, classes):
         if name in _SCALAR_TYPES:
             return _SCALAR_TYPES[name]
         if name == "issue_projection":
+            projection = definition["python"].get("issue_projection")
+            if not isinstance(projection, str):
+                raise ValueError(
+                    "bindings.yaml uses the issue_projection type without "
+                    "declaring python.issue_projection"
+                )
             return _python_type(
-                _type_node(definition["python"]["issue_projection"]),
+                _type_node(projection),
                 definition,
                 classes,
             )

@@ -38,6 +38,13 @@ class BindingsTests(unittest.TestCase):
                 if export["kind"] == "class"
             )
 
+        def first_function(definition):
+            return next(
+                export
+                for export in definition["python"]["exports"]
+                if export["kind"] == "function"
+            )
+
         cases = [
             (
                 generator._validate_python,
@@ -66,6 +73,24 @@ class BindingsTests(unittest.TestCase):
             (
                 generator._validate_python,
                 mutated(lambda d: first_class(d).update(methods=[{"name": None}])),
+            ),
+            (
+                generator._validate_python,
+                mutated(lambda d: first_function(d).update(args={"bad-name": "text"})),
+            ),
+            (
+                generator._validate_python,
+                mutated(lambda d: first_function(d).update(args={"class": "text"})),
+            ),
+            (
+                generator._validate_python,
+                mutated(lambda d: d["python"].pop("issue_projection")),
+            ),
+            (
+                generator._resolve_records_import,
+                mutated(
+                    lambda d: d["imports"]["records"].update(roles=[{"role": "x"}])
+                ),
             ),
             (
                 generator._resolve_records_import,
