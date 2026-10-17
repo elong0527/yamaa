@@ -408,6 +408,79 @@ impl Run<'_> {
             }
         }
     }
+    fn declares_written_keys(
+        &mut self,
+        expression: &TypeExpression,
+        node: usize,
+        site: Site<'_>,
+    ) -> Result<bool, ValidationError> {
+        let N::Mapping(items) = &self.input.nodes()[site.value] else {
+            return Ok(false);
+        };
+        if items.is_empty() {
+            return Ok(false);
+        }
+        let mut keys = Vec::new();
+        for &(key, _) in items {
+            let N::Text(name) = &self.input.nodes()[key] else {
+                return Ok(false);
+            };
+            keys.push(name.clone());
+        }
+        self.declares_keys(expression, node, site, &keys)
+    }
+    fn declares_keys(
+        &mut self,
+        expression: &TypeExpression,
+        node: usize,
+        site: Site<'_>,
+        keys: &[String],
+    ) -> Result<bool, ValidationError> {
+        self.step(site)?;
+        let TypeNode::Name(span) = &expression.nodes()[node] else {
+            return Ok(false);
+        };
+        let name = expression.expression()[span.clone()].to_string();
+        if matches!(
+            name.as_str(),
+            "str" | "int" | "float" | "bool" | "null" | "list" | "dict"
+        ) {
+            return Ok(false);
+        }
+        let schema = self.schema;
+        if let Some(class) = schema.class_named(&name) {
+            return Ok(keys
+                .iter()
+                .all(|key| class.fields.iter().any(|field| &field.name == key)));
+        }
+        let Some((id, alias)) = schema.alias_named(&name) else {
+            return Ok(false);
+        };
+        if self.active.contains(&(site.value, id)) {
+            return Ok(false);
+        }
+        match alias.kind {
+            SchemaAliasKind::Registry(registry) => Ok(keys.iter().all(|key| {
+                schema.registries()[registry]
+                    .entries
+                    .iter()
+                    .any(|entry| &entry.name == key)
+            })),
+            SchemaAliasKind::Descriptor(descriptor) => {
+                self.active.push((site.value, id));
+                let result = (|| {
+                    for member in schema.descriptors()[descriptor].descriptor.members() {
+                        if self.declares_keys(member, member.root(), site.deeper(), keys)? {
+                            return Ok(true);
+                        }
+                    }
+                    Ok(false)
+                })();
+                self.active.pop();
+                result
+            }
+        }
+    }
     fn union(
         &mut self,
         members: &[TypeExpression],
@@ -431,6 +504,13 @@ impl Run<'_> {
                 return Ok(result);
             }
             attempted.push((member, result));
+        }
+        for (member, diagnostics) in &mut attempted {
+            if self.outer(member, member.root(), site.deeper())?
+                && self.declares_written_keys(member, member.root(), site.deeper())?
+            {
+                return Ok(std::mem::take(diagnostics));
+            }
         }
         for (member, diagnostics) in &mut attempted {
             if self.outer(member, member.root(), site.deeper())? {

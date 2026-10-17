@@ -1067,6 +1067,35 @@ fn outer_secondary(
         })
         .collect()
 }
+fn unused_slot_placeholder(
+    identifier: &str,
+    path: &str,
+    donor_name: &str,
+    source: &TableSchema,
+) -> Intermediate {
+    Intermediate {
+        identifier: identifier.into(),
+        path: path.into(),
+        source: IntermediateSource::Primary {
+            name: donor_name.into(),
+            schema: source.clone(),
+        },
+        keys: vec![crate::dataset::IntermediateKey {
+            source_column: 0,
+            path: format!("{path}.key"),
+            value: crate::dataset::MatchValue::Literal(Value::Missing),
+        }],
+        filter: None,
+        selection: None,
+        range: None,
+        columns: None,
+        no_match: Some(Value::Missing),
+        unique: Vec::new(),
+        derivations: None,
+        pending_schema: None,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn rebase(
     previous: &[Option<Intermediate>],
@@ -1146,27 +1175,9 @@ fn rebase(
         if !required.contains(&index) {
             // Donor plans keep original selector indices. An unused slot owns
             // no matching work, derivations or verifications in this context.
-            *item = Intermediate {
-                identifier: item.identifier.clone(),
-                path: item.path.clone(),
-                source: IntermediateSource::Primary {
-                    name: donor_name.into(),
-                    schema: source.clone(),
-                },
-                keys: vec![crate::dataset::IntermediateKey {
-                    source_column: 0,
-                    path: format!("{}.key", item.path),
-                    value: crate::dataset::MatchValue::Literal(Value::Missing),
-                }],
-                filter: None,
-                selection: None,
-                range: None,
-                columns: None,
-                no_match: Some(Value::Missing),
-                unique: Vec::new(),
-                derivations: None,
-                pending_schema: None,
-            };
+            let placeholder =
+                unused_slot_placeholder(&item.identifier, &item.path, donor_name, source);
+            *item = placeholder;
             continue;
         }
         // Retain field names before moving this selector's source into the

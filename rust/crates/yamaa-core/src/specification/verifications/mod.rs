@@ -130,6 +130,159 @@ fn operation(d: &Document, id: usize) -> Result<(&str, usize), PrepareError> {
     };
     Ok((text(d, name)?, payload))
 }
+fn admit_vocabulary(
+    d: &Document,
+    entries: &[usize],
+    prefix: &str,
+    column: Option<usize>,
+    declared_warning_paths: &mut Vec<String>,
+) -> Result<(), PrepareError> {
+    let mut extra = Vec::new();
+    for (index, &id) in entries.iter().enumerate() {
+        let (op, payload) = operation(d, id)?;
+        let path = format!("{prefix}[{index}].{op}");
+        if column.is_some()
+            && !matches!(
+                op,
+                "not_missing" | "allowed_values" | "range" | "max_length" | "matches"
+            )
+        {
+            reject(&mut extra, op, path);
+            continue;
+        }
+        let allowed: &[&str] = match op {
+            "not_missing" if column.is_some() => &["id", "severity"],
+            "allowed_values" if column.is_some() => &["values", "id", "severity"],
+            "range" if column.is_some() => &["min", "max", "id", "severity"],
+            "max_length" if column.is_some() => &["max", "id", "severity"],
+            "matches" if column.is_some() => &["pattern", "id", "severity"],
+            "unique" | "all_or_none" => &["columns", "id", "severity"],
+            "row_count" => &[
+                "min",
+                "max",
+                "min_fraction",
+                "max_fraction",
+                "filter",
+                "when",
+                "group_by",
+                "id",
+                "severity",
+            ],
+            "assert" => &["when", "require", "id", "severity"],
+            _ => {
+                reject(&mut extra, op, path);
+                continue;
+            }
+        };
+        if op == "unique" && matches!(d.nodes()[payload], N::Sequence(_)) {
+            continue;
+        }
+        for &(name, _) in mapping(d, payload)? {
+            let name = text(d, name)?;
+            if !allowed.contains(&name) {
+                reject(&mut extra, name, format!("{path}.{name}"));
+            }
+        }
+        if let Some(id) = d.field(payload, "severity") {
+            if text(d, id)? == "warning" {
+                declared_warning_paths.push(path.clone());
+            } else if text(d, id)? != "error" {
+                reject(&mut extra, "verification_severity", path.clone());
+            }
+        }
+    }
+    if !extra.is_empty() {
+        return Err(PrepareError::Unsupported(extra));
+    }
+    Ok(())
+}
+
+type PreparedPredicates = BTreeMap<(usize, &'static str), Result<BoundPredicate, Diagnostic>>;
+
+fn compile_predicates(
+    d: &Document,
+    entries: &[usize],
+    prefix: &str,
+    output: &TableSchema,
+) -> Result<PreparedPredicates, PrepareError> {
+    let mut predicates = BTreeMap::new();
+    // Admit the complete operation/field/severity vocabulary before any
+    // payload compiler can refuse on policy. Later vocabulary still matters
+    // even when an earlier declaration finding makes its payload unreachable.
+    for (index, &id) in entries.iter().enumerate() {
+        let (op, payload) = operation(d, id)?;
+        let path = format!("{prefix}[{index}].{op}");
+
+        if op == "assert" || op == "row_count" {
+            for name in if op == "assert" {
+                ["when", "require"]
+            } else {
+                ["filter", "when"]
+            } {
+                if name == "require" || d.field(payload, name).is_some() {
+                    predicates.insert(
+                        (index, name),
+                        predicate(d, payload, name, &path, output, true)?,
+                    );
+                }
+            }
+        }
+    }
+    Ok(predicates)
+}
+
+fn admit_identity(
+    d: &Document,
+    payload: usize,
+    path: &str,
+    ids: &mut BTreeMap<String, String>,
+) -> Result<Option<String>, DeclarationFinding> {
+    let Some(id) = d.field(payload, "id") else {
+        return Ok(None);
+    };
+    match &d.nodes()[id] {
+        N::Text(value) if !value.is_empty() => {
+            if let Some(previous) = ids.get(value) {
+                return Err(DeclarationFinding::Reason {
+                    path: path.into(),
+                    code: ConditionCode::VerificationIdentifierRepeated,
+                    reason: format!(
+                        "verification id {} repeats {previous}",
+                        crate::schema::quoted_diagnostic_text(value)
+                    ),
+                });
+            }
+            ids.insert(value.clone(), path.into());
+            Ok(Some(value.clone()))
+        }
+        _ => Err(DeclarationFinding::Reason {
+            path: path.into(),
+            code: ConditionCode::VerificationIdentifierType,
+            reason: "a verification id is text".into(),
+        }),
+    }
+}
+
+fn push_deferred(result: &mut Verifications) {
+    if let Some(finding) = &result.deferred {
+        let (path, check) = match finding {
+            DeclarationFinding::Reason { path, code, reason } => (
+                path.clone(),
+                Check::InvalidDeclaration {
+                    code: *code,
+                    reason: reason.clone(),
+                },
+            ),
+            DeclarationFinding::Diagnostic(diagnostic) => (
+                diagnostic.spec_paths[0].clone(),
+                Check::InvalidDiagnostic(diagnostic.clone()),
+            ),
+        };
+        result.checks.push(Verification { path, check });
+        result.identities.push(None);
+    }
+}
+
 impl Verifications {
     pub(super) fn bind(
         &self,
@@ -199,86 +352,14 @@ impl Verifications {
         column: Option<usize>,
     ) -> Result<Self, PrepareError> {
         let mut result = Self::default();
-        let mut extra = Vec::new();
-        for (index, &id) in entries.iter().enumerate() {
-            let (op, payload) = operation(d, id)?;
-            let path = format!("{prefix}[{index}].{op}");
-            if column.is_some()
-                && !matches!(
-                    op,
-                    "not_missing" | "allowed_values" | "range" | "max_length" | "matches"
-                )
-            {
-                reject(&mut extra, op, path);
-                continue;
-            }
-            let allowed: &[&str] = match op {
-                "not_missing" if column.is_some() => &["id", "severity"],
-                "allowed_values" if column.is_some() => &["values", "id", "severity"],
-                "range" if column.is_some() => &["min", "max", "id", "severity"],
-                "max_length" if column.is_some() => &["max", "id", "severity"],
-                "matches" if column.is_some() => &["pattern", "id", "severity"],
-                "unique" | "all_or_none" => &["columns", "id", "severity"],
-                "row_count" => &[
-                    "min",
-                    "max",
-                    "min_fraction",
-                    "max_fraction",
-                    "filter",
-                    "when",
-                    "group_by",
-                    "id",
-                    "severity",
-                ],
-                "assert" => &["when", "require", "id", "severity"],
-                _ => {
-                    reject(&mut extra, op, path);
-                    continue;
-                }
-            };
-            if op == "unique" && matches!(d.nodes()[payload], N::Sequence(_)) {
-                continue;
-            }
-            for &(name, _) in mapping(d, payload)? {
-                let name = text(d, name)?;
-                if !allowed.contains(&name) {
-                    reject(&mut extra, name, format!("{path}.{name}"));
-                }
-            }
-            if let Some(id) = d.field(payload, "severity") {
-                if text(d, id)? == "warning" {
-                    result.declared_warning_paths.push(path.clone());
-                } else if text(d, id)? != "error" {
-                    reject(&mut extra, "verification_severity", path.clone());
-                }
-            }
-        }
-        if !extra.is_empty() {
-            return Err(PrepareError::Unsupported(extra));
-        }
-        let mut predicates = BTreeMap::new();
-        // Admit the complete operation/field/severity vocabulary before any
-        // payload compiler can refuse on policy. Later vocabulary still matters
-        // even when an earlier declaration finding makes its payload unreachable.
-        for (index, &id) in entries.iter().enumerate() {
-            let (op, payload) = operation(d, id)?;
-            let path = format!("{prefix}[{index}].{op}");
-
-            if op == "assert" || op == "row_count" {
-                for name in if op == "assert" {
-                    ["when", "require"]
-                } else {
-                    ["filter", "when"]
-                } {
-                    if name == "require" || d.field(payload, name).is_some() {
-                        predicates.insert(
-                            (index, name),
-                            predicate(d, payload, name, &path, output, true)?,
-                        );
-                    }
-                }
-            }
-        }
+        admit_vocabulary(
+            d,
+            entries,
+            prefix,
+            column,
+            &mut result.declared_warning_paths,
+        )?;
+        let mut predicates = compile_predicates(d, entries, prefix, output)?;
         let mut ids = BTreeMap::<String, String>::new();
         for (index, &id) in entries.iter().enumerate() {
             let (op, payload) = operation(d, id)?;
@@ -286,34 +367,12 @@ impl Verifications {
             let invalid = |path: String, code, reason: String| {
                 Some(DeclarationFinding::Reason { path, code, reason })
             };
-            let identity = if let Some(id) = d.field(payload, "id") {
-                match &d.nodes()[id] {
-                    N::Text(value) if !value.is_empty() => {
-                        if let Some(previous) = ids.get(value) {
-                            result.deferred = invalid(
-                                path,
-                                ConditionCode::VerificationIdentifierRepeated,
-                                format!(
-                                    "verification id {} repeats {previous}",
-                                    crate::schema::quoted_diagnostic_text(value)
-                                ),
-                            );
-                            break;
-                        }
-                        ids.insert(value.clone(), path.clone());
-                        Some(value.clone())
-                    }
-                    _ => {
-                        result.deferred = invalid(
-                            path,
-                            ConditionCode::VerificationIdentifierType,
-                            "a verification id is text".into(),
-                        );
-                        break;
-                    }
+            let identity = match admit_identity(d, payload, &path, &mut ids) {
+                Ok(identity) => identity,
+                Err(finding) => {
+                    result.deferred = Some(finding);
+                    break;
                 }
-            } else {
-                None
             };
             let check = if let Some(column) = column {
                 // IDs and each payload are prepared in declaration order. A
@@ -556,23 +615,7 @@ impl Verifications {
             result.checks.push(Verification { path, check });
             result.identities.push(identity);
         }
-        if let Some(finding) = &result.deferred {
-            let (path, check) = match finding {
-                DeclarationFinding::Reason { path, code, reason } => (
-                    path.clone(),
-                    Check::InvalidDeclaration {
-                        code: *code,
-                        reason: reason.clone(),
-                    },
-                ),
-                DeclarationFinding::Diagnostic(diagnostic) => (
-                    diagnostic.spec_paths[0].clone(),
-                    Check::InvalidDiagnostic(diagnostic.clone()),
-                ),
-            };
-            result.checks.push(Verification { path, check });
-            result.identities.push(None);
-        }
+        push_deferred(&mut result);
         Ok(result)
     }
 }

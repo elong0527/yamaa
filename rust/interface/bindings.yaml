@@ -1,0 +1,219 @@
+# Authoritative declaration input for the Python/R generators specified in README.md.
+# Design only: this file does not yet replace the handwritten registrations.
+format: yamaa.host-interface
+format_version: 1
+boundary: rust_generated_host_glue
+contract: README.md
+
+# Roles are imports, not declarations of a second record schema. Bind each role
+# to the actual public Rust path delivered by the owner before generating code.
+imports:
+  records:
+    owner: https://github.com/elong0527/yamaa/issues/2674
+    crate: yamaa-adapters
+    roles: [boundary_version, diagnostic, result, plan]
+  arrow_stream:
+    rust: yamaa_adapters::arrow_bridge::FFI_ArrowArrayStream
+  resource_request:
+    rust: yamaa_adapters::host_resources::Request
+  resource_reply:
+    rust: yamaa_adapters::host_resources::Reply
+  resource_failure:
+    rust: yamaa_adapters::host_resources::Failure
+  scalar_payload:
+    rust: yamaa_adapters::scalar_bytes::ScalarBytes
+  resolved_artifact:
+    rust: yamaa_adapters::resolved_artifact::ResolvedArtifact
+
+handshake:
+  version: records.boundary_version
+  python: _interface_handshake
+  r: interface_handshake
+  python_error: InterfaceError
+  r_error: yamaa_interface_error
+  required_features: [structured_records, arrow_c_stream]
+  optional_features:
+    resource_resolver: host_resources::Resolver
+    resolved_specification: resolved_artifact::ResolvedArtifact
+    format_yaml: yamaa-adapters/yaml
+    format_parquet: yamaa-adapters/parquet
+    format_readstat: yamaa-adapters/readstat
+  failure_record: records.diagnostic
+  result_record: records.result
+
+# Complete current registrations, in source order. Signatures describe the
+# current wire projections, not the future imported record fields. Type tokens
+# and per-host asymmetries are defined in README.md. Implicit interpreter/self
+# arguments are omitted. All returned values are owned unless marked otherwise.
+python:
+  module: yamaa._native
+  registration: rust/crates/yamaa-python/src/lib.rs
+  issue_projection: "tuple<text, text, optional<text>, list<text>, text>"
+  exports:
+    - kind: constant
+      name: _CORE_VERSION
+      rust: yamaa_core::VERSION
+      type: text
+    - kind: class
+      name: _ArrowTable
+      rust: arrow_bridge::ArrowTable
+      constructible: false
+      methods:
+        - name: __arrow_c_stream__
+          args: {requested_schema: "optional<host_object> = None"}
+          returns: arrow_stream_capsule
+    - kind: class
+      name: _DefineResult
+      rust: define_entry::Define
+      constructible: false
+      methods:
+        - {name: issues, args: {}, returns: "list<issue_projection>"}
+        - {name: artifacts, args: {}, returns: "list<tuple<text, bytes, text>>"}
+        - {name: capture_reads, args: {}, returns: index}
+        - {name: save, args: {}, returns: bool}
+    - kind: exception
+      name: DefineError
+      rust: define_entry::DefineError
+      base: Exception
+    - kind: function
+      name: _define_file
+      rust: define_entry::_define_file
+      args: {environment: text, standard: text, created: "optional<text>", installed_version: text}
+      returns: _DefineResult
+    - kind: class
+      name: _DomainResult
+      rust: domain_entry::Domain
+      constructible: false
+      methods:
+        - {name: propagate_interrupt, args: {}, returns: unit}
+        - {name: producer_attempt, args: {}, returns: "optional<_ProducerAttempt>"}
+        - {name: producer_projection_failure, args: {}, returns: "optional<text>"}
+        - {name: preparation_sources, args: {}, returns: "list<tuple<text, bytes>>"}
+        - {name: project_failures, args: {}, returns: "list<tuple<text, host_exception>>"}
+        - {name: observations, args: {include_measurements: "bool = false"}, returns: "optional<text>"}
+        - {name: output, args: {}, returns: "optional<_ArrowTable>"}
+        - {name: issues, args: {}, returns: "list<issue_projection>"}
+        - {name: log, args: {warning: bool}, returns: "optional<_ArrowTable>"}
+        - {name: save, args: {}, returns: bool}
+    - kind: exception
+      name: DomainError
+      rust: domain_entry::DomainError
+      base: Exception
+    - kind: function
+      name: _domain_file
+      rust: domain_entry::_domain_file
+      args: {specification: text, environment: "optional<text> = None", resolver: "optional<host_callback> = None"}
+      returns: _DomainResult
+    - kind: function
+      name: _check_file
+      rust: domain_entry::_check_file
+      args: {specification: text, environment: "optional<text> = None", resolver: "optional<host_callback> = None"}
+      returns: "list<issue_projection>"
+    - kind: function
+      name: _resolve_specification_file
+      rust: resolved_artifact::_resolve_specification_file
+      args: {specification: text, environment: "optional<text> = None"}
+      returns: "tuple<optional<text>, list<issue_projection>>"
+    - kind: function
+      name: _read_resolved_specification
+      rust: resolved_artifact::_read_resolved_specification
+      args: {text: text}
+      returns: text
+    - kind: class
+      name: _ProducerAttempt
+      rust: domain_entry::Attempt
+      constructible: false
+      methods:
+        - {name: accepted, args: {}, returns: bool}
+        - {name: entered_nodes, args: {}, returns: "list<index>"}
+        - {name: host_failures, args: {}, returns: "list<tuple<text, host_exception>>"}
+        - {name: propagate_interrupt, args: {}, returns: unit}
+        - {name: retained_sources, args: {}, returns: "list<tuple<text, bytes>>"}
+        - {name: artifact, args: {node: index}, returns: "optional<bytes>"}
+    - kind: function
+      name: _style_same_value
+      rust: style::_style_same_value
+      args: {before: bytes, after: bytes}
+      returns: bool
+
+r:
+  module: yamaa
+  registration: rust/crates/yamaa-r/src/lib.rs
+  # Includes every function in recursively used extendr_module! blocks.
+  # extendr supplies wrap__<name>, get_yamaa_metadata and registration machinery.
+  groups:
+    - module: yamaa
+      source: rust/crates/yamaa-r/src/lib.rs
+      functions:
+        - {name: core_version, args: {}, returns: text}
+    - module: domain_entry
+      source: rust/crates/yamaa-r/src/domain_entry.rs
+      functions:
+        - name: domain_file
+          args: {specification: raw, environment_path: robj, version: raw, capabilities: r_list}
+          returns: r_reply
+        - name: domain_resolved
+          args: {specification: raw, environment_path: robj, version: raw, capabilities: r_list, resolver: r_function}
+          returns: r_reply
+        - {name: check_file, args: {specification: raw, environment_path: robj, version: raw}, returns: r_reply}
+        - name: check_resolved
+          args: {specification: raw, environment_path: robj, version: raw, resolver: r_function}
+          returns: r_reply
+        - {name: domain_issues, args: {handle: robj}, returns: r_reply}
+        - {name: domain_output, args: {handle: robj}, returns: r_reply}
+        - {name: domain_arrow, args: {handle: robj, destination: robj, kind: i32}, returns: r_reply}
+        - {name: domain_log, args: {handle: robj, warning: bool}, returns: r_reply}
+        - {name: domain_observations, args: {handle: robj, include_measurements: bool}, returns: r_reply}
+        - {name: domain_save, args: {handle: robj}, returns: r_reply}
+        - {name: domain_interrupt, args: {handle: robj}, returns: r_reply}
+        - {name: domain_producer_evidence, args: {handle: robj}, returns: r_reply}
+        - {name: domain_preparation_sources, args: {handle: robj}, returns: r_reply}
+        - {name: domain_projection_failure, args: {handle: robj}, returns: r_reply}
+    - module: define_entry
+      source: rust/crates/yamaa-r/src/define_entry.rs
+      functions:
+        - {name: define_file, args: {environment: raw, standard: raw, created: robj, installed: raw}, returns: r_reply}
+        - {name: define_issues, args: {handle: robj}, returns: r_reply}
+        - {name: define_artifacts, args: {handle: robj}, returns: r_reply}
+        - {name: define_save, args: {handle: robj}, returns: r_reply}
+    - module: scalars
+      source: rust/crates/yamaa-r/src/scalars.rs
+      functions:
+        - {name: scalar_bytes, args: {tag: i32, payload: raw}, returns: r_scalar_reply}
+        - {name: scalar_exact_double, args: {tag: i32, payload: raw}, returns: r_scalar_reply}
+        - {name: scalar_operator_code, args: {name: raw, unary: bool}, returns: r_reply}
+        - name: scalar_operator
+          args: {code: i32, left_tag: i32, left: raw, right_tag: i32, right: raw, unary: bool}
+          returns: r_scalar_reply
+    - module: resolved_artifact
+      source: rust/crates/yamaa-r/src/resolved_artifact.rs
+      functions:
+        - {name: resolve_specification_file, args: {specification: raw, environment: robj}, returns: r_reply}
+        - {name: read_resolved_specification, args: {value: raw}, returns: r_reply}
+
+# Semantic pairings for generators; private transport helpers need not acquire
+# an artificial counterpart. Lists name existing exports, not new operations.
+operations:
+  core_version: {python: [_CORE_VERSION], r: [core_version]}
+  domain: {python: [_domain_file], r: [domain_file, domain_resolved]}
+  check: {python: [_check_file], r: [check_file, check_resolved]}
+  define: {python: [_define_file], r: [define_file]}
+  resolve_specification: {python: [_resolve_specification_file], r: [resolve_specification_file]}
+  read_resolved_specification: {python: [_read_resolved_specification], r: [read_resolved_specification]}
+  domain_issues: {python: [_DomainResult.issues], r: [domain_issues]}
+  domain_output: {python: [_DomainResult.output], r: [domain_output, domain_arrow]}
+  domain_logs: {python: [_DomainResult.log], r: [domain_log, domain_arrow]}
+  domain_save: {python: [_DomainResult.save], r: [domain_save]}
+  domain_observations: {python: [_DomainResult.observations], r: [domain_observations]}
+  domain_interrupt: {python: [_DomainResult.propagate_interrupt], r: [domain_interrupt]}
+  domain_preparation_sources: {python: [_DomainResult.preparation_sources], r: [domain_preparation_sources]}
+  domain_projection_failure: {python: [_DomainResult.producer_projection_failure], r: [domain_projection_failure]}
+  producer_evidence:
+    python: [_DomainResult.producer_attempt, _DomainResult.project_failures, _ProducerAttempt]
+    r: [domain_producer_evidence]
+  define_issues: {python: [_DefineResult.issues], r: [define_issues]}
+  define_artifacts: {python: [_DefineResult.artifacts], r: [define_artifacts]}
+  define_save: {python: [_DefineResult.save], r: [define_save]}
+host_only:
+  python: [_style_same_value, _DefineResult.capture_reads, _ArrowTable.__arrow_c_stream__, DomainError, DefineError]
+  r: [scalar_bytes, scalar_exact_double, scalar_operator_code, scalar_operator]

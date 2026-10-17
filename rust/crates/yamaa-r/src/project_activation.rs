@@ -2,175 +2,242 @@
 //! Original condition objects are rooted in owned error payloads; no longjmp
 //! crosses Rust because installed host helpers return closed reply envelopes.
 use extendr_api::prelude::*;
-use yamaa_adapters::{
-    project_lock::{self, Finding, Reason},
-    scalar_bytes,
+use std::sync::Mutex;
+use yamaa::{
+    Argument, CallError, FunctionError, FunctionHandle, FunctionIdentity, HostLanguage,
+    HostPayload, LockContext, LockFinding, LockKind, LockReason, LockSyntaxError, ProjectFunctions,
+    Scalar, ScalarRef, Signature,
 };
-use yamaa_core::{
-    function_invocation::{Argument, HostError},
-    project_activation::ActivationPort,
-};
-use yamaa_core::{
-    function_signature::{LogicalSignature, ProjectFunctionIdentity},
-    project_environment::{LockKind, LockReference},
-    project_function::Language,
-    table::ValueRef,
-    value::Value,
-};
-#[derive(Debug)]
-pub enum Error {
-    Host(Robj),
-    Interrupt(Robj),
-    Representation(Robj),
-    Scalar(&'static str),
-    LockSyntax(project_lock::Error),
-    Lock(Vec<Finding>),
-    Boundary(extendr_api::Error),
-    Protocol,
-    /// A caller-supplied registry has no binding for the requested call.
-    MissingBinding(String),
+
+/// Installed capabilities: lock verification, binding resolution and host
+/// condition rendering. Constructing this host port does not query versions,
+/// load project namespaces or invoke any project function.
+pub struct Functions {
+    verify: Mutex<crate::thread_bound::ThreadBound<Function>>,
+    resolve: Mutex<crate::thread_bound::ThreadBound<Function>>,
+    formatter: Mutex<crate::thread_bound::ThreadBound<Function>>,
 }
-impl Error {
-    /// Mechanical SDK facts, distinct from projected semantic issues. Original
-    /// R conditions remain rooted objects; no host condition is stringified.
-    pub fn facts(&self) -> Robj {
-        match self {
-            Self::Host(condition) => {
-                list!(kind = "host", condition = condition.clone()).into_robj()
-            }
-            Self::Interrupt(condition) => {
-                list!(kind = "interrupt", condition = condition.clone()).into_robj()
-            }
-            Self::Representation(condition) => {
-                list!(kind = "representation", condition = condition.clone()).into_robj()
-            }
-            Self::Scalar(reason) => {
-                list!(kind = "scalar", reason = Raw::from_bytes(reason.as_bytes())).into_robj()
-            }
-            Self::Lock(findings) => list!(
-                kind = "lock",
-                findings = List::from_values(findings.iter().map(|finding| {
-                    list!(
-                        package = Raw::from_bytes(finding.package.as_bytes()),
-                        reason = finding.reason.as_str(),
-                        expected = List::from_values(
-                            finding
-                                .expected
-                                .iter()
-                                .map(|value| Raw::from_bytes(value.as_bytes()))
-                        ),
-                        actual = finding
-                            .actual
-                            .as_ref()
-                            .map(|value| Raw::from_bytes(value.as_bytes()))
-                    )
-                }))
-            )
-            .into_robj(),
-            Self::LockSyntax(error) => match error {
-                project_lock::Error::Limit(error) => list!(
-                    kind = "lock_limit",
-                    resource = error.resource,
-                    limit = error.limit as f64,
-                    actual = error.actual.map(|value| value as f64)
-                )
-                .into_robj(),
-                project_lock::Error::Shape(field) => {
-                    list!(kind = "lock_shape", field = *field).into_robj()
-                }
-                project_lock::Error::Json(error) => list!(
-                    kind = "lock_json",
-                    line = error.line() as f64,
-                    column = error.column() as f64
-                )
-                .into_robj(),
-                project_lock::Error::Document(error) => list!(
-                    kind = "lock_document",
-                    resource_refusal =
-                        matches!(error, yamaa_adapters::yaml_decode::DecodeFailure::Limit(_))
-                )
-                .into_robj(),
-            },
-            Self::Boundary(error) => {
-                let condition = match error {
-                    extendr_api::Error::EvalError(value) | extendr_api::Error::Panic(value) => {
-                        value.clone()
-                    }
-                    _ => ().into_robj(),
-                };
-                list!(kind = "sdk_boundary", condition = condition).into_robj()
-            }
-            Self::Protocol => list!(kind = "protocol").into_robj(),
-            Self::MissingBinding(call) => list!(
-                kind = "missing_binding",
-                call = Raw::from_bytes(call.as_bytes())
-            )
-            .into_robj(),
-        }
-    }
-}
-/// Capabilities are installed package helpers. Constructing this host port does
-/// not query versions, load project namespaces or invoke any project function.
-pub struct Port<'lock> {
-    lock: &'lock [u8],
-    verify: Function,
-    resolve: Function,
-}
-impl<'lock> Port<'lock> {
-    pub fn new(lock: &'lock [u8], verify: Function, resolve: Function) -> Self {
+
+impl Functions {
+    pub fn new(verify: Function, resolve: Function, formatter: Function) -> Self {
+        use crate::thread_bound::ThreadBound;
         Self {
-            lock,
-            verify,
-            resolve,
+            verify: Mutex::new(ThreadBound::new(verify)),
+            resolve: Mutex::new(ThreadBound::new(resolve)),
+            formatter: Mutex::new(ThreadBound::new(formatter)),
         }
     }
 }
-fn reply(function: &Function, arguments: Pairlist) -> std::result::Result<Robj, Error> {
-    let result = function.call(arguments).map_err(Error::Boundary)?;
+
+/// One closed host reply: a completed payload or a classified failure status.
+enum Status {
+    Completed(Robj),
+    Host(Robj),
+    Representation(Robj),
+    Interrupt(Robj),
+}
+
+fn sdk_payload(error: &extendr_api::Error) -> Option<HostPayload> {
+    let condition = match error {
+        extendr_api::Error::EvalError(value) | extendr_api::Error::Panic(value) => {
+            Some(value.clone())
+        }
+        _ => None,
+    };
+    condition.map(|condition| HostPayload::new(crate::thread_bound::ThreadBound::new(condition)))
+}
+
+fn call_status(
+    function: &Function,
+    arguments: Pairlist,
+) -> std::result::Result<Status, FunctionError> {
+    let result = function
+        .call(arguments)
+        .map_err(|error| FunctionError::SdkBoundary {
+            payload: sdk_payload(&error),
+        })?;
     let result = result
         .as_list()
         .filter(|list| list.len() == 2)
-        .ok_or(Error::Protocol)?;
+        .ok_or(FunctionError::Protocol)?;
     let status = result
         .elt(0)
-        .map_err(Error::Boundary)?
+        .map_err(|error| FunctionError::SdkBoundary {
+            payload: sdk_payload(&error),
+        })?
         .as_integer()
-        .ok_or(Error::Protocol)?;
-    let payload = result.elt(1).map_err(Error::Boundary)?;
+        .ok_or(FunctionError::Protocol)?;
+    let payload = result.elt(1).map_err(|error| FunctionError::SdkBoundary {
+        payload: sdk_payload(&error),
+    })?;
     match status {
-        0 => Ok(payload),
-        1 => Err(Error::Host(payload)),
-        2 => Err(Error::Representation(payload)),
-        3 => Err(Error::Interrupt(payload)),
-        _ => Err(Error::Protocol),
+        0 => Ok(Status::Completed(payload)),
+        1 => Ok(Status::Host(payload)),
+        2 => Ok(Status::Representation(payload)),
+        3 => Ok(Status::Interrupt(payload)),
+        _ => Err(FunctionError::Protocol),
     }
 }
-fn text(value: &Robj) -> std::result::Result<String, Error> {
-    let raw = value.as_raw().ok_or(Error::Protocol)?;
+
+fn text(value: &Robj) -> std::result::Result<String, FunctionError> {
+    let raw = value.as_raw().ok_or(FunctionError::Protocol)?;
     std::str::from_utf8(raw.as_slice())
         .map(str::to_owned)
-        .map_err(|_| Error::Protocol)
+        .map_err(|_| FunctionError::Protocol)
 }
-fn optional_text(value: &Robj) -> std::result::Result<Option<String>, Error> {
+
+fn optional_text(value: &Robj) -> std::result::Result<Option<String>, FunctionError> {
     if value.is_null() {
         Ok(None)
     } else {
         text(value).map(Some)
     }
 }
-impl ActivationPort for Port<'_> {
-    type Handle = Function;
-    type Error = Error;
-    fn verify_lock(
-        &mut self,
-        language: Language,
-        lock: &LockReference,
-        functions: &[ProjectFunctionIdentity],
-    ) -> std::result::Result<(), Error> {
-        if language != Language::R || lock.kind != LockKind::Renv {
-            return Err(Error::Protocol);
+
+/// The installed helper renders only explicitly ordinary conditions. A failed
+/// secondary renderer cannot replace the original payload in the attempt.
+fn ordinary(condition: &Robj, formatter: &Function, rejected: bool) -> Option<(String, String)> {
+    let reply = formatter
+        .call(pairlist!(condition = condition.clone()))
+        .ok()?;
+    let reply = reply.as_list().filter(|reply| reply.len() == 2)?;
+    let class = crate::function_callback::detail(&reply.elt(0).ok()?, "R condition").ok()?;
+    let message =
+        crate::function_callback::detail(&reply.elt(1).ok()?, "unavailable R condition message")
+            .ok()?;
+    let _ = rejected;
+    Some((class, message))
+}
+
+fn classify_host(formatter: &Function, condition: &Robj) -> FunctionError {
+    match ordinary(condition, formatter, false) {
+        Some((class, message)) => FunctionError::Exception {
+            class,
+            message,
+            payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
+                condition.clone(),
+            ))),
+        },
+        None => FunctionError::Internal {
+            code: "host_classification",
+        },
+    }
+}
+
+fn classify_representation(formatter: &Function, condition: &Robj) -> FunctionError {
+    match ordinary(condition, formatter, true) {
+        Some((_class, message)) => FunctionError::Representation {
+            message,
+            payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
+                condition.clone(),
+            ))),
+        },
+        None => FunctionError::Internal {
+            code: "host_classification",
+        },
+    }
+}
+
+fn classify_status(formatter: &Function, status: Status) -> std::result::Result<Robj, CallError> {
+    match status {
+        Status::Completed(payload) => Ok(payload),
+        Status::Host(condition) => Err(CallError::Raised(classify_host(formatter, &condition))),
+        Status::Representation(condition) => Err(CallError::InvalidResult(
+            classify_representation(formatter, &condition),
+        )),
+        Status::Interrupt(condition) => Err(CallError::Raised(FunctionError::Interrupted {
+            payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
+                condition,
+            ))),
+        })),
+    }
+}
+
+fn owned_scalar(value: ScalarRef<'_>) -> std::result::Result<Scalar, CallError> {
+    // No wildcard: `ScalarRef` may grow under the stability policy, and a new
+    // argument variant must fail loudly rather than arrive as `NA`.
+    Ok(match value {
+        ScalarRef::Missing => Scalar::Missing,
+        ScalarRef::Str(value) => Scalar::Str(value.to_owned()),
+        ScalarRef::Int(value) => Scalar::Int(value),
+        ScalarRef::Float(value) => Scalar::Float(value),
+        ScalarRef::Bool(value) => Scalar::Bool(value),
+        ScalarRef::Date(value) => Scalar::Date(value),
+        ScalarRef::DateTime(value) => Scalar::DateTime(value),
+        _ => {
+            return Err(CallError::Raised(FunctionError::Protocol));
         }
-        let locked = project_lock::decode_renv(self.lock).map_err(Error::LockSyntax)?;
+    })
+}
+
+fn invoke_scalar(
+    handle: &Function,
+    formatter: &Function,
+    arguments: &[Argument<'_>],
+) -> std::result::Result<Scalar, CallError> {
+    let mut encoded = Vec::with_capacity(arguments.len());
+    for argument in arguments {
+        let value = yamaa::EncodedScalar::encode(owned_scalar(argument.value)?);
+        encoded.push((
+            argument.name,
+            Robj::from(list!(
+                tag = value.tag,
+                payload = Raw::from_bytes(&value.payload)
+            )),
+        ));
+    }
+    let status = call_status(handle, pairlist!(encoded = List::from_pairs(encoded)))
+        .map_err(CallError::Raised)?;
+    let result = classify_status(formatter, status)?;
+    let result = result
+        .as_list()
+        .filter(|list| list.len() == 2)
+        .ok_or(CallError::InvalidResult(FunctionError::Protocol))?;
+    let tag = result
+        .elt(0)
+        .map_err(|error| {
+            CallError::InvalidResult(FunctionError::SdkBoundary {
+                payload: sdk_payload(&error),
+            })
+        })?
+        .as_integer()
+        .ok_or(CallError::InvalidResult(FunctionError::Protocol))?;
+    let payload = result
+        .elt(1)
+        .map_err(|error| {
+            CallError::InvalidResult(FunctionError::SdkBoundary {
+                payload: sdk_payload(&error),
+            })
+        })?
+        .as_raw()
+        .ok_or(CallError::InvalidResult(FunctionError::Protocol))?;
+    yamaa::EncodedScalar::decode(tag, payload.as_slice()).map_err(|error| {
+        CallError::InvalidResult(FunctionError::Scalar {
+            reason: error.reason(),
+        })
+    })
+}
+
+impl ProjectFunctions for Functions {
+    fn verify_lock(
+        &self,
+        lock: &LockContext<'_>,
+        functions: &[FunctionIdentity],
+    ) -> Result<(), FunctionError> {
+        if lock.language != HostLanguage::R || lock.kind != LockKind::Renv {
+            return Err(FunctionError::Protocol);
+        }
+        let locked = yamaa::decode_renv_lock(lock.bytes).map_err(FunctionError::LockSyntax)?;
+        let verify_guard = self
+            .verify
+            .lock()
+            .map_err(|_| FunctionError::Internal { code: "host_port" })?;
+        let verify = verify_guard.get()?;
+        let formatter_guard = self
+            .formatter
+            .lock()
+            .map_err(|_| FunctionError::Internal { code: "host_port" })?;
+        let formatter = formatter_guard.get()?;
         let versions = List::from_pairs(locked.packages.iter().map(|(name, version)| {
             (
                 name.as_str(),
@@ -182,102 +249,119 @@ impl ActivationPort for Port<'_> {
                 .iter()
                 .map(|function| Raw::from_bytes(function.call.as_bytes())),
         );
-        let result = reply(&self.verify, pairlist!(versions = versions, calls = calls))?;
-        let rows = result.as_list().ok_or(Error::Protocol)?;
+        let status = call_status(verify, pairlist!(versions = versions, calls = calls))?;
+        let rows = match status {
+            Status::Completed(rows) => rows,
+            Status::Host(condition) => return Err(classify_host(formatter, &condition)),
+            Status::Representation(condition) => {
+                return Err(classify_representation(formatter, &condition));
+            }
+            Status::Interrupt(condition) => {
+                return Err(FunctionError::Interrupted {
+                    payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
+                        condition,
+                    ))),
+                });
+            }
+        };
+        let rows = rows.as_list().ok_or(FunctionError::Protocol)?;
         let mut findings = Vec::with_capacity(rows.len());
         for (_, row) in rows.iter() {
             let row = row
                 .as_list()
                 .filter(|row| row.len() == 4)
-                .ok_or(Error::Protocol)?;
-            findings.push(Finding {
-                package: text(&row.elt(0).map_err(Error::Boundary)?)?,
-                reason: Reason::parse(&text(&row.elt(1).map_err(Error::Boundary)?)?)
-                    .ok_or(Error::Protocol)?,
-                expected: optional_text(&row.elt(2).map_err(Error::Boundary)?)?
+                .ok_or(FunctionError::Protocol)?;
+            let actual = |index: usize| {
+                row.elt(index)
+                    .map_err(|_| FunctionError::Protocol)
+                    .and_then(|value| {
+                        if value.is_null() {
+                            Ok(None)
+                        } else {
+                            text(&value).map(Some)
+                        }
+                    })
+            };
+            findings.push(LockFinding::new(
+                text(&row.elt(0).map_err(|_| FunctionError::Protocol)?)?,
+                LockReason::parse(&text(&row.elt(1).map_err(|_| FunctionError::Protocol)?)?)
+                    .ok_or(FunctionError::Protocol)?,
+                optional_text(&row.elt(2).map_err(|_| FunctionError::Protocol)?)?
                     .into_iter()
                     .collect(),
-                actual: optional_text(&row.elt(3).map_err(Error::Boundary)?)?,
-            });
+                actual(3)?,
+            ));
         }
         if findings.is_empty() {
             Ok(())
         } else {
-            Err(Error::Lock(findings))
+            Err(FunctionError::Lock(findings))
         }
     }
+
     fn bind(
-        &mut self,
-        identity: &ProjectFunctionIdentity,
-        signature: &LogicalSignature,
-    ) -> std::result::Result<Function, Error> {
+        &self,
+        identity: &FunctionIdentity,
+        signature: &Signature,
+    ) -> Result<FunctionHandle, FunctionError> {
+        let resolve_guard = self
+            .resolve
+            .lock()
+            .map_err(|_| FunctionError::Internal { code: "host_port" })?;
+        let resolve = resolve_guard.get()?;
+        let formatter_guard = self
+            .formatter
+            .lock()
+            .map_err(|_| FunctionError::Internal { code: "host_port" })?;
+        let formatter = formatter_guard.get()?;
         let names = List::from_values(
             signature
-                .parameters()
+                .parameters
                 .iter()
                 .map(|parameter| Raw::from_bytes(parameter.name.as_bytes())),
         );
-        reply(
-            &self.resolve,
+        let status = call_status(
+            resolve,
             pairlist!(
                 call = Raw::from_bytes(identity.call.as_bytes()),
                 parameters = names
             ),
-        )?
-        .as_function()
-        .ok_or(Error::Protocol)
+        )?;
+        let handle = match status {
+            Status::Completed(handle) => handle,
+            Status::Host(condition) => return Err(classify_host(formatter, &condition)),
+            Status::Representation(condition) => {
+                return Err(classify_representation(formatter, &condition));
+            }
+            Status::Interrupt(condition) => {
+                return Err(FunctionError::Interrupted {
+                    payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
+                        condition,
+                    ))),
+                });
+            }
+        };
+        handle
+            .as_function()
+            .ok_or(FunctionError::Protocol)
+            .map(|handle| FunctionHandle::new(crate::thread_bound::ThreadBound::new(handle)))
     }
-    fn is_interrupt(&self, error: &Error) -> bool {
-        matches!(error, Error::Interrupt(_))
-    }
+
     fn invoke(
-        &mut self,
-        handle: &Function,
+        &self,
+        handle: &FunctionHandle,
         arguments: &[Argument<'_>],
-    ) -> std::result::Result<Value, HostError<Error>> {
-        let mut encoded = Vec::with_capacity(arguments.len());
-        for argument in arguments {
-            let value = match argument.value {
-                ValueRef::Missing => Value::Missing,
-                ValueRef::Int(value) => Value::Int(value),
-                ValueRef::Float(value) => Value::Float(value),
-                ValueRef::Str(value) => Value::Str(value.into()),
-                ValueRef::Bool(value) => Value::Bool(value),
-                ValueRef::Date(value) => Value::Date(value),
-                ValueRef::DateTime(value) => Value::DateTime(value),
-            };
-            let value = scalar_bytes::encode(value);
-            encoded.push((
-                argument.name,
-                Robj::from(list!(
-                    tag = value.tag,
-                    payload = Raw::from_bytes(&value.payload)
-                )),
-            ));
-        }
-        let result =
-            reply(handle, pairlist!(encoded = List::from_pairs(encoded))).map_err(|error| {
-                match error {
-                    Error::Representation(_) => HostError::InvalidResult(error),
-                    _ => HostError::Raised(error),
-                }
-            })?;
-        let result = result
-            .as_list()
-            .filter(|list| list.len() == 2)
-            .ok_or(HostError::InvalidResult(Error::Protocol))?;
-        let tag = result
-            .elt(0)
-            .map_err(|error| HostError::InvalidResult(Error::Boundary(error)))?
-            .as_integer()
-            .ok_or(HostError::InvalidResult(Error::Protocol))?;
-        let payload = result
-            .elt(1)
-            .map_err(|error| HostError::InvalidResult(Error::Boundary(error)))?
-            .as_raw()
-            .ok_or(HostError::InvalidResult(Error::Protocol))?;
-        scalar_bytes::decode(tag, payload.as_slice())
-            .map_err(|error| HostError::InvalidResult(Error::Scalar(error)))
+    ) -> std::result::Result<Scalar, CallError> {
+        let handle = handle
+            .with::<crate::thread_bound::ThreadBound<Function>, _>(|handle| handle.get().cloned())
+            .ok_or(CallError::Raised(FunctionError::Protocol))?
+            .map_err(CallError::Raised)?;
+        let formatter_guard = self
+            .formatter
+            .lock()
+            .map_err(|_| CallError::Raised(FunctionError::Internal { code: "host_port" }))?;
+        let formatter = formatter_guard.get().map_err(CallError::Raised)?;
+        invoke_scalar(&handle, formatter, arguments)
     }
 }
 
@@ -290,29 +374,70 @@ impl ActivationPort for Port<'_> {
 /// refuses lock verification rather than silently skipping it.
 #[allow(dead_code)]
 pub struct RegistryPort {
-    registry: std::collections::BTreeMap<String, Function>,
+    registry: std::collections::BTreeMap<String, crate::thread_bound::ThreadBound<Function>>,
 }
 #[allow(dead_code)]
 impl RegistryPort {
     pub fn new(registry: std::collections::BTreeMap<String, Function>) -> Self {
-        Self { registry }
+        use crate::thread_bound::ThreadBound;
+        Self {
+            registry: registry
+                .into_iter()
+                .map(|(call, handle)| (call, ThreadBound::new(handle)))
+                .collect(),
+        }
     }
-    fn invoke_scalar(
-        handle: &Function,
+}
+#[allow(dead_code)]
+impl ProjectFunctions for RegistryPort {
+    fn verify_lock(
+        &self,
+        _lock: &LockContext<'_>,
+        _functions: &[FunctionIdentity],
+    ) -> std::result::Result<(), FunctionError> {
+        Err(FunctionError::Protocol)
+    }
+    fn bind(
+        &self,
+        identity: &FunctionIdentity,
+        signature: &Signature,
+    ) -> std::result::Result<FunctionHandle, FunctionError> {
+        let bound = self
+            .registry
+            .get(&identity.call)
+            .ok_or_else(|| FunctionError::MissingBinding(identity.call.clone()))?;
+        let handle = bound.get()?.clone();
+        // Parity with the Python registry port: the registered function's
+        // formals must name exactly the logical parameters.
+        let formals = handle.formals().ok_or(FunctionError::Protocol)?;
+        let actual: std::collections::BTreeSet<&str> = formals.names().collect();
+        let expected: std::collections::BTreeSet<&str> = signature
+            .parameters
+            .iter()
+            .map(|parameter| parameter.name.as_str())
+            .collect();
+        if actual.contains("...") || actual != expected {
+            return Err(FunctionError::Protocol);
+        }
+        Ok(FunctionHandle::new(crate::thread_bound::ThreadBound::new(
+            handle,
+        )))
+    }
+    fn invoke(
+        &self,
+        handle: &FunctionHandle,
         arguments: &[Argument<'_>],
-    ) -> std::result::Result<Value, HostError<Error>> {
+    ) -> std::result::Result<Scalar, CallError> {
+        // Registry invocation has no installed formatter, so raised host
+        // payloads stay opaque: the core still validates lengths and exact
+        // types before accepting any output.
+        let handle = handle
+            .with::<crate::thread_bound::ThreadBound<Function>, _>(|handle| handle.get().cloned())
+            .ok_or(CallError::Raised(FunctionError::Protocol))?
+            .map_err(CallError::Raised)?;
         let mut encoded = Vec::with_capacity(arguments.len());
         for argument in arguments {
-            let value = match argument.value {
-                ValueRef::Missing => Value::Missing,
-                ValueRef::Int(value) => Value::Int(value),
-                ValueRef::Float(value) => Value::Float(value),
-                ValueRef::Str(value) => Value::Str(value.into()),
-                ValueRef::Bool(value) => Value::Bool(value),
-                ValueRef::Date(value) => Value::Date(value),
-                ValueRef::DateTime(value) => Value::DateTime(value),
-            };
-            let value = scalar_bytes::encode(value);
+            let value = yamaa::EncodedScalar::encode(owned_scalar(argument.value)?);
             encoded.push((
                 argument.name,
                 Robj::from(list!(
@@ -321,108 +446,144 @@ impl RegistryPort {
                 )),
             ));
         }
-        let result =
-            reply(handle, pairlist!(encoded = List::from_pairs(encoded))).map_err(|error| {
-                match error {
-                    Error::Representation(_) => HostError::InvalidResult(error),
-                    _ => HostError::Raised(error),
-                }
-            })?;
+        let status = call_status(&handle, pairlist!(encoded = List::from_pairs(encoded)))
+            .map_err(CallError::Raised)?;
+        let result = match status {
+            Status::Completed(payload) => payload,
+            Status::Host(_) | Status::Representation(_) => {
+                return Err(CallError::InvalidResult(FunctionError::Internal {
+                    code: "host_classification",
+                }));
+            }
+            Status::Interrupt(condition) => {
+                return Err(CallError::Raised(FunctionError::Interrupted {
+                    payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
+                        condition,
+                    ))),
+                }));
+            }
+        };
         let result = result
             .as_list()
             .filter(|list| list.len() == 2)
-            .ok_or(HostError::InvalidResult(Error::Protocol))?;
+            .ok_or(CallError::InvalidResult(FunctionError::Protocol))?;
         let tag = result
             .elt(0)
-            .map_err(|error| HostError::InvalidResult(Error::Boundary(error)))?
+            .map_err(|error| {
+                CallError::InvalidResult(FunctionError::SdkBoundary {
+                    payload: sdk_payload(&error),
+                })
+            })?
             .as_integer()
-            .ok_or(HostError::InvalidResult(Error::Protocol))?;
+            .ok_or(CallError::InvalidResult(FunctionError::Protocol))?;
         let payload = result
             .elt(1)
-            .map_err(|error| HostError::InvalidResult(Error::Boundary(error)))?
-            .as_raw()
-            .ok_or(HostError::InvalidResult(Error::Protocol))?;
-        scalar_bytes::decode(tag, payload.as_slice())
-            .map_err(|error| HostError::InvalidResult(Error::Scalar(error)))
-    }
-}
-#[allow(dead_code)]
-impl ActivationPort for RegistryPort {
-    type Handle = Function;
-    type Error = Error;
-    fn verify_lock(
-        &mut self,
-        _language: Language,
-        _lock: &LockReference,
-        _functions: &[ProjectFunctionIdentity],
-    ) -> std::result::Result<(), Error> {
-        Err(Error::Protocol)
-    }
-    fn bind(
-        &mut self,
-        identity: &ProjectFunctionIdentity,
-        signature: &LogicalSignature,
-    ) -> std::result::Result<Function, Error> {
-        let handle = self
-            .registry
-            .get(&identity.call)
-            .cloned()
-            .ok_or_else(|| Error::MissingBinding(identity.call.clone()))?;
-        // Parity with the Python registry port: the registered function's
-        // formals must name exactly the logical parameters.
-        let formals = handle.formals().ok_or(Error::Protocol)?;
-        let actual: std::collections::BTreeSet<&str> = formals.names().collect();
-        let expected: std::collections::BTreeSet<&str> = signature
-            .parameters()
-            .iter()
-            .map(|parameter| parameter.name.as_str())
-            .collect();
-        if actual.contains("...") || actual != expected {
-            return Err(Error::Protocol);
-        }
-        Ok(handle)
-    }
-    fn is_interrupt(&self, error: &Error) -> bool {
-        matches!(error, Error::Interrupt(_))
-    }
-    fn invoke(
-        &mut self,
-        handle: &Function,
-        arguments: &[Argument<'_>],
-    ) -> std::result::Result<Value, HostError<Error>> {
-        Self::invoke_scalar(handle, arguments)
-    }
-}
-#[allow(dead_code)]
-impl yamaa_core::function_batch::BatchFunctionPort for RegistryPort {
-    type Handle = Function;
-    type Error = Error;
-    fn is_interrupt(&self, error: &Error) -> bool {
-        matches!(error, Error::Interrupt(_))
-    }
-    /// R batch fallback: the installed R envelope is scalar, so this port
-    /// invokes the bound function once per row in batch order. Results
-    /// are scalar results by construction; the core still validates the
-    /// returned length and exact types before accepting any output. A
-    /// native vectorized R envelope is a maintainer follow-up, not a
-    /// silently different contract.
-    fn call_batch(
-        &mut self,
-        handle: &Function,
-        rows: usize,
-        arguments: &[yamaa_core::function_batch::BatchArgument],
-    ) -> std::result::Result<Vec<Value>, HostError<Error>> {
-        let mut results = Vec::with_capacity(rows);
-        for row in 0..rows {
-            let borrowed: Vec<Argument<'_>> = arguments
-                .iter()
-                .map(|argument| Argument {
-                    name: &argument.name,
-                    value: ValueRef::from(&argument.values[row]),
+            .map_err(|error| {
+                CallError::InvalidResult(FunctionError::SdkBoundary {
+                    payload: sdk_payload(&error),
                 })
-                .collect();
-            results.push(Self::invoke_scalar(handle, &borrowed)?);
+            })?
+            .as_raw()
+            .ok_or(CallError::InvalidResult(FunctionError::Protocol))?;
+        yamaa::EncodedScalar::decode(tag, payload.as_slice()).map_err(|error| {
+            CallError::InvalidResult(FunctionError::Scalar {
+                reason: error.reason(),
+            })
+        })
+    }
+}
+
+/// Mechanical SDK facts, distinct from projected semantic issues. Original
+/// R conditions remain rooted objects; no host condition is stringified.
+pub(crate) fn facts(error: &FunctionError) -> Robj {
+    let condition = |payload: &Option<HostPayload>| {
+        payload
+            .as_ref()
+            .and_then(|payload| {
+                // Best-effort evidence: a payload created on another thread
+                // cannot be touched here, so it reports as absent.
+                payload
+                    .with::<crate::thread_bound::ThreadBound<Robj>, _>(|condition| {
+                        condition.get().cloned().ok()
+                    })
+                    .flatten()
+            })
+            .unwrap_or_else(|| NULL.into_robj())
+    };
+    match error {
+        FunctionError::Exception { payload, .. } => {
+            list!(kind = "host", condition = condition(payload)).into_robj()
         }
-        Ok(results)
+        FunctionError::Representation { payload, .. } => {
+            list!(kind = "representation", condition = condition(payload)).into_robj()
+        }
+        FunctionError::Scalar { reason } => {
+            list!(kind = "scalar", reason = Raw::from_bytes(reason.as_bytes())).into_robj()
+        }
+        FunctionError::Lock(findings) => list!(
+            kind = "lock",
+            findings = List::from_values(findings.iter().map(|finding| {
+                list!(
+                    package = Raw::from_bytes(finding.package.as_bytes()),
+                    reason = finding.reason.as_str(),
+                    expected = List::from_values(
+                        finding
+                            .expected
+                            .iter()
+                            .map(|value| Raw::from_bytes(value.as_bytes()))
+                    ),
+                    actual = finding
+                        .actual
+                        .as_ref()
+                        .map(|value| Raw::from_bytes(value.as_bytes()))
+                )
+            }))
+        )
+        .into_robj(),
+        FunctionError::LockSyntax(error) => match error {
+            LockSyntaxError::Limit {
+                resource,
+                limit,
+                actual,
+            } => list!(
+                kind = "lock_limit",
+                resource = *resource,
+                limit = *limit as f64,
+                actual = actual.map(|value| value as f64)
+            )
+            .into_robj(),
+            LockSyntaxError::Shape { field } => {
+                list!(kind = "lock_shape", field = *field).into_robj()
+            }
+            LockSyntaxError::Json { line, column } => list!(
+                kind = "lock_json",
+                line = *line as f64,
+                column = *column as f64
+            )
+            .into_robj(),
+            LockSyntaxError::Document { resource_refusal } => {
+                list!(kind = "lock_document", resource_refusal = *resource_refusal).into_robj()
+            }
+            _ => list!(kind = "unclassified").into_robj(),
+        },
+        FunctionError::Interrupted { payload } => {
+            list!(kind = "interrupt", condition = condition(payload)).into_robj()
+        }
+        FunctionError::SdkBoundary { payload } => {
+            list!(kind = "sdk_boundary", condition = condition(payload)).into_robj()
+        }
+        FunctionError::Protocol => list!(kind = "protocol").into_robj(),
+        FunctionError::MissingBinding(call) => list!(
+            kind = "missing_binding",
+            call = Raw::from_bytes(call.as_bytes())
+        )
+        .into_robj(),
+        FunctionError::Rejected { reason, .. } => list!(
+            kind = "rejected",
+            reason = Raw::from_bytes(reason.as_bytes())
+        )
+        .into_robj(),
+        FunctionError::Internal { code } => list!(kind = "internal", code = *code).into_robj(),
+        _ => list!(kind = "unclassified").into_robj(),
     }
 }

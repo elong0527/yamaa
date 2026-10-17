@@ -692,6 +692,63 @@ impl Declarations {
                 .chain(item.range.iter().map(|range| range.value.as_str()))
         })
     }
+    fn prepare_unique_checks(
+        d: &Document,
+        id: usize,
+        path: &str,
+    ) -> Result<UniqueDeclarations, PrepareError> {
+        let mut unique = Vec::new();
+        if let Some(checks) = d
+            .field(id, "verifications")
+            .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        {
+            let mut identities = std::collections::BTreeSet::new();
+            for (check_index, &check) in sequence(d, checks)?.iter().enumerate() {
+                let payload = field(d, check, "unique")?;
+                let check_path = format!("{path}.verifications[{check_index}].unique");
+                let identity = d
+                    .field(payload, "id")
+                    .map(|id| text(d, id).map(String::from))
+                    .transpose()?;
+                if let Some(identity) = &identity {
+                    if !identities.insert(identity.clone()) {
+                        let mut finding = LookupFinding::new(
+                            &format!("{check_path}.id"),
+                            crate::diagnostic::ConditionCode::VerificationIdentifierRepeated,
+                        );
+                        finding.text("identifier", identity);
+                        return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
+                            finding.diagnostic(),
+                        )]));
+                    }
+                }
+                let names = if matches!(d.nodes()[payload], N::Sequence(_)) {
+                    payload
+                } else {
+                    field(d, payload, "columns")?
+                };
+                let columns = sequence(d, names)?
+                    .iter()
+                    .enumerate()
+                    .map(|(index, &id)| {
+                        text(d, id).map(|name| {
+                            (
+                                name.into(),
+                                if names == payload {
+                                    format!("{check_path}[{index}]")
+                                } else {
+                                    format!("{check_path}.columns[{index}]")
+                                },
+                            )
+                        })
+                    })
+                    .collect::<Result<_, _>>()?;
+                unique.push((check_path, columns, identity));
+            }
+        }
+        Ok(unique)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         d: &Document,
@@ -919,55 +976,7 @@ impl Declarations {
                 .field(id, "no_match")
                 .map(|value| literal(d, value, &format!("{path}.no_match")))
                 .transpose()?;
-            let mut unique = Vec::new();
-            if let Some(checks) = d
-                .field(id, "verifications")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            {
-                let mut identities = std::collections::BTreeSet::new();
-                for (check_index, &check) in sequence(d, checks)?.iter().enumerate() {
-                    let payload = field(d, check, "unique")?;
-                    let check_path = format!("{path}.verifications[{check_index}].unique");
-                    let identity = d
-                        .field(payload, "id")
-                        .map(|id| text(d, id).map(String::from))
-                        .transpose()?;
-                    if let Some(identity) = &identity {
-                        if !identities.insert(identity.clone()) {
-                            let mut finding = LookupFinding::new(
-                                &format!("{check_path}.id"),
-                                crate::diagnostic::ConditionCode::VerificationIdentifierRepeated,
-                            );
-                            finding.text("identifier", identity);
-                            return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
-                                finding.diagnostic(),
-                            )]));
-                        }
-                    }
-                    let names = if matches!(d.nodes()[payload], N::Sequence(_)) {
-                        payload
-                    } else {
-                        field(d, payload, "columns")?
-                    };
-                    let columns = sequence(d, names)?
-                        .iter()
-                        .enumerate()
-                        .map(|(index, &id)| {
-                            text(d, id).map(|name| {
-                                (
-                                    name.into(),
-                                    if names == payload {
-                                        format!("{check_path}[{index}]")
-                                    } else {
-                                        format!("{check_path}.columns[{index}]")
-                                    },
-                                )
-                            })
-                        })
-                        .collect::<Result<_, _>>()?;
-                    unique.push((check_path, columns, identity));
-                }
-            }
+            let unique = Self::prepare_unique_checks(d, id, &path)?;
             let driver_prohibited = ["key", "between", "order_by", "keep", "no_match"]
                 .into_iter()
                 .filter(|name| {

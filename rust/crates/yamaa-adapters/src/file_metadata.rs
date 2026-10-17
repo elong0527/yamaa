@@ -17,7 +17,7 @@ impl Reader<'_> {
         written: &str,
     ) -> Result<Identity, ResourceError> {
         let identity = self.resources.resolve_from(declaring, written)?;
-        let display_path = if std::path::Path::new(written).is_absolute() {
+        let display_path = if is_absolute_spelling(written) {
             written.to_owned()
         } else {
             format!("{}/{written}", directory(declaring)?)
@@ -134,8 +134,23 @@ fn directory(identity: &str) -> Result<&str, ResourceError> {
     identity
         .rsplit_once('/')
         .map(|(directory, _)| directory)
-        .filter(|_| std::path::Path::new(identity).is_absolute())
+        .filter(|_| is_absolute_spelling(identity))
         .ok_or(ResourceError::InvalidPath)
+}
+/// Lexical root test for declaring identities and authored spellings:
+/// `/`-rooted or drive-rooted (`X:/...`). These spellings are judged by
+/// the resource grammar, never by host path semantics: `Path::is_absolute`
+/// is host-dependent (on Windows a prefix-less root such as `/spec.yaml`
+/// is not absolute), so it rejects canonical declaring identities there
+/// and every parent, dictionary and cross-layer rebase fails as
+/// `InvalidPath` (see #2769). Mirrors the admission grammar in
+/// `yamaa_core::resource::written_path_failure`.
+fn is_absolute_spelling(path: &str) -> bool {
+    path.starts_with('/')
+        || (path.len() >= 3
+            && path.as_bytes()[0].is_ascii_alphabetic()
+            && path.as_bytes()[1] == b':'
+            && path.as_bytes()[2] == b'/')
 }
 /// Lexical only: preparation never inspects or opens a study/output path.
 fn rebase(layer: &str, entry: &str, written: &str) -> Result<String, ResourceError> {
@@ -213,5 +228,61 @@ impl yamaa_core::build::MetadataAdmissionPort for Reader<'_> {
 
     fn verify_metadata(&mut self) -> Result<(), (String, Self::Error)> {
         self.resources.verify_captured()
+    }
+}
+
+#[cfg(test)]
+mod spelling_tests {
+    use super::*;
+
+    #[test]
+    fn absolute_spelling_covers_both_root_forms_lexically() {
+        assert!(is_absolute_spelling("/spec.yaml"));
+        assert!(is_absolute_spelling("/layers/parent.yaml"));
+        assert!(is_absolute_spelling("C:/study/spec.yaml"));
+        assert!(!is_absolute_spelling("spec.yaml"));
+        assert!(!is_absolute_spelling("layers/parent.yaml"));
+        assert!(!is_absolute_spelling("../input/dm.csv"));
+        assert!(!is_absolute_spelling("C:study/spec.yaml"));
+        assert!(!is_absolute_spelling(""));
+    }
+
+    #[test]
+    fn declaring_directory_accepts_canonical_identities_on_every_host() {
+        // Canonical declaring identities are `/`-rooted on every host.
+        // Judging them with `Path::is_absolute` rejects them on Windows,
+        // where a prefix-less root is not absolute, so every parent,
+        // dictionary and cross-layer rebase failed there as `InvalidPath`
+        // (see #2769).
+        assert_eq!(directory("/spec.yaml").unwrap(), "");
+        assert_eq!(directory("/layers/parent.yaml").unwrap(), "/layers");
+        assert_eq!(directory("C:/study/spec.yaml").unwrap(), "C:/study");
+        assert!(directory("relative/spec.yaml").is_err());
+        assert!(directory("spec.yaml").is_err());
+    }
+
+    #[test]
+    fn rebase_reaches_parent_relative_paths_from_canonical_layers() {
+        // The schema-inheritance-project-root layer declares its input as
+        // `../input/dm.csv` beside `common/`; the entry rebases it to its
+        // own directory. Same-directory layers keep their spelling.
+        assert_eq!(
+            rebase(
+                "/common/spec_common.yaml",
+                "/spec_study.yaml",
+                "../input/dm.csv"
+            )
+            .unwrap(),
+            "input/dm.csv"
+        );
+        assert_eq!(
+            rebase(
+                "/spec_organization.yaml",
+                "/spec_study.yaml",
+                "input/lb.csv"
+            )
+            .unwrap(),
+            "input/lb.csv"
+        );
     }
 }

@@ -1,6 +1,7 @@
 """Python helpers for the yamaa clinical data specification."""
 
 from importlib import import_module as _import_module
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _distribution_version
 from typing import TYPE_CHECKING
 
@@ -46,7 +47,13 @@ def __dir__() -> list[str]:
     return sorted(set(globals()) | set(_EXPORTS))
 
 
-__version__ = _distribution_version("yamaa")
+try:
+    __version__ = _distribution_version("yamaa")
+except _PackageNotFoundError:
+    # A vendored copy carries no distribution metadata. The compiled core
+    # version is the same release: the shared-release check keeps the
+    # Python, R and Rust versions equal.
+    from yamaa._native import _CORE_VERSION as __version__
 
 __all__ = [
     "DefineError",

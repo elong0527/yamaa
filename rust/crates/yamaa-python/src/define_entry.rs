@@ -1,11 +1,12 @@
 //! Thin owned Define result transport. Shared phases own every file and finding.
 use pyo3::{exceptions::PyException, prelude::*, types::PyBytes};
 use std::sync::Mutex;
+use yamaa::{CancellationToken, DefineRequest, Engine, EngineOptions, HostLanguage, SaveOutcome};
 pyo3::create_exception!(yamaa, DefineError, PyException);
 
 #[pyclass(frozen, module = "yamaa._native", name = "_DefineResult")]
 pub struct Define {
-    inner: Mutex<yamaa_adapters::file_define::Define>,
+    inner: Mutex<yamaa::DefineBuild>,
 }
 #[pymethods]
 impl Define {
@@ -13,7 +14,7 @@ impl Define {
         {
             self.inner
                 .try_lock()
-                .map(|result| crate::report_fields::issue_rows(result.issues()))
+                .map(|result| crate::report_fields::issue_rows(&result.report().diagnostics))
                 .map_err(|_| {
                     pyo3::exceptions::PyRuntimeError::new_err("Define result already borrowed")
                 })
@@ -29,8 +30,13 @@ impl Define {
                 .map(|result| {
                     result
                         .artifacts()
-                        .map(|(path, bytes, state)| {
-                            (path.into(), PyBytes::new(py, bytes), format!("{state:?}"))
+                        .into_iter()
+                        .map(|artifact| {
+                            (
+                                artifact.path,
+                                PyBytes::new(py, &artifact.bytes),
+                                artifact.state,
+                            )
                         })
                         .collect()
                 })
@@ -54,34 +60,43 @@ impl Define {
             let mut result = self.inner.try_lock().map_err(|_| {
                 pyo3::exceptions::PyRuntimeError::new_err("Define result already borrowed")
             })?;
-            result.save().map_err(|_| {
-                DefineError::new_err(match result.failure() {
-                    Some(yamaa_adapters::file_define::Failure::Publication { error, .. }) => {
-                        error.message()
-                    }
-                    _ => "cannot save a failed Define result".into(),
-                })
-            })
+            match result.save() {
+                Ok(SaveOutcome::Saved) => Ok(true),
+                Ok(_) => Ok(false),
+                Err(_) => Err(DefineError::new_err(
+                    result
+                        .save_error_message()
+                        .unwrap_or_else(|| "cannot save a failed Define result".into()),
+                )),
+            }
         }
     }
 }
 #[pyfunction]
 #[pyo3(signature=(environment,standard,created,installed_version))]
 pub fn _define_file(
+    py: Python<'_>,
     environment: &str,
     standard: &str,
     created: Option<&str>,
     installed_version: &str,
 ) -> Define {
-    {
-        Define {
-            inner: Mutex::new(yamaa_adapters::file_define::Define::prepare(
-                environment,
-                standard,
-                created,
-                installed_version,
-                yamaa_core::project_function::Language::Python,
-            )),
-        }
+    let mut request = DefineRequest::new(environment, standard, installed_version);
+    if let Some(created) = created {
+        request = request.with_created(created);
+    }
+    let token = CancellationToken::new();
+    let engine = Engine::new(EngineOptions::new(
+        HostLanguage::Python,
+        "python".into(),
+        py.version().into(),
+    ));
+    // Define composition is infallible at the boundary; failures are carried
+    // by the result. Cancellation cannot trigger here with a fresh token.
+    let define = engine
+        .define(&request, &token)
+        .expect("define composition with a fresh token");
+    Define {
+        inner: Mutex::new(define),
     }
 }

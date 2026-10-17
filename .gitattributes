@@ -2,6 +2,8 @@
 R/yamaa/inst/LICENSE-UNICODE.txt text eol=lf
 # Keep the generated schema Unicode table's byte-exact reproduction portable.
 rust/crates/yamaa-core/src/schema/printable_data.rs text eol=lf
+# Keep the committed facade API inventory byte-identical on every platform.
+rust/crates/yamaa/public-api.txt text eol=lf
 # Keep vendored release sources and both installed MIT notices byte-identical.
 rust/vendor/saphyr-parser/** text eol=lf
 python/LICENSE-YAML.txt text eol=lf

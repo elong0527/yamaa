@@ -119,6 +119,53 @@ def test_intact_member_archive_preserved(tmp_path: Path) -> None:
     assert payloads["pkg-0.1/rust/crates/foo/build.rs"] == b"fn main() {}\n"
 
 
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        # No workspace section at all.
+        b'[package]\nname = "foo"\n',
+        # A workspace section that is not a table.
+        b"workspace = 42\n",
+        # A members value that is not a list.
+        b"[workspace]\nmembers = 42\n",
+        b'[workspace]\nmembers = "crates/foo"\n',
+        # A members entry that is not a string.
+        b"[workspace]\nmembers = [42]\n",
+    ],
+)
+def test_preserve_workspace_rejects_malformed_members(
+    tmp_path: Path, manifest: bytes
+) -> None:
+    # A malformed workspace manifest leaked a raw KeyError, TypeError or
+    # AttributeError (a string members value even reported a one-letter
+    # "member"); every other invalid input to this function is a ValueError.
+    workspace = _make_workspace(tmp_path)
+    (workspace / "Cargo.toml").write_bytes(manifest)
+    archive = _make_archive(tmp_path / "sdist.tar.gz", _BASE_ENTRIES)
+    with pytest.raises(ValueError, match="no valid members list"):
+        preserve_workspace(archive, workspace)
+
+
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        "patch = 42\n",
+        "[patch]\ncrates-io = 42\n",
+        "[patch]\ncrates-io = 'witness'\n",
+    ],
+)
+def test_local_patch_sources_reject_non_table_patch_sections(
+    tmp_path: Path, manifest: str
+) -> None:
+    # A non-table patch section leaked an AttributeError from `.get` /
+    # `.items` instead of the ValueError every other invalid patch gets.
+    workspace = tmp_path / "rust"
+    workspace.mkdir()
+    (workspace / "Cargo.toml").write_text(manifest)
+    with pytest.raises(ValueError, match="patch section must be a table"):
+        list(backend.local_patch_sources(workspace))
+
+
 def _make_archive_with_extra(
     tmp_path: Path, extra, *, archive_format=tarfile.DEFAULT_FORMAT
 ) -> Path:
@@ -145,6 +192,8 @@ def _make_archive_with_extra(
         ("pkg-0.1/evil_link", tarfile.SYMTYPE, "/etc/passwd"),
         ("pkg-0.1/hard_link", tarfile.LNKTYPE, "/etc/passwd"),
         ("pkg-0.1/fifo", tarfile.FIFOTYPE, ""),
+        ("pkg-0.1/device", tarfile.CHRTYPE, ""),
+        ("pkg-0.1/block_device", tarfile.BLKTYPE, ""),
     ],
 )
 def test_preserve_workspace_rejects_non_regular_entries(
@@ -217,7 +266,7 @@ def _make_sparse_archive(tmp_path: Path, sparse_format: str) -> Path:
 
 
 @pytest.mark.parametrize("sparse_format", ["gnu", "pax-0.1", "pax-1.0"])
-def test_preserve_workspace_rejects_sparse_entries(
+def test_preserve_workspace_rewrites_sparse_entries_as_regular(
     tmp_path: Path, sparse_format: str
 ) -> None:
     workspace = _make_workspace(tmp_path)
@@ -228,10 +277,16 @@ def test_preserve_workspace_rejects_sparse_entries(
         assert entry.isfile()
         assert entry.issparse()
         assert source.extractfile(entry).read() == b"\0\0ABC"
-    original = archive.read_bytes()
-    with pytest.raises(ValueError, match="must not contain links or special files"):
-        preserve_workspace(archive, workspace)
-    assert archive.read_bytes() == original
+    preserve_workspace(archive, workspace)
+    with tarfile.open(archive) as source:
+        entry = source.getmember("pkg-0.1/sparse.txt")
+        # The sparse member is rewritten as a regular member whose bytes
+        # are the fully expanded sparse contents, not the stored extent.
+        assert entry.isfile()
+        assert not entry.issparse()
+        assert entry.type == tarfile.REGTYPE
+        assert source.extractfile(entry).read() == b"\0\0ABC"
+    assert _archive_payloads(archive)["pkg-0.1/sparse.txt"] == b"\0\0ABC"
     assert list(tmp_path.glob("*.tar.gz")) == [archive]
 
 
@@ -522,6 +577,41 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
                 )
                 with self.assertRaisesRegex(ValueError, "vendor/package paths"):
                     list(backend.local_patch_sources(workspace))
+
+    def test_local_patch_sources_ignore_ancestor_build_or_cache_names(self):
+        for ancestor in ("target", ".git", "__pycache__"):
+            with self.subTest(ancestor=ancestor):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory) / ancestor / "checkout"
+                    root.mkdir(parents=True)
+                    workspace, package, _ = self.patch_fixture(root)
+                    sources = list(backend.local_patch_sources(workspace))
+                    self.assertEqual(len(sources), 8)
+                    junk = package / "target" / "junk.rs"
+                    junk.parent.mkdir()
+                    junk.write_bytes(b"fn junk() {}\n")
+                    with self.assertRaisesRegex(ValueError, "build or cache files"):
+                        list(backend.local_patch_sources(workspace))
+
+    def test_native_fixture_scan_ignores_ancestor_build_or_cache_names(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "target" / "checkout"
+            root.mkdir(parents=True)
+            workspace, source, original, name = self.compile_fixture(root)
+            source.write_text(
+                "fn main() { let _ = include_str!("
+                + json.dumps(str(original.resolve()))
+                + "); }\n"
+            )
+            with self.assertRaisesRegex(ValueError, "unescaped relative paths"):
+                backend.native_test_fixtures(workspace)
+            source.write_text(
+                "fn main() { let _ = include_str!("
+                + json.dumps("../../../../" + name)
+                + "); }\n"
+            )
+            selected = backend.native_test_fixtures(workspace)
+            self.assertEqual(selected[1], (name, original))
 
     def test_extra_local_patch_build_script_cannot_enter_a_source_archive(self):
         with tempfile.TemporaryDirectory() as directory:
