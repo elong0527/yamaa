@@ -2,6 +2,7 @@ schema_version: "1.0"
 input:
   DM: ../input/dm.csv
 base: DM
+
 columns:
   - name: USUBJID
     type: str
