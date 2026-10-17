@@ -40,11 +40,16 @@ make <- function(label,diamond=FALSE,fatal=NULL,blocked=FALSE) {
     else if(diamond) { source <- host_truth[["diamond_reference"]];input <- "A" }
     else { source <- host_truth[["aliased_producer_reference"]];input <- "A" }
     intermediate <- if(name=="root")host_truth[["root_intermediate_yaml"]] else ""
+    # The root's ID reads SHARED through first_available so pruning (REQ-0638) keeps
+    # the intermediate, and with it the B producer link, in the resolved graph.
+    # SHARED's key is a literal: keyed by the ID field it would form a dependency
+    # cycle with the ID column that reads it.
+    derivation <- if(name=="root")"{first_available: {sources: [A.ID, SHARED.ID]}}" else paste0(input,".ID")
     severity <- if(identical(name,fatal))"error" else "warning"
     warning <- if(blocked && name=="root")"blocked/root-warnings.csv" else paste0("generated/",name,"-warnings.csv")
     identifier <- if(name=="root")'"\\u00e9\\U0001d11e"' else paste0(name,"-range")
     write(file.path(work,paste0(name,".yaml")),paste0("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: ",input,"\ninput: ",source,"\n",intermediate,
-      "columns:\n  - name: ID\n    type: int\n    label: Identifier\n    derivation: ",input,".ID\n",
+      "columns:\n  - name: ID\n    type: int\n    label: Identifier\n    derivation: ",derivation,"\n",
       "    verifications: [{range: {max: 0, severity: ",severity,", id: ",identifier,"}}]\n",
       "output: {path: generated/",name,".csv, columns: [ID], verification_log: generated/",name,"-checks.csv, warning_log: ",warning,"}\n"))
   }

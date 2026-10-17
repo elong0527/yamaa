@@ -111,10 +111,20 @@ class ProducerLogs(unittest.TestCase):
                 else f"generated/{name}-warnings.csv"
             )
             identifier = r'"\u00e9\U0001d11e"' if name == "root" else name + "-range"
+            # The root's ID reads SHARED through first_available so pruning
+            # (REQ-0638) keeps the intermediate, and with it the B producer
+            # link, in the resolved graph. SHARED's key is a literal: keyed by
+            # the ID field it would form a dependency cycle with the ID column
+            # that reads it.
+            derivation = (
+                "{first_available: {sources: [A.ID, SHARED.ID]}}"
+                if name == "root"
+                else f"{base}.ID"
+            )
             self.write(
                 name + ".yaml",
                 f"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {source}\n{intermediate}columns:\n"
-                f"  - name: ID\n    type: int\n    label: Identifier\n    derivation: {base}.ID\n"
+                f"  - name: ID\n    type: int\n    label: Identifier\n    derivation: {derivation}\n"
                 f"    verifications: [{{range: {{max: 0, severity: {severity}, id: {identifier}}}}}]\n"
                 f"output: {{path: generated/{name}.csv, columns: [ID], verification_log: generated/{name}-checks.csv, warning_log: {warning}}}\n",
             )

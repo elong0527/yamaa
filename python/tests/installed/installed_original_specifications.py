@@ -577,6 +577,22 @@ class PublicDomains(unittest.TestCase):
                 for path, content in case["inputs"].items():
                     (work / path).write_text(content, encoding="utf-8")
                 result = yamaa.domain(entry)
+                if variant == "unused":
+                    # Every specification is pruned after composition (REQ-0638,
+                    # REQ-0641): no column reads LOOK, so pruning discards the
+                    # intermediate together with its ill-typed filter and the
+                    # specification builds with no issues instead of refusing
+                    # the dead declaration.
+                    self.assertEqual(findings(result), [])
+                    self.assertIsNotNone(result.output)
+                    self.assertTrue(result.save())
+                    self.assertEqual(
+                        (work / "out.csv").read_bytes(), b"ID,V,V2\na,ok,ok\n"
+                    )
+                    for path in case["inputs"]:
+                        (work / path).unlink()
+                    self.assertEqual(findings(yamaa.check(entry)), [])
+                    continue
                 expected = case["findings"] if variant == "duplicate" else type_findings
                 self.assertEqual(findings(result), expected)
                 self.assertIsNone(result.output)

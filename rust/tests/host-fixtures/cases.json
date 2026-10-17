@@ -3976,7 +3976,7 @@
         "right",
         "root"
       ],
-      "root_intermediate_yaml": "intermediates: [{id: SHARED, dataset: B, key: [ID], no_match: null}]\n",
+      "root_intermediate_yaml": "intermediates: [{id: SHARED, dataset: B, key: {ID: {literal: 1}}, no_match: null}]\n",
       "raw_source_reference": "{SRC: {path: input.csv, types: {ID: int}}}",
       "verification_producer_aliases": "  A: {path: adsl.csv, schema: producer.yaml}\n  B: {path: adsl.csv, schema: ./producer.yaml}",
       "producer_reference": "{P: {path: generated/producer.csv, schema: producer.yaml}}",
