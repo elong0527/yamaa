@@ -370,6 +370,10 @@ class SheetStructureTests(unittest.TestCase):
                 "columns": [{"type": "str", "label": "No name"}],
             },
             {**base, "rows": ["not-a-template"]},
+            {**base, "rows": 1},
+            {**base, "output": {"columns": [{"name": "STUDYID"}]}},
+            {**base, "output": {"columns": "STUDYID"}},
+            {**base, "rows": [{"id": "t1", "derivations": ["STUDYID"]}]},
             None,
         ):
             with self.subTest(spec=spec):

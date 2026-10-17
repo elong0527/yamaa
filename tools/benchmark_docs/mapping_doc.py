@@ -1377,13 +1377,39 @@ def mapping_sheets(spec, define=None):
     # isinstance, and a malformed field must render an empty sheet instead
     # of crashing the whole dashboard build with a TypeError/KeyError.
     columns = [c for c in spec.get("columns") or [] if isinstance(c, dict)]
-    ctx = SpecContext(spec)
+    # Normalize `rows` before SpecContext reads it: a scalar `rows` value
+    # would otherwise raise TypeError inside SpecContext before the sheet
+    # filter below ever runs, and a non-mapping `derivations` value would
+    # abort row construction when it is read with .get().
+    raw_rows = spec.get("rows")
+    rows_spec = (
+        [
+            {
+                **template,
+                "derivations": template.get("derivations")
+                if isinstance(template.get("derivations"), dict)
+                else {},
+            }
+            for template in raw_rows
+            if isinstance(template, dict)
+        ]
+        if isinstance(raw_rows, list)
+        else []
+    )
+    ctx = SpecContext({**spec, "rows": rows_spec})
     inputs = spec.get("input")
     input_names = set(inputs) if isinstance(inputs, dict) else set()
     output = spec.get("output")
-    output_names = (output.get("columns") if isinstance(output, dict) else None) or [
-        c.get("name") for c in columns if c.get("name")
-    ]
+    declared_output = output.get("columns") if isinstance(output, dict) else None
+    # Only a list of column names is a valid `output.columns`; a string
+    # would splinter into characters and a list of mappings is unhashable,
+    # so anything else falls back to the named columns.
+    output_names = (
+        declared_output
+        if isinstance(declared_output, list)
+        and all(isinstance(name, str) for name in declared_output)
+        else [c.get("name") for c in columns if c.get("name")]
+    )
     output_set = set(output_names)
     shown = [c for c in columns if c.get("name") in output_set]
 
@@ -1400,9 +1426,6 @@ def mapping_sheets(spec, define=None):
 
     sheets = [("mapping", "Mapping", map_headers, map_rows)]
 
-    rows_spec = [
-        template for template in spec.get("rows") or [] if isinstance(template, dict)
-    ]
     if rows_spec:
         template_vars = []
         for template in rows_spec:
