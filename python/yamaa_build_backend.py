@@ -139,7 +139,17 @@ def member_sources(member_root: Path):
 def local_patch_sources(workspace: Path):
     """Retain complete, regular local dependency sources and licensing notices."""
     manifest = tomllib.loads((workspace / "Cargo.toml").read_text())
-    for package, declaration in manifest.get("patch", {}).get("crates-io", {}).items():
+    # A `[patch]` or `[patch.crates-io]` section written as a scalar or an
+    # array is a malformed declaration like any other: refuse it with the
+    # ValueError every other invalid patch gets instead of leaking an
+    # AttributeError from `.get`/`.items` on the non-table value.
+    patch_section = manifest.get("patch", {})
+    if not isinstance(patch_section, dict):
+        raise ValueError("local Cargo patch section must be a table")
+    patches = patch_section.get("crates-io", {})
+    if not isinstance(patches, dict):
+        raise ValueError("local Cargo patch section must be a table")
+    for package, declaration in patches.items():
         if declaration != {"path": f"vendor/{package}"}:
             raise ValueError("local Cargo patches must use vendor/package paths")
         if not re.fullmatch(r"[a-z0-9_-]+", package):
@@ -173,7 +183,21 @@ def local_patch_sources(workspace: Path):
 def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> None:
     """Keep all lock members without adding an R dependency to the Python binary."""
     manifest = (workspace / "Cargo.toml").read_bytes()
-    members = tomllib.loads(manifest.decode())["workspace"]["members"]
+    # The workspace section and its members list are read by shape, not by
+    # trusting the parsed TOML: a missing or non-table section, a non-list
+    # members value, or a non-string entry otherwise escapes as a raw
+    # KeyError/TypeError/AttributeError (a string members value even
+    # iterates its characters and reports a one-letter "member").
+    workspace_section = tomllib.loads(manifest.decode()).get("workspace")
+    members = (
+        workspace_section.get("members")
+        if isinstance(workspace_section, dict)
+        else None
+    )
+    if not isinstance(members, list) or not all(
+        isinstance(member, str) for member in members
+    ):
+        raise ValueError("workspace manifest has no valid members list")
     lock = (workspace / "Cargo.lock").read_bytes()
     toolchain = workspace / "rust-toolchain.toml"
     toolchain_bytes = toolchain.read_bytes()

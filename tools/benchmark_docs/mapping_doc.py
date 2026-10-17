@@ -1180,7 +1180,7 @@ def allowed_value_codelists(columns):
         for check in checks:
             if isinstance(check, dict) and "allowed_values" in check:
                 values = check["allowed_values"].get("values", [])
-                out.append((col["name"], ", ".join(str(v) for v in values)))
+                out.append((col.get("name", ""), ", ".join(str(v) for v in values)))
     return out
 
 
@@ -1370,12 +1370,46 @@ def mapping_row(
 
 def mapping_sheets(spec, define=None):
     """Sheet models: list of (tab id, tab label, headers, rows)."""
-    columns = [c for c in spec.get("columns", []) if isinstance(c, dict)]
-    ctx = SpecContext(spec)
-    input_names = set((spec.get("input") or {}).keys())
-    output_names = (spec.get("output") or {}).get("columns") or [
-        c["name"] for c in columns
-    ]
+    spec = spec if isinstance(spec, dict) else {}
+    # A field written with no value parses as None, not as an absent key, so
+    # a bare .get(..., []) default does not apply to it; the other fields in
+    # this function (and SpecContext above) already guard with `or` /
+    # isinstance, and a malformed field must render an empty sheet instead
+    # of crashing the whole dashboard build with a TypeError/KeyError.
+    columns = [c for c in spec.get("columns") or [] if isinstance(c, dict)]
+    # Normalize `rows` before SpecContext reads it: a scalar `rows` value
+    # would otherwise raise TypeError inside SpecContext before the sheet
+    # filter below ever runs, and a non-mapping `derivations` value would
+    # abort row construction when it is read with .get().
+    raw_rows = spec.get("rows")
+    rows_spec = (
+        [
+            {
+                **template,
+                "derivations": template.get("derivations")
+                if isinstance(template.get("derivations"), dict)
+                else {},
+            }
+            for template in raw_rows
+            if isinstance(template, dict)
+        ]
+        if isinstance(raw_rows, list)
+        else []
+    )
+    ctx = SpecContext({**spec, "rows": rows_spec})
+    inputs = spec.get("input")
+    input_names = set(inputs) if isinstance(inputs, dict) else set()
+    output = spec.get("output")
+    declared_output = output.get("columns") if isinstance(output, dict) else None
+    # Only a list of column names is a valid `output.columns`; a string
+    # would splinter into characters and a list of mappings is unhashable,
+    # so anything else falls back to the named columns.
+    output_names = (
+        declared_output
+        if isinstance(declared_output, list)
+        and all(isinstance(name, str) for name in declared_output)
+        else [c.get("name") for c in columns if c.get("name")]
+    )
     output_set = set(output_names)
     shown = [c for c in columns if c.get("name") in output_set]
 
@@ -1392,7 +1426,6 @@ def mapping_sheets(spec, define=None):
 
     sheets = [("mapping", "Mapping", map_headers, map_rows)]
 
-    rows_spec = spec.get("rows") or []
     if rows_spec:
         template_vars = []
         for template in rows_spec:
