@@ -4,7 +4,7 @@ host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" e
   system.file("host-fixtures",package="yamaa",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-contract")
-stopifnot(identical(as.character(packageVersion("yamaa")), "0.4.0"),
+stopifnot(identical(as.character(packageVersion("yamaa")), "0.5.0"),
   identical(yamaa:::.core_version(), as.character(packageVersion("yamaa"))))
 stopifnot(identical(sort(getNamespaceExports("yamaa")), c("yamaa_check", "yamaa_define", "yamaa_domain",
   "yamaa_memory_resolver", "yamaa_read_resolved_specification", "yamaa_resolve_specification",

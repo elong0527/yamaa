@@ -27,8 +27,13 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 ## Hard rules
 
-- **0.4.0 is a fresh release.** Breaking changes are allowed. Remove obsolete
-  interfaces and callers together instead of adding compatibility aliases.
+- **Breaking a user-facing interface is a decision.** 0.4.0 has users. A
+  change that breaks the specification language, the Python or R API, saved
+  outputs or diagnostic identity needs an owner decision on its issue and a
+  migration note in the next release's notes under `docs/releases/`.
+  Internal interfaces, including the unpublished Rust crates, may change
+  freely. Remove obsolete interfaces and callers together instead of adding
+  compatibility aliases.
 - **Complete review before merging.** On the exact final PR head, require
   CodeRabbit's explicit completed review, or complete bounded reviews proved
   by the review gate, and resolve every actionable finding. Pending, missing,
@@ -65,6 +70,21 @@ their prerequisites. Local targets and CI share the owned scripts under
   page and `rules/README.md` for the rules index. MkDocs reads those
   files through `tools/docs/canonical_pages.py`; do not create
   `docs/index.md` or `docs/articles/rules.md`.
+
+## Pull requests
+
+- One issue per pull request, referenced with `Closes #N`. Branch from the
+  pull request's base: `main`, or the release integration branch
+  (`release/<version>`) while main is frozen for a release. The release's
+  planning issue says which.
+- Before merging, bring the branch up to date with its base and wait for
+  green CI on that exact head. A pull request that is green against an older
+  base can still fail to compile against the current one.
+- A decision recorded on a planning issue is not worked around. When one
+  turns out to be wrong in practice, say so on the child issue with the
+  evidence.
+- Evidence such as run ids and artifact names goes in issues, never in
+  committed files.
 
 ## Change recipes
 

@@ -15,7 +15,7 @@ open gates live in GitHub issues and pull requests, not here.
   CRAN and r-universe are later work.
 
 `.github/workflows/native.yml` builds, installs and tests every supported
-combination every two hours on main and on manual dispatch. A release is cut
+combination nightly on main and on manual dispatch. A release is cut
 from a commit whose complete native run passed.
 
 Python, R and Cargo versions move together;
