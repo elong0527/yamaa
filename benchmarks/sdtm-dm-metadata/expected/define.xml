@@ -42,19 +42,19 @@
         <CodeListRef CodeListOID="CL.DOMAIN"/>
         <def:Origin Type="Assigned" Source="Sponsor"/>
       </ItemDef>
-      <ItemDef OID="IT.DM.STUDYID" Name="STUDYID" DataType="text" Length="20" SASFieldName="STUDYID">
+      <ItemDef OID="IT.DM.STUDYID" Name="STUDYID" DataType="text" Length="4" SASFieldName="STUDYID">
         <Description>
           <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Protocol" Source="Sponsor"/>
       </ItemDef>
-      <ItemDef OID="IT.DM.USUBJID" Name="USUBJID" DataType="text" Length="30" SASFieldName="USUBJID">
+      <ItemDef OID="IT.DM.USUBJID" Name="USUBJID" DataType="text" Length="16" SASFieldName="USUBJID">
         <Description>
           <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Derived" Source="Sponsor"/>
       </ItemDef>
-      <ItemDef OID="IT.DM.SUBJID" Name="SUBJID" DataType="text" Length="10" SASFieldName="SUBJID">
+      <ItemDef OID="IT.DM.SUBJID" Name="SUBJID" DataType="text" Length="4" SASFieldName="SUBJID">
         <Description>
           <TranslatedText xml:lang="en">Subject Identifier for the Study</TranslatedText>
         </Description>
@@ -64,7 +64,7 @@
           </def:DocumentRef>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.DM.SITEID" Name="SITEID" DataType="text" Length="10" SASFieldName="SITEID">
+      <ItemDef OID="IT.DM.SITEID" Name="SITEID" DataType="text" Length="6" SASFieldName="SITEID">
         <Description>
           <TranslatedText xml:lang="en">Study Site Identifier</TranslatedText>
         </Description>

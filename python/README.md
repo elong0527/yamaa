@@ -237,12 +237,14 @@ created.save()
 ```
 
 Define reads the selected environment submission section and its metadata and
-parent specifications. Dataset-JSON reads already published CSV/Parquet artifacts
-when requested. It executes no specification, reads no ordinary study source and
+parent specifications. A section's `transport: xpt` or
+`transport: dataset_json` reads the already published CSV/Parquet artifacts and
+writes one SAS Transport version 5 or Dataset-JSON file per dataset beside
+`define.xml`. It executes no specification, reads no ordinary study source and
 opens no supporting-document links. The shared lifecycle renders/validates the
-whole output set before Save, then publishes Dataset-JSON in section order and
-XML last. A failed Save raises `yamaa.DefineError` carrying `issues` and
-`diagnostics`. See the
+whole output set before Save, then publishes the transport files in section
+order and XML last. A failed Save raises `yamaa.DefineError` carrying `issues`
+and `diagnostics`. See the
 [submission contracts](../rules/README.md#rule-files).
 
 ## ODM file helpers

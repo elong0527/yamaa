@@ -15,6 +15,7 @@ pub mod public_table;
 pub mod report_storage;
 mod storage_api;
 pub mod submission_json;
+pub mod submission_xpt;
 
 pub mod scalar_bytes;
 

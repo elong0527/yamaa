@@ -1324,8 +1324,11 @@ S1,002,2024-06
                     continue;
                 }
                 let metadata = expected(&entry.path().join("benchmark.yaml"));
+                // A Define benchmark fails in its study's composition, which
+                // `submission_transport` runs; its domain build succeeds.
                 if expected(&oracle)["phase"] == "validation"
                     && metadata["conformance"]["excluded"].is_null()
+                    && metadata["define"].is_null()
                 {
                     selected.push(name);
                 }

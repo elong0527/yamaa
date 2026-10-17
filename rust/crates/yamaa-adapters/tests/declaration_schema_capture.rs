@@ -1458,10 +1458,8 @@ mod declaration {
                 .unwrap();
             let doc = &result.normalized().document;
             let adam = doc.field(doc.root(), "adam").unwrap();
-            assert_eq!(
-                doc.nodes()[doc.field(adam, "dataset_json").unwrap()],
-                N::Boolean(false)
-            );
+            // An omitted transport has no default: only the document is written.
+            assert_eq!(doc.field(adam, "transport"), None);
             assert_eq!(
                 doc.nodes()[doc.field(adam, "context").unwrap()],
                 N::Text("Submission".into())

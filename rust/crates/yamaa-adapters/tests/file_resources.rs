@@ -728,7 +728,8 @@ mod file {
                     .find(&format!("<ItemDef OID=\"IT.LB.LBORRESU.{code}\""))
                     .unwrap();
                 let item = &xml[begin..begin + xml[begin..].find("</ItemDef>").unwrap()];
-                assert!(item.contains("Length=\"8\""));
+                // Every unit of both test codes is `mg/dL`, five bytes (SUB-24).
+                assert!(item.contains("Length=\"5\""), "{item}");
                 assert!(
                     item.contains(&format!("CodeListOID=\"CL.{list}\"")),
                     "{item}"
@@ -877,7 +878,7 @@ mod file {
                             text = text.replacen(before, change[1].as_str().unwrap(), 1);
                         }
                         if filename == "environment.yaml" {
-                            text = text.replace("dataset_json: true", "dataset_json: false");
+                            text = text.replace("  transport: dataset_json\n", "");
                         }
                         fs::write(path, text).unwrap();
                     }
@@ -1000,29 +1001,27 @@ mod file {
             );
         }
         #[test]
-        fn case_alias_targets_are_refused_before_overwriting_a_sentinel() {
+        fn transport_targets_equal_after_lowercasing_are_refused_before_overwriting_a_sentinel() {
             let temp = Temp::fixture("sdtm-dm-metadata", true);
             let target = temp.0.join("dm.json");
             fs::write(&target, b"original publication sentinel").unwrap();
-            if !temp.0.join("DM.JSON").exists() {
-                // This witness concerns an actual case-insensitive volume; distinct
-                // names on case-sensitive volumes are distinct publication targets.
-                return;
-            }
+            // Under Other a lower-case dataset name is admitted, and its
+            // transport file is named for it in lower case beside the document.
             let environment = temp.0.join("environment.yaml");
             fs::write(
                 &environment,
                 fs::read_to_string(&environment)
                     .unwrap()
-                    .replace("  - spec.yaml", "  - spec.yaml\n  - second.yaml"),
+                    .replace("  - spec.yaml", "  - spec.yaml\n  - second.yaml")
+                    .replace("context: Submission", "context: Other"),
             )
             .unwrap();
             fs::write(
                 temp.0.join("second.yaml"),
                 fs::read_to_string(temp.0.join("spec.yaml"))
                     .unwrap()
-                    .replace("domain: DM", "domain: DM2")
-                    .replace("path: dm.csv", "path: DM.csv"),
+                    .replace("domain: DM", "domain: dm")
+                    .replace("path: dm.csv", "path: second.csv"),
             )
             .unwrap();
             fs::write(temp.0.join("define.xml"), b"original Define sentinel").unwrap();
@@ -1035,12 +1034,10 @@ mod file {
             assert_eq!(result.issues().len(), 1, "{:?}", result.issues());
             let issue = &result.issues()[0];
             assert_eq!(issue.phase, "validation");
-            assert_eq!(issue.condition, "dataset_json_path_collision");
+            assert_eq!(issue.condition, "transport_path_collision");
             assert_eq!(issue.requirement.as_deref(), Some("REQ-1226"));
-            assert!(
-                yamaa_adapters::json_wire::encode(&issue.context).contains("dm.json")
-                    && yamaa_adapters::json_wire::encode(&issue.context).contains("DM.json")
-            );
+            assert_eq!(issue.spec_paths, ["sdtm.specs[1]"]);
+            assert!(yamaa_adapters::json_wire::encode(&issue.context).contains("dm.json"));
             let reads = result.capture_reads();
             assert!(result.save().is_err());
             assert_eq!(reads, result.capture_reads());
@@ -1120,21 +1117,37 @@ mod file {
         }
         #[test]
         fn mutual_references_and_published_contract_fail_before_any_publication() {
-            // REQ1206/1229 forbid a JSON-to-Define reference needing parent traversal.
-            let temp = Temp::fixture("sdtm-dm-metadata", false);
+            // JSON-1 places the transport file beside the document wherever the
+            // artifact is published, so the pair always references one directory.
+            let temp = Temp::fixture("sdtm-dm-metadata", true);
             fs::create_dir(temp.0.join("artifacts")).unwrap();
+            fs::rename(temp.0.join("dm.csv"), temp.0.join("artifacts/dm.csv")).unwrap();
             let spec = fs::read_to_string(temp.0.join("spec.yaml"))
                 .unwrap()
                 .replace("path: dm.csv", "path: artifacts/dm.csv");
             fs::write(temp.0.join("spec.yaml"), spec).unwrap();
             let mut run = temp.run("2026-09-11T00:00:00");
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            let xml = std::str::from_utf8(run.artifacts().nth(1).unwrap().1).unwrap();
+            assert!(xml.contains("xlink:href=\"dm.json\""));
+            assert!(run.save().unwrap());
+            assert!(temp.0.join("dm.json").is_file());
+            assert!(!temp.0.join("artifacts/dm.json").exists());
+            // Without a transport the leaf names the artifact, which must stay
+            // inside the document's directory (DEFINE-16).
+            let environment = fs::read_to_string(temp.0.join("environment.yaml"))
+                .unwrap()
+                .replace("  transport: dataset_json\n", "")
+                .replace("define: define.xml", "define: package/define.xml");
+            fs::write(temp.0.join("environment.yaml"), environment).unwrap();
+            let mut run = temp.run("2026-09-11T00:00:00");
             assert!(run
                 .issues()
                 .iter()
                 .any(|i| i.condition == "artifact_outside_document"
-                    && i.requirement.as_deref() == Some("REQ-1229")));
+                    && i.requirement.as_deref() == Some("REQ-1021")));
             assert!(run.save().is_err());
-            assert!(!temp.0.join("dm.json").exists());
+            assert!(!temp.0.join("package").exists());
             // REQ1230 assigns a stale output contract to REQ0535, before JSON schema.
             let temp = Temp::fixture("sdtm-dm-metadata", true);
             let csv = fs::read_to_string(temp.0.join("dm.csv")).unwrap();
@@ -1204,7 +1217,7 @@ mod file {
         #[test]
         fn unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files() {
             let temp = Temp::fixture("sdtm-dm-metadata", false);
-            let environment = fs::read_to_string(temp.0.join("environment.yaml")).unwrap().replace("dataset_json: true", "dataset_json: false").replace("sdtm:\n", "- codelists:\n  - id: UNUSED\n    name: Used only in another submission\n    data_type: text\n    items: [{value: OTHER}]\nsdtm:\n");
+            let environment = fs::read_to_string(temp.0.join("environment.yaml")).unwrap().replace("  transport: dataset_json\n", "").replace("sdtm:\n", "- codelists:\n  - id: UNUSED\n    name: Used only in another submission\n    data_type: text\n    items: [{value: OTHER}]\nsdtm:\n");
             fs::write(temp.0.join("environment.yaml"), environment).unwrap();
             let result = temp.run("2026-09-11T00:00:00");
             assert!(result.issues().is_empty(), "{:?}", result.issues());

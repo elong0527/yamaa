@@ -8,7 +8,7 @@ pub(crate) use yamaa_core::{
     diagnostic::ConditionCode,
     project_terminology as ct,
     submission_composition::{self as composition, Finding, Input, Study},
-    submission_document, submission_json, submission_xml,
+    submission_document, submission_transport, submission_xml, submission_xpt,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
@@ -137,7 +137,7 @@ pub(crate) fn compose(
             document,
             source: "d0.yaml",
             artifact: "d0.csv",
-            href: "d0.csv",
+            href: Some("d0.csv"),
         })
         .collect();
     composition::compose(
@@ -349,9 +349,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             21,
         ),
         (
-            SubmissionDatasetJsonNoData,
-            "dataset_json_without_data",
-            "REQ-1227",
+            SubmissionLabelInvalid,
+            "transport_label_invalid",
+            "XPT-5",
             22,
         ),
         (
@@ -384,6 +384,18 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "redundant_declaration",
             "REQ-0916",
             28,
+        ),
+        (
+            SubmissionDisplayFormatConflict,
+            "value_not_permitted",
+            "SUB-25",
+            29,
+        ),
+        (
+            XptDisplayFormatInvalid,
+            "xpt_display_format_invalid",
+            "XPT-9",
+            30,
         ),
     ] {
         let mut env = environment();
@@ -473,12 +485,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 *spec.at(&["submission", "repeating"]) = Tree::boolean(true);
                 spec.set(&["submission", "reference_data"], Tree::boolean(true));
             }
-            21 | 22 => {
-                spec.set(&["submission", "has_no_data"], Tree::boolean(true));
-                if change == 22 {
-                    env.set(&["sdtm", "dataset_json"], Tree::boolean(true));
-                    spec.set(&["submission", "comment"], Tree::text("No data collected"));
-                }
+            21 => spec.set(&["submission", "has_no_data"], Tree::boolean(true)),
+            // A transport carries labels of at most 40 printable characters.
+            22 => {
+                env.set(&["sdtm", "transport"], Tree::text("xpt"));
+                *spec.at(&["submission", "label"]) =
+                    Tree::text("An independent dataset label beyond forty characters");
             }
             23 => *spec.at(&["keys"]) = Tree::list(vec![Tree::text("MISSING")]),
             24 => *spec.at(&["output", "columns"]) = Tree::list(vec![]),
@@ -515,6 +527,49 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), extra]);
                 *spec.at(&["output", "columns"]) =
                     Tree::list(vec![Tree::text("VALUE"), Tree::text("EXTRA")]);
+            }
+            // An ADaM date travels as a SAS date with its one display format.
+            29 => {
+                env = Tree::Map(match env {
+                    Tree::Map(mut fields) => {
+                        fields[1].0 = "adam".into();
+                        fields
+                    }
+                    _ => unreachable!(),
+                });
+                *env.at(&["adam", "standard", "name"]) = Tree::text("ADaMIG");
+                *spec.at(&["submission", "class"]) = Tree::text("SUBJECT LEVEL ANALYSIS DATASET");
+                spec.at(&meta).set(&["mandatory"], Tree::boolean(true));
+                let mut date = column("ADT");
+                *date.at(&["type"]) = Tree::text("date");
+                date.remove(&["submission", "length"]);
+                date.at(&["submission"])
+                    .set(&["mandatory"], Tree::boolean(false));
+                date.at(&["submission"])
+                    .set(&["display_format"], Tree::text("YYMMDD10."));
+                date.set(
+                    &["derivation"],
+                    Tree::map(vec![("source", Tree::text("SRC.ADT"))]),
+                );
+                *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), date]);
+                *spec.at(&["output", "columns"]) =
+                    Tree::list(vec![Tree::text("VALUE"), Tree::text("ADT")]);
+            }
+            // A numeric display format under xpt must be a SAS format.
+            30 => {
+                env.set(&["sdtm", "transport"], Tree::text("xpt"));
+                let mut number = column("NUMBER");
+                *number.at(&["type"]) = Tree::text("int");
+                number.set(
+                    &["derivation"],
+                    Tree::map(vec![("literal", Tree::integer("1"))]),
+                );
+                number
+                    .at(&["submission"])
+                    .set(&["display_format"], Tree::text("8,2"));
+                *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), number]);
+                *spec.at(&["output", "columns"]) =
+                    Tree::list(vec![Tree::text("VALUE"), Tree::text("NUMBER")]);
             }
             _ => unreachable!(),
         }
@@ -675,6 +730,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "REQ-1004",
             6,
         ),
+        (SubmissionDefineName, "value_not_permitted", "DEFINE-2", 7),
     ] {
         let mut env = environment();
         let mut spec = specification();
@@ -707,6 +763,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                     &["columns", "0", "submission", "codelist"],
                     Tree::text("LIST"),
                 );
+            }
+            // A transport file sits beside a document named define.xml.
+            7 => {
+                env.set(&["sdtm", "transport"], Tree::text("dataset_json"));
+                *env.at(&["sdtm", "define"]) = Tree::text("out/metadata.xml");
             }
             _ => unreachable!(),
         }
@@ -765,7 +826,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         .unwrap(),
         value: Value::Bool(true),
     };
-    let finding = submission_json::admit(&study, &study.datasets()[0], &table).unwrap_err();
+    let finding = submission_transport::admit(&study, &study.datasets()[0], &table).unwrap_err();
     reached_finding(
         &mut reached,
         &[finding],
@@ -788,7 +849,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         .unwrap(),
         value: Value::Str("UNKNOWN_DATASET".into()),
     };
-    let finding = submission_json::admit(&study, &study.datasets()[0], &table).unwrap_err();
+    let finding = submission_transport::admit(&study, &study.datasets()[0], &table).unwrap_err();
     reached_finding(
         &mut reached,
         std::slice::from_ref(&finding),
@@ -818,6 +879,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         finding.context["key_values"],
         JsonValue::Array(vec![JsonValue::String("UNKNOWN_DATASET".into())])
     );
+    transport_refusals(&mut reached, &empty);
     for valid in ["sdtm", "adam", "send"] {
         assert!(define_diagnostics::standard_name(valid).is_ok());
     }
@@ -867,21 +929,15 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "REQ-1021",
         ),
         (
-            TargetRelation::DatasetJsonOutsidePackage,
-            DefineDatasetJsonOutsidePackage,
-            "artifact_outside_document",
-            "REQ-1229",
-        ),
-        (
             TargetRelation::ArtifactCollision,
             DefineArtifactCollision,
             "artifact_path_collision",
             "REQ-1195",
         ),
         (
-            TargetRelation::DatasetJsonCollision,
-            DefineDatasetJsonCollision,
-            "dataset_json_path_collision",
+            TargetRelation::TransportCollision,
+            DefineTransportCollision,
+            "transport_path_collision",
             "REQ-1226",
         ),
     ] {
@@ -910,4 +966,127 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         );
     }
     reached
+}
+
+/// Held rows of one typed column; a declared row count may exceed the cells
+/// when only the file geometry is inspected.
+pub(crate) struct Rows {
+    pub(crate) schema: TableSchema,
+    pub(crate) rows: usize,
+    pub(crate) values: Vec<Value>,
+}
+impl TableAccess for Rows {
+    type Error = Infallible;
+    fn schema(&self) -> &TableSchema {
+        &self.schema
+    }
+    fn row_count(&self) -> usize {
+        self.rows
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
+        match self.values.get(row) {
+            Some(value) if column == 0 => Ok(value.into()),
+            _ => Err(CellError::OutOfBounds { row, column }),
+        }
+    }
+}
+fn rows(kind: ColumnType, values: Vec<Value>) -> Rows {
+    Rows {
+        schema: TableSchema::new(vec![Column {
+            name: "VALUE".into(),
+            kind,
+        }])
+        .unwrap(),
+        rows: values.len(),
+        values,
+    }
+}
+/// XPT-7, XPT-8, XPT-10 and JSON-3 over held published rows.
+fn transport_refusals(reached: &mut BTreeSet<ConditionCode>, empty: &ct::Catalogue) {
+    use ConditionCode::*;
+    let mut env = environment();
+    env.set(&["sdtm", "transport"], Tree::text("xpt"));
+    let study = one(env.clone(), specification(), empty).unwrap();
+    let dataset = &study.datasets()[0];
+    let finding = submission_transport::admit(
+        &study,
+        dataset,
+        &rows(ColumnType::Str, vec![Value::Str("caf\u{e9}".into())]),
+    )
+    .unwrap_err();
+    assert_eq!(finding.path, "datasets.D0.columns.VALUE");
+    assert_eq!(finding.context["cause"], JsonValue::String("ascii".into()));
+    assert_eq!(finding.context["row"], JsonValue::from(0usize));
+    reached_finding(
+        reached,
+        &[finding],
+        TransportTextInvalid,
+        "output",
+        "transport_text_invalid",
+        "XPT-7",
+    );
+    let finding =
+        submission_transport::admit(&study, dataset, &rows(ColumnType::Str, vec![])).unwrap_err();
+    assert_eq!(finding.path, "datasets.D0.artifact");
+    reached_finding(
+        reached,
+        &[finding],
+        SubmissionTransportEmpty,
+        "output",
+        "transport_dataset_empty",
+        "JSON-3",
+    );
+    let mut spec = specification();
+    *spec.at(&["columns", "0", "type"]) = Tree::text("int");
+    *spec.at(&["columns", "0", "derivation"]) = Tree::map(vec![("literal", Tree::integer("1"))]);
+    let numeric = one(env.clone(), spec, empty).unwrap();
+    let finding = submission_transport::admit(
+        &numeric,
+        &numeric.datasets()[0],
+        &rows(ColumnType::Int, vec![Value::Int((1 << 53) + 1)]),
+    )
+    .unwrap_err();
+    assert_eq!(
+        finding.context["cause"],
+        JsonValue::String("integer".into())
+    );
+    reached_finding(
+        reached,
+        &[finding],
+        XptValueOutOfRange,
+        "output",
+        "xpt_value_out_of_range",
+        "XPT-8",
+    );
+    let mut measured = one(env, specification(), empty).unwrap();
+    let held = rows(
+        ColumnType::Str,
+        vec![Value::Str("A".into()), Value::Missing],
+    );
+    submission_transport::measure(&mut measured, &[Some(&held)]).unwrap();
+    let document = submission_xpt::document(&measured, &measured.datasets()[0]);
+    assert_eq!(document.variables[0].width, 1);
+    let finding = submission_xpt::admit(&document, &measured.datasets()[0], &held).unwrap_err();
+    assert_eq!(finding.context["row"], JsonValue::from(1usize));
+    reached_finding(
+        reached,
+        &[finding],
+        XptLastRowBlank,
+        "output",
+        "xpt_last_row_blank",
+        "XPT-10",
+    );
+    let wide = Rows {
+        rows: 5_000_000_000 / document.observation(),
+        ..rows(ColumnType::Str, vec![])
+    };
+    let finding = submission_xpt::admit(&document, &measured.datasets()[0], &wide).unwrap_err();
+    reached_finding(
+        reached,
+        &[finding],
+        XptFileTooLarge,
+        "output",
+        "xpt_file_too_large",
+        "XPT-10",
+    );
 }

@@ -333,6 +333,9 @@ def render_files(paths, group, benchmark, derived, labels):
                 count = "raw CSV"
         if table is None:
             try:
+                # A SAS transport file can decode as ASCII; it is still binary.
+                if path.suffix.lower() == ".xpt":
+                    raise UnicodeError
                 table = f'<pre class="plain-file"><code>{escape(path.read_text(encoding="utf-8"))}</code></pre>'
             except UnicodeError:
                 table = '<p class="no-rows">Binary fixture; inspect it in the benchmark source.</p>'

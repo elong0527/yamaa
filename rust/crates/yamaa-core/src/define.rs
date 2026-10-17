@@ -7,10 +7,11 @@ use crate::{
     limits::Limits,
     project_terminology::Catalogue,
     resource::WrittenPath,
-    schema::Document,
+    schema::{Document, DocumentNode},
     submission_composition::{self as composition, Finding},
-    submission_document,
-    table::TableAccess,
+    submission_document::{self, Transport},
+    submission_transport,
+    table::{CellError, TableAccess, TableSchema, ValueRef},
 };
 use std::vec;
 
@@ -23,6 +24,9 @@ pub struct SpecificationView<'a> {
     pub document: &'a Document,
     pub source: &'a str,
     pub output: Option<WrittenPath<'a>>,
+    /// Every declared input dataset and the written origin of its path; a
+    /// transport file never replaces one (JSON-2).
+    pub inputs: Vec<(&'a str, WrittenPath<'a>)>,
 }
 /// Capture errors are moved once into the attempt. No clone, retry, thread or
 /// serialization requirement is imposed on the native payload.
@@ -47,9 +51,10 @@ pub trait Ports {
     ) -> Result<Self::Specification, Self::Error>;
     fn specification(document: &Self::Specification) -> SpecificationView<'_>;
     fn location(&self, path: &str, declaring: &str, written: &str) -> Result<String, Self::Error>;
-    fn json_written(&self, written: &str) -> String;
+    /// The written path of `file` in the directory of the written `define`
+    /// target, relative to the same declaring environment (JSON-1).
+    fn transport_written(&self, define: &str, file: &str) -> String;
     fn same_location(&self, left: &str, right: &str) -> bool;
-    fn same_parent(&self, left: &str, right: &str) -> bool;
     fn package_reference(&self, target: &str, define: &str) -> Option<String>;
     fn define_name(&self, location: &str) -> String;
     fn verify_metadata(&mut self, path: &str, source: &str) -> Result<(), Self::Error>;
@@ -65,6 +70,13 @@ pub trait Ports {
     fn render_dataset_json<T: TableAccess>(
         &mut self,
         document: &crate::submission_json::DatasetJsonDocument,
+        table: &T,
+    ) -> Result<Vec<u8>, Finding>;
+    /// Encode one admitted SAS Transport version 5 document over its held
+    /// table. Core owns admission and the typed document; the port owns bytes.
+    fn render_xpt<T: TableAccess>(
+        &mut self,
+        document: &crate::submission_xpt::XptDocument,
         table: &T,
     ) -> Result<Vec<u8>, Finding>;
     fn target(
@@ -169,6 +181,55 @@ fn published_typed_csv_failure<E, PE>(
             "published CSV contract",
         ),
     )
+}
+/// One published artifact held for a transport, as its profile decoded it.
+enum Held<C, Q> {
+    Csv(C),
+    Parquet(Q),
+}
+impl<C: TableAccess, Q: TableAccess> TableAccess for Held<C, Q> {
+    type Error = ();
+    fn schema(&self) -> &TableSchema {
+        match self {
+            Self::Csv(table) => table.schema(),
+            Self::Parquet(table) => table.schema(),
+        }
+    }
+    fn row_count(&self) -> usize {
+        match self {
+            Self::Csv(table) => table.row_count(),
+            Self::Parquet(table) => table.row_count(),
+        }
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<()>> {
+        fn opaque<E>(error: CellError<E>) -> CellError<()> {
+            match error {
+                CellError::OutOfBounds { row, column } => CellError::OutOfBounds { row, column },
+                CellError::Access(_) => CellError::Access(()),
+            }
+        }
+        match self {
+            Self::Csv(table) => table.cell(row, column).map_err(opaque),
+            Self::Parquet(table) => table.cell(row, column).map_err(opaque),
+        }
+    }
+}
+/// The typed document a transport file encodes.
+enum Rendered {
+    Json(Box<crate::submission_json::DatasetJsonDocument>),
+    Xpt(crate::submission_xpt::XptDocument),
+}
+/// A published artifact held for a transport, or the service failure.
+type Published<P> = Result<
+    Held<crate::typed_csv::TypedRows, <P as Ports>::Parquet>,
+    Failure<<P as Ports>::Error, <P as Ports>::PublicationError>,
+>;
+/// Whether a resolved specification declares `submission.has_no_data: true`.
+fn declares_no_data(document: &Document) -> bool {
+    document
+        .field(document.root(), "submission")
+        .and_then(|submission| document.field(submission, "has_no_data"))
+        .is_some_and(|node| document.nodes()[node] == DocumentNode::Boolean(true))
 }
 type PreflightResult<P> = Result<
     Vec<<P as Ports>::Publisher>,
@@ -281,10 +342,14 @@ impl<P: Ports> Application<P> {
                 &section.define.value,
             )
             .map_err(Failure::Port)?;
+        let transport = section.transport.as_ref().map(|field| field.value);
         let mut locations = Vec::new();
         let mut hrefs = Vec::new();
         let mut outputs = Vec::new();
-        let mut targets = vec![define_location.clone()];
+        let mut transports = Vec::new();
+        // Every file this generation writes, the document first (JSON-2).
+        let mut written = vec![define_location.clone()];
+        let mut inputs = Vec::new();
         for (index, spec) in section.specs.value.iter().enumerate() {
             let path = format!("{standard}.specs[{index}]");
             let document = ports
@@ -305,24 +370,6 @@ impl<P: Ports> Application<P> {
                     origin.written,
                 )
                 .map_err(Failure::Port)?;
-            let written_json = ports.json_written(origin.written);
-            let reference = if section.dataset_json.value {
-                ports
-                    .location(
-                        &format!("{path}.dataset_json"),
-                        origin.base_source,
-                        &written_json,
-                    )
-                    .map_err(Failure::Port)?
-            } else {
-                artifact.clone()
-            };
-            if section.dataset_json.value && !ports.same_parent(&reference, &define_location) {
-                return Err(Failure::Metadata(vec![crate::define_diagnostics::admit_relation(
-                    crate::define_diagnostics::TargetRelation::DatasetJsonOutsidePackage,
-                    &path, &format!("Dataset-JSON {reference} and Define {define_location} require parent traversal in their mutual references"),
-                ).unwrap_err()]));
-            }
             if ports.same_location(&artifact, &define_location) {
                 return Err(Failure::Metadata(vec![
                     crate::define_diagnostics::admit_relation(
@@ -333,51 +380,64 @@ impl<P: Ports> Application<P> {
                     .unwrap_err(),
                 ]));
             }
-            if section.dataset_json.value {
-                if let Some(conflict) = targets
-                    .iter()
-                    .find(|target| ports.same_location(target, &reference))
-                    .or_else(|| {
-                        ports
-                            .same_location(&reference, &artifact)
-                            .then_some(&artifact)
-                    })
-                {
-                    return Err(Failure::Metadata(vec![
-                        crate::define_diagnostics::admit_relation(
-                            crate::define_diagnostics::TargetRelation::DatasetJsonCollision,
-                            &path,
-                            &format!("{reference} and {conflict} name one publication target"),
-                        )
-                        .unwrap_err(),
-                    ]));
+            for (name, input) in &view.inputs {
+                let input_path = format!("{path}.input.{name}.path");
+                let location = ports
+                    .location(&input_path, input.base_source, input.written)
+                    .map_err(Failure::Port)?;
+                inputs.push((input_path, location));
+            }
+            let document_root = view.document.root();
+            let id = composition::text(view.document, document_root, "domain").unwrap_or_default();
+            // A dataset declared to have no data has no transport file (JSON-3).
+            let (href, target) = match transport {
+                Some(transport) if !declares_no_data(view.document) => {
+                    let file = format!("{}.{}", id.to_ascii_lowercase(), transport.extension());
+                    let target_written = ports.transport_written(&section.define.value, &file);
+                    let target = ports
+                        .location(&format!("{path}.transport"), identity, &target_written)
+                        .map_err(Failure::Port)?;
+                    if let Some(conflict) = written
+                        .iter()
+                        .find(|other| ports.same_location(other, &target))
+                    {
+                        return Err(Failure::Metadata(vec![
+                            crate::define_diagnostics::admit_relation(
+                                crate::define_diagnostics::TargetRelation::TransportCollision,
+                                &path,
+                                &format!("{target} and {conflict} name one publication target"),
+                            )
+                            .unwrap_err(),
+                        ]));
+                    }
+                    written.push(target);
+                    (Some(file), Some(target_written))
                 }
-            }
-            if section.dataset_json.value {
-                targets.push(reference.clone());
-            }
-            let href = ports
-                .package_reference(&reference, &define_location)
-                .ok_or_else(|| {
-                    Failure::Metadata(vec![crate::define_diagnostics::admit_relation(
-                        crate::define_diagnostics::TargetRelation::ArtifactOutsidePackage,
-                        &path,
-                        "artifact must be inside the Define package",
-                    )
-                    .unwrap_err()])
-                })?;
+                Some(_) => (None, None),
+                None => {
+                    let href = ports
+                        .package_reference(&artifact, &define_location)
+                        .ok_or_else(|| {
+                            Failure::Metadata(vec![crate::define_diagnostics::admit_relation(
+                                crate::define_diagnostics::TargetRelation::ArtifactOutsidePackage,
+                                &path,
+                                "artifact must be inside the Define package",
+                            )
+                            .unwrap_err()])
+                        })?;
+                    (Some(href), None)
+                }
+            };
             locations.push(artifact);
             hrefs.push(href);
-            outputs.push((
-                origin.base_source.to_string(),
-                origin.written.to_string(),
-                written_json,
-            ));
+            outputs.push((origin.base_source.to_string(), origin.written.to_string()));
+            transports.push(target.map(|target| (path, target)));
             self.specifications.push(document);
         }
-        // The selected output set is admitted before any published artifact read.
+        // The selected output set is admitted before any published artifact
+        // read: no published artifact or declared input is a written target.
         for artifact in &locations {
-            if targets
+            if written
                 .iter()
                 .any(|target| ports.same_location(target, artifact))
             {
@@ -386,6 +446,21 @@ impl<P: Ports> Application<P> {
                     standard,
                     "published dataset overlaps Define targets",
                 )]));
+            }
+        }
+        for (input_path, input) in &inputs {
+            if let Some(target) = written
+                .iter()
+                .find(|target| ports.same_location(target, input))
+            {
+                return Err(Failure::Metadata(vec![
+                    crate::define_diagnostics::admit_relation(
+                        crate::define_diagnostics::TargetRelation::TransportCollision,
+                        input_path,
+                        &format!("declared input {input} is the written target {target}"),
+                    )
+                    .unwrap_err(),
+                ]));
             }
         }
         let inputs: Vec<_> = self
@@ -397,10 +472,10 @@ impl<P: Ports> Application<P> {
                 document: P::specification(document).document,
                 source: P::specification(document).source,
                 artifact,
-                href,
+                href: href.as_deref(),
             })
             .collect();
-        let composed = composition::compose(
+        let mut composed = composition::compose(
             study,
             section,
             environment.catalogue,
@@ -409,87 +484,66 @@ impl<P: Ports> Application<P> {
             &created,
         )
         .map_err(Failure::Metadata)?;
-        let xml =
+        // Every document fault is found before a published artifact is read;
+        // with a transport the document is rendered again once measured.
+        let mut xml =
             crate::submission_xml::render(&composed).map_err(|f| Failure::Metadata(vec![f]))?;
         ports
             .verify_metadata(standard, identity)
             .map_err(Failure::Port)?;
-        if section.dataset_json.value {
-            for ((dataset, (declaring, written, json)), location) in
-                composed.datasets().iter().zip(&outputs).zip(&locations)
-            {
-                let bytes = ports
-                    .capture_published(
-                        &format!("datasets.{}.artifact", dataset.id()),
-                        declaring,
-                        written,
-                    )
-                    .map_err(Failure::Port)?;
-                if let Err(error) = Limits::source_bytes(bytes.as_ref().len()) {
-                    return Err(published_boundary_failure(error, dataset.id(), written));
+        let mut tables = Vec::new();
+        if transport.is_some() {
+            for (dataset, (declaring, written)) in composed.datasets().iter().zip(&outputs) {
+                if dataset.has_no_data() {
+                    tables.push(None);
+                    continue;
                 }
-                let kinds: Vec<_> = dataset
-                    .columns()
-                    .iter()
-                    .map(|column| {
-                        (
-                            column.declaration().name.value.clone(),
-                            column.runtime_type(),
-                        )
-                    })
-                    .collect();
-                let rendered = if location.to_ascii_lowercase().ends_with(".csv") {
-                    let source = crate::csv_source::parse(bytes.as_ref())
-                        .map_err(|error| published_csv_failure(&error, dataset.id(), written))?;
-                    crate::submission_json::admit_fields(
-                        dataset,
-                        source.names.iter().map(String::as_str),
-                    )
+                let table = Self::published(ports, dataset, declaring, written)?;
+                submission_transport::admit(&composed, dataset, &table)
                     .map_err(|finding| Failure::Metadata(vec![finding]))?;
-                    let table = crate::typed_csv::PreparedTypes::new(&kinds)
-                        .and_then(|types| types.convert(source))
-                        .map_err(|error| {
-                            published_typed_csv_failure(&error, dataset.id(), written)
-                        })?;
-                    crate::submission_json::admit(&composed, dataset, &table)
-                        .map_err(|finding| Failure::Metadata(vec![finding]))?;
-                    let document = crate::submission_json::document(
+                tables.push(Some(table));
+            }
+            let held: Vec<_> = tables.iter().map(Option::as_ref).collect();
+            submission_transport::measure(&mut composed, &held)
+                .map_err(|finding| Failure::Metadata(vec![finding]))?;
+            let mut documents = Vec::new();
+            for (dataset, table) in composed.datasets().iter().zip(&tables) {
+                let Some(table) = table else {
+                    documents.push(None);
+                    continue;
+                };
+                documents.push(Some(match transport {
+                    Some(Transport::Xpt) => {
+                        let document = crate::submission_xpt::document(&composed, dataset);
+                        crate::submission_xpt::admit(&document, dataset, table)
+                            .map_err(|finding| Failure::Metadata(vec![finding]))?;
+                        Rendered::Xpt(document)
+                    }
+                    _ => Rendered::Json(Box::new(crate::submission_json::document(
                         &composed,
                         dataset,
                         &ports.define_name(&define_location),
-                    );
-                    ports.render_dataset_json(&document, &table)
-                } else if location.to_ascii_lowercase().ends_with(".parquet") {
-                    let table = ports.decode_parquet(bytes.as_ref()).map_err(|_| {
-                        Failure::Metadata(vec![Finding::cause(
-                            ConditionCode::ProducerContractMismatch,
-                            written,
-                            "published Parquet profile",
-                        )])
-                    })?;
-                    Limits::table(table.row_count(), table.schema().columns().len()).map_err(
-                        |error| published_boundary_failure(error, dataset.id(), written),
-                    )?;
-                    crate::submission_json::admit(&composed, dataset, &table)
-                        .map_err(|finding| Failure::Metadata(vec![finding]))?;
-                    let document = crate::submission_json::document(
-                        &composed,
-                        dataset,
-                        &ports.define_name(&define_location),
-                    );
-                    ports.render_dataset_json(&document, &table)
-                } else {
-                    return Err(Failure::Metadata(vec![Finding::cause(
-                        ConditionCode::ApplicationUnsupported,
-                        written,
-                        "published_dataset_format",
-                    )]));
+                    ))),
+                }));
+            }
+            xml =
+                crate::submission_xml::render(&composed).map_err(|f| Failure::Metadata(vec![f]))?;
+            for ((document, table), target) in documents.iter().zip(&tables).zip(&transports) {
+                let (Some(document), Some(table), Some((path, target))) = (document, table, target)
+                else {
+                    continue;
+                };
+                let rendered = match document {
+                    Rendered::Xpt(document) => ports.render_xpt(document, table),
+                    Rendered::Json(document) => ports.render_dataset_json(document, table),
                 }
                 .map_err(|f| Failure::Metadata(vec![f]))?;
-                let target = ports.target(json, declaring, json).map_err(Failure::Port)?;
+                let held_target = ports
+                    .target(&format!("{path}.transport"), identity, target)
+                    .map_err(Failure::Port)?;
                 self.artifacts.push(Artifact {
-                    written: json.clone(),
-                    target,
+                    written: target.clone(),
+                    target: held_target,
                     bytes: rendered,
                     state: PublicationState::Ready,
                 });
@@ -513,6 +567,63 @@ impl<P: Ports> Application<P> {
         self.preflight(ports)?;
         Ok(())
     }
+    /// JSON-5: read one published artifact exactly as a consumer reads its
+    /// producer's artifact, under the profile its extension selects.
+    fn published(
+        ports: &mut P,
+        dataset: &composition::Dataset,
+        declaring: &str,
+        written: &str,
+    ) -> Published<P> {
+        let bytes = ports
+            .capture_published(
+                &format!("datasets.{}.artifact", dataset.id()),
+                declaring,
+                written,
+            )
+            .map_err(Failure::Port)?;
+        if let Err(error) = Limits::source_bytes(bytes.as_ref().len()) {
+            return Err(published_boundary_failure(error, dataset.id(), written));
+        }
+        let lower = written.to_ascii_lowercase();
+        if lower.ends_with(".csv") {
+            let kinds: Vec<_> = dataset
+                .columns()
+                .iter()
+                .map(|column| {
+                    (
+                        column.declaration().name.value.clone(),
+                        column.runtime_type(),
+                    )
+                })
+                .collect();
+            let source = crate::csv_source::parse(bytes.as_ref())
+                .map_err(|error| published_csv_failure(&error, dataset.id(), written))?;
+            submission_transport::admit_fields(dataset, source.names.iter().map(String::as_str))
+                .map_err(|finding| Failure::Metadata(vec![finding]))?;
+            let table = crate::typed_csv::PreparedTypes::new(&kinds)
+                .and_then(|types| types.convert(source))
+                .map_err(|error| published_typed_csv_failure(&error, dataset.id(), written))?;
+            Ok(Held::Csv(table))
+        } else if lower.ends_with(".parquet") {
+            let table = ports.decode_parquet(bytes.as_ref()).map_err(|_| {
+                Failure::Metadata(vec![Finding::cause(
+                    ConditionCode::ProducerContractMismatch,
+                    written,
+                    "published Parquet profile",
+                )])
+            })?;
+            Limits::table(table.row_count(), table.schema().columns().len())
+                .map_err(|error| published_boundary_failure(error, dataset.id(), written))?;
+            Ok(Held::Parquet(table))
+        } else {
+            Err(Failure::Metadata(vec![Finding::cause(
+                ConditionCode::ApplicationUnsupported,
+                written,
+                "published_dataset_format",
+            )]))
+        }
+    }
     fn preflight(&self, ports: &mut P) -> PreflightResult<P> {
         let mut publishers: Vec<P::Publisher> = Vec::with_capacity(self.artifacts.len());
         for (index, artifact) in self.artifacts.iter().enumerate() {
@@ -526,7 +637,7 @@ impl<P: Ports> Application<P> {
                 {
                     return Err(Failure::Metadata(vec![
                         crate::define_diagnostics::admit_relation(
-                            crate::define_diagnostics::TargetRelation::DatasetJsonCollision,
+                            crate::define_diagnostics::TargetRelation::TransportCollision,
                             "define.targets",
                             &format!(
                                 "{} and {} name one physical publication target",

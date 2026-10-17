@@ -63,8 +63,9 @@ R arrow reads its installed host's corresponding captured buffer. Repeated
 domain saves must retain identical bytes. Ordinary CI tests the minimum
 readers; every native wheel/source and R source lane also runs these controls
 with the minimum versions. SAS datasets and Transport are input formats;
-the published dataset profiles remain CSV and Parquet. Dataset-JSON and
-Define-XML are generated through the public study-document API.
+the published dataset profiles remain CSV and Parquet. SAS Transport
+version 5 and Dataset-JSON files and Define-XML are generated through the
+public study-document API.
 
 ## Supported dependency combinations
 

@@ -1093,7 +1093,7 @@ mod schema {
                     document,
                     source: &sources[index],
                     artifact: &artifacts[index],
-                    href: &artifacts[index],
+                    href: Some(&artifacts[index]),
                 })
                 .collect();
             submission_composition::compose(
@@ -1310,7 +1310,7 @@ mod schema {
             })
             .collect();
             let docs = a.node(N::Sequence(docs));
-            let enabled = a.node(N::Boolean(true));
+            let xpt = a.text("xpt");
             let context = a.text("Other");
             let xml_lang = a.text("fr-CA");
             let file = a.text("FILE.analysis-1");
@@ -1327,7 +1327,7 @@ mod schema {
                 ("standard", guide),
                 ("specs", specs),
                 ("define", define),
-                ("dataset_json", enabled),
+                ("transport", xpt),
                 ("context", context),
                 ("xml_lang", xml_lang),
                 ("file_oid", file),
@@ -1384,12 +1384,11 @@ mod schema {
             );
             assert_eq!(send.define.value, "results/define.xml");
             assert!(send.documents.value.is_empty());
-            assert!(!send.dataset_json.value);
+            assert!(send.transport.is_none());
             assert_eq!(send.context.value, Context::Submission);
             assert_eq!(send.xml_lang.value, "en");
             for origin in [
                 send.documents.origin,
-                send.dataset_json.origin,
                 send.context.origin,
                 send.xml_lang.origin,
             ] {
@@ -1405,7 +1404,10 @@ mod schema {
             );
             let adam = &owned.sections()[1];
             assert_eq!(adam.standard.name.value, GuideName::AdamIgMd);
-            assert!(adam.dataset_json.value);
+            assert_eq!(
+                adam.transport.as_ref().map(|field| field.value),
+                Some(submission_document::Transport::Xpt)
+            );
             assert_eq!(adam.context.value, Context::Other);
             assert_eq!(adam.xml_lang.value, "fr-CA");
             assert_eq!(adam.file_oid.as_ref().unwrap().value, "FILE.analysis-1");
@@ -1489,7 +1491,7 @@ mod schema {
             let specs = a.node(N::Sequence(vec![]));
             let define = a.text("define.xml");
             let documents = a.node(N::Sequence(vec![]));
-            let flag = a.node(N::Boolean(false));
+            let flag = a.text("dataset_json");
             let context = a.text("Submission");
             let lang = a.text("en");
             let section = a.map(vec![
@@ -1497,7 +1499,7 @@ mod schema {
                 ("specs", specs),
                 ("define", define),
                 ("documents", documents),
-                ("dataset_json", flag),
+                ("transport", flag),
                 ("context", context),
                 ("xml_lang", lang),
             ]);
@@ -1507,7 +1509,7 @@ mod schema {
             let s = &owned.sections()[0];
             for (origin, expected) in [
                 (s.documents.origin, documents),
-                (s.dataset_json.origin, flag),
+                (s.transport.as_ref().unwrap().origin, flag),
                 (s.context.origin, context),
                 (s.xml_lang.origin, lang),
             ] {
@@ -1548,7 +1550,7 @@ mod schema {
                 ("specs", specs),
                 ("define", define),
                 ("documents", documents),
-                ("dataset_json", flag),
+                ("transport", flag),
                 ("context", context),
                 ("xml_lang", language),
                 ("file_oid", file),
@@ -1583,7 +1585,7 @@ mod schema {
                     Kind::InvalidChoice,
                     Kind::InvalidHref,
                     Kind::EmptyText,
-                    Kind::ExpectedBoolean,
+                    Kind::InvalidChoice,
                     Kind::InvalidChoice,
                     Kind::InvalidLanguage,
                     Kind::EmptyText,
@@ -1647,7 +1649,7 @@ mod schema {
             let mut fields = vec![("standard", guide), ("specs", specs), ("define", define)];
             for key in [
                 "documents",
-                "dataset_json",
+                "transport",
                 "context",
                 "xml_lang",
                 "file_oid",
@@ -1668,7 +1670,7 @@ mod schema {
                 findings.iter().map(|f| f.kind).collect::<Vec<_>>(),
                 [
                     Kind::ExpectedSequence,
-                    Kind::ExpectedBoolean,
+                    Kind::ExpectedText,
                     Kind::ExpectedText,
                     Kind::ExpectedText,
                     Kind::ExpectedText,
@@ -2345,7 +2347,7 @@ mod schema {
                     document,
                     source: "spec.yaml",
                     artifact: "lb.csv",
-                    href: "lb.csv",
+                    href: Some("lb.csv"),
                 }],
                 "0.3.0",
                 "2026-09-11T00:00:00",

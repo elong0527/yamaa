@@ -72,6 +72,7 @@ def plan(fixtures):
             "name": case.name,
             "entries": entries,
             "excluded": metadata.get("conformance", {}).get("excluded"),
+            "define": metadata.get("define"),
         }
         example["variants"], _ = example_variants(fixtures, example)
         examples.append(example)
@@ -151,7 +152,9 @@ def example_variants(fixtures, example):
     if example["excluded"]:
         return descriptors, contents
     case = fixtures / example["name"]
-    negative = (case / "expected" / "error.yaml").exists()
+    # A Define benchmark's domain builds succeed; its expected failure, if
+    # any, belongs to the Define call the fixed-time Define suites run.
+    negative = (case / "expected" / "error.yaml").exists() and not example.get("define")
     for runtime in ("python", "r"):
         for index, entry in enumerate(example["entries"][runtime]):
             spec = Path(entry["specification"])
@@ -648,14 +651,15 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
         result["not_compared"].append(
             {"artifact": "spec_resolved.yaml", "reason": RESOLVED_REASON}
         )
-    for filename in ("define.xml", "dm.json"):
-        if (case / "expected" / filename).exists():
-            result["not_compared"].append(
-                {
-                    "artifact": filename,
-                    "reason": "Define not compared by domain runner; fixed-time public Define suite is separate",
-                }
-            )
+    if example.get("define"):
+        for truth in sorted((case / "expected").iterdir()):
+            if truth.suffix in {".xml", ".json", ".xpt"} or truth.name == "error.yaml":
+                result["not_compared"].append(
+                    {
+                        "artifact": truth.name,
+                        "reason": "Define not compared by domain runner; fixed-time public Define suite is separate",
+                    }
+                )
     entries = example["entries"][runtime]
     if record.get("error"):
         result["findings"].append(record["error"])
@@ -709,7 +713,7 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
         )
         return finish()
     negative = case / "expected/error.yaml"
-    if negative.exists():
+    if negative.exists() and not example.get("define"):
         want = load_yaml(negative)
         if not issues or not diagnostic_matches(want, issues[0]):
             result["findings"].append(

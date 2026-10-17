@@ -111,9 +111,10 @@ or raises an error. Generic consumers must choose equally exact conversions.
 Nanoarrow 0.7.0 uses an R-internals API removed in the supported R 4.6.1, so the
 bridge floor is 0.8.0. See the [ownership contract](../../rust/README.md#arrow-host-handoff).
 
-`yamaa_define` admits submission metadata without executing a domain. Explicit
-Dataset-JSON requests read already published artifacts. Save publishes retained
-JSON in specification order and XML last, stopping after an operational failure.
+`yamaa_define` admits submission metadata without executing a domain. A
+section's `transport` (`xpt` or `dataset_json`) reads already published
+artifacts. Save publishes the retained SAS Transport or Dataset-JSON files in
+specification order and XML last, stopping after an operational failure.
 A failed Define Save raises `yamaa_define_error`. See the
 [submission contracts](../../rules/README.md#rule-files).
 

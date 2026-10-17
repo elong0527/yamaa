@@ -69,11 +69,46 @@ impl ColumnType {
             Self::Datetime => DataType::Datetime,
         }
     }
+    /// Admission on the specification alone, before a document names the
+    /// family: a date or datetime admits its own type and the `integer` an
+    /// `adam` document submits it as (SUB-6, SUB-25).
     pub fn admits_data_type(self, data_type: DataType) -> bool {
-        if self == Self::String {
-            !matches!(data_type, DataType::Integer | DataType::Float)
+        match self {
+            Self::String => !matches!(data_type, DataType::Integer | DataType::Float),
+            Self::Date | Self::Datetime => {
+                data_type == self.default_data_type() || data_type == DataType::Integer
+            }
+            Self::Integer | Self::Float => data_type == self.default_data_type(),
+        }
+    }
+    /// Whether the column type is `date` or `datetime`.
+    pub fn temporal(self) -> bool {
+        matches!(self, Self::Date | Self::Datetime)
+    }
+    /// The display format of a date or datetime an `adam` document submits as
+    /// a SAS numeric date, or None when the column keeps its own form (SUB-25).
+    pub fn numeric_date_format(self, adam: bool) -> Option<&'static str> {
+        match self {
+            Self::Date if adam => Some("DATE9."),
+            Self::Datetime if adam => Some("DATETIME20."),
+            _ => None,
+        }
+    }
+    /// The default submission data type once the family is known.
+    pub fn family_data_type(self, adam: bool) -> DataType {
+        if self.numeric_date_format(adam).is_some() {
+            DataType::Integer
         } else {
-            data_type == self.default_data_type()
+            self.default_data_type()
+        }
+    }
+    /// Admission once the family is known: a date or datetime admits exactly
+    /// the one type its family submits it as.
+    pub fn admits_family_data_type(self, data_type: DataType, adam: bool) -> bool {
+        if self.temporal() {
+            data_type == self.family_data_type(adam)
+        } else {
+            self.admits_data_type(data_type)
         }
     }
 }

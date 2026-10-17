@@ -646,14 +646,11 @@ mod service {
                 assert_eq!(written, "define.xml");
                 Ok("/project/define.xml".into())
             }
-            fn json_written(&self, _: &str) -> String {
+            fn transport_written(&self, _: &str, _: &str) -> String {
                 panic!("no dataset selected")
             }
             fn same_location(&self, left: &str, right: &str) -> bool {
                 left == right
-            }
-            fn same_parent(&self, _: &str, _: &str) -> bool {
-                panic!("no dataset selected")
             }
             fn package_reference(&self, _: &str, _: &str) -> Option<String> {
                 panic!("no dataset selected")
@@ -678,6 +675,13 @@ mod service {
                 // The fixture declares no datasets, so composition never
                 // reaches Dataset-JSON encoding.
                 Ok(Vec::new())
+            }
+            fn render_xpt<T: TableAccess>(
+                &mut self,
+                _: &yamaa_core::submission_xpt::XptDocument,
+                _: &T,
+            ) -> Result<Vec<u8>, yamaa_core::submission_composition::Finding> {
+                panic!("no dataset selected")
             }
             fn decode_parquet(&mut self, _: &[u8]) -> Result<EmptyTable, ()> {
                 panic!("no codec selected")
