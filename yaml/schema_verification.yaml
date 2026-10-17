@@ -50,7 +50,7 @@ dataset_verifications:
         - when:
             type: predicate
             required: false
-            description: See REQ-1154.
+            description: A predicate over one constructed output row that binds a group when at least one of its rows evaluates it to TRUE, leaving a group with no such row exempt (CHECK-14).
         - min: {type: int, required: false}
         - max: {type: int, required: false}
         - min_fraction: {type: float, required: false}

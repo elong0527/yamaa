@@ -125,7 +125,7 @@ not its digits require it: at `n` of 4, an integral 25 is written `25.0000`.
 <a id="req-0746"></a>
 
 **REQ-0746.** This is the only place a value is rounded for presentation. It
-happens once, when the field is written, and after everything [Execution lifecycle](../execution/lifecycle.md) sequences:
+happens once, when the field is written, and after everything [Column derivation](../columns.md) sequences:
 every derivation, every conversion, every verification, key
 validation, and row ordering. No dependent column, predicate, aggregate,
 verification, key, or order term ever sees a rounded value, and changing

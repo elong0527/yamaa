@@ -109,7 +109,7 @@ placeholder name follows the `variable` field rules in
 
 <a id="req-0456"></a>
 
-**REQ-0456.** [Execution lifecycle](../execution/lifecycle.md) collects all placeholders as dependencies before evaluation.
+**REQ-0456.** [Column derivation](../columns.md) collects all placeholders as dependencies before evaluation.
 Repeated placeholders add one dependency but are replaced wherever they appear.
 
 <a id="req-0457"></a>
@@ -124,7 +124,7 @@ their string values and brace pairs are unescaped. Values stay unconverted.
 <a id="req-0459"></a>
 
 **REQ-0459.** If a placeholder value is missing, return declared `missing`.
-Without that handler, the missing value is fatal under [Local handlers](../execution/handlers.md).
+Without that handler, the missing value is fatal under [Column derivation](../columns.md).
 
 <a id="req-0460"></a>
 
@@ -218,7 +218,7 @@ broader casing from a host or environment default.
 - the `pattern` descriptor keyword [Schema language](../reference/schema-language.md) declares on a schema `str`;
 - `str_extract.pattern`;
 - `str_replace.pattern` ([REQ-1318](text.md#req-1318));
-- the `pattern` of [Verification](../execution/verification.md)'s `matches` column verification;
+- the `pattern` of [Verification](../verification.md)'s `matches` column verification;
 - the pattern literal in the predicate call `str_contains(source, pattern)`
   ([REQ-1244](predicates.md#req-1244)).
 
@@ -226,7 +226,7 @@ broader casing from a host or environment default.
 
 **REQ-0797.** `regex` is the named schema type for `str_extract.pattern`
 and `str_replace.pattern`, and for
-[Verification](../execution/verification.md)'s
+[Verification](../verification.md)'s
 `matches` pattern. The schema descriptor and predicate pattern literal use
 the same portable pattern contract. All requirements below apply to every
 consumer except where a section names one.
@@ -271,7 +271,7 @@ syntax. `(?i)` is a syntax error. A consumer must not expose `i`, `m`, `s`,
 
 **REQ-0802.** The `u` flag makes a pattern operate on the Unicode scalar values
 [Text values](../values/text.md) defines. One supplementary-plane scalar is one character to a pattern
-and one unit to [Schema language](../reference/schema-language.md)'s `min_length` and [Verification](../execution/verification.md)'s `max_length`. Without `u`, the
+and one unit to [Schema language](../reference/schema-language.md)'s `min_length` and [Verification](../verification.md)'s `max_length`. Without `u`, the
 same scalar is two UTF-16 code units and `.` matches half of the scalar.
 The flag also admits `\\u{...}` code point escapes and makes a malformed
 escape such as `\\a` a syntax error rather than a silent literal.
@@ -427,7 +427,7 @@ with no scalars is the empty string, never missing.
 
 **REQ-1321.** A missing source returns declared `missing`. Without that
 handler, the missing source is fatal under
-[Local handlers](../execution/handlers.md).
+[Column derivation](../columns.md).
 
 ### Regular expressions: Determinism and parity
 
@@ -500,7 +500,7 @@ whose length can vary. Fixed length lookbehind stays allowed, and
 | `expressions.mapping.source` | String variable used as the dictionary key, or a [filtered source](lookup.md#req-1052) carrying it with a filter, a selection, or an absent value. |
 | `expressions.mapping.dict` | Source-value to result-value dictionary, written inline or as the path of a YAML file holding it. A path is read once during workflow planning through the spec's [project resources](../storage/resources.md); its content must satisfy the inline dictionary contract. |
 | `expressions.mapping.case_sensitive` | Compare exactly when true; use [Text values](../values/text.md) ASCII folding when false. |
-| `expressions.mapping.missing` | Value returned when the source is missing; without it, a missing source fails ([REQ-0344](../execution/handlers.md#req-0344)). |
+| `expressions.mapping.missing` | Value returned when the source is missing; without it, a missing source fails ([COLUMN-10](../columns.md#column-10)). |
 | `expressions.mapping.unmapped` | Value returned when the source is present but has no dictionary entry; without it, such a source fails. `missing` never answers it. |
 | `Result` | Looks up a string source in a dictionary, given inline or loaded from a YAML file. Case-insensitive lookup folds ASCII a-z to A-Z under [Text values](../values/text.md); folded keys must be unique. |
 
@@ -592,7 +592,7 @@ or unmatched brace.
 
 <a id="req-0462"></a>
 
-**REQ-0462.** A placeholder that does not bind: fail under [Execution lifecycle](../execution/lifecycle.md) and [Name binding](../specification/binding.md).
+**REQ-0462.** A placeholder that does not bind: fail under [Column derivation](../columns.md) and [Name binding](../specification/binding.md).
 
 ### Errors
 

@@ -80,7 +80,7 @@ itself qualifies no dataset but its own.
 
 **REQ-0412.** An identifier that does not resolve in its phase is an error. A
 lookup field carries the type [Source ingestion](../storage/ingestion.md) assigns to the field in the lookup's
-dataset. [Execution lifecycle](../execution/lifecycle.md) collects these identifiers and lookup source dependencies. A
+dataset. [Column derivation](../columns.md) collects these identifiers and lookup source dependencies. A
 `compute` derivation therefore participates in dependency ordering like a
 predicate does.
 
@@ -215,7 +215,7 @@ fail uses `NULLIF`. Percentage change against a zero base is
 
 <a id="req-0429"></a>
 
-**REQ-0429.** The following conditions fail the run. Consistent with [Execution lifecycle](../execution/lifecycle.md),
+**REQ-0429.** The following conditions fail the run. Consistent with [Column derivation](../columns.md),
 implementations must not silently convert a failure to missing.
 
 <a id="req-0430"></a>

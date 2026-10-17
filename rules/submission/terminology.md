@@ -89,7 +89,7 @@ to check.
 
 **REQ-0937.** Binding a non-extensible codelist that declares `items` requires
 every non-missing value of the column to equal one declared `value`. Missing
-values pass, exactly as [Verification](../execution/verification.md)'s `allowed_values` treats missing values; a
+values pass, exactly as [Verification](../verification.md)'s `allowed_values` treats missing values; a
 column that also prohibits absence declares `not_missing`.
 
 <a id="req-0938"></a>
@@ -105,7 +105,7 @@ values live in the dictionary and this language does not read the dictionary.
 
 <a id="req-0940"></a>
 
-**REQ-0940.** The enforcement in [REQ-0937](terminology.md#req-0937) runs where [Verification](../execution/verification.md) runs a column
+**REQ-0940.** The enforcement in [REQ-0937](terminology.md#req-0937) runs where [Verification](../verification.md) runs a column
 verification, over the completed column, and fails the same way. The
 enforcement is the same check `allowed_values` performs, arriving from the
 terminology rather than from a second list beside it.
@@ -135,7 +135,7 @@ under the equality [REQ-0935](terminology.md#req-0935) uses. A difference is rej
 <a id="req-0945"></a>
 
 **REQ-0945.** Declaring `allowed_values` without a `codelist` binding remains
-an ordinary [Verification](../execution/verification.md) verification. Not every constrained column carries published
+an ordinary [Verification](../verification.md) verification. Not every constrained column carries published
 terminology.
 
 ### Codelists selected by binding
@@ -160,7 +160,7 @@ what distinguishes this vocabulary from a codelist, whose values
 [REQ-0931](terminology.md#req-0931) requires be listed or deferred to a dictionary. Missing
 values pass, exactly as [REQ-0937](terminology.md#req-0937) treats missing values; a column
 that also prohibits absence declares `not_missing`. Enforcement runs where
-[Verification](../execution/verification.md) runs a column verification, over the
+[Verification](../verification.md) runs a column verification, over the
 completed column, and fails the same way. The ADaM `SRCDOM` column, whose
 values name the source SDTM domain or ADaM dataset, binds this vocabulary.
 
@@ -253,7 +253,7 @@ value sets differ, where [REQ-0942](terminology.md#req-0942) requires equality: 
 <a id="req-0957"></a>
 
 **REQ-0957.** A non-missing value outside a bound non-extensible codelist: fail
-where [Verification](../execution/verification.md) fails a column verification, reporting the column, the row's key,
+where [Verification](../verification.md) fails a column verification, reporting the column, the row's key,
 and the value.
 
 <a id="req-0958"></a>

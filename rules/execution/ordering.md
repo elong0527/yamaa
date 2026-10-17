@@ -14,7 +14,7 @@ status: normative
 
 **REQ-0222.** `output.order_by` declares the order the artifact's rows are
 presented in. It is optional. An artifact whose specification omits the
-order keeps [Execution lifecycle](lifecycle.md)'s construction order: row-template order, and base-record order
+order keeps [Column derivation](../columns.md)'s construction order: row-template order, and base-record order
 or first-occurrence group order within each row template.
 
 <a id="req-0223"></a>
@@ -41,9 +41,9 @@ term to break a tie.
 <a id="req-0226"></a>
 
 **REQ-0226.** Ordering is a presentation step. Ordering runs once after the
-lifecycle, key validation, and every [Verification](verification.md)
+lifecycle, key validation, and every [Verification](../verification.md)
 verification. Ordering never changes whether a run passes or warns. Evaluation
-is unchanged. [Lifecycle](lifecycle.md)'s dependency order, a window's
+is unchanged. [Lifecycle](../columns.md)'s dependency order, a window's
 partitions, and the neighbours `row_value` reads are fixed before
 ordering. Each uses construction order for its own tie-break.
 

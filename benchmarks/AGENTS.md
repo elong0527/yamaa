@@ -341,7 +341,7 @@ the same point say so the same way. Whole-run evaluation failures use:
 | `verification` | a declared assertion |
 
 A condition that an operation could have answered locally uses the stage in
-the [local-handlers contract](../rules/execution/handlers.md):
+the [local-handlers contract](../rules/columns.md#local-handlers):
 
 | Phase | Rejects |
 |---|---|
@@ -434,6 +434,6 @@ After registering one, update every place that enumerates the vocabulary: the
 expression registry in the owning `../yaml/schema_*.yaml` module and the
 generated schema-fields reference it feeds (see `../rules/README.md`), the
 owning operation contract's type
-behavior, and the [local-handlers contract](../rules/execution/handlers.md)
+behavior, and the [local-handlers contract](../rules/columns.md#local-handlers)
 if it declares handlers. Then delete the gap it closed from its work item in the
 issue tracker, and close the work item when its last gap closes.

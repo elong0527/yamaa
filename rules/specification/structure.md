@@ -100,7 +100,7 @@ column-phase meaning, and a `rows` entry naming its column fails as
 <a id="req-0206"></a>
 
 **REQ-0206.** Internal columns hold working values a multi-step derivation
-does not publish. They do not change evaluation. [Execution lifecycle](../execution/lifecycle.md) builds one dependency
+does not publish. They do not change evaluation. [Column derivation](../columns.md) builds one dependency
 graph over all declared columns regardless of `output`, and an output column
 may depend on an internal one.
 
@@ -156,14 +156,14 @@ under this contract. A non-ASCII source byte fails validation with
 | `root_class.domain` | Name of the output dataset this specification derives. |
 | `root_class.keys` | Output columns identifying a row; [Artifact publication](../storage/publication.md) defines the identity they assert. |
 | `root_class.input` | Source datasets readable by this specification, each under the name it is read through. |
-| `root_class.base` | Input dataset whose records build output rows when rows is absent; [Row construction](../execution/rows.md) states when it is required. |
-| `root_class.filter` | Predicate selecting base input records for row construction when `rows` is absent; the filter-only row template lifted to root. Mutually exclusive with `root_class.rows`; [Row construction](../execution/rows.md) defines the driver it reads. |
+| `root_class.base` | Input dataset whose records build output rows when rows is absent; [Row construction](../rows.md) states when it is required. |
+| `root_class.filter` | Predicate selecting base input records for row construction when `rows` is absent; the filter-only row template lifted to root. Mutually exclusive with `root_class.rows`; [Row construction](../rows.md) defines the driver it reads. |
 | `root_class.output` | Artifact presentation independent of dependency-ordered declarations; [Artifact publication](../storage/publication.md) defines it. |
 | `root_class.windows` | Complete named window settings under [REQ-1251](../operations/windows.md#req-1251). |
 | `root_class.intermediates` | Named dataset lookups several columns read through <lookup-id>.<column>; [Lookup and joins](../operations/lookup.md) defines them. |
-| `root_class.columns` | Columns in the dependency order [Execution lifecycle](../execution/lifecycle.md) requires; output.columns controls artifact order. |
-| `root_class.rows` | Row templates constructing output rows from input records or groups; [Row construction](../execution/rows.md) evaluates them. Mutually exclusive with `root_class.filter`. |
-| `root_class.verifications` | Assertions over the completed dataset; [Verification](../execution/verification.md) defines them. |
+| `root_class.columns` | Columns in the dependency order [Column derivation](../columns.md) requires; output.columns controls artifact order. |
+| `root_class.rows` | Row templates constructing output rows from input records or groups; [Row construction](../rows.md) evaluates them. Mutually exclusive with `root_class.filter`. |
+| `root_class.verifications` | Assertions over the completed dataset; [Verification](../verification.md) defines them. |
 | `root_class.submission` | Governed dataset metadata a submission document is generated from; [Submission metadata](../submission/metadata.md) defines it. |
 | `root_class.metadata` | Free-form annotations carried with the specification; [Submission metadata](../submission/metadata.md) reserves the key names it governs. |
 
@@ -177,7 +177,7 @@ under this contract. A non-ASCII source byte fails validation with
 | `column_class.type` | Declared data type this column must carry in the completed dataset. |
 | `column_class.label` | Descriptive text carried with the column for a reader of the dataset. |
 | `column_class.derivation` | How the column's value is produced; [Specification structure](structure.md) owns where a column may be derived. |
-| `column_class.verifications` | Assertions over this column's completed values; [Verification](../execution/verification.md) defines them. |
+| `column_class.verifications` | Assertions over this column's completed values; [Verification](../verification.md) defines them. |
 | `column_class.submission` | Governed column metadata a submission document is generated from; [Submission metadata](../submission/metadata.md) defines it. |
 | `column_class.metadata` | Free-form annotations carried with the column; [Submission metadata](../submission/metadata.md) reserves the key names it governs. |
 

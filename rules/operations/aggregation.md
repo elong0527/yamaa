@@ -35,7 +35,7 @@ gives `function` the return type declared by its logical contract.
 returns one value per group. The expression never changes the row count.
 [Lookup and joins](lookup.md) joins
 a right-side reduction to constructed rows. An output-row reduction broadcasts
-under [REQ-0467](aggregation.md#req-0467). A grouped row template asks the expression for one value while [Execution lifecycle](../execution/lifecycle.md)
+under [REQ-0467](aggregation.md#req-0467). A grouped row template asks the expression for one value while [Column derivation](../columns.md)
 decides whether that candidate row is appended.
 
 ### Relations and identifiers
@@ -257,7 +257,7 @@ order, starting with the first such value and adding each later value with
 [Numeric computation](computation.md)'s `+` semantics. Implementations must not
 reorder, reassociate, partition, or use a compensated or correctly rounded
 summation. The `filter`, when present, removes records and keeps the order of
-the records that remain. [Source ingestion](../storage/ingestion.md) defines stored-source record order. [Execution lifecycle](../execution/lifecycle.md)
+the records that remain. [Source ingestion](../storage/ingestion.md) defines stored-source record order. [Column derivation](../columns.md)
 defines constructed-output and grouped-input record order. `MEAN` uses the same
 ordered `SUM`, followed by division by `COUNT`; `MEAN` inherits `SUM`'s binary64
 rounding behavior.

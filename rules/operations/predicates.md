@@ -20,7 +20,7 @@ and by the `assert` verification.
 
 **REQ-0159.** A predicate evaluates to `TRUE`, `FALSE`, or `UNKNOWN`. A filter
 retains a row or record only for `TRUE`. A verification holds only for `TRUE`.
-[Verification](../execution/verification.md) defines every other consequence.
+[Verification](../verification.md) defines every other consequence.
 
 ### Grammar
 
@@ -195,13 +195,13 @@ filter: "AEDECOD LIKE '100!%' ESCAPE '!'"
 
 <a id="req-0178"></a>
 
-**REQ-0178.** [Execution lifecycle](../execution/lifecycle.md) defines the
+**REQ-0178.** [Column derivation](../columns.md) defines the
 names visible at each predicate site:
 
 <a id="req-0179"></a>
 
 **REQ-0179.** an ungrouped row filter sees the names
-  [REQ-0068](../execution/rows.md#req-0068) defines;
+  [ROW-6](../rows.md#row-6) defines;
 
 <a id="req-0180"></a>
 
@@ -240,7 +240,7 @@ reach an undeclared relation.
 
 <a id="req-0186"></a>
 
-**REQ-0186.** [Execution lifecycle](../execution/lifecycle.md) collects predicate identifiers for dependency ordering. A
+**REQ-0186.** [Column derivation](../columns.md) collects predicate identifiers for dependency ordering. A
 parser must therefore reject an unresolved name rather than treating a
 predicate as dependency-free.
 
@@ -283,7 +283,7 @@ evaluate the grammar itself.
   An unqualified identifier that names a field of an in-scope dataset fails
   with `unresolvable_name` and suggests the qualified spelling; any other
   unavailable identifier fails with `unknown_field`. Both report under
-  [Execution lifecycle](../execution/lifecycle.md).
+  [Column derivation](../columns.md).
 
 <a id="req-0190"></a>
 

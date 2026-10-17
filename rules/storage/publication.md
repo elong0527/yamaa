@@ -14,7 +14,7 @@ status: normative
 
 **REQ-0062.** `output.columns` selects and orders artifact columns
 independently of declaration order, and `output.order_by` orders the
-artifact's rows independently of the construction order [Row construction](../execution/rows.md) defines.
+artifact's rows independently of the construction order [Row construction](../rows.md) defines.
 This contract owns column selection; [Ordering](../execution/ordering.md) owns artifact row order.
 
 ### The artifact
@@ -23,15 +23,15 @@ This contract owns column selection; [Ordering](../execution/ordering.md) owns a
 
 **REQ-0193.** The **primary artifact** is the dataset this specification derives.
 Its columns are exactly the declared columns listed by `output.columns`, in
-that order. Its rows are the rows [Row construction](../execution/rows.md) constructs. A specification may
-also produce [Verification](../execution/verification.md)'s governed warning sidecar. That log reports
+that order. Its rows are the rows [Row construction](../rows.md) constructs. A specification may
+also produce [Verification](../verification.md)'s governed warning sidecar. That log reports
 the run, not a second derivation target or source within this specification.
 
 <a id="req-0195"></a>
 
 **REQ-0195.** Serialization follows the [CSV](csv.md) and [Parquet](parquet.md) profiles. `output.path` names the primary
 file, and `output.warning_log` and `output.verification_log`, when
-present, name [Verification](../execution/verification.md)'s sidecars. Each
+present, name [Verification](../verification.md)'s sidecars. Each
 extension selects `parquet` or `csv`. The format profiles own their containers and bytes; this contract owns
 publication. Everything below concerns the primary values and their order,
 which the profiles carry rather than decide.
@@ -63,7 +63,7 @@ repeated column, and reports the invalid name when present.
 
 **REQ-0221.** Once every column's lifecycle is complete, the combined key
 values of each row must be non-missing and unique across the artifact. Key
-validation happens before dataset verifications, which [Verification](../execution/verification.md) runs last.
+validation happens before dataset verifications, which [Verification](../verification.md) runs last.
 String key values use [Text values](../values/text.md) equality. Key order is significant to [Lookup and joins](../operations/lookup.md),
 which joins on the output keys a right side also carries. The applicable
 keys are used for enrichment and do not change the identity asserted here.
@@ -85,7 +85,7 @@ verifications:
 ```
 
 [Ordering](../execution/ordering.md#req-0299) places missing values last by
-default. [REQ-0381](../execution/verification.md#req-0381) treats missing values
+default. [CHECK-10](../verification.md#check-10) treats missing values
 as values in the uniqueness check, so two rows with the same subject,
 treatment, start date, and missing end date fail that check. The missing end
 date remains missing. Submission key metadata describes the identity in
@@ -99,7 +99,7 @@ the separate uniqueness check changes it.
 
 **REQ-0715.** `output.path` is required and names the primary file; it has no
 default. `output.warning_log` and
-`output.verification_log` name [Verification](../execution/verification.md)'s
+`output.verification_log` name [Verification](../verification.md)'s
 sidecars when the specification declares them. `output.relative_to` selects the
 base for all three targets under [Resource resolution](resources.md#req-0780);
 `entry` lets a shared output declaration publish separately for each study.
@@ -207,7 +207,7 @@ artifact and leaves the target untouched.
 <a id="req-0755"></a>
 
 **REQ-0755.** Publication happens once, after the whole artifact is complete:
-after every value's lifecycle, key validation, and verification under [Execution lifecycle](../execution/lifecycle.md), and
+after every value's lifecycle, key validation, and verification under [Column derivation](../columns.md), and
 after its rows are ordered. Rows are not streamed to the target as they are
 constructed.
 
@@ -252,7 +252,7 @@ two, and an extension the mapping does not name fails validation with
 
 <a id="req-1181"></a>
 
-**REQ-1181.** The verification log [Verification](../execution/verification.md) fixes is diagnostic output,
+**REQ-1181.** The verification log [Verification](../verification.md) fixes is diagnostic output,
 not one of [REQ-0193](publication.md#req-0193)'s artifacts. A successful run
 renders and validates it with the other files before touching any target and
 publishes it first, then the warning log, then the primary artifact,
@@ -274,9 +274,9 @@ target untouched.
 | `output_class.path` | File this specification produces; [Artifact publication](publication.md) selects the serialization profile from its extension. |
 | `output_class.decimals` | Fixed display digits for every float column of a csv artifact; [CSV profile](csv.md) defines the rounding and rejects it for parquet. |
 | `output_class.columns` | Declared columns selected for the artifact, in the order this contract requires. |
-| `output_class.warning_log` | Sidecar dataset recording warning-level verification violations; [Verification](../execution/verification.md) fixes its schema and [Artifact publication](publication.md) serializes it. |
-| `output_class.verification_log` | Sidecar dataset recording the outcome of every declared verification; [Verification](../execution/verification.md) fixes its schema and [Artifact publication](publication.md) serializes it. |
-| `output_class.order_by` | Terms ordering artifact rows after every verification; omission keeps [Execution lifecycle](../execution/lifecycle.md) construction order. |
+| `output_class.warning_log` | Sidecar dataset recording warning-level verification violations; [Verification](../verification.md) fixes its schema and [Artifact publication](publication.md) serializes it. |
+| `output_class.verification_log` | Sidecar dataset recording the outcome of every declared verification; [Verification](../verification.md) fixes its schema and [Artifact publication](publication.md) serializes it. |
+| `output_class.order_by` | Terms ordering artifact rows after every verification; omission keeps [Column derivation](../columns.md) construction order. |
 
 ## Error conditions
 
@@ -299,8 +299,8 @@ wrapper: fail.
 
 **REQ-0240.** A missing or duplicate combined key value: fail and report the
 offending rows. A specification without `rows` emits one row per key
-combination under [REQ-0042](../execution/rows.md#req-0042), so a duplicate key can come only from row
-templates emitting one combination more than once, under [REQ-0043](../execution/rows.md#req-0043).
+combination under [ROW-8](../rows.md#row-8), so a duplicate key can come only from row
+templates emitting one combination more than once, under [ROW-7](../rows.md#row-7).
 
 <a id="req-0759"></a>
 

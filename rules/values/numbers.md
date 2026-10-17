@@ -21,7 +21,7 @@ replacement literals, `allowed_values` entries, and length or value bounds.
 Declaring a `float` or `str` result does not widen the integer literal's range.
 Quote a numeric identifier as text, or write a floating-point literal when that
 is the intended value. Declaration integers such as mathematical row-count
-bounds under [REQ-1152](../execution/verification.md#req-1152) retain their own
+bounds under [CHECK-13](../verification.md#check-13) retain their own
 contracts and are not runtime integer values.
 
 <a id="req-0015"></a>
@@ -89,7 +89,7 @@ the floor of the exact integer quotient.
 <a id="req-0423"></a>
 
 **REQ-0423.** `CEIL`, `FLOOR`, and `TRUNC` return `float`. Declare the column
-`type: int` to get an integer. [Execution lifecycle](../execution/lifecycle.md) converts the completed result
+`type: int` to get an integer. [Column derivation](../columns.md) converts the completed result
 and [Types and conversion](types.md) defines that conversion.
 
 <a id="req-0424"></a>

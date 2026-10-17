@@ -35,21 +35,21 @@ failed conversion is a named failure. Enforced by
 the empty string; no text spells it, every type admits it, and every operation
 states what it does with it. Enforced by
 [REQ-0166](operations/predicates.md#req-0166),
-[REQ-0344](execution/handlers.md#req-0344),
+[COLUMN-10](columns.md#column-10),
 [REQ-0492](operations/aggregation.md#req-0492) and
 [REQ-0530](storage/ingestion.md#req-0530).
 
 **P4. Ambiguity fails.** Two values for one key, several matching records
 without a declared selection, an unmapped value or text that does not parse
 fails with a named condition instead of choosing. Enforced by
-[REQ-0075](execution/lifecycle.md#req-0075),
+[COLUMN-2](columns.md#column-2),
 [REQ-0127](operations/lookup.md#req-0127),
 [REQ-0482](operations/aggregation.md#req-0482) and
 [REQ-1272](specification/binding.md#req-1272).
 
 **P5. Order is data.** Stored record order, construction order and declared
 order terms decide every tie. No operation reorders records or chooses an
-order of its own. Enforced by [REQ-0039](execution/rows.md#req-0039),
+order of its own. Enforced by [ROW-7](rows.md#row-7),
 [REQ-0225](execution/ordering.md#req-0225),
 [REQ-0480](operations/aggregation.md#req-0480) and
 [REQ-0514](storage/ingestion.md#req-0514).
@@ -66,7 +66,7 @@ storage profiles and conditions are closed lists. Extending one is a rule
 change. Enforced by [REQ-0002](values/types.md#req-0002),
 [REQ-0289](operations/expressions.md#req-0289),
 [REQ-0478](operations/aggregation.md#req-0478) and
-[REQ-1297](execution/lifecycle.md#req-1297).
+[COLUMN-15](columns.md#column-15).
 
 **P8. Inheritance is deterministic.** Layers compose in one fixed order, and
 the resolved specification is the same whatever spelling its layers used.
@@ -102,11 +102,10 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | [Numeric values](values/numbers.md) | REQ | Define numeric representation, promotion, conversion, and overflow. |
 | [Text values](values/text.md) | REQ | Define Unicode scalar identity, preservation, equality, and order. |
 | [Temporal values](values/temporal.md) | REQ | Define dates, local civil datetimes, precision, canonical text, and order. |
-| [Execution lifecycle](execution/lifecycle.md) | REQ | Sequence resolution, row construction, dependency evaluation, value completion, and output checks. |
-| [Row construction](execution/rows.md) | REQ | Construct output rows from declared input records or groups. |
+| [Row construction](rows.md) | ROW | Construct output rows from declared input records or groups, or from the distinct keys of the base records. |
+| [Column derivation](columns.md) | COLUMN | Sequence a run, order column dependencies, complete each value's lifecycle, and handle conditions at their site. |
 | [Ordering](execution/ordering.md) | REQ | Apply ordering terms, missing placement, stable ties, and final artifact order. |
-| [Local handlers](execution/handlers.md) | REQ | Handle conditions at their expression or conversion site and report substitutions. |
-| [Verification](execution/verification.md) | REQ | Apply assertions, severity, and grouped counts to completed values, and record what ran in the warning log and the verification log. |
+| [Verification](verification.md) | CHECK | Apply assertions, severity, and grouped counts to completed values, and record what ran in the warning log and the verification log. |
 | [Expression evaluation](operations/expressions.md) | REQ | Register and dispatch expressions, restrict nesting, and define scalar selection. |
 | [Predicates](operations/predicates.md) | REQ | Evaluate the closed Boolean language using three-valued logic. |
 | [Numeric computation](operations/computation.md) | REQ | Evaluate written arithmetic formulas without reassociation or presentation rounding. |
@@ -194,8 +193,8 @@ One term per concept across all rules, schema comments, and messages:
   (binding notation). Never `row_class.` or `root_class.`.
 - **driver** -- the source whose records drive row construction: a row
   template's `dataset`, naming an input dataset or an eligible named
-  intermediate ([REQ-0034](execution/rows.md#req-0034)), or root `base`
-  without row templates ([REQ-0042](execution/rows.md#req-0042)). Either
+  intermediate ([ROW-1](rows.md#row-1)), or root `base`
+  without row templates ([ROW-8](rows.md#row-8)). Either
   defaults to the single declared input when omitted. The term is allowed
   in normative text, schema descriptions, and user-facing messages.
 

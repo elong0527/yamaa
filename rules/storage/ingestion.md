@@ -15,7 +15,7 @@ status: normative
 **REQ-0514.** Stored record order is part of the input contract. A reader must
 return records in stored order after field decoding and typing. Parallel reads,
 batches, partitions, or an engine's scan plan must not reorder records.
-Filtering preserves the relative order of the records that remain. [Execution lifecycle](../execution/lifecycle.md) uses
+Filtering preserves the relative order of the records that remain. [Column derivation](../columns.md) uses
 this sequence as base-record and grouped-input order. [Ordering](../execution/ordering.md) uses the sequence to
 break window ties. [Aggregation](../operations/aggregation.md) consumes the sequence for ordered floating-point
 reduction.
@@ -186,7 +186,7 @@ only after parsing as numbers.
 
 **REQ-0527.** An ingestion failure is not a conversion failure.
 `unconvertible` is declared on a result wrapper and answers for a value the
-derivation produced, as [Execution lifecycle](../execution/lifecycle.md) and [Local handlers](../execution/handlers.md) define. A stored value that does not
+derivation produced, as [Column derivation](../columns.md) defines. A stored value that does not
 match its field's declared type is rejected before any derivation runs. No
 handler answers for the rejected value. A specification that wants to see such
 a value declares the field `str` and converts it at the consuming column,
@@ -197,7 +197,7 @@ where a handler exists.
 <a id="req-0528"></a>
 
 **REQ-0528.** A missing value is the absence of a value. It is recognized before
-typing. Every type admits it. [Local handlers](../execution/handlers.md)'s handlers answer for it.
+typing. Every type admits it. [Column derivation](../columns.md)'s handlers answer for it.
 
 <a id="req-0529"></a>
 

@@ -61,7 +61,7 @@ RETIRED = re.compile(r"(?:this form is )?retired\b", re.IGNORECASE)
 CONTRACT_SECTIONS = (["Requirements"], ["Requirements", "Error conditions"])
 SCHEMA_COMMENT = re.compile(r"(?:^\s*#|\s+#)\s*([^\n]*)", re.MULTILINE)
 
-VERIFICATION_CONTRACT = "execution/verification.md"
+VERIFICATION_CONTRACT = "verification.md"
 VERIFICATION_REGISTRIES = (
     "column_verifications",
     "dataset_verifications",

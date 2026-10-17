@@ -165,7 +165,7 @@ the decimal point and is a non-negative integer.
 <a id="req-0874"></a>
 
 **REQ-0874.** A `length` on a `str` column is enforced. The column's completed
-values must contain at most `length` [Text values](../values/text.md) scalar values, as [Verification](../execution/verification.md)'s
+values must contain at most `length` [Text values](../values/text.md) scalar values, as [Verification](../verification.md)'s
 `max_length` requires, so the declared length binds rather than describes.
 
 <a id="req-0875"></a>
@@ -392,7 +392,7 @@ algorithm attached is not traceable.
 
 <a id="req-0896"></a>
 
-**REQ-0896.** The [Execution lifecycle](../execution/lifecycle.md) derivation graph proves some facts about a column value.
+**REQ-0896.** The [Column derivation](../columns.md) derivation graph proves some facts about a column value.
 A declared origin that contradicts a proven fact is rejected. The graph never
 supplies an origin. The graph cannot tell an investigator-recorded
 value from a vendor-transmitted or protocol-fixed value. Origin is always

@@ -190,28 +190,28 @@ row_class:
     - id:
         type: row_id
         required: true
-        description: See REQ-1056.
+        description: Identifier of this row template, unique within rows (ROW-1).
     - dataset:
         type: identifier
         required: false
-        description: See REQ-1056.
+        description: Input dataset or eligible named intermediate whose records build this row template's output rows, required when more than one input dataset is declared (ROW-1).
     - group_by:
         type: "list[variable]"
         required: false
-        description: See REQ-1056.
+        description: Grouping keys over driver records, producing one candidate row per group (ROW-4).
     - filter:
         type: predicate
         required: false
-        description: See REQ-1056.
+        description: Predicate gating each driver record's candidate row for an ungrouped row template, or completed candidate groups for a grouped row template (ROW-3, ROW-4).
     # See REQ-0199.
     - derivations:
         type: "dict[identifier, derivation]"
         required: true
-        description: See REQ-1056.
+        description: Columns this row template derives, whose coverage across row templates follows REQ-0200.
     - submission:
         type: "dict[identifier, submission_column_class]"
         required: false
-        description: See REQ-1056.
+        description: Per-value submission metadata for this row template's values, keyed by column (REQ-1162).
 
 variable:
     type: str

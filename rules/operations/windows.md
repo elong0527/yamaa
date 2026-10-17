@@ -204,8 +204,8 @@ from another template or from outside row construction: fail. Row
 derivations follow their dependency graph. Each derivation completes for all
 rows of the template before a dependent derivation starts, so a window may
 read a completed column derived from another window, directly or through
-scalar derivations. A dependency cycle still fails under REQ-0059 and
-REQ-0072.
+scalar derivations. A dependency cycle still fails under COLUMN-4 and
+COLUMN-6.
 
 <a id="req-0327"></a>
 

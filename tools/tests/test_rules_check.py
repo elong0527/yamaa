@@ -372,16 +372,17 @@ class RuleCheckTests(unittest.TestCase):
 
     def test_verification_checks_match_the_registries(self):
         self.write(
-            "rules/execution/verification.md",
-            "---\nid: execution/verification\ntitle: Verification\nstatus: normative\n---\n\n"
-            "# Verification\n\n## Requirements\n\n"
-            '<a id="req-0381"></a>\n\n**REQ-0381.** `unique` requires distinct keys.\n\n'
-            '<a id="req-0382"></a>\n\n**REQ-0382.** `exactly_one` requires one value.\n',
+            "rules/verification.md",
+            "# Verification\n\n## Checks\n\n"
+            '<a id="check-1"></a>\n\n### CHECK-1. Keys are distinct\n\n'
+            "`unique` requires distinct keys.\n\n"
+            '<a id="check-2"></a>\n\n### CHECK-2. One value is present\n\n'
+            "`exactly_one` requires one value.\n",
         )
         self.replace(
             "rules/README.md",
             "| [Types]",
-            "| [Verification](execution/verification.md) | REQ | Checks. |\n| [Types]",
+            "| [Verification](verification.md) | CHECK | Checks. |\n| [Types]",
         )
         self.write(
             "yaml/schema_verification.yaml",
@@ -391,13 +392,13 @@ class RuleCheckTests(unittest.TestCase):
         )
         errors = self.errors()
         self.assertIn(
-            "execution/verification.md: REQ-0382 defines `exactly_one`, which no "
+            "verification.md: CHECK-2 defines `exactly_one`, which no "
             "verification registry declares",
             errors,
         )
         self.assertIn(
             "schema_verification.yaml: `row_count` is registered but no "
-            "execution/verification.md rule defines it",
+            "verification.md rule defines it",
             errors,
         )
 

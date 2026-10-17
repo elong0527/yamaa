@@ -42,7 +42,7 @@ replay the same parser vectors.
 
 ## Execution overview
 
-The [lifecycle](../rules/execution/lifecycle.md) owns execution order. Read it
+The [lifecycle](../rules/columns.md) owns execution order. Read it
 first when implementing a runner, then follow the contract for each stage.
 [Define-XML generation](../rules/submission/define-xml.md) is a separate workflow
 that composes specifications and metadata without running their derivations.

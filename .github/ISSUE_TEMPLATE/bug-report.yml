@@ -75,5 +75,5 @@ body:
     id: references
     attributes:
       label: "Links and references"
-      description: "REQ IDs, rule files, benchmarks or URLs that pin down the relevant spec, plus the impact or a suspected cause if you know it."
-      placeholder: "REQ-0075, rules/execution/lifecycle.md, benchmarks/adam-adsl-demographics"
+      description: "Rule IDs, rule files, benchmarks or URLs that pin down the relevant spec, plus the impact or a suspected cause if you know it."
+      placeholder: "COLUMN-2, rules/columns.md, benchmarks/adam-adsl-demographics"

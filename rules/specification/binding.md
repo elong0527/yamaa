@@ -15,7 +15,7 @@ status: normative
 **REQ-0076.** `input` maps dataset identifiers to source data
 declarations. Identifiers are used by `base`, `rows.dataset`, qualified
 source variables, and named intermediates. A row template may also name a named
-intermediate under [REQ-1262](../execution/rows.md#req-1262).
+intermediate under [ROW-2](../rows.md#row-2).
 
 <a id="req-0077"></a>
 
@@ -46,7 +46,7 @@ Declare that source under its own name.
 <a id="req-0082"></a>
 
 **REQ-0082.** No keyed construct reaches a sibling record of the output
-dataset. [Execution lifecycle](../execution/lifecycle.md) owns what happens when a column reaches its own value through
+dataset. [Column derivation](../columns.md) owns what happens when a column reaches its own value through
 that column's window partition. Addressing a sibling record by key is open
 work.
 
@@ -74,7 +74,7 @@ lookup resolution.
 
 **REQ-0085.** A qualified reference to the current row template's driver
 reads the current driver record. The driver is an input dataset or an eligible
-named intermediate under [REQ-1262](../execution/rows.md#req-1262). A
+named intermediate under [ROW-2](../rows.md#row-2). A
 qualified reference to another dataset follows [Lookup and joins](../operations/lookup.md).
 
 <a id="req-0086"></a>
@@ -152,7 +152,7 @@ source:
 <a id="req-0094"></a>
 
 **REQ-0094.** `absent` and a source's `order_by`/`keep` selection are
-handlers; [Local handlers](../execution/handlers.md) defines them and [Lookup and joins](../operations/lookup.md) defines the join
+handlers; [Column derivation](../columns.md) defines them and [Lookup and joins](../operations/lookup.md) defines the join
 uniqueness the selection relaxes.
 
 <a id="req-0095"></a>
@@ -214,12 +214,12 @@ was built from:
 
 | The row was built by | Its ODM scope |
 | --- | --- |
-| no `rows`, with the ODM input as the base | the records its key combination was derived from ([REQ-0042](../execution/rows.md#req-0042)) |
+| no `rows`, with the ODM input as the base | the records its key combination was derived from ([ROW-8](../rows.md#row-8)) |
 | a row template grouped over the ODM input | the records equal to the row on every hierarchy field in the template's `group_by` |
 | a record-driven row template over the ODM input | the records equal to the driver record on all eight hierarchy fields |
 
 Equality on a hierarchy field treats missing as equal to missing, as
-[REQ-0037](../execution/rows.md#req-0037) does. `ItemOID`, `Value`, and
+[ROW-4](../rows.md#row-4) does. `ItemOID`, `Value`, and
 every field outside the hierarchy never narrow a scope, so a row built for
 one item reads the other items of its own item group occurrence.
 

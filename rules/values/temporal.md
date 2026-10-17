@@ -338,8 +338,8 @@ For a `datetime` it additionally includes:
 
 Reaching a temporal column, it is the conversion failure
 [Types and conversion](types.md) defines, handled by `unconvertible` under
-[Local handlers](../execution/handlers.md) and otherwise fatal under
-[Execution lifecycle](../execution/lifecycle.md).
+[Column derivation](../columns.md) and otherwise fatal under
+[Column derivation](../columns.md).
 
 <a id="req-0602"></a>
 

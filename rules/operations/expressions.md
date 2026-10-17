@@ -222,7 +222,7 @@ rule that is not satisfied: fail.
 <a id="req-0325"></a>
 
 **REQ-0325.** A scalar or window expression that changes row count: fail
-under [Execution lifecycle](../execution/lifecycle.md), which owns the phase invariant.
+under [Column derivation](../columns.md), which owns the phase invariant.
 
 <a id="req-0339"></a>
 

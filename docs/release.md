@@ -311,6 +311,6 @@ The 0.4.0 upgrade also includes language and environment changes made before
 | Data roots or `yamaa-project.yaml` | Relative resources resolve from the YAML file that declares them, including inherited layers. |
 | Symbolic link below the entry directory | Copy or hard-link the input; the resource policy refuses symbolic links. |
 
-The normative contracts are [verification](https://github.com/elong0527/yamaa/blob/main/rules/execution/verification.md),
+The normative contracts are [verification](https://github.com/elong0527/yamaa/blob/main/rules/verification.md),
 [functions and project environments](https://github.com/elong0527/yamaa/blob/main/rules/operations/functions.md) and
 [resources](https://github.com/elong0527/yamaa/blob/main/rules/storage/resources.md).

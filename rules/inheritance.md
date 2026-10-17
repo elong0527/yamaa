@@ -289,7 +289,7 @@ Replaces: REQ-0643, REQ-0644.
 
 A derivation that reads an undeclared column, or that reads itself directly or
 through other columns, fails under the
-[Execution lifecycle](execution/lifecycle.md); ordering repairs neither.
+[Column derivation](columns.md); ordering repairs neither.
 `output.columns` alone defines artifact membership and column order under
 [Artifact publication](storage/publication.md).
 

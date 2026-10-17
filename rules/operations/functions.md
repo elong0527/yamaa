@@ -78,7 +78,7 @@ results.
 
 **REQ-0678.** Every argument and default matches its declared exact type. There
 is no implicit conversion, including no `int`-to-`float` widening. [Types and conversion](../values/types.md)
-conversion can run only after the function has returned under the [Execution lifecycle](../execution/lifecycle.md)
+conversion can run only after the function has returned under the [Column derivation](../columns.md)
 lifecycle. Argument names, requiredness, and exact types are contract-dependent
 checks at the implementation stage. Structural validation before then checks
 only the closed argument-leaf forms below.
@@ -138,7 +138,7 @@ independent calls in logical row order.
 
 **REQ-0686.** An invoked binding may return missing only when
 `may_return_missing` is true. It may not return a vector, collection, table,
-object wrapper, or value of a different type. [Execution lifecycle](../execution/lifecycle.md) conversion is not a repair
+object wrapper, or value of a different type. [Column derivation](../columns.md) conversion is not a repair
 mechanism for an invalid function result. [Types and conversion](../values/types.md)'s non-finite normalization runs
 immediately after the host scalar is returned and before these result checks.
 The normalized missing result therefore still requires `may_return_missing:
@@ -285,7 +285,7 @@ default: `invalid_function_argument`.
 <a id="req-0701"></a>
 
 **REQ-0701.** A host exception or enforced
-resource failure: `function_call_failed`. It is fatal and has no [Local handlers](../execution/handlers.md) local
+resource failure: `function_call_failed`. It is fatal and has no [Column derivation](../columns.md) local
 fallback.
 
 <a id="req-0702"></a>

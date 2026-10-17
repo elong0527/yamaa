@@ -40,7 +40,7 @@ order as the represented fields. This does not widen accepted temporal forms.
 **REQ-0004.** Named operation inputs must have compatible runtime types.
 An operation must not implicitly convert one named input to the type of
 another. Column conversion applies only to the completed derivation result
-at the point defined by [Execution lifecycle](../execution/lifecycle.md).
+at the point defined by [Column derivation](../columns.md).
 
 <a id="req-0005"></a>
 
@@ -95,7 +95,7 @@ contract allows missing through `may_return_missing: true`.
 
 <a id="req-0009"></a>
 
-**REQ-0009.** At [Execution lifecycle](../execution/lifecycle.md)'s conversion stage, implementations must apply the
+**REQ-0009.** At [Column derivation](../columns.md)'s conversion stage, implementations must apply the
 matrix below deterministically. A missing result stays missing without
 attempting conversion and must not trigger the `unconvertible` handler.
 
@@ -153,8 +153,8 @@ schema validation under [Schema language](../reference/schema-language.md)'s `va
 <a id="req-0013"></a>
 
 **REQ-0013.** A `fail` cell, unsuccessful parse, or undefined conversion must
-raise conversion failure. Apply the [Local handlers](../execution/handlers.md) `unconvertible` handler when
-declared; otherwise the failure is fatal under [Execution lifecycle](../execution/lifecycle.md). Implementations must
+raise conversion failure. Apply the [Column derivation](../columns.md) `unconvertible` handler when
+declared; otherwise the failure is fatal under [Column derivation](../columns.md). Implementations must
 not select an unspecified representation or silently substitute missing.
 Numeric range and integrality failures are defined by [REQ-0021](numbers.md#req-0021).
 
