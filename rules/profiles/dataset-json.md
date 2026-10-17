@@ -18,7 +18,7 @@ one Dataset-JSON file for each specification in its ordered `specs`. Each
 target is beside that specification's already published `output.path`, with
 the same basename and a `.json` extension. Omission or false produces only the
 Define-XML document. The submission section requests the files, and the
-extension mapping of [Artifact publication](../storage/publication.md) stays
+extension mapping of [OUTPUT-5](../output.md#output-5) stays
 closed at `.csv` and `.parquet`.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::entry_relative_inherited_output_supplies_json_capture_and_publication_targets`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
@@ -101,11 +101,11 @@ Replaces: REQ-1199, REQ-1200, REQ-1230.
 
 The artifact is read:
 
-- under the profile [REQ-0751](../storage/ingestion.md#req-0751) says the
+- under the profile [INPUT-1](../inputs.md#input-1) says the
   producer wrote it with;
-- with the field agreement [REQ-0522](../storage/ingestion.md#req-0522)
+- with the field agreement [INPUT-11](../inputs.md#input-11)
   requires; and
-- with the typed values [REQ-0524](../storage/ingestion.md#req-0524)
+- with the typed values [INPUT-11](../inputs.md#input-11)
   delivers.
 
 `output.decimals` is a `csv` display precision under
@@ -114,7 +114,7 @@ does not reach `parquet` under [PARQUET-3](../reference/parquet.md#parquet-3).
 
 An artifact that has not been published, or whose fields, order or types do not
 match the producing specification's output contract, fails under
-[REQ-0535](../storage/ingestion.md#req-0535) with
+[INPUT-11](../inputs.md#input-11) with
 `producer_contract_mismatch`, reporting the dataset and the artifact path. The
 document and its data files are generated from one composition, so a stale
 artifact fails the generation rather than producing a package whose two halves
@@ -229,7 +229,7 @@ Replaces: REQ-1209.
 `keySequence` therefore describes the same non-missing identity in `keys`; it
 is not independently declarable. Sponsor ordering and a separate `unique`
 verification, including combinations with missing values, follow the
-[output identity example](../storage/publication.md#req-0221) and do not
+[output identity example](../output.md#output-3) and do not
 change this metadata.
 
 <a id="json-10"></a>
@@ -261,9 +261,9 @@ Replaces: REQ-1210, REQ-1211.
 
 A reader that needs the finer type reads the document. `float` is written for a
 `float` column even though the value of
-[Types and conversion](../values/types.md) is binary64; this member must equal
+[Values](../values.md) is binary64; this member must equal
 the `DataType` that `ItemDef` carries, and the storage width of a number is not
-what it names. [Types and conversion](../values/types.md) declares no Boolean
+what it names. [Values](../values.md) declares no Boolean
 column type, and neither `decimal` nor `double` names a submission type
 [Submission metadata](submission.md) resolves.
 
@@ -283,18 +283,18 @@ Replaces: REQ-1212, REQ-1213, REQ-1214.
 | Column type | Written as |
 |---|---|
 | missing, any type | `null` |
-| `str` | a JSON string carrying the value's scalar values, under [Text values](../values/text.md) |
+| `str` | a JSON string carrying the value's scalar values, under [Values](../values.md) |
 | `int` | a JSON number, its decimal digits |
-| `float` | a JSON number, [Numeric values](../values/numbers.md)'s float text |
-| `date` | a JSON string, [Temporal values](../values/temporal.md)'s canonical `date` text |
-| `datetime` | a JSON string, [Temporal values](../values/temporal.md)'s canonical `datetime` text |
+| `float` | a JSON number, [Values](../values.md)'s float text |
+| `date` | a JSON string, [Values](../values.md)'s canonical `date` text |
+| `datetime` | a JSON string, [Values](../values.md)'s canonical `datetime` text |
 
 The epoch counts of the [Parquet profile](../reference/parquet.md) are a
 property of that container and are not a second spelling here. A `parquet`
 artifact's zero-length string arrives as a present empty string. A `csv`
 artifact's empty field arrives as missing under
-[REQ-0529](../storage/ingestion.md#req-0529). The empty-string convention of
-[REQ-1158](../storage/ingestion.md#req-1158) does not apply here.
+[INPUT-8](../inputs.md#input-8). The empty-string convention of
+[INPUT-9](../inputs.md#input-9) does not apply here.
 
 ## Serialization and publication
 
@@ -354,7 +354,7 @@ UTF-8.
 No number is written with an exponent, a leading `U+002B`, digit grouping, or a
 leading zero. An `int` is the integer spelling of
 [CSV-5](../reference/csv.md#csv-5) and a `float` is the float text of
-[REQ-0018](../values/numbers.md#req-0018), which is positional and shortest.
+[VALUE-8](../values.md#value-8), which is positional and shortest.
 
 A generation's data files meet the byte-identity rule of
 [DEFINE-23](define-xml.md#define-23).
@@ -366,8 +366,8 @@ A generation's data files meet the byte-identity rule of
 A generation renders and validates every Dataset-JSON file and the Define-XML
 document before touching any target. It publishes the data files first, in
 entry order, and the document last, applying
-[REQ-0752](../storage/publication.md#req-0752) through
-[REQ-0754](../storage/publication.md#req-0754) to each file. A failure at any
+[OUTPUT-8](../output.md#output-8) through
+[OUTPUT-8](../output.md#output-8) to each file. A failure at any
 point publishes nothing further and leaves every untouched target as it was.
 
 Fails: `publication_failed`.
@@ -375,11 +375,11 @@ Evidence: `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.
 Replaces: REQ-1221, REQ-1222, REQ-1232.
 
 A visible document therefore never points at a data file that is not there yet,
-which is the order of [REQ-0757](../storage/publication.md#req-0757) applied to
+which is the order of [OUTPUT-10](../output.md#output-10) applied to
 this pair. Atomic replacement is guaranteed per file and not across the
-package, exactly as [REQ-0758](../storage/publication.md#req-0758) states for a
+package, exactly as [OUTPUT-10](../output.md#output-10) states for a
 primary artifact and its log. A failed publication fails under
-[REQ-0764](../storage/publication.md#req-0764) and this rule.
+[OUTPUT-8](../output.md#output-8) and this rule.
 
 ## Reading
 
@@ -388,7 +388,7 @@ primary artifact and its log. A failed publication fails under
 ### JSON-15. A Dataset-JSON file is never read as a source
 
 This container is not a source. The extension mapping of
-[Source ingestion](../storage/ingestion.md) stays closed at `.csv` and
+[Inputs](../inputs.md) stays closed at `.csv` and
 `.parquet`, and a `dataset_class.path` ending in `.json` names no profile.
 
 Replaces: REQ-1223.

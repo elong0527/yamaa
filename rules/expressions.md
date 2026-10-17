@@ -77,7 +77,7 @@ types.
 
 A plain string is a value unless its schema field is typed `variable`,
 `function_arg`, `predicate` or `string_template`.
-[Project functions](operations/functions.md) closes `function_arg`: a string
+[Project functions](profiles/functions.md) closes `function_arg`: a string
 is a variable, while string, date and datetime literals use their explicit
 tagged leaf forms.
 
@@ -114,7 +114,7 @@ Evidence: `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/test
 Replaces: REQ-0319, REQ-0320.
 
 For a `derivation`, the handled-expression expansion of
-[REQ-0266](reference/schema-language.md#req-0266) then applies unchanged.
+[SCHEMA-10](reference/schema-language.md#schema-10) then applies unchanged.
 `derivation: 5` must be written `{literal: 5}`. The specification reader uses
 YAML 1.2 core, so only `true`/`false` spellings, numbers and null parse as
 non-strings; quote a column reference that YAML would otherwise parse as a
@@ -229,7 +229,7 @@ A `mapping` requires a string source. The source may be a filtered source
 carrying the variable with its filter, selection or absent value
 ([LOOKUP-1](lookup.md#lookup-1)). A dictionary path is read once during
 workflow planning through the specification's
-[project resources](storage/resources.md), and its content must satisfy the
+[project resources](reference/files.md), and its content must satisfy the
 inline dictionary contract. `case_sensitive` selects exact comparison when
 true and the ASCII fold of [EXPR-12](#expr-12) when false.
 

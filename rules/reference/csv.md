@@ -19,7 +19,7 @@ a terminator; it appears only inside a quoted field that contains one.
 Evidence: `schema-text-functions`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::retired_python_scalar_text_and_calendar_edges_keep_exact_csv_bytes`.
 Replaces: REQ-0722, REQ-0723, REQ-0724, REQ-0765.
 
-[Text values](../values/text.md) owns the text being encoded. Writing a
+[Values](../values.md) owns the text being encoded. Writing a
 byte-order mark, a `U+000D` record terminator, or a quoting that differs from
 [CSV-3](#csv-3) is not an implementation option.
 
@@ -29,7 +29,7 @@ byte-order mark, a `U+000D` record terminator, or a quoting that differs from
 
 The first record is the header: the `output.columns` names, in that order,
 written under the quoting rule of [CSV-3](#csv-3). Each following record is one
-row, in the order [Ordering](../execution/ordering.md) fixes, holding one field
+row, in the order [OUTPUT-11](../output.md#output-11) fixes, holding one field
 per header name in the same order. An artifact with no rows is the header
 record and its terminator alone.
 
@@ -63,7 +63,7 @@ output.
 A missing value is written as no characters at all, unquoted. A collected
 empty string is written as two quote characters. The two forms stay apart in
 the artifact, and no text stands in for absence. Reading does not restore the
-pair: [REQ-0529](../storage/ingestion.md#req-0529) reads an empty field as
+pair: [INPUT-8](../inputs.md#input-8) reads an empty field as
 missing whether it was bare or quoted.
 
 Evidence: `schema-str-replace`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
@@ -89,7 +89,7 @@ collected empty string. The first row's is missing.
 A value is written as the text its column type fixes in the table below. An
 `int` is written without a leading `U+002B`, without digit grouping and without
 a leading zero; zero is `0`. A `float` that takes no display precision is
-written by [Types and conversion](../values/types.md)'s conversion to `str`:
+written by [Values](../values.md)'s conversion to `str`:
 the shortest round-tripping digits in positional notation, with a trailing
 `.0` omitted. That conversion has no exponent.
 
@@ -98,11 +98,11 @@ Replaces: REQ-0732, REQ-0733.
 
 | Column type | Text written |
 |---|---|
-| `str` | its scalar values, under [Text values](../values/text.md) |
+| `str` | its scalar values, under [Values](../values.md) |
 | `int` | its decimal digits, with a leading `U+002D` when negative |
-| `float` | [Types and conversion](../values/types.md)'s float text, or the fixed-point form of [CSV-7](#csv-7) |
-| `date` | [Temporal values](../values/temporal.md)'s canonical `date` text |
-| `datetime` | [Temporal values](../values/temporal.md)'s canonical `datetime` text |
+| `float` | [Values](../values.md)'s float text, or the fixed-point form of [CSV-7](#csv-7) |
+| `date` | [Values](../values.md)'s canonical `date` text |
+| `datetime` | [Values](../values.md)'s canonical `datetime` text |
 
 ## Display precision
 
@@ -130,7 +130,7 @@ take effect is a defect in the specification, not a setting to ignore.
 ### CSV-7. With `output.decimals` of n, every float is written in fixed point with exactly n decimal digits
 
 When `output.decimals` is absent, a `float` is written as
-[Types and conversion](../values/types.md)'s float text. When it is present
+[Values](../values.md)'s float text. When it is present
 with the value `n`, a `float` is written in fixed-point form with exactly `n`
 digits after the decimal point, and with a decimal point only when `n` is
 greater than zero. A value keeps its declared width whether or not its digits
@@ -145,7 +145,7 @@ Replaces: REQ-0745.
 
 Writing a field under `output.decimals` is the only place a value is rounded
 for presentation. It happens once, when the field is written, after everything
-the [Execution lifecycle](../execution/lifecycle.md) sequences: every
+the [Column derivation](../columns.md) sequences: every
 derivation, every conversion, every verification, key validation and row
 ordering. No dependent column, predicate, aggregate, verification, key or
 order term sees a rounded value, and changing `output.decimals` cannot change
@@ -193,14 +193,14 @@ an implementation option.
 ### CSV-10. A csv source is UTF-8 without a byte-order mark
 
 A delimited source is UTF-8. Ill-formed encoded bytes fail under
-[Text values](../values/text.md) rather than being replaced, skipped or decoded
+[Values](../values.md) rather than being replaced, skipped or decoded
 under a machine default. A byte-order mark is rejected rather than skipped.
 
 Fails: `invalid_text`, `source_byte_order_mark`.
 Evidence: `negative-source-bad-encoding`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::defects_have_exact_priority_and_coordinates`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::bom`.
 Replaces: REQ-0836, REQ-0837, REQ-0853.
 
-Ill-formed encoded bytes fail with [Text values](../values/text.md)'s
+Ill-formed encoded bytes fail with [Values](../values.md)'s
 `invalid_text`, reporting the record and field the reader had reached. A
 byte-order mark fails with `source_byte_order_mark`.
 
@@ -253,7 +253,7 @@ field with `source_quote_in_bare_field`, and text after a closing quote with
 
 The first record is the header, and it names the source's fields in order.
 Each name is non-empty, and no two names are the same under
-[Text values](../values/text.md)'s equality; a quoted name carries the text
+[Values](../values.md)'s equality; a quoted name carries the text
 inside its quotes, so a quoted empty name is an empty name and fails. Every
 later record carries exactly as many fields as the header names. A file with
 no bytes has no header and fails; a header-only file holds no records and is
@@ -271,11 +271,11 @@ An empty dataset still has its fields.
 
 ### CSV-14. A field reaches ingestion as its text, or as missing when it has no characters
 
-Every field reaches [Source ingestion](../storage/ingestion.md) as its text or
+Every field reaches [Inputs](../inputs.md) as its text or
 as missing, and an implementation must preserve the text and the missing
 state. A field with no characters is missing, bare or quoted. Quoting is a
 transport detail the reader does not report:
-[Source ingestion](../storage/ingestion.md) gives an empty field one meaning
+[Inputs](../inputs.md) gives an empty field one meaning
 and never sees an empty string.
 
 Evidence: `adam-adsl-investigator-comment`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_quoted_and_bare_empty_records_keep_order`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::collected_text_and_missing_remain_lossless`.
@@ -295,7 +295,7 @@ record, renaming a duplicate name or normalizing a terminator inside a value.
 Evidence: `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::retired_python_missing_looking_text_is_never_inferred_as_missing`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::discarded_ragged_rows_preserve_complete_syntax_and_header_priority`.
 Replaces: REQ-0848, REQ-0849, REQ-0854.
 
-[Source ingestion](../storage/ingestion.md) fixes what a stored field means,
+[Inputs](../inputs.md) fixes what a stored field means,
 including that no text spells absence.
 
 <a id="csv-16"></a>
@@ -314,7 +314,7 @@ Replaces: REQ-0851.
 
 | Condition | Rejects |
 |---|---|
-| `source_profile_unknown` | an extension the [Source ingestion](../storage/ingestion.md#req-0830) mapping does not name |
+| `source_profile_unknown` | an extension the [Source ingestion](../inputs.md#input-1) mapping does not name |
 | `source_byte_order_mark` | a byte-order mark |
 | `source_header_absent` | a file with no header record |
 | `source_field_name_empty` | an empty header name |

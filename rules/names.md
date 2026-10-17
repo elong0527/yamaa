@@ -24,7 +24,7 @@ Replaces: REQ-0076, REQ-0077, REQ-0078, REQ-0079, REQ-0081, REQ-0105.
 A row template may also name a named intermediate under
 [ROW-2](rows.md#row-2). [Inputs](inputs.md)
 owns both declaration forms and their shorthand. A declared path is a
-`project_path`: [Resource resolution](storage/resources.md) fixes its written
+`project_path`: [File resolution](reference/files.md) fixes its written
 form, its selected relative base and its readable bytes, and a source path it
 does not accept fails under its condition. [Inheritance](inheritance.md)
 preserves the path's origin when a declaration is inherited and rebases a

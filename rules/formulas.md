@@ -587,7 +587,7 @@ The link through `dataset_class.schema`
 ([INPUT-10](inputs.md#input-10)) supplies the workflow boundary:
 the producer completes first under
 [INPUT-10](inputs.md#input-10), and the consumer reads its held
-serialized artifact under [REQ-1247](storage/resources.md#req-1247). One
+serialized artifact under [FILE-3](reference/files.md#file-3). One
 domain build executes both levels; neither artifact must already exist, and
 only explicit Save publishes them. A source path alone does not establish this
 boundary. The producer's selected columns must declare their types and labels
@@ -645,7 +645,7 @@ No implicit conversion happens inside the grammar.
 [Values](values.md) converts the completed derivation
 result, as it does for every other expression. A `function` expression
 returns the type its logical contract declares under
-[Project functions](operations/functions.md).
+[Project functions](profiles/functions.md).
 
 <a id="formula-24"></a>
 

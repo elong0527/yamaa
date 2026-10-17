@@ -29,15 +29,15 @@ names the same container as one that stores `dm.csv`.
 
 | Extension | Profile | Container | Source-profile owner |
 |---|---|---|---|
-| `.csv` | `csv` | delimited text | [CSV profile](storage/csv.md) |
-| `.parquet` | `parquet` | Apache Parquet | [Parquet profile](storage/parquet.md) |
-| `.sas7bdat` | `sas7bdat` | SAS dataset (read-only) | [SAS source profiles](storage/sas.md) |
-| `.xpt` | `xpt` | SAS Transport v5/v8 (read-only) | [SAS source profiles](storage/sas.md) |
+| `.csv` | `csv` | delimited text | [CSV profile](reference/csv.md) |
+| `.parquet` | `parquet` | Apache Parquet | [Parquet profile](reference/parquet.md) |
+| `.sas7bdat` | `sas7bdat` | SAS dataset (read-only) | [SAS source profiles](reference/sas.md) |
+| `.xpt` | `xpt` | SAS Transport v5/v8 (read-only) | [SAS source profiles](reference/sas.md) |
 
 A source profile follows the artifact profile: a file
 [Output](output.md) writes and these rules read has
 one profile name in both directions. The read-only SAS and Transport profiles
-of [REQ-1310](storage/sas.md#req-1310) are the exceptions; no artifact
+of [SAS-1](reference/sas.md#sas-1) are the exceptions; no artifact
 publication profile corresponds to them.
 
 A specification that reads an artifact another specification produced learns
@@ -158,7 +158,7 @@ the type comes from depends on the container:
 
 - A **SAS or Transport source** supplies character or numeric storage, with
   defaults and explicit numeric narrowing under
-  [SAS source profiles](storage/sas.md).
+  [SAS source profiles](reference/sas.md).
 - A **self-describing source** supplies it. An ODM `ItemDef` data type, a
   Parquet schema and an artifact's producing specification are each the
   field's type authority; the consuming specification never restates the type.
@@ -190,7 +190,7 @@ generated ordinal, fails. A `types` entry for a field whose container or
 producing specification already supplies a type fails rather than overriding
 the source contract, including every field of a Parquet source; the one
 exception is explicit SAS numeric narrowing under
-[REQ-1312](storage/sas.md#req-1312). `types` must be absent whenever `schema`
+[SAS-3](reference/sas.md#sas-3). `types` must be absent whenever `schema`
 is present, even when an entry agrees with the producer.
 
 Fails: `unknown_field`, `redundant_field_type`.
@@ -266,7 +266,7 @@ Replaces: REQ-1158, REQ-1159, REQ-1160, REQ-1161.
 Handlers answer for a collected empty string like any other string. The
 container profiles keep their own distinction -- a Parquet null and a
 zero-length string remain distinct under
-[REQ-1034](storage/parquet.md#req-1034) -- and the convention applies at
+[PARQUET-8](reference/parquet.md#parquet-8) -- and the convention applies at
 ingestion, after the profile decodes. An empty field of any other declared type
 is missing under [INPUT-8](#input-8); a typed container admits no zero-length
 string outside `str`. The delimited profile admits no empty string
@@ -299,7 +299,7 @@ input:
 ```
 
 `schema` is a `project_path` resolved like `dataset_class.path`, so
-[Resource resolution](storage/resources.md) confines both. The referenced
+[File resolution](reference/files.md) confines both. The referenced
 document is validated against the same `root_class` in `schema.yaml`; there is
 no second source-schema class or field-description language. A document named
 by `schema` that does not validate as a complete yamaa specification fails with
@@ -331,5 +331,5 @@ values, ingestion applies the `str` row of [VALUE-3](values.md#value-3) to
 every non-missing cell, and a producer column declared `date` or `datetime`
 uses the forms of [VALUE-15](values.md#value-15), exactly as an inline `types`
 declaration or a column conversion does. A Parquet artifact instead supplies
-typed values under the [Parquet profile](storage/parquet.md), and the link does
+typed values under the [Parquet profile](reference/parquet.md), and the link does
 not convert those values through text.

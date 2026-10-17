@@ -65,7 +65,7 @@ Replaces: REQ-1312.
 A disallowed physical/type pair fails with `source_sas_invalid`
 ([SAS-7](#sas-7)). A `types` entry naming an unknown field still
 fails with `unknown_field`. A producing-specification link keeps its sole type
-authority under [REQ-0523](../storage/ingestion.md#req-0523).
+authority under [INPUT-6](../inputs.md#input-6).
 
 <a id="sas-4"></a>
 
@@ -88,7 +88,7 @@ value. Non-integral, out-of-range or precision-losing narrowing fails with
 `field_parse_failed`, reporting the dataset, field, declared type and decoded
 numeric value. Negative counts precede the epoch. Fractions are rejected
 before conversion, and dates and datetimes must remain within the complete
-civil ranges [Temporal values](../values/temporal.md) fixes.
+civil ranges [Values](../values.md) fixes.
 
 ## Values and order
 
@@ -98,7 +98,7 @@ civil ranges [Temporal values](../values/temporal.md) fixes.
 
 Ordinary numeric missing and the tagged missing values `.A` through `.Z` and
 `._` become the shared missing value, and non-finite numeric values normalize
-to missing under [REQ-0006](../values/types.md#req-0006). Character storage
+to missing under [VALUE-4](../values.md#value-4). Character storage
 loses right-hand ASCII space and NUL padding; leading and internal spaces
 remain. The resulting zero-length character value follows `empty_string`.
 Strings such as `.` and `NA` remain ordinary text, and embedded NUL bytes are
@@ -119,7 +119,7 @@ fails with `source_sas_invalid` ([SAS-7](#sas-7)).
 Readers decode only the captured immutable bytes obtained from the declared
 source authority, and never reopen a path. Stored field order and record order
 are preserved, and the generated `ordinal` applies before filtering under
-[REQ-1292](../storage/ingestion.md#req-1292). Source bytes, rows, fields,
+[INPUT-3](../inputs.md#input-3). Source bytes, rows, fields,
 cells, retained values, page and row work, and header work are admitted before
 their corresponding allocations where the physical framing supplies those
 counts.

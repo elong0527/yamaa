@@ -59,7 +59,7 @@ binary64 computed exactly as written. Nothing is rounded except where a
 specification declares it. Enforced by [VALUE-7](values.md#value-7),
 [VALUE-9](values.md#value-9),
 [FORMULA-26](formulas.md#formula-26) and
-[REQ-0746](storage/csv.md#req-0746).
+[CSV-8](reference/csv.md#csv-8).
 
 **P7. Vocabularies are closed.** Verbs, grammars, functions, column types,
 storage profiles and conditions are closed lists. Extending one is a rule
@@ -76,14 +76,14 @@ Enforced by [LAYER-3](inheritance.md#layer-3),
 **P9. Faults are found before data.** A fault that does not depend on data
 fails during validation, before any input record is read. Enforced by
 [LAYER-12](inheritance.md#layer-12),
-[REQ-0792](storage/resources.md#req-0792) and
+[FILE-11](reference/files.md#file-11) and
 [INPUT-1](inputs.md#input-1).
 
 **P10. Artifacts are reproducible.** The same specification and inputs produce
 the same artifact bytes, and an artifact is published whole or not at all.
-Enforced by [REQ-0728](storage/csv.md#req-0728),
+Enforced by [CSV-3](reference/csv.md#csv-3),
 [OUTPUT-8](output.md#output-8) and
-[REQ-1008](submission/define-xml.md#req-1008).
+[DEFINE-23](profiles/define-xml.md#define-23).
 
 ## Rule files
 
@@ -109,16 +109,16 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | [Dates and times](temporal.md) | TIME | Compute calendar differences, study days, completed dates and times, precision, and civil arithmetic. |
 | [Verification](verification.md) | CHECK | Apply assertions, severity, and grouped counts to completed values, and record what ran in the warning log and the verification log. |
 | [Output](output.md) | OUTPUT | Select artifact columns, keys, profiles, and row order, and publish complete files atomically. |
-| [Project functions](profiles/functions.md) | FUNC | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
 | [File resolution](reference/files.md) | FILE | Resolve declared local paths from their base, reach one regular file, and read one immutable snapshot per physical file. |
 | [CSV profile](reference/csv.md) | CSV | Read admitted CSV spellings and write canonical CSV bytes and display precision. |
 | [Parquet profile](reference/parquet.md) | PARQUET | Read and write the closed Parquet field and value mapping. |
 | [SAS source profiles](reference/sas.md) | SAS | Read SAS datasets and Transport v5/v8 through declared encoding and explicit numeric narrowing. |
+| [Schema language](reference/schema-language.md) | SCHEMA | Define schema notation, registries, constraints, and canonical shorthand expansion. |
 | [Submission metadata](profiles/submission.md) | SUB | Govern dataset and column metadata, origin, methods, and document references. |
 | [Controlled terminology](profiles/terminology.md) | CT | Declare codelists once and validate their bindings and allowed values. |
 | [Define-XML](profiles/define-xml.md) | DEFINE | Compose study metadata into deterministic Define-XML 2.1 documents. |
 | [Dataset-JSON](profiles/dataset-json.md) | JSON | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
-| [Schema language](reference/schema-language.md) | SCHEMA | Define schema notation, registries, constraints, and canonical shorthand expansion. |
+| [Project functions](profiles/functions.md) | FUNC | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
 
 The [requirement index](https://elong0527.github.io/yamaa/reference/requirements/),
 [rules at a glance](https://elong0527.github.io/yamaa/reference/rules-summary/)

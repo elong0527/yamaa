@@ -91,8 +91,8 @@ default. [CHECK-10](verification.md#check-10) treats missing values
 as values in the uniqueness check, so two rows with the same subject,
 treatment, start date and missing end date fail that check. The missing end
 date remains missing. Submission key metadata describes the identity in
-`keys`, as [REQ-0990](submission/define-xml.md#req-0990) and
-[REQ-1209](submission/dataset-json.md#req-1209) require; neither ordering nor
+`keys`, as [DEFINE-18](profiles/define-xml.md#define-18) and
+[JSON-9](profiles/dataset-json.md#json-9) require; neither ordering nor
 the separate uniqueness check changes it.
 
 ## Profiles
@@ -105,7 +105,7 @@ the separate uniqueness check changes it.
 `output.warning_log` and `output.verification_log` name the sidecars of
 [Verification](verification.md) when the specification declares
 them. `output.relative_to` selects the base for all three paths under
-[REQ-0780](storage/resources.md#req-0780). A missing `output.path` fails
+[FILE-2](reference/files.md#file-2). A missing `output.path` fails
 validation, reporting the specification.
 
 Evidence: `schema-inherited-output`, `schema-verification-log`.
@@ -133,13 +133,13 @@ Replaces: REQ-0195, REQ-0716, REQ-0760, REQ-1233, REQ-1235, REQ-1237.
 | `.csv` | `csv` | delimited text | the bytes |
 | `.parquet` | `parquet` | Parquet | schema, column and row order, values |
 
-Serialization follows the [CSV](storage/csv.md) and [Parquet](storage/parquet.md)
+Serialization follows the [CSV](reference/csv.md) and [Parquet](reference/parquet.md)
 profiles. The profiles own their containers and bytes, and this file owns
 publication; the profiles carry the primary values and their order rather
 than decide them.
 
 SAS Transport v5 (`.xpt`) is not an output profile. Dataset-JSON is generated
-by a study document under [Dataset-JSON](submission/dataset-json.md); `.json`
+by a study document under [Dataset-JSON](profiles/dataset-json.md); `.json`
 is not a specification output profile and fails like any other unmapped
 extension. A derivation run publishes only the primary artifact and its
 declared sidecars; conversion to a transport container is a separate

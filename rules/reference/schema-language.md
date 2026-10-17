@@ -54,8 +54,8 @@ with `schema_version_mismatch`.
 All schema documents must reject duplicate YAML keys, aliases, merge keys,
 explicit tags and unknown schema constructs. Invalid YAML or a prohibited YAML
 feature fails. Schema documents and the documents they validate use the ASCII
-source boundary of [Text values](../values/text.md), and a decoded string value
-follows [Text values](../values/text.md) even when written with ASCII escape
+source boundary of [Values](../values.md), and a decoded string value
+follows [Values](../values.md) even when written with ASCII escape
 notation.
 
 Fails: `invalid_yaml`.
@@ -77,7 +77,7 @@ Evidence: `schema-non-finite`, `rust/crates/yamaa-adapters/src/yaml_decode/tests
 Replaces: REQ-0248, REQ-0249.
 
 Default parser settings do not satisfy this rule.
-[Types and conversion](../values/types.md)'s non-finite normalization applies
+[Values](../values.md)'s non-finite normalization applies
 immediately after core-schema scalar resolution. An integer scalar keeps its
 exact decoded identity until schema and runtime range admission: overflow must
 not silently round it or collapse distinct mapping keys. This does not expand
@@ -123,7 +123,7 @@ expression:
 A field name is not a descriptor keyword and may match one. In
 `- type: {type: column_type, required: true}` the outer name is the field
 `type` of `column_class` and the inner `type` is the descriptor keyword. The
-two uses are unrelated; [Types and conversion](../values/types.md) separates
+two uses are unrelated; [Values](../values.md) separates
 the vocabularies.
 
 <a id="schema-6"></a>
@@ -181,13 +181,13 @@ Evidence: `negative-lookup-id-collision`, `negative-source-self-reference`, `rus
 
 - a schema descriptor's `type`, a column's declared `type` and a value's
   runtime type belong to different naming lists
-  ([REQ-0001](../values/types.md#req-0001));
+  ([VALUE-1](../values.md#value-1));
 - datasets and record lookups share one naming list
-  ([REQ-0084](../specification/binding.md#req-0084));
+  ([NAME-3](../names.md#name-3));
 - a lookup `id` shares one naming list with dataset identifiers, other lookup
-  ids and the output `domain` ([REQ-0113](../operations/lookup.md#req-0113));
+  ids and the output `domain` ([LOOKUP-3](../lookup.md#lookup-3));
 - window names belong to a separate window naming list
-  ([REQ-1251](../operations/windows.md#req-1251)).
+  ([WINDOW-1](../windows.md#window-1)).
 
 ## Type expressions
 
@@ -278,10 +278,10 @@ Replaces: REQ-0269, REQ-0270, REQ-0271, REQ-0272, REQ-0273, REQ-0274, REQ-0275, 
 | `type` | every descriptor; required | one type expression or a union |
 | `required` | a class field descriptor only | whether the field must be written; defaults to false |
 | `description` | every descriptor; optional | a non-empty string documenting the field or value type; it has no effect on validation |
-| `pattern` | `str` only | a regular expression; [Text operations](../operations/text.md) owns its syntax, the engine that reads it, and what satisfying it means |
-| `min_length` | `str` only | a minimum length, counted in [Text values](../values/text.md) scalar values |
+| `pattern` | `str` only | a regular expression; [Text](../text.md) owns its syntax, the engine that reads it, and what satisfying it means |
+| `min_length` | `str` only | a minimum length, counted in [Values](../values.md) scalar values |
 | `size` | `list` or `dict` only | an exact size |
-| `values` | `str` only | permitted values, compared by [Text values](../values/text.md) equality |
+| `values` | `str` only | permitted values, compared by [Values](../values.md) equality |
 | `default` | when `required` is false or absent | a value satisfying the same descriptor |
 
 Runtime semantics belong to the owning rule, which a description references.

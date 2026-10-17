@@ -140,7 +140,7 @@ value. A `role` declared for that family fails the same way under
 `data_type` states the type the submission represents the column as. It
 defaults from the declared column type, and each declared type admits the
 closed set the table below fixes. `data_type` never changes a value: it states
-how a value [Types and conversion](../values/types.md) already typed appears in
+how a value [Values](../values.md) already typed appears in
 the document, and no derivation, verification, key, order term or artifact
 byte can observe it. A `data_type` outside the admitted set fails validation.
 
@@ -161,12 +161,12 @@ Replaces: REQ-0868, REQ-0869, REQ-0870, REQ-0914, REQ-1145.
 `durationDatetime`, `intervalDatetime` and `URI`.
 
 A `str` column admits temporal submission types: a submission carries a
-partial or incomplete date as text, and [Temporal values](../values/temporal.md)
+partial or incomplete date as text, and [Values](../values.md)
 does not admit partial or incomplete dates as `date` or `datetime`. The two
 temporal column types admit only their matching submission type:
-[Temporal values](../values/temporal.md) defines each temporal type as a
+[Values](../values.md) defines each temporal type as a
 complete value, and the submission types of the same name mean the same thing.
-A number's submission type is fixed: [Types and conversion](../values/types.md)
+A number's submission type is fixed: [Values](../values.md)
 already decides integer or binary64. The failure reports the column, the
 declared type and the submission type.
 
@@ -198,8 +198,8 @@ fails with `submission_length_not_applicable`, reporting the column.
 ### SUB-8. A `str` column's length is a bound its completed values must meet, stated once
 
 A `length` on a `str` column is enforced: the column's completed values must
-contain at most `length` [Text values](../values/text.md) scalar values, as
-[Verification](../execution/verification.md)'s `max_length` requires. On a
+contain at most `length` [Values](../values.md) scalar values, as
+[Verification](../verification.md)'s `max_length` requires. On a
 `str` column with a `max_length` verification, `length` is derived from the
 verification's `max` and need not be declared; declaring both is accepted when
 equal and rejected when different. A `length` declared on any other column type
@@ -288,7 +288,7 @@ Each of these fails with `core_mandatory_conflict`, reporting the column:
 
 A column declaring `mandatory: true` must also carry a `not_missing`
 verification or appear in `keys`, whose non-missing requirement
-[Artifact publication](../storage/publication.md) already states. A
+[OUTPUT-3](../output.md#output-3) already states. A
 `mandatory: true` column with neither fails.
 
 Fails: `mandatory_not_enforced`.
@@ -458,7 +458,7 @@ algorithm attached is not traceable.
 
 ### SUB-19. A declared origin the column's derivation contradicts is rejected, and an origin is never inferred
 
-The derivation graph of the [Execution lifecycle](../execution/lifecycle.md)
+The derivation graph of the [Column derivation](../columns.md)
 proves some facts about a column value, and a declared origin that contradicts
 a proven fact is rejected. The graph never supplies an origin: origin is always
 declared and sometimes refuted, never inferred. The table below fixes which
@@ -486,7 +486,7 @@ or copied, and a value the specification states outright is available.
 
 A column derived by a bare `source` copies one value of one declared dataset,
 and a column derived by a bare `odm` copies the `Value` of the one ODM record it
-identifies ([REQ-1272](../specification/binding.md#req-1272)): nothing was
+identifies ([NAME-13](../names.md#name-13)): nothing was
 computed. Whether that stored value was collected, assigned, fixed by the
 protocol or copied from a predecessor dataset is a fact about the source and
 not about this specification.

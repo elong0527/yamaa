@@ -32,7 +32,7 @@ Replaces: REQ-0734, REQ-0735.
 
 A `date` is the count of days from 1970-01-01, and a `datetime` is the count
 of microseconds from 1970-01-01T00:00:00 on the same wall clock the value
-names. A [Temporal values](../values/temporal.md) `datetime` carries no zone
+names. A [Values](../values.md) `datetime` carries no zone
 and no offset, so its Timestamp is not adjusted to UTC, and an implementation
 must not attach a zone when writing or reading. A `datetime` has whole-second
 resolution: it is written with the microsecond unit, and its microsecond part
@@ -100,7 +100,7 @@ are not one readable Parquet file fail with `source_parquet_invalid`.
 ### PARQUET-6. Every Parquet field has a non-empty unique name and a scalar type
 
 Every schema field name is non-empty and unique under
-[Text values](../values/text.md) equality. A field is scalar: nested, repeated,
+[Values](../values.md) equality. A field is scalar: nested, repeated,
 dictionary and extension types are outside this profile. An empty or duplicate
 field name fails.
 
@@ -117,7 +117,7 @@ closed mapping of [PARQUET-7](#parquet-7).
 ### PARQUET-7. The embedded Parquet type supplies the field type through the exact inverse of the write mapping
 
 The embedded Parquet type supplies the
-[Source ingestion](../storage/ingestion.md) field type through the closed
+[Inputs](../inputs.md) field type through the closed
 mapping below, the inverse of [PARQUET-1](#parquet-1). The mapping is exact: a
 different physical type, logical type, timestamp unit or timezone is not
 converted or inferred, and fails. Nullable and non-nullable fields are both
@@ -149,7 +149,7 @@ width differs. A field outside the mapping fails with
 A Parquet null is the missing value. A present zero-length string is the
 collected empty string, and the two remain distinct. A finite `DOUBLE` is
 delivered bit-identically. A non-finite `DOUBLE` is normalized immediately to
-missing under [Types and conversion](../values/types.md).
+missing under [Values](../values.md).
 
 Evidence: `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::independent_codecs_page_versions_and_encodings_preserve_exact_values`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::empty_tables_and_nonfinite_inputs_keep_the_closed_schema_and_normalized_nulls`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::parquet_input_policy_and_owned_source_observations_use_the_shared_build_path`.
 Replaces: REQ-1034, REQ-1035.

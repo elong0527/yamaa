@@ -67,7 +67,7 @@ directory, a project root, a data root or the process working directory.
 ### FILE-3. A path to an artifact the run produces names its selected location before the file exists
 
 A path that names an artifact the run itself produces, through the `schema`
-link of [Source ingestion](../storage/ingestion.md), denotes its selected
+link of [Inputs](../inputs.md), denotes its selected
 location even before that file exists. Both the artifact path and the
 `schema` link use the input's selected `relative_to` base under
 [FILE-2](#file-2). The producing specification that `schema` names already
@@ -78,7 +78,7 @@ Evidence: `adam-adae-exposure-adjusted-incidence`, `sdtm-dm-race-ethnicity`, `ru
 Replaces: REQ-1247.
 
 Workflow execution consumes held serialized producer bytes; explicit Save
-publishes those bytes under [Artifact publication](../storage/publication.md).
+publishes those bytes under [Output](../output.md).
 
 ## Written form
 
@@ -90,7 +90,7 @@ A `project_path` is either relative, one or more segments separated by `/`, or
 rooted: a leading `/`, or one ASCII letter followed by `:/`, and then one or
 more such segments. Path form and syntax are decided before the filesystem is
 consulted, and a malformed path fails validation. A written path is ASCII
-under [Text values](../values/text.md), like every other repository-authored
+under [Values](../values.md), like every other repository-authored
 value.
 
 Evidence: `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-adapters/src/file_metadata.rs::absolute_spelling_covers_both_root_forms_lexically`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::parent_and_absolute_local_paths_build_and_save_held_bytes`.
@@ -195,7 +195,7 @@ Replaces: REQ-0786, REQ-0787.
 
 Several dataset identifiers may resolve to one physical file. The declarations
 remain distinct, each with its own identifier and its own
-[Source ingestion](../storage/ingestion.md) field types, but they share the one
+[Inputs](../inputs.md) field types, but they share the one
 snapshot, and no two of them observe different bytes.
 
 <a id="file-10"></a>

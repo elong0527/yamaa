@@ -75,7 +75,7 @@ the codelist.
 
 `data_type` is `text`, `integer` or `float` and defaults to `text`, and every
 coded value must be of the declared `data_type`. Coded values are unique within
-a codelist under [Text values](../values/text.md) equality for `text` and under
+a codelist under [Values](../values.md) equality for `text` and under
 numeric equality otherwise. Items keep their declared order, and
 [Define-XML](define-xml.md) carries the declared order into the generated
 document. A duplicate coded value, or one not of the codelist's `data_type`,
@@ -131,9 +131,9 @@ than an extension.
 
 Binding a non-extensible codelist that declares `items` requires every
 non-missing value of the column to equal one declared `value`. Missing values
-pass, exactly as [Verification](../execution/verification.md)'s
+pass, exactly as [Verification](../verification.md)'s
 `allowed_values` treats missing values. The check runs where
-[Verification](../execution/verification.md) runs a column verification, over
+[Verification](../verification.md) runs a column verification, over
 the completed column, and fails the same way. Binding an extensible codelist or
 an `external` codelist enforces nothing.
 
@@ -148,7 +148,7 @@ and admits a value outside the list, so a check would reject what the
 declaration permits. The admitted values of an `external` codelist live in the
 dictionary, and this language does not read the dictionary. A non-missing value
 outside a bound non-extensible codelist fails where
-[Verification](../execution/verification.md) fails a column verification,
+[Verification](../verification.md) fails a column verification,
 reporting the column, the row's key and the value.
 
 <a id="ct-8"></a>
@@ -208,7 +208,7 @@ Replaces: REQ-0946.
 A column carrying submission metadata may declare `inventory_vocabulary`. Every
 non-missing value of such a column must equal the name of a dataset the study
 document declares. Missing values pass, exactly as [CT-7](#ct-7) treats missing
-values, and enforcement runs where [Verification](../execution/verification.md)
+values, and enforcement runs where [Verification](../verification.md)
 runs a column verification, over the completed column, and fails the same way.
 
 Fails: `allowed_values_failed`.

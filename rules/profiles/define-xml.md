@@ -32,7 +32,7 @@ and a directory listing is not one.
 
 The selected section's `define` names the file the document produces, and its
 extension must be `.xml`. The extension mapping of
-[Artifact publication](../storage/publication.md) is not consulted: that
+[OUTPUT-5](../output.md#output-5) is not consulted: that
 mapping selects a profile for a dataset artifact, and this artifact has one
 form. A `define` target whose extension is not `.xml` fails validation.
 
@@ -86,7 +86,7 @@ requirements a regulator imposes. Under `Submission`:
   `has_no_data`;
 - every dataset carries a `Description` and a `def:Class`;
 - every dataset declares at least one key, which
-  [Artifact publication](../storage/publication.md) already requires, and
+  [OUTPUT-2](../output.md#output-2) already requires, and
   every key column carries a `KeySequence`;
 - every column carries a `def:Origin`, which [SUB-14](submission.md#sub-14)
   already requires; and
@@ -424,7 +424,7 @@ relative to the document's directory without a parent traversal fails with
 `artifact_outside_document`, reporting the dataset and both paths.
 
 The leaf names a file this language produced, and the two it produces are the
-artifact [Artifact publication](../storage/publication.md) publishes and the
+artifact [Output](../output.md) publishes and the
 Dataset-JSON file [Dataset-JSON](dataset-json.md) writes beside this document.
 A document that named any other container would assert a file no run wrote. A
 package that converts its artifacts to a container neither profile writes
@@ -450,7 +450,7 @@ Replaces: REQ-0989, REQ-1022.
 Each `output.columns` entry produces one `ItemRef` inside its `ItemGroupDef`,
 with the attributes the table below lists, and `OrderNumber` is written for
 every `ItemRef`. `KeySequence` describes the non-missing row identity `keys`
-asserts ([REQ-0221](../storage/publication.md#req-0221)) and is not
+asserts ([OUTPUT-3](../output.md#output-3)) and is not
 independently declarable: membership in `keys` determines it, and using a
 sponsor variable in `output.order_by` or a `unique` verification does not
 independently assign it.
@@ -467,7 +467,7 @@ Replaces: REQ-0990, REQ-0991.
 | `Role` | `submission.role`, when declared |
 | `MethodOID` | generated method identifier; omit without `submission.method` |
 
-The [output identity example](../storage/publication.md#req-0221) shows how to
+The [output identity example](../output.md#output-3) shows how to
 use those variables when some values may be missing.
 
 `OrderNumber` is written for every `ItemRef` of a container or for none of
@@ -643,7 +643,7 @@ the character.
 The generated document must be valid against the Define-XML 2.1 schema; a
 document that is not fails, reporting the schema violation, and the run
 publishes nothing. Publication follows the procedure of
-[Artifact publication](../storage/publication.md) exactly: the complete
+[OUTPUT-8](../output.md#output-8) exactly: the complete
 document is written to a temporary regular file in the target's directory,
 flushed and closed, and atomically moved onto the target. A failure leaves the
 previous file and no residue.
@@ -657,7 +657,7 @@ implementation that produces a schema-invalid document has a defect regardless
 of which rule it satisfied. A schema-invalid document fails with
 `value_not_permitted`. Generation completes before publication begins, so a
 failure at any point publishes nothing. A failed publication fails under
-[REQ-0764](../storage/publication.md#req-0764) with `publication_failed`.
+[OUTPUT-8](../output.md#output-8) with `publication_failed`.
 
 ## Scope
 

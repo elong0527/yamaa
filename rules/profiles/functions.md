@@ -139,7 +139,7 @@ Signatures are closed and named: each parameter name is unique, and a binding
 has no positional, variadic or arbitrary keyword parameter bag. `required`
 defaults to true; every optional parameter declares an environment `default`,
 and a required parameter declares no `default`. Parameter types are the
-[Types and conversion](../values/types.md) column vocabulary plus function-only
+[Values](../values.md) column vocabulary plus function-only
 `bool`, and return types do not include `bool`. Every argument and default
 matches its declared exact type, with no implicit conversion.
 
@@ -149,9 +149,9 @@ Replaces: REQ-0676, REQ-0677, REQ-0678, REQ-0700.
 
 The function-only `bool` introduces neither Boolean columns nor Boolean
 derivation results. There is no `int`-to-`float` widening, and
-[Types and conversion](../values/types.md) conversion can run only after the
+[Values](../values.md) conversion can run only after the
 function has returned under the
-[Execution lifecycle](../execution/lifecycle.md). Argument names, requiredness
+[Column derivation](../columns.md). Argument names, requiredness
 and exact types are contract-dependent checks at the implementation stage;
 structural validation before then checks only the closed argument-leaf forms of
 [FUNC-6](#func-6). An unknown, missing required, or incorrectly typed argument
@@ -165,7 +165,7 @@ A call argument is one of: a named variable, written as a plain string; an
 `int`, `float`, `bool` or missing YAML scalar; a string literal written as
 `{literal: text}`; a date literal written as `{date: YYYY-MM-DD}`; or a
 datetime literal written as `{datetime: YYYY-MM-DDThh:mm[:ss]}`. The temporal
-text must be a [Temporal values](../values/temporal.md) value. No argument may
+text must be a [Values](../values.md) value. No argument may
 contain another expression.
 
 Evidence: `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
@@ -218,7 +218,7 @@ failure matches independent calls in logical row order.
 
 A host exception or enforced resource failure fails with
 `function_call_failed`. It is fatal and has no local fallback under
-[Local handlers](../execution/handlers.md).
+[Column derivation](../columns.md).
 
 <a id="func-9"></a>
 
@@ -227,7 +227,7 @@ A host exception or enforced resource failure fails with
 The binding returns one scalar of the declared exact type. An invoked binding
 may return missing only when `may_return_missing` is true, and it may not
 return a vector, collection, table, object wrapper or value of a different
-type. [Types and conversion](../values/types.md)'s non-finite normalization
+type. [Values](../values.md)'s non-finite normalization
 runs immediately after the host scalar is returned and before these checks, so
 a normalized missing result still requires `may_return_missing: true`. An
 invalid result fails and is not converted.
@@ -236,7 +236,7 @@ Fails: `invalid_function_result`.
 Evidence: `schema-non-finite`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `R/yamaa/tests/scalars.R`.
 Replaces: REQ-0686, REQ-0702.
 
-Conversion under the [Execution lifecycle](../execution/lifecycle.md) is not a
+Conversion under the [Column derivation](../columns.md) is not a
 repair mechanism for an invalid function result. A wrong type or shape, or an
 undeclared missing value returned by an invoked binding, fails with
 `invalid_function_result`; it is fatal.
@@ -251,7 +251,7 @@ unclassed R integer or character scalar of the corresponding exact logical
 type. Double and logical scalars remain `float` and `bool`; there is no numeric
 or text coercion. R `date` and `datetime` use the Date and explicitly UTC
 POSIXct representations fixed by
-[Temporal values](../values/temporal.md#req-0563). This host mapping adds no
+[Temporal values](../values.md#value-14). This host mapping adds no
 logical type.
 
 <a id="func-10"></a>
@@ -328,7 +328,7 @@ Replaces: REQ-0691, REQ-0703.
 ### FUNC-13. A numeric result is compared at `comparison_decimals` with ties away from zero, and is never changed
 
 Nonnumeric expected results and missingness use equality for their type,
-including [Text values](../values/text.md) for strings. Numeric results compare
+including [Values](../values.md) for strings. Numeric results compare
 temporary decimal copies at the contract's non-negative `comparison_decimals`,
 four by default; at an exact decimal tie, the copy rounds to the nearest value
 away from zero. The comparator never replaces or mutates the runtime result,

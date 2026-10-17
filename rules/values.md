@@ -208,7 +208,7 @@ Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`.
 Replaces: REQ-0017, REQ-0018.
 
 Shortest chooses the significant digits, not the character count. Artifact
-serialization under the [CSV profile](storage/csv.md) uses the same canonical
+serialization under the [CSV profile](reference/csv.md) uses the same canonical
 numeric text when no display precision is selected.
 
 <a id="value-9"></a>
@@ -216,9 +216,9 @@ numeric text when no display precision is selected.
 ### VALUE-9. Values are used unrounded, and presentation rounding never feeds back
 
 Calculations, comparisons, verifications and dependent derivations use
-unrounded values. Display precision under the [CSV profile](storage/csv.md)
+unrounded values. Display precision under the [CSV profile](reference/csv.md)
 applies half-away-from-zero rounding once, when a field is written, and
-[Project functions](operations/functions.md) conformance comparison operates
+[Project functions](profiles/functions.md) conformance comparison operates
 on a temporary copy; neither changes a value the specification uses.
 
 Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::genuine_binary64_ties_and_adjacent_values_match_independent_text`.
@@ -497,7 +497,7 @@ carries the day or the moment and nothing about how much of it was collected:
 
 - a temporal value converted to `str` under [VALUE-3](#value-3);
 - the artifact's record of a temporal column;
-- the typed value [Project functions](operations/functions.md) encodes for a
+- the typed value [Project functions](profiles/functions.md) encodes for a
   function argument.
 
 A specification that must carry precision past any of those boundaries
