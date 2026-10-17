@@ -61,6 +61,9 @@ jobs:
       - uses: ./.github/actions/setup
       - run: make test-python
       - name: Test the minimum supported Python saved artifact readers
+        # The minimum dependency graph also tests these floors, and neither
+        # runs on PRs into a release integration branch.
+        if: github.event_name != 'pull_request' || github.base_ref == 'main'
         run: |
           uv pip install --python python/.venv/bin/python 'polars==1.43.2' 'pyarrow==23.0.1' 'lxml==6.1.0'
           make test-python
