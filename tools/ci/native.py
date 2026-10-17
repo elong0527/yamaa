@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 PLATFORMS = ("ubuntu-24.04", "macos-15", "windows-latest")
-PYTHONS = ("3.12", "3.13", "3.14")
+PYTHONS = ("3.12", "3.13", "3.14", "3.15")
 FORMS = ("wheel", "source")
 R_PLATFORMS = PLATFORMS
 BUILD_PYTHON = "3.14"

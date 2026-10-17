@@ -74,21 +74,24 @@ class MatrixTests(unittest.TestCase):
         ("Darwin", "arm64", "3.12"),
         ("Darwin", "arm64", "3.13"),
         ("Darwin", "arm64", "3.14"),
+        ("Darwin", "arm64", "3.15"),
         ("Linux", "x86_64", "3.12"),
         ("Linux", "x86_64", "3.13"),
         ("Linux", "x86_64", "3.14"),
+        ("Linux", "x86_64", "3.15"),
         ("Windows", "AMD64", "3.12"),
         ("Windows", "AMD64", "3.13"),
         ("Windows", "AMD64", "3.14"),
+        ("Windows", "AMD64", "3.15"),
     )
 
     def test_complete_approved_matrix(self):
-        """Accept all nine distinct approved numerical report origins."""
+        """Accept all twelve distinct approved numerical report origins."""
         portability.validate_hosts(self.HOSTS)
 
     def test_missing_or_duplicate_interpreter_is_rejected(self):
-        """Require 3.13 on each OS, including when a duplicate preserves the count."""
-        for index in (1, 4, 7):
+        """Require 3.13 and 3.15 on each OS, including when a duplicate preserves the count."""
+        for index in (1, 3, 5, 7, 9, 11):
             incomplete = self.HOSTS[:index] + self.HOSTS[index + 1 :]
             with self.assertRaisesRegex(AssertionError, "native matrix"):
                 portability.validate_hosts(incomplete)

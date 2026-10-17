@@ -4,6 +4,9 @@ inputs:
   r:
     description: R setup mode (none, runtime, or check with package test dependencies)
     default: none
+  python:
+    description: Python version for the locked development environment
+    default: '3.14'
 runs:
   using: composite
   steps:
@@ -20,7 +23,7 @@ runs:
       with:
         version: '0.11.6'
         enable-cache: true
-        python-version: '3.14'
+        python-version: ${{ inputs.python }}
     - name: Read the workspace toolchain
       shell: bash
       run: python -m tools.ci.toolchain

@@ -18,7 +18,7 @@ EXPECTED_HOSTS = {
         ("Linux", "x86_64"),
         ("Windows", "AMD64"),
     )
-    for version in ("3.12", "3.13", "3.14")
+    for version in ("3.12", "3.13", "3.14", "3.15")
 }
 
 

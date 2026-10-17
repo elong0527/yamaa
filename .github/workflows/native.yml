@@ -114,11 +114,22 @@ jobs:
           if-no-files-found: error
       - name: Preserve Python 3.12 numerical assessment coverage
         # The native build matrix uses 3.14, but portable-math-exact still
-        # requires independent observations from all three supported interpreters.
+        # requires independent observations from every supported interpreter.
         # Reuse the Rust probe; this stdlib-only assessment needs no wheel build.
         run: uv run --no-project --python 3.12 python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment-3.12/math-assessment.json"
       - name: Preserve Python 3.13 numerical assessment coverage
         run: uv run --no-project --python 3.13 python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment-3.13/math-assessment.json"
+      # uv 0.11.6 can only download a 3.15 alpha, so take the released
+      # interpreter from setup-python without changing this job's PATH.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: python-315
+        with:
+          python-version: '3.15'
+          update-environment: false
+      - name: Preserve Python 3.15 numerical assessment coverage
+        env:
+          PYTHON_315: ${{ steps.python-315.outputs.python-path }}
+        run: uv run --no-project --python "${PYTHON_315}" python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment-3.15/math-assessment.json"
       - name: Preserve candidate math assessment (not parity qualification)
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -139,6 +150,13 @@ jobs:
         with:
           name: math-assessment-${{ matrix.os }}-3.13
           path: ${{ runner.temp }}/math-assessment-3.13/math-assessment.json
+          if-no-files-found: error
+      - name: Preserve Python 3.15 candidate math assessment
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: math-assessment-${{ matrix.os }}-3.15
+          path: ${{ runner.temp }}/math-assessment-3.15/math-assessment.json
           if-no-files-found: error
   dist:
     name: native-dist (${{ matrix.os }}, ${{ matrix.python }})
@@ -241,7 +259,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15, windows-latest]
-        python: ['3.12', '3.13', '3.14']
+        python: ['3.12', '3.13', '3.14', '3.15']
         form: [wheel, source]
     steps:
       - name: Preserve fixture bytes and symlinks on Windows
@@ -304,7 +322,14 @@ jobs:
           python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz project-dist/*.whl
       - name: Install the minimum supported Python saved artifact readers
         working-directory: ${{ runner.temp }}
-        run: python -m pip install polars==1.43.2 pyarrow==23.0.1 lxml==6.1.0
+        # The minimum readers do not work on CPython 3.15 (docs/release.md), so
+        # 3.15 takes the oldest releases that do.
+        run: |
+          if [ "${{ matrix.python }}" = 3.15 ]; then
+            python -m pip install polars==2.0.0 pyarrow==26.0.0 lxml==6.1.2
+          else
+            python -m pip install polars==1.43.2 pyarrow==23.0.1 lxml==6.1.0
+          fi
       - name: Report installed Python public benchmark conformance
         working-directory: ${{ runner.temp }}
         run: |

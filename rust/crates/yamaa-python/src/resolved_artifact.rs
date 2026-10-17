@@ -4,11 +4,13 @@ use yamaa::{Engine, EngineOptions, HostLanguage, Request};
 
 type Reply<'py> = (Option<String>, Vec<crate::report_fields::IssueRow<'py>>);
 
-fn engine() -> Engine {
+// `Python::version` builds on the PyO3 0.27.2 floor; 0.29 renamed it `version_str`.
+#[allow(deprecated)]
+fn engine(py: Python<'_>) -> Engine {
     Engine::new(EngineOptions::new(
         HostLanguage::Python,
         "python".into(),
-        Python::version_str().into(),
+        py.version().into(),
     ))
 }
 
@@ -23,7 +25,7 @@ pub fn _resolve_specification_file<'py>(
     if let Some(environment) = environment {
         request = request.with_environment(environment);
     }
-    match engine().resolve_specification(&request) {
+    match engine(py).resolve_specification(&request) {
         Ok(artifact) => Ok((
             Some(
                 artifact
