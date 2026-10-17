@@ -10,23 +10,27 @@ from tools.conformance.supplemental_inventory import load_catalog
 from tools.paths import ROOT
 
 
+def run_installed_suites(python, work):
+    """Stage the cataloged Python suites into work and run them with python."""
+    catalog = load_catalog(ROOT, ROOT / "rust/qualification/supplemental.json")
+    stage("python", work)
+    for suite in catalog["suites"]:
+        if suite["runtime"] == "python":
+            subprocess.run(
+                [str(python), "-E", "-s", str(work / suite["staged_path"])],
+                cwd=work,
+                check=True,
+            )
+
+
 def main():
     subprocess.run(
         [sys.executable, "-m", "pytest", "python/tests", "tools/tests"],
         cwd=ROOT,
         check=True,
     )
-    catalog = load_catalog(ROOT, ROOT / "rust/qualification/supplemental.json")
     with tempfile.TemporaryDirectory(prefix="yamaa-python-tests-") as directory:
-        work = Path(directory)
-        stage("python", work)
-        for suite in catalog["suites"]:
-            if suite["runtime"] == "python":
-                subprocess.run(
-                    [sys.executable, "-E", "-s", str(work / suite["staged_path"])],
-                    cwd=work,
-                    check=True,
-                )
+        run_installed_suites(sys.executable, Path(directory))
 
 
 if __name__ == "__main__":

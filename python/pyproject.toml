@@ -28,9 +28,9 @@ classifiers = [
 ]
 dependencies = [
   "lxml>=6.1.0",
-  # 1.43.2 is the first installable release that decodes the IEEE 754 total-order
-  # column metadata our locked Parquet writer records for floating-point columns.
-  "polars>=1.43.2",
+  # The locked Parquet 57.3.0 writer records only type-defined column orders,
+  # which Polars 1.35.2 reads; the IEEE 754 total-order form needs 1.43.2.
+  "polars>=1.35.2",
   "py-yaml12>=0.2",
   "pyarrow>=23.0.1",
   "pydantic>=2.12.4",
@@ -88,6 +88,32 @@ extend = "../pyproject.toml"
 [tool.pyrefly]
 project-includes = ["src/yamaa"]
 preset = "default"
+
+[tool.uv]
+# `make setup` installs a built wheel, which uv rebuilds only when a file listed
+# here changes. List every wheel input: the package files, the build backend,
+# and the Rust sources the backend restores into a source archive. Paths are
+# relative to this directory. uv walks everything under a glob's literal prefix,
+# so no glob starts at `.`, `..` or `../rust`, which hold `.venv`, `build` and
+# `target`.
+cache-keys = [
+  { file = "pyproject.toml" },
+  { file = "README.md" },
+  { file = "LICENSE-READSTAT.txt" },
+  { file = "LICENSE-UNICODE.txt" },
+  { file = "LICENSE-WINDOWS.txt" },
+  { file = "LICENSE-YAML.txt" },
+  { file = "src/**" },
+  { file = "yamaa_build_backend.py" },
+  { file = "../rust/Cargo.toml" },
+  { file = "../rust/Cargo.lock" },
+  { file = "../rust/rust-toolchain.toml" },
+  { file = "../rust/crates/*/Cargo.toml" },
+  { file = "../rust/crates/*/build.rs" },
+  { file = "../rust/crates/*/src/**/*.rs" },
+  { file = "../rust/crates/yamaa-adapters/vendor/**" },
+  { file = "../rust/vendor/**" },
+]
 
 [tool.uv.sources]
 yamaa-benchmarks = { path = "../rust/tests/project-programs/python", editable = true }

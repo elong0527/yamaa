@@ -41,8 +41,11 @@ with that independent truth. Engine output cannot establish a golden value.
 
 Follow the benchmark area guide for mechanical checks and the
 [Harbor guide](../../evaluations/harbor/README.md) for prompt, reference-solution
-and changed-input checks. A reference solution must solve the task from its
-prompt and inputs without consulting the yamaa specification or expected files.
+and changed-input checks. Write prompts with the writing flow of the
+[prompt recipe](../../evaluations/harbor/prompts/recipe.md): the writer works
+from the README, specification and inputs in a sandbox without the expected
+files, and the reference solutions come from solvers that saw only the
+prompt and inputs.
 Keep relevant oracle and grading controls unchanged while editing task content.
 
 When a maintenance change adds rows or columns, preserve existing expected values

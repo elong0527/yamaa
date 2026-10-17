@@ -88,7 +88,7 @@ jobs:
         # runs on PRs into a release integration branch.
         if: github.event_name != 'pull_request' || github.base_ref == 'main'
         run: |
-          uv pip install --python python/.venv/bin/python 'polars==1.43.2' 'pyarrow==23.0.1' 'lxml==6.1.0'
+          uv pip install --python python/.venv/bin/python 'polars==1.35.2' 'pyarrow==23.0.1' 'lxml==6.1.0'
           make test-python
   python-newest:
     name: python (3.15)

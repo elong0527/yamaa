@@ -28,7 +28,7 @@ The minimum supported independent readers are:
 
 | Reader | Minimum | Saved formats qualified |
 | --- | --- | --- |
-| Python Polars | 1.43.2 | CSV text and Parquet |
+| Python Polars | 1.35.2 | CSV text and Parquet |
 | Python PyArrow | 23.0.1 | CSV text and Parquet |
 | R arrow | 23.0.1 | CSV text and Parquet |
 | Python standard library | Supported CPython above | Dataset-JSON 1.1 |
@@ -73,21 +73,25 @@ Define-XML are generated through the public study-document API.
 The Rust workspace declares MSRV 1.90 and builds with Rust 1.99.1; a CI job
 checks and lints it with Rust 1.90.0. Canonical
 release builds use `rust/Cargo.lock`, including unchanged copies in both source
-packages. Arrow and Parquet are supported at exactly 60.0.0 with flatbuffers
-25.12.19. Arrow/Parquet 57 (and other Rust Arrow major versions) are unsupported:
-the adapter's version-specific APIs have not been adapted and qualified for
-those graphs. Broadening that range requires separate adapter and installed-host
-qualification first. Portable libm remains exactly 0.2.16, and the reviewed
-local saphyr-parser patch remains part of every graph. The Python binding builds
-with PyO3 0.27.2 through 0.30; the lock selects 0.30.1, and the minimum
-dependency graph tests 0.27.2.
+packages. Arrow and Parquet are supported at exactly 57.3.0 with flatbuffers
+25.12.19, so an embedder whose graph holds Arrow 57.3 builds the engine
+unchanged. Other Arrow and Parquet releases are unsupported: the adapter's
+version-specific APIs, confined to `storage_api.rs`, are adapted and qualified
+for 57.3.0 only. Broadening that range requires separate adapter and
+installed-host qualification first. The direct storage codec floors are brotli
+8.0.4 and lz4_flex 0.13.1. Portable libm remains exactly 0.2.16, and the
+reviewed local saphyr-parser patch remains part of every graph. The Python
+binding builds with PyO3 0.27.2 through 0.30; the lock selects 0.30.1, and the
+minimum dependency graph tests 0.27.2.
 
 Python supports CPython 3.12 through 3.15 with the runtime ranges in
-`python/pyproject.toml`. Their declared floors are lxml 6.1.0, Polars 1.43.2,
+`python/pyproject.toml`. Their declared floors are lxml 6.1.0, Polars 1.35.2,
 py-yaml12 0.2, PyArrow 23.0.1, Pydantic 2.12.4, packaging 25 and PyYAML 6.0.3.
-Polars 1.35 and 1.42.1 cannot read the current writer's saved Parquet and are
-outside the supported range. R uses R 4.6.1 and the shared Rust graph; its host
-qualification readers are the `Suggests` dependencies in `R/yamaa/DESCRIPTION`.
+The Parquet 57.3.0 writer records only type-defined column orders, which
+Polars 1.35.2 reads; the IEEE 754 total-order form that later writers record
+for floating-point columns needs Polars 1.43.2. R uses R 4.6.1 and the shared
+Rust graph; its host qualification readers are the `Suggests` dependencies in
+`R/yamaa/DESCRIPTION`.
 
 Four of these floors do not work on CPython 3.15. Polars before 2.0.0
 installs, but its Series methods that forward to expressions, such as
@@ -213,11 +217,14 @@ owns decoding behavior.
 - Promote row defaults per template: a column can be row-phase for the
   templates that need it and column-phase for the rest, and a candidate a
   template filter suppresses never reads a lookup it does not need.
-- Keep the Python Polars floor at 1.43.2, with no vendored Parquet writer.
+- Pin Arrow and Parquet to exactly 57.3.0, with brotli 8.0.4 and lz4_flex
+  0.13.1 floors, so embedders on Arrow 57.3 build the engine unchanged. The
+  57.3.0 writer's type-defined column orders return the Python Polars floor to
+  1.35.2, with no vendored Parquet writer.
 - Ship the reviewed vendored `saphyr-parser` compact-flow patch in every
   supported graph; replacing it with a published parser is 0.5.0 work.
-- Keep Cargo dependency floors where they are tested; the crates are not
-  published.
+- Keep Cargo dependency floors where the minimum dependency-graph lane tests
+  them; the crates are not published.
 - Generate both hosts' binding declarations from
   `rust/interface/bindings.yaml` and compare them in the repository check
   and the native qualification lane. The version and feature handshake
