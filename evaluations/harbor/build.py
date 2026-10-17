@@ -50,7 +50,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import yaml
+from evaluations.harbor import scaffold
 from evaluations.harbor.brief import brief
 from tools.benchmark import directories, load_metadata
 
@@ -223,24 +223,17 @@ def system_prompt(language: str) -> str:
 
 
 def output_specs(benchmark: Path) -> list[dict]:
-    """Each specification that writes a golden dataset, in file order.
-
-    `spec.yaml`, or else the `spec_<name>.yaml` files: domains built
-    together (DM and SUPPDM) each write their own golden, and variants that
-    write the same one count once.
+    """Each specification that writes a golden dataset, in the order the
+    prompt lists them (`scaffold.output_specs`): domains built together (DM
+    and SUPPDM) each write their own golden.
     """
-    single = benchmark / "spec.yaml"
-    paths = [single] if single.is_file() else sorted(benchmark.glob("spec_*.yaml"))
-    specs, seen = [], set()
-    for path in paths:
-        spec = yaml.safe_load(path.read_text(encoding="utf-8"))
-        output = spec.get("output") or {}
-        name = Path(output.get("path") or "").name
-        if not name or name in seen or not (benchmark / "expected" / name).is_file():
+    specs = []
+    for spec in scaffold.output_specs(benchmark):
+        output = spec["output"]
+        if not (benchmark / "expected" / Path(output["path"]).name).is_file():
             continue
         if output.get("warning_log") or output.get("verification_log"):
             raise BuildError(f"{benchmark.name}: log outputs are not graded yet")
-        seen.add(name)
         specs.append(spec)
     if not specs:
         raise BuildError(f"{benchmark.name}: no specification writes a golden dataset")
@@ -384,11 +377,17 @@ def oracle_script(language: str, golden: list[Path]) -> str:
     return "\n".join(lines)
 
 
-def task_name(benchmark: str, language: str, tier: str = "full") -> str:
+def task_name(
+    benchmark: str, language: str, tier: str = "full", *, candidate: bool = False
+) -> str:
     """`<benchmark>-<language>`, with the tier before the language unless it
-    is the full prompt; the language stays last (`task_language`)."""
+    is the full prompt, or `candidate` for a candidate full prompt
+    (`author.py solve`); the language stays last (`task_language`)."""
     if tier not in TIERS:
         raise BuildError(f"unknown prompt tier {tier!r}; want {', '.join(TIERS)}")
+    if candidate and tier != "full":
+        raise BuildError("a candidate prompt stands in for the full prompt only")
+    tier = "candidate" if candidate else tier
     return "-".join(p for p in (benchmark, tier, language) if p and p != "full")
 
 
@@ -403,17 +402,23 @@ def task_toml(
     image: str | None = None,
     verifier_image: str | None = None,
     challenge_required: bool = False,
+    candidate: bool = False,
 ) -> str:
     standard, lifecycle = tags["standard"], tags["lifecycle"]
     noun = "datasets" if " and " in domain else "dataset"
     label = LANGUAGES[language]["label"]
     source = "" if tier == "full" else f", from its {tier} prompt"
+    # A candidate prompt's task is graded without a reference and never
+    # ranked: no leaderboard accepts its grading protocol.
+    protocol = GRADING_PROTOCOL
+    if candidate:
+        source, protocol = ", from a candidate full prompt", f"{protocol}-candidate"
     return f"""\
 schema_version = "1.4"
 artifacts = ["/app", "/logs/agent/trajectory.json"]
 
 [task]
-name = "yamaa/{task_name(benchmark, language, tier)}"
+name = "yamaa/{task_name(benchmark, language, tier, candidate=candidate)}"
 version = "0.4.0"
 description = "Create the {domain} {noun} of the yamaa benchmark {benchmark} in {label}{source}."
 keywords = ["cdisc", "{standard.lower()}", "clinical-data"]
@@ -426,11 +431,11 @@ standard = "{standard}"
 domain = "{domain}"
 lifecycle = "{lifecycle}"
 yamaa_commit = "{commit}"
-grading_protocol = "{GRADING_PROTOCOL}"
+grading_protocol = "{protocol}"
 image_reference = {json.dumps(image or AGENT_IMAGES[language])}
 verifier_image_reference = {json.dumps(verifier_image or VERIFIER_IMAGES[language])}
 challenge_required = {str(challenge_required).lower()}
-publicly_indexed = true
+publicly_indexed = {str(not candidate).lower()}
 
 [agent]
 timeout_sec = 1800.0
@@ -496,7 +501,13 @@ def reference_solution(benchmark: Path, language: str) -> Path | None:
 
 
 def task_readme(
-    benchmark: Path, contract: dict, inputs: list[str], commit: str, tier: str = "full"
+    benchmark: Path,
+    contract: dict,
+    inputs: list[str],
+    commit: str,
+    tier: str = "full",
+    *,
+    candidate: bool = False,
 ) -> str:
     """The task page on Harbor Hub: what the agent gets and how it is graded.
 
@@ -509,7 +520,13 @@ def task_readme(
     tags = load_metadata(benchmark)
     domain = " and ".join(s["domain"] for s in output_specs(benchmark))
     tiers = _source_link(commit, "evaluations/harbor/prompts/README.md")
-    if tier == "full":
+    if candidate:
+        oracle = """\
+The agent gets a candidate full prompt that is not committed yet
+(`evaluations/harbor/author.py`). No reference solution is written from it
+yet, so this task has no oracle, skips the held-out and changed-input
+reruns, and is never ranked."""
+    elif tier == "full":
         oracle = f"""\
 `solution/{script}` is the benchmark's reference solution, written from its
 full prompt and inputs alone. Harbor's oracle agent runs it to check that
@@ -534,8 +551,11 @@ show that this prompt alone can be solved."""
     )
     source_tier = "full" if tier == "brief" else tier
     prompt = f"evaluations/harbor/prompts/{benchmark.name}/{source_tier}.md"
+    prompt_row = f"{tier}: {_source_link(commit, prompt)}"
+    if candidate:
+        prompt_row = "a candidate full prompt, not committed"
     return f"""\
-# yamaa/{task_name(benchmark.name, language, tier)}
+# yamaa/{task_name(benchmark.name, language, tier, candidate=candidate)}
 
 The agent writes the {domain} data of the yamaa benchmark
 `{benchmark.name}` with {article} {label} script, in a sandbox with no internet, and
@@ -544,7 +564,7 @@ is graded cell by cell against the benchmark's expected data.
 | | |
 |---|---|
 | Benchmark | {_source_link(commit, f"benchmarks/{benchmark.name}")} |
-| Prompt | {tier}: {_source_link(commit, prompt)} |
+| Prompt | {prompt_row} |
 | Standard and domain | {tags["standard"]}, {domain} |
 | Track | {label}: `/app/output/{script}`, rerun with `{runner}` |
 | Lifecycle | {tags["lifecycle"]} |
@@ -721,25 +741,34 @@ def build_task(
     tier: str = "full",
     *,
     verifier_image: str | None = None,
+    candidate: str | None = None,
 ) -> Path:
+    """One task of a benchmark, prompt tier and language.
+
+    `candidate` stands in for the committed full prompt (`author.py solve`).
+    No reference is written from it yet, so its task has no oracle, skips
+    the held-out and changed-input reruns, and is never ranked.
+    """
     contract = contract_for(benchmark, language)
     image = image or AGENT_IMAGES[language]
     verifier_image = verifier_image or VERIFIER_IMAGES[language]
+    trial = candidate is not None
     # The held-out and changed-input reruns compute their answers with the
-    # reference, so a task cannot be graded without one.
-    reference = reference_solution(benchmark, language)
-    if reference is None:
+    # reference, so a ranked task cannot be graded without one.
+    reference = None if trial else reference_solution(benchmark, language)
+    if trial:
+        contract["challenge_required"] = False
+    elif reference is None:
         raise BuildError(
             f"{benchmark.name}-{language}: a derivation reference is required"
         )
     domain = " and ".join(s["domain"] for s in output_specs(benchmark))
-    prompt = prompt_text(benchmark, tier).strip()
-    task = tasks / task_name(benchmark.name, language, tier)
+    prompt = (candidate if trial else prompt_text(benchmark, tier)).strip()
+    task = tasks / task_name(benchmark.name, language, tier, candidate=trial)
     if task.exists():
         shutil.rmtree(task)
     (task / "environment").mkdir(parents=True)
     (task / "tests").mkdir()
-    (task / "solution").mkdir()
 
     task_text = task_toml(
         benchmark.name,
@@ -751,6 +780,7 @@ def build_task(
         image=image,
         verifier_image=verifier_image,
         challenge_required=contract["challenge_required"],
+        candidate=trial,
     )
     (task / "task.toml").write_text(task_text)
     (task / "instruction.md").write_text(
@@ -769,14 +799,13 @@ def build_task(
     )
     inputs = sorted(p.name for p in (task / "environment" / "input").iterdir())
     (task / "README.md").write_text(
-        task_readme(benchmark, contract, inputs, commit, tier)
+        task_readme(benchmark, contract, inputs, commit, tier, candidate=trial)
     )
 
     golden = [benchmark / "expected" / o["file"] for o in contract["outputs"]]
-    for directory in (task / "tests" / "expected", task / "solution" / "expected"):
-        directory.mkdir()
-        for path in golden:
-            shutil.copyfile(path, directory / path.name)
+    (task / "tests" / "expected").mkdir()
+    for path in golden:
+        shutil.copyfile(path, task / "tests" / "expected" / path.name)
     shutil.copyfile(HERE / "grade.py", task / "tests" / "grade.py")
     shutil.copyfile(HERE / "measurements.json", task / "tests" / "measurements.json")
     # The sandbox runs the agent's script as an unprivileged user, restores
@@ -791,20 +820,25 @@ def build_task(
         "set -euo pipefail\n"
         "python3 /tests/grade.py --rerun --sandbox\n"
     )
-    script = LANGUAGES[language]["script"]
-    # The verifier's held-out and changed-input reruns check the agent
-    # against the reference.
-    (task / "tests" / "reference").mkdir()
-    shutil.copyfile(reference, task / "tests" / "reference" / script)
     (task / "tests" / "Dockerfile").write_text(
         f"FROM {verifier_image}\n"
         "COPY --chmod=755 test.sh /tests/test.sh\n"
         "COPY grade.py sandbox.py measurements.json contract.json task.toml /tests/\n"
         "COPY input/ /tests/input/\n"
         "COPY expected/ /tests/expected/\n"
-        "COPY reference/ /tests/reference/\n"
-        "RUN chmod 700 /tests\n"
+        + ("" if reference is None else "COPY reference/ /tests/reference/\n")
+        + "RUN chmod 700 /tests\n"
     )
+    if reference is None:
+        return task
+    script = LANGUAGES[language]["script"]
+    # The verifier's held-out and changed-input reruns check the agent
+    # against the reference.
+    (task / "tests" / "reference").mkdir()
+    shutil.copyfile(reference, task / "tests" / "reference" / script)
+    (task / "solution" / "expected").mkdir(parents=True)
+    for path in golden:
+        shutil.copyfile(path, task / "solution" / "expected" / path.name)
     shutil.copyfile(reference, task / "solution" / script)
     runner = LANGUAGES[language]["runner"]
     solve = task / "solution" / "solve.sh"
@@ -833,11 +867,15 @@ def job_config(
     job_name: str | None,
     jobs_dir: Path,
     dataset: str | None = None,
+    permissions: dict | None = None,
 ) -> dict:
-    languages = {task_language(task) for task in tasks}
-    if len(languages) > 1:
-        raise BuildError("one model job must have exactly one language")
-    permissions = tool_permissions(next(iter(languages), None))
+    """One model job. `permissions` replaces the language policy of the
+    tasks' track, for jobs that write prompts (`author.py`)."""
+    if permissions is None:
+        languages = {task_language(task) for task in tasks}
+        if len(languages) > 1:
+            raise BuildError("one model job must have exactly one language")
+        permissions = tool_permissions(next(iter(languages), None))
     provider = model.partition("/")[0]
     known_host, known_key = PROVIDERS.get(provider, (None, None))
     host, key = api_host or known_host, key_env or known_key

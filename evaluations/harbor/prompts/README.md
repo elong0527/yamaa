@@ -18,9 +18,10 @@ conventions, conventions within full.
 ## full
 
 The complete request a statistician would send a statistical programmer,
-written by hand to the
-[benchmark prompt recipe](recipe.md). It has
-four parts, in order:
+written to the [benchmark prompt recipe](recipe.md) from the benchmark's
+README, specification, and inputs, never its expected data (recipe section
+7). It has four parts, in order, and all but the rules and the record level
+follow from the benchmark ([`../scaffold.py`](../scaffold.py)):
 
 1. **Opening.** The standard, the input datasets, and the record level
    (`Following CDISC ADaM standards, use the provided TRT and EX datasets
@@ -86,7 +87,8 @@ subject has a fatal adverse event ..., and has no value otherwise`
 becomes `DTHFL is Y or has no value`), and it never names a value, code,
 or number the full prompt does not.
 
-A conventions prompt is written by hand from the full prompt and runs to at
+A conventions prompt is written from the full prompt alone, by hand or in
+a writing task (`author.py write --tier conventions`), and runs to at
 most 20 lines, its conventions said in as few paragraphs as they fit. Where
 the rules hold no convention it equals the brief prompt, and where they
 hold nothing but conventions it equals the full prompt
@@ -128,7 +130,8 @@ own.
 - every `sdtm-*` and `adam-*` benchmark has a folder here, holding
   `full.md` and `conventions.md`, and no prompt is left under
   `benchmarks/`;
-- every full prompt has the four parts, and every brief prompt is exactly
+- every full prompt has the four parts, with the standard, domains, column
+  lists, and paths `scaffold.py` renders, and every brief prompt is exactly
   what `brief.py` renders from it;
 - every conventions prompt keeps the full prompt's parts 1, 2, and 4
   verbatim, is no longer than the full prompt or 20 lines, and names no
@@ -136,7 +139,14 @@ own.
 - every tier of a graded benchmark asks for exactly its output files and
   column lists, as the expected data holds them;
 - every tier keeps to the recipe's 79-column width and never names the
-  harness (yamaa, specifications, rule identifiers).
+  harness (yamaa, specifications, rule identifiers), a subject identifier
+  or date from the inputs that no rule names, or what only the
+  specification uses (an intermediate result, an operation).
+
+These checks live in [`../check.py`](../check.py), which the writing tasks'
+verifier also runs. `evaluations/harbor/tests/test_harbor_authoring.py`
+checks that the writer's sources are byte for byte the same without the
+benchmark's `expected/`.
 
 The Harbor workflow runs these checks and the R and Python reference
 solutions on main pushes, schedules and manual dispatch. Its oracle job
