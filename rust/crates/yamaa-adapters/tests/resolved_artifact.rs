@@ -9,7 +9,7 @@ use std::{
 use yamaa_adapters::resolved_artifact::model::{
     specification_value, Location, OriginKind, RelativeTo, ResolvedArtifact, ResourceRole,
 };
-use yamaa_adapters::{file_workflow, resolved_artifact};
+use yamaa_adapters::{canonical_path, file_workflow, resolved_artifact};
 use yamaa_core::{
     build::{Prepared, Request},
     json::Value,
@@ -26,7 +26,7 @@ impl Study {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir_all(&root).unwrap();
-        Self(fs::canonicalize(root).unwrap())
+        Self(canonical_path::canonicalize(root).unwrap())
     }
     fn path(&self, path: &str) -> String {
         self.0.join(path).to_str().unwrap().replace('\\', "/")

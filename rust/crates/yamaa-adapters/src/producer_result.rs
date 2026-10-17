@@ -635,15 +635,12 @@ mod log_tests {
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
             fs::create_dir_all(root.join("generated")).unwrap();
-            Self(fs::canonicalize(root).unwrap())
+            Self(crate::canonical_path::canonicalize(root).unwrap())
         }
         fn path(&self) -> String {
             let path = self.0.to_str().unwrap().to_owned();
             #[cfg(windows)]
-            let path = path
-                .strip_prefix(r"\\?\")
-                .unwrap_or(&path)
-                .replace('\\', "/");
+            let path = path.replace('\\', "/");
             path
         }
         fn write(&self, name: &str, bytes: impl AsRef<[u8]>) {
@@ -1315,8 +1312,8 @@ mod log_tests {
             study.write("root.yaml", raw.replace("generated/root-checks.csv", name));
             if physical_parent {
                 assert_eq!(
-                    fs::canonicalize(study.0.join("GENERATED")).unwrap(),
-                    fs::canonicalize(study.0.join("generated")).unwrap()
+                    crate::canonical_path::canonicalize(study.0.join("GENERATED")).unwrap(),
+                    crate::canonical_path::canonicalize(study.0.join("generated")).unwrap()
                 );
             }
             assert!(!study.0.join("generated/producer-checks.csv").exists());

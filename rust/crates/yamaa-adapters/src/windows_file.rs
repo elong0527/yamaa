@@ -638,7 +638,7 @@ mod tests {
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
             std::fs::create_dir(&path).unwrap();
-            Self(std::fs::canonicalize(path).unwrap())
+            Self(crate::canonical_path::canonicalize(path).unwrap())
         }
         fn root(&self) -> Directory {
             Directory::open(&self.0).unwrap()

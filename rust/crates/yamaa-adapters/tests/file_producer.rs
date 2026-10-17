@@ -142,15 +142,12 @@ mod file {
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
                 fs::create_dir(&root).unwrap();
-                Self(fs::canonicalize(root).unwrap())
+                Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
             }
             fn path(&self, written: &str) -> String {
                 let path = self.0.join(written).to_str().unwrap().to_owned();
                 #[cfg(windows)]
-                let path = path
-                    .strip_prefix(r"\\?\")
-                    .unwrap_or(&path)
-                    .replace('\\', "/");
+                let path = path.replace('\\', "/");
                 path
             }
             fn write(&self, written: &str, bytes: impl AsRef<[u8]>) {
@@ -1384,7 +1381,7 @@ columns:
             let outer = Study::new();
             let path = outer.0.join(r"native\root");
             fs::create_dir(&path).unwrap();
-            let study = Study(fs::canonicalize(path).unwrap());
+            let study = Study(yamaa_adapters::canonical_path::canonicalize(path).unwrap());
             study.rounded();
             let mut build = study.build(Language::Python);
             let attempt = build.build(

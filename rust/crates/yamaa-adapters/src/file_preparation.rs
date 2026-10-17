@@ -271,7 +271,7 @@ mod profile_inspection_tests {
             "schema_version: '1.0'\nparents: [../parent/base.yaml]\n",
         )
         .unwrap();
-        let root = fs::canonicalize(root).unwrap();
+        let root = crate::canonical_path::canonicalize(root).unwrap();
         use yamaa_core::diagnostic::ConditionCode as C;
         for (kind, condition) in [
             (0, C::ResourceNotRegularFile),
@@ -373,7 +373,7 @@ mod declaring_origin_tests {
                 .join(name);
             fs::create_dir_all(root.join("entry")).unwrap();
             fs::create_dir(root.join("producer")).unwrap();
-            Self(fs::canonicalize(root).unwrap())
+            Self(crate::canonical_path::canonicalize(root).unwrap())
         }
         fn check(&self) {
             let parent = "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
@@ -452,7 +452,7 @@ mod dispatch_policy_tests {
             fs::write(path.join("entry/root.yaml"), root).unwrap();
             fs::write(path.join("parent/base.yaml"), PARENT).unwrap();
             fs::write(path.join("root.yaml"), b"original base marker").unwrap();
-            Self(fs::canonicalize(path).unwrap())
+            Self(crate::canonical_path::canonicalize(path).unwrap())
         }
         fn resources(&self) -> Resources {
             Resources::new(self.0.to_str().unwrap(), self.0.to_str().unwrap(), &[]).unwrap()

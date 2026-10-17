@@ -124,16 +124,10 @@ mod file {
                 for name in ["entry", "shared", "outputs"] {
                     fs::create_dir(path.join(name)).unwrap();
                 }
-                Self(fs::canonicalize(path).unwrap())
+                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
             }
             fn text(&self, name: &str) -> String {
-                self.0
-                    .join(name)
-                    .to_str()
-                    .unwrap()
-                    .replace('\\', "/")
-                    .trim_start_matches("//?/")
-                    .to_owned()
+                self.0.join(name).to_str().unwrap().replace('\\', "/")
             }
             fn resources(&self) -> Resources {
                 Resources::for_entry(&self.text("entry")).unwrap()
@@ -667,7 +661,7 @@ mod file {
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
                 fs::create_dir_all(&path).unwrap();
-                Self(fs::canonicalize(path).unwrap())
+                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
             }
             fn fixture(name: &str, published: bool) -> Self {
                 let this = Self::new();

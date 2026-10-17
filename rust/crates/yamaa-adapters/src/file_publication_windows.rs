@@ -160,8 +160,9 @@ impl Publisher {
             .ok_or(Error::InvalidTarget)?
             .to_owned();
         windows_file::validate_publication_name(&name).map_err(|_| Error::InvalidTarget)?;
-        let parent_path = std::fs::canonicalize(target.parent().ok_or(Error::InvalidTarget)?)
-            .map_err(|_| Error::InvalidTarget)?;
+        let parent_path =
+            crate::canonical_path::canonicalize(target.parent().ok_or(Error::InvalidTarget)?)
+                .map_err(|_| Error::InvalidTarget)?;
         let parent = Directory::open(&parent_path).map_err(|_| Error::InvalidTarget)?;
         if Directory::open(&parent_path)
             .map_err(|_| Error::InvalidTarget)?
@@ -354,7 +355,7 @@ mod tests {
                 NEXT_TEST.fetch_add(1, Ordering::Relaxed)
             ));
             std::fs::create_dir(&path).unwrap();
-            Self(std::fs::canonicalize(path).unwrap())
+            Self(crate::canonical_path::canonicalize(path).unwrap())
         }
         fn publisher(&self, target: &str) -> Publisher {
             Publisher::new("output.csv", self.0.join(target).to_str().unwrap()).unwrap()

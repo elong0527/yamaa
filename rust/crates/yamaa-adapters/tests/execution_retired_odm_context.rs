@@ -843,21 +843,13 @@ rows:
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
                 fs::create_dir_all(path.join("parent")).unwrap();
-                Self(fs::canonicalize(path).unwrap())
+                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
             }
             fn identity(&self, name: &str) -> String {
                 let value = self.0.join(name).to_string_lossy().into_owned();
                 #[cfg(windows)]
-                {
-                    value
-                        .strip_prefix(r"\\?\")
-                        .unwrap_or(&value)
-                        .replace('\\', "/")
-                }
-                #[cfg(unix)]
-                {
-                    value
-                }
+                let value = value.replace('\\', "/");
+                value
             }
         }
         impl Drop for Study {
@@ -976,7 +968,7 @@ rows:
                 )
                 .unwrap();
                 fs::write(path.join("ex.csv"), "USUBJID,EXSPID,EXROUTE,DATE,DTM,N\nS1,PER1-D1,ORAL,2030-01-01,2030-01-01T08:00:00,1.25\nS2,PER2-D1,INTRAVENOUS,2030-02-01,2030-02-01T09:00:00,-2.25\n").unwrap();
-                Self(fs::canonicalize(path).unwrap())
+                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
             }
             fn path(&self) -> String {
                 self.0.join("spec.yaml").to_str().unwrap().into()
@@ -1251,7 +1243,7 @@ rows:
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
                 fs::create_dir(&path).unwrap();
-                Self(fs::canonicalize(path).unwrap())
+                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
             }
             fn benchmark(name: &str) -> (Self, PathBuf) {
                 fn copy(source: &Path, destination: &Path) {

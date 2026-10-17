@@ -128,7 +128,7 @@ impl Resources {
         for written in std::iter::once(root).chain(data_roots.iter().map(String::as_str)) {
             roots.push(selected_root(written)?);
         }
-        let path = std::fs::canonicalize(base).map_err(|_| Error::InvalidBase)?;
+        let path = crate::canonical_path::canonicalize(base).map_err(|_| Error::InvalidBase)?;
         if !path.is_dir() {
             return Err(Error::InvalidBase);
         }
@@ -869,7 +869,7 @@ impl Resources {
 
 #[cfg(unix)]
 fn selected_root(written: &str) -> Result<Root, Error> {
-    let path = std::fs::canonicalize(written).map_err(|_| Error::InvalidRoot)?;
+    let path = crate::canonical_path::canonicalize(written).map_err(|_| Error::InvalidRoot)?;
     let canonical = directory_segments(&path).ok_or(Error::InvalidRoot)?;
     let before = fs::lstat(&path).map_err(|_| Error::InvalidRoot)?;
     let descriptor = fs::open(
@@ -897,7 +897,7 @@ fn selected_root(written: &str) -> Result<Root, Error> {
 
 #[cfg(windows)]
 fn selected_root(written: &str) -> Result<Root, Error> {
-    let path = std::fs::canonicalize(written).map_err(|_| Error::InvalidRoot)?;
+    let path = crate::canonical_path::canonicalize(written).map_err(|_| Error::InvalidRoot)?;
     let canonical = directory_segments(&path).ok_or(Error::InvalidRoot)?;
     let descriptor = OwnedFd::open(&path).map_err(|_| Error::InvalidRoot)?;
     let expected = descriptor.identity().map_err(|_| Error::InvalidRoot)?;
@@ -1034,13 +1034,12 @@ fn directory_segments(path: &Path) -> Option<Segments> {
     }
     #[cfg(windows)]
     {
-        let text = normalized.to_str()?.replace('\\', "/");
-        let text = text.strip_prefix("//?/").unwrap_or(&text);
-        if let Some(unc) = text.strip_prefix("UNC/") {
-            rooted_segments(&format!("//{unc}"))
-        } else {
-            rooted_segments(text)
-        }
+        // Identities never carry the verbatim prefix, whatever their length:
+        // every open goes through a held directory handle, never this text.
+        let text = normalized.to_str()?;
+        let text =
+            crate::canonical_path::without_verbatim_prefix(text).unwrap_or_else(|| text.to_owned());
+        rooted_segments(&text.replace('\\', "/"))
     }
 }
 /// Convert an absolute caller-owned native path to the resource spelling. YAML
@@ -1192,7 +1191,7 @@ mod physical_capture_tests {
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
             std::fs::create_dir(&path).unwrap();
-            Self(std::fs::canonicalize(path).unwrap())
+            Self(crate::canonical_path::canonicalize(path).unwrap())
         }
         fn resources(&self) -> Resources {
             let root = self.0.to_str().unwrap();
@@ -1201,10 +1200,7 @@ mod physical_capture_tests {
         fn identity(&self, name: &str) -> String {
             let path = self.0.join(name).to_str().unwrap().to_owned();
             #[cfg(windows)]
-            let path = path
-                .strip_prefix(r"\\?\")
-                .unwrap_or(&path)
-                .replace('\\', "/");
+            let path = path.replace('\\', "/");
             path
         }
     }
@@ -1353,16 +1349,10 @@ mod declaring_publication_tests {
             }
             fs::write(path.join("entry/root.yaml"), b"entry").unwrap();
             fs::write(path.join("shared/base.yaml"), b"parent").unwrap();
-            Self(fs::canonicalize(path).unwrap())
+            Self(crate::canonical_path::canonicalize(path).unwrap())
         }
         fn text(&self, name: &str) -> String {
-            self.0
-                .join(name)
-                .to_str()
-                .unwrap()
-                .replace('\\', "/")
-                .trim_start_matches("//?/")
-                .to_owned()
+            self.0.join(name).to_str().unwrap().replace('\\', "/")
         }
         fn resources(&self) -> Resources {
             Resources::for_entry(&self.text("entry")).unwrap()

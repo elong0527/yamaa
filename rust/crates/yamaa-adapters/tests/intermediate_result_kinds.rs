@@ -19,15 +19,12 @@ impl Study {
         ));
         fs::create_dir(&directory).unwrap();
         fs::write(directory.join("spec.yaml"), specification).unwrap();
-        Self(fs::canonicalize(directory).unwrap())
+        Self(yamaa_adapters::canonical_path::canonicalize(directory).unwrap())
     }
     fn specification(&self) -> String {
         let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
         #[cfg(windows)]
-        let path = path
-            .strip_prefix(r"\\?\")
-            .unwrap_or(&path)
-            .replace('\\', "/");
+        let path = path.replace('\\', "/");
         path
     }
     fn input(&self) {

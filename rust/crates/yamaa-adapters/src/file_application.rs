@@ -753,7 +753,7 @@ mod tests {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir_all(root.join("input")).unwrap();
-        let study = Study(fs::canonicalize(root).unwrap());
+        let study = Study(crate::canonical_path::canonicalize(root).unwrap());
         const VERIFICATION_HEADER: &str = "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n";
         // The output preserves declared precision: each large
         // finite float needs 309 whole digits plus the declared 18 fractional digits.
@@ -839,7 +839,7 @@ mod tests {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir_all(root.join("input")).unwrap();
-        let root = fs::canonicalize(root).unwrap();
+        let root = crate::canonical_path::canonicalize(root).unwrap();
         let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../../benchmarks/schema-verification-log");
         fs::copy(fixture.join("input/dm.csv"), root.join("input/dm.csv")).unwrap();
@@ -1188,7 +1188,7 @@ mod tests {
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
             fs::create_dir_all(&root).unwrap();
-            let study = Study(fs::canonicalize(root).unwrap());
+            let study = Study(crate::canonical_path::canonicalize(root).unwrap());
             fs::write(study.0.join("input.csv"), "ID\n1\n").unwrap();
             // This real native output exceeded the former 64 KiB IPC metadata
             // allowance. The wider allowance admits it without losing public
