@@ -26,12 +26,15 @@ serde_json = { version = "1.0.145", features = ["raw_value"] }
 saphyr-parser = { version = ">=0.0.11", default-features = false, optional = true }
 num-bigint = { version = "0.5.1", default-features = false, optional = true }
 
-arrow-array = { version = "=60.0.0", default-features = false, features = ["ffi"] }
-arrow-schema = { version = "=60.0.0", default-features = false }
-arrow-buffer = { version = "=60.0.0", default-features = false }
-arrow-ipc = { version = "=60.0.0", default-features = false }
+arrow-array = { version = ">=57.0.0", default-features = false, features = ["ffi"] }
+arrow-schema = { version = ">=57.0.0", default-features = false }
+arrow-buffer = { version = ">=57.0.0", default-features = false }
+arrow-ipc = { version = ">=57.0.0", default-features = false }
 flatbuffers = { version = "=25.12.19", default-features = false }
-parquet = { version = "=60.0.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2-rust_backend", "lz4", "zstd"], optional = true }
+# The flate2 feature keeps parquet 57's misspelled name: 57 has only
+# `flate2-rust_backened`, while current releases accept it as an alias for
+# `flate2-rust_backend`, so this spelling selects the rust backend on both.
+parquet = { version = ">=57.0.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2-rust_backened", "lz4", "zstd"], optional = true }
 # Direct page admission bounds decompression before the general source reader.
 # These storage dependencies stay at the adapter boundary.
 bytes = { version = "1.12.1", optional = true }

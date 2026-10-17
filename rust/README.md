@@ -68,13 +68,16 @@ Python/R checks and native wheel/source qualification retain the packaged defaul
 
 Arrow/Parquet release-specific operations live in the adapter's
 `storage_api` module: fallible IPC schema conversion, logical timestamp/integer
-construction, and logical-type inspection. The canonical lock and manifests
-continue to select 60; using 57 requires adapting this boundary and qualifying
-that dependency graph. Keep malformed-schema rejection and the closed output
-profile when adapting the boundary.
+construction, logical-type inspection, column logical types and row-group
+reader construction. The manifests accept Arrow/Parquet >=57.0.0 with no upper
+bound; the canonical lock selects 60.0.0, and the adapter's build script
+selects the 57 API shape from the resolved lock (or `YAMAA_PARQUET_MAJOR`).
+Keep malformed-schema rejection and the closed output profile when adapting
+the boundary.
 ## Arrow host handoff
 
-The host bridge uses Arrow-rs 60.0.0 C Data/Stream callbacks, PyArrow >=23.0.1
+The host bridge uses Arrow-rs C Data/Stream callbacks (canonical lock
+60.0.0), PyArrow >=23.0.1
 and R nanoarrow >=0.8.0. An exported stream owns a reader with an independent
 cursor and shared immutable Arrow array references. Each emitted C Data array
 owns its own buffer references. Dropping the build, stream or exporter cannot

@@ -70,11 +70,12 @@ Define-XML are generated through the public study-document API.
 
 The Rust workspace declares MSRV 1.90 and builds with Rust 1.90.0. Canonical
 release builds use `rust/Cargo.lock`, including unchanged copies in both source
-packages. Arrow and Parquet are supported at exactly 60.0.0 with flatbuffers
-25.12.19. Arrow/Parquet 57 (and other Rust Arrow major versions) are unsupported:
-the adapter's version-specific APIs have not been adapted and qualified for
-those graphs. Broadening that range requires separate adapter and installed-host
-qualification first. Portable libm remains exactly 0.2.16, and the reviewed
+packages. Arrow and Parquet are supported at 57.0.0 or newer, with no upper
+bound, with flatbuffers 25.12.19; the canonical lock selects Arrow/Parquet
+60.0.0. The dependency-graph lanes qualify both the 57.0.0 floor and the
+newest compatible resolution. Saved Parquet bytes may differ between
+Arrow/Parquet graphs; repeated saves are byte-identical within a build.
+Portable libm remains exactly 0.2.16, and the reviewed
 local saphyr-parser patch remains part of every graph.
 
 Python supports CPython 3.12 through 3.14 with the runtime ranges in

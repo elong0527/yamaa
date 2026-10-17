@@ -3,10 +3,7 @@ use super::{reader::Error, shape};
 use parquet::{
     column::reader::{ColumnReader, ColumnReaderImpl},
     data_type::{ByteArray, DataType},
-    file::{
-        metadata::ParquetMetaData, properties::ReaderProperties, reader::RowGroupReader,
-        serialized_reader::SerializedRowGroupReader,
-    },
+    file::{metadata::ParquetMetaData, properties::ReaderProperties, reader::RowGroupReader},
     schema::types::ColumnDescriptor,
 };
 use std::sync::Arc;
@@ -110,10 +107,11 @@ pub(super) fn read(
     }
     let mut result: Vec<_> = descriptors.iter().map(|_| Column::Discard).collect();
     for (index, group) in metadata.row_groups().iter().enumerate() {
-        let group = SerializedRowGroupReader::new(
+        let group = crate::storage_api::row_group_reader(
             source.clone(),
+            metadata,
+            index,
             group,
-            metadata.page_index_for_row_group(index),
             properties.clone(),
         )
         .map_err(|_| Error::Malformed)?;
