@@ -31,6 +31,23 @@ UNSAID = re.compile(
     r"|derivations?)\b|\bR0\d\d\b|\bREQ-\d+",
     re.IGNORECASE,
 )
+# Wording that tells the agent how to compute rather than what a value is:
+# joins, filters, sorting, keeping a record, loops, steps and code. Literal
+# values are set aside first (`_prose`), so a "FILTER" label is not wording.
+PROCEDURE = re.compile(
+    r"\b(?:left|right|inner|outer|full|cross|anti|semi)[ -]join\b"
+    r"|\bjoin(?:ed|ing|s)? on\b|\bmerg(?:e|ed|es|ing)\b|\bfilter(?:ed|ing|s)?\b"
+    r"|\bgroup(?:ed|ing|s)? by\b"
+    r"|\bsort(?:ed|ing|s)? (?:the )?(?:records|rows|data(?:sets?)?|by)\b"
+    r"|\b(?:keep|keeps|kept|retain|retains|retained) (?:only )?the (?:first|last)\b"
+    r"|\bfirst[ _]available\b|\b(?:loop|iterate)s? (?:over|through)\b"
+    r"|\bfor each row\b|\bdata ?frames?\b|\bpseudo-?code\b"
+    r"|\b(?:step \d+|first step|next step|final step)\b"
+    r"|\bde-?duplicat\w*|\b(?:drop|remove) duplicates\b|\bcoalesce\w*"
+    r"|\bintermediate (?:datasets?|results?|variables?|columns?|tables?)\b"
+    r"|==|!=|<-|:=",
+    re.IGNORECASE,
+)
 # What a conventions prompt may name: a quoted value, an upper-case code or
 # variable, or a number. Each must come from the full prompt.
 LITERALS = re.compile(r'"[^"]*"|\b[A-Z][A-Z0-9_]+\b|\b\d+(?:\.\d+)?\b')
@@ -46,9 +63,24 @@ def words(text: str) -> str:
     return " ".join(text.split())
 
 
+def _prose(text: str) -> str:
+    """The text without its literal values: quoted text and upper-case codes."""
+    return re.sub(r'"[^"]*"|\b[A-Z][A-Z0-9_]+\b', " ", text)
+
+
+def procedure_problems(text: str) -> list[str]:
+    """Steps, joins, filters, loops or code, which a prompt never gives."""
+    return [
+        f"reads as a procedure: {match.group(0)!r}"
+        for match in PROCEDURE.finditer(words(_prose(text)))
+    ]
+
+
 def recipe_problems(text: str) -> list[str]:
-    """What every tier keeps to: no harness names, lines within 79 columns."""
+    """What every tier keeps to: no harness names or procedure, and lines
+    within 79 columns."""
     problems = [f"names the harness: {m.group(0)!r}" for m in UNSAID.finditer(text)]
+    problems += procedure_problems(text)
     problems += [
         f"line {number} is wider than {WIDTH} columns"
         for number, line in enumerate(text.splitlines(), 1)

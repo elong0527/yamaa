@@ -95,11 +95,11 @@ hold nothing but conventions it equals the full prompt
 (`adam-adsl-age-group`); either way the benchmark adds no signal at that
 step. Rewrite it in the same change as its full prompt.
 
-In a writing task this file is the writer's instruction. The full prompt is
-`/app/sources/full.md`; save the conventions prompt as
-`/app/output/conventions.md`, and before finishing run the verifier's own
-check, `python3 /app/sources/check.py conventions /app/output/conventions.md
---full /app/sources/full.md`.
+In a writing task this file is the writer's instruction. Paths are relative
+to the task folder (`/app` in a Harbor container): the full prompt is
+`sources/full.md`; save the conventions prompt as `output/conventions.md`,
+and before finishing run the verifier's own check, `python3
+sources/check.py conventions output/conventions.md --full sources/full.md`.
 
 ## brief
 

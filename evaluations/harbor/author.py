@@ -13,10 +13,18 @@ candidates which columns the solvers failed. From the repository root::
     python -m evaluations.harbor.author solve --prompts <dir> --model <provider/model>
     python -m evaluations.harbor.author report <out>/jobs/<job>
 
-`write --tier conventions --prompts <dir>` narrows the full prompts in
-`<dir>`, or the committed ones, with the tier contract (`prompts/README.md`)
-as the instruction. These jobs run locally and are never uploaded to Harbor
-Hub. The output directory defaults to `~/.cache/yamaa-harbor/authoring`.
+Without Docker, `prepare` builds the same writer folders, and with
+`--solvers` the candidate solver folders, for agents without a sandbox, and
+`grade` grades the solver folders::
+
+    python -m evaluations.harbor.author prepare --benchmarks <name> --out <dir>
+    python -m evaluations.harbor.author prepare --solvers --prompts <dir> --out <dir>
+    python -m evaluations.harbor.author grade <dir>
+
+`--tier conventions --prompts <dir>` narrows the full prompts in `<dir>`, or
+the committed ones, with the tier contract (`prompts/README.md`) as the
+instruction. These jobs run locally and are never uploaded to Harbor Hub.
+The output directory defaults to `~/.cache/yamaa-harbor/authoring`.
 """
 
 from __future__ import annotations
@@ -28,9 +36,11 @@ import shutil
 import sys
 import tomllib
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
 
 from evaluations.harbor import build, packet
+from evaluations.harbor import grade as grader
 
 HERE = Path(__file__).resolve().parent
 OUT = build.OUT / "authoring"
@@ -85,6 +95,43 @@ network_mode = "no-network"
 """
 
 
+def _request(tier: str, prompts: Path | None) -> None:
+    if tier not in INSTRUCTIONS:
+        raise build.BuildError(f"no writing task for the {tier} prompt")
+    if tier == "full" and prompts is not None:
+        raise build.BuildError(
+            "a full prompt is written from the benchmark's sources alone"
+        )
+
+
+def _sources(
+    benchmark: Path, folder: Path, tier: str, prompts: Path | None
+) -> Path | None:
+    """Write a writer's `sources/`, and `input/` for the full prompt, in
+    `folder`; return the full prompt a conventions writer narrows.
+
+    The full prompt is written from the benchmark's sources alone
+    (`packet.py`): no earlier candidate or solver result joins them. The
+    conventions prompt is written from the full prompt alone, the candidate
+    in `prompts/<benchmark>/full.md` or else the committed one.
+    """
+    _request(tier, prompts)
+    if tier == "full":
+        packet.write(benchmark, folder)
+        return None
+    candidate = prompts / benchmark.name / "full.md" if prompts else None
+    if candidate is None or not candidate.is_file():
+        candidate = build.PROMPTS / benchmark.name / "full.md"
+    if not candidate.is_file():
+        raise build.BuildError(f"{benchmark.name}: no full prompt to narrow")
+    sources = folder / "sources"
+    sources.mkdir(parents=True)
+    shutil.copyfile(candidate, sources / "full.md")
+    for name in packet.CHECKS:
+        shutil.copyfile(HERE / name, sources / name)
+    return candidate
+
+
 def writing_task(
     benchmark: Path,
     tasks: Path,
@@ -93,28 +140,19 @@ def writing_task(
     *,
     prompts: Path | None = None,
 ) -> Path:
-    """One task in which an agent writes a benchmark's prompt of `tier`.
-
-    The full prompt is written from the benchmark's sources alone
-    (`packet.py`): no earlier candidate or solver result joins them. The
-    conventions prompt is written from the full prompt alone, the candidate
-    in `prompts/<benchmark>/full.md` or else the committed one. Each
-    writer's instruction is the document that defines its tier, and the
-    verifier runs `check.py`, which needs no expected data.
+    """One Harbor task in which an agent writes a benchmark's prompt of
+    `tier` from its sources (`_sources`). The writer's instruction is the
+    document that defines its tier, and the verifier runs `check.py`, which
+    needs no expected data.
     """
-    if tier not in INSTRUCTIONS:
-        raise build.BuildError(f"no writing task for the {tier} prompt")
-    if tier == "full" and prompts is not None:
-        raise build.BuildError(
-            "a full prompt is written from the benchmark's sources alone"
-        )
+    _request(tier, prompts)
     task = tasks / f"{benchmark.name}-write-{tier}"
     if task.exists():
         shutil.rmtree(task)
+    full = _sources(benchmark, task / "environment", tier, prompts)
     tests = task / "tests"
     tests.mkdir(parents=True)
-    if tier == "full":
-        packet.write(benchmark, task / "environment")
+    if full is None:
         shutil.copyfile(task / "environment/sources/check.json", tests / "check.json")
         mounts = "sources/ /app/sources/", "input/ /app/input/"
         data = "check.json"
@@ -123,17 +161,7 @@ def writing_task(
             "--data /tests/check.json"
         )
     else:
-        candidate = prompts / benchmark.name / "full.md" if prompts else None
-        if candidate is None or not candidate.is_file():
-            candidate = build.PROMPTS / benchmark.name / "full.md"
-        if not candidate.is_file():
-            raise build.BuildError(f"{benchmark.name}: no full prompt to narrow")
-        sources = task / "environment" / "sources"
-        sources.mkdir(parents=True)
-        shutil.copyfile(candidate, sources / "full.md")
-        for name in packet.CHECKS:
-            shutil.copyfile(HERE / name, sources / name)
-        shutil.copyfile(candidate, tests / "full.md")
+        shutil.copyfile(full, tests / "full.md")
         mounts = ("sources/ /app/sources/",)
         data = "full.md"
         check = "conventions /app/output/conventions.md --full /tests/full.md"
@@ -158,6 +186,43 @@ def writing_task(
         "RUN chmod 700 /tests\n"
     )
     return task
+
+
+def writer_folder(
+    benchmark: Path, out: Path, tier: str = "full", *, prompts: Path | None = None
+) -> Path:
+    """A writer's folder for an agent without a sandbox,
+    `out/<benchmark>-write-<tier>/`: what a writing task's container holds
+    (`_sources`), the instruction, and an empty `output/`."""
+    _request(tier, prompts)
+    folder = out / f"{benchmark.name}-write-{tier}"
+    if folder.exists():
+        shutil.rmtree(folder)
+    _sources(benchmark, folder, tier, prompts)
+    (folder / "instruction.md").write_text(
+        INSTRUCTIONS[tier].read_text(encoding="utf-8")
+    )
+    (folder / "output").mkdir()
+    return folder
+
+
+def solver_folder(benchmark: Path, candidate: str, language: str, out: Path) -> Path:
+    """A candidate solver's folder for an agent without a sandbox,
+    `out/<benchmark>-candidate-<language>/`: the evaluated agent's
+    instruction and inputs and an empty `output/`, standing for `/app`. No
+    grading file or task page is in it."""
+    build.contract_for(benchmark, language)
+    folder = out / build.task_name(benchmark.name, language, candidate=True)
+    if folder.exists():
+        shutil.rmtree(folder)
+    shutil.copytree(
+        benchmark / "input",
+        folder / "input",
+        ignore=shutil.ignore_patterns("*.yaml", "*.yml"),
+    )
+    (folder / "instruction.md").write_text(build.instruction(language, candidate))
+    (folder / "output").mkdir()
+    return folder
 
 
 def solver_tasks(
@@ -285,28 +350,21 @@ def _failures(grade: dict) -> set[str]:
     return failed
 
 
-def report(jobs: list[Path]) -> dict[str, str]:
-    """What candidate solvers failed, per benchmark, for the person who
-    reviews the candidates. No writer receives it."""
+def _summary(grades: Iterable[tuple[str, dict | None]]) -> dict[str, str]:
+    """Per benchmark, how many solver attempts passed and what failed, by
+    output file and column only (`_failures`)."""
     attempts: dict[str, int] = defaultdict(int)
     passed: dict[str, int] = defaultdict(int)
     failed: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    for job in jobs:
-        for path in sorted(job.glob("*/result.json")):
-            name = _task_name(json.loads(path.read_text(encoding="utf-8")))
-            benchmark, marker, _ = name.rpartition("-candidate-")
-            if not marker:
-                continue
-            attempts[benchmark] += 1
-            grade_path = path.parent / "verifier" / "grade.json"
-            if not grade_path.is_file():
-                failed[benchmark]["the attempt was not graded"] += 1
-                continue
-            grade = json.loads(grade_path.read_text(encoding="utf-8"))
-            if grade.get("passed"):
-                passed[benchmark] += 1
-            for item in _failures(grade):
-                failed[benchmark][item] += 1
+    for benchmark, grade in grades:
+        attempts[benchmark] += 1
+        if grade is None:
+            failed[benchmark]["the attempt was not graded"] += 1
+            continue
+        if grade.get("passed"):
+            passed[benchmark] += 1
+        for item in _failures(grade):
+            failed[benchmark][item] += 1
     texts = {}
     for benchmark in sorted(attempts):
         total = attempts[benchmark]
@@ -320,6 +378,58 @@ def report(jobs: list[Path]) -> dict[str, str]:
         ]
         texts[benchmark] = "\n".join(lines) + "\n"
     return texts
+
+
+def report(jobs: list[Path]) -> dict[str, str]:
+    """What candidate solvers in Harbor jobs failed, per benchmark, for the
+    person who reviews the candidates. No writer receives it."""
+
+    def grades():
+        for job in jobs:
+            for path in sorted(job.glob("*/result.json")):
+                name = _task_name(json.loads(path.read_text(encoding="utf-8")))
+                benchmark, marker, _ = name.rpartition("-candidate-")
+                if not marker:
+                    continue
+                grade_path = path.parent / "verifier" / "grade.json"
+                yield (
+                    benchmark,
+                    (
+                        json.loads(grade_path.read_text(encoding="utf-8"))
+                        if grade_path.is_file()
+                        else None
+                    ),
+                )
+
+    return _summary(grades())
+
+
+def grade_folders(root: Path) -> dict[str, str]:
+    """Grade the datasets and script each solver folder (`solver_folder`)
+    wrote against the golden files, as `report` does for Harbor jobs. The
+    session that runs the solvers reads it; no writer receives it."""
+
+    def grades():
+        for folder in sorted(p for p in root.iterdir() if "-candidate-" in p.name):
+            benchmark, _, language = folder.name.rpartition("-candidate-")
+            case = build.BENCHMARKS / benchmark
+            contract = build.contract_for(case, language)
+            output = folder / "output"
+            outputs = [
+                grader.grade_output(spec, case / "expected", output)
+                for spec in contract["outputs"]
+            ]
+            script = grader.grade_script(contract, output)
+            yield (
+                benchmark,
+                {
+                    "passed": script["passed"] and all(o["passed"] for o in outputs),
+                    "outputs": outputs,
+                    "script": script,
+                },
+            )
+
+    return _summary(grades())
 
 
 def _jobs(args, tasks: list[Path], stem: str, permissions: dict | None) -> list[Path]:
@@ -361,27 +471,45 @@ def _fresh(directory: Path) -> Path:
     return directory
 
 
+def _benchmarks(names: list[str] | None) -> list[str]:
+    return names or sorted(
+        p.name
+        for p in build.BENCHMARKS.iterdir()
+        if p.name.startswith(("sdtm-", "adam-"))
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
     write = commands.add_parser("write", help="build writing tasks and jobs")
-    write.add_argument("--tier", choices=list(INSTRUCTIONS), default="full")
-    write.add_argument(
-        "--benchmarks", nargs="+", help="default: every sdtm-* and adam-* benchmark"
-    )
-    write.add_argument(
-        "--prompts", type=Path, help="full prompts to narrow, <dir>/<benchmark>/full.md"
+    prepare = commands.add_parser(
+        "prepare", help="build writer or solver folders for agents without a sandbox"
     )
     solve = commands.add_parser("solve", help="build candidate solver tasks and jobs")
-    solve.add_argument(
-        "--language",
-        nargs="+",
-        choices=sorted(build.LANGUAGES),
-        default=sorted(build.DEFAULT_LANGUAGES),
+    for command in (write, prepare):
+        command.add_argument("--tier", choices=list(INSTRUCTIONS), default="full")
+        command.add_argument(
+            "--benchmarks", nargs="+", help="default: every sdtm-* and adam-* benchmark"
+        )
+    for command in (write, prepare, solve):
+        command.add_argument(
+            "--prompts",
+            type=Path,
+            required=command is solve,
+            help="full prompts, <dir>/<benchmark>/full.md: to narrow or to solve",
+        )
+    for command in (prepare, solve):
+        command.add_argument(
+            "--language",
+            nargs="+",
+            choices=sorted(build.LANGUAGES),
+            default=sorted(build.DEFAULT_LANGUAGES),
+        )
+    prepare.add_argument(
+        "--solvers", action="store_true", help="solver folders for --prompts"
     )
-    solve.add_argument(
-        "--prompts", type=Path, required=True, help="<dir>/<benchmark>/full.md"
-    )
+    prepare.add_argument("--out", type=Path, required=True)
     for command in (write, solve):
         command.add_argument("--model", nargs="+", required=True, help="provider/model")
         command.add_argument("--api-host", help="model API host, for other providers")
@@ -397,26 +525,62 @@ def main() -> None:
     for command in (gather, summary):
         command.add_argument("jobs", nargs="+", type=Path)
     gather.add_argument("--into", type=Path, required=True)
+    mark = commands.add_parser("grade", help="grade solver folders like `report`")
+    mark.add_argument("folders", type=Path)
     args = parser.parse_args()
-    if args.command == "write" and args.tier == "full" and args.prompts:
-        parser.error("a full prompt is written from the benchmark's sources alone")
+    solvers = getattr(args, "solvers", False)
+    if args.command in ("write", "prepare") and not solvers:
+        if args.tier == "full" and args.prompts:
+            parser.error("a full prompt is written from the benchmark's sources alone")
+    if solvers and args.prompts is None:
+        parser.error("--solvers needs the candidates in --prompts")
 
     if args.command == "run":
         asyncio.run(run(json.loads(args.config.read_text(encoding="utf-8"))))
     elif args.command == "collect":
         copied = [p for job in args.jobs for p in collect(job, args.into)]
         print(f"copied {len(copied)} file(s) into {args.into}")
-    elif args.command == "report":
-        for benchmark, text in report(args.jobs).items():
+    elif args.command in ("report", "grade"):
+        texts = (
+            report(args.jobs)
+            if args.command == "report"
+            else grade_folders(args.folders)
+        )
+        for benchmark, text in texts.items():
             print(f"{benchmark}\n{text}")
+    elif args.command == "prepare" and solvers:
+        folders = []
+        for folder in sorted(
+            p for p in args.prompts.iterdir() if (p / "full.md").is_file()
+        ):
+            candidate = (folder / "full.md").read_text(encoding="utf-8")
+            for language in args.language:
+                try:
+                    folders.append(
+                        solver_folder(
+                            build.BENCHMARKS / folder.name,
+                            candidate,
+                            language,
+                            args.out,
+                        )
+                    )
+                except build.BuildError as exc:
+                    print(
+                        f"skip {folder.name}-candidate-{language}: {exc}",
+                        file=sys.stderr,
+                    )
+        print(f"built {len(folders)} solver folder(s) in {args.out}")
+    elif args.command == "prepare":
+        folders = [
+            writer_folder(
+                build.BENCHMARKS / name, args.out, args.tier, prompts=args.prompts
+            )
+            for name in _benchmarks(args.benchmarks)
+        ]
+        print(f"built {len(folders)} writer folder(s) in {args.out}")
     elif args.command == "write":
         commit = build.git_commit()
         tasks_dir = _fresh(args.out / f"write-{args.tier}" / "tasks")
-        names = args.benchmarks or sorted(
-            p.name
-            for p in build.BENCHMARKS.iterdir()
-            if p.name.startswith(("sdtm-", "adam-"))
-        )
         tasks = [
             writing_task(
                 build.BENCHMARKS / name,
@@ -425,7 +589,7 @@ def main() -> None:
                 args.tier,
                 prompts=args.prompts,
             )
-            for name in names
+            for name in _benchmarks(args.benchmarks)
         ]
         configs = _jobs(args, tasks, f"write-{args.tier}", build.tool_permissions(None))
         print(f"built {len(tasks)} writing task(s) in {tasks_dir}")
