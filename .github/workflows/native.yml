@@ -75,6 +75,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install build tools
         run: |
+          python -m pip install pyyaml==6.0.3
           python -m tools.ci.toolchain --install
       - name: Test shared workspace
         id: shared_crates
@@ -91,6 +92,7 @@ jobs:
             python -m tools.numeric.generate_regex_identifiers
             python -m tools.packaging.generate_schema_printable
             python -m tools.packaging.generate_shipped_schema
+            python -m tools.packaging.generate_bindings
             python -m tools.numeric.check_float_text
             python -m tools.numeric.check_sqrt
             python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment.json"
