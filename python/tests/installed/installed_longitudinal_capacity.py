@@ -89,6 +89,9 @@ class LongitudinalCapacity(unittest.TestCase):
                         tuple(value(row, column) for column in range(100)),
                     )
                 if profile == "parquet":
+                    # A link only types the stored artifact: save the producer
+                    # before its consumer reads it.
+                    self.assertTrue(built.save())
                     consumer_document = dict(document)
                     consumer_document["input"] = {
                         "SRC": {"path": "output.parquet", "schema": "spec.yaml"}
@@ -99,12 +102,12 @@ class LongitudinalCapacity(unittest.TestCase):
                     }
                     consumer = root / "consumer.yaml"
                     consumer.write_text(json.dumps(consumer_document), encoding="ascii")
-                    produced = yamaa.domain(consumer)
-                    self.assertEqual(produced.issues.to_dicts(), [])
-                    self.assertEqual(produced.output.shape, (50_000, 100))
-                    self.assertTrue(produced.save())
+                    consumed = yamaa.domain(consumer)
+                    self.assertEqual(consumed.issues.to_dicts(), [])
+                    self.assertEqual(consumed.output.shape, (50_000, 100))
+                    self.assertTrue(consumed.save())
                     self.assertEqual((root / "consumer.csv").read_bytes(), expected)
-                    del produced
+                    del consumed
                 # Saving uses accepted bytes, including after source changes.
                 source.write_bytes(b"changed\n")
                 for _ in range(2):

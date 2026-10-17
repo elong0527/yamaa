@@ -77,10 +77,26 @@ consumer <- sub("RAW: raw.csv", "RAW: {path: ../out/producer.csv, schema: ../pro
 consumer <- sub("out.csv", "../out/consumer.csv", consumer, fixed = TRUE)
 resolver <- yamaa_synthetic_remote_resolver(list("consumer/root.yaml" = charToRaw(consumer),
   "producer/root.yaml" = charToRaw(producer), "raw/data.csv" = charToRaw("ID\n7\n")))
+# A link only types the stored artifact; the producer never runs inside its
+# consumer. Before the caller supplies the artifact it is missing.
+missing <- yamaa_domain("consumer/root.yaml", resolver = resolver)
+stopifnot(identical(missing$issues$condition, "resource_path_missing"),
+  length(resolver$backend$outputs) == 0L)
+produced <- yamaa_domain("producer/root.yaml", resolver = resolver)
+stopifnot(nrow(produced$issues) == 0L, isTRUE(produced$save()))
+saved <- resolver$backend$outputs[["object://synthetic/out/producer.csv"]]
+stopifnot(identical(saved, charToRaw("ID\n7\n")))
+resolver$backend$put("out/producer.csv", saved)
 result <- yamaa_domain("consumer/root.yaml", resolver = resolver)
 stopifnot(nrow(result$issues) == 0L, isTRUE(result$save()),
-  identical(resolver$backend$outputs[["object://synthetic/out/producer.csv"]], charToRaw("ID\n7\n")),
   identical(resolver$backend$outputs[["object://synthetic/out/consumer.csv"]], charToRaw("ID\n7\n")))
-resolver$backend$put("raw/data.csv", NULL, frame = data.frame(ID = 7))
+# The producer's output contract types ID as a signed 64-bit integer.
+resolver$backend$put("out/producer.csv", NULL,
+  frame = nanoarrow::as_nanoarrow_array_stream(data.frame(ID = 7L),
+    schema = nanoarrow::na_struct(list(ID = nanoarrow::na_int64()))))
 result <- yamaa_domain("consumer/root.yaml", resolver = resolver)
 stopifnot(nrow(result$issues) == 0L, identical(as.character(result$output$ID), "7"), isTRUE(result$save()))
+# A supplied frame must still match the producer's output contract.
+resolver$backend$put("out/producer.csv", NULL, frame = data.frame(ID = "7"))
+refused <- yamaa_domain("consumer/root.yaml", resolver = resolver)
+stopifnot(is.null(refused$output), identical(refused$issues$condition, "producer_contract_mismatch"))

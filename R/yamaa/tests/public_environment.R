@@ -289,7 +289,7 @@ failed <- yamaa_domain("spec.yaml", environment = "environment.yaml")
 stopifnot(is.null(failed$output), identical(failed$issues$condition, "division_by_zero"),
   inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"), !file.exists("rounded.csv"))
 cat("public R CSV precision preserves unrounded tables, exact saved bytes and failure gates\n")
-graph_dir <- file.path(work, "producer-metadata-refusal"); dir.create(graph_dir)
+graph_dir <- file.path(work, "linked-artifact-refusal"); dir.create(graph_dir)
 setwd(graph_dir)
 writeLines(c("schema_version: '1.0'", "language: r"), "environment.yaml")
 writeLines(c("schema_version: '1.0'", "domain: PROD", "keys: [ID]",
@@ -302,14 +302,16 @@ writeLines(c("schema_version: '1.0'", "domain: CONS", "keys: [ID]",
   "output: {path: consumer.csv, columns: [ID]}"), "spec.yaml")
 checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
 failed <- yamaa_domain("spec.yaml", environment = "environment.yaml")
+# The producer never runs: the consumer reads its own linked path, and that
+# stored artifact does not exist yet.
 stopifnot(nrow(checked$issues) == 0L,
   identical(failed$issues$condition, "resource_path_missing"),
-  identical(failed$issues$spec_paths, list("input.RAW.path")),
+  identical(failed$issues$spec_paths, list("input.P.path")),
   grepl('"outcome":"failure"', observations(failed), fixed = TRUE),
-  grepl('"path":"never-read.csv"', observations(failed), fixed = TRUE))
+  !grepl('"path":"never-read.csv"', observations(failed), fixed = TRUE))
 stopifnot(is.null(failed$output), !file.exists("produced.csv"), !file.exists("consumer.csv"),
   inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"))
-cat("public R selected functionless producer failure retains its actual source prefix\n")
+cat("public R functionless link reads its missing artifact without running the producer\n")
 graph_document <- function(input, base, output, invalid = FALSE) c(
   "schema_version: '1.0'", "domain: TEST", "keys: [ID]", paste0("base: ", base),
   paste0("input: ", input), "columns:",
@@ -324,29 +326,27 @@ writeLines(graph_document(host_truth[["aliased_leaf_reference"]], "P", "left.csv
 writeLines(graph_document(host_truth[["leaf_reference"]], "P", "right.csv"), "right.yaml")
 writeLines(graph_document(host_truth[["diamond_reference"]], "L", "consumer.csv", TRUE), "spec.yaml")
 for (attempt in 1:2) {
+  # Linked producers supply output contracts only: their own findings are
+  # never compiled, and only the entry is checked.
   checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
-  expected_context <- vapply(c("spec.yaml", "leaf.yaml"), function(source) paste0(
-    '{', if (source == "leaf.yaml") paste0('"declaring_sources":["', normalizePath("parents/base.yaml", winslash = "/"), '"],'),
-    '"entry":"', normalizePath("spec.yaml", winslash = "/"), '","pattern":"\u00e9(","source":"',
-    normalizePath(source, winslash = "/"), '"}'), character(1), USE.NAMES = FALSE)
-  stopifnot(identical(checked$issues$phase, rep("validation", 2L)),
-    identical(checked$issues$condition, rep("invalid_regex", 2L)),
-    identical(checked$issues$requirement, rep("REQ-0827", 2L)),
-    identical(checked$issues$spec_paths, rep(list(host_truth[["verification_pattern_path"]]), 2L)),
-    identical(checked$issues$context, expected_context))
+  stopifnot(identical(checked$issues$phase, "validation"),
+    identical(checked$issues$condition, "invalid_regex"),
+    identical(checked$issues$requirement, "REQ-0827"),
+    identical(checked$issues$spec_paths, list(host_truth[["verification_pattern_path"]])),
+    identical(checked$issues$context, '{"pattern":"\u00e9("}'))
 }
+# A link types whatever file the consumer names; a path that differs from the
+# producer's own output is admitted.
 writeLines(graph_document(host_truth[["wrong_leaf_reference"]], "P", "consumer.csv"), "spec.yaml")
 checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
-stopifnot(identical(checked$issues$condition, "producer_output_path_mismatch"),
-  identical(checked$issues$requirement, "REQ-0534"),
-  identical(checked$issues$spec_paths, list(c("input.P.path", "input.P.schema"))))
+stopifnot(nrow(checked$issues) == 0L)
 writeLines(graph_document(host_truth[["incompatible_leaf_reference"]], "P", "consumer.csv"), "spec.yaml")
 checked <- yamaa_check("spec.yaml", environment = "environment.yaml")
 stopifnot(identical(checked$issues$condition, "redundant_field_type"),
   identical(checked$issues$requirement, "REQ-0523"),
   identical(checked$issues$spec_paths, list("input.P.types.ID")),
   !any(file.exists(fixture_strings(host_truth[["unread_graph_files"]]))))
-cat("public R original inherited diamond checks are complete with no study/publication effects\n")
+cat("public R linked checks report only the entry with no study/publication effects\n")
 # Declaring-file input/output provenance survives inheritance and publication.
 local_paths <- file.path(work, "declaring-file-paths"); dir.create(local_paths)
 setwd(local_paths)

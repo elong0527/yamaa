@@ -59,10 +59,11 @@ def resolve_specification(
     *,
     environment: str | PathLike[str] | None = None,
 ) -> ResolvedSpecification:
-    """Prepare the original entry and linked producers and retain inspection facts.
+    """Prepare the original entry and retain its inspection facts.
 
     Named dictionary references remain in the normalized model. Resources contain
-    selected locations and provenance; their presence does not assert existence.
+    selected locations and provenance, including each `schema` link's producing
+    specification; their presence does not assert existence.
     """
     text, rows = _resolve_specification_file(
         fspath(specification), None if environment is None else fspath(environment)

@@ -34,17 +34,6 @@ def stage(destination: Path) -> None:
     for name in CASES:
         case = destination / name
         stage_case(REPOSITORY / "benchmarks" / name, case)
-    producer = destination / "shared-producer-parquet"
-    producer.mkdir()
-    for name in ("seed.csv", "producer.yaml", "spec.yaml"):
-        # The native execution fixture has only the original authored inputs.
-        # Independent expected reports and artifacts stay in the comparator tree.
-        shutil.copyfile(
-            REPOSITORY
-            / "rust/qualification/producer-cohort/shared-producer-parquet"
-            / name,
-            producer / name,
-        )
 
 
 if __name__ == "__main__":

@@ -56,7 +56,6 @@ class CompletePublicTruth(unittest.TestCase):
                     for suffix in (
                         "original-specifications",
                         "verification-logs",
-                        "producer-cohort",
                     )
                 ],
             }
@@ -66,10 +65,6 @@ class CompletePublicTruth(unittest.TestCase):
                 + " public domain complete Rust run report and successful save observations passed"
                 for name in cohort.COHORT
             ]
-            witnesses.append(
-                cohort.PRODUCER
-                + " actual installed public owner and repeated held-byte Save evidence passed"
-            )
             (supplemental / "unit.log").write_text("\n".join(witnesses))
             for name in cohort.COHORT:
                 raw = cohort.read(ROOT / cohort.TRUTH_PATHS[name])
@@ -78,65 +73,6 @@ class CompletePublicTruth(unittest.TestCase):
                 )
                 raw["runtime_version"] = record["installation"]["runtime_version"]
                 cohort.write(root / "public-reports" / f"{name}.{host}.rust.json", raw)
-            self.producer_owner(root, host, record)
-
-    def producer_owner(self, root, host, record):
-        source = ROOT / "rust/qualification/producer-cohort" / cohort.PRODUCER
-        owner = root / "public-reports/producer-cohort" / host / cohort.PRODUCER
-        case = "/unit-unqualified/" + host + "/" + cohort.PRODUCER
-        owner.mkdir(parents=True)
-        (owner / "case-directory.txt").write_text(case)
-        cohort.write(
-            owner / "provenance.json",
-            {key: record[key] for key in ("scope", "evidence", "installation")},
-        )
-        raw = cohort.read(source / "reference.json")
-        raw.update(
-            runtime=host,
-            backend="rust",
-            engine_version="fixture-engine",
-            example="domain",
-            entry="spec.yaml",
-            activation={"lock": "not_requested", "bindings": [], "tests": []},
-            environment={
-                "source": f"/unit-unqualified/{host}/environment.yaml",
-                "lock_source": f"/unit-unqualified/{host}/"
-                + ("uv.lock" if host == "python" else "renv.lock"),
-            },
-        )
-        raw["runtime_version"] = record["installation"]["runtime_version"]
-        for group in ("nodes", "tables", "verifications", "callbacks"):
-            for observation in raw[group]:
-                observation["specification"] = case + "/" + observation["specification"]
-        for observation in raw["source_reads"]:
-            observation.update(
-                specification=case + "/producer.yaml", base_directory=case
-            )
-        for artifact in raw["artifacts"]:
-            artifact["specification"] = (
-                case
-                + "/"
-                + ("producer.yaml" if artifact["name"] == "produced" else "spec.yaml")
-            )
-        cohort.write(owner / "before.json", raw)
-        for attempt in (1, 2):
-            saved = owner / f"after-{attempt}"
-            cohort.write(
-                saved / "report.json",
-                {
-                    **raw,
-                    "publication": {
-                        "status": "success",
-                        "error": None,
-                        "entered": [
-                            {"node": 1, "published": True},
-                            {"node": 0, "published": True},
-                        ],
-                    },
-                },
-            )
-            for name in cohort.TARGETS:
-                shutil.copyfile(source / "expected" / name, saved / name)
 
     def compare(self):
         return cohort.compare_owners(
@@ -151,8 +87,9 @@ class CompletePublicTruth(unittest.TestCase):
         self,
     ):
         result = self.compare()
-        self.assertEqual(result["summary"], {"python": 19, "r": 19})
-        self.assertEqual(len(result["coverage"]), 38)
+        count = len(cohort.COHORT)
+        self.assertEqual(result["summary"], {"python": count, "r": count})
+        self.assertEqual(len(result["coverage"]), 2 * count)
         self.assertEqual(len(result["batches"]), 2)
         self.assertTrue(
             all(row["truth"]["kind"] == cohort.TRUTH_KIND for row in result["coverage"])
@@ -171,28 +108,11 @@ class CompletePublicTruth(unittest.TestCase):
                 / "public-reports"
                 / Path(row["report"]).name
             )
-            if row["example"] == cohort.PRODUCER:
-                owner = (
-                    self.evidence
-                    / row["runtime"]
-                    / "public-reports/producer-cohort"
-                    / row["runtime"]
-                    / cohort.PRODUCER
-                )
-                projected = cohort.project_report(
-                    cohort.read(owner / "before.json"),
-                    (owner / "case-directory.txt").read_text(),
-                )
-                self.assertEqual(
-                    cohort.read(self.output / row["report"]),
-                    projected.model_dump(mode="json"),
-                )
-            else:
-                self.assertEqual(
-                    (self.output / row["report"]).read_bytes(), source.read_bytes()
-                )
+            self.assertEqual(
+                (self.output / row["report"]).read_bytes(), source.read_bytes()
+            )
 
-    def test_new_cli_compares_all_authored_reports_and_producer_saves_together(self):
+    def test_new_cli_compares_all_authored_reports_together(self):
         # Synthetic reports exercise the real command, never qualification.
         revision = subprocess.check_output(
             ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
@@ -204,10 +124,6 @@ class CompletePublicTruth(unittest.TestCase):
             record = cohort.read(record_path)
             record["evidence"]["source_revision"] = revision
             cohort.write(record_path, record)
-            owner = root / "public-reports/producer-cohort" / host / cohort.PRODUCER
-            provenance = cohort.read(owner / "provenance.json")
-            provenance["evidence"]["source_revision"] = revision
-            cohort.write(owner / "provenance.json", provenance)
         result = subprocess.run(
             [
                 sys.executable,
@@ -230,9 +146,10 @@ class CompletePublicTruth(unittest.TestCase):
             text=True,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(json.loads(result.stdout), {"python": 19, "r": 19})
+        count = len(cohort.COHORT)
+        self.assertEqual(json.loads(result.stdout), {"python": count, "r": count})
         inventory = cohort.read(self.output / "coverage.json")
-        self.assertEqual(len(inventory["coverage"]), 38)
+        self.assertEqual(len(inventory["coverage"]), 2 * count)
         self.assertEqual(len(inventory["batches"]), 2)
 
     def test_malformed_authored_report_cannot_disappear_from_discovery(self):
@@ -413,8 +330,15 @@ class CompletePublicTruth(unittest.TestCase):
         import pyarrow as pa
         import pyarrow.parquet as pq
 
-        report = cohort.reports.read_report(ROOT / cohort.TRUTH_PATHS[cohort.PRODUCER])
-        artifact = next(a for a in report.artifacts if a.profile == "parquet")
+        artifact = cohort.reports.ArtifactObservation(
+            name="produced",
+            profile="parquet",
+            columns=("ID",),
+            types=("str",),
+            row_count=1,
+            records=('["ID"]', '["01"]'),
+            byte_length=228,
+        )
         for value in ("02", 1):
             content = io.BytesIO()
             pq.write_table(pa.table({"ID": [value]}), content)
@@ -473,29 +397,7 @@ assert observed.to_dict(as_series=False) == {"VALUE": [1, 2, None]}
                 raw = copy.deepcopy(result)
                 change(raw)
                 with self.assertRaises(ValueError):
-                    cohort.validate_inventory(
-                        raw, self.revision, (*cohort.COHORT, cohort.PRODUCER)
-                    )
-
-    def test_incomplete_producer_owner_and_altered_saved_bytes_are_refused(self):
-        owner = (
-            self.evidence
-            / "python/public-reports/producer-cohort/python"
-            / cohort.PRODUCER
-        )
-        before_path = owner / "before.json"
-        before = cohort.read(before_path)
-        for key in ("callbacks", "environment", "source_reads"):
-            with self.subTest(missing=key):
-                raw = copy.deepcopy(before)
-                del raw[key]
-                with self.assertRaises(ValueError):
-                    cohort.project_report(
-                        raw, (owner / "case-directory.txt").read_text()
-                    )
-        (owner / "after-2/out.csv").write_bytes(b"ID\n02\n")
-        with self.assertRaisesRegex(ValueError, "CSV bytes"):
-            self.compare()
+                    cohort.validate_inventory(raw, self.revision, cohort.COHORT)
 
     def test_tools_import_without_any_yamaa_package(self):
         program = """
@@ -511,64 +413,11 @@ for name in ('complete_reports', 'report_values', 'public_conformance'):
         subprocess.run([sys.executable, "-c", program], cwd=ROOT, check=True)
 
 
-class ProducerOwnerReview(unittest.TestCase):
+class InstalledOwnerReview(unittest.TestCase):
     def setUp(self):
         self.fixture = CompletePublicTruth("runTest")
         self.fixture.setUp()
         self.addCleanup(self.fixture.doCleanups)
-
-    def source_owner(self):
-        return (
-            self.fixture.evidence
-            / "python/public-reports/producer-cohort/python"
-            / cohort.PRODUCER
-        )
-
-    def test_qualifier_publication_node_and_flag_types_are_exact(self):
-        owner = self.source_owner()
-        record = cohort.read(
-            self.fixture.evidence / "python/supplemental/supplemental.json"
-        )
-        expected = cohort.reports.read_report(
-            ROOT / cohort.TRUTH_PATHS[cohort.PRODUCER]
-        )
-        saved = owner / "after-1/report.json"
-        original = cohort.read(saved)
-        for label, change in (
-            (
-                "boolean node",
-                lambda j: j["publication"]["entered"][0].update(node=True),
-            ),
-            ("float node", lambda j: j["publication"]["entered"][0].update(node=1.0)),
-            (
-                "integer flag",
-                lambda j: j["publication"]["entered"][0].update(published=1),
-            ),
-        ):
-            with self.subTest(label=label):
-                changed = copy.deepcopy(original)
-                change(changed)
-                cohort.write(saved, changed)
-                destination = self.fixture.directory / label
-                with self.assertRaisesRegex(ValueError, "publication"):
-                    cohort.retain_producer(
-                        self.fixture.evidence / "python",
-                        "python",
-                        record,
-                        expected,
-                        destination,
-                    )
-        cohort.write(saved, original)
-
-    def test_original_seed_read_cannot_be_reassigned_to_consumer(self):
-        owner = self.source_owner()
-        raw = cohort.read(owner / "before.json")
-        case = (owner / "case-directory.txt").read_text()
-        self.assertEqual(len(raw["source_reads"]), 1)
-        self.assertEqual(raw["source_reads"][0]["path"], "seed.csv")
-        raw["source_reads"][0]["specification"] = case + "/spec.yaml"
-        with self.assertRaisesRegex(ValueError, "source|resource|owner|node"):
-            cohort.project_report(raw, case)
 
     def test_qualifier_rejects_nonnull_error_on_actual_complete_public_report(self):
         path = (
@@ -594,29 +443,6 @@ class ProducerOwnerReview(unittest.TestCase):
         cohort.write(path, raw)
         with self.assertRaisesRegex(ValueError, "runtime|report|owner|version"):
             self.fixture.compare()
-
-    def test_qualifier_binds_raw_producer_reports_to_installed_runtime_version(self):
-        self.fixture.compare()
-        owner = self.source_owner()
-        for relative in ("before.json", "after-1/report.json", "after-2/report.json"):
-            path = owner / relative
-            raw = cohort.read(path)
-            raw["runtime_version"] = "3.14.9"
-            cohort.write(path, raw)
-        record = cohort.read(
-            self.fixture.evidence / "python/supplemental/supplemental.json"
-        )
-        expected = cohort.reports.read_report(
-            ROOT / cohort.TRUTH_PATHS[cohort.PRODUCER]
-        )
-        with self.assertRaisesRegex(ValueError, "runtime|report|owner|version"):
-            cohort.retain_producer(
-                self.fixture.evidence / "python",
-                "python",
-                record,
-                expected,
-                self.fixture.directory / "changed-runtime",
-            )
 
 
 if __name__ == "__main__":

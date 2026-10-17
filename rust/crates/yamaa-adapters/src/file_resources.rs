@@ -145,16 +145,6 @@ impl Resources {
             reads: 0,
         })
     }
-    pub(crate) fn owned_table_from(
-        &self,
-        declaring: &str,
-        written: &str,
-    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
-        self.host
-            .as_ref()
-            .and_then(|host| host.frame(declaring, written))
-            .map(|table| table as Arc<dyn std::any::Any + Send + Sync>)
-    }
     pub fn capture_reads(&self) -> usize {
         self.reads
     }

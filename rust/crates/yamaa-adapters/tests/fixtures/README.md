@@ -596,8 +596,8 @@ Native and installed Python/R tests compare the complete report, including
 source reads, all source and derived cells, all four checks and the actual three
 published artifacts in verification, warning and primary order. Installed tests
 also retain their actual public reports after this comparison. These witnesses
-qualify this document; they do not close the remaining public API or producer
-graph sidecar support gates.
+qualify this document; they do not close the remaining public API sidecar
+support gates.
 
 ## window_diagnostics
 # Original window diagnostic truth

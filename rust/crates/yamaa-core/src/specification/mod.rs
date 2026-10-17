@@ -367,6 +367,8 @@ pub struct PreparedSpecification {
     project_calls: Option<crate::project_calls::ProjectCalls>,
     sources: Vec<SourceDeclaration>,
     source_interpretations: Vec<SourceInterpretation>,
+    /// The producing specification's output contract for each linked source.
+    source_contracts: Vec<Option<crate::producer_contract::Contract>>,
     driver: usize,
     intermediates: intermediates::Declarations,
     output: TableSchema,
@@ -827,8 +829,6 @@ fn collect_source_findings<'a>(
     d: &'a Document,
     inputs: &[(usize, usize)],
     odm_inputs: &std::collections::BTreeSet<&'a str>,
-    producers: Option<&[crate::producer_admission::Declaration]>,
-    extra: &mut Vec<UnsupportedFeature>,
 ) -> Result<Vec<PreflightFinding>, PrepareError> {
     let mut source_findings = Vec::new();
     for &(name, id) in inputs {
@@ -893,9 +893,6 @@ fn collect_source_findings<'a>(
             }
             continue;
         }
-        if producers.is_none() {
-            optional_features(d, id, &["schema"], &prefix, extra);
-        }
         if profile == Some(SourceProfile::Parquet) {
             if let Some(types) = d
                 .field(id, "types")
@@ -931,14 +928,22 @@ fn collect_source_findings<'a>(
     Ok(source_findings)
 }
 
+type BuiltSources = (
+    Vec<SourceDeclaration>,
+    Vec<SourceInterpretation>,
+    Vec<Option<crate::producer_contract::Contract>>,
+);
+
 fn build_sources<'a>(
     d: &'a Document,
     inputs: &[(usize, usize)],
     odm_inputs: &std::collections::BTreeSet<&'a str>,
-    producers: Option<&[crate::producer_admission::Declaration]>,
-) -> Result<(Vec<SourceDeclaration>, Vec<SourceInterpretation>), PrepareError> {
+    contracts: Vec<(String, crate::producer_contract::Contract)>,
+) -> Result<BuiltSources, PrepareError> {
     let mut sources = Vec::new();
     let mut source_interpretations = Vec::new();
+    let mut source_contracts = Vec::new();
+    let mut contracts = contracts.into_iter().peekable();
     for &(name, selected) in inputs {
         source_interpretations.push(if odm_inputs.contains(text(d, name)?) {
             SourceInterpretation::Odm
@@ -992,21 +997,26 @@ fn build_sources<'a>(
                 .map(|id| text(d, id).map(String::from))
                 .transpose()?,
         });
-        if let Some(producer) = producers.and_then(|p| {
-            p.iter()
-                .find(|p| p.dataset() == text(d, name).unwrap_or(""))
-        }) {
-            // A producer's selected output contract is the sole type authority.
-            // The private metadata wrapper never exposes these as file reads.
-            sources.last_mut().ok_or(PrepareError::Internal)?.types = producer
-                .contract()
+        // Admission returns contracts in authored input order, so a linked
+        // source always takes the next contract.
+        let contract = contracts
+            .next_if(|(dataset, _)| dataset == text(d, name).unwrap_or(""))
+            .map(|(_, contract)| contract);
+        if let Some(contract) = &contract {
+            // The producing specification's output contract is the sole type
+            // authority for the stored fields.
+            sources.last_mut().ok_or(PrepareError::Internal)?.types = contract
                 .fields()
                 .iter()
                 .map(|f| (f.name.clone(), f.kind))
                 .collect();
         }
+        source_contracts.push(contract);
     }
-    Ok((sources, source_interpretations))
+    if contracts.next().is_some() {
+        return Err(PrepareError::Internal);
+    }
+    Ok((sources, source_interpretations, source_contracts))
 }
 
 struct PreparedOutputDeclarations {
@@ -1231,7 +1241,7 @@ impl PreparedSpecification {
     /// Reject unsupported declarations before requesting any source bytes. Effective
     /// source empty-string behavior is missing unless explicitly declared otherwise.
     pub fn prepare(spec: &SpecificationDocument) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, None, None, None, None)
+        Self::prepare_implementation(spec, None, None, Default::default(), None)
     }
     /// Prepare calls against statically admitted environment definitions. No
     /// project imports, lock verification, test invocation or study reads occur.
@@ -1239,32 +1249,28 @@ impl PreparedSpecification {
         spec: &SpecificationDocument,
         functions: &[crate::project_function::Function],
     ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, Some(functions), None, None, None)
+        Self::prepare_implementation(spec, Some(functions), None, Default::default(), None)
     }
     /// Compile project calls and fixed terminology against the same admitted metadata.
     pub fn prepare_with_environment(
         spec: &SpecificationDocument,
         environment: &crate::project_environment::ExecutionEnvironment,
     ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(
-            spec,
-            Some(environment.functions()),
-            Some(environment.catalogue()),
-            None,
-            Some(environment.inventory()),
-        )
+        Self::prepare_linked(spec, Some(environment), Default::default())
     }
-    /// This representation stays inside the sealed producer metadata result.
-    pub(crate) fn prepare_producer_metadata(
+    /// Compile with the producing specifications that `schema` links name. Each
+    /// link supplies only its output contract's field names, order and types;
+    /// a linked input without supplied metadata is invalid.
+    pub fn prepare_linked(
         spec: &SpecificationDocument,
         environment: Option<&crate::project_environment::ExecutionEnvironment>,
-        producers: &[crate::producer_admission::Declaration],
+        links: crate::producer_contract::Links<'_>,
     ) -> Result<Self, PrepareError> {
         Self::prepare_implementation(
             spec,
             environment.map(|e| e.functions()),
             environment.map(|e| e.catalogue()),
-            Some(producers),
+            links,
             environment.map(|e| e.inventory()),
         )
     }
@@ -1272,12 +1278,26 @@ impl PreparedSpecification {
         spec: &SpecificationDocument,
         functions: Option<&[crate::project_function::Function]>,
         catalogue: Option<&crate::project_terminology::Catalogue>,
-        producers: Option<&[crate::producer_admission::Declaration]>,
+        links: crate::producer_contract::Links<'_>,
         inventory: Option<&crate::submission_inventory::Inventory>,
     ) -> Result<Self, PrepareError> {
         let d = spec.document();
         let root = d.root();
         check_prepare_limits(d)?;
+        // Link admission precedes every other declaration finding: a refused
+        // type authority or contract leaves nothing to compile against.
+        let contracts = crate::producer_contract::admit(spec, links).map_err(|error| {
+            use crate::producer_contract::AdmissionError;
+            match error {
+                AdmissionError::Limit(limit) => {
+                    PrepareError::limit(limit.resource, limit.limit, limit.actual, None)
+                }
+                AdmissionError::Invalid(findings) => PrepareError::Invalid(
+                    findings.into_iter().map(PreflightFinding::Scalar).collect(),
+                ),
+                AdmissionError::Boundary => PrepareError::Internal,
+            }
+        })?;
         match_values::declaration_admission(d)?;
         let mut findings = preflight(spec)?;
         findings.extend(odm::context_findings(spec)?);
@@ -1375,8 +1395,7 @@ impl PreparedSpecification {
             .iter()
             .position(|&(name, _)| text(d, name).is_ok_and(|name| name == driver))
             .ok_or(PrepareError::Internal)?;
-        let source_findings =
-            collect_source_findings(d, inputs, &odm_inputs, producers, &mut extra)?;
+        let source_findings = collect_source_findings(d, inputs, &odm_inputs)?;
         if !source_findings.is_empty() {
             return Err(PrepareError::Invalid(source_findings));
         }
@@ -1385,7 +1404,8 @@ impl PreparedSpecification {
         if extra.iter().any(|feature| feature.operation == "parents") {
             return Err(PrepareError::Unsupported(extra));
         }
-        let (sources, source_interpretations) = build_sources(d, inputs, &odm_inputs, producers)?;
+        let (sources, source_interpretations, source_contracts) =
+            build_sources(d, inputs, &odm_inputs, contracts)?;
         let PreparedOutputDeclarations {
             output_order,
             output_path,
@@ -1433,6 +1453,7 @@ impl PreparedSpecification {
                 project_calls: project.map(|p| p.calls),
                 sources,
                 source_interpretations,
+                source_contracts,
                 driver: driver_index,
                 intermediates,
                 output,
@@ -1470,6 +1491,7 @@ impl PreparedSpecification {
             project_calls: project.map(|p| p.calls),
             sources,
             source_interpretations,
+            source_contracts,
             driver: driver_index,
             intermediates,
             output,
@@ -1498,6 +1520,10 @@ impl PreparedSpecification {
     }
     pub fn source_interpretation(&self, index: usize) -> Option<SourceInterpretation> {
         self.source_interpretations.get(index).copied()
+    }
+    /// The producing specification's output contract a linked source must match.
+    pub fn source_contract(&self, index: usize) -> Option<&crate::producer_contract::Contract> {
+        self.source_contracts.get(index).and_then(Option::as_ref)
     }
     pub fn key_names(&self) -> impl Iterator<Item = &str> {
         self.keys

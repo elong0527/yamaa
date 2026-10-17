@@ -166,7 +166,9 @@ owns decoding behavior.
 - Resolve resources from their original declaring file by default; explicit
   input/output `relative_to: entry` selects each specification entry. Admit
   absolute and parent-relative local paths without project-root fallback. Preserve snapshots,
-  original failures, callback counts and producer-first publication order.
+  original failures, callback counts and log-first publication order. A `schema`
+  link types a stored artifact from its producing specification and never runs
+  it; callers build and save producers before their consumers.
 - Keep normative diagnostics registry-owned, including the reviewed
   `unsupported_operation` and `engine_rejected` null-requirement exceptions.
   Cut breaks remain finite and strictly ascending; signed-i64 predicate

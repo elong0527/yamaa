@@ -85,7 +85,7 @@ impl EngineOptions {
     }
 
     /// Activate project functions through a caller-supplied capability.
-    /// Project and producer routes without functions report unsupported.
+    /// Project routes without functions report unsupported.
     pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self {
         self.functions = Some(functions);
         self
@@ -423,12 +423,7 @@ pub struct Build {
     verification: Option<Table>,
     warning: Option<Table>,
     project_failures: Option<Vec<AttemptFailure>>,
-    producer_failures: Option<Vec<AttemptFailure>>,
-    producer_accepted: Option<bool>,
-    producer_nodes: Option<Vec<usize>>,
-    project_interrupt: Option<FunctionError>,
-    producer_interrupt: Option<FunctionError>,
-    projection_failure: Option<String>,
+    interrupt: Option<FunctionError>,
 }
 
 impl Build {
@@ -447,12 +442,7 @@ impl Build {
             verification: None,
             warning: None,
             project_failures: None,
-            producer_failures: None,
-            producer_accepted: None,
-            producer_nodes: None,
-            project_interrupt: None,
-            producer_interrupt: None,
-            projection_failure: None,
+            interrupt: None,
         };
         build.refresh();
         build.capture_evidence(shared);
@@ -474,45 +464,20 @@ impl Build {
                 .as_ref()
                 .is_some_and(|functions| functions.is_interrupt(error))
         };
-        match &self.state {
-            BuildOutcome::Project { attempt, .. } => {
-                let mut borrowed = Vec::new();
-                yamaa_adapters::project_attempt::visit_host_failures(attempt, |stage, error| {
-                    borrowed.push((stage, error));
-                });
-                let failures: Vec<AttemptFailure> = snapshot_failures(borrowed)
-                    .iter()
-                    .map(AttemptFailure::from_internal)
-                    .collect();
-                self.project_interrupt = failures
-                    .iter()
-                    .find(|failure| is_interrupt(&failure.error))
-                    .map(|failure| failure.error.clone());
-                self.project_failures = Some(failures);
-            }
-            BuildOutcome::Producer {
-                attempt,
-                projection,
-            } => {
-                let mut borrowed = Vec::new();
-                yamaa_adapters::producer_attempt::visit_host_failures(attempt, |stage, error| {
-                    borrowed.push((stage, error));
-                });
-                let failures: Vec<AttemptFailure> = snapshot_failures(borrowed)
-                    .iter()
-                    .map(AttemptFailure::from_internal)
-                    .collect();
-                self.producer_interrupt = failures
-                    .iter()
-                    .find(|failure| is_interrupt(&failure.error))
-                    .map(|failure| failure.error.clone());
-                self.producer_failures = Some(failures);
-                self.producer_accepted = Some(attempt.accepted());
-                self.producer_nodes =
-                    Some(attempt.graph.nodes.iter().map(|node| node.node).collect());
-                self.projection_failure = projection.output_error.map(|error| error.to_string());
-            }
-            _ => {}
+        if let BuildOutcome::Project { attempt, .. } = &self.state {
+            let mut borrowed = Vec::new();
+            yamaa_adapters::project_attempt::visit_host_failures(&**attempt, |stage, error| {
+                borrowed.push((stage, error));
+            });
+            let failures: Vec<AttemptFailure> = snapshot_failures(borrowed)
+                .iter()
+                .map(AttemptFailure::from_internal)
+                .collect();
+            self.interrupt = failures
+                .iter()
+                .find(|failure| is_interrupt(&failure.error))
+                .map(|failure| failure.error.clone());
+            self.project_failures = Some(failures);
         }
     }
 
@@ -528,11 +493,6 @@ impl Build {
             BuildOutcome::Project {
                 result: Ok(domain), ..
             } => domain.output(),
-            BuildOutcome::Producer { projection, .. } => projection
-                .result
-                .as_ref()
-                .ok()
-                .and_then(|root| root.output()),
             _ => None,
         }
     }
@@ -553,15 +513,6 @@ impl Build {
             BuildOutcome::Project {
                 result: Ok(domain), ..
             } => domain_logs(domain, warning),
-            BuildOutcome::Producer { projection, .. } => {
-                projection.result.as_ref().ok().and_then(|root| {
-                    if warning {
-                        root.warning_log()
-                    } else {
-                        root.verification_log()
-                    }
-                })
-            }
             _ => None,
         }
     }
@@ -631,10 +582,6 @@ impl Build {
             BuildOutcome::Project {
                 result: Ok(domain), ..
             } => domain.save(),
-            BuildOutcome::Producer { projection, .. } => match &mut projection.result {
-                Ok(root) => root.save(),
-                Err(_) => Err(FailedBuild),
-            },
             _ => Err(FailedBuild),
         };
         let outcome = match saved {
@@ -658,10 +605,6 @@ impl Build {
             BuildOutcome::Project {
                 result: Ok(domain), ..
             } => Some(domain.observations_json()),
-            BuildOutcome::Producer { projection, .. } => match &projection.result {
-                Ok(root) => Some(root.observations_json()),
-                Err(_) => projection.observations.clone(),
-            },
             _ => None,
         };
         if include_measurements {
@@ -686,61 +629,10 @@ impl Build {
         self.project_failures.as_deref()
     }
 
-    /// Borrow the entered producer node identities, when this is a producer
-    /// build. An empty slice means no node was entered.
-    pub fn producer_nodes(&self) -> Option<&[usize]> {
-        self.producer_nodes.as_deref()
-    }
-
-    /// Borrow one entered producer artifact by node, when retained.
-    pub fn producer_artifact(&self, node: usize) -> Option<&[u8]> {
-        match &self.state {
-            BuildOutcome::Producer { attempt, .. } => producer_artifact(attempt, node),
-            _ => None,
-        }
-    }
-
-    /// Borrow retained producer capture sources, when this is a producer build.
-    pub fn producer_sources(&self) -> Option<&SourceBytes> {
-        match &self.state {
-            BuildOutcome::Producer { attempt, .. } => Some(&attempt.resources),
-            _ => None,
-        }
-    }
-
-    /// Borrow the retained producer host failures, when this is a producer build.
-    pub fn producer_failures(&self) -> Option<&[AttemptFailure]> {
-        self.producer_failures.as_deref()
-    }
-
-    /// Report whether the retained producer attempt was accepted, when this
-    /// is a producer build. Acceptance is independent of output admission.
-    pub fn producer_accepted(&self) -> Option<bool> {
-        self.producer_accepted
-    }
-
-    /// Borrow the output-projection failure text, when projection refused.
-    pub fn projection_failure(&self) -> Option<&str> {
-        self.projection_failure.as_deref()
-    }
-
-    /// Borrow the first interrupt-classified host failure, project attempts
-    /// before producer attempts, if any. Hosts propagate the original
-    /// payload from this record.
+    /// Borrow the first interrupt-classified project host failure, if any.
+    /// Hosts propagate the original payload from this record.
     pub fn interrupt(&self) -> Option<&FunctionError> {
-        self.project_interrupt
-            .as_ref()
-            .or(self.producer_interrupt.as_ref())
-    }
-
-    /// Borrow the first interrupt-classified project failure, if any.
-    pub fn project_interrupt(&self) -> Option<&FunctionError> {
-        self.project_interrupt.as_ref()
-    }
-
-    /// Borrow the first interrupt-classified producer failure, if any.
-    pub fn producer_interrupt(&self) -> Option<&FunctionError> {
-        self.producer_interrupt.as_ref()
+        self.interrupt.as_ref()
     }
 }
 
@@ -767,14 +659,6 @@ fn tables_of(state: &BuildOutcome) -> (Option<Table>, Option<Table>, Option<Tabl
             domain.log_table(false),
             domain.log_table(true),
         ),
-        BuildOutcome::Producer { projection, .. } => match &projection.result {
-            Ok(root) => tables(
-                root.output_table(),
-                root.log_table(false),
-                root.log_table(true),
-            ),
-            Err(_) => (None, None, None),
-        },
         _ => (None, None, None),
     }
 }
@@ -785,18 +669,6 @@ fn domain_logs(domain: &yamaa_adapters::file_application::Domain, warning: bool)
     } else {
         domain.verification_log()
     }
-}
-
-fn producer_artifact(attempt: &crate::internal::ProducerAttempt, node: usize) -> Option<&[u8]> {
-    attempt
-        .graph
-        .nodes
-        .iter()
-        .find(|entered| entered.node == node)
-        .and_then(|entered| entered.output.as_ref().ok())
-        .and_then(Option::as_ref)
-        .and_then(|output| output.artifact())
-        .map(|artifact| artifact.bytes())
 }
 
 /// Whether saving published anything.
@@ -952,7 +824,7 @@ mod tests {
 
     struct NoopProgress;
     impl Progress for NoopProgress {
-        fn observe(&self, _event: crate::observe::Event<'_>) {}
+        fn observe(&self, _event: crate::observe::Event) {}
     }
 
     #[test]
@@ -988,8 +860,6 @@ mod tests {
         assert!(build.observations(false).is_none());
         assert!(build.preparation_sources().is_empty());
         assert!(build.project_failures().is_none());
-        assert!(build.producer_failures().is_none());
-        assert!(build.producer_nodes().is_none());
         assert!(build.interrupt().is_none());
     }
 
