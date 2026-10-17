@@ -462,9 +462,10 @@ class PublicationBoundary(unittest.TestCase):
             git("commit", "-am", "side branch")
             with self.assertRaisesRegex(ValueError, "peeled tag"):
                 release.tagged_revision(root, TAG)
-            git("tag", "-a", "yamaa-v0.5.0", "-m", "outside main")
+            outside = f"yamaa-v{OTHER_VERSION}"
+            git("tag", "-a", outside, "-m", "outside main")
             with self.assertRaisesRegex(ValueError, "main ancestry"):
-                release.tagged_revision(root, "yamaa-v0.5.0")
+                release.tagged_revision(root, outside)
 
     def test_publication_rechecks_the_remote_annotated_tag_before_creating_a_release(
         self,
