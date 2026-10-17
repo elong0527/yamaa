@@ -1,10 +1,8 @@
 //! R nanoarrow bridge: fill a fresh nanoarrow-owned C Stream header.
 use extendr_api::prelude::*;
-use yamaa_adapters::{arrow_bridge::FFI_ArrowArrayStream, public_table::PublicTable};
+use yamaa::{FFI_ArrowArrayStream, InputFrame, Table};
 
-pub(crate) fn import(
-    source: Robj,
-) -> std::result::Result<yamaa_adapters::arrow_table::ArrowTable, String> {
+pub(crate) fn import(source: Robj) -> std::result::Result<InputFrame, String> {
     if !source.is_external_pointer() || !source.inherits("nanoarrow_array_stream") {
         return Err("expected a nanoarrow array stream".into());
     }
@@ -16,11 +14,10 @@ pub(crate) fn import(
         return Err("null Arrow stream source".into());
     }
     let stream = unsafe { FFI_ArrowArrayStream::from_raw(pointer) };
-    yamaa_adapters::arrow_bridge::import_public_stream(stream)
-        .map_err(|_| "unsupported host frame".into())
+    InputFrame::import(stream).map_err(|_| "unsupported host frame".into())
 }
 
-pub(crate) fn export(table: &PublicTable, destination: Robj) -> std::result::Result<Robj, String> {
+pub(crate) fn export(table: &Table, destination: Robj) -> std::result::Result<Robj, String> {
     if !destination.is_external_pointer() || !destination.inherits("nanoarrow_array_stream") {
         return Err("expected a fresh nanoarrow array stream".into());
     }

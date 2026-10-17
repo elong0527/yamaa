@@ -1,0 +1,27 @@
+[package]
+name = "yamaa"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[features]
+default = ["yaml", "parquet", "readstat"]
+# Document syntax admission; owned core documents do not require this parser.
+yaml = ["yamaa-adapters/yaml"]
+# Source and artifact codecs share one edge, including native Zstd compression.
+parquet = ["yamaa-adapters/parquet"]
+# SAS binary input only; disabling this feature omits the bundled ReadStat build.
+readstat = ["yamaa-adapters/readstat"]
+
+[dependencies]
+# The forwarded format features above are the only admission edges: without
+# them adapters builds with no physical reader, leaving CSV and Arrow routes.
+yamaa-adapters = { path = "../yamaa-adapters", default-features = false }
+yamaa-core = { path = "../yamaa-core" }
+# Table representation and host transfer only. These edges select no physical
+# reader; format admission stays behind the forwarded features above.
+arrow-array = { version = "=60.0.0", default-features = false, features = ["ffi"] }
+arrow-schema = { version = "=60.0.0", default-features = false }

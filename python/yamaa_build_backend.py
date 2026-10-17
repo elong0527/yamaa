@@ -58,8 +58,12 @@ def native_test_fixtures(workspace: Path):
     invocation = re.compile(r"\s*!\s*([\(\[\{])\s*")
     argument = re.compile(r'"((?:[^"\\]|\\.)*)"\s*,?\s*([\)\]\}])')
     closing = {"(": ")", "[": "]", "{": "}"}
-    for source in sorted((workspace / "crates").rglob("*.rs")):
-        if any(part in {"target", ".git", "__pycache__"} for part in source.parts):
+    crates = workspace / "crates"
+    for source in sorted(crates.rglob("*.rs")):
+        if any(
+            part in {"target", ".git", "__pycache__"}
+            for part in source.relative_to(crates).parts
+        ):
             continue
         text = source.read_text(encoding="utf-8")
         for directive in include.finditer(text):
@@ -155,7 +159,10 @@ def local_patch_sources(workspace: Path):
         for path in sorted(root.rglob("*")):
             if path.is_symlink():
                 raise ValueError("local Cargo patch sources must not be symlinks")
-            if any(part in {"target", ".git", "__pycache__"} for part in path.parts):
+            if any(
+                part in {"target", ".git", "__pycache__"}
+                for part in path.relative_to(root).parts
+            ):
                 raise ValueError("local Cargo patch contains build or cache files")
             if path.name == "Cargo.lock" or path.suffix == ".pyc":
                 raise ValueError("local Cargo patch contains build or cache files")
@@ -311,12 +318,16 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
             # without ever matching its exact-name verification, so those
             # spellings are refused as duplicates as well.
             # A GNU sparse entry reports isfile() but rewriting it with
-            # addfile drops its sparse map and publishes damaged data,
-            # so sparse entries are refused here as well.
-            if any(
-                entry.issparse() or not (entry.isfile() or entry.isdir())
-                for entry in entries
-            ):
+            # addfile as-is drops its sparse map and publishes damaged
+            # data, so a sparse entry is never passed through that way.
+            # Below, each sparse entry is instead rewritten as a regular
+            # member from its fully expanded bytes, whose length is
+            # verified against the entry's logical size; the verified
+            # sets above have already compared those expanded bytes
+            # against the repository files for every restored member,
+            # patch and fixture. Links, devices and FIFOs are still
+            # refused here.
+            if any(not (entry.isfile() or entry.isdir()) for entry in entries):
                 raise ValueError(
                     "source archive must not contain links or special files"
                 )
@@ -334,7 +345,34 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
                 temporary = Path(file.name)
             with tarfile.open(temporary, "w:gz") as target:
                 for entry in entries:
-                    if entry.name == manifest_name:
+                    if entry.issparse():
+                        # Read the fully expanded bytes before clearing
+                        # the sparse map: extractfile() needs the map to
+                        # reconstruct the holes, and its length must
+                        # match the entry's logical size so no data is
+                        # dropped or truncated by the rewrite.
+                        expanded = source.extractfile(entry)
+                        if expanded is None:
+                            raise ValueError(
+                                "source archive sparse member is not a file"
+                            )
+                        payload_bytes = expanded.read()
+                        if len(payload_bytes) != entry.size:
+                            raise ValueError(
+                                "source archive sparse member has incomplete data"
+                            )
+                        entry.sparse = None
+                        entry.type = tarfile.REGTYPE
+                        entry.pax_headers = {
+                            key: value
+                            for key, value in entry.pax_headers.items()
+                            if not key.startswith("GNU.sparse") and key != "size"
+                        }
+                        if entry.name == manifest_name:
+                            payload_bytes = manifest
+                        entry.size = len(payload_bytes)
+                        target.addfile(entry, io.BytesIO(payload_bytes))
+                    elif entry.name == manifest_name:
                         entry.size = len(manifest)
                         target.addfile(entry, io.BytesIO(manifest))
                     else:

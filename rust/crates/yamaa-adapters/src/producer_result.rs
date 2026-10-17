@@ -615,7 +615,6 @@ mod log_tests {
         path::PathBuf,
         sync::atomic::{AtomicUsize, Ordering},
     };
-    use yamaa_core::application_observer::Scope;
     use yamaa_core::{
         function_invocation::{Argument, HostError},
         project_activation::ActivationPort,
@@ -801,8 +800,12 @@ mod log_tests {
                         "producer.yaml",
                     )
                     .unwrap();
-                    let result =
-                        crate::file_application::plain(prepared, id(), Scope::default()).unwrap();
+                    let result = crate::file_application::plain(
+                        prepared,
+                        id(),
+                        yamaa_core::application_observer::Scope::default(),
+                    )
+                    .unwrap();
                     assert!(result.output().is_none());
                     result.issues()
                 }
@@ -817,7 +820,10 @@ mod log_tests {
                         shipped_schema::capture_environment().unwrap(),
                     )
                     .unwrap();
-                    let attempt = prepared.build(&mut NoActivation, Scope::default());
+                    let attempt = prepared.build(
+                        &mut NoActivation,
+                        yamaa_core::application_observer::Scope::default(),
+                    );
                     let result =
                         crate::project_report::build_result(prepared.run(), &attempt, id(), &[])
                             .unwrap();

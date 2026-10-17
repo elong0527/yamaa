@@ -1852,6 +1852,171 @@ mod schema {
             );
         }
 
+        fn required_field(name: &'static str, kind: &'static str) -> V {
+            V::map(vec![(
+                name,
+                V::map(vec![
+                    ("type", V::text(kind)),
+                    ("required", V::boolean(true)),
+                ]),
+            )])
+        }
+        fn operations_registry() -> Vec<(&'static str, V)> {
+            vec![
+                (
+                    "expression",
+                    V::map(vec![("registry", V::text("operations"))]),
+                ),
+                (
+                    "operations",
+                    V::map(vec![
+                        ("source", descriptor("str")),
+                        ("literal", descriptor("int")),
+                    ]),
+                ),
+            ]
+        }
+        fn handled_bundle() -> SchemaStructure {
+            let mut declarations = vec![
+                (
+                    "derivation",
+                    V::map(vec![(
+                        "type",
+                        V::List(vec![
+                            V::text("str"),
+                            V::text("expression"),
+                            V::text("handled_expression_class"),
+                        ]),
+                    )]),
+                ),
+                (
+                    "handled_expression_class",
+                    V::List(vec![
+                        required_field("value", "expression"),
+                        field("unconvertible", "int"),
+                    ]),
+                ),
+            ];
+            declarations.extend(operations_registry());
+            bundle(vec![field("derive", "derivation")], declarations)
+        }
+
+        #[test]
+        fn union_reports_inside_the_member_declaring_the_written_keys() {
+            // Handled derivation: the written keys belong to
+            // handled_expression_class, not to the expression registry
+            // member tried before it, so the finding lands inside `value`.
+            let schema = handled_bundle();
+            let result = validate(
+                &schema,
+                "derive",
+                V::map(vec![
+                    ("value", V::map(vec![("literal", V::text("x"))])),
+                    ("unconvertible", V::integer("0")),
+                ]),
+                false,
+            );
+            assert_eq!(
+                findings(&result),
+                [("derive.value.literal", "invalid_field_type")]
+            );
+
+            // Typed intermediate derivation: the written keys belong to
+            // intermediate_binding_class, not to the untyped member tried
+            // before it, so the finding lands inside `derivation`.
+            let mut declarations = vec![
+                (
+                    "intermediate_derivation",
+                    V::map(vec![(
+                        "type",
+                        V::List(vec![
+                            V::text("untyped_intermediate_derivation"),
+                            V::text("intermediate_binding_class"),
+                        ]),
+                    )]),
+                ),
+                (
+                    "untyped_intermediate_derivation",
+                    V::map(vec![(
+                        "type",
+                        V::List(vec![
+                            V::text("str"),
+                            V::text("expression"),
+                            V::text("intermediate_expression_class"),
+                        ]),
+                    )]),
+                ),
+                (
+                    "intermediate_expression_class",
+                    V::List(vec![required_field("value", "expression")]),
+                ),
+                (
+                    "intermediate_binding_class",
+                    V::List(vec![
+                        required_field("type", "str"),
+                        required_field("derivation", "untyped_intermediate_derivation"),
+                        field("unconvertible", "int"),
+                    ]),
+                ),
+            ];
+            declarations.extend(operations_registry());
+            let schema = bundle(
+                vec![field("binding", "intermediate_derivation")],
+                declarations,
+            );
+            let result = validate(
+                &schema,
+                "binding",
+                V::map(vec![
+                    ("type", V::text("str")),
+                    ("derivation", V::map(vec![("literal", V::text("x"))])),
+                ]),
+                false,
+            );
+            assert_eq!(
+                findings(&result),
+                [("binding.derivation.literal", "invalid_field_type")]
+            );
+        }
+
+        #[test]
+        fn union_keeps_the_previous_fallback_when_no_member_declares_the_keys() {
+            let schema = handled_bundle();
+            // An empty mapping declares no written keys.
+            assert_eq!(
+                findings(&validate(&schema, "derive", V::map(vec![]), false)),
+                [("derive", "invalid_operation_count")]
+            );
+            // A key that no member declares keeps the registry fallback.
+            assert_eq!(
+                findings(&validate(
+                    &schema,
+                    "derive",
+                    V::map(vec![("absent", V::Scalar(N::Null))]),
+                    false
+                )),
+                [("derive.absent", "unknown_operation")]
+            );
+        }
+
+        #[test]
+        fn case_otherwise_reports_inside_the_otherwise_member() {
+            let schema = case_bundle("expressions");
+            let result = validate(
+                &schema,
+                "derive",
+                case(vec![
+                    branch(V::integer(1)),
+                    otherwise(V::map(vec![("literal", V::text("x"))])),
+                ]),
+                false,
+            );
+            assert_eq!(
+                findings(&result),
+                [("derive.case[1].otherwise.literal", "invalid_field_type")]
+            );
+        }
+
         #[test]
         fn fragments_suppress_nested_requiredness_but_keep_type_and_unknown_field_checks() {
             let schema = bundle(

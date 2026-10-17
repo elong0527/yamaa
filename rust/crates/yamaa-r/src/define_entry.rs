@@ -6,7 +6,10 @@ use std::{
     collections::BTreeMap,
     rc::{Rc, Weak},
 };
-type State = yamaa_adapters::file_define::Define;
+use yamaa::{
+    CancellationToken, DefineBuild, DefineRequest, Engine, EngineOptions, HostLanguage, SaveOutcome,
+};
+type State = DefineBuild;
 struct Handle {
     state: Rc<RefCell<State>>,
     identity: Cell<usize>,
@@ -45,9 +48,9 @@ fn text(value: &Raw) -> std::result::Result<&str, String> {
 #[extendr]
 fn define_file(environment: Raw, standard: Raw, created: Robj, installed: Raw) -> List {
     boundary(|| {
-        let environment = text(&environment)?;
-        let standard = text(&standard)?;
-        let installed = text(&installed)?;
+        let environment = text(&environment)?.to_owned();
+        let standard = text(&standard)?.to_owned();
+        let installed = text(&installed)?.to_owned();
         let created = if created.is_null() {
             None
         } else {
@@ -57,16 +60,17 @@ fn define_file(environment: Raw, standard: Raw, created: Robj, installed: Raw) -
                     .ok_or("created must be raw UTF-8 or NULL")?,
             )
         };
-        let created = created.as_ref().map(text).transpose()?;
-        {
-            store(State::prepare(
-                environment,
-                standard,
-                created,
-                installed,
-                yamaa_core::project_function::Language::R,
-            ))
+        let created_text = created.as_ref().map(text).transpose()?.map(str::to_owned);
+        let mut request = DefineRequest::new(&environment, &standard, &installed);
+        if let Some(created) = created_text.as_deref() {
+            request = request.with_created(created);
         }
+        let version = String::new();
+        let engine = Engine::new(EngineOptions::new(HostLanguage::R, "r".into(), version));
+        let define = engine
+            .define(&request, &CancellationToken::new())
+            .map_err(|error| error.to_string())?;
+        store(define)
     })
 }
 #[extendr]
@@ -77,7 +81,7 @@ fn define_issues(handle: Robj) -> List {
             .try_borrow()
             .map_err(|_| "Define result already borrowed")?;
         {
-            crate::issue_frame::frame(state.issues())
+            crate::issue_frame::frame(&state.report().diagnostics)
         }
     })
 }
@@ -90,11 +94,11 @@ fn define_artifacts(handle: Robj) -> List {
             .map_err(|_| "Define result already borrowed")?;
         {
             Ok(
-                List::from_values(state.artifacts().map(|(path, bytes, state)| {
+                List::from_values(state.artifacts().into_iter().map(|artifact| {
                     list!(
-                        path = path,
-                        bytes = Raw::from_bytes(bytes),
-                        state = format!("{state:?}")
+                        path = artifact.path,
+                        bytes = Raw::from_bytes(&artifact.bytes),
+                        state = artifact.state
                     )
                 }))
                 .into_robj(),
@@ -111,14 +115,12 @@ fn define_save(handle: Robj) -> List {
             .map_err(|_| "Define result already borrowed")?;
         {
             match state.save() {
-                Ok(saved) => Ok(list!(saved = saved, failed = false).into_robj()),
+                Ok(SaveOutcome::Saved) => Ok(list!(saved = true, failed = false).into_robj()),
+                Ok(_) => Ok(list!(saved = false, failed = false).into_robj()),
                 Err(_) => {
-                    let cause = match state.failure() {
-                        Some(yamaa_adapters::file_define::Failure::Publication {
-                            error, ..
-                        }) => error.message(),
-                        _ => "cannot save a failed Define result".into(),
-                    };
+                    let cause = state
+                        .save_error_message()
+                        .unwrap_or_else(|| "cannot save a failed Define result".into());
                     Ok(list!(saved = false, failed = true, cause = cause).into_robj())
                 }
             }
