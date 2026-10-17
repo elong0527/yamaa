@@ -72,7 +72,7 @@ impl Drop for Fixture {
     }
 }
 fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> Json {
-    json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
+    json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
 }
 fn issues(fixture: &Fixture) -> Vec<Json> {
     match fixture.attempt() {
