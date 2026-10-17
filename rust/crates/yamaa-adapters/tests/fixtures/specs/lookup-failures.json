@@ -119,7 +119,8 @@
         "context": {
           "left_type": "str",
           "right_type": "int"
-        }
+        },
+        "operand_route": []
       }
     ],
     "handler_counts": []

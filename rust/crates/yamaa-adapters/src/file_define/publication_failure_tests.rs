@@ -70,10 +70,7 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot_in_both
         assert_eq!(finding.condition, "resource_path_content_changed");
         assert_eq!(finding.requirement.as_deref(), Some("REQ-0788"));
         assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
-        assert_eq!(
-            crate::json_wire::decode(&finding.context).unwrap(),
-            crate::json!({"path":"dm.csv"})
-        );
+        assert_eq!(finding.context.clone(), crate::json!({"path":"dm.csv"}));
     }
     assert_eq!(resources.capture_reads(), 1);
     assert_eq!(original.as_ref(), b"ID\n1\n");
@@ -156,10 +153,7 @@ fn changed_define_metadata_uses_original_root_spec_parent_and_dictionary_occurre
             assert_eq!(findings[0].condition, "resource_path_content_changed");
             assert_eq!(findings[0].requirement.as_deref(), Some("REQ-0788"));
             assert_eq!(findings[0].spec_paths, [field]);
-            assert_eq!(
-                crate::json_wire::decode(&findings[0].context).unwrap(),
-                crate::json!({"path":written})
-            );
+            assert_eq!(findings[0].context.clone(), crate::json!({"path":written}));
         }
         assert_eq!(ports.resources().capture_reads(), reads);
         assert_eq!(specification.source().bytes, spec.as_bytes());
@@ -240,7 +234,7 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     assert_eq!(result.issues()[0].requirement.as_deref(), Some("REQ-0764"));
     assert_eq!(result.issues()[0].spec_paths, ["define"]);
     assert_eq!(
-        crate::json_wire::decode(&result.issues()[0].context).unwrap(),
+        result.issues()[0].context.clone(),
         crate::json!({"artifact":1,"cause":error.message()})
     );
     assert_eq!(result.capture_reads(), reads);

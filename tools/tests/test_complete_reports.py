@@ -318,6 +318,58 @@ class CompletePublicTruth(unittest.TestCase):
             any(f.kind == "report.diagnostics.count" for f in verdict.findings)
         )
 
+    def test_present_null_geometry_is_rejected_while_omitted_geometry_reads(self):
+        original = cohort.read(ROOT / cohort.TRUTH_PATHS["negative-integer-overflow"])
+        sites = {
+            "report": (
+                lambda raw: raw["diagnostics"][0],
+                lambda report: report.diagnostics[0],
+            ),
+            "node": (
+                lambda raw: raw["nodes"][0]["diagnostics"][0],
+                lambda report: report.nodes[0].diagnostics[0],
+            ),
+        }
+        for key in sorted(cohort.reports.GEOMETRY_FIELDS):
+            for site, (select, observed) in sites.items():
+                with self.subTest(key=key, site=site):
+                    self.assertIsNotNone(select(original)[key])
+                    omitted = copy.deepcopy(original)
+                    del select(omitted)[key]
+                    report = cohort.reports.parse_report(json.dumps(omitted))
+                    self.assertIsNone(getattr(observed(report), key))
+                    nulled = copy.deepcopy(original)
+                    select(nulled)[key] = None
+                    with self.assertRaises(ValueError):
+                        cohort.reports.parse_report(json.dumps(nulled))
+
+    def test_written_reports_omit_unrecorded_geometry_and_read_back(self):
+        original = cohort.read(ROOT / cohort.TRUTH_PATHS["negative-integer-overflow"])
+        omitted = copy.deepcopy(original)
+        diagnostics = (
+            omitted["diagnostics"][0],
+            omitted["nodes"][0]["diagnostics"][0],
+        )
+        for diagnostic in diagnostics:
+            for key in cohort.reports.GEOMETRY_FIELDS:
+                del diagnostic[key]
+        unrecorded = cohort.reports.parse_report(json.dumps(omitted))
+        path = cohort.reports.write_report(unrecorded, self.directory / "unrecorded")
+        written = cohort.read(path)
+        for diagnostic in (
+            written["diagnostics"][0],
+            written["nodes"][0]["diagnostics"][0],
+        ):
+            self.assertFalse(cohort.reports.GEOMETRY_FIELDS & set(diagnostic))
+        self.assertEqual(cohort.reports.read_report(path), unrecorded)
+        recorded = cohort.reports.parse_report(json.dumps(original))
+        path = cohort.reports.write_report(recorded, self.directory / "recorded")
+        self.assertEqual(cohort.reports.read_report(path), recorded)
+        self.assertEqual(cohort.read(path)["diagnostics"], original["diagnostics"])
+        # Unrecorded geometry stays distinct from a recorded empty route or
+        # zero-width span in a parity comparison.
+        self.assertFalse(cohort.reports.compare_reports(recorded, unrecorded).passed)
+
     def test_exact_scalar_bits_and_missing_empty_are_preserved(self):
         observe = cohort.reports.observe_scalar
         for value in (-(2**63), 2**63 - 1, 2**53 + 1):

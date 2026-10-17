@@ -21,7 +21,12 @@
       "requirement": "REQ-0434",
       "spec_paths": [
         "columns.CELLTOT.derivation.compute"
-      ]
+      ],
+      "operand_route": [],
+      "source_span": {
+        "start": 0,
+        "end": 16
+      }
     }
   ],
   "engine_version": "fixture-engine",
@@ -49,7 +54,12 @@
           "requirement": "REQ-0434",
           "spec_paths": [
             "columns.CELLTOT.derivation.compute"
-          ]
+          ],
+          "operand_route": [],
+          "source_span": {
+            "start": 0,
+            "end": 16
+          }
         }
       ],
       "handler_counts": [],

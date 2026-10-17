@@ -19,7 +19,12 @@
       "requirement": "REQ-0430",
       "spec_paths": [
         "columns.PCHG.derivation.compute"
-      ]
+      ],
+      "operand_route": [],
+      "source_span": {
+        "start": 0,
+        "end": 26
+      }
     }
   ],
   "engine_version": "fixture-engine",
@@ -45,7 +50,12 @@
           "requirement": "REQ-0430",
           "spec_paths": [
             "columns.PCHG.derivation.compute"
-          ]
+          ],
+          "operand_route": [],
+          "source_span": {
+            "start": 0,
+            "end": 26
+          }
         }
       ],
       "handler_counts": [],

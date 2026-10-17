@@ -325,7 +325,7 @@ mod file {
                         assert_eq!(issue.requirement.as_deref(), Some(requirement));
                         assert_eq!(issue.spec_paths, ["input.SRC.path"]);
                         assert_eq!(
-                            yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                            issue.context.clone(),
                             yamaa_adapters::json!({"dataset":"SRC","path":written})
                         );
                     }
@@ -388,7 +388,7 @@ mod file {
                 assert_eq!(issues[0].requirement.as_deref(), Some(requirement));
                 assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
                 assert_eq!(
-                    yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
+                    issues[0].context.clone(),
                     yamaa_adapters::json!({"dataset":"SRC","path":written})
                 );
                 assert!(!study.0.join("entry/output.csv").exists());
@@ -795,8 +795,8 @@ mod file {
                 run.issues()
                     .iter()
                     .any(|i| i.condition == "allowed_values_failed"
-                        && i.context.contains("CL_GLUCOSE")
-                        && i.context.contains("GLUC")),
+                        && yamaa_adapters::json_wire::encode(&i.context).contains("CL_GLUCOSE")
+                        && yamaa_adapters::json_wire::encode(&i.context).contains("GLUC")),
                 "{:?}",
                 run.issues()
             );
@@ -905,7 +905,7 @@ mod file {
                     let actual: Vec<_> = run.issues().iter().map(|issue| yamaa_adapters::json!({
                 "phase": issue.phase, "condition": issue.condition, "requirement": issue.requirement,
                 "spec_paths": issue.spec_paths,
-                "context": yamaa_adapters::json_wire::decode(&issue.context).unwrap()
+                "context": issue.context.clone()
             })).collect();
                     assert_eq!(
                         yamaa_adapters::json!(actual),
@@ -993,7 +993,8 @@ mod file {
             assert!(run.issues().iter().any(|i| i.phase == "engine"
                 && i.condition == "engine_rejected"
                 && i.requirement.is_none()
-                && i.context.contains("publication_target_admission")));
+                && yamaa_adapters::json_wire::encode(&i.context)
+                    .contains("publication_target_admission")));
             assert!(matches!(
                 run.failure(),
                 Some(yamaa_adapters::file_define::Failure::TargetAdmission { index: 1, .. })
@@ -1042,7 +1043,10 @@ mod file {
             assert_eq!(issue.phase, "validation");
             assert_eq!(issue.condition, "dataset_json_path_collision");
             assert_eq!(issue.requirement.as_deref(), Some("REQ-1226"));
-            assert!(issue.context.contains("dm.json") && issue.context.contains("DM.json"));
+            assert!(
+                yamaa_adapters::json_wire::encode(&issue.context).contains("dm.json")
+                    && yamaa_adapters::json_wire::encode(&issue.context).contains("DM.json")
+            );
             let reads = result.capture_reads();
             assert!(result.save().is_err());
             assert_eq!(reads, result.capture_reads());
@@ -1172,8 +1176,7 @@ mod file {
                 .find(|i| i.requirement.as_deref() == Some("REQ-0957"))
                 .unwrap();
             assert_eq!(issue.phase, "verification");
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+            let context: yamaa_core::json::Value = issue.context.clone();
             assert_eq!(context["value"], "Z");
             assert!(context["key_values"]
                 .as_array()

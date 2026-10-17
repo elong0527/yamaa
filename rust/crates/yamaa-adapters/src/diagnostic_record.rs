@@ -5,9 +5,10 @@
 //! This module owns the boundary built on that registry: the version both
 //! hosts read, the severity vocabulary, and the named record types hosts will
 //! consume. It only represents findings; it does not select a phase, bind a
-//! name or evaluate anything. The legacy five-field [`crate::issue_rows::Issue`]
-//! projection stays in place until the projection migrates onto these records,
-//! so nothing here changes host-visible behaviour yet.
+//! name or evaluate anything. The [`crate::issue_rows::Issue`] projection
+//! migrated onto these records in #2675: it carries the same structured
+//! context and geometry, encoded with geometry keys present only when
+//! recorded, so diagnostics without geometry keep their previous bytes.
 //!
 //! # Boundary version
 //!

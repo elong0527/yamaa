@@ -954,10 +954,9 @@ impl RuntimePort for MemoryRuntime<'_> {
                 condition: "engine_rejected".to_string(),
                 requirement: None,
                 spec_paths: Vec::new(),
-                context: format!("producer result projection failed: {error:?}")
-                    .chars()
-                    .take(300)
-                    .collect(),
+                context: yamaa_adapters::json!({"detail": format!("producer result projection failed: {error:?}").chars().take(300).collect::<String>()}),
+                source_span: None,
+                operand_route: None,
             }]),
         }
     }

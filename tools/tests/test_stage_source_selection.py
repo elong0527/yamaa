@@ -1,4 +1,4 @@
-"""Portable staged paths retain exact independently authored source truth."""
+"""Portable staged paths carry authored source truth in the host issue shape."""
 
 import json
 import tempfile
@@ -10,7 +10,9 @@ from tools.staging import stage_specification_inputs as stage
 
 
 class PortableSourceSelectionStage(unittest.TestCase):
-    def test_each_identity_has_one_portable_directory_and_unchanged_truth(self):
+    def test_each_identity_has_one_portable_directory_and_host_projected_truth(
+        self,
+    ):
         for fixture, label in (
             ("source_selection", "source-selection"),
             ("source_filter_scope", "source-filter-scope"),
@@ -28,10 +30,11 @@ class PortableSourceSelectionStage(unittest.TestCase):
                 )
                 truth = json.loads(original.read_text())
                 stage.stage_source_selection_truth(destination, fixture, label)
-                self.assertEqual(
-                    (destination / (label + "-truth.json")).read_bytes(),
-                    original.read_bytes(),
-                )
+                staged = json.loads((destination / (label + "-truth.json")).read_text())
+                self.assertEqual(staged, stage.host_truth(original))
+                for case in staged["cases"].values():
+                    for row in case["issues"] + case["check_issues"]:
+                        self.assertEqual(set(row), set(stage.HOST_ISSUE_FIELDS))
                 paths = json.loads(
                     (destination / (label + "-case-paths.json")).read_text()
                 )

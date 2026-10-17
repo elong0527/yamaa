@@ -59,8 +59,8 @@ mod execution {
                 .iter()
                 .map(|issue| {
                     let mut value = issue.as_value();
-                    assert!(value["context"].is_string());
-                    value["context"] = yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+                    assert!(value["context"].is_object());
+                    value["context"] = issue.context.clone();
                     value
                 })
                 .collect()
@@ -445,7 +445,7 @@ columns:
                     vec![format!("verifications[0].assert.{field}")]
                 );
                 assert_eq!(
-                    yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                    issue.context.clone(),
                     yamaa_adapters::json!({"identifier": "P.MISSING"})
                 );
                 assert!(result.output().is_none());
@@ -541,7 +541,7 @@ columns:
             fs::write(fixture.0.join("alt.csv"), "ID,SEQ,CUT\n1,1,4\n3,1,2\n").unwrap();
         }
         fn finding(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         #[test]
         fn complete_root_outputs_and_handler_geometry_are_current_row_specific() {
@@ -733,7 +733,7 @@ columns:
             }
         }
         fn issues(issues: &[yamaa_adapters::issue_rows::Issue]) -> Vec<yamaa_core::json::Value> {
-            issues.iter().map(|i|yamaa_adapters::json!({"phase":i.phase,"condition":i.condition,"requirement":i.requirement,"spec_paths":i.spec_paths,"context":yamaa_adapters::json_wire::decode(&i.context).unwrap()})).collect()
+            issues.iter().map(|i|yamaa_adapters::json!({"phase":i.phase,"condition":i.condition,"requirement":i.requirement,"spec_paths":i.spec_paths,"context":i.context.clone()})).collect()
         }
         fn reference() -> yamaa_core::json::Value {
             yamaa_adapters::json_wire::decode(include_str!("fixtures/flag_reference.json")).unwrap()
@@ -941,7 +941,7 @@ columns:
                 Ok(result) => result.issues().to_vec(),
                 Err(records) => records,
             };
-            records.iter().map(|issue| yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})).collect()
+            records.iter().map(|issue| yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})).collect()
         }
         const BODY: &str = r#"schema_version: '1.0'
 domain: TEST
@@ -1235,7 +1235,7 @@ columns:
             }
         }
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         #[test]
         fn independent_original_language_captures_match_all_output_bytes_and_complete_findings() {
@@ -1380,10 +1380,23 @@ columns:
                     expected.as_array().unwrap().as_slice(),
                     "{variant}"
                 );
-                assert_eq!(result.observations()["diagnostics"], expected, "{variant}");
+                // The report projection carries the recorded geometry through:
+                // these predicate diagnostics recorded an empty operand route,
+                // except the boolean-missing variant, which recorded ["Right"].
+                let mut expected_report = expected.clone();
+                expected_report[0]["operand_route"] = if variant == "boolean_missing" {
+                    yamaa_adapters::json!(["Right"])
+                } else {
+                    yamaa_adapters::json!([])
+                };
+                assert_eq!(
+                    result.observations()["diagnostics"],
+                    expected_report,
+                    "{variant}"
+                );
                 assert_eq!(
                     result.observations()["nodes"][0]["diagnostics"],
-                    expected,
+                    expected_report,
                     "{variant}"
                 );
                 assert!(result.output().is_none(), "{variant}");
@@ -1608,8 +1621,7 @@ columns:
                     .iter()
                     .map(|issue| {
                         let mut value = issue.as_value();
-                        value["context"] =
-                            yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+                        value["context"] = issue.context.clone();
                         value
                     })
                     .collect::<Vec<_>>(),
@@ -1780,7 +1792,7 @@ columns:
                 .iter()
                 .map(|issue| {
                     let mut value = issue.as_value();
-                    value["context"] = yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+                    value["context"] = issue.context.clone();
                     value
                 })
                 .collect::<Vec<_>>();
@@ -1947,11 +1959,7 @@ columns:
                     "{name}"
                 );
                 assert_eq!(issue.spec_paths, [path], "{name}");
-                assert_eq!(
-                    yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
-                    context,
-                    "{name}"
-                );
+                assert_eq!(issue.context.clone(), context, "{name}");
             }
         }
         #[test]
@@ -1982,7 +1990,7 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
             );
             assert_eq!(issues[0].spec_paths, ["input.SRC.empty_string"]);
             assert_eq!(
-                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
+                issues[0].context.clone(),
                 yamaa_adapters::json!({"dataset":"SRC"})
             );
             assert!(!fixture.0.join("result.csv").exists());
@@ -2075,7 +2083,7 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
             );
             assert_eq!(issue.spec_paths, ["filter"]);
             assert_eq!(
-                yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                issue.context.clone(),
                 yamaa_adapters::json!({"identifier":"ID", "available_phase":"column_derivation", "required_phase":"row_filter"})
             );
             let mut spec = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
@@ -2140,7 +2148,7 @@ columns:
             );
             assert_eq!(issues[0].spec_paths, ["input.SOURCE.ordinal"]);
             assert_eq!(
-                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
+                issues[0].context.clone(),
                 yamaa_adapters::json!({"dataset":"SOURCE", "field":"SourceOrdinal"})
             );
 
@@ -2169,7 +2177,7 @@ columns: [{name: ID, type: str, derivation: {odm: {item: SRC.ITEM}}}]
             );
             assert_eq!(issues[0].spec_paths, ["input.SRC.ordinal"]);
             assert_eq!(
-                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap(),
+                issues[0].context.clone(),
                 yamaa_adapters::json!({"dataset":"SRC", "declared":"ordinal"})
             );
         }
@@ -2402,7 +2410,7 @@ columns:
             }
         }
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         #[test]
         fn complete_independent_record_contexts_and_unchanged_original() {

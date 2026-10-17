@@ -1599,7 +1599,8 @@
           "requirement": "REQ-0190",
           "spec_paths": [
             "verifications[1].assert.when"
-          ]
+          ],
+          "operand_route": []
         }
       ],
       "engine_version": "fixture-engine",
@@ -1619,7 +1620,8 @@
               "requirement": "REQ-0190",
               "spec_paths": [
                 "verifications[1].assert.when"
-              ]
+              ],
+              "operand_route": []
             }
           ],
           "handler_counts": [],
@@ -1724,7 +1726,8 @@
           "requirement": "REQ-0190",
           "spec_paths": [
             "verifications[1].assert.require"
-          ]
+          ],
+          "operand_route": []
         }
       ],
       "engine_version": "fixture-engine",
@@ -1744,7 +1747,8 @@
               "requirement": "REQ-0190",
               "spec_paths": [
                 "verifications[1].assert.require"
-              ]
+              ],
+              "operand_route": []
             }
           ],
           "handler_counts": [],
@@ -1849,7 +1853,8 @@
           "requirement": "REQ-0190",
           "spec_paths": [
             "verifications[1].assert.require"
-          ]
+          ],
+          "operand_route": []
         }
       ],
       "engine_version": "fixture-engine",
@@ -1869,7 +1874,8 @@
               "requirement": "REQ-0190",
               "spec_paths": [
                 "verifications[1].assert.require"
-              ]
+              ],
+              "operand_route": []
             }
           ],
           "handler_counts": [],
@@ -2066,7 +2072,8 @@
           "requirement": "REQ-0190",
           "spec_paths": [
             "verifications[1].assert.when"
-          ]
+          ],
+          "operand_route": []
         }
       ],
       "engine_version": "fixture-engine",
@@ -2086,7 +2093,8 @@
               "requirement": "REQ-0190",
               "spec_paths": [
                 "verifications[1].assert.when"
-              ]
+              ],
+              "operand_route": []
             }
           ],
           "handler_counts": [],
@@ -2191,7 +2199,8 @@
           "requirement": "REQ-0190",
           "spec_paths": [
             "verifications[1].assert.when"
-          ]
+          ],
+          "operand_route": []
         }
       ],
       "engine_version": "fixture-engine",
@@ -2211,7 +2220,8 @@
               "requirement": "REQ-0190",
               "spec_paths": [
                 "verifications[1].assert.when"
-              ]
+              ],
+              "operand_route": []
             }
           ],
           "handler_counts": [],
