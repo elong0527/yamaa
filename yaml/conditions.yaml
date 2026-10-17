@@ -122,8 +122,6 @@ conditions:
   pattern_mismatch: {phases: [validation]}
   phase_boundary: {phases: [validation]}
   producer_contract_mismatch: {phases: [validation]}
-  producer_output_path_mismatch: {phases: [validation]}
-  producer_workflow_cycle: {phases: [validation]}
   prohibited_construct: {phases: [validation]}
   prohibited_function: {phases: [validation]}
   project_environment_invalid: {phases: [validation]}

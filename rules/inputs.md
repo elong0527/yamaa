@@ -13,11 +13,10 @@ file's contents.
 
 `dataset_class.path` names the file a specification reads, and its
 case-insensitive extension selects the source profile that reads it:
-`.csv`, `.parquet`, `.sas7bdat` or `.xpt`. An input linked to its producing
-specification instead takes the profile its producer wrote. No reader inspects
-a file's contents to choose a profile, a delimiter or a quote character, and no
-unknown extension falls back to a default: it fails during validation, before
-any byte is read.
+`.csv`, `.parquet`, `.sas7bdat` or `.xpt`, including for an input linked to
+its producing specification. No reader inspects a file's contents to choose a
+profile, a delimiter or a quote character, and no unknown extension falls back
+to a default: it fails during validation, before any byte is read.
 
 Fails: `source_profile_unknown`.
 Evidence: `negative-source-unknown-format`, `schema-parquet`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`.
@@ -40,13 +39,11 @@ one profile name in both directions. The read-only SAS and Transport profiles
 of [SAS-1](reference/sas.md#sas-1) are the exceptions; no artifact
 publication profile corresponds to them.
 
-A specification that reads an artifact another specification produced learns
-its byte encoding from the producer through the producing-specification link
-of [INPUT-10](#input-10). The producer's `output.path` states the profile by
-its extension, just as `output.columns` states the fields, and the consumer
-reads the profile from the producing specification, not from the name it knows
-the file by. A copy stored under another name is still read under the profile
-its producer wrote it with.
+A specification that reads an artifact another specification produced reads
+it like any other input: the extension of its own `path` selects the profile.
+The producing-specification link of [INPUT-10](#input-10) supplies the stored
+fields, their order and their types, not the profile, and a Parquet artifact's
+self-describing types must still equal them under [INPUT-11](#input-11).
 
 `source_profile_unknown` is decided from the written path before any byte is
 read and reports in the `validation` phase. Source-profile reading conditions
@@ -90,7 +87,7 @@ position of the data record in stored record order, assigned before any
 filter, join, grouping or window reads the input dataset; filtering keeps the
 original positions. Without the declaration, ingestion adds no field.
 
-Evidence: `schema-source-ordinal`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::source_ordinals_precede_filtering_and_count_multiline_records_once`, `rust/crates/yamaa-adapters/tests/file_producer.rs::linked_producer_ordinal_is_local_to_consumers_and_keeps_the_stored_contract`.
+Evidence: `schema-source-ordinal`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::source_ordinals_precede_filtering_and_count_multiline_records_once`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_linked_ordinal_is_local_to_the_consumer_and_never_part_of_the_contract`.
 Replaces: REQ-1291, REQ-1292, REQ-1293.
 
 ```yaml
@@ -277,18 +274,18 @@ string outside `str`. The delimited profile admits no empty string
 
 <a id="input-10"></a>
 
-### INPUT-10. A schema link makes the producing specification an executable predecessor
+### INPUT-10. A schema link types a stored artifact from its producing specification without running it
 
 `dataset_class.schema` names the complete yamaa specification that produces
-the stored artifact, whose output contract and workflow provenance the
-artifact then carries. The producer validates against the same `root_class`:
-its sources must exist and validate, its derivations must be complete and its
-own `schema` links validate recursively. It completes before the consumer
-reads the artifact named by `path`. The dependency graph must be acyclic, so a
-link cannot name the consuming specification or one above it in the workflow.
+the stored artifact at `path`. The link is type metadata only: the producer is
+read and validated as a specification, and its output columns type the
+artifact under [INPUT-11](#input-11), but it is never compiled or run, and its
+own sources and `schema` links are not followed. The consumer reads the
+artifact like any other input, so the caller builds and saves the producer
+first. A link cannot name the consuming specification.
 
-Fails: `invalid_producer_contract`, `producer_workflow_cycle`.
-Evidence: `adam-adae-exposure-adjusted-incidence`, `sdtm-dm-race-ethnicity`, `rust/crates/yamaa-adapters/tests/file_producer.rs::study_relative_schema_links_select_each_producer_wrapper_and_its_output_base`.
+Fails: `invalid_producer_contract`.
+Evidence: `ars-ae-incidence-results`, `sdtm-dm-race-ethnicity`, `adam-adae-exposure-adjusted-incidence`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::the_producing_specification_is_read_but_never_compiled_or_executed`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`.
 Replaces: REQ-0520, REQ-0521, REQ-0534.
 
 ```yaml
@@ -302,9 +299,16 @@ input:
 [File resolution](reference/files.md) confines both. The referenced
 document is validated against the same `root_class` in `schema.yaml`; there is
 no second source-schema class or field-description language. A document named
-by `schema` that does not validate as a complete yamaa specification fails with
-`invalid_producer_contract`, and a producer dependency that creates a cycle
-fails with `producer_workflow_cycle`.
+by `schema` that does not validate as a complete yamaa specification, whose
+`output.columns` do not form a valid output contract under
+[INPUT-11](#input-11), or that is the consuming specification itself fails
+with `invalid_producer_contract`. A missing producing specification fails like
+any missing file, at `input.<dataset>.schema`.
+
+Checking reads the producing specification but no study data, so it admits a
+link whose artifact does not exist yet. Building the consumer reads the
+artifact named by `path`: an absent artifact fails as a missing input at
+`input.<dataset>.path`, and no producer runs in its place.
 
 <a id="input-11"></a>
 
@@ -319,12 +323,15 @@ producer's declared type. Missing, extra, reordered, duplicate or undeclared
 fields fail.
 
 Fails: `producer_contract_mismatch`.
-Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`.
+Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_header_must_equal_the_producer_output_columns_in_order`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_parquet_schema_must_equal_the_producer_output_types`.
 Replaces: REQ-0522, REQ-0524, REQ-0535.
 
 A stored artifact whose field names, order or self-describing types do not
 exactly match the producer's output contract fails with
-`producer_contract_mismatch`.
+`producer_contract_mismatch`. The comparison is made when the consumer reads
+the artifact: a delimited header is compared before any cell is typed, and the
+typed fields of every profile, including a frame a host supplies, are compared
+before a generated ordinal is appended.
 
 A stored cell in a delimited artifact is still text. After recognizing missing
 values, ingestion applies the `str` row of [VALUE-3](values.md#value-3) to

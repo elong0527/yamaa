@@ -21,8 +21,9 @@ inspect fields. Resolution failures signal \code{yamaa_resolved_specification_er
 with an \code{issues} data frame and the same findings as \code{diagnostics}
 records (see \code{\link{yamaa_domain}}). Invalid serialized artifacts signal an error.}
 \description{Prepares original specifications through the shared engine and retains
-the composed normalized model, original field provenance, resource locations and
-producer-specific entry identities. It reads metadata without invoking project code.}
+the composed normalized model, original field provenance and resource locations,
+including each linked producing specification. It reads metadata without invoking
+project code.}
 \details{Artifact version 1 preserves named dictionary references. The distinct
 format records lexical locations, not resource availability or file access
 capabilities. Deserialization replays inspection facts only; it never opens

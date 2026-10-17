@@ -977,15 +977,18 @@ mod project {
             assert!(!study.0.join("input.csv").exists());
         }
     }
-    mod producer_admission {
+    mod producer_links {
         use std::sync::Arc;
         use yamaa_adapters::{
-            producer_admission::{prepare, Error, SuppliedProducer},
             shipped_schema,
-            specification_source::{InheritancePort, PreparedDocument, Source},
+            specification_source::{
+                link_metadata, InheritancePort, LinkedSpecification, PreparedDocument, Source,
+            },
         };
         use yamaa_core::inheritance::{Source as FileIdentity, SourceError};
-        use yamaa_core::{producer_admission::Error as CoreError, specification::PrepareError};
+        use yamaa_core::{
+            producer_contract::Links, specification::PrepareError, value::ColumnType,
+        };
         const PRODUCER:&str="schema_version: '1.0'\ndomain: PROD\nkeys: [ID]\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: float, label: Reported value, derivation: RAW.VALUE}\noutput: {path: './produced.csv', columns: [ID, VALUE]}\n";
         const CONSUMER:&str="schema_version: '1.0'\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './produced.csv', schema: nested/producer.yaml}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
         fn standalone(identity: &str, text: &str) -> Arc<PreparedDocument> {
@@ -999,50 +1002,65 @@ mod project {
                     .unwrap(),
             )
         }
-        fn supplied(document: Arc<PreparedDocument>) -> SuppliedProducer {
-            SuppliedProducer {
+        fn linked(document: Arc<PreparedDocument>) -> LinkedSpecification {
+            LinkedSpecification {
                 dataset: "SRC".into(),
-                schema_identity: "/producer.yaml".into(),
-                source_identity: "/artifacts/produced.csv".into(),
-                output_identity: "/artifacts/produced.csv".into(),
-                document,
+                identity: document.source().identity.clone(),
+                document: Some(document),
             }
         }
+        fn check(
+            consumer: &PreparedDocument,
+            links: &[LinkedSpecification],
+        ) -> Result<yamaa_core::domain::CheckedSpecification, PrepareError> {
+            let metadata = link_metadata(consumer, links);
+            yamaa_core::domain::check_linked(
+                consumer.model(),
+                None,
+                Links {
+                    consumer: &consumer.source().identity,
+                    links: &metadata,
+                },
+            )
+        }
         #[test]
-        fn original_documents_and_distinct_metadata_remain_held_without_study_authority() {
+        fn linked_documents_supply_only_their_output_contract_without_study_authority() {
             let consumer = standalone("/consumer.yaml", CONSUMER);
             let producer = standalone("/producer.yaml", PRODUCER);
-            let admitted = prepare(
-                Arc::clone(&consumer),
-                vec![supplied(Arc::clone(&producer))],
-                None,
-            )
-            .unwrap();
-            drop(consumer);
-            drop(producer);
-            assert_eq!(admitted.consumer().source().bytes, CONSUMER.as_bytes());
+            let links = [linked(Arc::clone(&producer))];
+            let checked = check(&consumer, &links).unwrap();
+            let compiled = checked.compiled();
+            assert_eq!(compiled.sources()[0].path, "./produced.csv");
             assert_eq!(
-                admitted.producers()[0].document.source().bytes,
-                PRODUCER.as_bytes()
-            );
-            let declaration = &admitted.metadata().producers()[0];
-            assert_eq!(
-                declaration.schema_origin().written(),
-                "nested/producer.yaml"
+                compiled.sources()[0].types,
+                [
+                    ("ID".to_owned(), ColumnType::Int),
+                    ("VALUE".to_owned(), ColumnType::Float)
+                ]
             );
             assert_eq!(
-                declaration.schema_origin().declaring_source(),
-                "/consumer.yaml"
-            );
-            assert_eq!(declaration.output_origin().written(), "./produced.csv");
-            assert_eq!(
-                declaration
-                    .contract()
+                compiled
+                    .source_contract(0)
+                    .unwrap()
                     .fields()
                     .iter()
                     .map(|f| f.name.as_str())
                     .collect::<Vec<_>>(),
                 ["ID", "VALUE"]
+            );
+            drop(links);
+            drop(producer);
+            assert_eq!(compiled.source_contract(0).unwrap().fields().len(), 2);
+            // Without the linked document the declaration has no type authority.
+            let Err(PrepareError::Invalid(findings)) = check(&consumer, &[]) else {
+                panic!("missing link metadata")
+            };
+            let finding = findings[0].diagnostic();
+            assert_eq!(finding.definition().condition, "invalid_producer_contract");
+            assert_eq!(finding.spec_paths, ["input.SRC.schema"]);
+            assert_eq!(
+                finding.context["reason"],
+                yamaa_core::json::Value::String("missing_metadata".into())
             );
         }
         struct Parent {
@@ -1105,7 +1123,7 @@ mod project {
             (Arc::new(document), port)
         }
         #[test]
-        fn inherited_schema_artifact_and_output_paths_keep_independent_authored_layers() {
+        fn inherited_link_and_artifact_paths_keep_independent_authored_layers() {
             let entry="schema_version: '1.0'\nparents: parent.yaml\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './child.csv'}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
             let parent =
         "schema_version: '1.0'\ninput: {SRC: {path: parent.csv, schema: '../producer.yaml'}}\n";
@@ -1121,161 +1139,28 @@ mod project {
             let (producer, producer_port) =
                 inherited("/producer.yaml", &producer_entry, producer_parent);
             let before = (consumer_port.calls.clone(), producer_port.calls.clone());
-            let admitted = prepare(Arc::clone(&consumer), vec![supplied(producer)], None).unwrap();
-            let declaration = &admitted.metadata().producers()[0];
-            assert_eq!(
-                declaration.schema_path(),
-                "internal/parent/../producer.yaml"
-            );
-            assert_eq!(declaration.schema_origin().written(), "../producer.yaml");
-            assert_eq!(
-                declaration.schema_origin().declaring_source(),
-                "/parent.yaml"
-            );
-            assert_eq!(declaration.input_origin().written(), "./child.csv");
-            assert_eq!(
-                declaration.input_origin().declaring_source(),
-                "/consumer.yaml"
-            );
-            assert_eq!(declaration.output_origin().written(), "../stored.csv");
-            assert_eq!(
-                declaration.output_origin().declaring_source(),
-                "/producer-parent.yaml"
-            );
-            assert_eq!(
-                declaration.contract().path(),
-                "internal/parent/../stored.csv"
-            );
+            let schema = consumer.written_input_origin("SRC", "schema").unwrap();
+            assert_eq!(schema.written, "../producer.yaml");
+            assert_eq!(schema.declaring_source, "/parent.yaml");
+            let path = consumer.written_input_origin("SRC", "path").unwrap();
+            assert_eq!(path.written, "./child.csv");
+            assert_eq!(path.declaring_source, "/consumer.yaml");
+            let checked = check(&consumer, &[linked(Arc::clone(&producer))]).unwrap();
+            // The consumer reads its own path; the producer's inherited output
+            // path is never consulted.
+            assert_eq!(checked.compiled().sources()[0].path, "./child.csv");
+            assert_eq!(checked.compiled().sources()[0].types.len(), 2);
             assert_eq!(consumer.parents()[0].source().bytes, parent.as_bytes());
             assert_eq!(
-                admitted.producers()[0].document.parents()[0].source().bytes,
+                producer.parents()[0].source().bytes,
                 producer_parent.as_bytes()
             );
             assert_eq!(before, (consumer_port.calls, producer_port.calls));
         }
         #[test]
-        fn missing_and_contradictory_metadata_fail_before_capability() {
-            let consumer = standalone("/consumer.yaml", CONSUMER);
-            let producer = standalone("/producer.yaml", PRODUCER);
-            assert!(matches!(
-                prepare(Arc::clone(&consumer), vec![], None),
-                Err(Error::Admission(CoreError::Invalid(_)))
-            ));
-            let mut wrong = supplied(Arc::clone(&producer));
-            wrong.schema_identity = "/wrong.yaml".into();
-            assert!(matches!(
-                prepare(Arc::clone(&consumer), vec![wrong], None),
-                Err(Error::Admission(CoreError::Invalid(_)))
-            ));
-            assert!(prepare(consumer, vec![supplied(producer)], None).is_ok());
-        }
-        #[test]
-        fn ordinary_preparation_remains_unsupported_and_inline_types_are_portable() {
-            let consumer = standalone("/consumer.yaml", CONSUMER);
-            let redundant = CONSUMER.replace(
-                "schema: nested/producer.yaml",
-                "schema: nested/producer.yaml, types: {ID: int}",
-            );
-            let redundant = standalone("/consumer.yaml", &redundant);
-            let error = prepare(
-                redundant,
-                vec![supplied(standalone("/producer.yaml", PRODUCER))],
-                None,
-            );
-            let Err(Error::Admission(CoreError::Invalid(findings))) = error else {
-                panic!("redundant authority")
-            };
-            assert_eq!(findings[0].definition().requirement, Some("REQ-0523"));
-            assert_eq!(findings[0].spec_paths, ["input.SRC.types.ID"]);
-            assert!(matches!(
-                yamaa_core::domain::check(consumer.model()),
-                Err(PrepareError::Unsupported(_))
-            ));
-        }
-        #[test]
-        fn producer_must_use_the_same_captured_root_closure() {
-            use yamaa_adapters::specification_source::CapturedSchema;
-            let consumer = standalone("/consumer.yaml", CONSUMER);
-            let shipped = shipped_schema::capture().unwrap();
-            let mut sources = shipped.sources().to_vec();
-            sources[0]
-                .bytes
-                .extend_from_slice(b"\n# independent changed closure\n");
-            let different = CapturedSchema::admit(sources, 0).unwrap();
-            let producer = Arc::new(
-                different
-                    .prepare_standalone(Source {
-                        identity: "/producer.yaml".into(),
-                        bytes: PRODUCER.as_bytes().to_vec(),
-                    })
-                    .unwrap(),
-            );
-            let Err(Error::Admission(CoreError::Invalid(findings))) =
-                prepare(Arc::clone(&consumer), vec![supplied(producer)], None)
-            else {
-                panic!("captured root mismatch")
-            };
-            assert_eq!(findings[0].definition().requirement, Some("REQ-0534"));
-            assert_eq!(findings[0].spec_paths, ["input.SRC.schema"]);
-        }
-        #[test]
-        fn shared_producer_identities_require_the_same_original_byte_snapshot() {
-            let two=CONSUMER.replace("schema: nested/producer.yaml}}", "schema: nested/producer.yaml}, OTHER: {path: './produced.csv', schema: nested/producer.yaml}}")+"base: SRC\n";
-            let consumer = standalone("/consumer.yaml", &two);
-            let original = standalone("/producer.yaml", PRODUCER);
-            // Equal normalized contracts cannot hide different captured source bytes.
-            let changed = standalone(
-                "/producer.yaml",
-                &(PRODUCER.to_owned() + "# different captured bytes\n"),
-            );
-            let mut other = supplied(changed);
-            other.dataset = "OTHER".into();
-            let Err(Error::Admission(CoreError::Invalid(findings))) =
-                prepare(consumer, vec![supplied(original), other], None)
-            else {
-                panic!("contradictory source snapshot")
-            };
-            assert_eq!(findings[0].definition().requirement, Some("REQ-0534"));
-            assert_eq!(findings[0].spec_paths, ["input.OTHER.schema"]);
-            assert_eq!(
-                findings[0].context["reason"],
-                yamaa_core::json::Value::String("contradictory_snapshot".into())
-            );
-        }
-        #[test]
-        fn undeclared_and_schema_less_supplied_metadata_retain_the_portable_cause() {
-            let producer = standalone("/producer.yaml", PRODUCER);
-            for (text, dataset) in [
-                (CONSUMER.to_owned(), "ABSENT"),
-                (
-                    CONSUMER.replace(", schema: nested/producer.yaml", ""),
-                    "SRC",
-                ),
-                (
-                    CONSUMER.replace(
-                        "{path: './produced.csv', schema: nested/producer.yaml}",
-                        "produced.csv",
-                    ),
-                    "SRC",
-                ),
-            ] {
-                let consumer = standalone("/consumer.yaml", &text);
-                let mut supplied = supplied(Arc::clone(&producer));
-                supplied.dataset = dataset.into();
-                let Err(Error::Admission(CoreError::Invalid(findings))) =
-                    prepare(consumer, vec![supplied], None)
-                else {
-                    panic!("undeclared metadata diagnostic")
-                };
-                assert_eq!(findings[0].definition().requirement, Some("REQ-0534"));
-                assert_eq!(findings[0].spec_paths, [format!("input.{dataset}.schema")]);
-                assert_eq!(
-                    findings[0].context["reason"],
-                    yamaa_core::json::Value::String("undeclared_metadata".into())
-                );
-            }
-            // The shipped structural root rejects explicit-null schema before this
-            // metadata boundary; retain that original finding rather than bypassing it.
+        fn explicit_null_schema_is_refused_by_the_structural_root() {
+            // The shipped structural root rejects explicit-null schema before
+            // link admission; retain that original finding.
             let null = CONSUMER.replace("schema: nested/producer.yaml", "schema: null");
             let Err(yamaa_adapters::specification_source::Error::Findings(findings)) =
                 shipped_schema::capture()
@@ -1292,415 +1177,6 @@ mod project {
                 findings.findings()[0].definition().requirement,
                 Some("REQ-0287")
             );
-        }
-    }
-    mod producer_graph {
-        use std::sync::Arc;
-        use yamaa_adapters::{
-            producer_admission::SuppliedProducer,
-            producer_graph::{prepare, Error, SuppliedNode},
-            shipped_schema,
-            specification_source::{InheritancePort, PreparedDocument, Source},
-        };
-        use yamaa_core::inheritance::{Source as Identity, SourceError};
-        use yamaa_core::{
-            producer_graph::Error as CoreError,
-            project_environment::{Draft, Environment, ExecutionEnvironment},
-            project_function::Language,
-            specification::PrepareError,
-        };
-
-        fn environment() -> ExecutionEnvironment {
-            Environment::admit(
-                Language::Python,
-                Draft {
-                    language: None,
-                    lock: None,
-                    functions: None,
-                    codelists: vec![],
-                    has_study: false,
-                    submissions: vec![],
-                },
-            )
-            .unwrap()
-            .into_execution()
-        }
-        fn text(input: &str, base: &str, output: &str) -> String {
-            format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {input}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n  - {{name: VALUE, type: float, label: Reported value, derivation: {base}.VALUE}}\noutput: {{path: {output}, columns: [ID, VALUE], decimals: 2}}\n")
-        }
-        fn document(identity: &str, text: &str) -> Arc<PreparedDocument> {
-            Arc::new(
-                shipped_schema::capture()
-                    .unwrap()
-                    .prepare_standalone(Source {
-                        identity: identity.into(),
-                        bytes: text.as_bytes().to_vec(),
-                    })
-                    .unwrap(),
-            )
-        }
-        fn link(
-            dataset: &str,
-            document: &Arc<PreparedDocument>,
-            artifact: &str,
-        ) -> SuppliedProducer {
-            SuppliedProducer {
-                dataset: dataset.into(),
-                schema_identity: document.source().identity.clone(),
-                source_identity: artifact.into(),
-                output_identity: artifact.into(),
-                document: Arc::clone(document),
-            }
-        }
-        fn node(
-            document: &Arc<PreparedDocument>,
-            producers: Vec<SuppliedProducer>,
-        ) -> SuppliedNode {
-            SuppliedNode {
-                document: Arc::clone(document),
-                producers,
-            }
-        }
-
-        #[test]
-        fn recursive_original_documents_are_owned_once_and_all_alias_origins_remain_held() {
-            let leaf_text = text("{RAW: never-read.csv}", "RAW", "leaf.csv");
-            let left_text = text(
-                "{LEAF: {path: leaf.csv, schema: './leaf.yaml'}}",
-                "LEAF",
-                "left.csv",
-            );
-            let right_text = text(
-                "{LEAF: {path: leaf.csv, schema: leaf.yaml}}",
-                "LEAF",
-                "right.csv",
-            );
-            // VALUE reads all three producer datasets so pruning (REQ-0638)
-            // keeps every supplied link declared in the resolved model.
-            let root_text = text("{RIGHT: {path: right.csv, schema: right.yaml}, LEFT: {path: left.csv, schema: left.yaml}, AGAIN: {path: left.csv, schema: './left.yaml'}}", "RIGHT", "root.csv")
-                .replace(
-                    "derivation: RIGHT.VALUE",
-                    "derivation: {first_available: {sources: [RIGHT.VALUE, LEFT.VALUE, AGAIN.VALUE]}}",
-                );
-            let leaf = document("/leaf.yaml", &leaf_text);
-            let left = document("/left.yaml", &left_text);
-            let right = document("/right.yaml", &right_text);
-            let root = document("/root.yaml", &root_text);
-            let graph = prepare(
-                "/root.yaml",
-                vec![
-                    node(&left, vec![link("LEAF", &leaf, "/leaf.csv")]),
-                    node(
-                        &root,
-                        vec![
-                            link("AGAIN", &left, "/left.csv"),
-                            link("LEFT", &left, "/left.csv"),
-                            link("RIGHT", &right, "/right.csv"),
-                        ],
-                    ),
-                    node(&leaf, vec![]),
-                    node(&right, vec![link("LEAF", &leaf, "/leaf.csv")]),
-                ],
-                environment(),
-            )
-            .unwrap();
-            drop((root, left, right, leaf));
-            assert_eq!(graph.metadata().root(), 1);
-            assert_eq!(graph.metadata().order(), [2, 3, 0, 1]);
-            assert_eq!(graph.nodes().len(), 4);
-            assert_eq!(
-                graph.nodes()[1].document.source().bytes,
-                root_text.as_bytes()
-            );
-            assert_eq!(
-                graph.nodes()[2].document.source().bytes,
-                leaf_text.as_bytes()
-            );
-            assert!(Arc::ptr_eq(
-                &graph.nodes()[0].producers[0].document,
-                &graph.nodes()[2].document
-            ));
-            assert!(Arc::ptr_eq(
-                &graph.nodes()[3].producers[0].document,
-                &graph.nodes()[2].document
-            ));
-            let aliases = graph.metadata().nodes()[1].producers();
-            assert_eq!(
-                aliases
-                    .iter()
-                    .map(|p| (
-                        p.dataset(),
-                        p.schema_origin().declaring_source(),
-                        p.schema_origin().written()
-                    ))
-                    .collect::<Vec<_>>(),
-                [
-                    ("RIGHT", "/root.yaml", "right.yaml"),
-                    ("LEFT", "/root.yaml", "left.yaml"),
-                    ("AGAIN", "/root.yaml", "./left.yaml")
-                ]
-            );
-            assert!(matches!(
-                yamaa_core::domain::check(graph.nodes()[1].document.model()),
-                Err(PrepareError::Unsupported(_))
-            ));
-        }
-
-        #[test]
-        fn incomplete_duplicate_replaced_and_unreachable_supplied_nodes_are_denied() {
-            let p = document("/p.yaml", &text("{RAW: never-read.csv}", "RAW", "p.csv"));
-            let root = document(
-                "/root.yaml",
-                &text("{P: {path: p.csv, schema: p.yaml}}", "P", "root.csv"),
-            );
-            let replaced = document(
-                "/p.yaml",
-                &text("{RAW: different-never-read.csv}", "RAW", "p.csv"),
-            );
-            let extra = document(
-                "/extra.yaml",
-                &text("{RAW: never-read.csv}", "RAW", "extra.csv"),
-            );
-            for (nodes, reason) in [
-                (
-                    vec![node(&root, vec![link("P", &p, "/p.csv")])],
-                    "missing_producer_node",
-                ),
-                (
-                    vec![
-                        node(&root, vec![link("P", &p, "/p.csv")]),
-                        node(&p, vec![]),
-                        node(&p, vec![]),
-                    ],
-                    "duplicate_identity",
-                ),
-                (
-                    vec![
-                        node(&root, vec![link("P", &replaced, "/p.csv")]),
-                        node(&p, vec![]),
-                    ],
-                    "contradictory_producer_document",
-                ),
-            ] {
-                assert!(
-                    matches!(prepare("/root.yaml", nodes, environment()), Err(Error::Boundary { reason: actual, .. }) if actual == reason)
-                );
-            }
-            assert!(matches!(
-                prepare(
-                    "/root.yaml",
-                    vec![
-                        node(&root, vec![link("P", &p, "/p.csv")]),
-                        node(&p, vec![]),
-                        node(&extra, vec![])
-                    ],
-                    environment()
-                ),
-                Err(Error::Graph(CoreError::Boundary {
-                    reason: "unreachable_node",
-                    ..
-                }))
-            ));
-        }
-
-        struct Parent {
-            bytes: Vec<u8>,
-            calls: usize,
-        }
-        impl InheritancePort for Parent {
-            type Error = ();
-            fn canonicalize(
-                &mut self,
-                _: &str,
-                written: &str,
-            ) -> Result<Identity, SourceError<()>> {
-                self.calls += 1;
-                assert_eq!(written, "parent.yaml");
-                Ok(Identity {
-                    identity: "/shared-parent.yaml".into(),
-                    display_path: "parent.yaml".into(),
-                })
-            }
-            fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<()>> {
-                self.calls += 1;
-                Ok(self.bytes.clone())
-            }
-            fn rebase(&mut self, _: &Identity, _: &Identity, written: &str) -> Result<String, ()> {
-                self.calls += 1;
-                Ok(written.into())
-            }
-        }
-        fn inherited(identity: &str, text: &str, parent: &[u8]) -> (Arc<PreparedDocument>, Parent) {
-            let mut port = Parent {
-                bytes: parent.into(),
-                calls: 0,
-            };
-            let bytes = text.replace("domain: TEST", "parents: parent.yaml\ndomain: TEST");
-            let prepared = shipped_schema::prepare(
-                Source {
-                    identity: identity.into(),
-                    bytes: bytes.into_bytes(),
-                },
-                identity.into(),
-                &mut port,
-            )
-            .unwrap();
-            (Arc::new(prepared), port)
-        }
-
-        #[test]
-        fn snapshots_shared_only_across_distinct_branches_must_hold_identical_bytes() {
-            let (a, a_port) = inherited(
-                "/a.yaml",
-                &text("{RAW: never-read.csv}", "RAW", "a.csv"),
-                b"schema_version: '1.0'\n# first retained parent\n",
-            );
-            let (b, b_port) = inherited(
-                "/b.yaml",
-                &text("{RAW: never-read.csv}", "RAW", "b.csv"),
-                b"schema_version: '1.0'\n# different retained parent\n",
-            );
-            let left = document(
-                "/left.yaml",
-                &text("{A: {path: a.csv, schema: a.yaml}}", "A", "left.csv"),
-            );
-            let right = document(
-                "/right.yaml",
-                &text("{B: {path: b.csv, schema: b.yaml}}", "B", "right.csv"),
-            );
-            let root = document("/root.yaml", &text("{LEFT: {path: left.csv, schema: left.yaml}, RIGHT: {path: right.csv, schema: right.yaml}}", "LEFT", "root.csv"));
-            let before = (a_port.calls, b_port.calls);
-            assert!(matches!(
-                prepare(
-                    "/root.yaml",
-                    vec![
-                        node(
-                            &root,
-                            vec![
-                                link("LEFT", &left, "/left.csv"),
-                                link("RIGHT", &right, "/right.csv")
-                            ]
-                        ),
-                        node(&left, vec![link("A", &a, "/a.csv")]),
-                        node(&right, vec![link("B", &b, "/b.csv")]),
-                        node(&a, vec![]),
-                        node(&b, vec![])
-                    ],
-                    environment()
-                ),
-                Err(Error::Boundary {
-                    reason: "contradictory_snapshot",
-                    ..
-                })
-            ));
-            assert_eq!(before, (a_port.calls, b_port.calls));
-        }
-
-        #[test]
-        fn equal_shared_parent_snapshots_and_written_inherited_origins_remain_retained() {
-            let producer_text = text("{RAW: never-read.csv}", "RAW", "p.csv").replace(
-                "output: {path: p.csv, columns: [ID, VALUE], decimals: 2}\n",
-                "",
-            );
-            let parent = b"schema_version: '1.0'\noutput: {path: p.csv, columns: [ID, VALUE], decimals: 2}\n# retained parent\n";
-            let (p, port) = inherited("/p.yaml", &producer_text, parent);
-            let (root, root_port) = inherited(
-                "/root.yaml",
-                &text("{P: {path: p.csv, schema: p.yaml}}", "P", "root.csv"),
-                parent,
-            );
-            let before = (port.calls, root_port.calls);
-            let graph = prepare(
-                "/root.yaml",
-                vec![node(&root, vec![link("P", &p, "/p.csv")]), node(&p, vec![])],
-                environment(),
-            )
-            .unwrap();
-            assert_eq!(
-                graph.nodes()[1].document.parents()[0].source().bytes,
-                parent
-            );
-            assert_eq!(
-                graph.nodes()[0].document.parents()[0].source().bytes,
-                parent
-            );
-            assert_eq!(
-                graph.metadata().nodes()[0].producers()[0]
-                    .output_origin()
-                    .declaring_source(),
-                "/shared-parent.yaml"
-            );
-            assert_eq!(
-                graph.metadata().nodes()[0].producers()[0]
-                    .output_origin()
-                    .written(),
-                "p.csv"
-            );
-            assert_eq!(before, (port.calls, root_port.calls));
-        }
-
-        #[test]
-        fn changed_schema_bytes_are_rejected_before_capability() {
-            let p_text = text("{RAW: never-read.csv}", "RAW", "p.csv");
-            let root = document(
-                "/root.yaml",
-                &text("{P: {path: p.csv, schema: p.yaml}}", "P", "root.csv"),
-            );
-            let mut sources = shipped_schema::capture().unwrap().sources().to_vec();
-            sources[0]
-                .bytes
-                .extend_from_slice(b"\n# changed schema closure\n");
-            let schema =
-                yamaa_adapters::specification_source::CapturedSchema::admit(sources, 0).unwrap();
-            let changed = Arc::new(
-                schema
-                    .prepare_standalone(Source {
-                        identity: "/p.yaml".into(),
-                        bytes: p_text.into_bytes(),
-                    })
-                    .unwrap(),
-            );
-            assert!(matches!(
-                prepare(
-                    "/root.yaml",
-                    vec![
-                        node(&root, vec![link("P", &changed, "/p.csv")]),
-                        node(&changed, vec![])
-                    ],
-                    environment()
-                ),
-                Err(Error::Boundary {
-                    reason: "schema_mismatch",
-                    ..
-                })
-            ));
-        }
-
-        #[test]
-        fn original_inline_type_conflict_is_not_erased_by_complete_graph_admission() {
-            let p = document("/p.yaml", &text("{RAW: never-read.csv}", "RAW", "p.csv"));
-            let root = document(
-                "/root.yaml",
-                &text(
-                    "{P: {path: p.csv, schema: p.yaml, types: {ID: int}}}",
-                    "P",
-                    "root.csv",
-                ),
-            );
-            let Err(Error::Graph(CoreError::Admission {
-                error: yamaa_core::producer_admission::Error::Invalid(findings),
-                ..
-            })) = prepare(
-                "/root.yaml",
-                vec![node(&root, vec![link("P", &p, "/p.csv")]), node(&p, vec![])],
-                environment(),
-            )
-            else {
-                panic!("original conflicting authority")
-            };
-            assert_eq!(findings[0].definition().condition, "redundant_field_type");
-            assert_eq!(findings[0].definition().requirement, Some("REQ-0523"));
-            assert_eq!(findings[0].spec_paths, ["input.P.types.ID"]);
         }
     }
     mod project_activation_diagnostics {

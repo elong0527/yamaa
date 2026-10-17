@@ -248,8 +248,7 @@ run_column_ceilings <- function() {
     assert_refusal(yamaa_domain(spec))
   }
 
-  for (width in c(1024L, 1025L)) {
-    producer <- write_case(path(paste0("producer-", width)), columns = width)
+  linked_consumer <- function(producer) {
     consumer <- file.path(dirname(producer), "consumer.yaml")
     writeLines(c(
       "schema_version: '1.0'", "domain: TEST", "keys: [ID]",
@@ -257,24 +256,29 @@ run_column_ceilings <- function() {
       "  - {name: ID, type: str, label: ID, derivation: SRC.ID}",
       "output: {path: consumer.csv, columns: [ID]}"
     ), consumer)
+    consumer
+  }
+  for (width in c(1024L, 1025L)) {
+    producer <- write_case(path(paste0("producer-", width)), columns = width)
+    consumer <- linked_consumer(producer)
     if (width == 1024L) {
+      # Callers build and save the producer before its consumer reads it.
+      stopifnot(isTRUE(yamaa_domain(producer)$save()))
       assert_build(consumer)
     } else {
       for (operation in list(yamaa_check, yamaa_domain)) assert_refusal(operation(consumer))
     }
   }
 
-  # Keep producer metadata in range while its raw source crosses the runtime
-  # width ceiling; the Rust decoder control pins producer_source_fields itself.
+  # Keep the link's metadata in range while its stored artifact crosses the
+  # width ceiling; the Rust decoder control pins the contract itself.
   for (width in c(1024L, 1025L)) {
-    producer <- write_case(path(paste0("producer-input-", width)), columns = 1024L, fields = width)
-    consumer <- file.path(dirname(producer), "consumer.yaml")
-    writeLines(c(
-      "schema_version: '1.0'", "domain: TEST", "keys: [ID]",
-      "input: {SRC: {path: out.csv, schema: spec.yaml}}", "columns:",
-      "  - {name: ID, type: str, label: ID, derivation: SRC.ID}",
-      "output: {path: consumer.csv, columns: [ID]}"
-    ), consumer)
+    producer <- write_case(path(paste0("producer-input-", width)), columns = 1024L)
+    consumer <- linked_consumer(producer)
+    header <- c("ID", sprintf("C%04d", seq_len(width - 1L)))
+    writeLines(c(paste(header, collapse = ","),
+                 paste(c("S-001", rep("x", width - 1L)), collapse = ",")),
+               file.path(dirname(producer), "out.csv"))
     stopifnot(nrow(yamaa_check(consumer)$issues) == 0L)
     if (width == 1024L) assert_build(consumer) else assert_refusal(yamaa_domain(consumer))
   }

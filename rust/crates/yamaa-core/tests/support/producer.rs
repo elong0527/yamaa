@@ -1,8 +1,10 @@
 pub use crate::support::document::Tree;
 use yamaa_core::{
-    producer_admission::{Candidate, WrittenPath},
+    producer_contract::{Link, Links},
     schema::{Document, SpecificationDocument},
 };
+
+pub const CONSUMER: &str = "/consumer.yaml";
 
 pub fn document(
     input: Tree,
@@ -99,29 +101,18 @@ pub fn consumer(types: Option<Tree>) -> SpecificationDocument {
         false,
     )
 }
-pub fn candidate(document: &SpecificationDocument) -> Candidate<'_> {
-    Candidate {
+/// The `SRC` link to the producing specification held at `/producer.yaml`.
+pub fn link(document: &SpecificationDocument) -> Link<'_> {
+    Link {
         dataset: "SRC",
-        schema_path: "nested/producer.yaml",
-        schema_origin: WrittenPath {
-            declaring_source: "/parent.yaml",
-            base_source: "/parent.yaml",
-            written: "../nested/producer.yaml",
-        },
-        input_origin: WrittenPath {
-            declaring_source: "/consumer.yaml",
-            base_source: "/consumer.yaml",
-            written: "./produced.csv",
-        },
-        output_origin: WrittenPath {
-            declaring_source: "/producer.yaml",
-            base_source: "/producer.yaml",
-            written: "produced.csv",
-        },
-        schema_identity: "/producer.yaml",
-        producer_identity: "/producer.yaml",
-        source_identity: "/produced.csv",
-        output_identity: "/produced.csv",
+        identity: "/producer.yaml",
         document,
+    }
+}
+/// Links of the consuming specification held at [`CONSUMER`].
+pub fn links<'a>(links: &'a [Link<'a>]) -> Links<'a> {
+    Links {
+        consumer: CONSUMER,
+        links,
     }
 }

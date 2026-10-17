@@ -6,7 +6,6 @@ use yamaa_core::{
 };
 
 pub mod producer;
-pub mod producer_graph;
 pub mod project_call_compiler;
 pub mod project_codelist_compiler;
 pub mod project_environment;

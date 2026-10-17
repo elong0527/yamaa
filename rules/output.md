@@ -169,11 +169,12 @@ under the names [SPEC-2](specification.md#spec-2) admits. The `parquet`
 profile carries its own types: an artifact read by another specification needs
 no declaration to be understood. The `csv` profile's bytes are fixed exactly.
 
-A profile and the specification's `schema_version` identify the bytes exactly,
-and a consumer receives both; the producing-specification link of
-[Inputs](inputs.md) carries the whole producer document,
-not only the profile. A profile's byte and value mapping is fixed by its
-producer's `schema_version`; a mapping that diverges at the same schema
+A profile and the specification's `schema_version` identify the bytes exactly.
+A consumer selects the profile from its own path under
+[INPUT-1](inputs.md#input-1) and reads the producer's output contract
+through the producing-specification link of
+[INPUT-10](inputs.md#input-10). A profile's byte and value mapping is fixed
+by its producer's `schema_version`; a mapping that diverges at the same schema
 version must use a new profile name.
 
 ## Publication
@@ -246,7 +247,7 @@ Parquet while its log is CSV, or the reverse. A sidecar extension the mapping
 does not name fails validation as it does for `output.path`.
 
 Fails: `artifact_path_collision`, `unknown_artifact_profile`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `python/tests/installed/installed_producer_logs.py::test_lexical_collisions_and_invalid_sidecars_precede_study_access`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `python/tests/installed/installed_verification_logs.py::test_sidecar_collisions_and_unknown_profiles_precede_study_access`.
 Replaces: REQ-0756, REQ-1180.
 
 <a id="output-10"></a>
@@ -260,7 +261,7 @@ not prevent publication. A failed run publishes neither a primary artifact nor
 a warning log and replaces only its verification log; it is the only file a
 failed run writes, and writing it accepts nothing.
 
-Evidence: `schema-verification-log`, `python/tests/installed/installed_producer_logs.py::test_failed_leaf_and_dependent_publish_only_completed_verification_prefix`, `python/tests/installed/installed_producer_logs.py::test_actual_late_warning_publication_failure_keeps_prefix_and_retries`.
+Evidence: `schema-verification-log`, `python/tests/installed/installed_verification_logs.py::test_fatal_checks_publish_only_verification_and_keep_original_issues`, `rust/crates/yamaa-adapters/src/file_application.rs::actual_late_failures_retain_original_error_entered_prefix_and_retry`, `rust/crates/yamaa-adapters/src/file_application.rs::failed_build_ancillary_log_keeps_original_failure_and_fresh_retry_prefix`.
 Replaces: REQ-0757, REQ-0758, REQ-1181.
 
 A successful publication therefore never exposes a new primary artifact

@@ -14,7 +14,5 @@ extendr_module! {
     fn domain_observations;
     fn domain_save;
     fn domain_interrupt;
-    fn domain_producer_evidence;
     fn domain_preparation_sources;
-    fn domain_projection_failure;
 }

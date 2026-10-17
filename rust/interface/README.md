@@ -88,9 +88,7 @@ describes the existing `{value, error}` list and `r_scalar_reply` its
 conventions. Python's optional resolver corresponds to R's separate resolved
 entry points; Python table exporters correspond to R's frame and destination
 stream accessors. R `domain_arrow` selects output/verification/warning with
-`kind` 0/1/2. R's producer evidence is a projection of the retained attempt;
-Python additionally exposes that owner and its methods. `host_only` declares
-intentional helpers. Generating both hosts does not mean inventing a public
+`kind` 0/1/2. `host_only` declares intentional helpers. Generating both hosts does not mean inventing a public
 scalar-helper API in Python or a style API in R. extendr-generated `wrap__*`,
 metadata, registration and finalizer functions are framework machinery, not
 additional engine operations. Public package facades remain the owners of
@@ -204,8 +202,8 @@ busy or poisoned owners, conversion failures and caught native panics are typed
 boundary refusals using the shared `ApplicationRejected` classification; they
 do not invent a language requirement. Native unwinds and R longjmps must not
 cross the host boundary. Ordinary callback exceptions/conditions stay rooted on
-their originating attempt and can be inspected after projection failure.
-Formatting a secondary error must not replace that original object.
+their originating attempt. Formatting a secondary error must not replace that
+original object.
 
 Version refusal uses the bootstrap mapping above. Ordinary callable boundary
 failures use the negotiated imported records directly. Argument failures before
@@ -224,7 +222,7 @@ run. Adding a plan handle requires a declared operation and capability here.
 | --- | --- |
 | Input text/bytes | Borrow only during a synchronous call; clone into a retained Rust owner before returning or retaining for a callback. |
 | Diagnostic/result/plan metadata | Owned values independent of temporary interpreter buffers and of later calls. |
-| Domain/Define/producer handle | Owning PyO3 object or rooted R external pointer; drop/finalize once, invalidate before dropping state. No caller dereferences a stale address. |
+| Domain/Define handle | Owning PyO3 object or rooted R external pointer; drop/finalize once, invalidate before dropping state. No caller dereferences a stale address. |
 | Callback/resolver/host failure | Strong interpreter root held by the attempt that may call or inspect it; release on its owning interpreter thread. |
 | Arrow stream or emitted schema/array | Current holder of the moved standard header, with independent references to immutable buffers. |
 
@@ -232,7 +230,7 @@ Handles are process-local, host-local and kind checked. Do not serialize them,
 use them after finalization, exchange them between Python/R or treat an address
 as authority. Access during an existing mutable borrow or after poisoning
 returns a refusal. Result accessors own their outputs; dropping the parent
-cannot invalidate an acquired producer owner, copied record or exported table.
+cannot invalidate a copied record or exported table.
 Inspection and evidence access grant no Save capability. Save uses the held
 build's ordered publication path and reports operational refusal separately from
 attempting to save a failed build.

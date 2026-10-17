@@ -941,6 +941,40 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertNotIn("dm.csv: expected artifact name", message)
         self.assertNotIn("supp.csv: expected artifact name", message)
 
+    def test_csv_golden_of_a_declared_producer_entry_is_accepted(self):
+        ex_dir = self.root_dir / "benchmarks" / "producer-entry"
+        (ex_dir / "expected").mkdir(parents=True)
+        (ex_dir / "input").mkdir()
+        (ex_dir / "input" / "dm.schema.yaml").write_text(
+            "output:\n  path: dm.csv\n  columns: [a]\ncolumns:\n  - name: a\n"
+        )
+        (ex_dir / "spec.yaml").write_text(
+            "input:\n  DM: {path: input/dm.csv, schema: input/dm.schema.yaml}\n"
+            "output:\n  path: out.csv\n  columns: [b]\ncolumns:\n  - name: b\n"
+        )
+        (ex_dir / "expected" / "dm.csv").write_text("a\n1\n")
+        (ex_dir / "expected" / "out.csv").write_text("b\n2\n")
+        calls = (
+            "  - {specification: input/dm.schema.yaml, environment: null}\n"
+            "  - {specification: spec.yaml, environment: null}\n"
+        )
+        metadata = ex_dir / "benchmark.yaml"
+        metadata.write_text(
+            "lifecycle: draft\nstandard: TEST\ndomain: TEST\nentries:\n"
+            f"  python:\n{calls}  r:\n{calls}"
+        )
+
+        errors = OWNER_REPOSITORY_ARTIFACTS.validate_examples_csv(self.root_dir)
+
+        self.assertEqual(errors, [])
+        # Without the entry, nothing declares the producer's artifact.
+        metadata.write_text("lifecycle: draft\nstandard: TEST\ndomain: TEST\n")
+        errors = OWNER_REPOSITORY_ARTIFACTS.validate_examples_csv(self.root_dir)
+        self.assertIn(
+            "producer-entry/expected/dm.csv: no authored output declares this artifact",
+            "\n".join(errors),
+        )
+
     def test_layout_rejects_base_spec_mixed_with_variants(self):
         ex_dir = self.root_dir / "benchmarks" / "mixed-specs"
         (ex_dir / "input").mkdir(parents=True)

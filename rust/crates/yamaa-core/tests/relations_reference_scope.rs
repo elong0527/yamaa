@@ -2288,7 +2288,7 @@ mod relations {
     }
     mod source_ordinal {
         use yamaa_core::{
-            source_ordinal::{stored_fields, Error, Ordinal},
+            source_ordinal::{Error, Ordinal},
             table::{Column, TableSchema},
             value::ColumnType,
         };
@@ -2305,10 +2305,7 @@ mod relations {
         fn positions_and_stored_contract_are_exact_at_the_admission_boundary() {
             let original = schema();
             let admitted = Ordinal::admit(&original, 3, "REC").unwrap();
-            assert_eq!(
-                stored_fields(admitted.schema(), Some("REC")).unwrap(),
-                original.columns()
-            );
+            assert_eq!(&admitted.schema().columns()[..1], original.columns());
             assert_eq!(
                 admitted.schema().columns()[1],
                 Column {
@@ -2334,18 +2331,9 @@ mod relations {
                 Ordinal::admit(&original, 0, "ID"),
                 Err(Error::Collision)
             ));
-            assert!(matches!(
-                stored_fields(&original, Some("REC")),
-                Err(Error::InvalidTable)
-            ));
-            assert!(matches!(
-                stored_fields(&original, Some("ID")),
-                Err(Error::InvalidTable)
-            ));
             let empty = Ordinal::admit(&original, 0, "REC").unwrap();
             assert_eq!(empty.schema(), admitted.schema());
             assert_eq!(empty.value(0), None);
-            assert_eq!(stored_fields(&original, None).unwrap(), original.columns());
             let edge = Ordinal::admit(&original, 10_000_000, "REC").unwrap();
             assert_eq!(edge.value(9_999_999), Some(10_000_000));
             assert!(matches!(

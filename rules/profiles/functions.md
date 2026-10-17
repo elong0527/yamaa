@@ -23,7 +23,7 @@ override the environment, and no adjacent environment or language subdirectory
 is discovered implicitly.
 
 Fails: `project_environment_missing`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_project.rs::absent_environment_selects_producer_without_capturing_or_inventing_metadata`, `rust/crates/yamaa-adapters/tests/file_project.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_supplied_missing_environment_precedes_bad_or_absent_entry_without_activation`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_project.rs::absent_environment_selects_plain_route_without_capturing_or_inventing_metadata`, `rust/crates/yamaa-adapters/tests/file_project.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_supplied_missing_environment_precedes_bad_or_absent_entry_without_activation`.
 Replaces: REQ-0662, REQ-0663, REQ-0694.
 
 Omission never creates an environment implicitly. Every path declared in the

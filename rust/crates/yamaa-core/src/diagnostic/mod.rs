@@ -279,8 +279,6 @@ conditions! {
     SourceOrdinalCollision => ("validation", "ordinal_field_collision", Some("REQ-1294")),
     SourceEmptyStringPresentUnsupported => ("validation", "empty_string_present_unsupported", Some("REQ-1161")),
     ProducerInvalidContract => ("validation", "invalid_producer_contract", Some("REQ-0534")),
-    ProducerWorkflowCycle => ("validation", "producer_workflow_cycle", Some("REQ-0534")),
-    ProducerOutputPathMismatch => ("validation", "producer_output_path_mismatch", Some("REQ-0534")),
     ProducerRedundantSourceType => ("validation", "redundant_field_type", Some("REQ-0523")),
     ProducerContractMismatch => ("validation", "producer_contract_mismatch", Some("REQ-0535")),
     OutputUnknownProfile => ("validation", "unknown_artifact_profile", Some("REQ-0760")),

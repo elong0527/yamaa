@@ -93,7 +93,6 @@ def domain(
         None if resolver is None else resolver._dispatch,
     )
     try:
-        native.propagate_interrupt()
         if resolver is not None:
             resolver._raise_pending()
         return Domain(native, resolver)

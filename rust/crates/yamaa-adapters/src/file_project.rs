@@ -70,11 +70,12 @@ impl FileProject {
     /// Consume only the complete sealed native capture. No externally supplied
     /// standalone document or replacement environment can enter this transfer.
     pub(crate) fn from_workflow(
-        entry: crate::file_graph::CapturedEntry,
+        entry: crate::file_entry::CapturedEntry,
     ) -> Result<Self, Box<RejectedOrdinary>> {
-        let (resources, entry, document, environment) = entry.into_ordinary_parts();
+        let (resources, entry, document, links, environment) = entry.into_parts();
         match PreparedRun::prepare_with_profile_inspection(
             document,
+            &links,
             environment,
             |document, dataset, path| {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
@@ -129,8 +130,16 @@ impl FileProject {
             &document.source().identity,
         )
         .map_err(Error::Document)?;
+        let links = file_preparation::capture_links(
+            &mut resources,
+            &document,
+            Some(&specification_schema),
+            &mut None,
+        )
+        .map_err(Error::Document)?;
         let run = PreparedRun::prepare_with_profile_inspection(
             document,
+            &links,
             environment,
             |document, dataset, path| {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
