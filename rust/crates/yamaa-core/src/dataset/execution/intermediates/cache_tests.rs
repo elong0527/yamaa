@@ -183,38 +183,184 @@ fn repeated_selection_uses_the_original_cached_choice_and_reads_only_the_payload
     assert_eq!(run.choices.len(), 1);
 }
 
+struct Tuples {
+    schema: TableSchema,
+    rows: Vec<Vec<Value>>,
+}
+impl TableAccess for Tuples {
+    type Error = Original;
+    fn schema(&self) -> &TableSchema {
+        &self.schema
+    }
+    fn row_count(&self) -> usize {
+        self.rows.len()
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Original>> {
+        Ok(ValueRef::from(&self.rows[row][column]))
+    }
+}
+
+fn item_with_key_columns(fixture: &Fixture, columns: &[usize]) -> Intermediate {
+    let mut item = fixture.plan.intermediates()[0].clone();
+    item.keys = columns
+        .iter()
+        .map(|&source_column| IntermediateKey {
+            source_column,
+            path: "intermediates[0].key".into(),
+            value: MatchValue::Variable(MatchRead::Record {
+                column: 0,
+                identifier: "BASE.K".into(),
+            }),
+        })
+        .collect();
+    item
+}
+
 #[test]
-fn string_index_keeps_every_original_coordinate_in_source_order() {
-    struct Keys {
-        schema: TableSchema,
-        values: Vec<Value>,
-    }
-    impl TableAccess for Keys {
-        type Error = Original;
-        fn schema(&self) -> &TableSchema {
-            &self.schema
-        }
-        fn row_count(&self) -> usize {
-            self.values.len()
-        }
-        fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Original>> {
-            assert_eq!(column, 0);
-            Ok(ValueRef::from(&self.values[row]))
-        }
-    }
-    let keys = Keys {
+fn key_index_keeps_every_original_coordinate_in_source_order() {
+    let keys = Tuples {
         schema: schema(&[("K", ColumnType::Str)]),
-        values: (0..256)
-            .map(|row| Value::Str(std::format!("K{:03}", row % 64)))
+        rows: (0..256)
+            .map(|row| vec![Value::Str(std::format!("K{:03}", row % 64))])
             .collect(),
     };
     let fixture = Fixture::new();
     let eligible = (0..256).collect::<Vec<_>>();
-    let index =
-        key_index::StringIndex::build(&keys, &fixture.plan.intermediates()[0], &eligible, 0)
-            .unwrap();
-    assert_eq!(index.0.len(), 64);
-    assert_eq!(index.0["K015"], [15, 79, 143, 207]);
+    let index = key_index::KeyIndex::build(&keys, &fixture.plan.intermediates()[0], &eligible)
+        .unwrap()
+        .unwrap();
+    assert_eq!(index.bucket_count(), 64);
+    assert_eq!(
+        index
+            .matching::<Original>(&[(0, Value::Str("K015".into()))])
+            .unwrap(),
+        [15, 79, 143, 207]
+    );
+}
+
+#[test]
+fn key_index_matches_int_keys_and_their_float_spelling() {
+    let keys = Tuples {
+        schema: schema(&[("K", ColumnType::Int)]),
+        rows: (0..256)
+            .map(|row| vec![Value::Int((row % 64) as i64)])
+            .collect(),
+    };
+    let fixture = Fixture::new();
+    let eligible = (0..256).collect::<Vec<_>>();
+    let index = key_index::KeyIndex::build(&keys, &fixture.plan.intermediates()[0], &eligible)
+        .unwrap()
+        .unwrap();
+    assert_eq!(index.bucket_count(), 64);
+    let expected: &[usize] = &[15, 79, 143, 207];
+    assert_eq!(
+        index.matching::<Original>(&[(0, Value::Int(15))]).unwrap(),
+        expected
+    );
+    assert_eq!(
+        index
+            .matching::<Original>(&[(0, Value::float(15.0))])
+            .unwrap(),
+        expected
+    );
+    assert!(index
+        .matching::<Original>(&[(0, Value::float(15.5))])
+        .unwrap()
+        .is_empty());
+    assert!(index
+        .matching::<Original>(&[(0, Value::Str("15".into()))])
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn key_index_matches_composite_keys_in_donor_order_and_skips_missing() {
+    let keys = Tuples {
+        schema: schema(&[("S", ColumnType::Str), ("N", ColumnType::Int)]),
+        rows: vec![
+            vec![Value::Str("a".into()), Value::Int(1)],
+            vec![Value::Str("a".into()), Value::Int(2)],
+            vec![Value::Missing, Value::Int(1)],
+            vec![Value::Str("a".into()), Value::Int(1)],
+            vec![Value::Str("b".into()), Value::Int(1)],
+            vec![Value::Str("a".into()), Value::Missing],
+        ],
+    };
+    let fixture = Fixture::new();
+    let item = item_with_key_columns(&fixture, &[0, 1]);
+    let eligible = (0..6).collect::<Vec<_>>();
+    let index = key_index::KeyIndex::build(&keys, &item, &eligible)
+        .unwrap()
+        .unwrap();
+    assert_eq!(index.bucket_count(), 3);
+    assert_eq!(
+        index
+            .matching::<Original>(&[(0, Value::Str("a".into())), (1, Value::Int(1))])
+            .unwrap(),
+        [0, 3]
+    );
+    // Lookup key order follows the resolved keys, not declaration order.
+    assert_eq!(
+        index
+            .matching::<Original>(&[(1, Value::float(1.0)), (0, Value::Str("a".into()))])
+            .unwrap(),
+        [0, 3]
+    );
+    assert!(index
+        .matching::<Original>(&[(0, Value::Str("a".into())), (1, Value::Int(3))])
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn key_index_unifies_zero_signs_and_ignores_temporal_precision() {
+    use crate::temporal::{Date, DatePrecision};
+    let keys = Tuples {
+        schema: schema(&[("F", ColumnType::Float), ("D", ColumnType::Date)]),
+        rows: vec![
+            vec![
+                Value::float(-0.0),
+                Value::Date(Date::new(2020, 1, 2, DatePrecision::Year).unwrap()),
+            ],
+            vec![
+                Value::float(0.5),
+                Value::Date(Date::new(2020, 1, 2, DatePrecision::Day).unwrap()),
+            ],
+        ],
+    };
+    let fixture = Fixture::new();
+    let item = item_with_key_columns(&fixture, &[0, 1]);
+    let eligible = (0..2).collect::<Vec<_>>();
+    let index = key_index::KeyIndex::build(&keys, &item, &eligible)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        index
+            .matching::<Original>(&[
+                (0, Value::Int(0)),
+                (
+                    1,
+                    Value::Date(Date::new(2020, 1, 2, DatePrecision::Day).unwrap())
+                )
+            ])
+            .unwrap(),
+        [0]
+    );
+}
+
+#[test]
+fn key_index_declines_a_donor_cell_whose_type_fits_no_column_type() {
+    let keys = Tuples {
+        schema: schema(&[("K", ColumnType::Str)]),
+        rows: vec![vec![Value::Int(7)]],
+    };
+    let fixture = Fixture::new();
+    let eligible = vec![0];
+    assert!(
+        key_index::KeyIndex::build(&keys, &fixture.plan.intermediates()[0], &eligible)
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]

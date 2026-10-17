@@ -180,7 +180,7 @@ matching, independent of the runtime implementation.
 | `datetime` | `datetime_impute` |
 | `int` | `date_diff`, `rank`, `row_number`, `study_day`, `to_epoch_day` |
 | `float` | `round_half_away_from_zero` |
-| `str` | `baseline_flag`, `cut`, `date_precision`, `datetime_precision`, `str_case`, `str_concat`, `str_extract`, `str_pad`, `str_template` |
+| `str` | `baseline_flag`, `cut`, `date_precision`, `datetime_precision`, `str_case`, `str_concat`, `str_extract`, `str_pad`, `str_replace`, `str_template` |
 | `bool` | `str_contains` |
 | Numeric (`int` or `float`) | `compute` |
 

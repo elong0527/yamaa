@@ -780,6 +780,18 @@ def describe_str_extract(node, ctx=None, depth=0):
     return sentence(text + handler_phrase(node, "no_match", "no match"))
 
 
+def describe_str_replace(node, ctx=None, depth=0):
+    replacement = node.get("replacement", "")
+    text = (
+        "Replace every match of "
+        + str(node.get("pattern"))
+        + " in "
+        + describe_variable(node.get("source"), ctx, depth)
+        + (" with " + literal_text(replacement) if replacement else " with nothing")
+    )
+    return sentence(text + handler_phrase(node, "missing", "a missing source"))
+
+
 def describe_str_contains(node, ctx=None, depth=0):
     text = (
         "True when "
@@ -919,6 +931,7 @@ DERIVATION_DESCRIBERS = {
     "str_case": describe_str_case,
     "str_pad": describe_str_pad,
     "str_extract": describe_str_extract,
+    "str_replace": describe_str_replace,
     "str_contains": describe_str_contains,
     "str_concat": describe_str_concat,
     "str_template": describe_str_template,

@@ -579,6 +579,7 @@ pub(super) fn operand_references(
         "str_case",
         "str_extract",
         "str_pad",
+        "str_replace",
         "round_half_away_from_zero",
         "date_impute",
         "datetime_impute",

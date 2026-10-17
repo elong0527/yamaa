@@ -64,7 +64,7 @@ fn issue_rows(issues: &[Issue]) -> Value {
             .iter()
             .map(|issue| {
                 let mut value = issue.as_value();
-                value["context"] = yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+                value["context"] = issue.context.clone();
                 value
             })
             .collect(),

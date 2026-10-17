@@ -1,0 +1,67 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERMC, AESPID, AESPDIG]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  # Every run of white space becomes one space. \s includes the no-break
+  # space U+00A0, so a pasted no-break space becomes an ordinary space.
+  - name: AETERMS
+    type: str
+    label: Reported Term with Single Spaces
+    derivation:
+      str_replace:
+        source: AE.AETERM
+        pattern: '\s+'
+        replacement: " "
+
+  # A run at either end is now one space; replacing it with nothing trims
+  # the term. A term with no space at either end is unchanged.
+  - name: AETERMC
+    type: str
+    label: Reported Term with Clean Spacing
+    derivation:
+      str_replace:
+        source: AETERMS
+        pattern: '^ | $'
+        replacement: ""
+    verifications:
+      not_missing: {}
+
+  - name: AESPID
+    type: str
+    label: Sponsor-Defined Identifier
+    derivation: AE.AESPID
+
+  # Every character that is not a digit is removed. An identifier without
+  # digits gives the empty string, which stays distinct from the missing
+  # value a missing identifier gives.
+  - name: AESPDIG
+    type: str
+    label: Digits of the Sponsor-Defined Identifier
+    derivation:
+      str_replace:
+        source: AESPID
+        pattern: '[^0-9]'
+        replacement: ""
+        missing: null

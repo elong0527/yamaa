@@ -127,13 +127,14 @@
         {
           "phase": "validation",
           "condition": "ungrouped_driver_field",
-          "requirement": "REQ-0107",
+          "requirement": "REQ-0067",
           "spec_paths": [
             "columns.VALUE.derivation.case[0].then.source"
           ],
           "context": {
             "identifier": "SRC.SEQ",
-            "dataset": "SRC"
+            "dataset": "SRC",
+            "row": "grouped"
           }
         }
       ],

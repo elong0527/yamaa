@@ -60,7 +60,7 @@ mod execution {
                 Ok(result) => result.issues().to_vec(),
                 Err(records) => records,
             };
-            records.iter().map(|issue| yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})).collect()
+            records.iter().map(|issue| yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})).collect()
         }
         const BODY: &str = r#"schema_version: "1.0"
 domain: TEST
@@ -397,8 +397,8 @@ columns:
                 rows.iter()
                     .map(|issue| {
                         let mut row = issue.as_value();
-                        assert!(row["context"].is_string());
-                        row["context"] = yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+                        assert!(row["context"].is_object());
+                        row["context"] = issue.context.clone();
                         row
                     })
                     .collect(),
@@ -577,7 +577,7 @@ columns:
         fn rows(issues: &[Issue]) -> yamaa_core::json::Value {
             issues.iter().map(|row| yamaa_adapters::json!({
         "phase": row.phase, "condition": row.condition, "requirement": row.requirement,
-        "spec_paths": row.spec_paths, "context": yamaa_adapters::json_wire::decode(&row.context).unwrap()
+        "spec_paths": row.spec_paths, "context": row.context.clone()
     })).collect()
         }
         #[test]
@@ -943,7 +943,10 @@ columns:
                 assert_eq!(issue.phase, "validation");
                 assert_eq!(issue.condition, "duplicate_identifier");
                 assert_eq!(issue.requirement.as_deref(), Some("REQ-0113"));
-                assert_eq!(issue.context, "{\"identifier\":\"REF\"}");
+                assert_eq!(
+                    yamaa_adapters::json_wire::encode(&issue.context),
+                    "{\"identifier\":\"REF\"}"
+                );
                 assert!(issue
                     .spec_paths
                     .iter()
@@ -1070,7 +1073,7 @@ columns:
                                 "read={read} {entry}"
                             );
                             assert_eq!(
-                        issue.context,
+                        yamaa_adapters::json_wire::encode(&issue.context),
                         "{\"columns\":[\"CODE\"],\"dataset\":\"REF\",\"duplicate_count\":1,\"intermediate\":\"REFCHK\"}",
                         "read={read} {entry}"
                     );
@@ -1323,7 +1326,7 @@ columns:
         }
 
         fn issue(value: &Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":value.phase,"condition":value.condition,"requirement":value.requirement,"spec_paths":value.spec_paths,"context":yamaa_adapters::json_wire::decode(&value.context).unwrap()})
+            yamaa_adapters::json!({"phase":value.phase,"condition":value.condition,"requirement":value.requirement,"spec_paths":value.spec_paths,"context":value.context.clone()})
         }
 
         fn assert_overflow(fixture: &Fixture, path: &str, actual: &str) {
@@ -1493,7 +1496,7 @@ columns:
         fn rows(issues: &[Issue]) -> yamaa_core::json::Value {
             issues.iter().map(|row| yamaa_adapters::json!({
         "phase": row.phase, "condition": row.condition, "requirement": row.requirement,
-        "spec_paths": row.spec_paths, "context": yamaa_adapters::json_wire::decode(&row.context).unwrap()
+        "spec_paths": row.spec_paths, "context": row.context.clone()
     })).collect()
         }
         #[test]
@@ -1602,10 +1605,13 @@ columns:
             }
         }
         fn issues(rows: &[yamaa_adapters::issue_rows::Issue]) -> yamaa_core::json::Value {
-            yamaa_adapters::json!(rows.iter().map(|row| yamaa_adapters::json!({
-        "phase":row.phase,"condition":row.condition,"requirement":row.requirement,
-        "spec_paths":row.spec_paths,"context":yamaa_adapters::json_wire::decode(&row.context).unwrap()
-    })).collect::<Vec<_>>())
+            yamaa_adapters::json!(rows
+                .iter()
+                .map(|row| yamaa_adapters::json!({
+                    "phase":row.phase,"condition":row.condition,"requirement":row.requirement,
+                    "spec_paths":row.spec_paths,"context":row.context.clone()
+                }))
+                .collect::<Vec<_>>())
         }
         #[test]
         fn source_only_named_row_drivers_preserve_lookup_key_admission() {
@@ -1710,7 +1716,7 @@ columns:
         fn rows(issues: &[Issue]) -> yamaa_core::json::Value {
             issues.iter().map(|row| yamaa_adapters::json!({
         "phase": row.phase, "condition": row.condition, "requirement": row.requirement,
-        "spec_paths": row.spec_paths, "context": yamaa_adapters::json_wire::decode(&row.context).unwrap()
+        "spec_paths": row.spec_paths, "context": row.context.clone()
     })).collect()
         }
         #[test]
@@ -1976,7 +1982,7 @@ columns:
                 );
                 let rows = checked.iter().map(|row| yamaa_adapters::json!({
             "phase":row.phase, "condition":row.condition, "requirement":row.requirement,
-            "spec_paths":row.spec_paths, "context":yamaa_adapters::json_wire::decode(&row.context).unwrap()
+            "spec_paths":row.spec_paths, "context":row.context.clone()
         })).collect::<Vec<_>>();
                 assert_eq!(
                     yamaa_adapters::json!(rows),
@@ -2555,8 +2561,7 @@ output: {path: out.csv, columns: [I, V]}
                     assert_eq!(issues[0].condition, "row_count_failed");
                     assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0385"));
                     assert_eq!(issues[0].spec_paths, ["verifications[0].row_count"]);
-                    let context: Value =
-                        yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
+                    let context: Value = issues[0].context.clone();
                     assert_eq!(context["denominator"], 0);
                     assert_eq!(context["count"], 0);
                     assert_eq!(context["keys"], json!([{}]));
@@ -2584,7 +2589,7 @@ output: {path: out.csv, columns: [I, V]}
             assert_eq!(issues[0].condition, "assert_failed");
             assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0384"));
             assert_eq!(issues[0].spec_paths, ["verifications[0].assert"]);
-            let context: Value = yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
+            let context: Value = issues[0].context.clone();
             assert_eq!(
                 context["keys"],
                 json!([
@@ -2615,10 +2620,13 @@ output: {path: out.csv, columns: [I, V]}
             }
         }
         fn issues(rows: &[yamaa_adapters::issue_rows::Issue]) -> yamaa_core::json::Value {
-            yamaa_adapters::json!(rows.iter().map(|row| yamaa_adapters::json!({
-        "phase":row.phase,"condition":row.condition,"requirement":row.requirement,
-        "spec_paths":row.spec_paths,"context":yamaa_adapters::json_wire::decode(&row.context).unwrap()
-    })).collect::<Vec<_>>())
+            yamaa_adapters::json!(rows
+                .iter()
+                .map(|row| yamaa_adapters::json!({
+                    "phase":row.phase,"condition":row.condition,"requirement":row.requirement,
+                    "spec_paths":row.spec_paths,"context":row.context.clone()
+                }))
+                .collect::<Vec<_>>())
         }
         #[test]
         fn original_predicate_suggestions_preserve_scopes_and_unknown_names() {
@@ -2762,7 +2770,7 @@ output: {path: out.csv, columns: [I, V]}
                                     ["rows[0].derivations.total.aggregate"]
                                 );
                                 assert_eq!(
-                                    yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                                    issue.context.clone(),
                                     yamaa_adapters::json!({"expr":"SUM(SRC.x)","reducer":"SUM","source":identifier.as_deref().unwrap_or("x"),"expected":"numeric","actual":"str"})
                                 );
                             }

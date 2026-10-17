@@ -168,9 +168,31 @@
           "context": {
             "identifier": "SRC.ID"
           }
+        },
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
         }
       ],
       "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.filter"
+          ],
+          "context": {
+            "identifier": "SRC.ID"
+          }
+        },
         {
           "phase": "validation",
           "condition": "prohibited_construct",
@@ -197,13 +219,14 @@
         {
           "phase": "validation",
           "condition": "ungrouped_driver_field",
-          "requirement": "REQ-0107",
+          "requirement": "REQ-0067",
           "spec_paths": [
             "columns.VALUE.derivation.source"
           ],
           "context": {
             "identifier": "SRC.V",
-            "dataset": "SRC"
+            "dataset": "SRC",
+            "row": "grouped"
           }
         }
       ],

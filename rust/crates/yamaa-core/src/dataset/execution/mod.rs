@@ -28,6 +28,7 @@ mod self_relations;
 mod str_case;
 mod str_extract;
 mod str_pad;
+mod str_replace;
 mod str_template;
 mod windows;
 
@@ -550,6 +551,9 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     if let Expression::StrExtract { source, operation } = &assignment.expression {
         return str_extract::evaluate(source, operation, table, candidate, plan, row, state);
     }
+    if let Expression::StrReplace { source, operation } = &assignment.expression {
+        return str_replace::evaluate(source, operation, table, candidate, plan, row, state);
+    }
     if let Expression::StrCase { source, operation } = &assignment.expression {
         return str_case::evaluate(source, operation, table, candidate, plan, row, state);
     }
@@ -696,6 +700,7 @@ impl DatasetPlan {
             imputation::register(&assignment.expression, &mut observations.handlers);
             str_case::register(&assignment.expression, &mut observations.handlers);
             str_extract::register(&assignment.expression, &mut observations.handlers);
+            str_replace::register(&assignment.expression, &mut observations.handlers);
             str_template::register(&assignment.expression, &mut observations.handlers);
         }
         let result = self.execute_inner(
@@ -1254,9 +1259,15 @@ impl DatasetPlan {
         records: &mut Vec<CheckRecord>,
     ) -> Result<(), Box<ExecutionError<T::Error>>> {
         intermediate_run.begin_columns(self)?;
-        let mut completed = vec![false; self.output().columns().len()];
-        for assignment in &self.templates()[0].assignments {
-            completed[assignment.column] = true;
+        let mut completed = vec![true; self.output().columns().len()];
+        for template in self.templates() {
+            let mut present = vec![false; self.output().columns().len()];
+            for assignment in &template.assignments {
+                present[assignment.column] = true;
+            }
+            for (column, done) in completed.iter_mut().enumerate() {
+                *done &= present[column];
+            }
         }
         let mut next_column = 0;
         self.check_columns(candidates, &completed, &mut next_column, records)?;
@@ -1265,6 +1276,9 @@ impl DatasetPlan {
             let mut numbers =
                 windows::Evaluation::new(assignment, candidates, self, table, handlers)?;
             for row in 0..candidates.len() {
+                if candidates[row].completed[assignment.column] {
+                    continue;
+                }
                 let number = if let Some(run) = &mut numbers {
                     Some(run.value(row, candidates, table, assignment, self)?)
                 } else {
@@ -2064,6 +2078,7 @@ fn evaluate_leaf<T: TableAccess + ?Sized>(
         | Expression::StrCase { .. }
         | Expression::StrPad { .. }
         | Expression::StrExtract { .. }
+        | Expression::StrReplace { .. }
         | Expression::StrTemplate { .. } => {
             unreachable!("recursive evaluation handled above")
         }

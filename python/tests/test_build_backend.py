@@ -119,6 +119,53 @@ def test_intact_member_archive_preserved(tmp_path: Path) -> None:
     assert payloads["pkg-0.1/rust/crates/foo/build.rs"] == b"fn main() {}\n"
 
 
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        # No workspace section at all.
+        b'[package]\nname = "foo"\n',
+        # A workspace section that is not a table.
+        b"workspace = 42\n",
+        # A members value that is not a list.
+        b"[workspace]\nmembers = 42\n",
+        b'[workspace]\nmembers = "crates/foo"\n',
+        # A members entry that is not a string.
+        b"[workspace]\nmembers = [42]\n",
+    ],
+)
+def test_preserve_workspace_rejects_malformed_members(
+    tmp_path: Path, manifest: bytes
+) -> None:
+    # A malformed workspace manifest leaked a raw KeyError, TypeError or
+    # AttributeError (a string members value even reported a one-letter
+    # "member"); every other invalid input to this function is a ValueError.
+    workspace = _make_workspace(tmp_path)
+    (workspace / "Cargo.toml").write_bytes(manifest)
+    archive = _make_archive(tmp_path / "sdist.tar.gz", _BASE_ENTRIES)
+    with pytest.raises(ValueError, match="no valid members list"):
+        preserve_workspace(archive, workspace)
+
+
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        "patch = 42\n",
+        "[patch]\ncrates-io = 42\n",
+        "[patch]\ncrates-io = 'witness'\n",
+    ],
+)
+def test_local_patch_sources_reject_non_table_patch_sections(
+    tmp_path: Path, manifest: str
+) -> None:
+    # A non-table patch section leaked an AttributeError from `.get` /
+    # `.items` instead of the ValueError every other invalid patch gets.
+    workspace = tmp_path / "rust"
+    workspace.mkdir()
+    (workspace / "Cargo.toml").write_text(manifest)
+    with pytest.raises(ValueError, match="patch section must be a table"):
+        list(backend.local_patch_sources(workspace))
+
+
 def _make_archive_with_extra(
     tmp_path: Path, extra, *, archive_format=tarfile.DEFAULT_FORMAT
 ) -> Path:
