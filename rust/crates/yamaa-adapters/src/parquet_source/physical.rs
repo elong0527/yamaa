@@ -90,15 +90,18 @@ fn collect<T: DataType>(
     Ok(result)
 }
 
+/// Read the file's pages through the native column readers. `source` is the
+/// held file with each page header presented as the footer is presented to
+/// the metadata decoder.
 pub(super) fn read(
-    bytes: &[u8],
+    source: bytes::Bytes,
     metadata: &ParquetMetaData,
     keep: &[bool],
     schema: &arrow_schema::Schema,
 ) -> Result<Vec<Column>, Error> {
-    // Reuse the admitted metadata instead of reparsing the original footer
-    // through the native unknown-boolean-collection skip path a second time.
-    let source = Arc::new(bytes::Bytes::copy_from_slice(bytes));
+    // Reuse the admitted metadata instead of reparsing the footer through the
+    // native decoder's unknown-field skip a second time.
+    let source = Arc::new(source);
     let properties = Arc::new(ReaderProperties::builder().build());
     let descriptors = metadata.file_metadata().schema_descr().columns();
     let shapes = shape::constraints(schema, metadata.file_metadata().schema_descr())?;
@@ -197,8 +200,9 @@ mod tests {
         let mut writer = ArrowWriter::try_new(&mut bytes, schema.clone(), None).unwrap();
         writer.write(&batch).unwrap();
         writer.close().unwrap();
-        let reader = SerializedFileReader::new(bytes::Bytes::copy_from_slice(&bytes)).unwrap();
-        let result = read(&bytes, reader.metadata(), &[true], &schema).unwrap();
+        let bytes = bytes::Bytes::from(bytes);
+        let reader = SerializedFileReader::new(bytes.clone()).unwrap();
+        let result = read(bytes, reader.metadata(), &[true], &schema).unwrap();
         assert!(matches!(&result[0], Column::Int64(values) if values == &[Some(1), Some(2)]));
     }
 }

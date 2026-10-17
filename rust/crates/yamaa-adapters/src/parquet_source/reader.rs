@@ -11,7 +11,7 @@ use parquet::{
     arrow::arrow_reader::{ArrowReaderMetadata, ArrowReaderOptions},
     file::metadata::{ParquetMetaData, ParquetMetaDataReader},
 };
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 use yamaa_core::{table::TableSchema, value::ColumnType};
 
 #[derive(Debug, PartialEq)]
@@ -127,6 +127,23 @@ fn admit_page_counts(
     Ok(())
 }
 
+/// Copy the held file for the native page reader, presenting each page header
+/// as the footer is presented to the metadata decoder. The presentation keeps
+/// each header's length, so it is written in place and no offset moves. Page
+/// bodies keep their held bytes.
+fn native_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<bytes::Bytes, Error> {
+    let mut file: Option<Vec<u8>> = None;
+    for header in &frame.headers {
+        if let Cow::Owned(native) = compact::native_metadata(&bytes[header.clone()])? {
+            file.get_or_insert_with(|| bytes.to_vec())[header.clone()].copy_from_slice(&native);
+        }
+    }
+    Ok(match file {
+        Some(file) => bytes::Bytes::from(file),
+        None => bytes::Bytes::copy_from_slice(bytes),
+    })
+}
+
 fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     let frame = framing::admit(bytes)?;
     let metadata = Arc::new({
@@ -216,7 +233,8 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
                 })
         })
         .collect();
-    let raw = contain_decode(|| physical::read(bytes, &metadata, &keep, &arrow_schema))
+    let source = native_pages(bytes, &frame)?;
+    let raw = contain_decode(|| physical::read(source, &metadata, &keep, &arrow_schema))
         .ok_or(Error::Malformed)??;
     let group_rows = metadata
         .row_groups()
@@ -514,6 +532,62 @@ mod tests {
                 assert_eq!(decoded.unwrap_err(), Error::Malformed);
             }
         }
+    }
+
+    /// Unknown fields that parquet 57.3.0's skip cannot step over as held,
+    /// beginning with `set`, the header of the first field (a set):
+    /// set<bool>{true, false}, map<byte, bool>{-1: true}, a UUID, list<uuid>
+    /// and a 129-byte map<bool, i16>, whose binary length takes a padded
+    /// prefix.
+    fn unskippable_fields(set: u8) -> Vec<u8> {
+        let mut fields = vec![set, 0x21, 1, 2, 0x1b, 1, 0x31, 0xff, 1, 0x1d];
+        fields.extend([7; 16]);
+        fields.extend([0x19, 0x1d]);
+        fields.extend([9; 16]);
+        fields.extend([0x1b, 63, 0x14]);
+        fields.extend((0..62).flat_map(|_| [1, 0]));
+        fields.extend([1, 0x80, 0x01]);
+        fields
+    }
+
+    fn strings(decoded: &Decoded) -> Vec<Option<&str>> {
+        decoded.batches[0]
+            .column(0)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap()
+            .iter()
+            .collect()
+    }
+
+    #[test]
+    fn unskippable_unknown_footer_fields_keep_the_file_readable() {
+        let mut body = progression(0, 1, 2);
+        body.extend(progression(1, 0, 2));
+        body.extend(b"ab"); // a, ab
+        let mut bytes = container(0, 2, 2, 0, &[data_page(2, &body)]);
+        // Before the file metadata's stop byte; its last field is 4.
+        let fields = unskippable_fields(0xba);
+        let end = bytes.len() - 8;
+        bytes.splice(end - 1..end - 1, fields.iter().copied());
+        let length = bytes.len() - 8;
+        let footer = u32::from_le_bytes(bytes[length..length + 4].try_into().unwrap());
+        let footer = footer + u32::try_from(fields.len()).unwrap();
+        bytes[length..length + 4].copy_from_slice(&footer.to_le_bytes());
+        assert_eq!(strings(&read(&bytes).unwrap()), [Some("a"), Some("ab")]);
+    }
+
+    #[test]
+    fn unskippable_unknown_page_header_fields_keep_the_page_readable() {
+        let mut body = progression(0, 1, 2);
+        body.extend(progression(1, 0, 2));
+        body.extend(b"ab"); // a, ab
+        let mut page = data_page(2, &body);
+        // Before the page header's stop byte; its last field is 5.
+        let stop = page.len() - body.len() - 1;
+        page.splice(stop..stop, unskippable_fields(0xaa));
+        let bytes = container(0, 2, 2, 0, &[page]);
+        assert_eq!(strings(&read(&bytes).unwrap()), [Some("a"), Some("ab")]);
     }
 
     #[test]

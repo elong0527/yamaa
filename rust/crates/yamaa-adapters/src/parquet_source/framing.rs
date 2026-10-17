@@ -65,6 +65,8 @@ pub(super) enum Payload {
 pub(super) struct Framing<'a> {
     pub metadata: &'a [u8],
     pub pages: Vec<Page<'a>>,
+    /// Each page header's byte range in the held file, in page order.
+    pub headers: Vec<std::ops::Range<usize>>,
 }
 
 fn integer(value: Option<Value<'_>>) -> Result<i64, Error> {
@@ -151,6 +153,7 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
     let mut result = Framing {
         metadata,
         pages: Vec::new(),
+        headers: Vec::new(),
     };
     let mut rows = 0usize;
     for (row_group, group) in groups.into_iter().enumerate() {
@@ -235,6 +238,7 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
                     None => (0, true),
                 };
                 let body_start = offset.checked_add(used).ok_or(Error::Malformed)?;
+                result.headers.push(offset..body_start);
                 offset = body_start
                     .checked_add(compressed)
                     .filter(|end_body| *end_body <= end)

@@ -92,14 +92,11 @@ struct Reader<'a> {
     bytes: &'a [u8],
     position: usize,
     native_metadata: Option<Cow<'a, [u8]>>,
-    /// `(position, length)` of each map or UUID value the native copy
-    /// presents as a binary: its byte length is inserted before it.
-    native_prefixes: Vec<(usize, usize)>,
 }
 
 /// The kind the native decoder skips in place of `kind`: it cannot skip a
 /// set, map or UUID at all, so a set becomes the identically encoded list and
-/// a map or UUID becomes a binary whose length the native copy prefixes.
+/// a map or UUID becomes a binary of the same length (`native_binary`).
 fn native_opaque(kind: u8) -> u8 {
     match kind {
         10 => 9,
@@ -114,7 +111,6 @@ impl<'a> Reader<'a> {
             bytes,
             position: 0,
             native_metadata: None,
-            native_prefixes: Vec::new(),
         }
     }
 
@@ -123,6 +119,35 @@ impl<'a> Reader<'a> {
             if let Some(bytes) = &mut self.native_metadata {
                 bytes.to_mut()[position] = header;
             }
+        }
+    }
+
+    /// Present the value at `start..position` to the native copy as one binary
+    /// of the same length, so no later offset moves: its first bytes become
+    /// the varint length of the rest, padded to fill exactly the bytes they
+    /// replace. The native decoder skips the value without reading it.
+    fn native_binary(&mut self, start: usize) {
+        let Some(bytes) = &mut self.native_metadata else {
+            return;
+        };
+        // Every value holds at least one byte. A value up to 128 bytes takes a
+        // one-byte prefix, and each further prefix byte covers far more bytes
+        // than it costs, so the prefix never outgrows the value.
+        let length = self.position - start;
+        let mut width = 1;
+        while (length - width) >> (7 * width) != 0 {
+            width += 1;
+        }
+        let mut prefix = [0u8; 10];
+        let mut rest = length - width;
+        for (index, byte) in prefix[..width].iter_mut().enumerate() {
+            let more = if index + 1 < width { 0x80 } else { 0 };
+            *byte = (rest & 0x7f) as u8 | more;
+            rest >>= 7;
+        }
+        let range = start..start + width;
+        if bytes[range.clone()] != prefix[..width] {
+            bytes.to_mut()[range].copy_from_slice(&prefix[..width]);
         }
     }
 
@@ -280,9 +305,7 @@ impl<'a> Reader<'a> {
                 }
                 self.native_metadata = native;
                 // An empty map's zero count already reads as an empty binary.
-                if count != 0 && self.native_metadata.is_some() {
-                    self.native_prefixes.push((start, self.position - start));
-                }
+                self.native_binary(start);
                 Value::Map(&self.bytes[start..self.position])
             }
             12 => {
@@ -294,10 +317,10 @@ impl<'a> Reader<'a> {
                 Value::Struct(&self.bytes[start..self.position])
             }
             13 => {
-                if self.native_metadata.is_some() {
-                    self.native_prefixes.push((self.position, 16));
-                }
-                Value::Uuid(self.take(16)?)
+                let start = self.position;
+                let uuid = self.take(16)?;
+                self.native_binary(start);
+                Value::Uuid(uuid)
             }
             _ => return Err(Error::Malformed),
         })
@@ -313,44 +336,24 @@ pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
     Ok((value, reader.position))
 }
 
-/// Work around parquet 57.3.0's unknown-field skip. It treats a boolean
-/// collection element like an inline struct-field boolean and consumes no
-/// byte, and it cannot skip a set, map or UUID at all. The current Parquet
-/// footer schema has no known boolean collections and no known set, map or
-/// UUID fields. Present validated one-byte boolean elements as bytes, a set as
-/// the identically encoded list, and a map or UUID as a binary holding its
-/// exact bytes, only to the native decoder; every field header and id stays.
+/// Work around parquet 57.3.0's unknown-field skip in one held footer or page
+/// header. It treats a boolean collection element like an inline struct-field
+/// boolean and consumes no byte, and it cannot skip a set, map or UUID at all.
+/// The current Parquet footer and page header schemas have no known boolean
+/// collections and no known set, map or UUID fields. Present validated
+/// one-byte boolean elements as bytes, a set as the identically encoded list,
+/// and a map or UUID as one opaque binary of the same length, only to the
+/// native decoder; every field header and id stays. The result has the
+/// input's length, so a page header is presented in place in the held file.
 /// Keep the original metadata for admission and the original data pages for
-/// reads. This independently authored correction copies the footer only when
+/// reads. This independently authored correction copies the struct only when
 /// needed, changes no values the native decoder reads from a well-typed
-/// footer, and never turns invalid booleans into bytes.
+/// struct, and never turns invalid booleans into bytes.
 pub(super) fn native_metadata(bytes: &[u8]) -> Result<Cow<'_, [u8]>, Error> {
     let mut reader = Reader::new(bytes);
     reader.native_metadata = Some(Cow::Borrowed(bytes));
     reader.value(12, 0)?;
-    let native = reader.native_metadata.unwrap();
-    if reader.native_prefixes.is_empty() {
-        return Ok(native);
-    }
-    let mut prefixes = reader.native_prefixes;
-    prefixes.sort_unstable();
-    let prefix_bytes: usize = prefixes
-        .iter()
-        .map(|&(_, length)| (usize::BITS - (length | 1).leading_zeros()).div_ceil(7) as usize)
-        .sum();
-    let mut output = Vec::with_capacity(native.len() + prefix_bytes);
-    let mut cursor = 0;
-    for (position, mut length) in prefixes {
-        output.extend_from_slice(&native[cursor..position]);
-        while length >= 0x80 {
-            output.push(length as u8 | 0x80);
-            length >>= 7;
-        }
-        output.push(length as u8);
-        cursor = position;
-    }
-    output.extend_from_slice(&native[cursor..]);
-    Ok(Cow::Owned(output))
+    Ok(reader.native_metadata.unwrap())
 }
 
 #[cfg(test)]
@@ -358,20 +361,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn native_skip_compatibility_changes_only_unskippable_headers() {
+    fn native_skip_compatibility_changes_only_unskippable_headers_and_prefixes() {
         // Inline true/false fields, an opaque binary payload, then a nested
         // struct containing a bool list and bool->list<bool> map.
         let bytes = [
             0x11, 0x12, 0x18, 3, 0x11, 0x21, 0x11, 0x1c, 0x19, 0x21, 1, 2, 0x1b, 1, 0x19, 2, 0x21,
             2, 1, 0, 0,
         ];
-        // The bool list header gains byte elements; the map field becomes a
-        // binary holding the map's six bytes unchanged.
-        let mut expected = bytes[..13].to_vec();
-        expected[9] = 0x23;
-        expected[12] = 0x18;
-        expected.push(6);
-        expected.extend(&bytes[13..]);
+        // The bool list header gains byte elements. The map field becomes one
+        // six-byte binary: a prefix of five, then the map's other bytes as held.
+        let mut expected = bytes;
+        for (position, byte) in [(9, 0x23), (12, 0x18), (13, 5)] {
+            expected[position] = byte;
+        }
         let native = native_metadata(&bytes).unwrap();
         assert_eq!(native.as_ref(), expected);
         assert!(matches!(native, Cow::Owned(_)));
@@ -390,8 +392,9 @@ mod tests {
         ] {
             assert_eq!(native_metadata(bytes).unwrap().as_ref(), expected);
         }
-        // A bool set becomes a byte list; UUID values become 16-byte binaries,
-        // both as a field and as list elements.
+        // A bool set becomes a byte list; each UUID becomes a 16-byte binary,
+        // a prefix of 15 and then its last 15 bytes, both as a field and as
+        // list elements.
         let uuid = [7u8; 16];
         let mut bytes = vec![0x1a, 0x21, 1, 2, 0x1d];
         bytes.extend(uuid);
@@ -399,14 +402,43 @@ mod tests {
         bytes.extend(uuid);
         bytes.extend(uuid);
         bytes.push(0);
-        let mut expected = vec![0x19, 0x23, 1, 2, 0x18, 16];
-        expected.extend(uuid);
-        expected.extend([0x19, 0x28, 16]);
-        expected.extend(uuid);
-        expected.push(16);
-        expected.extend(uuid);
-        expected.push(0);
+        let mut expected = bytes.clone();
+        for (position, byte) in [
+            (0, 0x19),  // set -> list
+            (1, 0x23),  // of bytes
+            (4, 0x18),  // uuid -> binary
+            (5, 15),    // of fifteen more bytes
+            (22, 0x28), // list<uuid> -> list<binary>
+            (23, 15),
+            (39, 15),
+        ] {
+            expected[position] = byte;
+        }
         assert_eq!(native_metadata(&bytes).unwrap().as_ref(), expected);
+        // A prefix takes as many bytes as the rest's length needs: 259 map
+        // bytes take a two-byte prefix of 257.
+        let mut wide = vec![0x1b, 0x80, 0x01, 0x11]; // map: 128 pairs, bool/bool
+        wide.extend((0..128).flat_map(|_| [1, 2]));
+        assert_eq!(wide.len() - 1, 259);
+        wide.push(0);
+        let mut native = wide.clone();
+        native[0] = 0x18;
+        native[1..3].copy_from_slice(&[0x81, 0x02]);
+        assert_eq!(native_metadata(&wide).unwrap().as_ref(), native);
+        // 129 map bytes are one too many for a one-byte prefix of 128, so a
+        // two-byte prefix holds 127, padded with a zero continuation byte.
+        let mut odd = vec![0x1b, 63, 0x14]; // map<bool,i16>: 63 pairs
+        odd.extend((0..62).flat_map(|_| [1, 0]));
+        odd.extend([1, 0x80, 0x01]); // the last value, 64, takes two bytes
+        assert_eq!(odd.len() - 1, 129);
+        odd.push(0);
+        let mut native = odd.clone();
+        native[0] = 0x18;
+        native[1..3].copy_from_slice(&[0xff, 0x00]);
+        assert_eq!(native_metadata(&odd).unwrap().as_ref(), native);
+        let (root, used) = parse(&native).unwrap();
+        assert_eq!(used, native.len());
+        assert_eq!(root.field(1).unwrap(), Some(Value::Binary(&odd[3..130])));
         // Ordinary metadata and empty collections keep borrowing the source.
         for bytes in [&[0x11, 0x12, 0][..], &[0x19, 0x01, 0x19, 0x0b, 0]] {
             assert!(matches!(native_metadata(bytes).unwrap(), Cow::Borrowed(_)));
