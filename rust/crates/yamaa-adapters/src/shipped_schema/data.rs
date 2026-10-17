@@ -1023,7 +1023,7 @@ submission_column_class:
     - inventory_vocabulary:
         type: bool
         required: false
-        description: Whether every non-missing value must name a dataset the study document declares (CT-11).
+        description: Whether every non-missing value must name a dataset any submission section of the study environment declares (CT-11).
     - origin:
         type: submission_origin_class
         required: false
@@ -1052,11 +1052,11 @@ submission_origin_class:
         type: str
         required: false
         min_length: 1
-        description: Explanatory text, required where the origin is incomplete without it (SUB-16).
+        description: Explanatory text, required where the origin is incomplete without it; a Predecessor names the column it copies (SUB-16).
     - documents:
         type: "list[document_reference]"
         required: false
-        description: Supporting documents evidencing the origin, derived for a collected origin that omits them (SUB-17).
+        description: Supporting documents evidencing the origin; a value collected from a person names its annotated case report form page under Submission (SUB-17).
 
 submission_method_class:
     - name:
