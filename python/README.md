@@ -2,7 +2,8 @@
 
 The `yamaa` distribution contains the Python facade and shared Rust engine.
 Its public API consists of `domain`, `check`, `define`, `resolve_specification`, their result/error APIs,
-package version metadata, host resource resolvers and the two ODM file helpers.
+the `Diagnostic` and `SourceSpan` record types, package version metadata, host
+resource resolvers and the two ODM file helpers.
 
 ```python
 import yamaa

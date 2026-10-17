@@ -154,10 +154,12 @@ owns decoding behavior.
 - Keep the Rust adapter features `yaml`, `parquet` and `readstat` independent,
   all enabled by default; the Python and R packages enable all three.
 - Preserve full signed-i64 values and separate missingness, lossless R
-  `yamaa_int64_vector`/`yamaa_utf8_vector`, preserve-or-error conversions and
-  JSON-text diagnostic context in the issue frames, with the same findings as
-  named `diagnostics` records carrying structured context and optional
-  geometry in both hosts.
+  `yamaa_int64_vector`/`yamaa_utf8_vector` and preserve-or-error conversions.
+- Expose every finding two ways in both hosts, mapped from one Rust record:
+  named `diagnostics` records with structured context and optional
+  `source_span` and `operand_route`, and the five-column issues frame, whose
+  JSON-text context is a documented projection of the same records. No host
+  interprets conditions.
 - Resolve resources from their original declaring file by default; explicit
   input/output `relative_to: entry` selects each specification entry. Admit
   absolute and parent-relative local paths without project-root fallback. Preserve snapshots,
@@ -175,6 +177,29 @@ owns decoding behavior.
 - Keep canonical Cargo locking and unchanged source-package copies. Runtime,
   contract, cache and resource identities use references, canonical forms or
   bytes; only packaging-tool lockfiles carry their own checksum fields.
+- Prune every specification after composition, including an entry file that
+  declares no `parents`; resolved-column ordering stays inheritance-only.
+- Ship `str_replace` with literal replacement text only. Group references,
+  if ever added, come through a different field, so `replacement` never
+  changes meaning.
+- Promote row defaults per template: a column is row-only, column-only or
+  row-phase for the templates that need it, and a candidate a template
+  filter suppresses never reads a lookup it does not need.
+- Keep the Python floor at Polars 1.43.2. No second vendored crate buys a
+  few months of reader compatibility; the floor moves only through a plain
+  dependency bump if the upstream Parquet writer makes the floating-point
+  column metadata optional.
+- Ship the reviewed vendored `saphyr-parser` compact-flow patch in every
+  supported graph; replacing it with a published parser is 0.5.0 work.
+- Keep Cargo dependency floors where they are tested; the crates are not
+  published.
+- Generate both hosts' binding declarations from
+  `rust/interface/bindings.yaml` and compare them in the repository check
+  and the native qualification lane. The version and feature handshake
+  runtime waits for an engine that loads separately from the host facade.
+- The `yamaa` facade crate is the only supported Rust surface;
+  `yamaa-adapters` and `yamaa-core` are internal and may change in any
+  release.
 
 Host behavior and source installation commands live in the
 [Python](https://github.com/elong0527/yamaa/blob/main/python/README.md) and
@@ -248,7 +273,17 @@ a range, derivations, a correlated filter or a `SELF` source, and any
 lookup over a donor relation below the small-relation index threshold.
 Indexed and scanned lookups keep the same diagnostics and ordering.
 
-## Specification and environment migration from 0.2.0
+## Specification and environment migration
+
+Changes since 0.3.0:
+
+| Earlier spelling or behavior | Current form |
+| --- | --- |
+| A dead declaration with an invalid reference fails a file without `parents` | The declaration is discarded before validation and the file builds. To keep a declaration validated, name the column in `output.columns`, `keys` or `output.order_by`, read it from a live derivation or verification, or name the dataset in `base`. An input no column reads is discarded too, so declare `base` to keep a driver that no column reads. |
+| `parents: []` added only to enable pruning | Every specification is pruned; the line can be removed. |
+| Collected text cleaned outside the language | `str_replace` with a portable `pattern` and literal `replacement`. |
+| Host code parsing the JSON text of the issues `context` column | Read the `diagnostics` records: structured `context`, `source_span` and `operand_route`. The issues frame is unchanged. |
+| Rust code depending on `yamaa-adapters` or `yamaa-core` | Depend on the `yamaa` facade crate by path or git. |
 
 The 0.4.0 upgrade also includes language and environment changes introduced
 before 0.3.0. Update old specifications and project locks together:
