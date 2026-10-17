@@ -9,17 +9,21 @@
 #    rustc >= 1.90), so dplyr's oldrel-* matrix entries cannot run here;
 #    the matrix keeps release on all three operating systems plus devel
 #    on Ubuntu, and installs the pinned Rust toolchain before checking.
-# 3. Like the native qualification in native.yml, this also runs as a
+# 3. Like the native qualification in native.yml, this runs as a
 #    scheduled nightly build (at 02:47 UTC, so it does not pile onto the
-#    native run at 05:17), not only on push / pull request.
+#    native run at 05:17) instead of after every merge to main.
+#    Pull requests check only macOS and Windows: CI's `r` job already runs
+#    the same strict check on Ubuntu with the release R.
 
 on:
   schedule:
     # Nightly, two and a half hours before the native qualification run.
     - cron: '47 2 * * *'
   workflow_dispatch:
+  # Schedules only check main, so release branches are checked on each push
+  # that changes these paths.
   push:
-    branches: [main, 'release/**']
+    branches: ['release/**']
     paths:
       - 'R/**'
       - 'crates/**'
@@ -85,11 +89,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        config:
-          - {os: macos-15,       r: 'release'}
-          - {os: windows-latest, r: 'release'}
-          - {os: ubuntu-24.04,   r: 'devel', http-user-agent: 'release'}
-          - {os: ubuntu-24.04,   r: 'release'}
+        # Pull requests: macOS and Windows release. Scheduled, manual and
+        # release-branch push runs add Ubuntu with R-devel and the release R.
+        config: >-
+          ${{ fromJSON(github.event_name == 'pull_request'
+          && '[{"os":"macos-15","r":"release"},{"os":"windows-latest","r":"release"}]'
+          || '[{"os":"macos-15","r":"release"},{"os":"windows-latest","r":"release"},{"os":"ubuntu-24.04","r":"devel","http-user-agent":"release"},{"os":"ubuntu-24.04","r":"release"}]') }}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -150,7 +155,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: rust
-          shared-key: yamaa-${{ runner.os }}
+          key: ${{ github.workflow }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install the shared grammar fixture codec and PyYAML

@@ -58,7 +58,7 @@ malformed-source language findings. Capture and ingest boundary replies expose
 `sas_reader_unavailable`; unavailable Parquet compression retains its separate
 `parquet_codec_unavailable` code.
 
-The optional-format CI matrix runs no-default, each individual feature and all
+The optional-format CI job runs no-default, each individual feature and all
 three features. Each lane exercises enabled-format fixtures and disabled
 capabilities, verifies the Cargo graph, and inspects the linked test binary for
 ReadStat and Zstd symbols. Run a lane locally from the repository root with

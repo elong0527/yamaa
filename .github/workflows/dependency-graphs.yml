@@ -1,13 +1,33 @@
 name: Dependency graphs
 
+# Every graph is resolved and built from scratch, so main runs nightly and a
+# pull request runs only when it changes what the graphs resolve or the
+# advisory policy in rust/deny.toml.
 on:
   # PRs into a release integration branch run only the CI workflow.
   pull_request:
     branches: [main]
+    paths:
+      - 'rust/**/Cargo.toml'
+      - 'rust/Cargo.lock'
+      - 'rust/deny.toml'
+      - 'rust/rust-toolchain.toml'
+      - 'rust/vendor/**'
+      - 'pyproject.toml'
+      - 'python/pyproject.toml'
+      - 'python/uv.lock'
+      - 'rust/tests/project-programs/python/pyproject.toml'
+      - 'rust/tests/project-programs/r/DESCRIPTION'
+      - 'R/yamaa/DESCRIPTION'
+      - 'tools/ci/dependency_graphs.py'
+      - 'tools/ci/toolchain.py'
+      - '.github/actions/setup/**'
+      - '.github/workflows/dependency-graphs.yml'
+  # Schedules only check main, so release branches are checked on each push.
   push:
-    branches: [main, 'release/**']
+    branches: ['release/**']
   schedule:
-    - cron: '23 6 * * 1'
+    - cron: '23 6 * * *'
   workflow_dispatch:
 
 permissions:

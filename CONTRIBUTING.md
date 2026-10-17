@@ -122,21 +122,30 @@ issue, never in the repository.
 
 ## CI and release qualification
 
-The ordinary CI workflow runs the same check targets listed above for each PR.
+The ordinary CI workflow runs the same check targets listed above for each PR,
+every two hours on main, and on each push to a `release/**` branch. Merges to
+main do not start workflows other than the documentation site deployment; main
+is checked on those schedules instead. While a workflow's latest main run
+fails, the `Main health` workflow keeps a `main-red` issue open for it and
+closes the issue when a later main run succeeds. A PR into main that changes
+`.github/` also runs actionlint over every workflow.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
 A PR into a release integration branch (`release/X.Y.Z`) runs the CI workflow
-alone, without its second Python pass at the minimum saved-artifact readers.
-Dependency graphs, Optional format features and R-CMD-check run on PRs into
-main, including the release branch's own PR, so every change still passes them
-before it reaches main. To check a release branch sooner, dispatch one with
-`gh workflow run <workflow> --ref release/X.Y.Z`.
+alone, and CI skips its `python-minimum` job, which tests the minimum
+saved-artifact readers. Optional format features, Dependency graphs,
+R-CMD-check and Workflow lint run on PRs into main, including the release
+branch's own PR, so every change still passes them before it reaches main. No
+schedule checks a release branch, so each push to one also runs Optional format
+features, Dependency graphs and R-CMD-check. To check a release branch sooner,
+dispatch one with `gh workflow run <workflow> --ref release/X.Y.Z`.
 
 `.github/workflows/dependency-graphs.yml` also resolves minimum and newest
-compatible graphs on each PR into main, main push, weekly schedule and
-dispatch. Run a lane locally with R and the normal development prerequisites
-installed:
+compatible graphs nightly, on dispatch, on each push to a release branch, and
+on each PR into main that changes a dependency manifest or lock, or the
+advisory policy in `rust/deny.toml`. Run a lane locally with R and the normal
+development prerequisites installed:
 
 ```sh
 uv run --project python --no-sync python -m tools.ci.dependency_graphs \
