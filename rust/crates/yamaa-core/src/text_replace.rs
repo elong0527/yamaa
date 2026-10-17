@@ -212,13 +212,16 @@ mod tests {
 
     #[test]
     fn complete_output_size_counts_utf8_and_empty_matches_before_allocation() {
-        let subject = "é𐐀";
-        let op = operation("x*", "𐐀", None);
+        let subject = "\u{e9}\u{10400}";
+        let op = operation("x*", "\u{10400}", None);
         let Step::Matched { spans, .. } = op.apply(ValueRef::Str(subject)).unwrap() else {
             panic!("empty matches")
         };
         assert_eq!(output_bytes(subject.len(), &spans, 4), Some(18));
-        assert_eq!(op.render(subject, &spans).unwrap(), "𐐀é𐐀𐐀𐐀");
+        assert_eq!(
+            op.render(subject, &spans).unwrap(),
+            "\u{10400}\u{e9}\u{10400}\u{10400}\u{10400}"
+        );
         assert_eq!(output_bytes(6, &[(0, 2), (2, 6)], 0), Some(0));
         assert_eq!(output_bytes(6, &[], usize::MAX), Some(6));
         assert_eq!(output_bytes(0, &[(0, 0)], usize::MAX), Some(usize::MAX));

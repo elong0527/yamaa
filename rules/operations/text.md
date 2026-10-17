@@ -418,7 +418,9 @@ becomes `-b--`.
 
 **REQ-1320.** `replacement` is literal text. Each match is replaced by exactly
 that text: `$`, the backslash, and braces have no special meaning, and no
-capture group is referenced. The scalars outside the matches are kept in
+capture group is referenced. This field retains its literal meaning if group
+references are added; those references require a separate field.
+The scalars outside the matches are kept in
 order. A source the pattern matches nowhere is returned unchanged. A result
 with no scalars is the empty string, never missing.
 
