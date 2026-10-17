@@ -48,6 +48,12 @@ def write_odm_parquet(
         raise ODMError("output must end in .parquet")
     if source_path.resolve() == output_path.resolve():
         raise ODMError("source and output paths must be different")
+    if output_path.is_dir():
+        # A directory can never be published over, with or without
+        # overwrite: without this refusal the staged replace at the end
+        # leaks a raw IsADirectoryError naming the temporary building
+        # path, after the whole input has been converted.
+        raise FileExistsError(output_path)
     if output_path.exists() and not overwrite:
         raise FileExistsError(output_path)
     if isinstance(batch_size, bool) or not isinstance(batch_size, int):

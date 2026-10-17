@@ -122,6 +122,19 @@ class TestYamlLoader(unittest.TestCase):
                 Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
             )
 
+    def test_unhashable_keys_are_rejected_as_yaml_errors(self):
+        # A sequence or mapping used as a key is valid YAML syntax, so the
+        # loader must report it the way SafeLoader does (a YAMLError the
+        # validation callers catch), not crash with a raw TypeError from
+        # the duplicate-key membership test in construct_mapping.
+        for document in ("? [a, b]\n: value\n", "? {a: 1}\n: value\n"):
+            with self.subTest(document=document):
+                with self.assertRaisesRegex(yaml.YAMLError, "unhashable key"):
+                    yaml.load(
+                        document,
+                        Loader=OWNER_REPOSITORY_YAML.UniqueKeyLoader,
+                    )
+
 
 class TestTextSourceBoundary(unittest.TestCase):
     def test_preserves_only_named_third_party_unicode_data_and_notices(self):

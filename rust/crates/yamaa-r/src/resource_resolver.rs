@@ -9,7 +9,7 @@ use std::{
     },
     thread::ThreadId,
 };
-use yamaa_adapters::host_resources::{Failure, Reply, Request, Resolver};
+use yamaa::{ResolverFailure, ResolverReply, ResolverRequest, ResourceResolver};
 thread_local! { static CALLBACKS: RefCell<BTreeMap<usize, Function>> = const { RefCell::new(BTreeMap::new()) }; }
 static NEXT: AtomicUsize = AtomicUsize::new(1);
 struct Port {
@@ -23,7 +23,7 @@ impl Drop for Port {
         }
     }
 }
-pub fn new(callback: Function) -> Arc<dyn Resolver> {
+pub fn new(callback: Function) -> Arc<dyn ResourceResolver> {
     let id = NEXT.fetch_add(1, Ordering::Relaxed);
     CALLBACKS.with(|callbacks| callbacks.borrow_mut().insert(id, callback));
     Arc::new(Port {
@@ -31,14 +31,15 @@ pub fn new(callback: Function) -> Arc<dyn Resolver> {
         thread: std::thread::current().id(),
     })
 }
-impl Resolver for Port {
-    fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
+impl ResourceResolver for Port {
+    fn request(&self, request: ResolverRequest<'_>) -> Result<ResolverReply, ResolverFailure> {
         if self.thread != std::thread::current().id() {
-            return Err(Failure::Rejected);
+            return Err(ResolverFailure::from_code("rejected"));
         }
+        let rejected = || ResolverFailure::from_code("rejected");
         let callback = CALLBACKS
             .with(|callbacks| callbacks.borrow().get(&self.id).cloned())
-            .ok_or(Failure::Rejected)?;
+            .ok_or_else(rejected)?;
         let args = list!(
             operation = request.operation.name(),
             kind = request.kind.name(),
@@ -51,45 +52,32 @@ impl Resolver for Port {
         // returns closed envelopes; no R longjmp crosses the native boundary.
         let reply = callback
             .call(pairlist!(request = args))
-            .map_err(|_| Failure::Rejected)?
+            .map_err(|_| rejected())?
             .as_list()
-            .ok_or(Failure::Rejected)?;
-        let failure = reply.elt(0).map_err(|_| Failure::Rejected)?;
+            .ok_or_else(rejected)?;
+        let failure = reply.elt(0).map_err(|_| rejected())?;
         if !failure.is_null() {
-            return Err(match failure.as_str().ok_or(Failure::Rejected)? {
-                "missing" => Failure::Missing,
-                "changed" => Failure::Changed,
-                "cancelled" => Failure::Cancelled,
-                "publication" => Failure::Publication,
-                "cleanup" => Failure::Cleanup,
-                _ => Failure::Rejected,
-            });
+            return Err(ResolverFailure::from_code(
+                failure.as_str().ok_or_else(rejected)?,
+            ));
         }
-        let reference = reply.elt(1).map_err(|_| Failure::Rejected)?;
-        let reference = reference.as_raw().ok_or(Failure::Rejected)?;
+        let reference = reply.elt(1).map_err(|_| rejected())?;
+        let reference = reference.as_raw().ok_or_else(rejected)?;
         let reference = std::str::from_utf8(reference.as_slice())
-            .map_err(|_| Failure::Rejected)?
+            .map_err(|_| rejected())?
             .to_owned();
-        let bytes = reply.elt(2).map_err(|_| Failure::Rejected)?;
+        let bytes = reply.elt(2).map_err(|_| rejected())?;
         let bytes = if bytes.is_null() {
             None
         } else {
-            Some(Arc::from(
-                bytes.as_raw().ok_or(Failure::Rejected)?.as_slice(),
-            ))
+            Some(Arc::from(bytes.as_raw().ok_or_else(rejected)?.as_slice()))
         };
-        let frame = reply.elt(3).map_err(|_| Failure::Rejected)?;
+        let frame = reply.elt(3).map_err(|_| rejected())?;
         let frame = if frame.is_null() {
             None
         } else {
-            Some(Arc::new(
-                crate::arrow_bridge::import(frame).map_err(|_| Failure::Rejected)?,
-            ))
+            Some(crate::arrow_bridge::import(frame).map_err(|_| rejected())?)
         };
-        Ok(Reply {
-            reference,
-            bytes,
-            frame,
-        })
+        Ok(ResolverReply::new(reference, bytes, frame))
     }
 }

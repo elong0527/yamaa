@@ -33,6 +33,10 @@ activation and the complete build lifecycle; its dataset model owns execution.
 implement their host boundaries. Core may use `std`; portable math still uses
 the pinned libm policy.
 
+The [shared host interface](rust/interface/README.md) owns the binding-generation
+design, declaration input, version negotiation and lifetime contract. Public
+diagnostic/result records are imported from their shared adapter owner.
+
 Use the Rust toolchain selected by `rust/rust-toolchain.toml` and the unchanged
 canonical `rust/Cargo.lock`. Host source packages carry that workspace and lock.
 The [source packaging guidance](docs/release.md#source-package-contents) links

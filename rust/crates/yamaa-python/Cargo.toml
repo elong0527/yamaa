@@ -16,8 +16,7 @@ doctest = false
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-yamaa-core = { path = "../yamaa-core" }
-yamaa-adapters = { path = "../yamaa-adapters" }
+yamaa = { path = "../yamaa" }
 pyo3 = { version = "0.27.2", features = ["abi3-py312"] }
 
 [build-dependencies]

@@ -3,19 +3,15 @@ use pyo3::prelude::*;
 mod arrow_bridge;
 mod define_entry;
 mod domain_entry;
-mod file_domain;
-mod file_producer;
-mod file_project;
 mod function_callback;
 mod project_activation;
-mod project_result;
 mod report_fields;
 mod resolved_artifact;
 mod resource_resolver;
 mod style;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add("_CORE_VERSION", yamaa_core::VERSION)?;
+    module.add("_CORE_VERSION", yamaa::VERSION)?;
     module.add_class::<arrow_bridge::ArrowTable>()?;
     module.add_class::<define_entry::Define>()?;
     module.add(
@@ -24,6 +20,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     module.add_function(wrap_pyfunction!(define_entry::_define_file, module)?)?;
     module.add_class::<domain_entry::Domain>()?;
+    module.add_class::<domain_entry::Attempt>()?;
     module.add(
         "DomainError",
         module.py().get_type::<domain_entry::DomainError>(),
@@ -38,7 +35,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
         resolved_artifact::_read_resolved_specification,
         module
     )?)?;
-    module.add_class::<file_producer::Attempt>()?;
     module.add_function(wrap_pyfunction!(style::_style_same_value, module)?)?;
     Ok(())
 }

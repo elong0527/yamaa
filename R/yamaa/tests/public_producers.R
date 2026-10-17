@@ -543,7 +543,7 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
   issues <- failed$issues
   stopifnot(is.null(failed$output),nrow(issues)==1L,
     identical(issues$phase,"validation"),identical(issues$condition,"incompatible_input_type"),
-    identical(issues$requirement,"REQ-0190"),identical(issues$spec_paths,list("intermediates[0].filter")))
+    identical(issues$requirement,"REQ-0190"),identical(issues$spec_paths,list("input.ADSL.schema.intermediates[0].filter")))
   context <- jsonlite::fromJSON(issues$context[[1L]],simplifyVector=FALSE)
   stopifnot(identical(context[sort(names(context))],list(left_type="date",right_type="str")))
   for(index in 1:2) {

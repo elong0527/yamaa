@@ -1152,6 +1152,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
+name = "yamaa"
+version = "0.4.0"
+dependencies = [
+ "arrow-array",
+ "arrow-schema",
+ "yamaa-adapters",
+ "yamaa-core",
+]
+
+[[package]]
 name = "yamaa-adapters"
 version = "0.4.0"
 dependencies = [
@@ -1195,19 +1205,15 @@ version = "0.4.0"
 dependencies = [
  "pyo3",
  "pyo3-build-config",
- "yamaa-adapters",
- "yamaa-core",
+ "yamaa",
 ]
 
 [[package]]
 name = "yamaa-r"
 version = "0.4.0"
 dependencies = [
- "arrow-array",
- "arrow-schema",
  "extendr-api",
- "yamaa-adapters",
- "yamaa-core",
+ "yamaa",
 ]
 
 [[package]]

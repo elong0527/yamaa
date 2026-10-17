@@ -1,10 +1,10 @@
 //! R-owned scalar representations cross Rust only as checked raw payloads.
 use extendr_api::prelude::*;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use yamaa_adapters::scalar_bytes::{self, ScalarBytes};
+use yamaa::{EncodedScalar, Scalar};
 
 /// Return normally before the R facade raises a condition; catch Rust unwinds.
-fn boundary(run: impl FnOnce() -> std::result::Result<ScalarBytes, String>) -> List {
+fn boundary(run: impl FnOnce() -> std::result::Result<yamaa::EncodedScalar, String>) -> List {
     match catch_unwind(AssertUnwindSafe(run)) {
         Ok(Ok(value)) => list!(
             tag = value.tag,
@@ -19,22 +19,25 @@ fn boundary(run: impl FnOnce() -> std::result::Result<ScalarBytes, String>) -> L
         ),
     }
 }
+
+fn admit(tag: i32, payload: &Raw) -> std::result::Result<Scalar, String> {
+    EncodedScalar::decode(tag, payload.as_slice()).map_err(|error| error.reason().into())
+}
+
 /// Validate and canonicalize a scalar without interpreting R character pointers.
 #[extendr]
 fn scalar_bytes(tag: i32, payload: Raw) -> List {
-    boundary(|| {
-        scalar_bytes::decode(tag, payload.as_slice())
-            .map(scalar_bytes::encode)
-            .map_err(String::from)
-    })
+    boundary(|| admit(tag, &payload).map(EncodedScalar::encode))
 }
 
 /// Return exact binary64 bits directly, without an R decimal-parser round trip.
 #[extendr]
 fn scalar_exact_double(tag: i32, payload: Raw) -> List {
     boundary(|| {
-        let value = scalar_bytes::decode(tag, payload.as_slice())?;
-        Ok(scalar_bytes::encode(scalar_bytes::exact_float(&value)?))
+        let value = admit(tag, &payload)?;
+        Ok(EncodedScalar::encode(
+            yamaa::exact_float(&value).map_err(|error| error.reason().to_owned())?,
+        ))
     })
 }
 /// Apply a selected scalar operator to two independently admitted byte payloads.
@@ -42,7 +45,7 @@ fn scalar_exact_double(tag: i32, payload: Raw) -> List {
 fn scalar_operator_code(name: Raw, unary: bool) -> List {
     let code = std::str::from_utf8(name.as_slice())
         .ok()
-        .and_then(|name| scalar_bytes::operator_code(name, unary));
+        .and_then(|name| yamaa::scalar_operator_code(name, unary));
     match code {
         Some(code) => list!(value = code, error = NULL),
         None => list!(value = NULL, error = "unsupported scalar operator"),
@@ -59,17 +62,16 @@ fn scalar_operator(
     unary: bool,
 ) -> List {
     boundary(|| {
-        let left = scalar_bytes::decode(left_tag, left.as_slice())?;
+        let left = admit(left_tag, &left)?;
         let right = if unary {
             None
         } else {
-            Some(scalar_bytes::decode(right_tag, right.as_slice())?)
+            Some(admit(right_tag, &right)?)
         };
-        Ok(scalar_bytes::encode(scalar_bytes::operate(
-            code,
-            &left,
-            right.as_ref(),
-        )?))
+        Ok(EncodedScalar::encode(
+            yamaa::apply_scalar_operator(code, &left, right.as_ref())
+                .map_err(|error| error.message().to_owned())?,
+        ))
     })
 }
 

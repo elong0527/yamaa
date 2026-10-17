@@ -10,6 +10,7 @@ re-exports every public name defined here for backward compatibility.
 import copy
 import csv
 import re
+from collections.abc import Hashable
 from pathlib import Path
 
 from yaml.composer import ComposerError
@@ -67,6 +68,17 @@ class UniqueKeyLoader(yaml.SafeLoader):
         mapping = {}
         for key_node, value_node in node.value:
             key = self.construct_object(key_node, deep=deep)
+            if not isinstance(key, Hashable):
+                # SafeConstructor raises this for a sequence or mapping used
+                # as a key; without the guard the membership test below dies
+                # with a raw TypeError that escapes the callers catching
+                # yaml.YAMLError and crashes the whole validation run.
+                raise ConstructorError(
+                    None,
+                    None,
+                    "found unhashable key",
+                    key_node.start_mark,
+                )
             if key in mapping:
                 raise ConstructorError(
                     "while constructing a mapping",
