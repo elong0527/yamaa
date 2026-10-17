@@ -39,9 +39,10 @@ from [#2591](https://github.com/elong0527/yamaa/issues/2591). Its approved decis
 specify a boundary version starting at 1 in `yamaa-adapters`, severity
 `error`/`warning` (all current conditions are errors), and unchanged optional core
 span/route geometry. The `records` import names roles, not guessed Rust symbols
-or a second schema. Once that owner delivers its public types, bind the roles to
-their actual Rust paths before implementing the generators. An unresolved
-import is a generation error. The imported version constant is the single
+or a second schema. The generator resolves each role to its public symbol in
+`yamaa_adapters::diagnostic_record` (`BOUNDARY_VERSION`, `DiagnosticRecord`,
+`ResultRecord` and `PlanRecord`); an unresolved role is a generation error.
+The imported version constant is the single
 runtime source for both hosts; neither generator embeds a separately maintained
 version number. `format_version` versions the IDL grammar only.
 
@@ -305,9 +306,9 @@ these adapters rather than promise zero copies for those conversions.
 
 ## Follow-up verification
 
-The generation steps must compare this definition with both actual registration
-surfaces, then preserve existing installed-host behavior while using the
-imported record contract as it lands. The compatibility step must cover the
+Generation already compares this definition with both actual registration
+surfaces. Later steps must preserve existing installed-host behavior while
+adopting the imported record contract. The compatibility step must cover the
 handshake table (including older native/newer facade), refusal before IO or
 callbacks, wrong-kind/busy/expired owners, original callback failures,
 cancellation during conversion/publication, and post-failure cleanup. Reuse

@@ -195,7 +195,8 @@ declaring source, selected base, authored spelling and location. Linked producer
 have their own entries. Resolution uses the same metadata preparation as direct
 compilation and accepts the same optional `environment`; it invokes no callbacks.
 Missing study data and nonexistent output directories can be inspected. Missing
-required metadata still raises `ResolvedSpecificationError` with structured `issues`.
+required metadata still raises `ResolvedSpecificationError` with `issues` and
+`diagnostics`.
 
 Serialization preserves exact integer values and mapping order in a separate ledger.
 Dictionary views are independent copies. Deserialization validates the distinct
@@ -225,7 +226,8 @@ parent specifications. Dataset-JSON reads already published CSV/Parquet artifact
 when requested. It executes no specification, reads no ordinary study source and
 opens no supporting-document links. The shared lifecycle renders/validates the
 whole output set before Save, then publishes Dataset-JSON in section order and
-XML last. A failed Save raises `yamaa.DefineError` carrying issues. See the
+XML last. A failed Save raises `yamaa.DefineError` carrying `issues` and
+`diagnostics`. See the
 [submission contracts](../rules/README.md#submission).
 
 ## ODM file helpers
@@ -242,7 +244,7 @@ These helpers read ODM 1.3/2.0 XML or TAR inputs into the fixed
 clinical-item schema. They preserve source order and absent/null/empty values,
 and the Parquet writer uses bounded batches and atomic publication. Their
 `max_archive_members`, `max_expanded_bytes` and `max_xml_depth` options govern
-parsing; parser refusals raise `ODMError`. Their
+parsing; parser refusals raise `ValueError`. Their
 [private implementation](src/yamaa/_odm/README.md) imports only file/schema
 libraries. Internal row
 models, iterators, binding plans and contexts are not public authoring APIs.

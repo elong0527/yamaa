@@ -61,35 +61,7 @@ producer bytes before consumers and reuses those bytes on repeated calls. A fail
 build raises `yamaa_domain_error` on Save. Owned result attributes are read only.
 Capacity refusals retain the shared condition and authored paths;
 [release guidance](../../docs/release.md#resource-refusals) describes their
-context.
-
-## Diagnostics
-
-`diagnostics` is an unnamed list of records, one per finding in the engine's
-authored order, and `issues` is the data-frame projection of the same
-findings: character `phase`, `condition`, `requirement` (`NA` when absent), a
-list column `spec_paths` and `context` as the engine's canonical JSON text.
-Both views are built natively from one record, so they cannot disagree, and
-no JSON is parsed in R. `yamaa_domain`, `yamaa_check` and `yamaa_define`
-results, `yamaa_define_error` after a failed save and
-`yamaa_resolved_specification_error` all carry both.
-
-Each record is a named list with `phase`, `condition`, `requirement` (`NULL`
-when the cause cites none), `spec_paths` (character), `context`,
-`source_span` and `operand_route`. `context` is structured: objects are named
-lists (an empty object keeps its empty `names`), arrays are unnamed lists,
-text is character, logicals are logical and `null` is `NULL`. An integer token
-whose magnitude is at most 2^53 becomes a double; every other integer token
-is carried as its exact decimal spelling in a character scalar, because
-binary64 cannot hold it, so compare such values as text or through `int64()`.
-Fraction and exponent tokens become doubles. Text containing NUL is a
-`yamaa_utf8` scalar, as in output columns. `source_span` is
-`list(start, end)` with half-open byte offsets into the original expression
-and `operand_route` is the character vector of operand steps from the
-expression root to the failing node; both are `NULL` when the failure site
-recorded no geometry. Absent geometry is distinct from recorded zero
-geometry: `list(start = 0, end = 0)` is a zero-width span and `character(0)`
-is a failure at the root. `yamaa_check` reads no study data or project code.
+context. `yamaa_check` reads no study data or project code.
 Resource paths resolve from their original declaring YAML layer by default.
 Set `relative_to: entry` on an input dataset or `output` declaration to select
 the study entry's directory under the
@@ -133,6 +105,34 @@ JSON in specification order and XML last, stopping after an operational failure.
 A failed Define Save raises `yamaa_define_error`. See the
 [submission contracts](../../rules/README.md#submission).
 
+## Diagnostics
+
+`diagnostics` is an unnamed list of records, one per finding in the engine's
+authored order, and `issues` is the data-frame projection of the same
+findings: character `phase`, `condition`, `requirement` (`NA` when absent), a
+list column `spec_paths` and `context` as the engine's canonical JSON text.
+Both views are built natively from one record, so they cannot disagree, and
+no JSON is parsed in R. `yamaa_domain`, `yamaa_check` and `yamaa_define`
+results, `yamaa_define_error` after a failed save and
+`yamaa_resolved_specification_error` all carry both.
+
+Each record is a named list with `phase`, `condition`, `requirement` (`NULL`
+when the cause cites none), `spec_paths` (character), `context`,
+`source_span` and `operand_route`. `context` is structured: objects are named
+lists (an empty object keeps its empty `names`), arrays are unnamed lists,
+text is character, logicals are logical and `null` is `NULL`. An integer token
+whose magnitude is at most 2^53 becomes a double; every other integer token
+is carried as its exact decimal spelling in a character scalar, because
+binary64 cannot hold it, so compare such values as text.
+Fraction and exponent tokens become doubles. Text containing NUL is a
+`yamaa_utf8` scalar, as in output columns. `source_span` is
+`list(start, end)` with half-open byte offsets into the original expression
+and `operand_route` is the character vector of operand steps from the
+expression root to the failing node; both are `NULL` when the failure site
+recorded no geometry. Absent geometry is distinct from recorded zero
+geometry: `list(start = 0, end = 0)` is a zero-width span and `character(0)`
+is a failure at the root.
+
 ## Resolved specification inspection
 
 ```r
@@ -148,7 +148,7 @@ provenance, selected resource roots and producer-specific entry identities.
 The optional `environment` argument admits declared project metadata without
 invoking callbacks. Missing study data and nonexistent output locations can be
 inspected; missing required metadata signals `yamaa_resolved_specification_error`
-with an `issues` data frame.
+with an `issues` data frame and the matching `diagnostics` records.
 
 Loading validates the distinct format and version and replays inspection facts
 only. It never opens resources, rebinds paths or compiles an executable program.
