@@ -108,6 +108,52 @@ def fixture_rows(name):
     return json.loads((FIXTURES / (name + ".json")).read_text(encoding="utf-8"))
 
 
+# Installed hosts expose these five issue columns. The adapter geometry
+# (`source_span`, `operand_route`) that the same fixtures assert for the Rust
+# boundary stays out of host-visible truth until a host column carries it
+# (#2676). Projecting here keeps the fixture the one source of truth: a row
+# missing a host field or carrying a field this projection does not know is
+# refused rather than silently narrowed.
+HOST_ISSUE_FIELDS = ("phase", "condition", "requirement", "spec_paths", "context")
+ADAPTER_GEOMETRY_FIELDS = ("source_span", "operand_route")
+
+
+def host_issue_rows(rows):
+    """Project authored issue rows onto the host-visible issue columns."""
+    projected = []
+    for row in rows:
+        fields = set(row)
+        missing = set(HOST_ISSUE_FIELDS) - fields
+        if missing:
+            raise ValueError(
+                "issue row misses host fields: " + ", ".join(sorted(missing))
+            )
+        unknown = fields - set(HOST_ISSUE_FIELDS) - set(ADAPTER_GEOMETRY_FIELDS)
+        if unknown:
+            raise ValueError("unknown issue fields: " + ", ".join(sorted(unknown)))
+        projected.append(
+            {field: value for field, value in row.items() if field in HOST_ISSUE_FIELDS}
+        )
+    return projected
+
+
+def host_truth(source):
+    """Read authored case truth with every issue row projected for installed hosts."""
+    truth = json.loads(source.read_text(encoding="ascii"))
+    for case in truth["cases"].values():
+        for group in ("issues", "check_issues"):
+            case[group] = host_issue_rows(case[group])
+    return truth
+
+
+def write_host_truth(truth, destination):
+    """Write projected truth in the fixtures' own layout: two-space indent, ASCII."""
+    destination.write_text(
+        json.dumps(truth, indent=2, ensure_ascii=True) + "\n",
+        encoding="ascii",
+    )
+
+
 def stage_json_fixtures(destination: Path):
     """Copy authored JSON directly; installed readers own no intermediate format."""
     for source in FIXTURES.glob("*.json"):
@@ -1061,8 +1107,8 @@ def stage_source_selection_truth(
     source = REPOSITORY / (
         "rust/crates/yamaa-adapters/tests/fixtures/" + fixture + ".json"
     )
-    shutil.copy2(source, destination / (label + "-truth.json"))
-    truth = json.loads(source.read_text(encoding="ascii"))
+    truth = host_truth(source)
+    write_host_truth(truth, destination / (label + "-truth.json"))
     directories = destination / (label + "-cases")
     directories.mkdir()
 
@@ -1153,8 +1199,8 @@ def stage_completed_lookup_assertion_truth(destination: Path):
     source = REPOSITORY / (
         "rust/crates/yamaa-adapters/tests/fixtures/" + fixture + ".json"
     )
-    shutil.copy2(source, destination / (label + "-truth.json"))
-    truth = json.loads(source.read_text(encoding="ascii"))
+    truth = host_truth(source)
+    write_host_truth(truth, destination / (label + "-truth.json"))
     directories = destination / (label + "-cases")
     directories.mkdir()
 

@@ -19,7 +19,14 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 import yaml12
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    model_serializer,
+    model_validator,
+)
 
 REPORT_VERSION = "0.3.0-draft"
 RUNTIME: Literal["python"] = "python"
@@ -151,6 +158,13 @@ class ArtifactObservation(_FrozenModel):
     content: str = ""
 
 
+# The recorded-geometry fields of a diagnostic. They are optional on the wire
+# the way the adapter boundary (Issue::from_diagnostic) defines it: an omitted
+# key means no geometry was recorded, and a present key carries a recorded
+# value, never null.
+GEOMETRY_FIELDS = frozenset({"source_span", "operand_route"})
+
+
 class SourceSpanObservation(_FrozenModel):
     """Byte offsets carried from the core diagnostic when recorded."""
 
@@ -174,6 +188,17 @@ class DiagnosticObservation(_FrozenModel):
     context: dict[str, JsonValue]
     source_span: SourceSpanObservation | None = None
     operand_route: tuple[str, ...] | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_unrecorded_geometry(self, handler):
+        # Unrecorded geometry leaves the wire as an omitted key, as the
+        # adapter boundary writes it, so a dumped report reads back through
+        # `parse_report` and never carries a null geometry key.
+        payload = handler(self)
+        for key in GEOMETRY_FIELDS:
+            if payload.get(key) is None:
+                payload.pop(key, None)
+        return payload
 
 
 class UnsupportedObservation(_FrozenModel):
@@ -666,19 +691,23 @@ def parse_report(text: str) -> ExampleReport:
     """Require every complete observation field before strict JSON model admission."""
     raw = json.loads(text)
 
-    # Geometry keys ride the wire only when recorded; every other
-    # observation field is always present in a complete report.
-    WIRE_OPTIONAL = {"source_span", "operand_route"}
-
     def complete(value, model):
         if not isinstance(value, dict):
             raise ValueError("complete report fields differ: " + model.__name__)
         fields = model.model_fields
-        required = set(fields) - WIRE_OPTIONAL
+        # Geometry keys ride the wire only when recorded; every other
+        # observation field is always present in a complete report.
+        required = set(fields) - GEOMETRY_FIELDS
         allowed = set(fields)
         actual = set(value)
         if not required.issubset(actual) or not actual.issubset(allowed):
             raise ValueError("complete report fields differ: " + model.__name__)
+        # A present geometry key carries a recorded value. The adapter
+        # boundary refuses null there, so this reader does too, while an
+        # omitted key still reads as unrecorded.
+        for key in sorted(GEOMETRY_FIELDS & actual):
+            if value[key] is None:
+                raise ValueError("present geometry key is null: " + key)
 
     complete(raw, ExampleReport)
     for group, model in (
