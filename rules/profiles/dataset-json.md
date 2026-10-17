@@ -1,65 +1,85 @@
 # Dataset-JSON
 
 This file is a profile: it is optional, and it applies only to a build whose
-selected submission section of a study environment sets `dataset_json`. Such a
-build writes one deterministic Dataset-JSON 1.1 file per composed
-specification, carrying the published dataset and the submission metadata the
-[Define-XML](define-xml.md) document is generated from. A domain build never
-writes Dataset-JSON.
+selected submission section of a study environment sets `transport:
+dataset_json`. Such a build writes one deterministic Dataset-JSON 1.1 file per
+composed specification, carrying the published dataset and the submission
+metadata the [Define-XML](define-xml.md) document is generated from. A domain
+build never writes Dataset-JSON. [JSON-1](#json-1), [JSON-2](#json-2),
+[JSON-3](#json-3), [JSON-5](#json-5) and [JSON-14](#json-14) also govern the
+files [SAS Transport](xpt.md) writes.
 
-## Requesting Dataset-JSON
+## Requesting a transport file
 
 <a id="json-1"></a>
 
-### JSON-1. A section's `dataset_json` requests one Dataset-JSON file beside each listed specification's artifact
+### JSON-1. A section's `transport` requests one file per composed dataset, named for the dataset beside the document
 
-The selected environment submission section's `dataset_json` boolean requests
-one Dataset-JSON file for each specification in its ordered `specs`. Each
-target is beside that specification's already published `output.path`, with
-the same basename and a `.json` extension. Omission or false produces only the
-Define-XML document. The submission section requests the files, and the
-extension mapping of [OUTPUT-5](../output.md#output-5) stays
-closed at `.csv` and `.parquet`.
+The selected environment submission section's optional `transport` requests
+one transport file for each specification in its ordered `specs`: `xpt` a SAS
+Transport version 5 file under [SAS Transport](xpt.md), and `dataset_json` a
+Dataset-JSON file under this profile. Each file is in the directory of the
+section's `define` target, named the lower-case dataset name with the extension
+`.xpt` or `.json`. Omission produces only the Define-XML document. The
+extension mapping of [OUTPUT-5](../output.md#output-5) stays closed at `.csv`
+and `.parquet`.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::entry_relative_inherited_output_supplies_json_capture_and_publication_targets`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
 Replaces: REQ-1193, REQ-1194.
 
-Package references use `/` separators and satisfy [JSON-8](#json-8). A
-Dataset-JSON file carries `studyOID`, `metaDataVersionOID`, `itemGroupOID`, a
-per-column `itemOID` and a creation timestamp. The composition derives those
-facts from the study, the selected section and the specification domain, and
-[DEFINE-3](define-xml.md#define-3) selects the explicit creation time or the
-current UTC time once during preparation.
+One section requests one transport. The file's place depends on the document
+and the dataset name alone, not on where the artifact is published: a `DM`
+dataset beside `out/define.xml` is written to `out/dm.json` or `out/dm.xpt`.
+A section that requests a transport names its document `define.xml`
+([DEFINE-2](define-xml.md#define-2)), so `metaDataRef` is `define.xml`
+([JSON-8](#json-8)). A Dataset-JSON file carries `studyOID`,
+`metaDataVersionOID`, `itemGroupOID`, a per-column `itemOID` and a creation
+timestamp. The composition derives those facts from the study, the selected
+section and the specification domain, and [DEFINE-3](define-xml.md#define-3)
+selects the explicit creation time or the current UTC time once during
+preparation.
 
 <a id="json-2"></a>
 
-### JSON-2. Every Dataset-JSON target has exactly one writer
+### JSON-2. Every transport file has exactly one writer
 
-Every Dataset-JSON target must differ from the selected section's `define`
-target, every other Dataset-JSON target and every composed specification's
-published `output.path`. Each file has one writer. A derived Dataset-JSON
-target equal to one of those targets fails validation, reporting the
-conflicting targets.
+Every transport file must differ from the selected section's `define` target,
+every other transport file, every composed specification's published
+`output.path` and every path a composed specification declares for an input.
+Each file has one writer. A transport file equal to one of those paths fails
+validation, as does a published artifact equal to the document, reporting the
+conflicting paths.
 
-Fails: `dataset_json_path_collision`, `artifact_path_collision`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::case_alias_targets_are_refused_before_overwriting_a_sentinel`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineDatasetJsonCollision`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineArtifactCollision`.
+Fails: `transport_path_collision`, `artifact_path_collision`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::transport_targets_equal_after_lowercasing_are_refused_before_overwriting_a_sentinel`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::a_transport_file_never_replaces_a_declared_input`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineTransportCollision`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineArtifactCollision`.
 Replaces: REQ-1195, REQ-1226.
 
-A derived Dataset-JSON target equal to the selected section's `define` target,
-another Dataset-JSON target or a composed specification's `output.path` fails
-with `dataset_json_path_collision`.
+A transport file equal to another transport file or to a declared input path
+fails with `transport_path_collision`, reporting the specification or the
+input's position; two dataset names that differ only in case name one file. A
+published artifact equal to a written target fails with
+`artifact_path_collision`. The written targets are compared once more on the
+filesystem before publication, so two spellings of one file are refused as
+well.
 
 <a id="json-3"></a>
 
-### JSON-3. A dataset declared to have no data is not requested as Dataset-JSON
+### JSON-3. A dataset declared to have no data has no transport file, and a dataset without rows declares it
 
-A selected specification whose dataset submission metadata declares
-`has_no_data` must not be requested as Dataset-JSON. Such a request fails
-validation, reporting the dataset.
+A composed specification whose dataset submission metadata declares
+`has_no_data` is never written as a transport file, and its artifact is not
+read. When a transport is requested, a composed dataset whose published
+artifact has no rows and that does not declare `has_no_data` fails, reporting
+the dataset and the artifact.
 
-Fails: `dataset_json_without_data`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDatasetJsonNoData`.
+Fails: `transport_dataset_empty`.
+Evidence: `rust/crates/yamaa-adapters/tests/submission_transport.rs::datasets_without_data_have_no_file_and_empty_ones_must_declare_it`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionTransportEmpty`.
 Replaces: REQ-1196, REQ-1227.
+
+The document still describes a dataset with no data, with `def:HasNoData`; it
+names no file for it ([DEFINE-15](define-xml.md#define-15)). The failure
+reports `transport_dataset_empty` at `datasets.<dataset>.artifact` with the
+dataset and the artifact.
 
 <a id="json-4"></a>
 
@@ -87,7 +107,7 @@ document.
 
 ### JSON-5. The rows are the published artifact's rows, read the way a consumer reads a producer's artifact
 
-The file's rows are the rows of the artifact the entry's specification
+A transport file's rows are the rows of the artifact the entry's specification
 published at its `output.path`, read exactly as a consuming specification reads
 a producer's artifact; the artifact must already be published, and generation
 never runs the specification. Composition does not re-derive, re-order, filter
@@ -96,7 +116,7 @@ value is the value the artifact carries. An artifact that is unpublished or
 does not match its producing specification fails.
 
 Fails: `producer_contract_mismatch`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 Replaces: REQ-1199, REQ-1200, REQ-1230.
 
 The artifact is read:
@@ -148,9 +168,8 @@ composed specification and fails the document that lacks them.
 The file is one JSON object carrying the members the table below lists, in that
 order, which is the order the standard presents them. A member whose source is
 absent is omitted and is never written as `null`: within this file `null` is
-the missing value of a row. `rows` is written even when the dataset has no
-rows, as `[]`. `dbLastModifiedDateTime` and `targetDataType` are never
-written.
+the missing value of a row. A file always has rows ([JSON-3](#json-3)), and
+`dbLastModifiedDateTime` is never written.
 
 Evidence: `sdtm-dm-metadata`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 Replaces: REQ-1203, REQ-1204, REQ-1205, REQ-1207, REQ-1208.
@@ -178,29 +197,23 @@ name is `yamaa`; its version is the selected section's explicit
 under [FUNC-2](functions.md#func-2). The same selected version is used in
 Define-XML and Dataset-JSON.
 
-`targetDataType` asks a receiving system to convert a transmitted value into
-another logical type; every value here is written in the spelling its own type
-fixes.
+A column's `targetDataType` is written only as [JSON-10](#json-10) states;
+every value is written in the spelling its own type fixes.
 
 <a id="json-8"></a>
 
-### JSON-8. `metaDataRef` names the Define-XML document relative to the file, without leaving its directory
+### JSON-8. `metaDataRef` names the Define-XML document beside the file
 
-`metaDataRef` is the selected section's `define` target expressed relative to
-the directory holding the Dataset-JSON file, written with `/` separators, and
-must not begin with a parent traversal. A `dataset_json` path, or a
-`metaDataRef` computed from it, that cannot be expressed relative to its
-directory without a parent traversal fails, reporting the dataset and both
-paths.
+`metaDataRef` is `define.xml`, the file name of the selected section's
+`define` target, which [JSON-1](#json-1) places in the directory holding the
+Dataset-JSON file and [DEFINE-2](define-xml.md#define-2) names. The reference
+therefore never leaves that directory.
 
-Fails: `artifact_outside_document`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_original_output_supplies_both_json_capture_and_publication_target`.
 Replaces: REQ-1206, REQ-1229.
 
 The pair travels together: the file names the document its `itemOID`s point
-into, and [JSON-12](#json-12) has that document name the file. The failure
-reports `artifact_outside_document` as [DEFINE-16](define-xml.md#define-16)
-does for the artifact a leaf names.
+into, and [JSON-12](#json-12) has that document name the file.
 
 <a id="json-9"></a>
 
@@ -222,8 +235,9 @@ Replaces: REQ-1209.
 | `name` | the column name |
 | `label` | the column's `label` |
 | `dataType` | per [JSON-10](#json-10) |
-| `length` | `submission.length`, when [Submission metadata](submission.md) admits one |
-| `displayFormat` | `submission.display_format`, when declared |
+| `targetDataType` | per [JSON-10](#json-10), when it applies |
+| `length` | the `ItemDef` `Length`, when one applies ([SUB-24](submission.md#sub-24)) |
+| `displayFormat` | the `ItemDef` `def:DisplayFormat`, when one applies |
 | `keySequence` | one-based position in `keys`; omitted when not a key |
 
 `keySequence` therefore describes the same non-missing identity in `keys`; it
@@ -234,16 +248,17 @@ change this metadata.
 
 <a id="json-10"></a>
 
-### JSON-10. `dataType` maps the resolved submission data type through a closed table
+### JSON-10. `dataType` maps the resolved submission data type through a closed table, and an ADaM date targets an integer
 
 `dataType` maps the resolved submission data type of
-[Submission metadata](submission.md) through the closed table below. The table
-is not a second type system: Dataset-JSON's set is smaller than Define-XML's,
-so the eight collapsed types are carried as text here and keep their
-submission type in the `ItemDef` the column's `itemOID` points at. `boolean`,
-`decimal` and `double` are never written.
+[Submission metadata](submission.md) through the closed table below; the eight
+collapsed types are carried as text and keep their submission type in the
+`ItemDef`. Under `adam`, a `date` or `datetime` the document describes as
+`integer` ([SUB-25](submission.md#sub-25)) keeps its ISO value with `dataType`
+`date` or `datetime` and `targetDataType` `integer`. No other column carries
+`targetDataType`, and `boolean`, `decimal` and `double` are never written.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::integer_terminology_items_admit_equal_float_published_values`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::adam_dataset_json_targets_the_integer_its_document_submits`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 Replaces: REQ-1210, REQ-1211.
 
 | Submission data type | `dataType` |
@@ -259,13 +274,16 @@ Replaces: REQ-1210, REQ-1211.
 | `incompleteDate`, `incompleteTime`, `incompleteDatetime` | `string` |
 | `durationDatetime`, `intervalDatetime` | `string` |
 
-A reader that needs the finer type reads the document. `float` is written for a
-`float` column even though the value of
-[Values](../values.md) is binary64; this member must equal
-the `DataType` that `ItemDef` carries, and the storage width of a number is not
-what it names. [Values](../values.md) declares no Boolean
-column type, and neither `decimal` nor `double` names a submission type
-[Submission metadata](submission.md) resolves.
+`targetDataType` asks the receiving system to convert the ISO value into the
+SAS date or datetime the document describes, and the column's `length` and
+`displayFormat` are that `ItemDef`'s `8` and `DATE9.` or `DATETIME20.`. The
+table is not a second type system: Dataset-JSON's set is smaller than
+Define-XML's. A reader that needs the finer type reads the document. `float` is
+written for a `float` column even though the value of [Values](../values.md) is
+binary64; this member must equal the `DataType` that `ItemDef` carries, and the
+storage width of a number is not what it names. [Values](../values.md) declares
+no Boolean column type, and neither `decimal` nor `double` names a submission
+type [Submission metadata](submission.md) resolves.
 
 <a id="json-11"></a>
 
@@ -303,9 +321,10 @@ artifact's empty field arrives as missing under
 ### JSON-12. When Dataset-JSON is requested, each dataset's leaf names its JSON file
 
 When the selected section requests `dataset_json`, each dataset's `def:leaf`
-names that dataset's JSON target: its `xlink:href` and `def:title` use the JSON
-file rather than the published CSV or Parquet path. When Dataset-JSON is not
-requested, the leaf names the specification's published `output.path`.
+names that dataset's JSON file beside the document: its `xlink:href` and
+`def:title` use the JSON file name rather than the published CSV or Parquet
+path. When no transport is requested, the leaf names the specification's
+published `output.path` ([DEFINE-16](define-xml.md#define-16)).
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::entry_relative_inherited_output_supplies_json_capture_and_publication_targets`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 Replaces: REQ-1215.
@@ -361,14 +380,13 @@ A generation's data files meet the byte-identity rule of
 
 <a id="json-14"></a>
 
-### JSON-14. Data files are published before the document, and only after every file renders and validates
+### JSON-14. Transport files are published before the document, and only after every file renders and validates
 
-A generation renders and validates every Dataset-JSON file and the Define-XML
-document before touching any target. It publishes the data files first, in
-entry order, and the document last, applying
-[OUTPUT-8](../output.md#output-8) through
-[OUTPUT-8](../output.md#output-8) to each file. A failure at any
-point publishes nothing further and leaves every untouched target as it was.
+A generation renders and validates every transport file and the Define-XML
+document before touching any target. It publishes the transport files first,
+in entry order, and the document last, applying
+[OUTPUT-8](../output.md#output-8) to each file. A failure at any point
+publishes nothing further and leaves every untouched target as it was.
 
 Fails: `publication_failed`.
 Evidence: `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/tests/file_resources.rs::semantic_failure_and_target_admission_have_zero_writes`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`.

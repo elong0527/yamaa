@@ -141,12 +141,12 @@ profiles. The profiles own their containers and bytes, and this file owns
 publication; the profiles carry the primary values and their order rather
 than decide them.
 
-SAS Transport v5 (`.xpt`) is not an output profile. Dataset-JSON is generated
-by a study document under [Dataset-JSON](profiles/dataset-json.md); `.json`
-is not a specification output profile and fails like any other unmapped
-extension. A derivation run publishes only the primary artifact and its
-declared sidecars; conversion to a transport container is a separate
-packaging step outside the language.
+SAS Transport version 5 (`.xpt`) and Dataset-JSON (`.json`) are not output
+profiles: a study document's submission section writes them from published
+artifacts under [SAS Transport](profiles/xpt.md) and
+[Dataset-JSON](profiles/dataset-json.md), and either extension in an output
+path fails like any other unmapped extension. A derivation run publishes only
+the primary artifact and its declared sidecars.
 
 <a id="output-6"></a>
 
