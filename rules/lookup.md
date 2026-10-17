@@ -142,7 +142,8 @@ intermediates:
 
 A named intermediate must narrow, derive or reshape its dataset, or require
 that every read selects a record. An intermediate that declares nothing beyond
-`id`, `dataset` and `no_match: null` reads exactly what the implicit join reads
+`id`, `dataset` and `no_match: {literal: null}` reads exactly what the implicit
+join reads
 ([LOOKUP-1](#lookup-1)) and fails: read the input dataset directly instead of
 aliasing it. Composition preserves this refusal even when no output reads the
 declaration.
@@ -156,7 +157,7 @@ Replaces: REQ-1248.
 intermediates:
   - id: CODED
     dataset: CODING
-    no_match: null
+    no_match: {literal: null}
 ```
 
 Instead, qualify the dataset where it is read:
@@ -168,7 +169,7 @@ intermediates:
     key:
       DRUG_RECORD_NO: CODING.DRUG_RECORD_NO
       ATC_CODE: CODING.ATC_CODE
-    no_match: null
+    no_match: {literal: null}
 ```
 
 An implicit join to `CODING` also needs matching output-key types. When the
@@ -306,7 +307,7 @@ intermediates:
     key: {USUBJID: VS.USUBJID, PARAMCD: VS.VSTESTCD, AVISIT: AVISIT}
     order_by: [SELF.VSSEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 rows:
   # ...after the template that builds the collected rows
   - id: expected_week2
@@ -480,11 +481,11 @@ Replaces: REQ-0124, REQ-0129, REQ-0130, REQ-0131, REQ-0147.
 
 The failure is `unmatched_key`, reporting the source values and the key
 columns it sought. One column's handling never answers for another.
-`no_match: null` answers with missing when it first declares the field, and it
-keeps that meaning when an empty child inherits the specification. A later
-layer's null over an inherited `no_match` clears the handler under
-[LAYER-9](inheritance.md#layer-9). The answer is recorded under the `no_match`
-handler of [Column derivation](columns.md).
+`no_match: {literal: null}` answers with missing, and it keeps that meaning
+when an empty child inherits the specification. A YAML null declares no
+handler: written over an inherited `no_match` it clears the handler, and the
+read fails again, under [LAYER-9](inheritance.md#layer-9). The answer is
+recorded under the `no_match` handler of [Column derivation](columns.md).
 
 <a id="lookup-14"></a>
 
@@ -545,7 +546,7 @@ derivations:
   VISITN:
     type: int
     derivation: {str_extract: {source: VISIT, pattern: '^WEEK ([0-9]+)$', group: 1}}
-    unconvertible: null
+    unconvertible: {literal: null}
 ```
 
 `WEEK 02` thus yields the integer `2` before numeric matching. `check` reports
@@ -611,7 +612,7 @@ intermediates:
     order_by: [SRC.DIST]
     keep: first
     columns: [VALUE, DIST]
-    no_match: null
+    no_match: {literal: null}
 ```
 
 <a id="lookup-16"></a>

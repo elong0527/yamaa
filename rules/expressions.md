@@ -165,7 +165,7 @@ which defaults to `"Y"`; `FALSE` returns `false_value`, or missing when it is
 absent; `UNKNOWN` returns `missing`, or missing when it is absent. An unknown
 condition never falls through to `false_value`. A `flag` that declares
 `false_value` also declares `missing`, which may repeat `false_value`, name
-another value, or be `null` for missing.
+another value, or be `{literal: null}` for missing.
 
 Fails: `missing_value_required`.
 Evidence: `negative-flag-missing-value`, `negative-flag-condition`, `adam-adae-occurrence-flags`.

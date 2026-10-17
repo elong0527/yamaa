@@ -148,7 +148,7 @@ Replaces: REQ-0093, REQ-0094, REQ-0095.
 ```yaml
 source:
   variable: ADSL.TRTSDT
-  absent: null
+  absent: {literal: null}
 ```
 
 [Lookup and joins](lookup.md) defines the join uniqueness the

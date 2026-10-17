@@ -136,15 +136,15 @@ headings that group cards. A card is written as:
 ```markdown
 <a id="layer-3"></a>
 
-### LAYER-3. Layers contribute depth first, once each, later layers taking precedence
+### LAYER-3. Layers form one chain contributed from its root ancestor to the entry, later layers taking precedence
 
-Starting at the entry file, each layer's parents are visited left to right,
-depth first, and then the layer itself. ...
+Starting at the entry file, each layer's `parent` names the next layer up the
+chain, which ends at a layer without a parent. ...
 
 Fails: `inheritance_cycle`.
 Evidence: `schema-inheritance`.
 
-For parents `A` then `B` that both inherit `Common`, ...
+For a study entry whose parent is a compound layer whose parent is an ...
 ```
 
 - **ID**: the file's prefix and a number. Numbers are assigned once, in the

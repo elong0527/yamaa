@@ -110,15 +110,15 @@ A row dependency on a later-phase value fails as `phase_boundary`.
 After row construction, the column dependency graph is built. Every dependency
 must refer to a column declared earlier, and columns evaluate in declaration
 order. Composition orders the resolved columns only when a specification
-declares `parents`; otherwise declaration order is the resolved order.
+declares a `parent`; otherwise declaration order is the resolved order.
 
 Fails: `unknown_reference`, `forward_reference`.
 Evidence: `negative-forward-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`.
 Replaces: REQ-0060, REQ-0070, REQ-0071.
 
 [Inheritance](inheritance.md) composes and prunes every specification before
-these rules apply: a specification that declares no `parents` is a composition
-of one layer and is pruned on the same terms as one that declares `parents`.
+these rules apply: a specification that declares no `parent` is a composition
+of one layer and is pruned on the same terms as one that declares a `parent`.
 An unresolved variable or predicate reference fails. A reference to a later
 declared column fails as `forward_reference` and reports both columns.
 
@@ -211,14 +211,14 @@ does not read a window result, evaluated before the window pass.
 
 <a id="column-10"></a>
 
-### COLUMN-10. A local handler answers its condition with a literal, and an omitted handler leaves it fatal
+### COLUMN-10. A local handler answers its condition with a literal or `{literal: null}`, and an omitted handler leaves it fatal
 
 Each local handler applies at the site the table below lists and is
-substituted only when its condition occurs. Every handler value is a literal,
-and literal handlers add no dependencies. Omitting an applicable handler field
-makes its condition fatal at every site; a handler written as `null` answers
-with missing. A condition that registers no handler is answered by its owning
-rule.
+substituted only when its condition occurs. Every handler value is a scalar
+literal, or `{literal: null}`, which answers with missing; handlers are never
+expressions and add no dependencies. Omitting an applicable handler field, or
+writing it as YAML null, leaves its condition fatal at every site. A condition
+that registers no handler is answered by its owning rule.
 
 Fails: `missing_input`, `unmapped_value`, `unmatched_pattern`.
 Evidence: `schema-handlers`, `negative-cut-missing-input`, `negative-mapping-unmapped-value`.
@@ -228,6 +228,15 @@ These sites identify conditions within expression evaluation or result
 handling; the ordered derivation lifecycle is [COLUMN-8](#column-8) and
 [COLUMN-9](#column-9). Each handler uses a literal unless its behavior says
 otherwise.
+
+A handler's literal is a string, integer, float or Boolean, written bare. The
+missing value has one spelling, `{literal: null}`, the same as the literal
+expression: a YAML null leaves the field absent under
+[LAYER-9](inheritance.md#layer-9), so `unmapped: null` declares no handler.
+The same two forms are the values of a `flag`'s `true_value`, `false_value`
+and `missing`, of `first_available`'s `missing` and of an inline `mapping`
+dictionary entry, and a `function` argument passes the missing value as
+`{literal: null}`.
 
 | Stage | Local declaration | Behavior |
 |---|---|---|
@@ -305,7 +314,7 @@ Replaces: REQ-0351, REQ-0352, REQ-0353, REQ-0354, REQ-0355, REQ-0365.
 ```yaml
 source:
   variable: RAW.AGE
-  absent: null
+  absent: {literal: null}
 ```
 
 Other expressions type `source` as a variable or a variable with a `filter`,
@@ -343,7 +352,7 @@ A derivation that needs stage 3 wraps its expression in `value`:
 derivation:
   value:
     source: RAW.AGE
-  unconvertible:
+  unconvertible: {literal: null}
 ```
 
 [Values](values.md) defines which conversions fail and
