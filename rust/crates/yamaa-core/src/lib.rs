@@ -47,6 +47,7 @@ pub mod submission_composition;
 pub mod submission_document;
 pub mod submission_inventory;
 pub mod submission_json;
+mod submission_origin;
 pub mod submission_xml;
 pub mod temporal;
 pub mod text_case;

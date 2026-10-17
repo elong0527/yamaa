@@ -76,6 +76,9 @@ columns:
       origin:
         type: Collected
         source: Investigator
+        documents:
+          - document: acrf
+            pages: {type: PhysicalRef, refs: "1"}
 
   # Both coded terms come from the dictionary row whose lowest-level term
   # equals the reported term exactly, letter case included. No such row, or

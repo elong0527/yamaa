@@ -121,6 +121,7 @@ conditions:
   parent_not_found: {phases: [validation]}
   pattern_mismatch: {phases: [validation]}
   phase_boundary: {phases: [validation]}
+  predecessor_label_mismatch: {phases: [validation]}
   producer_contract_mismatch: {phases: [validation]}
   prohibited_construct: {phases: [validation]}
   prohibited_function: {phases: [validation]}
