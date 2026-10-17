@@ -1,4 +1,4 @@
-Following CDISC standards, use the provided SUBJ dataset to create a
+Following CDISC ADaM standards, use the provided ADSL dataset to create a
 CLINSITE dataset for a Bioresearch Monitoring (BIMO) submission package,
 with one record per clinical site.
 

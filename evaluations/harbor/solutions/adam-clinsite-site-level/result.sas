@@ -1,4 +1,4 @@
-/* opensas reference solution for the yamaa benchmark bimo-clinsite-site-level.
+/* opensas reference solution for the yamaa benchmark adam-clinsite-site-level.
    Reads the benchmark inputs and derives the requested output.
    Execute with the existing opensas runtime: opensas /app/output/result.sas. */
 
