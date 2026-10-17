@@ -75,7 +75,9 @@ packages. Arrow and Parquet are supported at exactly 60.0.0 with flatbuffers
 the adapter's version-specific APIs have not been adapted and qualified for
 those graphs. Broadening that range requires separate adapter and installed-host
 qualification first. Portable libm remains exactly 0.2.16, and the reviewed
-local saphyr-parser patch remains part of every graph.
+local saphyr-parser patch remains part of every graph. The Python binding builds
+with PyO3 0.27.2 through 0.30; the lock selects 0.30.1, and the minimum
+dependency graph tests 0.27.2.
 
 Python supports CPython 3.12 through 3.14 with the runtime ranges in
 `python/pyproject.toml`. Their declared floors are lxml 6.1.0, Polars 1.43.2,

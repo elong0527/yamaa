@@ -27,6 +27,9 @@ impl From<&Table> for ArrowTable {
 #[pymethods]
 impl ArrowTable {
     #[pyo3(signature=(requested_schema=None))]
+    // `PyCapsule::new` builds on the PyO3 0.27.2 floor; 0.29 renamed it
+    // `new_with_value`, with the same pointer and drop behaviour.
+    #[allow(deprecated)]
     fn __arrow_c_stream__<'py>(
         &self,
         py: Python<'py>,
@@ -41,6 +44,6 @@ impl ArrowTable {
         // value on capsule destruction. A consumer moves that header and clears
         // release; dropping the consumed capsule then only frees the shell.
         // Unconsumed capsules release their reader and buffers on destruction.
-        PyCapsule::new_with_value(py, self.table.stream(), c"arrow_array_stream")
+        PyCapsule::new(py, self.table.stream(), Some(c"arrow_array_stream".into()))
     }
 }
