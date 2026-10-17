@@ -19,7 +19,6 @@ changes the principle first.
 order and checks are written in the specification. Nothing is inferred from
 data, from file contents, from a same-named field or from a host default.
 Enforced by [SPEC-4](specification.md#spec-4),
-[SPEC-4](specification.md#spec-4),
 [INPUT-5](inputs.md#input-5),
 [OUTPUT-5](output.md#output-5) and
 [INPUT-1](inputs.md#input-1).
@@ -27,8 +26,7 @@ Enforced by [SPEC-4](specification.md#spec-4),
 **P2. Values never convert silently.** An operation never converts its inputs.
 A value converts once, to its column's declared type, by one table, and a
 failed conversion is a named failure. Enforced by
-[VALUE-2](values.md#value-2), [VALUE-3](values.md#value-3),
-[VALUE-3](values.md#value-3) and
+[VALUE-2](values.md#value-2), [VALUE-3](values.md#value-3) and
 [INPUT-7](inputs.md#input-7).
 
 **P3. Missing is a value.** Missing is distinct from every string, number and

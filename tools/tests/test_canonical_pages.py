@@ -143,7 +143,7 @@ class CanonicalPages(unittest.TestCase):
         self.assertIn("Schema fields", self.page("reference/schema-fields/index.html"))
         summary = self.page("reference/rules-summary/index.html")
         self.assertIn("Rules at a glance", summary)
-        self.assertIn("Each layer contributes once", summary)
+        self.assertIn("LAYER-1", summary)
         self.assertIn(
             f'href="{repository}/blob/main/rules/inheritance.md#layer-1"', summary
         )

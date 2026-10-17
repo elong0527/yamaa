@@ -75,7 +75,7 @@ class RuleReferenceTests(unittest.TestCase):
             index.index("## Requirements not yet"), index.index("## Replaced")
         )
 
-    def test_summary_lists_principles_and_each_card_title_and_statement(self):
+    def test_summary_lists_principles_and_each_card_title(self):
         summary = self.page("rules-summary.md")
         self.assertTrue(summary.startswith("# Rules at a glance\n"))
         self.assertIn(
@@ -86,14 +86,11 @@ class RuleReferenceTests(unittest.TestCase):
         )
         self.assertIn("## Inheritance\n\nResolve inherited layers.\n", summary)
         self.assertIn(
-            "### [LAYER-1](../inheritance.md#layer-1). Layers compose depth first\n\n"
-            "Each layer's parents are visited left to right, depth first, and then the\n"
-            "layer itself.\n",
+            "- [LAYER-1](../inheritance.md#layer-1). Layers compose depth first\n",
             summary,
         )
-        # Statement links resolve from the generated page, not the card file.
-        self.assertIn("[REQ-0001](../values/types.md#req-0001).", summary)
-        # Detail, conditions and evidence stay in the rule file.
+        # Statements, detail, conditions and evidence stay in the rule file.
+        self.assertNotIn("Each layer's parents are visited left to right", summary)
         self.assertNotIn("A cycle reports its path", summary)
         self.assertNotIn("Fails:", summary)
         self.assertIn(
@@ -224,7 +221,7 @@ class RuleReferenceTests(unittest.TestCase):
             ["requirements.md", "rules-summary.md", "schema-fields.md"],
         )
         summary = pages[ROOT / "rules/reference/rules-summary.md"]
-        self.assertIn("### [LAYER-14](../inheritance.md#layer-14). ", summary)
+        self.assertIn("- [LAYER-14](../inheritance.md#layer-14). ", summary)
         self.assertIn("**P10. Artifacts are reproducible.**", summary)
 
 
