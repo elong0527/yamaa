@@ -174,6 +174,7 @@ macro_rules! walk {
             | Expression::MappingCut { source, .. }
             | Expression::StrContains { source, .. }
             | Expression::StrExtract { source, .. }
+            | Expression::StrReplace { source, .. }
             | Expression::StrCase { source, .. }
             | Expression::StrPad { source, .. }
             | Expression::Round { source, .. } => $recurse(&$($mutable)? source.expression, $visitor, $depth + 1)?,

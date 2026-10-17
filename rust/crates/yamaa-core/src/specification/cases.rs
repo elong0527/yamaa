@@ -448,6 +448,17 @@ fn bind_operation(
             edges,
             findings,
         )?,
+        Operation::StrReplace(operation) => str_extract::bind_replace(
+            operation,
+            column,
+            &spec.keys,
+            catalog,
+            &spec.intermediates,
+            secondary,
+            intermediates,
+            edges,
+            findings,
+        )?,
         Operation::MappingCut(operation) => mapping_cut::bind(
             spec,
             operation,

@@ -65,6 +65,7 @@ mod temporal_arithmetic;
 pub use crate::text_case::StringCase;
 pub use crate::text_extract::StringExtract;
 pub use crate::text_pad::StringPad;
+pub use crate::text_replace::StringReplace;
 pub use crate::text_template::StringTemplate;
 pub use temporal::{
     CalendarUnit, DateBounds, ElapsedUnit, InvalidTemporal, Temporal, TemporalKind,
@@ -108,6 +109,10 @@ pub enum Expression {
     StrExtract {
         source: std::boxed::Box<Assignment>,
         operation: StringExtract,
+    },
+    StrReplace {
+        source: std::boxed::Box<Assignment>,
+        operation: StringReplace,
     },
     StrCase {
         source: std::boxed::Box<Assignment>,
@@ -849,6 +854,7 @@ fn key_expression(expression: &Expression) -> bool {
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::StrReplace { source, .. }
         | Expression::MappingCut { source, .. }
         | Expression::Round { source, .. } => key_expression(&source.expression),
         Expression::StrTemplate { operands, .. }
@@ -987,6 +993,7 @@ fn current_record_read(
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::StrReplace { source, .. }
         | Expression::MappingCut { source, .. }
         | Expression::Round { source, .. } => {
             current_record_read(&source.expression, intermediates, scope)
@@ -1729,6 +1736,9 @@ fn validate_operand_assignment(
             source: operand, ..
         }
         | Expression::StrExtract {
+            source: operand, ..
+        }
+        | Expression::StrReplace {
             source: operand, ..
         }
         | Expression::StrContains {
