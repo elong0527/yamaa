@@ -20,9 +20,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         .unwrap()
     };
     let op = make("(a)", "1");
-    let Error::Diagnostic(input) = op.apply(ValueRef::Int(7)).unwrap_err() else {
-        panic!("typed input")
-    };
+    let Error::Diagnostic(input) = op.apply(ValueRef::Int(7)).unwrap_err();
     let cases = [
         (
             input,

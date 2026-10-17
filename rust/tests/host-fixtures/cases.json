@@ -3850,18 +3850,21 @@
       "wrong_leaf_reference": "{P: {path: wrong.csv, schema: leaf.yaml}}",
       "incompatible_leaf_reference": "{P: {path: leaf.csv, schema: leaf.yaml, types: {ID: int}}}",
       "verification_pattern_path": "columns.VALUE.verifications[0].matches.pattern",
-      "regex_budget": {
+      "catastrophic_pattern": {
         "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: TERM\n    type: str\n    derivation: SRC.TERM\n    verifications: {matches: {pattern: '(a+)+b'}}\n",
         "source": "ID,TERM\n1,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
-        "condition": "engine_rejected",
+        "condition": "matches_failed",
         "paths": [
-          "columns.TERM.verifications[0].matches.pattern"
+          "columns.TERM.verifications[0].matches"
         ],
         "context": {
-          "code": "execution_limit",
-          "stage": "execute",
-          "resource": "regex_steps",
-          "limit": 1000000
+          "column": "TERM",
+          "failure_count": 1,
+          "keys": [
+            {
+              "ID": 1
+            }
+          ]
         }
       }
     },

@@ -8,7 +8,7 @@ use std::cmp::Ordering;
 use std::vec;
 
 use crate::limits::{LimitExceeded, Limits};
-use crate::regex;
+use crate::portable_regex;
 use crate::table::ValueRef;
 use crate::value::{compare_present, Selection, Value, ValueType};
 
@@ -128,7 +128,7 @@ pub enum PlanError {
     #[error("predicate regex: node={node:?}, error={error:?}")]
     Regex {
         node: usize,
-        error: regex::CompileError,
+        error: portable_regex::CompileError,
     },
     #[error("predicate limit: {0:?}")]
     Limit(LimitExceeded),
@@ -214,7 +214,6 @@ impl Condition {
 pub enum ErrorKind<E> {
     Condition(Condition),
     Resolution { identifier: String, error: E },
-    Regex(regex::MatchError),
 }
 
 /// Original source context and structural route, without fabricating a source span.
@@ -233,7 +232,7 @@ pub struct EvaluationError<E> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Plan {
     nodes: Vec<Node>,
-    compiled_patterns: Vec<Option<regex::Pattern>>,
+    compiled_patterns: Vec<Option<portable_regex::Pattern>>,
     root: usize,
     spec_path: String,
     expression: String,
@@ -271,7 +270,7 @@ impl Plan {
                 Node::Contains { value, pattern } => {
                     scalars.push(value);
                     compiled_pattern = Some(
-                        regex::Pattern::compile(pattern)
+                        portable_regex::Pattern::compile(pattern)
                             .map_err(|error| PlanError::Regex { node: index, error })?,
                     );
                 }
@@ -442,10 +441,7 @@ impl Plan {
                         let pattern = self.compiled_patterns[index]
                             .as_ref()
                             .expect("admitted pattern");
-                        let matched = pattern
-                            .search(&value)
-                            .map_err(|error| self.error(ErrorKind::Regex(error), route))?;
-                        Ok(Truth::from_bool(matched.is_some()))
+                        Ok(Truth::from_bool(pattern.is_match(&value)))
                     }
                     other => Err(Condition::ContainsExpectedText {
                         actual: other.value_type().expect("missing handled above"),
@@ -577,7 +573,7 @@ enum Pattern {
 /// Unicode scalar full matching with O(pattern) storage.
 /// All tokens are checked before matching, including a trailing escaped character.
 fn like(value: &str, pattern: &str, escape: Option<char>) -> Result<Truth, Condition> {
-    // The per-match step boundary belongs to regex; LIKE has no separate work quota.
+    // Linear in the value and pattern lengths; LIKE has no work quota.
     let mut tokens = Vec::new();
     let mut escaped = false;
     for character in pattern.chars() {

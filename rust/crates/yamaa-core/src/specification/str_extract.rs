@@ -60,25 +60,19 @@ impl Prepared {
             }
             .map_err(|error| match error {
                 AdmissionError::Shape => PrepareError::Internal,
-                AdmissionError::Regex(crate::regex::CompileError::Limit {
+                AdmissionError::Regex(crate::portable_regex::CompileError::Limit {
                     resource,
                     limit,
-                    ..
                 }) => PrepareError::limit(
                     compiler_limits::regex_resource(resource),
                     limit,
                     None,
                     Some(&format!("{path}.pattern")),
                 ),
-                AdmissionError::Regex(_) => PrepareError::Unsupported(vec![UnsupportedFeature {
-                    operation: if replacement.is_some() {
-                        "str_replace_pattern"
-                    } else {
-                        "str_extract_pattern"
-                    }
-                    .into(),
-                    path: format!("{path}.pattern"),
-                }]),
+                // An invalid pattern is a deferred finding, never an admission error.
+                AdmissionError::Regex(crate::portable_regex::CompileError::Invalid { .. }) => {
+                    PrepareError::Internal
+                }
             })?;
             let operation = match &admitted {
                 Admitted::Search(operation) => operation,

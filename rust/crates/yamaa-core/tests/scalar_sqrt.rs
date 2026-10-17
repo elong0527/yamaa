@@ -691,9 +691,8 @@ mod scalar {
     }
     mod text_extract {
         use yamaa_core::{
-            regex,
             table::ValueRef,
-            text_extract::{AdmissionError, Error, Step, StringExtract},
+            text_extract::{AdmissionError, Step, StringExtract},
             value::Value,
         };
         fn operation(
@@ -755,15 +754,13 @@ mod scalar {
             );
         }
         #[test]
-        fn per_match_step_refusal_never_becomes_no_match_or_a_recovered_value() {
+        fn long_subjects_are_searched_to_completion_before_no_match() {
+            // Half a million scalars, which the retired step budget refused.
             let op = operation("z", "0", None, Some(Value::Missing));
-            assert!(matches!(
+            assert_eq!(
                 op.apply(ValueRef::Str(&"a".repeat(500_000))),
-                Err(Error::Regex(regex::MatchError {
-                    resource: regex::Resource::Work,
-                    limit: 1_000_000
-                }))
-            ));
+                Ok(Step::Recovered("no_match"))
+            );
             assert_eq!(op.apply(ValueRef::Str("z")), Ok(Step::Capture(Some("z"))));
             assert_eq!(
                 op.apply(ValueRef::Str("x")),

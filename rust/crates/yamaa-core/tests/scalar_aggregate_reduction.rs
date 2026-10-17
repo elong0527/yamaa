@@ -2616,12 +2616,12 @@ mod scalar {
         }
     }
     mod predicate_contains {
-        //! Independent REQ-1244 truth, error ordering and the fixed per-match boundary.
+        //! Independent REQ-1244 truth, error ordering and linear-time matching.
         use yamaa_core::{
+            portable_regex::CompileError,
             predicate::{
                 Condition, ErrorKind, Node, Plan, PlanError, Resolver, Route, Scalar, Truth,
             },
-            regex::CompileError,
             value::{Selection, Value, ValueType},
         };
 
@@ -2674,8 +2674,9 @@ mod scalar {
             for (pattern, subject, expected) in [
                 ("a", "cat", Truth::True),
                 ("^a$", "cat", Truth::False),
-                ("(?<letter>a)\\k<letter>", "baac", Truth::True),
-                ("(?<=a)b", "ab", Truth::True),
+                ("(?<letter>a)ac", "baac", Truth::True),
+                ("\\Bb", "ab", Truth::True),
+                ("\\bb", "ab", Truth::False),
                 ("^.$", "😀", Truth::True),
                 ("z", "cat", Truth::False),
                 ("", "", Truth::True),
@@ -2734,7 +2735,7 @@ mod scalar {
                     error: CompileError::Invalid { .. }
                 }
             ));
-            let pattern = format!("(a){}(?<=\\1)", "(a|aa)".repeat(8));
+            let pattern = format!("(a){}b", "(a|aa)".repeat(8));
             plan(vec![contains(&pattern)]);
             Plan::new(
                 vec![contains(&pattern); 512],
@@ -2776,7 +2777,7 @@ mod scalar {
         }
 
         #[test]
-        fn contains_enforces_the_fixed_per_match_boundary_and_keeps_small_matches_independent() {
+        fn contains_answers_catastrophic_patterns_and_keeps_small_matches_independent() {
             let single = plan(vec![contains("a+")]);
             for _ in 0..2 {
                 let mut source = port(Value::Str("aaaa".into()));
@@ -2787,18 +2788,12 @@ mod scalar {
             let mut source = port(Value::Str("aaaa".into()));
             assert_eq!(repeated.evaluate(&mut source).unwrap(), Truth::True);
             assert_eq!(source.reads, ["s", "s"]);
-            let bounded = plan(vec![contains("a+"), contains("(a+)+$"), Node::And(0, 1)]);
+            // (a+)+$ cannot match before the final "!": a linear-time FALSE,
+            // where the retired step budget refused the whole predicate.
+            let catastrophic = plan(vec![contains("a+"), contains("(a+)+$"), Node::And(0, 1)]);
             for _ in 0..2 {
-                let mut source = port(Value::Str("a".repeat(30) + "!"));
-                let error = bounded.evaluate(&mut source).unwrap_err();
-                assert_eq!(error.route, [Route::Right]);
-                assert_eq!(
-                    error.kind,
-                    ErrorKind::Regex(yamaa_core::regex::MatchError {
-                        resource: yamaa_core::regex::Resource::Work,
-                        limit: 1_000_000,
-                    })
-                );
+                let mut source = port(Value::Str("a".repeat(100_000) + "!"));
+                assert_eq!(catastrophic.evaluate(&mut source).unwrap(), Truth::False);
                 assert_eq!(source.reads, ["s", "s"]);
             }
         }

@@ -810,7 +810,7 @@ mod execution {
         }
 
         #[test]
-        fn contains_fixed_match_boundary_precedes_later_source_reads() {
+        fn contains_answers_a_catastrophic_pattern_for_every_row() {
             let source = table(
                 &[("id", ColumnType::Str)],
                 vec![vec![Value::Str("a".repeat(30) + "!")]; 2],
@@ -840,15 +840,10 @@ mod execution {
                 &mut yamaa_core::function_invocation::NoFunctions::new(),
                 None,
             );
-            assert!(matches!(
-                *attempt.result.unwrap_err(),
-                ExecutionError::Limit {
-                    resource: yamaa_core::dataset::Resource::RegexWork,
-                    limit: 1_000_000,
-                    ..
-                }
-            ));
-            assert_eq!(*source.reads.borrow(), [(0, 0)]);
+            // (a+)+$ cannot match before the final "!". The linear-time search
+            // answers every row; there is no match budget to refuse the first.
+            assert!(attempt.result.unwrap().dataset.rows().is_empty());
+            assert_eq!(*source.reads.borrow(), [(0, 0), (1, 0)]);
             assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
         }
     }

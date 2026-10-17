@@ -121,7 +121,6 @@ impl Refusal {
             Core::OutputRows => "output_rows",
             Core::OutputCells => "output_cells",
             Core::OutputColumns => "output_columns",
-            Core::RegexWork => "regex_work",
         };
         Self {
             resource,

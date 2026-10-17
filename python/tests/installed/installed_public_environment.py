@@ -476,11 +476,13 @@ class PublicEnvironment(unittest.TestCase):
         self.assertIsNone(failed._native.observations())
         self.assertFalse(Path("outputs/ids.csv").exists())
 
-    def test_matching_budget_has_the_same_owner_and_bound_with_and_without_environment(
+    def test_catastrophic_pattern_fails_the_same_check_with_and_without_environment(
         self,
     ):
+        # Matching is linear: a nested repetition that cannot match is an
+        # ordinary verification failure, not an exhausted step budget.
         os.chdir(self.directory)
-        truth = TRUTH["regex_budget"]
+        truth = TRUTH["catastrophic_pattern"]
         Path("spec.yaml").write_text(truth["specification"])
         Path("input.csv").write_text(truth["source"])
         Path("environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")

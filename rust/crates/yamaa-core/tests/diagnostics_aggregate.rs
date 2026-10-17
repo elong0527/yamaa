@@ -570,7 +570,7 @@ mod diagnostics {
             }
             #[test]
 
-            fn complete_long_context_and_full_width_routes_preserve_original_regex_failure() {
+            fn complete_long_context_and_full_width_routes_are_preserved() {
                 let mut error: EvaluationError<Infallible> = EvaluationError {
                     spec_path: "rows[0].filter".into(),
                     expression: "unchanged".into(),
@@ -620,21 +620,6 @@ mod diagnostics {
                     [("identifier".into(), text(&identifier))].into()
                 );
                 assert_eq!(projected.operand_route, Some(vec![]));
-                error.kind = ErrorKind::Regex(regex::MatchError {
-                    resource: regex::Resource::Work,
-                    limit: 1_000_000,
-                });
-                let ErrorKind::Regex(ref native) = error.kind else {
-                    unreachable!()
-                };
-                let Err(P::Regex(held)) = error.diagnostic() else {
-                    panic!("original regex failure")
-                };
-                assert!(std::ptr::eq(held, native));
-                assert_eq!(
-                    (held.resource, held.limit),
-                    (regex::Resource::Work, 1_000_000)
-                );
                 assert_eq!(error.expression, "unchanged");
             }
         }

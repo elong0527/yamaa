@@ -3,9 +3,7 @@
 mod support;
 use support::text_schema as schema;
 use yamaa_core::{
-    dataset::{
-        Assignment, DatasetPlan, ExecutionError, Expression, Resource, RowMode, RowTemplate,
-    },
+    dataset::{Assignment, DatasetPlan, ExecutionError, Expression, RowMode, RowTemplate},
     diagnostic::ConditionCode,
     function_invocation::NoFunctions,
     numeric_lifecycle::HandlerKind,
@@ -137,33 +135,33 @@ fn missing_source_without_handler_keeps_the_row_identity() {
     assert_eq!(identity.unwrap().values, [Value::Str("row1".into())]);
 }
 #[test]
-fn a_step_refusal_is_not_an_unchanged_value() {
+fn a_catastrophic_pattern_without_a_match_leaves_the_value_unchanged() {
+    // (a+)+$ cannot match before the final "!"; the linear-time scan finds no
+    // match, so nothing is replaced and no handler is reached.
+    let subject = "a".repeat(30) + "!";
     let attempt = plan("(a+)+$", "-", Some(Value::Missing)).execute(
-        &table(Value::Str("a".repeat(30) + "!")),
+        &table(Value::Str(subject.clone())),
         &[],
         &mut NoFunctions::new(),
         None,
     );
-    assert!(matches!(
-        *attempt.result.unwrap_err(),
-        ExecutionError::Limit {
-            resource: Resource::RegexWork,
-            limit: 1_000_000,
-            ..
-        }
-    ));
+    assert_eq!(
+        attempt.result.unwrap().dataset.rows(),
+        [vec![Value::Str("row1".into()), Value::Str(subject)]]
+    );
     assert!(attempt.handler_counts.iter().all(|count| count.count == 0));
 }
 
 #[test]
-fn unsupported_patterns_report_the_declaring_operation() {
+fn oversized_patterns_report_the_compiled_size_limit_at_the_pattern() {
     use support::document::Tree as T;
     use yamaa_core::{
+        limits::Limits,
         schema::SpecificationDocument,
-        specification::{PrepareError, PreparedSpecification, UnsupportedFeature},
+        specification::{CompilerLimit, PrepareError, PreparedSpecification},
     };
 
-    // A valid repetition count whose two-scalar body exceeds addressable width.
+    // A valid repetition count far beyond any compiled program the limit admits.
     let pattern = format!("(?:ab){{{}}}", usize::MAX);
     for operation in ["str_extract", "str_replace"] {
         let mut fields = vec![
@@ -203,16 +201,17 @@ fn unsupported_patterns_report_the_declaring_operation() {
         ])
         .document();
         let model = SpecificationDocument::admit(document).unwrap().unwrap();
-        let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&model)
-        else {
-            panic!("unrepresentable pattern must be refused for {operation}");
+        let Err(PrepareError::Limit(limit)) = PreparedSpecification::prepare(&model) else {
+            panic!("an oversized pattern must be refused for {operation}");
         };
         assert_eq!(
-            features,
-            [UnsupportedFeature {
-                operation: format!("{operation}_pattern"),
-                path: format!("columns.TEXT.derivation.{operation}.pattern"),
-            }]
+            limit,
+            CompilerLimit {
+                resource: "regex_size",
+                limit: Limits::REGEX_SIZE,
+                actual: None,
+                spec_paths: vec![format!("columns.TEXT.derivation.{operation}.pattern")],
+            }
         );
     }
 }

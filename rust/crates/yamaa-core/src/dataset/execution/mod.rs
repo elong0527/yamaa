@@ -84,7 +84,6 @@ pub enum Resource {
     OutputRows,
     OutputCells,
     OutputColumns,
-    RegexWork,
 }
 
 /// Complete owned rows are exposed only after output identity and checks succeed.
@@ -347,14 +346,6 @@ fn own(value: ValueRef<'_>) -> Value {
         ValueRef::Bool(value) => Value::Bool(value),
         ValueRef::Date(value) => Value::Date(value),
         ValueRef::DateTime(value) => Value::DateTime(value),
-    }
-}
-
-fn regex_limit<E>(error: crate::regex::MatchError) -> ExecutionError<E> {
-    ExecutionError::Limit {
-        resource: Resource::RegexWork,
-        limit: error.limit,
-        required: None,
     }
 }
 
@@ -1106,10 +1097,7 @@ impl DatasetPlan {
                         source_row,
                         &candidate.values,
                     )
-                    .map_err(|error| match error.kind {
-                        crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
-                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                    })?
+                    .map_err(|error| Box::new(ExecutionError::Predicate { source_row, error }))?
                 };
                 if truth != crate::predicate::Truth::True {
                     continue;
@@ -1230,10 +1218,7 @@ impl DatasetPlan {
                     source_row,
                     &candidate.values,
                 )
-                .map_err(|error| match error.kind {
-                    crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
-                    _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                })?
+                .map_err(|error| Box::new(ExecutionError::Predicate { source_row, error }))?
             };
             if truth == crate::predicate::Truth::True {
                 candidates.swap(retained, row);
@@ -1682,25 +1667,6 @@ impl DatasetPlan {
                                         .collect()
                                 } else if let Check::Matches(pattern) = &verification.check {
                                     crate::dataset_checks::matches_offenders(pattern, values)
-                                        .map_err(|error| {
-                                            let ExecutionError::Limit {
-                                                resource,
-                                                limit,
-                                                required,
-                                            } = regex_limit::<E>(error)
-                                            else {
-                                                unreachable!("predicate resource limit")
-                                            };
-                                            Box::new(ExecutionError::ScopedLimit {
-                                                resource,
-                                                limit,
-                                                required,
-                                                spec_paths: vec![format!(
-                                                    "{}.pattern",
-                                                    verification.path
-                                                )],
-                                            })
-                                        })?
                                 } else {
                                     crate::dataset_checks::column_offenders(
                                         &verification.check,

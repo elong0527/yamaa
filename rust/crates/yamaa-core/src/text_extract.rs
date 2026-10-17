@@ -2,7 +2,7 @@
 use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
-    regex,
+    portable_regex,
     table::ValueRef,
     value::Value,
 };
@@ -12,7 +12,7 @@ pub struct StringExtract {
     source: String,
     path: String,
     pattern: String,
-    compiled: Option<regex::Pattern>,
+    compiled: Option<portable_regex::Pattern>,
     group: usize,
     deferred: Option<Diagnostic>,
     missing: Option<Value>,
@@ -23,7 +23,7 @@ pub enum AdmissionError {
     #[error("text extract shape")]
     Shape,
     #[error("text extract regex: {0:?}")]
-    Regex(regex::CompileError),
+    Regex(portable_regex::CompileError),
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step<'a> {
@@ -36,8 +36,6 @@ pub enum Step<'a> {
 pub enum Error {
     #[error("text extract diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
-    #[error("text extract regex: {0:?}")]
-    Regex(regex::MatchError),
 }
 impl StringExtract {
     /// Own the declaration while retaining invalid pattern/group facts for precedence.
@@ -53,17 +51,17 @@ impl StringExtract {
             return Err(AdmissionError::Shape);
         }
         let mut deferred = None;
-        let compiled = match regex::Pattern::compile(&pattern) {
+        let compiled = match portable_regex::Pattern::compile(&pattern) {
             Ok(compiled) => Some(compiled),
-            Err(regex::CompileError::Invalid { reason, .. }) => {
+            Err(portable_regex::CompileError::Invalid { reason, .. }) => {
                 // This projection belongs to extraction; checks retain their own
                 // pattern-only cause. The rejection is bounded static parser data.
                 let reason = match reason {
                     "unclosed character class" => "a character class is never closed",
                     "trailing backslash" => "a trailing backslash escapes nothing",
-                    "variable-length lookbehind" => {
-                        "a lookbehind whose length can vary is not allowed"
-                    }
+                    "lookahead outside the portable subset" => "a lookahead is not allowed",
+                    "lookbehind outside the portable subset" => "a lookbehind is not allowed",
+                    "backreference outside the portable subset" => "a backreference is not allowed",
                     reason => reason,
                 };
                 deferred = Some(diagnostic(
@@ -136,7 +134,7 @@ impl StringExtract {
         self.deferred.as_ref()
     }
     /// The compiled pattern, present unless a pattern or group finding is deferred.
-    pub(crate) fn admitted(&self) -> Option<&regex::Pattern> {
+    pub(crate) fn admitted(&self) -> Option<&portable_regex::Pattern> {
         self.compiled.as_ref().filter(|_| self.deferred.is_none())
     }
     pub fn handler(&self, name: &str) -> Option<&Value> {
@@ -165,7 +163,6 @@ impl StringExtract {
         )
     }
     /// Matching borrows captures and never allocates a result or handler literal.
-    /// A resource failure cannot be mistaken for an absent match.
     pub fn apply<'a>(&self, value: ValueRef<'a>) -> Result<Step<'a>, Error> {
         if let Some(diagnostic) = &self.deferred {
             return Err(Error::Diagnostic(diagnostic.clone()));
@@ -195,7 +192,6 @@ impl StringExtract {
             .as_ref()
             .expect("admitted pattern")
             .search(subject)
-            .map_err(Error::Regex)?
         {
             Some(found) => Ok(Step::Capture(found.groups[self.group])),
             None if self.no_match.is_some() => Ok(Step::Recovered("no_match")),
