@@ -4,11 +4,19 @@
 Python planning test
 `test_shared_producer_executes_once_and_shares_generated_snapshot` in Git history.
 Its current installed Python/R successors consume the `producer-cohort` family in
-`rust/tests/host-fixtures/cases.json`. They require one producer execution, shared
-generated snapshots for aliases A/B, and the exact root value `{"ID": "01"}`.
+`rust/tests/host-fixtures/cases.json`. They require one producer execution and the
+exact root value `{"ID": "01"}`.
+
+`spec.yaml` declares two inputs, `A` and `B`, over the same produced artifact, but
+no column reads `B`. Since every specification is pruned after composition
+([REQ-0638](../../../rules/specification/composition.md#req-0638) to REQ-0641),
+`B` is removed before any input is read, so the reference has no `B` source
+table. Aliased and diamond producer inputs that are read stay covered by the
+`producer-logs` host fixture family.
 
 `reference.json` and `expected/` retain the complete Python `execute_example`
-reference run and its published artifacts. They were captured before the native
+reference run and its published artifacts, less the pruned `B` source table
+(removed for 0.4.0; see #2456). They were captured before the native
 resource-read classification correction. The corresponding pre-fix native run
 matched all nodes, tables, artifacts, checks and callbacks, but incorrectly
 reported three resource requests instead of the reference's one `seed.csv`

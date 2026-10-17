@@ -318,8 +318,9 @@ def _validate_r(definition):
     r = definition["r"]
     if not isinstance(r, dict) or set(r) != {"module", "registration", "groups"}:
         raise ValueError("R definition must contain module, registration and groups")
-    if r["module"] != "yamaa" or r["registration"] != str(
-        (R_SOURCE / "lib.rs").relative_to(ROOT)
+    if (
+        r["module"] != "yamaa"
+        or r["registration"] != (R_SOURCE / "lib.rs").relative_to(ROOT).as_posix()
     ):
         raise ValueError("unexpected R module or registration path")
     groups = r["groups"]
@@ -341,7 +342,10 @@ def _validate_r(definition):
             raise ValueError(f"duplicate R module: {module}")
         modules.add(module)
         source = R_SOURCE / ("lib.rs" if module == r["module"] else f"{module}.rs")
-        if group["source"] != str(source.relative_to(ROOT)) or not source.is_file():
+        if (
+            group["source"] != source.relative_to(ROOT).as_posix()
+            or not source.is_file()
+        ):
             raise ValueError(f"invalid R source for module {module}")
         functions = group["functions"]
         if not isinstance(functions, list) or not functions:
@@ -690,7 +694,7 @@ def _reconcile_r(definition):
         if len(re.findall(r"#\[extendr(?:\([^]]*\))?\]", source)) != len(functions):
             raise ValueError(f"unsupported extendr signature in {path.name}")
         if functions:
-            found[str(path.relative_to(ROOT))] = functions
+            found[path.relative_to(ROOT).as_posix()] = functions
     groups = definition["r"]["groups"]
     if {group["source"] for group in groups} != set(found):
         raise ValueError("R groups differ from the handwritten #[extendr] modules")

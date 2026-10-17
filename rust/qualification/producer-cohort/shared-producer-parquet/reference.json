@@ -121,25 +121,6 @@
     },
     {
       "specification": "spec.yaml",
-      "stage": "source",
-      "name": "B",
-      "columns": [
-        "ID"
-      ],
-      "types": [
-        "str"
-      ],
-      "rows": [
-        [
-          {
-            "type": "str",
-            "value": "01"
-          }
-        ]
-      ]
-    },
-    {
-      "specification": "spec.yaml",
       "stage": "derived",
       "name": "output",
       "columns": [
