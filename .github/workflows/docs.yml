@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           python-version: '3.14'
           enable-cache: true
       - name: Set up Quarto
