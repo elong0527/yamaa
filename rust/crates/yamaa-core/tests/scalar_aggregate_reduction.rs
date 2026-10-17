@@ -1961,15 +1961,27 @@ mod scalar {
         }
 
         #[test]
-        fn comparison_promotion_order_missing_and_temporal_precision() {
+        fn comparison_exact_mixed_order_missing_and_temporal_precision() {
             use Truth::{False as F, True as T};
             let date = Date::new(2025, 1, 1, DatePrecision::Year).unwrap();
             let day = Date::new(2025, 1, 1, DatePrecision::Day).unwrap();
             let datetime = DateTime::new(day, 0, 0, 0, DateTimePrecision::Day).unwrap();
             let second = DateTime::new(day, 0, 0, 0, DateTimePrecision::Second).unwrap();
+            // Truth for =, <>, <, <=, >, >=. Mixed numbers compare by exact
+            // value: 2^53 + 1 exceeds 2^53, and i64::MAX is below 2^63.
             let pairs = [
                 (
                     Value::Int(9_007_199_254_740_993),
+                    Value::float(9_007_199_254_740_992.0),
+                    [F, T, F, F, T, T],
+                ),
+                (
+                    Value::float(9_007_199_254_740_992.0),
+                    Value::Int(9_007_199_254_740_993),
+                    [F, T, T, T, F, F],
+                ),
+                (
+                    Value::Int(9_007_199_254_740_992),
                     Value::float(9_007_199_254_740_992.0),
                     [T, F, F, T, F, T],
                 ),
@@ -1981,7 +1993,7 @@ mod scalar {
                 (
                     Value::Int(i64::MAX),
                     Value::float(9_223_372_036_854_775_808.0),
-                    [T, F, F, T, F, T],
+                    [F, T, T, T, F, F],
                 ),
                 (
                     Value::Int(i64::MIN),

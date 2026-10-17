@@ -547,23 +547,16 @@ impl Plan {
     }
 }
 
-/// REQ-0167 widens mixed numbers, unlike the exact comparator used by grouping.
+/// Mixed int/float operands compare by exact value, as keys, ordering and
+/// extremes do; no operand is widened to binary64 first.
 fn compare(operator: Comparison, left: &Value, right: &Value) -> Result<Truth, Condition> {
     if matches!(left, Value::Missing) || matches!(right, Value::Missing) {
         return Ok(Truth::Unknown);
     }
-    let ordering = match (left, right) {
-        (Value::Int(left), Value::Float(right)) => {
-            (*left as f64).partial_cmp(&right.get()).expect("finite")
-        }
-        (Value::Float(left), Value::Int(right)) => {
-            left.get().partial_cmp(&(*right as f64)).expect("finite")
-        }
-        _ => compare_present(left, right).map_err(|_| Condition::IncompatiblePair {
-            left: left.value_type().expect("present"),
-            right: right.value_type().expect("present"),
-        })?,
-    };
+    let ordering = compare_present(left, right).map_err(|_| Condition::IncompatiblePair {
+        left: left.value_type().expect("present"),
+        right: right.value_type().expect("present"),
+    })?;
     Ok(Truth::from_bool(match operator {
         Comparison::Equal => ordering == Ordering::Equal,
         Comparison::NotEqual => ordering != Ordering::Equal,

@@ -52,8 +52,9 @@ impl From<ColumnType> for ValueType {
 }
 
 /// Missing is a value; an absent source/record is a separate selection outcome.
-/// Derived equality distinguishes int and float variants. Ordered table consumers
-/// use `compare_present`; predicates use their own required mixed-number promotion.
+/// Derived equality distinguishes int and float variants. Every language
+/// comparison, including predicates and NULLIF, uses `compare_present`, which
+/// compares a mixed int/float pair by exact mathematical value.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Missing,
@@ -101,8 +102,8 @@ pub enum ComparisonError {
     IncompatibleTypes,
 }
 
-/// Compare without rounding a large integer through binary64 first.
-/// This preserves the current Python value comparator at and beyond 2^53.
+/// Compare by exact mathematical value, without rounding a large integer
+/// through binary64 first: 9007199254740993 is greater than 9007199254740992.0.
 fn compare_int_float(integer: i64, float: f64) -> Ordering {
     const UPPER_EXCLUSIVE: f64 = 9_223_372_036_854_775_808.0;
     const LOWER: f64 = -9_223_372_036_854_775_808.0;
