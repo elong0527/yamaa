@@ -113,7 +113,7 @@ Requested Python schema conversion is refused rather than silently narrowed.
 ## Resolved specification artifact
 
 `resolved_artifact::ResolvedArtifact` is an owned inspection format produced from
-the same prepared documents and producer graph used for direct compilation.
+the same prepared documents used for direct compilation.
 Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 
 | Field | Meaning |
@@ -124,11 +124,12 @@ Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 | `replay` | `inspection_only`. |
 | `entry` | Canonical identity of the requested specification entry. |
 | `environment` | Explicit environment identity, or null when absent. |
-| `entries` | Root first, then linked producer entries in preparation order. |
+| `entries` | Exactly one element: the requested entry. |
 
-Each entry contains `schema_version`, its complete composed normalized
-`specification`, `layers` in composition postorder, `origins`, `mapping_order`,
-`resources`, and `producers` mapping input dataset names to their producer entry.
+The entry contains `schema_version`, its complete composed normalized
+`specification`, `layers` in composition postorder, `origins`, `mapping_order`
+and `resources`. A linked producing specification is a `producer_schema`
+resource of the entry, never an entry of its own.
 Named mapping-dictionary references remain in the specification; preparation
 admits those resources as usual, and their declaring locations are recorded.
 The artifact carries no reusable executable code or activated environment.
@@ -149,7 +150,7 @@ named dictionaries and every inherited-parent reference. Each record contains
 `spec_path`, `role`, `owning_entry`, `declaring_source`, `relative_to`,
 `base_source`, `written`, and `location: {kind: local, path: ...}`. The composed
 selector governs inherited input paths and schema links; output is atomic.
-Every producer selects its own linked entry. Locations follow the existing
+Locations follow the existing
 lexical local-path policy, including absolute and parent-relative spellings.
 They state neither existence nor file-access authority. Environment internals
 are admitted through the usual environment owner and are outside this domain
@@ -447,10 +448,10 @@ Until #2583 lands, git/path is the distribution route.
 
 ### Host-usage mapping
 
-Every adapters or core module the two host crates use today (28 adapters
-modules, 11 core modules, counted from the host sources on 2026-10-16) maps to
-a facade item or is marked internal. Any module not listed here is internal by
-default.
+Every adapters or core module the two host crates use today (24 adapters
+modules, 11 core modules, counted from the host sources on 2026-10-16, less the
+removed producer-route modules) maps to a facade item or is marked internal.
+Any module not listed here is internal by default.
 
 | Module used today | Facade disposition |
 | --- | --- |
@@ -460,19 +461,15 @@ default.
 | `callback` | Facade -- the `ProjectFunctions` trait and `FunctionError`; `BoundaryError`/`CallbackError` convert into `FunctionError`. |
 | `file_application` | Facade -- `Engine::check`/`Engine::build`; `Application` and `ApplicationError` are internal. |
 | `file_define` | Facade -- `Engine::define` and `DefineBuild::save`; its `Failure` converts into `Error`. |
-| `file_graph` | Internal -- producer graph state behind `Build` and the future `Plan`. |
 | `file_preparation` | Internal -- `FileSpecification` is a prepared internal form. |
-| `file_producer_build` | Internal -- attempt state behind `Build`. |
 | `file_project` | Internal -- project state behind `Build` and the future `Plan`. |
 | `file_resources` | Internal -- its `Error` converts into `ResolverFailure`/`Error::Internal`. |
 | `file_workflow` | Internal -- `SelectionError` converts into diagnostics/`Error`. |
 | `host_resources` | Facade -- the `ResourceResolver` trait, `MemoryResolver`, and the resolver request/reply/failure types. |
 | `ipc_table` | Internal -- `TableError` converts into the facade `TableError`; `Table::ipc` is the public IPC route. |
 | `issue_rows` | Facade -- `Diagnostic` and `Report` are the public form of `Issue`; the module itself is internal. |
-| `producer_attempt` | Internal -- host-failure traversal; failures surface as `Error::Host`. |
-| `producer_result` | Facade -- `Build` is its public form (`project_owned` stays an internal constructor). |
 | `project_application` | Internal -- selection failures convert into diagnostics. |
-| `project_attempt` | Internal -- same disposition as `producer_attempt`. |
+| `project_attempt` | Internal -- host-failure traversal; failures surface as `Error::Host`. |
 | `project_lock` | Facade -- `LockFinding`/`LockReason` are the public lock-finding types and `decode_renv_lock` is the public renv admission; lock-kind detection stays internal (the engine supplies `LockKind` through `LockContext`). |
 | `project_report` | Internal -- `build_result` runs behind `Build`; `Classified` stays an internal constructor. |
 | `project_run` | Facade (future) -- `Plan` wraps `PreparedRun` (#2679); `Attempt`/`PreparedRun` stay internal in the first surface. |

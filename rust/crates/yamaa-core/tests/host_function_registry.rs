@@ -17,7 +17,7 @@ use yamaa_core::host_function_registry::{
 };
 use yamaa_core::project_function::{Case, Definition, Function, Language, Parameter as DefParam};
 use yamaa_core::table::ValueRef;
-use yamaa_core::temporal::{Date, DatePrecision, DateTime, DateTimePrecision};
+use yamaa_core::temporal::{Date, DateTime, Precision};
 use yamaa_core::value::{ColumnType, Value, ValueType};
 
 fn identity() -> ProjectFunctionIdentity {
@@ -566,7 +566,7 @@ fn batch_value_contract_keeps_exact_types_and_temporal_precision() {
             Ok(arguments[0].values.clone())
         }
     }
-    let year = Date::new(2025, 1, 1, DatePrecision::Year).unwrap();
+    let year = Date::new(2025, 1, 1, Precision::Year).unwrap();
     let rows = vec![
         row(&[("d", Value::Date(year))]),
         row(&[("d", Value::Missing)]),
@@ -575,17 +575,17 @@ fn batch_value_contract_keeps_exact_types_and_temporal_precision() {
     let results = invoke_batch(&date_plan, &(), &rows, &mut port).unwrap();
     assert_eq!(results, [Value::Date(year), Value::Missing]);
     if let Value::Date(date) = results[0] {
-        assert_eq!(date.collected_precision(), DatePrecision::Year);
+        assert_eq!(date.collected_precision(), Precision::Year);
     } else {
         panic!("date")
     }
     // Civil datetime with second precision round-trips exactly.
     let moment = DateTime::new(
-        Date::new(2025, 3, 4, DatePrecision::Day).unwrap(),
+        Date::new(2025, 3, 4, Precision::Day).unwrap(),
         5,
         6,
         7,
-        DateTimePrecision::Second,
+        Precision::Second,
     )
     .unwrap();
     let dt_plan = ProjectInvocationPlan::new(

@@ -22,7 +22,8 @@ a day only where the collected text already carries a month.
 Drop the month: nothing the policy accepts can use it.
 
 ```yaml
-date_impute:
+impute:
+  type: date
   source: AE.AESTDTC
   day: 15
   minimum_source_precision: month

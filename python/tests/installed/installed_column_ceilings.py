@@ -1,4 +1,4 @@
-"""Installed width boundaries for compiler, file and producer source admission."""
+"""Installed width boundaries for compiler, file and linked-artifact admission."""
 
 import json
 import tempfile
@@ -283,36 +283,44 @@ class ColumnCeilings(unittest.TestCase):
         spec = self.write_case("refuse-parquet", fields=1025, source_format="parquet")
         self.assert_refusal(yamaa.domain(spec))
 
-    def test_producer_source_fields(self):
+    def linked_consumer(self, producer):
+        """A consumer that types the producer's stored artifact through its link."""
+        document = json.loads(producer.read_text(encoding="ascii"))
+        document["input"]["SRC"] = {"path": "out.csv", "schema": "spec.yaml"}
+        document["columns"] = document["columns"][:1]
+        document["output"] = {"path": "consumer.csv", "columns": ["ID"]}
+        consumer = producer.with_name("consumer.yaml")
+        consumer.write_text(json.dumps(document), encoding="ascii")
+        return consumer
+
+    def test_producer_contract_fields(self):
         for width in (1024, 1025):
             with self.subTest(width=width):
                 producer = self.write_case(f"producer-{width}", columns=width)
-                document = json.loads(producer.read_text(encoding="ascii"))
-                document["input"]["SRC"] = {"path": "out.csv", "schema": "spec.yaml"}
-                document["columns"] = document["columns"][:1]
-                document["output"] = {"path": "consumer.csv", "columns": ["ID"]}
-                consumer = producer.with_name("consumer.yaml")
-                consumer.write_text(json.dumps(document), encoding="ascii")
+                consumer = self.linked_consumer(producer)
                 if width == 1024:
+                    # Callers build and save the producer before its consumer.
+                    self.assertTrue(yamaa.domain(producer).save())
                     self.assert_build(consumer)
                 else:
                     for operation in (yamaa.check, yamaa.domain):
                         self.assert_refusal(operation(consumer))
 
-    def test_in_range_producer_refuses_overwide_runtime_input(self):
-        # Producer metadata stays admissible; only its raw source width changes.
-        # The direct Rust decoder control separately pins producer_source_fields.
+    def test_in_range_contract_refuses_overwide_stored_artifact(self):
+        # The link's metadata stays admissible; only the stored artifact's width
+        # changes. The direct Rust decoder control separately pins the contract.
         for width in (1024, 1025):
             with self.subTest(width=width):
-                producer = self.write_case(
-                    f"producer-input-{width}", columns=1024, fields=width
+                producer = self.write_case(f"producer-input-{width}", columns=1024)
+                consumer = self.linked_consumer(producer)
+                header = ["ID", *[f"C{index:04d}" for index in range(1, width)]]
+                producer.with_name("out.csv").write_text(
+                    ",".join(header)
+                    + "\n"
+                    + ",".join(["S-001"] + ["x"] * (width - 1))
+                    + "\n",
+                    encoding="ascii",
                 )
-                document = json.loads(producer.read_text(encoding="ascii"))
-                document["input"]["SRC"] = {"path": "out.csv", "schema": "spec.yaml"}
-                document["columns"] = document["columns"][:1]
-                document["output"] = {"path": "consumer.csv", "columns": ["ID"]}
-                consumer = producer.with_name("consumer.yaml")
-                consumer.write_text(json.dumps(document), encoding="ascii")
                 self.assertEqual(yamaa.check(consumer).issues.height, 0)
                 if width == 1024:
                     self.assert_build(consumer)

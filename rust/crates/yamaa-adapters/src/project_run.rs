@@ -4,7 +4,7 @@
 use crate::{
     project_source::{CapturedEnvironment, OwnedEnvironment},
     project_source_decoder::{Decoder, Snapshot},
-    specification_source::PreparedDocument,
+    specification_source::{LinkedSpecification, PreparedDocument},
 };
 use std::{
     any::Any,
@@ -59,10 +59,13 @@ impl PreparedRun {
         document: PreparedDocument,
         environment: OwnedEnvironment,
     ) -> Result<Self, Box<RejectedRun>> {
-        Self::prepare_with_profile_inspection(document, environment, |_, _, _| None)
+        Self::prepare_with_profile_inspection(document, &[], environment, |_, _, _| None)
     }
+    /// Compile against the admitted environment and the producing
+    /// specifications that the document's `schema` links name.
     pub(crate) fn prepare_with_profile_inspection(
         document: PreparedDocument,
+        links: &[LinkedSpecification],
         environment: OwnedEnvironment,
         mut inspect: impl FnMut(
             &PreparedDocument,
@@ -71,7 +74,18 @@ impl PreparedRun {
         ) -> Option<(yamaa_core::resource::ResourceFailure, String)>,
     ) -> Result<Self, Box<RejectedRun>> {
         let (environment, captured) = environment.into_parts();
-        match project_domain::check_owned(document.compilation_model(), environment) {
+        let checked = {
+            let metadata = crate::specification_source::link_metadata(&document, links);
+            project_domain::check_owned_linked(
+                document.compilation_model(),
+                environment,
+                yamaa_core::producer_contract::Links {
+                    consumer: &document.source().identity,
+                    links: &metadata,
+                },
+            )
+        };
+        match checked {
             Ok(checked) => Ok(Self {
                 document,
                 captured,

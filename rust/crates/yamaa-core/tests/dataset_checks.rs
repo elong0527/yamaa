@@ -575,28 +575,24 @@ mod execution {
                     vec![
                         Value::Str("z\0\u{e9}".into()),
                         Value::float(-0.0),
-                        date(DatePrecision::Year),
+                        date(Precision::Year),
                     ],
-                    vec![Value::Missing, Value::float(2.0), date(DatePrecision::Day)],
+                    vec![Value::Missing, Value::float(2.0), date(Precision::Day)],
                     vec![
                         Value::Str("a".into()),
                         Value::float(0.0),
-                        date(DatePrecision::Day),
+                        date(Precision::Day),
                     ],
                     vec![
                         Value::Str("z\0\u{e9}".into()),
                         Value::float(0.0),
-                        date(DatePrecision::Month),
+                        date(Precision::Month),
                     ],
-                    vec![
-                        Value::Missing,
-                        Value::float(2.0),
-                        date(DatePrecision::Month),
-                    ],
+                    vec![Value::Missing, Value::float(2.0), date(Precision::Month)],
                     vec![
                         Value::Str("z\0e\u{301}".into()),
                         Value::float(0.0),
-                        date(DatePrecision::Year),
+                        date(Precision::Year),
                     ],
                 ],
             );
@@ -1137,9 +1133,9 @@ mod execution {
             let source = table(
                 &[("id", ColumnType::Date), ("x", ColumnType::Int)],
                 vec![
-                    vec![date(DatePrecision::Year), Value::Int(1)],
-                    vec![date(DatePrecision::Day), Value::Missing],
-                    vec![date(DatePrecision::Month), Value::Int(2)],
+                    vec![date(Precision::Year), Value::Int(1)],
+                    vec![date(Precision::Day), Value::Missing],
+                    vec![date(Precision::Month), Value::Int(2)],
                 ],
             );
             let output = schema(&[("id", ColumnType::Date), ("mean", ColumnType::Float)]);
@@ -1180,7 +1176,7 @@ mod execution {
             let Value::Date(actual) = result.dataset.rows()[0][0] else {
                 panic!("expected date")
             };
-            assert_eq!(actual.collected_precision(), DatePrecision::Year);
+            assert_eq!(actual.collected_precision(), Precision::Year);
             assert_eq!(result.dataset.rows()[0][1], Value::float(1.5));
         }
 

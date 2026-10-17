@@ -42,15 +42,15 @@ columns:
         filter: ODM.ItemOID = 'IT.DM.BRTHDT'
         variable: ODM.Value
 
-  # Y, M or D by how much of the birth date was collected; missing when
-  # none was.
+  # year, month or day by how much of the birth date was collected;
+  # missing when none was.
   - name: BRTH_PREC
     type: str
     label: Collected Precision of the Birth Date
     derivation:
-      date_precision:
+      precision:
+        type: date
         source: BRTHDTC
-        missing: null
 
   # Only a complete birth date becomes a date; a year-month or year-only
   # one gives none, and so no age.
@@ -59,7 +59,7 @@ columns:
     label: Birth Date as a Date
     derivation:
       case:
-        - when: "BRTH_PREC = 'D'"
+        - when: "BRTH_PREC = 'day'"
           then: BRTHDTC
         - otherwise: {literal: null}
 
@@ -70,9 +70,10 @@ columns:
     label: Age in AGEU at RFICDTC
     derivation:
       case:
-        - when: "BRTH_PREC = 'D'"
+        - when: "BRTH_PREC = 'day'"
           then:
-            date_diff:
+            diff:
+              type: date
               start: BRTHDT
               end: RFICDTC
               unit: year
@@ -96,11 +97,11 @@ verifications:
       columns: [AGE, AGEU]
   - assert:
       id: complete-birth-date-gives-age
-      when: "BRTH_PREC = 'D'"
+      when: "BRTH_PREC = 'day'"
       require: "AGE IS NOT NULL"
   - assert:
       id: partial-birth-date-gives-no-age
-      when: "BRTH_PREC IN ('M', 'Y') OR BRTHDTC IS NULL"
+      when: "BRTH_PREC IN ('month', 'year') OR BRTHDTC IS NULL"
       require: "AGE IS NULL"
   - assert:
       id: age-is-not-negative

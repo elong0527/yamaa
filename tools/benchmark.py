@@ -196,7 +196,12 @@ def entries(case, metadata=None):
 
 
 def main():
-    """Run a case's declared Python entries without publishing output files."""
+    """Build a case's declared Python entries in order inside a staged copy.
+
+    Each entry is saved in the staged copy before the next entry is built, so a
+    later entry reads an earlier entry's artifact at its own declared path, as
+    a `schema` link requires. Nothing is published into the checkout.
+    """
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument("case", type=Path, help="benchmark directory")
     case = parser.parse_args().case.resolve()
@@ -221,6 +226,7 @@ def main():
             output = result.output
             if output is None:
                 parser.exit(1, f"{call['specification']}: {result.issues}\n")
+            result.save()
             print(output)
 
 

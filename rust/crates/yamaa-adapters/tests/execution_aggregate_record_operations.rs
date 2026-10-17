@@ -475,11 +475,11 @@ columns:
           - name: H
             type: date
             derivation:
-              date_impute:
+              impute:
+                type: date
                 source: EX.EXENDTC
                 day: last
                 minimum_source_precision: month
-                missing: null
         expr: "MAX(H)"
 rows:
   - id: one

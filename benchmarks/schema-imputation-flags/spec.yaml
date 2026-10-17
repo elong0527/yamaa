@@ -1,0 +1,80 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, ASTDTM, ASTDTF, ASTTMF]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation: AE.AESTDTC
+
+  # Every part of the date and time the start did not collect takes its
+  # earliest value.
+  - name: ASTDTM
+    type: datetime
+    label: Analysis Start Date/Time
+    derivation:
+      impute:
+        type: datetime
+        source: AESTDTC
+        month: 1
+        day: first
+        time: first
+
+  - name: ASTDTF
+    type: str
+    label: Analysis Start Date Imputation Flag
+    derivation:
+      imputation_flag:
+        source: ASTDTM
+        part: date
+    verifications:
+      allowed_values:
+        values: [M, D]
+
+  - name: ASTTMF
+    type: str
+    label: Analysis Start Time Imputation Flag
+    derivation:
+      imputation_flag:
+        source: ASTDTM
+        part: time
+    verifications:
+      allowed_values:
+        values: [H, M, S]
+
+verifications:
+  - row_count:
+      min: 6
+      max: 6
+  - assert:
+      id: supplied-date-part-supplies-the-whole-time
+      when: "ASTDTF IS NOT NULL"
+      require: "ASTTMF = 'H'"

@@ -62,7 +62,10 @@ entries:
 ```
 
 `sdtm-dm-race-ethnicity` is the worked producer/consumer example. Each producer
-commits its own expected artifact beside the entry's. Multi-level inheritance
+commits its own expected artifact beside the entry's. A `schema` link only types
+the stored artifact; a consumer never runs its producer. List each producer
+before its consumers: the runners build and save every entry in order, so a
+later entry reads the artifact an earlier entry saved. Multi-level inheritance
 and alternative specifications also declare their entries; source files are
 not guessed from a parent graph. The metadata is the shared owner for native
 conformance and the dashboard's generated Python and R usage snippets. Do not
@@ -212,7 +215,7 @@ no expression or field names, no `output.columns`, and none of the words
 
     - counting neither the last day of period one nor the first day of period
       two, so consecutive periods give zero
-    + `date_diff` with `bounds: between`
+    + `diff` with `bounds: between`
 
     - A subject who never entered period two has no exposure records there
     + Its period-two right side is empty after filtering, treated as
@@ -377,7 +380,8 @@ check merely to make the sample pass.
 
 Use the supported setup and repository checks in [CONTRIBUTING.md](../CONTRIBUTING.md).
 From the repository root, run a positive case through its declared Python
-entries without publishing any output files:
+entries in a staged copy. Each entry is saved there before the next is built;
+nothing is published into the checkout:
 
 ```sh
 uv run --project python --no-sync python -m tools.benchmark benchmarks/<name>
@@ -426,9 +430,9 @@ numeric grammar once rather than registering `add`, `subtract`, and `divide`.
 
 Prefer widening an existing entry to adding a new one -- but the test is the
 kind of value, not the saving in YAML. Widen when the new behavior returns the
-same kind of value, as `date_diff`'s `bounds` still returns a count. Add an
+same kind of value, as `diff`'s `bounds` still returns a count. Add an
 entry when it does not: `study_day` returns an ordinal on a calendar with no
-zero, and folding it into `date_diff` would have allowed `unit: week` with it.
+zero, and folding it into `diff` would have allowed `unit: week` with it.
 
 After registering one, update every place that enumerates the vocabulary: the
 expression registry in the owning `../yaml/schema_*.yaml` module and the

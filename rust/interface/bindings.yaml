@@ -88,9 +88,6 @@ python:
       rust: domain_entry::Domain
       constructible: false
       methods:
-        - {name: propagate_interrupt, args: {}, returns: unit}
-        - {name: producer_attempt, args: {}, returns: "optional<_ProducerAttempt>"}
-        - {name: producer_projection_failure, args: {}, returns: "optional<text>"}
         - {name: preparation_sources, args: {}, returns: "list<tuple<text, bytes>>"}
         - {name: project_failures, args: {}, returns: "list<tuple<text, host_exception>>"}
         - {name: observations, args: {include_measurements: "bool = false"}, returns: "optional<text>"}
@@ -122,17 +119,6 @@ python:
       rust: resolved_artifact::_read_resolved_specification
       args: {text: text}
       returns: text
-    - kind: class
-      name: _ProducerAttempt
-      rust: domain_entry::Attempt
-      constructible: false
-      methods:
-        - {name: accepted, args: {}, returns: bool}
-        - {name: entered_nodes, args: {}, returns: "list<index>"}
-        - {name: host_failures, args: {}, returns: "list<tuple<text, host_exception>>"}
-        - {name: propagate_interrupt, args: {}, returns: unit}
-        - {name: retained_sources, args: {}, returns: "list<tuple<text, bytes>>"}
-        - {name: artifact, args: {node: index}, returns: "optional<bytes>"}
     - kind: function
       name: _style_same_value
       rust: style::_style_same_value
@@ -170,9 +156,7 @@ r:
         - {name: domain_observations, args: {handle: robj, include_measurements: bool}, returns: r_reply}
         - {name: domain_save, args: {handle: robj}, returns: r_reply}
         - {name: domain_interrupt, args: {handle: robj}, returns: r_reply}
-        - {name: domain_producer_evidence, args: {handle: robj}, returns: r_reply}
         - {name: domain_preparation_sources, args: {handle: robj}, returns: r_reply}
-        - {name: domain_projection_failure, args: {handle: robj}, returns: r_reply}
     - module: define_entry
       source: rust/crates/yamaa-r/src/define_entry.rs
       functions:
@@ -210,15 +194,12 @@ operations:
   domain_logs: {python: [_DomainResult.log], r: [domain_log, domain_arrow]}
   domain_save: {python: [_DomainResult.save], r: [domain_save]}
   domain_observations: {python: [_DomainResult.observations], r: [domain_observations]}
-  domain_interrupt: {python: [_DomainResult.propagate_interrupt], r: [domain_interrupt]}
+  # Python raises a retained interrupt from the domain call itself.
+  domain_interrupt: {python: [_domain_file], r: [domain_interrupt]}
   domain_preparation_sources: {python: [_DomainResult.preparation_sources], r: [domain_preparation_sources]}
-  domain_projection_failure: {python: [_DomainResult.producer_projection_failure], r: [domain_projection_failure]}
-  producer_evidence:
-    python: [_DomainResult.producer_attempt, _DomainResult.project_failures, _ProducerAttempt]
-    r: [domain_producer_evidence]
   define_issues: {python: [_DefineResult.issues], r: [define_issues, define_diagnostics]}
   define_artifacts: {python: [_DefineResult.artifacts], r: [define_artifacts]}
   define_save: {python: [_DefineResult.save], r: [define_save]}
 host_only:
-  python: [_style_same_value, _DefineResult.capture_reads, _ArrowTable.__arrow_c_stream__, DomainError, DefineError]
+  python: [_style_same_value, _DefineResult.capture_reads, _DomainResult.project_failures, _ArrowTable.__arrow_c_stream__, DomainError, DefineError]
   r: [scalar_bytes, scalar_exact_double, scalar_operator_code, scalar_operator]

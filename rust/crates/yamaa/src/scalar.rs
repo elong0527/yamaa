@@ -109,7 +109,7 @@ pub struct Date {
 impl Date {
     /// Validate complete civil fields with day precision.
     pub fn new(year: u16, month: u8, day: u8) -> Option<Self> {
-        yamaa_core::temporal::Date::new(year, month, day, yamaa_core::temporal::DatePrecision::Day)
+        yamaa_core::temporal::Date::new(year, month, day, yamaa_core::temporal::Precision::Day)
             .ok()
             .map(|inner| Self { inner })
     }
@@ -144,7 +144,7 @@ impl DateTime {
                 hour,
                 minute,
                 second,
-                yamaa_core::temporal::DateTimePrecision::Second,
+                yamaa_core::temporal::Precision::Second,
             )
             .ok()
             .map(|inner| Self { inner })

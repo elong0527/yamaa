@@ -347,9 +347,9 @@ unrepresentable and nothing to disambiguate.
 A `datetime` carries no timezone and no offset and resolves to a whole second.
 Text carrying a zone, an offset or a fractional second is rejected rather than
 normalized, and parsing keeps the fields of the text. A datetime is never
-implicitly shifted into another zone; only an explicit `datetime_shift` moves a
-civil value, under [TIME-16](temporal.md#time-16). A study that collects
-sub-second times keeps the collected text in a `str` column.
+implicitly shifted into another zone; only an explicit `shift` moves a civil
+value, under [TIME-14](temporal.md#time-14). A study that collects sub-second
+times keeps the collected text in a `str` column.
 
 Evidence: `negative-datetime-zones`, `adam-adae-post-dose-window`.
 Replaces: REQ-0555, REQ-0560, REQ-0561, REQ-0563, REQ-0564, REQ-0565, REQ-0612.
@@ -428,43 +428,48 @@ to see a malformed value therefore leaves the field `str`.
 
 <a id="value-16"></a>
 
-### VALUE-16. Every temporal value is complete and records the collected precision of its source
+### VALUE-16. Every temporal value is complete and records its collected precision on one ladder
 
 A temporal value is complete or is not a value of its type; a truncated
-collected value stays text until `date_impute` or `datetime_impute` completes
-it. Each value has a collected precision, the finest field its collected
-source supplied: `year`, `month` or `day` for a `date`, and `day`, `hour`,
-`minute` or `second` for a `datetime`. Where a value came from fixes its
-collected precision, and a field finer than it was supplied by imputation.
+collected value stays text until `impute` completes it. Each value has a
+collected precision on one ladder, `none`, `year`, `month`, `day`, `hour`,
+`minute`, `second`: the finest field its collected source supplied, or `none`
+when no collected field supplied it. A `date`'s precision is at most `day`.
+Where a value came from fixes its collected precision, and every field finer
+than it was supplied.
 
-Evidence: `schema-birth-date`, `adam-adae-partial-dates`, `adam-adae-partial-times`.
+Evidence: `schema-birth-date`, `adam-adae-partial-dates`, `adam-adae-partial-times`, `schema-impute-fallback`, `schema-imputation-flags`.
 Replaces: REQ-0544, REQ-0545, REQ-0546, REQ-0547, REQ-0548.
 
 | Origin | Collected precision |
 |---|---|
 | parsed text | `date`: `day`; `datetime`: `second` |
-| `date_impute` | the precision its source carried |
-| `datetime_impute` | the last field its source text carried; a `datetime` source unchanged |
-| `to_date` | `day` |
+| `impute` from text | the finest field the text carried, at most `day` for a `date` |
+| `impute` from a value of its type | unchanged |
+| `impute`'s `fallback` | `none` |
+| `to_date` | from text, `day`; from a `datetime`, its precision capped at `day` |
 | selecting an existing value | unchanged; the property follows the selected value |
-| `date_shift` or `datetime_shift` | unchanged from the source temporal value |
+| `shift` | unchanged from the source temporal value |
 
 The parsed-text row admits no other answer: the form of
 [VALUE-15](#value-15) admits only complete text, so nothing a parse produces
 was collected in part. A parsed datetime is collected through the second: an
-omitted `ss` names second zero rather than claiming a coarser value.
-`datetime_impute` may instead complete collected text that stops after its
-day, hour or minute under a declared time rule, producing a complete datetime
-whose collected precision is the last field that text carried
-([TIME-12](temporal.md#time-12)). [Expressions](expressions.md)
-fixes the selecting row for the extreme, conditional, coalescing and offset
-expressions that return an operand rather than computing one.
+omitted `ss` names second zero rather than claiming a coarser value. `impute`
+may instead complete collected text that stops after its year, month, day,
+hour or minute under declared rules, producing a complete value whose
+collected precision is the last field that text carried
+([TIME-8](temporal.md#time-8)): a datetime completed from `2025` carries
+`year`. [Expressions](expressions.md) fixes the selecting row for the extreme,
+conditional, coalescing and offset expressions that return an operand rather
+than computing one.
 
 Provenance is read off collected precision rather than recorded beside it. A
-date whose precision is `day` was collected in full. A datetime whose precision
-is `day` had its whole time supplied, `hour` had its minute and second
-supplied, `minute` had its second supplied, and `second` means the source
-carried every time field.
+date whose precision is `day` was collected in full, `month` had its day
+supplied, `year` its month and day, and `none` its every field. A datetime
+whose precision is `day` had its whole time supplied, `hour` had its minute and
+second supplied, `minute` had its second supplied, and `second` means the
+source carried every field. [TIME-18](temporal.md#time-18) reports these as
+ADaM imputation flags.
 
 <a id="value-17"></a>
 
@@ -502,8 +507,8 @@ carries the day or the moment and nothing about how much of it was collected:
   function argument.
 
 A specification that must carry precision past any of those boundaries
-derives a column from `date_precision` or `datetime_precision`
-([TIME-7](temporal.md#time-7), [TIME-11](temporal.md#time-11)), which is data
+derives a column from `precision` or `imputation_flag`
+([TIME-7](temporal.md#time-7), [TIME-18](temporal.md#time-18)), which is data
 the artifact records like any other.
 
 <a id="value-18"></a>

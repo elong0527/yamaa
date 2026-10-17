@@ -2392,7 +2392,7 @@ mod execution {
             use yamaa_core::{
                 reduction::NumericReducer,
                 table::{CellError, TableAccess, TableSchema, ValueRef},
-                temporal::{Date, DatePrecision},
+                temporal::{Date, Precision},
                 value::{ColumnType, Value, ValueType},
             };
 
@@ -2412,7 +2412,7 @@ mod execution {
                         ("missing".into(), Value::Missing),
                     ]
                 };
-                let date = Value::Date(Date::new(2024, 2, 29, DatePrecision::Month).unwrap());
+                let date = Value::Date(Date::new(2024, 2, 29, Precision::Month).unwrap());
                 let faults: Vec<ExecutionError<Payload>> = vec![
                     ExecutionError::MultipleValues {
                         path: "columns.A.source".into(),

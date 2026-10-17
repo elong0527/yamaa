@@ -1,7 +1,7 @@
 phase: validation
 condition: value_not_permitted
 spec_paths:
-  - columns.TRTDURM.derivation.date_diff.bounds
+  - columns.TRTDURM.derivation.diff.bounds
 requirement: REQ-0613
 context:
   value: inclusive

@@ -1,7 +1,7 @@
 //! Lossless values in retained report observations; no request protocol.
 use serde::{Deserialize, Serialize};
 
-use yamaa_core::temporal::{Date, DatePrecision, DateTime, DateTimePrecision};
+use yamaa_core::temporal::{Date, DateTime, Precision};
 use yamaa_core::value::Value;
 
 /// Represent retained scalar facts without host numeric coercion.
@@ -37,14 +37,7 @@ impl ScalarValue {
                         ("text".into(), Json::String(temporal.text.clone())),
                         (
                             "precision".into(),
-                            Json::String(
-                                match temporal.precision {
-                                    DateCollected::Year => "year",
-                                    DateCollected::Month => "month",
-                                    DateCollected::Day => "day",
-                                }
-                                .into(),
-                            ),
+                            Json::String(temporal.precision.word().into()),
                         ),
                     ]
                     .into_iter()
@@ -58,15 +51,7 @@ impl ScalarValue {
                         ("text".into(), Json::String(temporal.text.clone())),
                         (
                             "precision".into(),
-                            Json::String(
-                                match temporal.precision {
-                                    DateTimeCollected::Day => "day",
-                                    DateTimeCollected::Hour => "hour",
-                                    DateTimeCollected::Minute => "minute",
-                                    DateTimeCollected::Second => "second",
-                                }
-                                .into(),
-                            ),
+                            Json::String(temporal.precision.word().into()),
                         ),
                     ]
                     .into_iter()
@@ -114,25 +99,14 @@ impl ScalarValue {
                 let (text, precision) = temporal(payload)?;
                 Scalar::Date(Temporal {
                     text,
-                    precision: match precision.as_str() {
-                        "year" => DateCollected::Year,
-                        "month" => DateCollected::Month,
-                        "day" => DateCollected::Day,
-                        _ => return Err(invalid),
-                    },
+                    precision: Collected::from_word(&precision).ok_or(invalid)?,
                 })
             }
             ("datetime", payload) => {
                 let (text, precision) = temporal(payload)?;
                 Scalar::Datetime(Temporal {
                     text,
-                    precision: match precision.as_str() {
-                        "day" => DateTimeCollected::Day,
-                        "hour" => DateTimeCollected::Hour,
-                        "minute" => DateTimeCollected::Minute,
-                        "second" => DateTimeCollected::Second,
-                        _ => return Err(invalid),
-                    },
+                    precision: Collected::from_word(&precision).ok_or(invalid)?,
                 })
             }
             _ => return Err(invalid),
@@ -154,32 +128,59 @@ enum Scalar {
     Float(String),
     Str(String),
     Bool(bool),
-    Date(Temporal<DateCollected>),
-    Datetime(Temporal<DateTimeCollected>),
+    Date(Temporal),
+    Datetime(Temporal),
 }
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct Temporal<P> {
+struct Temporal {
     text: String,
-    precision: P,
+    precision: Collected,
 }
 
-#[derive(Deserialize, Serialize)]
+/// The one collected-precision ladder's words; a date admits at most `day`.
+#[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-enum DateCollected {
+enum Collected {
+    None,
     Year,
     Month,
-    Day,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-enum DateTimeCollected {
     Day,
     Hour,
     Minute,
     Second,
+}
+
+impl Collected {
+    const LADDER: [(Self, Precision); 7] = [
+        (Self::None, Precision::None),
+        (Self::Year, Precision::Year),
+        (Self::Month, Precision::Month),
+        (Self::Day, Precision::Day),
+        (Self::Hour, Precision::Hour),
+        (Self::Minute, Precision::Minute),
+        (Self::Second, Precision::Second),
+    ];
+
+    fn core(self) -> Precision {
+        Self::LADDER[self as usize].1
+    }
+
+    fn from_core(precision: Precision) -> Self {
+        Self::LADDER[precision as usize].0
+    }
+
+    fn word(self) -> &'static str {
+        self.core().word()
+    }
+
+    fn from_word(word: &str) -> Option<Self> {
+        Self::LADDER
+            .iter()
+            .find(|(_, precision)| precision.word() == word)
+            .map(|(collected, _)| *collected)
+    }
 }
 
 impl Scalar {
@@ -211,12 +212,7 @@ impl Scalar {
             Self::Date(Temporal { text, precision }) => {
                 let date: Date = text.parse().map_err(|_| invalid)?;
                 let (year, month, day) = date.fields();
-                let precision = match precision {
-                    DateCollected::Year => DatePrecision::Year,
-                    DateCollected::Month => DatePrecision::Month,
-                    DateCollected::Day => DatePrecision::Day,
-                };
-                Value::Date(Date::new(year, month, day, precision).map_err(|_| invalid)?)
+                Value::Date(Date::new(year, month, day, precision.core()).map_err(|_| invalid)?)
             }
             Self::Datetime(Temporal { text, precision }) => {
                 let date: DateTime = text.parse().map_err(|_| invalid)?;
@@ -224,15 +220,10 @@ impl Scalar {
                     return Err(invalid);
                 }
                 let (year, month, day, hour, minute, second) = date.fields();
-                let precision = match precision {
-                    DateTimeCollected::Day => DateTimePrecision::Day,
-                    DateTimeCollected::Hour => DateTimePrecision::Hour,
-                    DateTimeCollected::Minute => DateTimePrecision::Minute,
-                    DateTimeCollected::Second => DateTimePrecision::Second,
-                };
-                let date = Date::new(year, month, day, DatePrecision::Day).map_err(|_| invalid)?;
+                let date = Date::new(year, month, day, Precision::Day).map_err(|_| invalid)?;
                 Value::DateTime(
-                    DateTime::new(date, hour, minute, second, precision).map_err(|_| invalid)?,
+                    DateTime::new(date, hour, minute, second, precision.core())
+                        .map_err(|_| invalid)?,
                 )
             }
         })
@@ -248,20 +239,11 @@ impl Scalar {
             Value::Bool(value) => Self::Bool(value),
             Value::Date(value) => Self::Date(Temporal {
                 text: value.to_string(),
-                precision: match value.collected_precision() {
-                    DatePrecision::Year => DateCollected::Year,
-                    DatePrecision::Month => DateCollected::Month,
-                    DatePrecision::Day => DateCollected::Day,
-                },
+                precision: Collected::from_core(value.collected_precision()),
             }),
             Value::DateTime(value) => Self::Datetime(Temporal {
                 text: value.to_string(),
-                precision: match value.collected_precision() {
-                    DateTimePrecision::Day => DateTimeCollected::Day,
-                    DateTimePrecision::Hour => DateTimeCollected::Hour,
-                    DateTimePrecision::Minute => DateTimeCollected::Minute,
-                    DateTimePrecision::Second => DateTimeCollected::Second,
-                },
+                precision: Collected::from_core(value.collected_precision()),
             }),
         }
     }
@@ -273,14 +255,14 @@ mod tests {
 
     #[test]
     fn hour_and_minute_datetime_precision_survive_the_json_projection() {
-        let day = Date::new(2025, 3, 4, DatePrecision::Day).unwrap();
+        let day = Date::new(2025, 3, 4, Precision::Day).unwrap();
         for (value, precision) in [
             (
-                DateTime::new(day, 8, 59, 59, DateTimePrecision::Hour).unwrap(),
+                DateTime::new(day, 8, 59, 59, Precision::Hour).unwrap(),
                 "hour",
             ),
             (
-                DateTime::new(day, 8, 30, 0, DateTimePrecision::Minute).unwrap(),
+                DateTime::new(day, 8, 30, 0, Precision::Minute).unwrap(),
                 "minute",
             ),
         ] {

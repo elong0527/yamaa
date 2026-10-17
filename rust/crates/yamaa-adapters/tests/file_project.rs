@@ -1397,7 +1397,8 @@ mod file {
         use yamaa_adapters::{
             file_resources::Resources,
             file_workflow::{self, Error},
-            producer_check, shipped_schema,
+            project_application::{preparation_issues, IssueError},
+            project_check, shipped_schema,
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::project_function::Language;
@@ -1429,7 +1430,7 @@ mod file {
                 assert_eq!(owner.capture_reads(), 0);
                 assert_eq!(owner.captured_sources().count(), 0);
                 let rejection = Error::Environment(owner);
-                let rows = producer_check::rejected(&rejection, Language::Python).unwrap();
+                let rows = preparation_issues(&rejection, Language::Python).unwrap();
                 assert_eq!(rows.len(), 1);
                 assert_eq!(rows[0].condition, "project_environment_missing");
                 assert_eq!(rows[0].requirement.as_deref(), Some("REQ-0694"));
@@ -1450,7 +1451,7 @@ mod file {
                 "environment.yaml",
                 "schema_version: '1.0'\nlanguage: python\n",
             );
-            let file_workflow::SelectionError::Preparation(Error::Graph(owner)) =
+            let file_workflow::SelectionError::Preparation(Error::Entry(owner)) =
                 file_workflow::select(&entry, &environment, Language::Python)
                     .err()
                     .unwrap()
@@ -1459,7 +1460,7 @@ mod file {
             };
             assert!(matches!(
                 owner.error(),
-                yamaa_adapters::file_graph::Error::Document(
+                yamaa_adapters::file_entry::Error::Document(
                     yamaa_adapters::file_preparation::Error::Resource(
                         yamaa_adapters::file_resources::Error::Missing
                     )
@@ -1496,20 +1497,25 @@ mod file {
                 fs::create_dir_all(path.parent().unwrap()).unwrap();
                 fs::write(path, text).unwrap();
             }
-            fn prepare(&self) -> Result<yamaa_adapters::file_graph::FileGraph, Error> {
-                file_workflow::prepare_with_resources(
-                    Resources::new(&self.path(""), &self.path(""), &[]).unwrap(),
-                    "root.yaml",
-                    "environment.yaml",
-                    Language::Python,
-                    shipped_schema::capture().unwrap(),
-                    shipped_schema::capture_environment().unwrap(),
-                )
+            fn prepare(&self) -> Box<yamaa_adapters::file_project::FileProject> {
+                match self.select() {
+                    Ok(file_workflow::Selected::Ordinary(project)) => project,
+                    Ok(_) => panic!("project capability"),
+                    Err(error) => panic!("project preparation: {error:?}"),
+                }
             }
             fn rejected(&self) -> Error {
-                match self.prepare() {
-                    Err(error) => error,
-                    Ok(_) => panic!("expected rejection"),
+                match self.select() {
+                    Err(file_workflow::SelectionError::Preparation(error)) => error,
+                    Ok(_) => panic!("expected preparation rejection"),
+                    Err(error) => panic!("expected preparation rejection: {error:?}"),
+                }
+            }
+            fn compile_rejection(&self) -> Box<yamaa_adapters::file_project::RejectedOrdinary> {
+                match self.select() {
+                    Err(file_workflow::SelectionError::Ordinary(error)) => error,
+                    Ok(_) => panic!("expected compilation rejection"),
+                    Err(error) => panic!("expected compilation rejection: {error:?}"),
                 }
             }
         }
@@ -1541,11 +1547,11 @@ mod file {
                 &format!("    derivation: RAW.VALUE\n{verifications}"),
             );
             study.write("root.yaml", &source);
-            let graph = study.prepare().unwrap();
-            assert_eq!(graph.capture_reads(), 2);
-            assert!(producer_check::prepared(&graph).unwrap().is_empty());
+            let project = study.prepare();
+            assert_eq!(project.capture_reads(), 2);
+            assert!(project_check::prepared(project.run()).unwrap().is_empty());
             let compiled = yamaa_core::specification::PreparedSpecification::prepare(
-                graph.graph().nodes()[0].document.model(),
+                project.run().document().model(),
             )
             .unwrap();
             for index in 0..17 {
@@ -1578,11 +1584,11 @@ mod file {
             study.write("root.yaml", &source);
 
             let owner = study.rejected();
-            let Error::Graph(graph) = &owner else {
+            let Error::Entry(entry) = &owner else {
                 panic!("schema rejection owner")
             };
-            assert_eq!(graph.capture_reads(), 2); // environment and specification only
-            let raw = producer_check::rejected(&owner, Language::Python).unwrap();
+            assert_eq!(entry.capture_reads(), 2); // environment and specification only
+            let raw = preparation_issues(&owner, Language::Python).unwrap();
             assert_eq!(raw.len(), 10_001);
             for (index, issue) in raw.iter().enumerate() {
                 let name = format!("extra_{index:05}");
@@ -1628,7 +1634,7 @@ mod file {
                 operand_route: None,
             }];
             assert_eq!(
-                producer_check::rejected(&owner, Language::Python).unwrap(),
+                preparation_issues(&owner, Language::Python).unwrap(),
                 expected
             );
             assert_eq!(
@@ -1670,7 +1676,7 @@ mod file {
             assert!(context["reason"].as_str().is_some());
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(
-                producer_check::rejected(&owner, Language::Python).unwrap(),
+                preparation_issues(&owner, Language::Python).unwrap(),
                 expected
             );
         }
@@ -1696,7 +1702,7 @@ mod file {
                 ("functions.id", "absent-function.yaml"),
                 ("codelists[0]", "absent-codelists.yaml"),
             ];
-            let rows = producer_check::rejected(&error, Language::Python).unwrap();
+            let rows = preparation_issues(&error, Language::Python).unwrap();
             assert_eq!(rows.len(), expected.len());
             for (row, (declaration, path)) in rows.iter().zip(expected) {
                 assert_eq!(row.condition, "project_environment_invalid");
@@ -1745,7 +1751,7 @@ mod file {
                 &format!("schema_version: {DIGITS}\nlanguage: python\n"),
             );
             let error = study.rejected();
-            let rows = producer_check::rejected(&error, Language::Python).unwrap();
+            let rows = preparation_issues(&error, Language::Python).unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].condition, "schema_version_mismatch");
             assert_eq!(rows[0].spec_paths, ["schema_version"]);
@@ -1768,10 +1774,7 @@ mod file {
             assert_eq!(owner.capture_reads(), 1);
             assert!(!study.0.join("root.yaml").exists());
             fs::remove_dir_all(&study.0).unwrap();
-            assert_eq!(
-                producer_check::rejected(&error, Language::Python).unwrap(),
-                rows,
-            );
+            assert_eq!(preparation_issues(&error, Language::Python).unwrap(), rows,);
             assert_eq!(owner.capture_reads(), 1);
         }
 
@@ -1852,8 +1855,8 @@ mod file {
                 let reads = owner.capture_reads();
                 let held_root = rejected.root.source().bytes.as_ptr();
                 let held_error = owner.error() as *const _;
-                let producer_check::Error::ResourceLimit(refusal) =
-                    producer_check::rejected(error, Language::Python).unwrap_err()
+                let IssueError::ResourceLimit(refusal) =
+                    preparation_issues(error, Language::Python).unwrap_err()
                 else {
                     panic!("whole projection retains the typed refusal")
                 };
@@ -1891,8 +1894,8 @@ mod file {
                 fs::remove_dir_all(&study.0).unwrap();
                 for _ in 0..2 {
                     assert!(matches!(
-                        producer_check::rejected(error, Language::Python),
-                        Err(producer_check::Error::ResourceLimit(again)) if again == refusal
+                        preparation_issues(error, Language::Python),
+                        Err(IssueError::ResourceLimit(again)) if again == refusal
                     ));
                     let rows = yamaa_adapters::project_application::selection_failure(
                         &selection,
@@ -2057,7 +2060,7 @@ mod file {
         }
 
         #[test]
-        fn complete_original_diamond_checks_each_canonical_node_once_without_data() {
+        fn linked_diamond_checks_only_the_entry_and_reads_each_producer_once_without_data() {
             let study = Study::new();
             study.write(
                 "leaf.yaml",
@@ -2081,27 +2084,30 @@ mod file {
                     false,
                 ),
             );
-            // VALUE reads all three producer datasets so pruning (REQ-0638)
-            // keeps every link of the diamond in the resolved model.
+            // VALUE reads all three linked datasets so pruning (REQ-0638) keeps
+            // every link in the resolved model.
             study.write("root.yaml", &yaml("{L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml}, Q: {path: right.csv, schema: './right.yaml'}}", "L", "root.csv", true).replace(
                 "derivation: L.VALUE",
                 "derivation: {first_available: {sources: [L.VALUE, R.VALUE, Q.VALUE]}}",
             ));
-            let graph = study.prepare().unwrap();
-            assert_eq!(graph.capture_reads(), 5); // one environment + four canonical nodes
-            assert_eq!(graph.graph().metadata().order(), [3, 1, 2, 0]);
-            let expected = ["root.yaml", "left.yaml", "leaf.yaml"].map(|name| yamaa_adapters::issue_rows::Issue {
-        phase: "validation".into(), condition: "invalid_regex".into(), requirement: Some("REQ-0827".into()),
-        spec_paths: vec!["columns.VALUE.verifications[0].matches.pattern".into()],
-        context: yamaa_adapters::json!({"pattern":"é(", "source":study.path(name), "entry":study.path("root.yaml")}),
-        source_span: None, operand_route: None,
-    });
-            assert_eq!(producer_check::prepared(&graph).unwrap(), expected);
-            assert_eq!(producer_check::prepared(&graph).unwrap(), expected);
+            let project = study.prepare();
+            // One environment, the entry and its two distinct producers. The
+            // producers are neither compiled nor followed to leaf.yaml.
+            assert_eq!(project.capture_reads(), 4);
+            let expected = vec![yamaa_adapters::issue_rows::Issue {
+                phase: "validation".into(),
+                condition: "invalid_regex".into(),
+                requirement: Some("REQ-0827".into()),
+                spec_paths: vec!["columns.VALUE.verifications[0].matches.pattern".into()],
+                context: yamaa_adapters::json!({"pattern":"é("}),
+                source_span: None,
+                operand_route: None,
+            }];
+            assert_eq!(project_check::prepared(project.run()).unwrap(), expected);
             fs::remove_dir_all(&study.0).unwrap();
-            assert_eq!(producer_check::prepared(&graph).unwrap(), expected);
+            assert_eq!(project_check::prepared(project.run()).unwrap(), expected);
             assert_eq!(
-                graph.environment().root().source().bytes,
+                project.run().captured_environment().root().source().bytes,
                 b"schema_version: '1.0'\n"
             );
         }
@@ -2135,53 +2141,61 @@ mod file {
         }
 
         #[test]
-        fn producer_typed_rejections_keep_complete_authored_rows_and_original_owners() {
-            for (input, requirement, condition, path) in [
-                (
-                    "{P: {path: wrong.csv, schema: leaf.yaml}}",
-                    "REQ-0534",
-                    "producer_output_path_mismatch",
-                    "input.P.path",
-                ),
-                (
+        fn linked_type_rejection_keeps_complete_authored_rows_and_original_owners() {
+            let study = Study::new();
+            study.write(
+                "leaf.yaml",
+                &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
+            );
+            study.write(
+                "root.yaml",
+                &yaml(
                     "{P: {path: leaf.csv, schema: leaf.yaml, types: {ID: int}}}",
-                    "REQ-0523",
-                    "redundant_field_type",
-                    "input.P.types.ID",
+                    "P",
+                    "root.csv",
+                    false,
                 ),
-            ] {
-                let study = Study::new();
-                study.write(
-                    "leaf.yaml",
-                    &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
-                );
-                study.write("root.yaml", &yaml(input, "P", "root.csv", false));
-                let error = study.rejected();
-                let rows = producer_check::rejected(&error, Language::Python).unwrap();
-                assert_eq!(rows.len(), 1);
-                assert_eq!(rows[0].condition, condition);
-                assert_eq!(rows[0].requirement.as_deref(), Some(requirement));
-                assert_eq!(
-                    rows[0].spec_paths,
-                    if requirement == "REQ-0534" {
-                        vec![path, "input.P.schema"]
-                    } else {
-                        vec![path]
-                    }
-                );
-                assert_eq!(rows[0].context.clone()["source"], study.path("root.yaml"));
-                fs::remove_dir_all(&study.0).unwrap();
-                assert_eq!(
-                    producer_check::rejected(&error, Language::Python).unwrap(),
-                    rows
-                );
-                let Error::Graph(graph) = &error else {
-                    panic!("retained graph");
-                };
-                assert_eq!(graph.capture_reads(), 3);
-                assert_eq!(graph.documents().len(), 2);
-                assert_eq!(graph.captured_sources().count(), 3);
-            }
+            );
+            let error = study.compile_rejection();
+            let rows = project_check::rejected(error.run()).unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].condition, "redundant_field_type");
+            assert_eq!(rows[0].requirement.as_deref(), Some("REQ-0523"));
+            assert_eq!(rows[0].spec_paths, ["input.P.types.ID"]);
+            assert_eq!(
+                rows[0].context.clone(),
+                yamaa_adapters::json!({"dataset":"P", "field":"ID", "type":"int"})
+            );
+            fs::remove_dir_all(&study.0).unwrap();
+            assert_eq!(project_check::rejected(error.run()).unwrap(), rows);
+            assert_eq!(error.capture_reads(), 3);
+            assert_eq!(error.retained_sources().len(), 3);
+        }
+
+        #[test]
+        fn a_linked_artifact_path_may_differ_from_the_producer_output_path() {
+            // A link supplies types only; the consumer reads its own path.
+            let study = Study::new();
+            study.write(
+                "leaf.yaml",
+                &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
+            );
+            study.write(
+                "root.yaml",
+                &yaml(
+                    "{P: {path: copy/stored.csv, schema: leaf.yaml}}",
+                    "P",
+                    "root.csv",
+                    false,
+                ),
+            );
+            let project = study.prepare();
+            assert!(project_check::prepared(project.run()).unwrap().is_empty());
+            assert_eq!(
+                project.run().compiled().sources()[0].path,
+                "copy/stored.csv"
+            );
+            assert_eq!(project.capture_reads(), 3);
         }
 
         #[test]
@@ -2199,15 +2213,22 @@ mod file {
                 "root.yaml",
                 "schema_version: \"1.0\"\nparents: parent.yaml\ninput:\n  DM: {schema: producer/dm.yaml}\n",
             );
-            let error = study.rejected();
-            let rows = producer_check::rejected(&error, Language::Python).unwrap();
+            let error = study.compile_rejection();
+            let rows = project_check::rejected(error.run()).unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].condition, "redundant_field_type");
             assert_eq!(rows[0].requirement.as_deref(), Some("REQ-0523"));
             assert_eq!(rows[0].spec_paths, ["input.DM.types.RANDDT"]);
             assert_eq!(
                 rows[0].context.clone(),
-                yamaa_adapters::json!({"dataset":"DM", "declaring_sources":[study.path("parent.yaml")], "entry":study.path("root.yaml"), "field":"RANDDT", "source":study.path("root.yaml"), "type":"date"})
+                yamaa_adapters::json!({"dataset":"DM", "field":"RANDDT", "type":"date"})
+            );
+            assert_eq!(
+                error
+                    .run()
+                    .document
+                    .declaring_source(&rows[0].spec_paths[0]),
+                Some(study.path("parent.yaml").as_str())
             );
             assert_eq!(
                 yamaa_adapters::project_application::check(
@@ -2251,8 +2272,8 @@ mod file {
         }
 
         #[test]
-        fn actual_compilation_failure_and_cycle_are_projected_without_recompilation() {
-            for cycle in [false, true] {
+        fn producer_compilation_and_back_links_are_not_consumer_failures_but_self_links_are() {
+            for back_link in [false, true] {
                 let study = Study::new();
                 study.write(
                     "root.yaml",
@@ -2263,7 +2284,7 @@ mod file {
                         false,
                     ),
                 );
-                let leaf = if cycle {
+                let leaf = if back_link {
                     yaml(
                         "{R: {path: root.csv, schema: './root.yaml'}}",
                         "R",
@@ -2275,36 +2296,36 @@ mod file {
                         .replace("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}")
                 };
                 study.write("leaf.yaml", &leaf);
-                let error = study.rejected();
-                let rows = producer_check::rejected(&error, Language::Python).unwrap();
-                assert!(!rows.is_empty());
-                assert_eq!(
-                    rows[0].condition,
-                    if cycle {
-                        "producer_workflow_cycle"
-                    } else {
-                        "unknown_project_function"
-                    }
-                );
-                assert_eq!(
-                    rows[0].requirement.as_deref(),
-                    Some(if cycle { "REQ-0534" } else { "REQ-0698" })
-                );
-                let Error::Graph(graph) = &error else {
-                    panic!("graph");
-                };
-                assert_eq!(graph.capture_reads(), 3);
-                assert_eq!(graph.documents().len(), 2);
-                fs::remove_dir_all(&study.0).unwrap();
-                assert_eq!(
-                    producer_check::rejected(&error, Language::Python).unwrap(),
-                    rows
-                );
+                // The producer is never compiled and its links are never followed.
+                let project = study.prepare();
+                assert!(project_check::prepared(project.run()).unwrap().is_empty());
+                assert_eq!(project.capture_reads(), 3);
             }
+            let study = Study::new();
+            study.write(
+                "root.yaml",
+                &yaml(
+                    "{R: {path: root.csv, schema: './root.yaml'}}",
+                    "R",
+                    "root.csv",
+                    false,
+                ),
+            );
+            let error = study.compile_rejection();
+            let rows = project_check::rejected(error.run()).unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].condition, "invalid_producer_contract");
+            assert_eq!(rows[0].requirement.as_deref(), Some("REQ-0534"));
+            assert_eq!(rows[0].spec_paths, ["input.R.schema"]);
+            assert_eq!(
+                rows[0].context.clone(),
+                yamaa_adapters::json!({"dataset":"R", "reason":"self_reference"})
+            );
+            assert_eq!(error.capture_reads(), 2);
         }
 
         #[test]
-        fn raw_environment_rejection_precedes_the_first_graph_read() {
+        fn raw_environment_rejection_precedes_the_first_entry_read() {
             let study = Study::new();
             study.write(
                 "root.yaml",
@@ -2321,7 +2342,7 @@ mod file {
                 environment.captured_sources().next().unwrap().1,
                 raw.as_bytes()
             );
-            let rows = producer_check::rejected(&error, Language::Python).unwrap();
+            let rows = preparation_issues(&error, Language::Python).unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].condition, "invalid_yaml");
             let context: yamaa_core::json::Value = rows[0].context.clone();
@@ -2342,7 +2363,7 @@ mod file {
                 &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false),
             );
             let error = study.rejected();
-            let rows = producer_check::rejected(&error, Language::Python).unwrap();
+            let rows = preparation_issues(&error, Language::Python).unwrap();
             assert!(rows
                 .iter()
                 .any(|r| r.requirement.as_deref() == Some("REQ-0696")));
@@ -2361,20 +2382,17 @@ mod file {
                 "schema_version: '1.0'\nparents: [parent/base.yaml]\ndomain: CHILD\n",
             );
             let error = study.rejected();
-            let rows = producer_check::rejected(&error, Language::Python).unwrap();
+            let rows = preparation_issues(&error, Language::Python).unwrap();
             assert!(!rows.is_empty());
             assert!(rows
                 .iter()
                 .any(|r| r.context.clone()["source"] == study.path("parent/base.yaml")));
             fs::remove_dir_all(&study.0).unwrap();
-            assert_eq!(
-                producer_check::rejected(&error, Language::Python).unwrap(),
-                rows
-            );
+            assert_eq!(preparation_issues(&error, Language::Python).unwrap(), rows);
         }
 
         #[test]
-        fn inherited_graph_findings_retain_the_actual_declaring_layer_after_owner_files_drop() {
+        fn inherited_links_retain_the_declaring_layer_and_one_producer_document() {
             let study = Study::new();
             study.write(
                 "producer/base.yaml",
@@ -2393,35 +2411,28 @@ mod file {
                 "root.yaml",
                 "schema_version: '1.0'\nparents: [parents/base.yaml]\ndomain: ROOT\n",
             );
-            let graph = study.prepare().unwrap();
-            assert_eq!(graph.capture_reads(), 5);
-            let nodes = graph.graph().nodes();
-            assert!(std::sync::Arc::ptr_eq(
-                &nodes[0].producers[0].document,
-                &nodes[0].producers[1].document
-            ));
-            let expected = yamaa_adapters::json!({"declaring_sources":[study.path("producer/base.yaml")],
-        "source":study.path("leaf.yaml"), "entry":study.path("root.yaml"), "pattern":"é("});
-            let rows = producer_check::prepared(&graph).unwrap();
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].context, expected);
-            assert_eq!(
-                graph.graph().metadata().nodes()[0].producers()[0]
-                    .schema_origin()
-                    .declaring_source(),
-                study.path("parents/base.yaml")
-            );
-            let retained = graph.graph().nodes()[1].document.clone();
-            drop(graph);
-            fs::remove_dir_all(&study.0).unwrap();
-            assert_eq!(
-                retained.declaring_source("columns.VALUE.verifications[0].matches.pattern"),
-                Some(study.path("producer/base.yaml").as_str())
-            );
+            let project = study.prepare();
+            // One environment, the entry, its parent and the one linked producer
+            // with its own parent. The producer's invalid regex is never compiled.
+            assert_eq!(project.capture_reads(), 5);
+            assert!(project_check::prepared(project.run()).unwrap().is_empty());
+            let document = project.run().document();
+            for dataset in ["P", "Q"] {
+                assert_eq!(
+                    document
+                        .written_input_origin(dataset, "schema")
+                        .unwrap()
+                        .declaring_source,
+                    study.path("parents/base.yaml")
+                );
+            }
+            let compiled = project.run().compiled();
+            assert_eq!(compiled.source_contract(0), compiled.source_contract(1));
+            assert!(compiled.source_contract(0).is_some());
         }
 
         #[test]
-        fn unsupported_native_capture_keeps_exact_refusal_and_declaring_request() {
+        fn missing_linked_producer_keeps_exact_authored_finding_and_declaring_request() {
             let study = Study::new();
             study.write(
                 "root.yaml",
@@ -2433,23 +2444,38 @@ mod file {
                 ),
             );
             let error = study.rejected();
-            let Error::Graph(graph) = &error else {
-                panic!("graph");
+            let Error::Entry(entry) = &error else {
+                panic!("entry rejection");
             };
             assert!(matches!(
-                graph.error(),
-                yamaa_adapters::file_graph::Error::Resource(
-                    yamaa_adapters::file_resources::Error::Missing
+                entry.error(),
+                yamaa_adapters::file_entry::Error::Document(
+                    yamaa_adapters::file_preparation::Error::ResourceFinding {
+                        error: yamaa_adapters::file_resources::Error::Missing,
+                        ..
+                    }
                 )
             ));
-            assert_eq!(graph.capture_reads(), 2);
-            assert_eq!(graph.origin().unwrap().dataset, "P");
+            assert_eq!(entry.capture_reads(), 2);
+            assert_eq!(entry.origin().unwrap().dataset, "P");
             assert!(
-                matches!(producer_check::rejected(&error, Language::Python), Err(producer_check::Error::Original(original)) if std::ptr::eq(original, &error))
+                matches!(preparation_issues(&error, Language::Python), Err(IssueError::Original(original)) if std::ptr::eq(original, &error))
+            );
+            let rows = yamaa_adapters::project_application::check(
+                &study.path("root.yaml"),
+                &study.path("environment.yaml"),
+                Language::Python,
+            );
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].condition, "resource_path_missing");
+            assert_eq!(rows[0].spec_paths, ["input.P.schema"]);
+            assert_eq!(
+                rows[0].context.clone(),
+                yamaa_adapters::json!({"path":"missing.yaml"})
             );
             fs::remove_dir_all(&study.0).unwrap();
-            assert_eq!(graph.documents().len(), 1);
-            assert_eq!(graph.captured_sources().count(), 2);
+            assert!(entry.document().is_some());
+            assert_eq!(entry.captured_sources().count(), 2);
         }
 
         #[test]
@@ -2467,12 +2493,13 @@ mod file {
             let original = yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false)
                 .replace("    label: Reported value\n", "");
             study.write("leaf.yaml", &original);
-            let error = study.rejected();
-            let rows = producer_check::rejected(&error, Language::Python).unwrap();
+            let error = study.compile_rejection();
+            let rows = project_check::rejected(error.run()).unwrap();
             assert!(rows
                 .iter()
                 .any(|row| row.requirement.as_deref() == Some("REQ-0534")
-                    && row.condition == "invalid_producer_contract"));
+                    && row.condition == "invalid_producer_contract"
+                    && row.spec_paths == ["input.P.schema.columns.VALUE.label"]));
             study.write(
         "environment.yaml",
         "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {id: broken.yaml}\n",
@@ -2493,21 +2520,18 @@ mod file {
                     .1,
                 malformed.as_bytes()
             );
-            let failures = producer_check::rejected(&failure, Language::Python).unwrap();
+            let failures = preparation_issues(&failure, Language::Python).unwrap();
             assert_eq!(failures.len(), 1);
             assert_eq!(failures[0].condition, "invalid_yaml");
             let context: yamaa_core::json::Value = failures[0].context.clone();
             assert_eq!(context["path"], "broken.yaml");
             assert_eq!(context["environment_path"], "functions.id");
             fs::remove_dir_all(&study.0).unwrap();
-            let Error::Graph(graph) = &error else {
-                panic!("original contract");
-            };
-            assert_eq!(graph.documents()[1].source().bytes, original.as_bytes());
-            assert_eq!(
-                producer_check::rejected(&error, Language::Python).unwrap(),
-                rows
-            );
+            assert!(error
+                .retained_sources()
+                .iter()
+                .any(|(_, bytes)| bytes.as_ref() == original.as_bytes()));
+            assert_eq!(project_check::rejected(error.run()).unwrap(), rows);
             assert_eq!(
                 environment
                     .captured_sources()
@@ -2539,13 +2563,21 @@ mod file {
                     false,
                 ),
             );
-            let graph = study.prepare().unwrap();
-            assert!(producer_check::prepared(&graph).unwrap().is_empty());
+            let project = study.prepare();
+            assert!(project_check::prepared(project.run()).unwrap().is_empty());
+            let artifact = project.resolved_specification().unwrap();
+            let schema = artifact.entries()[0]
+                .resources
+                .iter()
+                .find(|resource| resource.spec_path == "input.P.schema")
+                .unwrap();
             assert_eq!(
-                graph.graph().nodes()[0].producers[0].schema_identity,
-                study.path("leaf.yaml")
+                schema.location,
+                yamaa_adapters::resolved_artifact::model::Location::Local {
+                    path: study.path("leaf.yaml")
+                }
             );
-            assert_eq!(graph.capture_reads(), 3);
+            assert_eq!(project.capture_reads(), 3);
         }
 
         #[test]
@@ -2555,22 +2587,15 @@ mod file {
                 "root.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "never-written.csv", false),
             );
-            let graph = study.prepare().unwrap();
-            assert_eq!(graph.capture_reads(), 2);
-            assert_eq!(graph.graph().nodes().len(), 1);
-            assert!(graph.graph().nodes()[0].producers.is_empty());
-            let document = &graph.graph().nodes()[0].document;
-            let raw = document.normalization_input();
-            let input = raw.field(raw.root(), "input").unwrap();
-            let declaration = raw.field(input, "RAW").unwrap();
-            assert!(!yamaa_core::producer_admission::is_producer_input(
-                raw,
-                declaration
-            ));
+            let project = study.prepare();
+            assert_eq!(project.capture_reads(), 2);
+            let document = project.run().document();
+            assert!(document.written_input_origin("RAW", "schema").is_none());
+            assert!(project.run().compiled().source_contract(0).is_none());
             let original = fs::read(study.0.join("root.yaml")).unwrap();
             drop(study);
             assert_eq!(document.source().bytes, original);
-            assert!(producer_check::prepared(&graph).unwrap().is_empty());
+            assert!(project_check::prepared(project.run()).unwrap().is_empty());
         }
 
         #[test]
@@ -2593,23 +2618,14 @@ mod file {
                 "root.yaml",
                 "schema_version: '1.0'\nparents: [base.yaml]\ndomain: TEST\n",
             );
-            let graph = study.prepare().unwrap();
-            assert_eq!(graph.capture_reads(), 4);
-            assert_eq!(graph.graph().nodes().len(), 2);
-            assert_eq!(graph.graph().nodes()[0].producers.len(), 1);
-            let document = &graph.graph().nodes()[0].document;
+            let project = study.prepare();
+            assert_eq!(project.capture_reads(), 4);
+            let document = project.run().document();
             assert!(document
                 .raw()
                 .document
                 .field(document.raw().document.root(), "input")
                 .is_none());
-            let raw = document.normalization_input();
-            let input = raw.field(raw.root(), "input").unwrap();
-            let declaration = raw.field(input, "P").unwrap();
-            assert!(yamaa_core::producer_admission::is_producer_input(
-                raw,
-                declaration
-            ));
             assert_eq!(
                 document
                     .written_input_origin("P", "schema")
@@ -2617,8 +2633,9 @@ mod file {
                     .declaring_source,
                 study.path("base.yaml")
             );
+            assert!(project.run().compiled().source_contract(0).is_some());
             drop(study);
-            assert!(producer_check::prepared(&graph).unwrap().is_empty());
+            assert!(project_check::prepared(project.run()).unwrap().is_empty());
         }
 
         #[test]
@@ -2632,24 +2649,24 @@ mod file {
             );
             study.write("root.yaml", &original);
             let rejection = study.rejected();
-            let Error::Graph(graph) = &rejection else {
+            let Error::Entry(entry) = &rejection else {
                 panic!("the original root rejection must remain owned");
             };
-            assert_eq!(graph.capture_reads(), 2);
-            assert!(graph.documents().is_empty());
+            assert_eq!(entry.capture_reads(), 2);
+            assert!(entry.document().is_none());
             drop(study);
-            let retained = graph.retained_sources();
+            let retained = entry.retained_sources();
             assert_eq!(retained.len(), 2);
             assert!(retained
                 .iter()
                 .any(|(name, bytes)| name.ends_with("/root.yaml")
                     && bytes.as_ref() == original.as_bytes()));
-            let findings = producer_check::rejected(&rejection, Language::Python).unwrap();
+            let findings = preparation_issues(&rejection, Language::Python).unwrap();
             assert_eq!(findings.len(), 1);
             assert_eq!(findings[0].condition, "invalid_field_type");
             assert_eq!(findings[0].requirement.as_deref(), Some("REQ-0287"));
             assert_eq!(findings[0].spec_paths, ["input.RAW.schema"]);
-            assert_eq!(graph.capture_reads(), 2);
+            assert_eq!(entry.capture_reads(), 2);
         }
 
         impl Study {
@@ -2812,7 +2829,7 @@ mod file {
         }
 
         #[test]
-        fn selected_inherited_producer_seeds_original_closure_with_shared_aliases_and_diamond() {
+        fn selected_inherited_links_read_each_producer_once_with_shared_aliases() {
             use file_workflow::Selected;
             let study = Study::new();
             study.write(
@@ -2844,38 +2861,28 @@ mod file {
             study.write("parents/base.yaml", &parent);
             let entry = "schema_version: '1.0'\nparents: [parents/base.yaml]\ndomain: ROOT\n";
             study.write("root.yaml", entry);
-            let Selected::Producer(graph) = study.select().unwrap() else {
-                panic!("inherited producer capability");
+            let Selected::Ordinary(project) = study.select().unwrap() else {
+                panic!("project capability");
             };
-            assert_eq!(graph.capture_reads(), 6); // environment, root, parent, left/right/leaf
-            let nodes = graph.graph().nodes();
-            assert_eq!(nodes.len(), 4);
-            assert_eq!(nodes[0].document.source().bytes, entry.as_bytes());
-            assert!(nodes[0]
-                .document
+            // Environment, entry, parent and the two distinct linked producers;
+            // leaf.yaml is linked only by producers and is never read.
+            assert_eq!(project.capture_reads(), 5);
+            let document = project.run().document();
+            assert_eq!(document.source().bytes, entry.as_bytes());
+            assert!(document
                 .raw()
                 .document
-                .field(nodes[0].document.raw().document.root(), "input")
+                .field(document.raw().document.root(), "input")
                 .is_none());
-            assert!(std::sync::Arc::ptr_eq(
-                &nodes[0].producers[1].document,
-                &nodes[0].producers[2].document
-            ));
-            assert!(std::sync::Arc::ptr_eq(
-                &nodes[1].producers[0].document,
-                &nodes[2].producers[0].document
-            ));
-            assert_eq!(graph.graph().metadata().order(), [3, 1, 2, 0]);
-            let rows = producer_check::prepared(&graph).unwrap();
+            let rows = project_check::prepared(project.run()).unwrap();
             assert_eq!(rows.len(), 1);
-            let context: yamaa_core::json::Value = rows[0].context.clone();
             assert_eq!(
-                context["declaring_sources"],
-                yamaa_adapters::json!([study.path("parents/base.yaml")])
+                document.declaring_source(&rows[0].spec_paths[0]),
+                Some(study.path("parents/base.yaml").as_str())
             );
             fs::remove_dir_all(&study.0).unwrap();
-            assert_eq!(producer_check::prepared(&graph).unwrap(), rows);
-            assert_eq!(graph.capture_reads(), 6);
+            assert_eq!(project_check::prepared(project.run()).unwrap(), rows);
+            assert_eq!(project.capture_reads(), 5);
         }
 
         #[test]
@@ -2911,53 +2918,60 @@ mod file {
         }
 
         #[test]
-        fn selected_invalid_original_declarations_never_fall_back_to_ordinary_compilation() {
+        fn selected_invalid_link_declarations_keep_their_typed_owners() {
             use file_workflow::SelectionError;
-            // The entry's columns read the declared dataset (base), so the
-            // producer link survives pruning (REQ-0638) and graph contract
-            // validation still precedes ordinary compilation.
-            for (input, base, expected) in [
-                (
+            // The entry's columns read the declared dataset (base), so the link
+            // survives pruning (REQ-0638).
+            let study = Study::new();
+            study.write(
+                "root.yaml",
+                &yaml(
                     "{RAW: {path: never-read.csv, schema: null}}",
                     "RAW",
-                    "REQ-0287",
+                    "root.csv",
+                    false,
                 ),
-                ("{P: {path: wrong.csv, schema: leaf.yaml}}", "P", "REQ-0534"),
-                (
+            );
+            let SelectionError::Preparation(error @ Error::Entry(_)) = study.selection_rejection()
+            else {
+                panic!("owned original metadata rejection");
+            };
+            let rows = preparation_issues(&error, Language::Python).unwrap();
+            assert!(rows
+                .iter()
+                .any(|r| r.requirement.as_deref() == Some("REQ-0287")));
+            let Error::Entry(owner) = &error else {
+                unreachable!()
+            };
+            assert_eq!(owner.capture_reads(), 2);
+            fs::remove_dir_all(&study.0).unwrap();
+            assert_eq!(preparation_issues(&error, Language::Python).unwrap(), rows);
+            assert_eq!(owner.capture_reads(), 2);
+
+            let study = Study::new();
+            study.write(
+                "root.yaml",
+                &yaml(
                     "{P: {path: leaf.csv, schema: leaf.yaml, types: {ID: int}}}",
                     "P",
-                    "REQ-0523",
+                    "root.csv",
+                    false,
                 ),
-            ] {
-                let study = Study::new();
-                study.write("root.yaml", &yaml(input, base, "root.csv", false));
-                study.write(
-                    "leaf.yaml",
-                    &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
-                );
-                let SelectionError::Preparation(error @ Error::Graph(_)) =
-                    study.selection_rejection()
-                else {
-                    panic!("owned original metadata/graph rejection");
-                };
-                let rows = producer_check::rejected(&error, Language::Python).unwrap();
-                assert!(
-                    rows.iter()
-                        .any(|r| r.requirement.as_deref() == Some(expected)),
-                    "expected {expected}; actual {rows:?}"
-                );
-                let Error::Graph(owner) = &error else {
-                    unreachable!()
-                };
-                let reads = owner.capture_reads();
-                assert_eq!(reads, if expected == "REQ-0287" { 2 } else { 3 });
-                fs::remove_dir_all(&study.0).unwrap();
-                assert_eq!(
-                    producer_check::rejected(&error, Language::Python).unwrap(),
-                    rows
-                );
-                assert_eq!(owner.capture_reads(), reads);
-            }
+            );
+            study.write(
+                "leaf.yaml",
+                &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
+            );
+            let SelectionError::Ordinary(rejected) = study.selection_rejection() else {
+                panic!("owned compilation rejection");
+            };
+            let rows = project_check::rejected(rejected.run()).unwrap();
+            assert!(rows
+                .iter()
+                .any(|r| r.requirement.as_deref() == Some("REQ-0523")));
+            assert_eq!(rejected.capture_reads(), 3);
+            fs::remove_dir_all(&study.0).unwrap();
+            assert_eq!(project_check::rejected(rejected.run()).unwrap(), rows);
         }
 
         #[test]
@@ -2977,22 +2991,19 @@ mod file {
             assert_eq!(environment.capture_reads(), 1);
             study.write("environment.yaml", "schema_version: '1.0'\n");
             study.write("root.yaml", "[");
-            let SelectionError::Preparation(root @ Error::Graph(_)) = study.selection_rejection()
+            let SelectionError::Preparation(root @ Error::Entry(_)) = study.selection_rejection()
             else {
                 panic!("raw root rejection");
             };
-            let rows = producer_check::rejected(&root, Language::Python).unwrap();
+            let rows = preparation_issues(&root, Language::Python).unwrap();
             assert_eq!(rows[0].condition, "invalid_yaml");
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(environment.retained_sources().len(), 1);
-            assert_eq!(
-                producer_check::rejected(&root, Language::Python).unwrap(),
-                rows
-            );
+            assert_eq!(preparation_issues(&root, Language::Python).unwrap(), rows);
         }
 
         #[test]
-        fn selected_producer_cycle_missing_labels_and_compiler_failures_keep_typed_whole_owners() {
+        fn selected_missing_labels_refuse_while_producer_links_and_compiler_failures_do_not() {
             use file_workflow::SelectionError;
             for mode in 0..3 {
                 let study = Study::new();
@@ -3019,28 +3030,36 @@ mod file {
                         .replace("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}"),
                 };
                 study.write("leaf.yaml", &leaf);
-                let SelectionError::Preparation(error @ Error::Graph(_)) =
-                    study.selection_rejection()
-                else {
-                    panic!("whole producer rejection");
+                if mode != 1 {
+                    // A link back to the consumer and a producer compiler failure
+                    // are producer facts the consumer never compiles or follows.
+                    let project = study.prepare();
+                    assert!(project_check::prepared(project.run()).unwrap().is_empty());
+                    assert_eq!(project.capture_reads(), 3);
+                    continue;
+                }
+                let SelectionError::Ordinary(rejected) = study.selection_rejection() else {
+                    panic!("whole contract rejection");
                 };
-                let rows = producer_check::rejected(&error, Language::Python).unwrap();
-                let requirement = ["REQ-0534", "REQ-0534", "REQ-0698"][mode];
-                assert!(
-                    rows.iter()
-                        .any(|r| r.requirement.as_deref() == Some(requirement)),
-                    "{rows:?}"
-                );
-                let Error::Graph(owner) = &error else {
-                    unreachable!()
-                };
-                assert_eq!(owner.capture_reads(), 3);
-                assert_eq!(owner.documents().len(), 2);
-                fs::remove_dir_all(&study.0).unwrap();
+                let rows = project_check::rejected(rejected.run()).unwrap();
                 assert_eq!(
-                    producer_check::rejected(&error, Language::Python).unwrap(),
-                    rows
+                    rows.iter()
+                        .map(|r| (r.condition.as_str(), r.spec_paths[0].as_str()))
+                        .collect::<Vec<_>>(),
+                    [
+                        (
+                            "invalid_producer_contract",
+                            "input.P.schema.columns.ID.label"
+                        ),
+                        (
+                            "invalid_producer_contract",
+                            "input.P.schema.columns.VALUE.label"
+                        ),
+                    ]
                 );
+                assert_eq!(rejected.capture_reads(), 3);
+                fs::remove_dir_all(&study.0).unwrap();
+                assert_eq!(project_check::rejected(rejected.run()).unwrap(), rows);
             }
         }
 
@@ -3083,7 +3102,7 @@ mod file {
         }
 
         #[test]
-        fn absent_environment_selects_producer_without_capturing_or_inventing_metadata() {
+        fn absent_environment_selects_plain_route_without_capturing_or_inventing_metadata() {
             let study = Study::new();
             // A nearby environment is deliberately unreadable as YAML. Absence must
             // neither discover it nor convert it into an empty captured document.
@@ -3110,32 +3129,27 @@ mod file {
             )
             .unwrap_or_else(|error| {
                 panic!(
-                    "original producer admission: {:?}",
+                    "original link admission: {:?}",
                     yamaa_adapters::project_application::selection_failure(
                         &error,
                         Language::Python
                     )
                 )
             });
-            let file_workflow::Selected::Producer(graph) = selected else {
-                panic!("schema link selects producer");
+            let file_workflow::Selected::Plain(prepared) = selected else {
+                panic!("a schema link keeps the plain route");
             };
-            assert_eq!(graph.capture_reads(), 2);
-            assert!(graph.environment().root_optional().is_none());
-            assert!(graph.environment().lock().is_none());
-            assert!(graph.environment().captures().is_empty());
-            assert!(graph
-                .graph()
-                .metadata()
-                .environment()
-                .functions()
-                .is_empty());
-            assert_eq!(graph.captured_sources().count(), 2);
+            assert_eq!(prepared.capture_reads(), 2);
+            assert!(prepared.run().compiled().source_contract(0).is_some());
             assert!(!study.0.join("never-read.csv").exists());
             assert!(!study.0.join("leaf.csv").exists());
             assert!(!study.0.join("root.csv").exists());
             fs::remove_dir_all(&study.0).unwrap();
-            assert!(producer_check::prepared(&graph).unwrap().is_empty());
+            assert!(
+                yamaa_adapters::specification_check::issue_rows(prepared.run())
+                    .unwrap()
+                    .is_empty()
+            );
         }
 
         #[test]

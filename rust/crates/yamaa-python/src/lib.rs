@@ -36,7 +36,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
         resolved_artifact::_read_resolved_specification,
         module
     )?)?;
-    module.add_class::<domain_entry::Attempt>()?;
     module.add_function(wrap_pyfunction!(style::_style_same_value, module)?)?;
     Ok(())
 }

@@ -493,7 +493,8 @@ def test_long_predicates_continue_after_a_comma_or_before_a_connective(
 
 def test_long_flow_mappings_become_blocks_but_literals_stay(tmp_path: Path) -> None:
     derivation = (
-        "{date_impute: {source: FIRSTDOSE.EXSTDTC, month: 1, day: last, missing: null}}"
+        "{impute: {type: date, source: FIRSTDOSE.EXSTDTC, month: 1, day: last, "
+        "invalid: null}}"
     )
     path = _spec(
         tmp_path,
@@ -504,9 +505,10 @@ def test_long_flow_mappings_become_blocks_but_literals_stay(tmp_path: Path) -> N
     after, remaining = _fix(path)
     assert remaining == []
     assert (
-        "    derivation:\n      date_impute: {source: FIRSTDOSE.EXSTDTC, month: 1,"
+        "    derivation:\n      impute: {type: date, source: FIRSTDOSE.EXSTDTC,"
         in after
-        or "    derivation:\n      date_impute:\n        source: FIRSTDOSE.EXSTDTC\n"
+        or "    derivation:\n      impute:\n        type: date\n"
+        "        source: FIRSTDOSE.EXSTDTC\n"
         in after
     )
     assert "then: {literal: null}" in after

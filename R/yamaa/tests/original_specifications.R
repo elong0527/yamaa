@@ -365,10 +365,10 @@ local({
       identical(rawfile(file.path(case,"adsl.csv")),rawfile(file.path(case,"expected","adsl.csv"))))
   }
   cases <- list(
-    list("negative-date-diff-endpoints","columns.SURVDD.derivation.date_diff.start","RFSTDTM","datetime"),
+    list("negative-date-diff-endpoints","columns.SURVDD.derivation.diff.start","RFSTDTM","datetime"),
     list("negative-study-day-datetime","columns.DTHDY.derivation.study_day.date","DTHDTM","datetime"),
     list("negative-epoch-day-non-date","columns.EXSTDY.derivation.to_epoch_day.source","EX.EXSTDT","str"),
-    list("negative-date-diff-units","columns.TRTDURM.derivation.date_diff.bounds",NULL,NULL))
+    list("negative-date-diff-units","columns.TRTDURM.derivation.diff.bounds",NULL,NULL))
   for(item in cases) {
     stopifnot(file.copy(file.path(root,"cases",item[[1L]]),directory,recursive=TRUE))
     case <- file.path(directory,item[[1L]]);unlink(file.path(case,"input"),recursive=TRUE)

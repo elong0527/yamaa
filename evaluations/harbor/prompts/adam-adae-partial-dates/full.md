@@ -12,11 +12,12 @@ is the same analysis date written as YYYY-MM-DD text, and has no value
 when there is no analysis date. ASTDTF is D when the day was supplied to
 complete the date, and has no value otherwise.
 
-A completed date is never placed before first exposure. When the 15th
-would fall before TRTSDT, the date moves forward to the exposure date.
-When the whole collected month ends before the exposure date, the
-event is left without an analysis date. A fully collected date stays
-exactly as collected even when it falls before TRTSDT.
+A supplied day is never placed before a first exposure that falls
+inside the collected month. When the 15th would fall before TRTSDT, the
+date moves forward to the exposure date. When the whole collected month
+ends before the exposure date, the date stays on the 15th and the event
+is not treatment emergent. A fully collected date stays exactly as
+collected even when it falls before TRTSDT.
 
 TRTEMFL is Y when the analysis start falls on or after TRTSDT. It has
 no value when there is no analysis date, when the event started before

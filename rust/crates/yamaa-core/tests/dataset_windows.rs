@@ -634,12 +634,10 @@ mod execution {
                 (
                     ColumnType::Date,
                     vec![
-                        Value::Date(Date::new(2024, 1, 1, DatePrecision::Year).unwrap()),
-                        Value::Date(Date::new(2024, 1, 1, DatePrecision::Day).unwrap()),
+                        Value::Date(Date::new(2024, 1, 1, Precision::Year).unwrap()),
+                        Value::Date(Date::new(2024, 1, 1, Precision::Day).unwrap()),
                     ],
-                    Some(Value::Date(
-                        Date::new(2024, 1, 1, DatePrecision::Year).unwrap(),
-                    )),
+                    Some(Value::Date(Date::new(2024, 1, 1, Precision::Year).unwrap())),
                 ),
                 (
                     ColumnType::Str,
@@ -686,7 +684,7 @@ mod execution {
                             assert_eq!(v.get().to_bits(), (-0.0_f64).to_bits());
                         }
                         if let Value::Date(v) = &result.dataset.rows()[0][1] {
-                            assert_eq!(v.collected_precision(), DatePrecision::Year);
+                            assert_eq!(v.collected_precision(), Precision::Year);
                         }
                     }
                 }
@@ -844,9 +842,9 @@ mod execution {
 
         #[test]
         fn numbering_ignores_temporal_precision_for_ties_and_handles_empty_scope() {
-            let a = Date::new(2024, 1, 1, DatePrecision::Year).unwrap();
-            let b = Date::new(2024, 1, 1, DatePrecision::Day).unwrap();
-            let c = Date::new(2023, 1, 1, DatePrecision::Day).unwrap();
+            let a = Date::new(2024, 1, 1, Precision::Year).unwrap();
+            let b = Date::new(2024, 1, 1, Precision::Day).unwrap();
+            let c = Date::new(2023, 1, 1, Precision::Day).unwrap();
             let mut source = table(
                 &[
                     ("ID", ColumnType::Int),
@@ -1396,7 +1394,7 @@ mod execution {
         #[test]
         fn value_window_donors_preserve_temporal_and_unicode_representation() {
             use yamaa_core::dataset::WindowKind;
-            let date = Date::new(2024, 1, 1, DatePrecision::Year).unwrap();
+            let date = Date::new(2024, 1, 1, Precision::Year).unwrap();
             let source = table(
                 &[
                     ("ID", ColumnType::Int),
@@ -1425,7 +1423,7 @@ mod execution {
             let Value::Date(donor) = result.dataset.rows()[1][3] else {
                 panic!("retained date donor")
             };
-            assert_eq!(donor.collected_precision(), DatePrecision::Year);
+            assert_eq!(donor.collected_precision(), Precision::Year);
             let source = table(
                 &[
                     ("ID", ColumnType::Int),
@@ -1503,7 +1501,7 @@ mod execution {
         /// Baseline compares each candidate to its own reference and skips either missing operand.
         #[test]
         fn baseline_uses_row_specific_reference_and_missing_candidates() {
-            let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+            let date = |day| Value::Date(Date::new(2025, 1, day, Precision::Day).unwrap());
             let source = table(
                 &[
                     ("ID", ColumnType::Int),
@@ -1556,7 +1554,7 @@ mod execution {
         /// Excluded later rows and excluded ties cannot take a baseline or make it ambiguous.
         #[test]
         fn baseline_filters_exclude_later_rows_and_ties_without_dropping_output() {
-            let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+            let date = |day| Value::Date(Date::new(2025, 1, day, Precision::Day).unwrap());
             // Original expressions/test_windows.py inputs: excluding January 6 must
             // leave January 2 flagged; excluding its January 6 twin must remove the tie.
             for first in [2, 6] {
@@ -1606,7 +1604,7 @@ mod execution {
         /// Missing, post-reference and filter-excluded rows never end the partition scan.
         #[test]
         fn baseline_search_keeps_original_candidate_and_row_specific_reference_rules() {
-            let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+            let date = |day| Value::Date(Date::new(2025, 1, day, Precision::Day).unwrap());
             // Original expressions/test_windows.py cases preserve their January dates
             // and expected flags, including equality with a row's own reference.
             for (pairs, eligible, expected) in [
@@ -1683,8 +1681,8 @@ mod execution {
         /// Equal represented dates tie despite collected precision; diagnostics identify partitions.
         #[test]
         fn baseline_ties_count_all_matches_and_keep_partition_identity() {
-            let year = Date::new(2025, 1, 1, DatePrecision::Year).unwrap();
-            let day = Date::new(2025, 1, 1, DatePrecision::Day).unwrap();
+            let year = Date::new(2025, 1, 1, Precision::Year).unwrap();
+            let day = Date::new(2025, 1, 1, Precision::Day).unwrap();
             let source = table(
                 &[
                     ("ID", ColumnType::Int),
@@ -1723,7 +1721,7 @@ mod execution {
                 } => {
                     assert_eq!(path, "columns.C4.derivation");
                     assert_eq!(column, "BLFL");
-                    assert_eq!(date.collected_precision(), DatePrecision::Year);
+                    assert_eq!(date.collected_precision(), Precision::Year);
                     assert_eq!(match_count, 3);
                     assert_eq!(
                         partition,
@@ -1752,7 +1750,7 @@ mod execution {
         /// A missing value makes a row ineligible, and an exclusive bound drops the reference day.
         #[test]
         fn baseline_requires_a_present_value_and_honors_an_exclusive_reference() {
-            let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+            let date = |day| Value::Date(Date::new(2025, 1, day, Precision::Day).unwrap());
             let source = table(
                 &[
                     ("ID", ColumnType::Int),
@@ -1832,7 +1830,7 @@ mod execution {
         #[test]
         fn baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied() {
             use yamaa_core::dataset::OrderTerm;
-            let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+            let date = |day| Value::Date(Date::new(2025, 1, day, Precision::Day).unwrap());
             let rows = |times: [Value; 3]| {
                 times
                     .into_iter()
@@ -1955,7 +1953,7 @@ mod execution {
                 "the higher sequence of the two 9:00 rows"
             );
             fn date_value(day: u8) -> Value {
-                Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap())
+                Value::Date(Date::new(2025, 1, day, Precision::Day).unwrap())
             }
         }
 

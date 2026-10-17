@@ -25,7 +25,8 @@ a calendar fixes or name the day itself. To place a start recorded as a year
 and month on the first of that month:
 
 ```yaml
-date_impute:
+impute:
+  type: date
   source: AE.AESTDTC
   month: 6
   day: first

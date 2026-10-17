@@ -38,7 +38,6 @@ pub struct OwnedEnvironment {
 #[derive(Debug)]
 pub struct CapturedEnvironment {
     inventory_documents: Vec<crate::specification_source::PreparedDocument>,
-    inventory_captured: bool,
     origins: SourceOrigins,
     root: Option<CapturedDocument>,
     captures: Vec<DocumentCapture>,
@@ -47,16 +46,6 @@ pub struct CapturedEnvironment {
 impl CapturedEnvironment {
     pub fn inventory_documents(&self) -> &[crate::specification_source::PreparedDocument] {
         &self.inventory_documents
-    }
-    pub(crate) fn inventory_captured(&self) -> bool {
-        self.inventory_captured
-    }
-    pub(crate) fn attach_inventory(
-        &mut self,
-        documents: Vec<crate::specification_source::PreparedDocument>,
-    ) {
-        self.inventory_documents = documents;
-        self.inventory_captured = true;
     }
     pub fn origins(&self) -> &SourceOrigins {
         &self.origins
@@ -126,7 +115,6 @@ impl OwnedEnvironment {
             self.environment,
             CapturedEnvironment {
                 inventory_documents: self.inventory_documents,
-                inventory_captured: self.inventory_captured,
                 origins: self.origins,
                 root: self.root,
                 captures: self.captures,

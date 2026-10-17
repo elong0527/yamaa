@@ -437,7 +437,7 @@ decimal point, sends a value exactly halfway between two candidates, or within
 positive zero. The `round_half_away_from_zero` verb, CSV display precision
 ([CSV-9](reference/csv.md#csv-9)), project-function result comparison
 ([FUNC-13](profiles/functions.md#func-13)) and second resolution in
-`datetime_shift` ([TIME-16](temporal.md#time-16)) all use it. No other
+`shift` of a datetime ([TIME-14](temporal.md#time-14)) all use it. No other
 rounding exists.
 
 Fails: `incompatible_input_type`.
@@ -587,19 +587,17 @@ Evidence: `yaml/grammar/aggregate.yaml`, `rust/crates/yamaa-core/tests/numeric_a
 Replaces: REQ-0483, REQ-0502.
 
 The link through `dataset_class.schema`
-([INPUT-10](inputs.md#input-10)) supplies the workflow boundary:
-the producer completes first under
-[INPUT-10](inputs.md#input-10), and the consumer reads its held
-serialized artifact under [FILE-3](reference/files.md#file-3). One
-domain build executes both levels; neither artifact must already exist, and
-only explicit Save publishes them. A source path alone does not establish this
-boundary. The producer's selected columns must declare their types and labels
-under [INPUT-11](inputs.md#input-11).
+([INPUT-10](inputs.md#input-10)) types the stored fields from the
+producer's output contract. Each level is its own domain build: the caller
+builds and saves the first specification, and the downstream build reads the
+saved artifact as an ordinary input under
+[FILE-3](reference/files.md#file-3). The producer's selected columns must
+declare their types and labels under [INPUT-11](inputs.md#input-11).
 
 For example, `daily.yaml` can group exposure records by subject, treatment
 and day and derive `ADOSE: {aggregate: "SUM(EX.EXDOSE)"}`. A downstream
-specification declares `DAILY: {path: daily.csv, schema: daily.yaml}`, with
-the producer's `output.path` resolving to that same `daily.csv`. It groups
+specification declares `DAILY: {path: daily.csv, schema: daily.yaml}` and is
+built after `daily.yaml` has saved that `daily.csv`. It groups
 `DAILY` by subject, treatment and `DAILY.ADOSE` and derives
 `TRTDUR: {aggregate: "COUNT(DAILY.*)"}`. If a subject has two 100-unit records
 on day 1 and one 200-unit record on each of days 2 and 3, the first level

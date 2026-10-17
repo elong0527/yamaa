@@ -2,4 +2,4 @@ lifecycle: draft
 standard: ADaM
 domain: ADAE
 covers:
-- date_impute
+- impute

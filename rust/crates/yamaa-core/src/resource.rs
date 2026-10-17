@@ -89,6 +89,16 @@ impl ResourceFailure {
     }
 }
 
+/// One authored path beside the layer that wrote it and the base its
+/// `relative_to` selection resolves against. These grant no filesystem lookup
+/// or resource capability.
+#[derive(Clone, Copy, Debug)]
+pub struct WrittenPath<'a> {
+    pub declaring_source: &'a str,
+    pub base_source: &'a str,
+    pub written: &'a str,
+}
+
 /// Written-form admission precedes profiles and filesystem access. Root and
 /// drive prefixes are separators, while dot and parent segments remain valid.
 pub fn written_path_failure(path: &str) -> Option<ResourceFailure> {

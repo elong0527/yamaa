@@ -34,9 +34,7 @@ pub mod portable_regex;
 pub mod predicate;
 pub mod predicate_compiler;
 pub mod predicate_parser;
-pub mod producer_admission;
 pub mod producer_contract;
-pub mod producer_graph;
 pub mod reference_binding;
 pub mod reference_scope;
 pub mod resource;
@@ -129,8 +127,6 @@ pub mod build;
 
 pub mod table_grouping;
 
-pub mod producer_build;
-
 pub mod standalone_preparation;
 
 pub mod numeric_lifecycle;
@@ -150,8 +146,6 @@ pub mod project_activation;
 pub mod inheritance_capture;
 
 pub mod source_profile_inspection;
-
-pub mod producer_publication;
 
 #[cfg(test)]
 use crate::schema as document_schema;

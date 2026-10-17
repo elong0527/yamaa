@@ -9,10 +9,11 @@ used as collected, even when it falls after the date of death. A year and
 month is completed to the last day of that month, and a year alone to
 December 31 of that year. A missing CMENDTC gives no AENDT. DTHDT is the
 subject's date of death from ADSL, empty for a subject who has not died.
-A completed date is never placed after DTHDT: when it would fall after
-DTHDT and the collected month or year contains DTHDT, AENDT is DTHDT;
-when the whole collected month or year lies after DTHDT, AENDT has no
-value. AENDTF is D when only the day was supplied (a year and month was
+A supplied end is never placed after a death that falls inside the
+collected month or year: when it would fall after DTHDT and the collected
+month or year contains DTHDT, AENDT is DTHDT; when the whole collected
+month or year lies after DTHDT, AENDT stays on the last day of that month
+or year. AENDTF is D when only the day was supplied (a year and month was
 collected) and M when the month and day were supplied (a year alone was
 collected). It has no value when the date was collected in full and when
 AENDT has no value. Dates are written as YYYY-MM-DD.

@@ -10,7 +10,7 @@ A subject is an individual who participates in a clinical trial, either
 as recipient of the investigational product(s) or as a control. In
 regular-expression operations, "subject" names the input text being
 matched, not the trial participant.
-(CDISC Clinical Research Glossary v5.0 [ICH]; operations/text.md)
+(CDISC Clinical Research Glossary v5.0 [ICH]; [Text](../text.md))
 
 ## record
 

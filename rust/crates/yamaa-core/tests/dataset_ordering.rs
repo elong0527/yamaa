@@ -345,14 +345,14 @@ mod execution {
         fn presentation_order_preserves_all_types_ties_and_direction_independent_nulls() {
             use yamaa_core::dataset::OrderTerm;
             use yamaa_core::{
-                temporal::{DateTime, DateTimePrecision},
+                temporal::{DateTime, Precision},
                 value::FiniteFloat,
             };
             let date = |year, precision| Value::Date(Date::new(year, 1, 1, precision).unwrap());
             let datetime = |year, precision| {
                 Value::DateTime(
                     DateTime::new(
-                        Date::new(year, 1, 1, DatePrecision::Day).unwrap(),
+                        Date::new(year, 1, 1, Precision::Day).unwrap(),
                         0,
                         0,
                         0,
@@ -382,15 +382,15 @@ mod execution {
                 ),
                 (
                     ColumnType::Date,
-                    date(2020, DatePrecision::Year),
-                    date(2021, DatePrecision::Day),
-                    date(2020, DatePrecision::Month),
+                    date(2020, Precision::Year),
+                    date(2021, Precision::Day),
+                    date(2020, Precision::Month),
                 ),
                 (
                     ColumnType::DateTime,
-                    datetime(2020, DateTimePrecision::Day),
-                    datetime(2021, DateTimePrecision::Second),
-                    datetime(2020, DateTimePrecision::Second),
+                    datetime(2020, Precision::Day),
+                    datetime(2021, Precision::Second),
+                    datetime(2020, Precision::Second),
                 ),
             ] {
                 let source = table(

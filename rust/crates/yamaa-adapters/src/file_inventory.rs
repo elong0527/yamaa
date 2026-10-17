@@ -2,7 +2,7 @@
 use crate::{
     file_preparation,
     file_resources::Resources,
-    project_source::{CapturedEnvironment, OwnedEnvironment},
+    project_source::OwnedEnvironment,
     specification_source::{CapturedSchema, PreparedDocument},
 };
 use std::sync::Arc;
@@ -67,29 +67,5 @@ pub(crate) fn prepare(
         .select_entry_base(entry)
         .map_err(file_preparation::Error::Resource)?;
     environment.attach_inventory(captured);
-    Ok(())
-}
-pub(crate) fn prepare_parts(
-    resources: &mut Resources,
-    schema: &Arc<CapturedSchema>,
-    environment: &mut yamaa_core::project_environment::ExecutionEnvironment,
-    provenance: &mut CapturedEnvironment,
-    requested: bool,
-    entry: &str,
-) -> Result<(), file_preparation::Error> {
-    if !requested || provenance.inventory_captured() {
-        return Ok(());
-    }
-    let Some(root) = provenance.root_optional() else {
-        return Ok(());
-    };
-    let captured = capture(resources, schema, root)?;
-    // Metadata inheritance selects its own codec entry. Restore the admitted
-    // domain owner before ordinary source paths acquire data-read authority.
-    resources
-        .select_entry_base(entry)
-        .map_err(file_preparation::Error::Resource)?;
-    environment.attach_inventory(captured.inventory);
-    provenance.attach_inventory(captured.specifications);
     Ok(())
 }

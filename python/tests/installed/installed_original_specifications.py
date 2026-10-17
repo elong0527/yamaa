@@ -902,7 +902,7 @@ class PublicDomains(unittest.TestCase):
             for name, path, source, actual in [
                 (
                     "negative-date-diff-endpoints",
-                    "columns.SURVDD.derivation.date_diff.start",
+                    "columns.SURVDD.derivation.diff.start",
                     "RFSTDTM",
                     "datetime",
                 ),
@@ -920,7 +920,7 @@ class PublicDomains(unittest.TestCase):
                 ),
                 (
                     "negative-date-diff-units",
-                    "columns.TRTDURM.derivation.date_diff.bounds",
+                    "columns.TRTDURM.derivation.diff.bounds",
                     None,
                     None,
                 ),

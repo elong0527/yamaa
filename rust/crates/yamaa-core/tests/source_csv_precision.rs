@@ -1764,7 +1764,7 @@ mod source {
     mod table {
         use yamaa_core::{
             table::{Column, SchemaError, TableSchema, ValueRef},
-            temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+            temporal::{Date, DateTime, Precision},
             value::{ColumnType, Value},
         };
 
@@ -1805,8 +1805,8 @@ mod source {
         #[test]
         /// Prove borrowed text ownership and exact scalar/temporal metadata.
         fn borrowing_retains_text_backing_exact_values_and_temporal_precision() {
-            let date = Date::new(2025, 1, 1, DatePrecision::Year).unwrap();
-            let datetime = DateTime::new(date, 0, 0, 0, DateTimePrecision::Day).unwrap();
+            let date = Date::new(2025, 1, 1, Precision::Year).unwrap();
+            let datetime = DateTime::new(date, 0, 0, 0, Precision::Day).unwrap();
             let values = [
                 Value::Missing,
                 Value::Str("text\0\u{1f980}".into()),
@@ -1835,11 +1835,11 @@ mod source {
             let ValueRef::Date(date) = views[6] else {
                 panic!("date required")
             };
-            assert_eq!(date.collected_precision(), DatePrecision::Year);
+            assert_eq!(date.collected_precision(), Precision::Year);
             let ValueRef::DateTime(datetime) = views[7] else {
                 panic!("datetime required")
             };
-            assert_eq!(datetime.collected_precision(), DateTimePrecision::Day);
+            assert_eq!(datetime.collected_precision(), Precision::Day);
         }
     }
     mod typed_csv {

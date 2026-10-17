@@ -4,8 +4,9 @@ keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
 input:
   ODM: input/odm.csv
-  # DM is built by spec_dm.yaml in the same run, so the subjects that get
-  # supplemental race records are exactly the ones DM calls MULTIPLE.
+  # DM is the artifact spec_dm.yaml saves before this entry is built, so the
+  # subjects that get supplemental race records are exactly the ones DM calls
+  # MULTIPLE.
   DM:
     path: dm.csv
     schema: spec_dm.yaml

@@ -184,7 +184,6 @@ class PythonPackageHygiene(unittest.TestCase):
                         (
                             "yamaa-0.4.0/rust/crates/yamaa-core/src/regex.rs",
                             "yamaa-0.4.0/rust/crates/yamaa-adapters/tests/fixtures/expressions.tsv",
-                            "yamaa-0.4.0/rust/qualification/producer-cohort/shared-producer-parquet/reference.json",
                         )
                     )
                     write_archive(path, names)

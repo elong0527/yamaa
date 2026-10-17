@@ -31,6 +31,8 @@ conditions:
   correlated_filter_with_unique_verification: {phases: [validation]}
   dataset_json_path_collision: {phases: [validation]}
   dataset_json_without_data: {phases: [validation]}
+  day_not_permitted: {phases: [validation]}
+  day_required: {phases: [validation]}
   decimals_not_applicable: {phases: [validation]}
   declared_length_conflict: {phases: [validation]}
   dependency_cycle: {phases: [validation]}
@@ -60,7 +62,6 @@ conditions:
   invalid_calendar_date: {phases: [impute]}
   invalid_clear: {phases: [validation]}
   invalid_date_text: {phases: [impute, validation]}
-  invalid_datetime_text: {phases: [impute]}
   invalid_declaration: {phases: [validation]}
   # REQ-1189, REQ-1191 and REQ-1242
   invalid_derive_step: {phases: [validation]}
@@ -89,7 +90,7 @@ conditions:
   minimum_length: {phases: [validation]}
   missing_aggregate_keys: {phases: [validation]}
   missing_derivation: {phases: [validation]}
-  missing_input: {phases: [cut, impute, mapping]}
+  missing_input: {phases: [cut, mapping]}
   missing_key: {phases: [output]}
   missing_required_field: {phases: [validation]}
   missing_value_required: {phases: [validation]}
@@ -122,8 +123,6 @@ conditions:
   phase_boundary: {phases: [validation]}
   predecessor_label_mismatch: {phases: [validation]}
   producer_contract_mismatch: {phases: [validation]}
-  producer_output_path_mismatch: {phases: [validation]}
-  producer_workflow_cycle: {phases: [validation]}
   prohibited_construct: {phases: [validation]}
   prohibited_function: {phases: [validation]}
   project_environment_invalid: {phases: [validation]}

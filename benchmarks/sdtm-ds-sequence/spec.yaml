@@ -31,11 +31,11 @@ columns:
     type: date
     label: Date/Time of Collection
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: DS_RAW.DSDTCOL
         month: 6
         day: 15
-        missing: null
         invalid: null
 
   # Number on the completed collection date so a partial entry takes

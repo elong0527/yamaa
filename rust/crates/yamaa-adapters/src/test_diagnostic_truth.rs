@@ -6,10 +6,3 @@ pub(crate) fn value(name: &str) -> yamaa_core::json::Value {
     .unwrap();
     truth.get(name).expect("known diagnostic fixture").clone()
 }
-#[cfg(feature = "yaml")]
-pub(crate) fn text(name: &str, field: &str) -> String {
-    value(name)[field]
-        .as_str()
-        .expect("text diagnostic fixture")
-        .to_owned()
-}

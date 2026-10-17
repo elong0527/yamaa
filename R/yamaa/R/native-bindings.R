@@ -53,16 +53,8 @@
   .Call(wrap__domain_interrupt, handle)
 }
 
-.native_domain_producer_evidence <- function(handle) {
-  .Call(wrap__domain_producer_evidence, handle)
-}
-
 .native_domain_preparation_sources <- function(handle) {
   .Call(wrap__domain_preparation_sources, handle)
-}
-
-.native_domain_projection_failure <- function(handle) {
-  .Call(wrap__domain_projection_failure, handle)
 }
 
 .native_define_file <- function(environment, standard, created, installed) {

@@ -47,11 +47,11 @@ columns:
     type: date
     label: Analysis Date of Last Contact
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: LSTCNTDC
         month: 1
         day: first
-        missing: null
         invalid: null
 
   # The subject's latest adverse event end and vital signs date, matched on

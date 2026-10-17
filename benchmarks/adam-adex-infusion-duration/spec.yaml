@@ -74,7 +74,8 @@ columns:
     type: float
     label: Duration from Start and End (min)
     derivation:
-      datetime_diff:
+      diff:
+        type: datetime
         start: ASTDTM
         end: AENDTM
         unit: minute

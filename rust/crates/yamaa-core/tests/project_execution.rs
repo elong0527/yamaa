@@ -46,41 +46,14 @@ mod project {
         #[derive(Default)]
         struct Stages(RefCell<Vec<Stage>>);
         impl yamaa_core::application_observer::Observer for Stages {
-            fn observe(&self, event: yamaa_core::application_observer::Event<'_>) {
+            fn observe(&self, event: yamaa_core::application_observer::Event) {
                 use yamaa_core::application_observer::Event;
                 self.0.borrow_mut().push(match event {
-                    Event::Phase { node, phase } => {
-                        assert_eq!(node, None);
-                        Stage::Phase(phase)
-                    }
-                    Event::FunctionCall { node, stage } => {
-                        assert_eq!(node, None);
-                        Stage::Call(stage)
-                    }
-                    Event::Exit {
-                        node,
-                        phase,
-                        outcome,
-                    } => {
-                        assert_eq!(node, None);
-                        Stage::Exit(phase, outcome)
-                    }
-                    Event::FunctionReturn {
-                        node,
-                        stage,
-                        outcome,
-                    } => {
-                        assert_eq!(node, None);
-                        Stage::Return(stage, outcome)
-                    }
-                    Event::Refusal {
-                        node,
-                        phase,
-                        refusal,
-                    } => {
-                        assert_eq!(node, None);
-                        Stage::Refusal(phase, refusal)
-                    }
+                    Event::Phase { phase } => Stage::Phase(phase),
+                    Event::FunctionCall { stage } => Stage::Call(stage),
+                    Event::Exit { phase, outcome } => Stage::Exit(phase, outcome),
+                    Event::FunctionReturn { stage, outcome } => Stage::Return(stage, outcome),
+                    Event::Refusal { phase, refusal } => Stage::Refusal(phase, refusal),
                 });
             }
         }
@@ -1296,7 +1269,7 @@ mod project {
     mod project_function_result {
         use yamaa_core::{
             project_function_result::results_match,
-            temporal::{Date, DatePrecision},
+            temporal::{Date, Precision},
             value::Value,
         };
         #[test]
@@ -1379,8 +1352,8 @@ mod project {
                     &Value::Int(i64::MAX),
                     digits
                 ));
-                let full = Value::Date(Date::new(2024, 1, 1, DatePrecision::Day).unwrap());
-                let collected = Value::Date(Date::new(2024, 1, 1, DatePrecision::Year).unwrap());
+                let full = Value::Date(Date::new(2024, 1, 1, Precision::Day).unwrap());
+                let collected = Value::Date(Date::new(2024, 1, 1, Precision::Year).unwrap());
                 assert!(results_match(&full, &collected, digits));
             }
             assert!(!results_match(&Value::Int(1), &Value::Int(1), -1));

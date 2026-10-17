@@ -145,8 +145,8 @@ mod execution {
                 (
                     ColumnType::Date,
                     vec![
-                        Value::Date(Date::new(2024, 1, 1, DatePrecision::Year).unwrap()),
-                        Value::Date(Date::new(2024, 1, 1, DatePrecision::Day).unwrap()),
+                        Value::Date(Date::new(2024, 1, 1, Precision::Year).unwrap()),
+                        Value::Date(Date::new(2024, 1, 1, Precision::Day).unwrap()),
                     ],
                 ),
             ] {
@@ -191,7 +191,7 @@ mod execution {
                 let result = attempt.result.unwrap();
                 match &result.dataset.rows()[0][1] {
                     Value::Float(v) => assert_eq!(v.get().to_bits(), (-0.0_f64).to_bits()),
-                    Value::Date(v) => assert_eq!(v.collected_precision(), DatePrecision::Year),
+                    Value::Date(v) => assert_eq!(v.collected_precision(), Precision::Year),
                     _ => panic!("wrong collected type"),
                 }
             }
@@ -207,13 +207,13 @@ mod execution {
                     vec![
                         Value::Int(1),
                         Value::Str("7".into()),
-                        Value::Date(Date::new(2024, 1, 1, DatePrecision::Year).unwrap()),
+                        Value::Date(Date::new(2024, 1, 1, Precision::Year).unwrap()),
                         Value::Str("é".into()),
                     ],
                     vec![
                         Value::Int(1),
                         Value::Str("8".into()),
-                        Value::Date(Date::new(2024, 1, 1, DatePrecision::Day).unwrap()),
+                        Value::Date(Date::new(2024, 1, 1, Precision::Day).unwrap()),
                         Value::Str("Ω".into()),
                     ],
                 ],

@@ -133,34 +133,34 @@ columns:
         - when: "AEEN_YR IS NOT NULL"
           then: AEEN_YR
 
-  # Collected precision: Y, M or D; missing when nothing was collected or
-  # the text is not a date.
+  # Collected precision: year, month or day; missing when nothing was
+  # collected or the text is not a date.
   - name: AESTPR
     type: str
     label: Collected Precision of Adverse Event Start
     derivation:
-      date_precision:
+      precision:
+        type: date
         source: AESTDTC
-        missing: null
         invalid: null
 
   - name: AEENPR
     type: str
     label: Collected Precision of Adverse Event End
     derivation:
-      date_precision:
+      precision:
+        type: date
         source: AEENDTC
-        missing: null
         invalid: null
 
-  # Only a complete date (precision D) becomes a date, so a partial date
+  # Only a complete date (precision day) becomes a date, so a partial date
   # gets no study day.
   - name: AESTDT
     type: date
     label: Start Date of Adverse Event (Complete Dates Only)
     derivation:
       case:
-        - when: "AESTPR = 'D'"
+        - when: "AESTPR = 'day'"
           then:
             to_date:
               source: AESTDTC
@@ -170,7 +170,7 @@ columns:
     label: End Date of Adverse Event (Complete Dates Only)
     derivation:
       case:
-        - when: "AEENPR = 'D'"
+        - when: "AEENPR = 'day'"
           then:
             to_date:
               source: AEENDTC
@@ -199,19 +199,19 @@ verifications:
       max: 6
   - assert:
       id: partial-start-keeps-no-study-day
-      when: "AESTDTC IS NOT NULL AND AESTPR <> 'D'"
+      when: "AESTDTC IS NOT NULL AND AESTPR <> 'day'"
       require: "AESTDY IS NULL"
   - assert:
       id: partial-end-keeps-no-study-day
-      when: "AEENDTC IS NOT NULL AND AEENPR <> 'D'"
+      when: "AEENDTC IS NOT NULL AND AEENPR <> 'day'"
       require: "AEENDY IS NULL"
   - assert:
       id: complete-start-with-reference-has-study-day
-      when: "AESTPR = 'D' AND RFSTDTC IS NOT NULL"
+      when: "AESTPR = 'day' AND RFSTDTC IS NOT NULL"
       require: "AESTDY IS NOT NULL"
   - assert:
       id: complete-end-with-reference-has-study-day
-      when: "AEENPR = 'D' AND RFSTDTC IS NOT NULL"
+      when: "AEENPR = 'day' AND RFSTDTC IS NOT NULL"
       require: "AEENDY IS NOT NULL"
   - assert:
       id: study-day-has-no-day-zero

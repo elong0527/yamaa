@@ -145,7 +145,7 @@ pub(super) fn prepare_value_with_driver(
             }
             Operation::StrPad(operation)
         }
-        "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision" | "to_date" => {
+        "impute" | "precision" | "imputation_flag" | "to_date" => {
             let mut features = Vec::new();
             let operation = imputation::prepare(
                 d,
@@ -161,8 +161,7 @@ pub(super) fn prepare_value_with_driver(
             }
             Operation::Imputation(operation)
         }
-        "date_diff" | "study_day" | "to_epoch_day" | "date_shift" | "datetime_diff"
-        | "datetime_shift" | "duration_value" => {
+        "diff" | "study_day" | "to_epoch_day" | "shift" | "duration_value" => {
             let mut features = Vec::new();
             let operation = temporal::prepare(
                 d,
@@ -1075,9 +1074,9 @@ fn references_mode(
         };
         predicate_references(d, condition, names)?;
     }
-    for op in ["date_diff", "study_day"] {
+    for op in ["diff", "study_day"] {
         if let Some(payload) = d.field(value, op) {
-            for name in if op == "date_diff" {
+            for name in if op == "diff" {
                 ["start", "end"]
             } else {
                 ["date", "reference"]
