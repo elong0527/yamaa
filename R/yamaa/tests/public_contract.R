@@ -50,6 +50,20 @@ check_projection <- function(frame, index, record) {
         " expected=", paste(deparse(debug_expected[[key]]), collapse = " "),
         " expected_class=", paste(class(debug_expected[[key]]), collapse = ","),
         " expected_typeof=", typeof(debug_expected[[key]]), "\n", sep = "")
+      actual_value <- record$context[[key]]; expected_value <- debug_expected[[key]]
+      if (is.character(actual_value) && is.double(expected_value)) {
+        parsed <- suppressWarnings(as.numeric(actual_value))
+        cat("DEBUG2813 sub key=", key,
+          " is_char=", is.character(actual_value),
+          " len1=", length(actual_value) == 1L,
+          " regex=", grepl("^-?[0-9]+$", actual_value),
+          " parsed_hex=", sprintf("%a", parsed),
+          " expected_hex=", sprintf("%a", expected_value),
+          " parsed_eq=", isTRUE(parsed == expected_value),
+          " parsed_print=", format(parsed, digits = 22),
+          " expected_print=", format(expected_value, digits = 22),
+          " in_text=", grepl(actual_value, frame$context[[index]], fixed = TRUE), "\n", sep = "")
+      }
     }
   }
   stopifnot(is.list(record),
