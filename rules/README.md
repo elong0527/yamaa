@@ -18,10 +18,9 @@ changes the principle first.
 **P1. Everything is declared.** Columns, types, keys, joins, row construction,
 order and checks are written in the specification. Nothing is inferred from
 data, from file contents, from a same-named field or from a host default.
-Enforced by [REQ-0092](specification/binding.md#req-0092),
-[REQ-0198](specification/structure.md#req-0198),
+Enforced by [SPEC-4](specification.md#spec-4),
 [REQ-0525](storage/ingestion.md#req-0525),
-[REQ-0716](storage/publication.md#req-0716) and
+[OUTPUT-5](output.md#output-5) and
 [REQ-0832](storage/ingestion.md#req-0832).
 
 **P2. Values never convert silently.** An operation never converts its inputs.
@@ -45,7 +44,7 @@ fails with a named condition instead of choosing. Enforced by
 [COLUMN-2](columns.md#column-2),
 [REQ-0127](operations/lookup.md#req-0127),
 [REQ-0482](operations/aggregation.md#req-0482) and
-[REQ-1272](specification/binding.md#req-1272).
+[NAME-13](names.md#name-13).
 
 **P5. Order is data.** Stored record order, construction order and declared
 order terms decide every tie. No operation reorders records or chooses an
@@ -82,7 +81,7 @@ fails during validation, before any input record is read. Enforced by
 **P10. Artifacts are reproducible.** The same specification and inputs produce
 the same artifact bytes, and an artifact is published whole or not at all.
 Enforced by [REQ-0728](storage/csv.md#req-0728),
-[REQ-0752](storage/publication.md#req-0752) and
+[OUTPUT-8](output.md#output-8) and
 [REQ-1008](submission/define-xml.md#req-1008).
 
 ## Rule files
@@ -95,9 +94,8 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | File | Prefix | Covers |
 | --- | --- | --- |
 | [Inheritance](inheritance.md) | LAYER | Resolve inherited layers into one minimal, ordered specification. |
-| [Specification structure](specification/structure.md) | REQ | Declare identifiers, columns, derivation coverage, and source notation. |
-| [Name binding](specification/binding.md) | REQ | Resolve input datasets, constructed output columns, and ODM item reads. |
-| [Specification style](specification/style.md) | REQ | Fix one written form of a specification and report departures without changing its meaning. |
+| [Specification structure](specification.md) | SPEC | Declare root fields, unique identifiers, column derivation coverage, internal columns, and ASCII source. |
+| [Name binding](names.md) | NAME | Resolve input datasets, qualified and bare names, driver reads, and ODM item reads. |
 | [Types and conversion](values/types.md) | REQ | Define column types, missing normalization, compatibility, and conversion. |
 | [Numeric values](values/numbers.md) | REQ | Define numeric representation, promotion, conversion, and overflow. |
 | [Text values](values/text.md) | REQ | Define Unicode scalar identity, preservation, equality, and order. |
@@ -120,7 +118,7 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | [CSV profile](storage/csv.md) | REQ | Read admitted CSV spellings and write canonical CSV bytes and display precision. |
 | [Parquet profile](storage/parquet.md) | REQ | Read and write the closed Parquet field and value mapping. |
 | [SAS source profiles](storage/sas.md) | REQ | Read SAS datasets and Transport v5/v8 through declared encoding and explicit numeric narrowing. |
-| [Artifact publication](storage/publication.md) | REQ | Select artifact columns and profiles and publish complete files atomically. |
+| [Output](output.md) | OUTPUT | Select artifact columns, keys, profiles, and row order, and publish complete files atomically. |
 | [Submission metadata](submission/metadata.md) | REQ | Govern dataset and column metadata, origin, methods, and document references. |
 | [Controlled terminology](submission/terminology.md) | REQ | Declare codelists once and validate their bindings and allowed values. |
 | [Define-XML](submission/define-xml.md) | REQ | Compose study metadata into deterministic Define-XML 2.1 documents. |

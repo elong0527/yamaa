@@ -5,7 +5,7 @@ version: "1.0"
 expressions:
     odm: # See REQ-1265.
         type: [odm_item, odm_class]
-        description: See REQ-1274.
+        description: One collected item read from the row's ODM scope; a bare string is the item (NAME-7).
 
 odm_item:
     type: str
@@ -21,16 +21,16 @@ odm_class:
     - item:
         type: odm_item
         required: true
-        description: See REQ-1274.
+        description: The ODM input and the complete ItemOID, written as DATASET.ItemOID (NAME-7).
     - event:
         type: [odm_oid, "list[odm_oid]"]
-        description: See REQ-1274.
+        description: StudyEventOID values an identified record carries; one OID or a list (NAME-12).
     - form:
         type: [odm_oid, "list[odm_oid]"]
-        description: See REQ-1274.
+        description: FormOID values an identified record carries; one OID or a list (NAME-12).
     - item_group:
         type: [odm_oid, "list[odm_oid]"]
-        description: See REQ-1274.
+        description: ItemGroupOID values an identified record carries; one OID or a list (NAME-12).
     - filter:
         type: predicate
-        description: See REQ-1274.
+        description: Predicate over the ODM input's schema fields that an identified record satisfies (NAME-12).

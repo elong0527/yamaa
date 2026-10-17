@@ -41,7 +41,7 @@ body:
         dm.csv: two rows with USUBJID "DUP". Run: yamaa.domain("spec.yaml")
 
         Inconsistency example:
-        rules/specification/structure.md names the condition `foo_bar`,
+        rules/specification.md names the condition `foo_bar`,
         but yaml/conditions.yaml has no entry for it.
     validations:
       required: true

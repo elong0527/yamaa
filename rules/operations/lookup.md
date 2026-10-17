@@ -250,7 +250,7 @@ read the current row's driver: root `base` (or the sole input)
 without explicit rows, or the enclosing `rows[].dataset` during row
 construction. During column derivation it must be the driver of every
 row template that the expression can evaluate on. The row driver may be an
-eligible named intermediate under [ROW-2](../rows.md#row-2).
+eligible named intermediate under [REQ-1262](../execution/rows.md#req-1262).
 Other datasets, intermediates that are not the current driver, and
 unqualified output names are not filter scopes.
 
@@ -322,7 +322,7 @@ reads the named column of the selected record in any field typed as
 matches on must be derived by the row template that reads the lookup.
 The exceptions are the template's group keys and, for an ungrouped
 template, the driver record's own fields.
-[Column derivation](../columns.md) orders row derivations before column derivation; a match value
+[Execution lifecycle](../execution/lifecycle.md) orders row derivations before column derivation; a match value
 available only in a later phase fails as `phase_boundary`.
 
 <a id="req-0127"></a>
@@ -344,7 +344,7 @@ the intermediate receives its literal, and `no_match: null` answers with
 missing when it first declares the field. It retains that meaning when an
 empty child inherits the specification. A later layer's null over an inherited
 `no_match` clears the handler under
-[LAYER-9](../inheritance.md#layer-9). The answer is recorded under [Column derivation](../columns.md)'s `no_match` handler.
+[LAYER-9](../inheritance.md#layer-9). The answer is recorded under [Local handlers](../execution/handlers.md)'s `no_match` handler.
 Without `no_match`, the read fails as `unmatched_key` ([REQ-0124](lookup.md#req-0124)).
 
 <a id="req-0130"></a>
@@ -412,7 +412,7 @@ as `unmatched_key` on a row that did not read it.
 
 <a id="req-0139"></a>
 
-**REQ-0139.** Handler accounting follows [Column derivation](../columns.md): a `keep` that chose among
+**REQ-0139.** Handler accounting follows [Local handlers](../execution/handlers.md): a `keep` that chose among
 surviving records counts one `multiple_matches` handling, and a declared
 `no_match` that answered an absence counts one `no_match` handling.
 
@@ -431,8 +431,8 @@ A typed entry converts each result to its declared type under
 match, ordering or verification reads it. Missing stays missing. A conversion
 failure is fatal without `unconvertible`; a declared literal replacement
 converts to the same type and is counted under
-[COLUMN-13](../columns.md#column-13) and
-[COLUMN-13](../columns.md#column-13). The conversion boundary is the
+[REQ-0358](../execution/handlers.md#req-0358) and
+[REQ-0359](../execution/handlers.md#req-0359). The conversion boundary is the
 binding's result; expressions still never convert implicitly
 ([REQ-0004](../values/types.md#req-0004)). For example:
 
@@ -603,7 +603,7 @@ key is verified unique needs neither `keep` nor `order_by`:
 matches without a selection rule. A repeated combination fails the run
 as `duplicate_intermediate_records` at the
 `intermediates[i].verifications[j].unique` path. Each check may declare an
-optional `id`, governed by CHECK-3. There is no warning
+optional `id`, governed by REQ-0374 and REQ-0398. There is no warning
 severity, so a duplicate can never resolve
 ambiguously. Each `unique` column must name a stored field or a derived
 name, or fail as `unknown_field`. A `filter` or `derivations:` entry that
@@ -727,7 +727,7 @@ With no applicable key the read fails as `no_applicable_keys`.
 with another input dataset joins that dataset on the applicable keys
 ([REQ-0150](lookup.md#req-0150)). Each key matches the same-named field of the row template's
 input record. Each retained input record builds one candidate row
-([ROW-3](../rows.md#row-3)). The input record's fields are the only single values the match
+([REQ-0036](../execution/rows.md#req-0036)). The input record's fields are the only single values the match
 can read. Values produced only by column derivation are not available
 then. A named intermediate states the same match with declared `key`
 pairs. Its match values have the same availability:
@@ -740,10 +740,10 @@ qualified cross-dataset identifier ([REQ-0410](computation.md#req-0410)).
 
 **REQ-0157.** During grouped row construction, the same join matches each
 applicable key against the candidate's group-key value. Every applicable
-key must be a group key of the row template ([ROW-4](../rows.md#row-4)). A key the group
+key must be a group key of the row template ([REQ-0037](../execution/rows.md#req-0037)). A key the group
 does not carry varies within the group and names no single match value:
-fail as `ungrouped_driver_field` ([ROW-5](../rows.md#row-5)). A key no input record
-carries fails as `unknown_field` ([REQ-0103](../specification/binding.md#req-0103)), in either mode.
+fail as `ungrouped_driver_field` ([REQ-0067](../execution/rows.md#req-0067)). A key no input record
+carries fails as `unknown_field` ([NAME-3](../names.md#name-3)), in either mode.
 
 ### Type behavior
 

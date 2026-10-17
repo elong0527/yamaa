@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import textwrap
 from pathlib import Path
 
@@ -37,7 +36,7 @@ from yamaa.style._fix import proved
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
-CONTRACT = REPOSITORY_ROOT / "rules" / "specification" / "style.md"
+GUIDE = REPOSITORY_ROOT / "docs" / "articles" / "style.md"
 ORDERS = field_orders()
 
 CANONICAL = """\
@@ -102,7 +101,7 @@ def _fix(path: Path) -> tuple[str, list[str]]:
     after = path.read_text(encoding="utf-8")
     assert changed == (after != before)
     assert proved(before, after)
-    # REQ-1286: fixing the fixed file changes nothing.
+    # A fix is kept only when fixing the fixed file changes nothing.
     assert fix_file(path, orders=ORDERS)[0] is False
     return after, [finding.name for finding in remaining]
 
@@ -111,15 +110,15 @@ def test_canonical_specification_has_no_findings(tmp_path: Path) -> None:
     assert _names(_spec(tmp_path, CANONICAL)) == []
 
 
-def test_finding_carries_file_line_column_and_requirement(tmp_path: Path) -> None:
+def test_finding_carries_file_line_column_and_name(tmp_path: Path) -> None:
     path = _spec(
         tmp_path, CANONICAL.replace("    dataset: EX\n", "    dataset: EX\n\n\n")
     )
     finding = check_file(path, orders=ORDERS)[0]
     assert finding.name == "blank_lines"
     assert (finding.line, finding.column) == (17, 1)
-    assert finding.requirement == "REQ-1284"
-    assert finding.render().startswith(f"{path}:17:1: blank_lines ")
+    # A finding carries its name and message only, never a rule ID.
+    assert finding.render() == f"{path}:17:1: blank_lines {finding.message}"
 
 
 def test_root_fields_follow_the_schema_order(tmp_path: Path) -> None:
@@ -286,7 +285,7 @@ def test_blank_lines(tmp_path: Path, text: str, message: str) -> None:
 
 
 def test_missing_line_break_is_reported_at_the_last_line(tmp_path: Path) -> None:
-    # REQ-1280: a finding carries the line and column where the departure
+    # A finding carries the line and column where the departure
     # starts; a missing final line break starts at the end of the last line.
     text = CANONICAL.rstrip("\n")
     path = tmp_path / "spec.yaml"
@@ -298,7 +297,7 @@ def test_missing_line_break_is_reported_at_the_last_line(tmp_path: Path) -> None
 
 
 def test_fix_preserves_crlf_line_endings(tmp_path: Path) -> None:
-    # REQ-1286: a fix rearranges lines and never rewrites what a value
+    # A fix rearranges lines and never rewrites what a value
     # says; the file's line endings are not a value, but silently
     # converting every CRLF ending to LF rewrites the whole file for a
     # one-line spacing fix, so the written ending is preserved.
@@ -344,7 +343,7 @@ def test_crlf_line_width_counts_the_line_without_its_ending(
     tmp_path: Path,
 ) -> None:
     # The carriage return belongs to the line ending, not the line: a
-    # 79-character CRLF line is within REQ-1285, and an 80-character one
+    # 79-character CRLF line is within the width, and an 80-character one
     # is reported as 80 characters, not 81.
     label = "    label: Study Identifier\n"
     for width, expected in ((79, []), (80, ["line is 80 characters"])):
@@ -527,7 +526,7 @@ def test_a_long_comment_is_reported_and_left_to_its_author(tmp_path: Path) -> No
 
 
 def test_line_width_boundary_is_seventy_nine(tmp_path: Path) -> None:
-    # REQ-1285: a line holds at most 79 characters, and a longer line is
+    # A line holds at most 79 characters, and a longer line is
     # reported at its eightieth character.
     at_limit = CANONICAL.replace(
         "    label: Study Identifier\n", "    label: " + "x" * 68 + "\n"
@@ -579,13 +578,13 @@ def test_literal_and_source_spellings(tmp_path: Path) -> None:
         ("literal_form", "columns[2].derivation.case[0].then"),
         ("source_form", "columns[2].derivation.case[1].otherwise"),
     ]
-    # REQ-1286: a spelling is corrected by its author, not by a fix.
+    # A spelling is corrected by its author, not by a fix.
     _, remaining = _fix(path)
     assert remaining == ["source_form", "literal_form", "source_form"]
 
 
 def test_literal_block_form_reports_any_value_shape(tmp_path: Path) -> None:
-    # REQ-1250 names the block form itself: a literal holding a collection,
+    # `literal_form` names the block form itself: a literal holding a collection,
     # or a scalar written on the line below `literal:`, parses to the same
     # value as the canonical {literal: X} and is reported the same way.
     for block in (
@@ -636,7 +635,7 @@ def test_sources_outside_the_shorthand_positions_keep_the_mapping(
 def test_literal_and_source_forms_need_a_single_key_mapping(
     tmp_path: Path,
 ) -> None:
-    # REQ-1250 and REQ-1255 name the single-key mappings {literal: X} and
+    # `literal_form` and `source_form` name the single-key mappings {literal: X} and
     # {source: X}: a block mapping with another key beside literal/source
     # is a different value and stays silent, and an empty mapping is
     # neither form (and must not crash the check).
@@ -750,14 +749,10 @@ def test_command_line_exit_status(
                 main([*schema, option, value, str(packed)])
 
 
-def test_every_finding_is_named_by_its_contract_requirement() -> None:
-    contract = CONTRACT.read_text(encoding="ascii")
-    for name, requirement in FINDINGS.items():
-        match = re.search(
-            rf"\*\*{requirement}\.\*\*(.*?)(?=<a id=|\Z)", contract, re.DOTALL
-        )
-        assert match is not None, requirement
-        assert f"`{name}`" in match[1], (name, requirement)
+def test_every_finding_is_documented_in_the_style_guide() -> None:
+    guide = GUIDE.read_text(encoding="ascii")
+    for name in FINDINGS:
+        assert f"`{name}`" in guide, name
 
 
 @pytest.mark.parametrize(
@@ -835,16 +830,16 @@ def test_repeated_row_derivations_move_to_column_level(
 ) -> None:
     path = _spec(tmp_path, REPEATED)
     findings = check_file(path, orders=ORDERS)
-    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
-        ("repeated_row_derivation", "rows[0].derivations.STUDYID", "REQ-1288"),
-        ("repeated_row_derivation", "rows[0].derivations.USUBJID", "REQ-1288"),
-        ("repeated_row_derivation", "rows[0].derivations.DOMAIN", "REQ-1288"),
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("repeated_row_derivation", "rows[0].derivations.STUDYID"),
+        ("repeated_row_derivation", "rows[0].derivations.USUBJID"),
+        ("repeated_row_derivation", "rows[0].derivations.DOMAIN"),
     ]
     first = findings[0]
     assert (first.line, first.column) == (27, 7)
     assert "move it to columns[].derivation" in first.message
     assert first.render().startswith(f"{path}:27:7: repeated_row_derivation ")
-    # REQ-1286: authoring lints rewrite the value, so no fix is offered.
+    # Authoring lints rewrite the value, so no fix is offered.
     changed, remaining = fix_file(path, orders=ORDERS)
     assert changed is False
     assert [item.name for item in remaining] == [
@@ -1090,8 +1085,8 @@ def test_redundant_intermediate_reads_the_dataset_directly(
 ) -> None:
     path = _spec(tmp_path, REDUNDANT)
     findings = check_file(path, orders=ORDERS)
-    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
-        ("redundant_intermediate", "intermediates[0]", "REQ-1289"),
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("redundant_intermediate", "intermediates[0]"),
     ]
     assert findings[0].message == (
         "intermediate `ADSL1` reads exactly what the implicit join to `ADSL` "
@@ -1112,8 +1107,8 @@ def test_redundant_intermediate_positions_ignore_stray_entries(
         "intermediates:\n  - stray\n\n  - id: ADSL1\n",
     )
     findings = check_file(_spec(tmp_path, stray), orders=ORDERS)
-    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
-        ("redundant_intermediate", "intermediates[1]", "REQ-1289"),
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("redundant_intermediate", "intermediates[1]"),
     ]
 
 
@@ -1207,8 +1202,8 @@ columns:
 def test_missing_output_column_labels(tmp_path: Path) -> None:
     path = _spec(tmp_path, MISSING_LABEL)
     findings = check_file(path, orders=ORDERS)
-    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
-        ("missing_label", "columns[1]", "REQ-1290"),
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("missing_label", "columns[1]"),
     ]
     assert findings[0].message == ("output column `AGE` has no label; declare `label:`")
     changed, remaining = fix_file(path, orders=ORDERS)
@@ -1227,8 +1222,8 @@ def test_missing_label_positions_ignore_stray_column_entries(
     )
     path = _spec(tmp_path, stray)
     findings = check_file(path, orders=ORDERS)
-    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
-        ("missing_label", "columns[2]", "REQ-1290"),
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("missing_label", "columns[2]"),
     ]
     age_line = next(
         number
@@ -1248,8 +1243,8 @@ def test_missing_label_reports_a_repeated_output_column_once(
     )
     path = _spec(tmp_path, repeated)
     findings = check_file(path, orders=ORDERS)
-    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
-        ("missing_label", "columns[1]", "REQ-1290"),
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("missing_label", "columns[1]"),
     ]
 
 

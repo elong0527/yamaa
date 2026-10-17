@@ -194,7 +194,7 @@ explicitly:
   runtime type belong to different naming lists
   ([REQ-0001](../values/types.md#req-0001));
 - datasets and record lookups share one naming list
-  ([REQ-0084](../specification/binding.md#req-0084));
+  ([NAME-3](../names.md#name-3));
 - a lookup `id` shares one naming list with dataset identifiers, other
   lookup ids, and the output `domain` ([REQ-0113](../operations/lookup.md#req-0113));
 - window names belong to a separate window naming list

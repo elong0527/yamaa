@@ -264,7 +264,7 @@ another name is still read under the profile its producer wrote it with.
 
 **REQ-0830.** `dataset_class.path` names the file a specification reads, and its
 extension selects the profile that reads it, under
-[REQ-0716](publication.md#req-0716). A study that stores `DM.CSV` names the
+[OUTPUT-5](../output.md#output-5). A study that stores `DM.CSV` names the
 same container as one that stores `dm.csv`.
 
 | Extension | Profile | Container | Source-profile owner |
@@ -276,7 +276,7 @@ same container as one that stores `dm.csv`.
 
 <a id="req-0831"></a>
 
-**REQ-0831.** A source profile follows the artifact profile: a file [Artifact publication](publication.md) writes
+**REQ-0831.** A source profile follows the artifact profile: a file [Output](../output.md#output-5) writes
 and this contract reads has one profile name in both directions. A second field
 could disagree with the source path, misname the contents, and leave the
 reader unable to check the claim. The read-only SAS and Transport profiles
@@ -373,6 +373,6 @@ also applies to an empty input dataset and a producer-linked input dataset.
 
 **REQ-1295.** An input dataset used by an `odm` expression must not declare
 `ordinal`: its exposed fields are the fixed schema under
-[REQ-1266](../specification/binding.md#req-1266). The declaration fails
+[NAME-8](../names.md#name-8). The declaration fails
 validation with `odm_schema_field_type`, reporting the input dataset,
 `declared: ordinal`, and `input.<dataset>.ordinal` specification path.

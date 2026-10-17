@@ -16,35 +16,35 @@ root_class:
     - schema_version:
         type: str
         required: true
-        description: See REQ-1042.
+        description: Schema bundle this specification is written against, which must match exactly (SPEC-1).
     - parents:
         type: [path, "list[path]"]
         required: false
-        description: See REQ-1042.
+        description: Ordered local specification layers resolved before validation and execution (LAYER-2).
     - domain:
         type: identifier
         required: true
-        description: See REQ-1042.
+        description: Name of the output dataset this specification derives (SPEC-1).
     - keys:
         type: "list[identifier]"
         required: true
-        description: See REQ-1042.
+        description: Output columns identifying a row (OUTPUT-2).
     - input:
         type: "dict[identifier, dataset_source]"
         required: true
-        description: See REQ-1042.
+        description: Source datasets this specification reads, each under the name it is read through (NAME-1).
     - base:
         type: identifier
         required: false
-        description: See REQ-1042.
+        description: Input dataset whose records build output rows when `rows` is absent; row construction states when it is required.
     - filter:
         type: predicate
         required: false
-        description: See REQ-1042.
+        description: Predicate selecting base input records for row construction when `rows` is absent, as the filter-only row template lifted to the root; it cannot be declared with `rows`.
     - output:
         type: output_class
         required: true
-        description: See REQ-1042.
+        description: Artifact presentation, independent of the dependency-ordered declarations (OUTPUT-1).
     - windows:
         type: "dict[identifier, window_spec]"
         required: false
@@ -52,33 +52,33 @@ root_class:
     - intermediates:
         type: "list[intermediate_class]"
         required: false
-        description: See REQ-1042.
+        description: Named dataset lookups that several columns read through `<lookup-id>.<column>`.
     - columns:
         type: "list[column_class]"
         required: true
-        description: See REQ-1042.
+        description: Columns in the dependency order the execution lifecycle requires; `output.columns` controls artifact order.
     - rows:
         type: "list[row_class]"
         required: false
-        description: See REQ-1042.
+        description: Row templates constructing output rows from input records or groups; it cannot be declared with `filter`.
     - verifications:
         type: [dataset_verification, "list[dataset_verification]"]
         required: false
-        description: See REQ-1042.
+        description: Assertions over the completed dataset.
     - submission:
         type: submission_dataset_class
         required: false
-        description: See REQ-1042.
+        description: Governed dataset metadata a submission document is generated from.
     - metadata:
         type: "dict[str, str]"
         required: false
-        description: See REQ-1042.
+        description: Free-form annotations carried with the specification; submission metadata reserves the key names it governs.
 
 output_class:
     - path:
         type: path
         required: true
-        description: See REQ-1047.
+        description: File this specification produces, whose extension selects the serialization profile (OUTPUT-5).
     - relative_to:
         type: path_base
         default: declaring
@@ -86,23 +86,23 @@ output_class:
     - decimals:
         type: int
         required: false
-        description: See REQ-1047.
+        description: Fixed display digits for every float column of a csv artifact; the CSV profile defines the rounding and rejects it for parquet.
     - columns:
         type: "list[identifier]"
         required: true
-        description: See REQ-1047.
+        description: Declared columns selected for the artifact, in artifact order (OUTPUT-1).
     - warning_log:
         type: path
         required: false
-        description: See REQ-1047.
+        description: Sidecar dataset recording warning-level verification violations; the verification rules fix its schema (OUTPUT-10).
     - verification_log:
         type: path
         required: false
-        description: See REQ-1047.
+        description: Sidecar dataset recording the outcome of every declared verification; the verification rules fix its schema (OUTPUT-10).
     - order_by:
         type: "list[order_by_term]"
         required: false
-        description: See REQ-1047.
+        description: Terms ordering artifact rows after every verification; omission keeps construction order (OUTPUT-11).
 
 intermediate_class:
     - id:
@@ -163,32 +163,32 @@ column_class:
     - name:
         type: identifier
         required: true
-        description: See REQ-1043.
+        description: Column name this specification declares.
     - type:
         type: column_type
         required: true
-        description: See REQ-1043.
+        description: Declared data type this column must carry in the completed dataset.
     - label:
         type: str
         required: false
-        description: See REQ-1043.
+        description: Descriptive text carried with the column for a reader of the dataset.
     # See REQ-1260.
     - derivation:
         type: derivation
         required: false
-        description: See REQ-1043.
+        description: How the column's value is produced (SPEC-4).
     - verifications:
         type: [column_verification, "list[column_verification]"]
         required: false
-        description: See REQ-1043.
+        description: Assertions over this column's completed values.
     - submission:
         type: submission_column_class
         required: false
-        description: See REQ-1043.
+        description: Governed column metadata a submission document is generated from.
     - metadata:
         type: "dict[str, str]"
         required: false
-        description: See REQ-1043.
+        description: Free-form annotations carried with the column; submission metadata reserves the key names it governs.
 
 row_class:
     - id:
@@ -220,7 +220,7 @@ row_class:
 variable:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$'
-    description: See REQ-1057.
+    description: Qualified source variable or unqualified constructed output column (NAME-3).
 
 match_key:
     type: [match_key_columns, "dict[identifier, match_value]"]
@@ -279,12 +279,12 @@ intermediate_id:
 row_id:
     type: str
     min_length: 1
-    description: See REQ-1044.
+    description: Identifier of a row template, unique within rows (SPEC-2).
 
 regex:
     type: str
     min_length: 1
-    description: See REQ-1058.
+    description: Regular expression applied to a string value under text operations.
 
 predicate:
     type: str
@@ -729,7 +729,7 @@ numeric_expression:
 expressions:
     odm: # See REQ-1265.
         type: [odm_item, odm_class]
-        description: See REQ-1274.
+        description: One collected item read from the row's ODM scope; a bare string is the item (NAME-7).
 
 odm_item:
     type: str
@@ -745,19 +745,19 @@ odm_class:
     - item:
         type: odm_item
         required: true
-        description: See REQ-1274.
+        description: The ODM input and the complete ItemOID, written as DATASET.ItemOID (NAME-7).
     - event:
         type: [odm_oid, "list[odm_oid]"]
-        description: See REQ-1274.
+        description: StudyEventOID values an identified record carries; one OID or a list (NAME-12).
     - form:
         type: [odm_oid, "list[odm_oid]"]
-        description: See REQ-1274.
+        description: FormOID values an identified record carries; one OID or a list (NAME-12).
     - item_group:
         type: [odm_oid, "list[odm_oid]"]
-        description: See REQ-1274.
+        description: ItemGroupOID values an identified record carries; one OID or a list (NAME-12).
     - filter:
         type: predicate
-        description: See REQ-1274.
+        description: Predicate over the ODM input's schema fields that an identified record satisfies (NAME-12).
 "#),
     ("schema_expression_str.yaml", r#"version: "1.0"
 
@@ -1220,7 +1220,7 @@ path_base:
 identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: See REQ-1046.
+    description: Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a standard, a document or a function (SPEC-2).
 
 
 function_param_type:
@@ -1726,7 +1726,7 @@ path_base:
 identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: See REQ-1046.
+    description: Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a standard, a document or a function (SPEC-2).
 
 
 function_param_type:

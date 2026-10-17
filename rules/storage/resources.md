@@ -120,7 +120,7 @@ the input's selected `relative_to` base under [REQ-0780](resources.md#req-0780).
 The producing specification that `schema` names already exists. Its
 `output.path`, resolved with the producer's own selected base, must name the same
 artifact location. Workflow execution consumes held serialized producer bytes;
-explicit Save publishes those bytes under [Publication](publication.md).
+explicit Save publishes those bytes under [Publication](../output.md#output-8).
 
 <a id="req-0782"></a>
 

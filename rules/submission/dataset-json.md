@@ -23,7 +23,7 @@ separators and satisfy [REQ-1206](dataset-json.md#req-1206) and
 <a id="req-1194"></a>
 
 **REQ-1194.** The submission section requests the files;
-[Artifact publication](../storage/publication.md)'s extension mapping stays
+[Output](../output.md#output-5)'s extension mapping stays
 closed at `.csv` and `.parquet`. A Dataset-JSON file carries `studyOID`,
 `metaDataVersionOID`, `itemGroupOID`, a per-column `itemOID`, and a creation
 timestamp. The shared composition derives those facts from the study,
@@ -186,7 +186,7 @@ Every member is the one the Define-XML document carries for the same column:
 `keySequence` therefore describes the same non-missing identity in `keys`;
 it is not independently declarable. Sponsor ordering and a separate `unique`
 verification, including combinations with missing values, follow the
-[output identity example](../storage/publication.md#req-0221) and do not change
+[output identity example](../output.md#output-3) and do not change
 this metadata.
 
 <a id="req-1210"></a>
@@ -318,15 +318,15 @@ a file.
 
 **REQ-1221.** A generation renders and validates every Dataset-JSON file and
 the Define-XML document before touching any target. It publishes the data
-files first, in entry order, and the document last, applying [REQ-0752](../storage/publication.md#req-0752) through
-[REQ-0754](../storage/publication.md#req-0754) to each file. A visible document therefore never points at a data
-file that is not there yet, which is [REQ-0757](../storage/publication.md#req-0757)'s order applied to this pair.
+files first, in entry order, and the document last, applying
+[OUTPUT-8](../output.md#output-8) to each file. A visible document therefore never points at a data
+file that is not there yet, which is [OUTPUT-10](../output.md#output-10)'s order applied to this pair.
 
 <a id="req-1222"></a>
 
 **REQ-1222.** A failure at any point publishes nothing further and leaves
 every untouched target as it was. Atomic replacement is guaranteed per file
-and not across the package, exactly as [REQ-0758](../storage/publication.md#req-0758) states for a primary artifact
+and not across the package, exactly as [OUTPUT-10](../output.md#output-10) states for a primary artifact
 and its log.
 
 ### Reading
@@ -377,5 +377,5 @@ exactly as [REQ-1026](define-xml.md#req-1026) requires of an invalid document.
 
 <a id="req-1232"></a>
 
-**REQ-1232.** A failed publication fails under [REQ-0764](../storage/publication.md#req-0764) and
+**REQ-1232.** A failed publication fails under [OUTPUT-8](../output.md#output-8) and
 [REQ-1222](dataset-json.md#req-1222).

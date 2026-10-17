@@ -291,7 +291,7 @@ A derivation that reads an undeclared column, or that reads itself directly or
 through other columns, fails under the
 [Column derivation](columns.md); ordering repairs neither.
 `output.columns` alone defines artifact membership and column order under
-[Artifact publication](storage/publication.md).
+[Output](output.md#output-1).
 
 <a id="layer-14"></a>
 

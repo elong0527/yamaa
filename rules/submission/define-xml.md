@@ -28,7 +28,7 @@ and a directory listing is not one.
 <a id="req-0961"></a>
 
 **REQ-0961.** The selected section's `define` names the file the document produces, and its
-extension must be `.xml`. [Artifact publication](../storage/publication.md)'s extension mapping is not consulted: that
+extension must be `.xml`. [Output](../output.md#output-5)'s extension mapping is not consulted: that
 mapping selects a profile for a dataset artifact, and this artifact has one
 form.
 
@@ -321,7 +321,7 @@ describe a file that is not in the package it belongs to.
 <a id="req-0988"></a>
 
 **REQ-0988.** The leaf names a file this language produced, and the two it
-produces are the artifact [Artifact publication](../storage/publication.md) publishes and the Dataset-JSON file
+produces are the artifact [Output](../output.md#output-1) publishes and the Dataset-JSON file
 [Dataset-JSON](dataset-json.md) writes beside this document. A document that named any other
 container would assert a file no run wrote. A package that converts its
 artifacts to a container neither contract writes regenerates the document
@@ -349,11 +349,11 @@ which states why a planned dataset holds no records.
 | `MethodOID` | generated method identifier; omit without `submission.method` |
 
 `KeySequence` describes the non-missing row identity asserted by `keys`
-([REQ-0221](../storage/publication.md#req-0221)). It is not independently
+([OUTPUT-3](../output.md#output-3)). It is not independently
 declarable. Membership in `keys` determines `KeySequence`; using a sponsor
 variable in `output.order_by` or a `unique` verification does not independently
 assign it. The
-[output identity example](../storage/publication.md#req-0221) shows how to use
+[output identity example](../output.md#output-3) shows how to use
 those variables when some values may be missing.
 
 <a id="req-0991"></a>
@@ -490,7 +490,7 @@ places on a regulatory submission:
 - every dataset carries a `def:ArchiveLocationID`, unless it declares
   `has_no_data`;
 - every dataset carries a `Description` and a `def:Class`;
-- every dataset declares at least one key, which [Artifact publication](../storage/publication.md) already requires, and
+- every dataset declares at least one key, which [Output](../output.md#output-2) already requires, and
   every key column carries a `KeySequence`;
 - every column carries a `def:Origin`, which [REQ-0887](metadata.md#req-0887) already requires; and
 - every codelist that declares `items` and is drawn from a standard whose
@@ -545,7 +545,7 @@ compared byte for byte.
 <a id="req-1009"></a>
 
 **REQ-1009.** Publication follows
-[Artifact publication](../storage/publication.md)'s procedure exactly. The
+[Output](../output.md#output-8)'s procedure exactly. The
 complete document is:
 
 1. written to a temporary regular file in the target's directory;
@@ -789,4 +789,4 @@ schema: fail and report the schema violation. The run publishes nothing.
 
 <a id="req-1027"></a>
 
-**REQ-1027.** A failed publication fails under [REQ-0764](../storage/publication.md#req-0764).
+**REQ-1027.** A failed publication fails under [OUTPUT-8](../output.md#output-8).

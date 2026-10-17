@@ -1,6 +1,6 @@
 """Check and fix the written form of yamaa specifications.
 
-The specification style contract (`rules/specification/style.md`) fixes one
+The specification style guide (`docs/articles/style.md`) fixes one
 written form of a specification. A style finding names a
 departure from it; it is not a validation diagnostic, and a specification
 with findings stays valid and runs exactly as its canonical form does.
@@ -27,10 +27,9 @@ from yamaa.style._fix import fix_text
 
 @dataclass(frozen=True, slots=True)
 class _StyleFinding:
-    """One private departure from the specification style contract."""
+    """One private departure from the specification style guide."""
 
     name: str
-    requirement: str
     path: str
     line: int
     column: int
@@ -38,14 +37,11 @@ class _StyleFinding:
     message: str
 
     def render(self) -> str:
-        return (
-            f"{self.path}:{self.line}:{self.column}: {self.name} "
-            f"{self.message} ({self.requirement})"
-        )
+        return f"{self.path}:{self.line}:{self.column}: {self.name} {self.message}"
 
 
 def _field_orders() -> dict[str, tuple[str, ...]]:
-    """The packaged field order of every class REQ-1281 orders."""
+    """The packaged field order of every class `field_order` orders."""
     fields = json.loads(files("yamaa.style").joinpath("_fields.json").read_text())
     return {name: tuple(order) for name, order in fields.items()}
 
@@ -65,7 +61,6 @@ def _findings(
     return tuple(
         _StyleFinding(
             name=item.name,
-            requirement=_FINDINGS[item.name],
             path=str(path),
             line=item.line + 1,
             column=item.column + 1,
@@ -162,7 +157,7 @@ def _selection(select: Iterable[str] | None) -> frozenset[str] | None:
     if select is None:
         return None
     names = frozenset(select)
-    unknown = sorted(names - _FINDINGS.keys())
+    unknown = sorted(names - set(_FINDINGS))
     if unknown:
         raise ValueError(f"unknown style finding: {', '.join(unknown)}")
     return names

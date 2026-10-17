@@ -234,7 +234,7 @@ names visible at each predicate site:
 **REQ-0185.** An identifier in a right-side predicate is qualified by the
 right-side dataset's ID. An identifier over a completed or candidate output
 row is unqualified. An enclosing column derivation may also bind a qualified
-dataset or record-lookup field under [Name binding](../specification/binding.md), [Lookup and joins](lookup.md), and [Lookup and joins](lookup.md). A verification
+dataset or record-lookup field under [Name binding](../names.md#name-3), [Lookup and joins](lookup.md), and [Lookup and joins](lookup.md). A verification
 may read a declared record lookup for its completed row. No predicate can
 reach an undeclared relation.
 

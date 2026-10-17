@@ -43,7 +43,7 @@ decides whether that candidate row is appended.
 <a id="req-0466"></a>
 
 **REQ-0466.** An identifier is `NAME` or `DATASET.NAME`. Name binding
-[resolves each identifier](../specification/binding.md) in the same phase. A
+[resolves each identifier](../names.md#name-3) in the same phase. A
 reducer expression and predicate resolve each name the same way.
 
 <a id="req-0467"></a>
@@ -81,7 +81,7 @@ under [Lookup and joins](lookup.md).
 **REQ-0469.** A qualified name in this grammar reaches a field of its
 relation, never an ODM item by its `ItemOID`. ODM item identifiers carry
 further periods. Read the item into a column with
-[`odm`](../specification/binding.md#req-1265) first.
+[`odm`](../names.md#name-7) first.
 
 <a id="req-0470"></a>
 
@@ -281,7 +281,7 @@ one source record and must reject duplicates.
 reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one key level and
 reducing that result at another uses two specifications. The first artifact
 names and validates the intermediate keys. The downstream specification
-declares that artifact as an ordinary source under [Name binding](../specification/binding.md)
+declares that artifact as an ordinary source under [Name binding](../names.md#name-1)
 and can link its producing specification through `dataset_class.schema`
 ([REQ-0520](../storage/ingestion.md#req-0520)). That link supplies the workflow
 boundary: the producer completes first under

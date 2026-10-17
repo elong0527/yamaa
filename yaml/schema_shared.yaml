@@ -27,7 +27,7 @@ path_base:
 identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: See REQ-1046.
+    description: Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a standard, a document or a function (SPEC-2).
 
 
 function_param_type:

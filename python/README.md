@@ -261,11 +261,11 @@ python -m yamaa.style --fix study/adsl.yaml
 python -m yamaa.style --ignore line_width study/
 ```
 
-Findings print `path:line:column: name message (REQ-NNNN)`. Exit status is 0 when
+Findings print `path:line:column: name message`. Exit status is 0 when
 no finding remains, 1 when findings remain and 2 when input cannot be read/parsed.
 `--fix` keeps a layout edit only when the shared admission/equality proof accepts
 it and comments remain unchanged. Authoring lints that require a semantic rewrite
-offer no automatic fix. See the [style contract](../rules/specification/style.md).
+offer no automatic fix. See the [style guide](../docs/articles/style.md).
 Its Python implementation names remain private.
 
 ## Installation
