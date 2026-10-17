@@ -389,7 +389,8 @@ fn public_temporals_preserve_existing_epoch_view_without_mutating_collected_prec
 }
 
 /// A raw C stream producer for inputs that arrow-rs's own producer cannot
-/// emit: arrays with under-aligned buffers and a NULL error message.
+/// emit: arrays with under-aligned buffers, a NULL error message, and a
+/// stream that drops its `get_next` callback after reporting its schema.
 mod raw {
     use arrow_array::{
         ffi::{FFI_ArrowArray, FFI_ArrowSchema},
@@ -398,10 +399,15 @@ mod raw {
     use arrow_schema::Schema;
     use std::ffi::{c_char, c_int, c_void};
 
+    pub enum Behaviour {
+        Yield(Vec<FFI_ArrowArray>),
+        Fail,
+        DropNext,
+    }
+
     struct Producer {
         schema: Schema,
-        arrays: Vec<FFI_ArrowArray>,
-        fail: bool,
+        behaviour: Behaviour,
     }
 
     unsafe extern "C" fn get_schema(
@@ -411,6 +417,9 @@ mod raw {
         let producer = unsafe { &*((*stream).private_data as *const Producer) };
         let schema = FFI_ArrowSchema::try_from(&producer.schema).unwrap();
         unsafe { std::ptr::write(out, schema) };
+        if matches!(producer.behaviour, Behaviour::DropNext) {
+            unsafe { (*stream).get_next = None };
+        }
         0
     }
 
@@ -419,13 +428,13 @@ mod raw {
         out: *mut FFI_ArrowArray,
     ) -> c_int {
         let producer = unsafe { &mut *((*stream).private_data as *mut Producer) };
-        if producer.fail {
+        let Behaviour::Yield(arrays) = &mut producer.behaviour else {
             return 5;
-        }
-        let next = if producer.arrays.is_empty() {
+        };
+        let next = if arrays.is_empty() {
             FFI_ArrowArray::empty()
         } else {
-            producer.arrays.remove(0)
+            arrays.remove(0)
         };
         unsafe { std::ptr::write(out, next) };
         0
@@ -440,17 +449,14 @@ mod raw {
         unsafe { (*stream).release = None };
     }
 
-    pub fn stream(schema: Schema, arrays: Vec<FFI_ArrowArray>, fail: bool) -> FFI_ArrowArrayStream {
+    pub fn stream(schema: Schema, behaviour: Behaviour) -> FFI_ArrowArrayStream {
         let mut stream = FFI_ArrowArrayStream::empty();
         stream.get_schema = Some(get_schema);
         stream.get_next = Some(get_next);
         stream.get_last_error = Some(no_message);
         stream.release = Some(release);
-        stream.private_data = Box::into_raw(Box::new(Producer {
-            schema,
-            arrays,
-            fail,
-        })) as *mut c_void;
+        stream.private_data =
+            Box::into_raw(Box::new(Producer { schema, behaviour })) as *mut c_void;
         stream
     }
 }
@@ -516,8 +522,7 @@ fn under_aligned_producer_buffers_import_unchanged() {
         };
         let source = raw::stream(
             Schema::new(fields.clone()),
-            vec![arrow_array::ffi::FFI_ArrowArray::new(&parent)],
-            false,
+            raw::Behaviour::Yield(vec![arrow_array::ffi::FFI_ArrowArray::new(&parent)]),
         );
         let table = arrow_bridge::import_public_stream(source).unwrap();
         assert_eq!(table.row_count(), 4);
@@ -535,9 +540,21 @@ fn under_aligned_producer_buffers_import_unchanged() {
 #[test]
 fn a_producer_failure_with_a_null_message_is_an_error() {
     let schema = Schema::new(vec![Field::new("I", DataType::Int64, true)]);
-    let error = arrow_bridge::import_public_stream(raw::stream(schema, Vec::new(), true))
+    let error = arrow_bridge::import_public_stream(raw::stream(schema, raw::Behaviour::Fail))
         .err()
         .unwrap();
     let text = format!("{error:?}");
     assert!(text.contains("Error code: 5"), "{text}");
+}
+
+#[test]
+fn a_stream_that_drops_its_next_callback_is_an_error_not_an_end() {
+    // The callback disappears after the schema is reported, so the import
+    // must refuse the stream instead of reading it as empty.
+    let schema = Schema::new(vec![Field::new("I", DataType::Int64, true)]);
+    let error = arrow_bridge::import_public_stream(raw::stream(schema, raw::Behaviour::DropNext))
+        .err()
+        .unwrap();
+    let text = format!("{error:?}");
+    assert!(text.contains("lost its get_next callback"), "{text}");
 }
