@@ -103,13 +103,16 @@ static repository validation does not establish engine release qualification.
 
 ## CI and release qualification
 
-The ordinary CI workflow runs the same check targets listed above for each PR.
+The ordinary CI workflow runs the same check targets listed above for each PR,
+and every two hours on main. Merges to main do not start workflows other than
+the documentation site deployment; main is checked on those schedules instead.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
 `.github/workflows/dependency-graphs.yml` also resolves minimum and newest
-compatible graphs on each PR, main push, weekly schedule and dispatch. Run a
-lane locally with R and the normal development prerequisites installed:
+compatible graphs nightly, on dispatch, and on each PR that changes a
+dependency manifest or lock. Run a lane locally with R and the normal
+development prerequisites installed:
 
 ```sh
 uv run --project python --no-sync python -m tools.ci.dependency_graphs \
