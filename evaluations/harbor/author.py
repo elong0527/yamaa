@@ -25,6 +25,13 @@ Without Docker, `prepare` builds the same writer folders, and with
 the committed ones, with the tier contract (`prompts/README.md`) as the
 instruction. These jobs run locally and are never uploaded to Harbor Hub.
 The output directory defaults to `~/.cache/yamaa-harbor/authoring`.
+
+A session that hands the folders to subagents follows the session rules in
+section 7 of the recipe: it proves its base provides `prepare` and `grade`
+before a round, records outside-folder reads without rejecting a candidate
+for the agent guides a runtime requires, checks that its Python provides
+the system prompt's packages before the solvers run, and counts two fresh
+sessions as its two solver attempts where its tool allows no model choice.
 """
 
 from __future__ import annotations
