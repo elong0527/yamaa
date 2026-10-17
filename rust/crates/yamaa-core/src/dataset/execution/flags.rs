@@ -29,7 +29,6 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         })
         .map_err(|error| match error.kind {
             predicate::ErrorKind::Resolution { error, .. } => error,
-            predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
             predicate::ErrorKind::Condition(_) => Box::new(ExecutionError::ScalarDiagnostic(
                 crate::dataset::flag_condition_diagnostic(&error)
                     .expect("condition has a core flag projection"),

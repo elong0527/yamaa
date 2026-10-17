@@ -1,7 +1,7 @@
 //! Structural descriptor admission precedes name resolution and default validation.
 
 use super::{Document, DocumentNode, TypeError, TypeExpression};
-use crate::regex;
+use crate::portable_regex;
 use std::vec;
 
 /// Ordered structural findings retain source occurrence ids where rendering needs them.
@@ -43,7 +43,7 @@ pub enum DescriptorError {
     #[error("schema descriptor type limit: {0:?}")]
     TypeLimit(TypeError),
     #[error("schema descriptor regex: {0:?}")]
-    Regex(regex::CompileError),
+    Regex(portable_regex::CompileError),
 }
 
 /// Admitted structure; references and any default still require the complete bundle.
@@ -53,7 +53,7 @@ pub struct Descriptor {
     required: bool,
     default: Option<usize>,
     permitted: Option<Vec<String>>,
-    pattern: Option<(String, regex::Pattern)>,
+    pattern: Option<(String, portable_regex::Pattern)>,
     minimum: Option<String>,
     size: Option<String>,
 }
@@ -196,9 +196,9 @@ impl Descriptor {
                 issues.push(DescriptorIssue::PatternRequiresString);
             }
             match &nodes[id] {
-                DocumentNode::Text(text) => match regex::Pattern::compile(text) {
+                DocumentNode::Text(text) => match portable_regex::Pattern::compile(text) {
                     Ok(compiled) => pattern = Some((text.clone(), compiled)),
-                    Err(regex::CompileError::Invalid { byte, reason }) => {
+                    Err(portable_regex::CompileError::Invalid { byte, reason }) => {
                         issues.push(DescriptorIssue::InvalidPattern {
                             pattern: text.clone(),
                             byte,
@@ -289,7 +289,7 @@ impl Descriptor {
         self.permitted.as_deref()
     }
     /// Retain exact pattern spelling alongside its precompiled portable matcher.
-    pub fn pattern(&self) -> Option<(&str, &regex::Pattern)> {
+    pub fn pattern(&self) -> Option<(&str, &portable_regex::Pattern)> {
         self.pattern
             .as_ref()
             .map(|(text, pattern)| (text.as_str(), pattern))

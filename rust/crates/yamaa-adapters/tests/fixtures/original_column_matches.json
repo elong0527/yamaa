@@ -839,47 +839,48 @@
     "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(?=b)b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
     "input": "ID,V\na,ab\nb,b\n",
     "expected": {
-      "artifacts": [
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
         {
-          "byte_length": 24,
-          "columns": [
-            "ID",
-            "V",
-            "LATER"
-          ],
-          "content": "ID,V,LATER\na,ab,2\nb,b,2\n",
-          "name": "result",
-          "profile": "csv",
-          "records": [
-            "ID,V,LATER",
-            "a,ab,2",
-            "b,b,2"
-          ],
-          "row_count": 2,
-          "types": [
-            "str",
-            "str",
-            "int"
+          "condition": "invalid_regex",
+          "context": {
+            "pattern": "(?=b)b"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0827",
+          "spec_paths": [
+            "columns.V.verifications[0].matches.pattern"
           ]
         }
       ],
-      "backend": "rust",
-      "callbacks": [],
-      "diagnostics": [],
       "engine_version": "fixture-engine",
       "error": null,
       "example": "column-matches-lookahead",
       "handler_counts": [],
       "nodes": [
         {
-          "diagnostics": [],
+          "diagnostics": [
+            {
+              "condition": "invalid_regex",
+              "context": {
+                "pattern": "(?=b)b"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0827",
+              "spec_paths": [
+                "columns.V.verifications[0].matches.pattern"
+              ]
+            }
+          ],
           "handler_counts": [],
-          "outcome": "success",
+          "outcome": "failure",
           "specification": "spec.yaml",
           "unsupported": []
         }
       ],
-      "outcome": "success",
+      "outcome": "failure",
       "report_version": "0.3.0-draft",
       "runtime": "python",
       "runtime_version": "fixture-runtime",
@@ -927,51 +928,6 @@
             "str",
             "str"
           ]
-        },
-        {
-          "columns": [
-            "ID",
-            "V",
-            "LATER"
-          ],
-          "name": "output",
-          "rows": [
-            [
-              {
-                "type": "str",
-                "value": "a"
-              },
-              {
-                "type": "str",
-                "value": "ab"
-              },
-              {
-                "type": "int",
-                "value": "2"
-              }
-            ],
-            [
-              {
-                "type": "str",
-                "value": "b"
-              },
-              {
-                "type": "str",
-                "value": "b"
-              },
-              {
-                "type": "int",
-                "value": "2"
-              }
-            ]
-          ],
-          "specification": "spec.yaml",
-          "stage": "derived",
-          "types": [
-            "str",
-            "str",
-            "int"
-          ]
         }
       ],
       "unsupported": [],
@@ -986,79 +942,58 @@
           "specification": "spec.yaml",
           "target": "ID",
           "verification_id": "key-rule"
-        },
-        {
-          "check": "matches",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0379",
-          "severity": "error",
-          "spec_path": "columns.V.verifications[0].matches",
-          "specification": "spec.yaml",
-          "target": "V",
-          "verification_id": "value-rule"
-        },
-        {
-          "check": "unique",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": null
         }
       ]
     },
-    "artifact": "ID,V,LATER\na,ab,2\nb,b,2\n"
+    "artifact": ""
   },
   {
     "case": "backreference",
     "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(.)\\\\1\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
     "input": "ID,V\na,aa\nb,éé\n",
     "expected": {
-      "artifacts": [
+      "artifacts": [],
+      "backend": "rust",
+      "callbacks": [],
+      "diagnostics": [
         {
-          "byte_length": 27,
-          "columns": [
-            "ID",
-            "V",
-            "LATER"
-          ],
-          "content": "ID,V,LATER\na,aa,2\nb,éé,2\n",
-          "name": "result",
-          "profile": "csv",
-          "records": [
-            "ID,V,LATER",
-            "a,aa,2",
-            "b,éé,2"
-          ],
-          "row_count": 2,
-          "types": [
-            "str",
-            "str",
-            "int"
+          "condition": "invalid_regex",
+          "context": {
+            "pattern": "(.)\\1"
+          },
+          "phase": "validation",
+          "requirement": "REQ-0827",
+          "spec_paths": [
+            "columns.V.verifications[0].matches.pattern"
           ]
         }
       ],
-      "backend": "rust",
-      "callbacks": [],
-      "diagnostics": [],
       "engine_version": "fixture-engine",
       "error": null,
       "example": "column-matches-backreference",
       "handler_counts": [],
       "nodes": [
         {
-          "diagnostics": [],
+          "diagnostics": [
+            {
+              "condition": "invalid_regex",
+              "context": {
+                "pattern": "(.)\\1"
+              },
+              "phase": "validation",
+              "requirement": "REQ-0827",
+              "spec_paths": [
+                "columns.V.verifications[0].matches.pattern"
+              ]
+            }
+          ],
           "handler_counts": [],
-          "outcome": "success",
+          "outcome": "failure",
           "specification": "spec.yaml",
           "unsupported": []
         }
       ],
-      "outcome": "success",
+      "outcome": "failure",
       "report_version": "0.3.0-draft",
       "runtime": "python",
       "runtime_version": "fixture-runtime",
@@ -1106,51 +1041,6 @@
             "str",
             "str"
           ]
-        },
-        {
-          "columns": [
-            "ID",
-            "V",
-            "LATER"
-          ],
-          "name": "output",
-          "rows": [
-            [
-              {
-                "type": "str",
-                "value": "a"
-              },
-              {
-                "type": "str",
-                "value": "aa"
-              },
-              {
-                "type": "int",
-                "value": "2"
-              }
-            ],
-            [
-              {
-                "type": "str",
-                "value": "b"
-              },
-              {
-                "type": "str",
-                "value": "éé"
-              },
-              {
-                "type": "int",
-                "value": "2"
-              }
-            ]
-          ],
-          "specification": "spec.yaml",
-          "stage": "derived",
-          "types": [
-            "str",
-            "str",
-            "int"
-          ]
         }
       ],
       "unsupported": [],
@@ -1165,32 +1055,10 @@
           "specification": "spec.yaml",
           "target": "ID",
           "verification_id": "key-rule"
-        },
-        {
-          "check": "matches",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0379",
-          "severity": "error",
-          "spec_path": "columns.V.verifications[0].matches",
-          "specification": "spec.yaml",
-          "target": "V",
-          "verification_id": "value-rule"
-        },
-        {
-          "check": "unique",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": null
         }
       ]
     },
-    "artifact": "ID,V,LATER\na,aa,2\nb,éé,2\n"
+    "artifact": ""
   },
   {
     "case": "bad_pattern",

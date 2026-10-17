@@ -342,7 +342,7 @@ pub enum Check {
     /// An exact authored maximum that is wider than the machine count.
     WideMaxLength(RowCountBound),
     /// Search the portable pattern as written over each present string.
-    Matches(crate::regex::Pattern),
+    Matches(crate::portable_regex::Pattern),
     /// A core-owned declaration finding deferred until dataset verification.
     InvalidDiagnostic(crate::diagnostic::Diagnostic),
     /// A compiler finding evaluated in declaration order after output keys.

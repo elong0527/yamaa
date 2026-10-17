@@ -134,7 +134,7 @@ mod execution {
                             .map(|index| Verification {
                                 path: format!("columns.V.verifications[{index}].matches"),
                                 check: Check::Matches(
-                                    yamaa_core::regex::Pattern::compile("b").unwrap(),
+                                    yamaa_core::portable_regex::Pattern::compile("b").unwrap(),
                                 ),
                             })
                             .collect(),

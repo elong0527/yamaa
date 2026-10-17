@@ -181,10 +181,7 @@ impl Run {
                         source_row,
                         &candidates[member].values,
                     )
-                    .map_err(|error| match error.kind {
-                        crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
-                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
-                    })?;
+                    .map_err(|error| Box::new(ExecutionError::Predicate { source_row, error }))?;
                     if truth == crate::predicate::Truth::True {
                         eligible.push(member);
                     }

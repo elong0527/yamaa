@@ -325,19 +325,20 @@ Replaces: REQ-0691, REQ-0703.
 
 <a id="func-13"></a>
 
-### FUNC-13. A numeric result is compared at `comparison_decimals` with ties away from zero, and is never changed
+### FUNC-13. A numeric result is compared at `comparison_decimals` with the one rounding, and is never changed
 
 Nonnumeric expected results and missingness use equality for their type,
 including [Values](../values.md) for strings. Numeric results compare
 temporary decimal copies at the contract's non-negative `comparison_decimals`,
-four by default; at an exact decimal tie, the copy rounds to the nearest value
-away from zero. The comparator never replaces or mutates the runtime result,
-and calculations use the unrounded result.
+four by default, rounded with the one rounding of
+[FORMULA-16](../formulas.md#formula-16). The comparator never replaces or
+mutates the runtime result, and calculations use the unrounded result.
 
-Evidence: `adam-advs-percentiles`, `rust/crates/yamaa-core/tests/project_execution.rs::exact_decimal_ties_go_away_from_zero_without_round_interval_tolerance`, `rust/crates/yamaa-core/tests/project_execution.rs::comparison_never_mutates_runtime_bits_or_normalizes_text`.
+Evidence: `adam-advs-percentiles`, `rust/crates/yamaa-core/tests/project_execution.rs::ties_and_near_ties_go_away_from_zero_with_the_one_rounding_interval`, `rust/crates/yamaa-core/tests/project_execution.rs::comparison_never_mutates_runtime_bits_or_normalizes_text`.
 Replaces: REQ-0692, REQ-0693.
 
-At four places, `1.23445` becomes `1.2345` and `-1.23445` becomes `-1.2345`.
+At four places, `1.23445` becomes `1.2345` and `-1.23445` becomes `-1.2345`;
+at two places, `2.675` becomes `2.68`.
 Rounding for final display occurs once, under `output.decimals` in
 [CSV-8](../reference/csv.md#csv-8). Predicate outcomes, keys, row membership
 and order, conditions, and final displayed artifacts must still agree exactly

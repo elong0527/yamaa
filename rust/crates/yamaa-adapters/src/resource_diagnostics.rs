@@ -56,7 +56,6 @@ pub(crate) fn resource_name(resource: Resource) -> &'static str {
         Resource::OutputRows => "output_rows",
         Resource::OutputCells => "output_cells",
         Resource::OutputColumns => "output_columns",
-        Resource::RegexWork => "regex_steps",
     }
 }
 fn input_paths(sources: &[SourceDeclaration]) -> Vec<String> {
@@ -231,7 +230,6 @@ pub(crate) fn outcome(
         "output_columns" => "output_columns",
         "table_rows" => "table_rows",
         "table_cells" => "table_cells",
-        "regex_steps" => "regex_steps",
         _ => return None,
     };
     let limit = value["limit"].as_str()?.parse().ok()?;

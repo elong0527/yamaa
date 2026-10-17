@@ -55,7 +55,7 @@
       "csv": "ID,VALUE\na,a\nb,\n"
     },
     "case_extract": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation:\n      case:\n        - when: \"SRC.TEXT IS NOT NULL\"\n          then: {str_extract: {source: SRC.TEXT, pattern: '(?<=prefix:)([A-Z]+)', group: 1}}\n        - otherwise: {literal: none}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation:\n      case:\n        - when: \"SRC.TEXT IS NOT NULL\"\n          then: {str_extract: {source: SRC.TEXT, pattern: 'prefix:([A-Z]+)', group: 1}}\n        - otherwise: {literal: none}\n",
       "inputs": {
         "input.csv": "ID,V,TEXT\na,1,prefix:ONE\nb,1,\n"
       },

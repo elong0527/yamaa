@@ -1266,9 +1266,6 @@ fn prepare_row_filters(
                         | Err(predicate_compiler::Error::Parse(
                             crate::predicate_parser::ParseError::Grammar { .. },
                         )) => {}
-                        Err(predicate_compiler::Error::Parse(
-                            crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-                        )) => return Err(unsupported("predicate_regex", &path)),
                         Err(predicate_compiler::Error::Internal) => {
                             return Err(PrepareError::Internal)
                         }

@@ -158,7 +158,7 @@ columns:
 
         #[test]
         fn qualified_case_predicate_and_full_pattern_capture_execute_in_each_expression_position() {
-            let expression = "{case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: '(?<=prefix:)([A-Z]+)(?=$)', group: 1}}}, {otherwise: {literal: none}}]}";
+            let expression = "{case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'prefix:([A-Z]+)$', group: 1}}}, {otherwise: {literal: none}}]}";
             let prefix = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n";
             for (position, tail) in [
         ("column-case", format!("  - {{name: VALUE, type: str, derivation: {expression}}}\n")),

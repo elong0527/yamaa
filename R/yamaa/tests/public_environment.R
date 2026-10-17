@@ -537,10 +537,12 @@ qualify_intermediate_callback <- function() {
 }
 qualify_intermediate_callback()
 
-qualify_matching_budget <- function() {
+# Matching is linear: a nested repetition that cannot match is an ordinary
+# verification failure, not an exhausted step budget.
+qualify_catastrophic_pattern <- function() {
   previous <- getwd(); on.exit(setwd(previous))
-  work <- tempfile("regex-budget-"); dir.create(work); setwd(work)
-  truth <- host_truth[["regex_budget"]]
+  work <- tempfile("catastrophic-pattern-"); dir.create(work); setwd(work)
+  truth <- host_truth[["catastrophic_pattern"]]
   writeChar(truth$specification, "spec.yaml", eos = NULL, useBytes = TRUE)
   writeChar(truth$source, "input.csv", eos = NULL, useBytes = TRUE)
   writeLines(c("schema_version: '1.0'", "language: r"), "environment.yaml")
@@ -555,4 +557,4 @@ qualify_matching_budget <- function() {
       !file.exists("output.csv"))
   }
 }
-qualify_matching_budget()
+qualify_catastrophic_pattern()

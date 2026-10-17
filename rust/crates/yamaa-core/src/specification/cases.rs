@@ -43,12 +43,6 @@ impl InvalidPredicate {
         Ok(failure.original_diagnostic(&self.path, &self.expression, position.character))
     }
 }
-fn unsupported(path: &str, operation: &str) -> PrepareError {
-    PrepareError::Unsupported(vec![UnsupportedFeature {
-        operation: operation.into(),
-        path: path.into(),
-    }])
-}
 #[allow(clippy::too_many_arguments)]
 pub(super) fn prepare(
     d: &Document,
@@ -101,9 +95,6 @@ pub(super) fn prepare(
                     expression: when.into(),
                     error,
                 }),
-                Err(predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-                )) => return Err(unsupported(&format!("{prefix}.when"), "predicate_regex")),
                 Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
                 Err(error) => {
                     return Err(PrepareError::predicate(

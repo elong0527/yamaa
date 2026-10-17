@@ -1298,7 +1298,7 @@ mod project {
             value::Value,
         };
         #[test]
-        fn exact_decimal_ties_go_away_from_zero_without_round_interval_tolerance() {
+        fn ties_and_near_ties_go_away_from_zero_with_the_one_rounding_interval() {
             for (actual, expected, decimals, matches) in [
                 (0.5, 1.0, 0, true),
                 (-0.5, -1.0, 0, true),
@@ -1307,9 +1307,16 @@ mod project {
                 (1.23445, 1.2345, 4, true),
                 (-1.23445, -1.2345, 4, true),
                 (1.23444, 1.2345, 4, false),
-                (2.675, 2.67, 2, true),
-                (2.675, 2.68, 2, false),
+                // The exact binary64 2.675 is 1.8e-14 below the scaled tie,
+                // inside REQ-0418's 2^-26 interval, so its copy is 2.68.
+                (2.675, 2.67, 2, false),
+                (2.675, 2.68, 2, true),
+                (-2.675, -2.68, 2, true),
                 (2.685, 2.69, 2, true),
+                // 1.0e-8 below the scaled tie is inside the interval; 1.0e-7 is not.
+                (1.0049999999, 1.01, 2, true),
+                (1.004999999, 1.00, 2, true),
+                (1.004999999, 1.01, 2, false),
             ] {
                 assert_eq!(
                     results_match(&Value::float(actual), &Value::float(expected), decimals),

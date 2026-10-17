@@ -20,8 +20,8 @@
 # A str_replace outcome is a mapping of the replacement text and the
 # complete result. A subject the pattern matches nowhere is its own result.
 #
-# A case carrying `invalid: true` records a pattern the portable contract
-# rejects. Every consumer rejects such a pattern, using invalid_regex except
+# A case carrying `invalid: true` records a pattern outside the portable
+# subset. Every consumer rejects such a pattern, using invalid_regex except
 # the str_contains predicate call, which uses invalid_predicate. It therefore
 # names no subject and no outcome.
 #
@@ -30,17 +30,25 @@
 # single-quoted so that a backslash is literal, and spell a non-ASCII scalar
 # with the ECMAScript \u{...} escape instead.
 #
-# The `dialect` tag marks a case the normalization layer exists to pin: the
-# host libraries the consumers build on disagree there (on what `\d`, `\w`,
-# `\s`, `.`, and `$` match), so the case proves the normalization rather
-# than an engine choice.
+# The `dialect` tag marks a case where common regular-expression engines
+# disagree (on what `\d`, `\w`, `\s`, `.`, and `$` match, and on what a
+# capture inside a repetition keeps), so the case pins the portable meaning
+# rather than an engine default.
+#
+# Matching is leftmost-first and takes time linear in the subject: the
+# earliest starting match wins, and from that start the first successful
+# path when alternatives are tried left to right and greedy (lazy)
+# quantifiers prefer more (fewer) iterations. A capture inside a repetition
+# keeps the last iteration that entered it, and once the minimum count is met
+# an iteration that matches the empty string ends the repetition.
 
 schema_version: "1.0"
 contract: regex
-contract_version: "2.0.0"
+contract_version: "3.0.0"
 portable_contract:
-  grammar: "ECMA-262 Pattern with the Unicode flag set, without property escapes and without variable-length lookbehind"
-  normalization: "REQ-0822 through REQ-0826 over the host library: ASCII-only \\d and \\w, the ECMA-262 \\s set, scalar dot, end-only $, \\u{...} expansion, and rejection of (?P<...>), inline flags, \\p{...}, malformed escapes, and variable-length lookbehind"
+  grammar: "ECMA-262 Pattern with the Unicode flag set, without lookahead, lookbehind, backreferences, property escapes or flags; group names are ASCII identifiers"
+  normalization: "REQ-0822 through REQ-0826: ASCII-only \\d, \\w and \\b, the ECMA-262 \\s set, scalar dot without line terminators, end-only $, \\u{...} expansion, and rejection of lookaround, backreferences, (?P<...>), inline flags, \\p{...} and malformed escapes"
+  matching: "leftmost-first in linear time; a capture inside a repetition keeps its last entered iteration, and an empty iteration past the minimum count ends the repetition"
 cases:
   - id: ascii-digit-class-rejects-arabic-indic-digit
     covers: [unicode, escaping, dialect]
@@ -159,9 +167,13 @@ cases:
     schema_pattern: false
     matches: true
     str_extract: {group: 0, value: "AE"}
-  - id: variable-length-lookbehind-is-rejected
-    covers: [anchors, dialect]
+  - id: lookbehind-is-rejected
+    covers: [unsupported, dialect]
     pattern: '(?<=a+)b'
+    invalid: true
+  - id: negative-lookbehind-is-rejected
+    covers: [unsupported]
+    pattern: '(?<!a)b'
     invalid: true
   - id: group-zero-is-the-whole-match
     covers: [capture-groups]
@@ -198,20 +210,30 @@ cases:
     schema_pattern: true
     matches: true
     str_extract: {group: 2, value: "a"}
-  - id: lookahead-contributes-no-group-number
-    covers: [capture-groups]
+  - id: lookahead-is-rejected
+    covers: [unsupported]
     pattern: '^(?=AE)([A-Z]+)$'
-    subject: "AE"
-    schema_pattern: true
-    matches: true
-    str_extract: {group: 1, value: "AE"}
-  - id: backreference-names-a-group-number
-    covers: [capture-groups, escaping]
+    invalid: true
+  - id: negative-lookahead-is-rejected
+    covers: [unsupported]
+    pattern: 'a(?!b)'
+    invalid: true
+  - id: backreference-is-rejected
+    covers: [unsupported, escaping]
     pattern: '^(a)\1$'
-    subject: "aa"
-    schema_pattern: true
-    matches: true
-    str_extract: {group: 1, value: "a"}
+    invalid: true
+  - id: named-backreference-is-rejected
+    covers: [unsupported, escaping]
+    pattern: '^(?<x>a)\k<x>$'
+    invalid: true
+  - id: non-ascii-group-name-is-rejected
+    covers: [unsupported, unicode]
+    pattern: '^(?<\u{00E9}>a)$'
+    invalid: true
+  - id: dollar-group-name-is-rejected
+    covers: [unsupported]
+    pattern: '^(?<$>a)$'
+    invalid: true
   - id: unentered-alternative-group-has-no-value
     covers: [capture-groups]
     pattern: '^(?:(a)|(b))$'
@@ -226,27 +248,41 @@ cases:
     schema_pattern: true
     matches: true
     str_extract: {group: 1, value: null}
-  - id: repeated-alternative-clears-an-unentered-capture
+  - id: repeated-group-keeps-its-last-entered-capture
     covers: [capture-groups, dialect]
     pattern: '(?:(a)|b){2,3}'
     subject: "abb"
     schema_pattern: true
     matches: true
-    str_extract: {group: 1, value: null}
-  - id: empty-optional-repetition-preserves-the-last-consuming-capture
+    str_extract: {group: 1, value: "a"}
+  - id: empty-iteration-captures-the-empty-string
     covers: [capture-groups, empty-match, dialect]
     pattern: '(a|){1,3}b'
     subject: "ab"
     schema_pattern: true
     matches: true
-    str_extract: {group: 1, value: "a"}
-  - id: nested-repeated-alternative-clears-an-unentered-capture
+    str_extract: {group: 1, value: ""}
+  - id: nested-repeated-group-keeps-its-last-entered-capture
     covers: [capture-groups, dialect]
     pattern: '(a|(b))+'
     subject: "aba"
     schema_pattern: true
     matches: true
-    str_extract: {group: 2, value: null}
+    str_extract: {group: 2, value: "b"}
+  - id: empty-first-alternative-ends-the-repetition
+    covers: [capture-groups, empty-match, dialect]
+    pattern: '(|a)*'
+    subject: "aa"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: ""}
+  - id: nested-repetition-is-answered-without-backtracking
+    covers: [search]
+    pattern: '^(a+)+$'
+    subject: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!"
+    schema_pattern: false
+    matches: false
+    str_extract: null
   - id: escaped-dot-matches-only-a-full-stop
     covers: [escaping]
     pattern: '^a\.b$'
@@ -323,9 +359,9 @@ cases:
     matches: true
     str_extract: {group: 0, value: "a"}
     str_replace: {replacement: "", value: "aa"}
-  - id: replacement-lookbehind-reads-before-the-scan-position
+  - id: replacement-boundary-reads-before-the-scan-position
     covers: [anchors, search]
-    pattern: '(?<=a)a'
+    pattern: '\Ba'
     subject: "aaa"
     schema_pattern: false
     matches: true

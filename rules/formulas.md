@@ -141,11 +141,10 @@ a predicate's result.
 
 Two non-missing operands compare only when
 [VALUE-19](values.md#value-19) makes their runtime types mutually
-comparable, in the order the table below gives, and no other operand
-conversion occurs. A mixed `int` and `float` pair widens the integer to
-binary64 under [VALUE-8](values.md#value-8) before comparing. Every
-other pair fails: a temporal value is not comparable to text, and a `date` is
-not comparable to a `datetime`.
+comparable, in the order the table below gives, and no operand conversion
+occurs. A mixed `int` and `float` pair compares by exact mathematical value.
+Every other pair fails: a temporal value is not comparable to text, and a
+`date` is not comparable to a `datetime`.
 
 Fails: `incompatible_input_type`.
 Evidence: `negative-review-date-text`, `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`.
@@ -155,15 +154,13 @@ Replaces: REQ-0167, REQ-0168, REQ-0169, REQ-0190.
 |---|---|
 | `int` with `int` | Exact integer order |
 | `float` with `float` | Binary64 numeric order |
-| Mixed `int` and `float` | Widen the integer to binary64 under [VALUE-8](values.md#value-8), then compare |
+| Mixed `int` and `float` | Exact mathematical order under [VALUE-19](values.md#value-19) |
 | `str` with `str` | [Values](values.md) text order |
 | `date` with `date` | Chronological under [Values](values.md) |
 | `datetime` with `datetime` | Chronological under [Values](values.md) |
 
 Strings use the equality and total order [Values](values.md)
-defines. Above `2^53`, widening can make a neighboring integer equal to a
-float: `9007199254740993 = 9007199254740992.0` is `TRUE`. The same pair stays
-unequal in the exact comparisons [VALUE-19](values.md#value-19) lists.
+defines. `9007199254740993 = 9007199254740992.0` is `FALSE`.
 Two non-missing operands that are not mutually comparable, or a non-string
 operand to `LIKE` ([FORMULA-7](#formula-7)), fail with
 `incompatible_input_type`.
@@ -432,23 +429,29 @@ missing is consistent with [Column derivation](columns.md).
 
 <a id="formula-16"></a>
 
-### FORMULA-16. round_half_away_from_zero is the one rounding, and its tie behavior is fixed
+### FORMULA-16. There is one rounding: half away from zero, with near ties treated as ties
 
-`round_half_away_from_zero` rounds a numeric `source` to `digits` places,
-where `digits` is an integer and a negative value rounds left of the decimal
-point. A value exactly halfway between two candidates, or within
-`sqrt(2^-52) * 10^-digits` below such a tie, rounds half away from zero.
-Missing stays missing, a value that rounds to zero returns positive zero,
-never negative zero, and the result is a `float`. No other rounding exists,
-and a non-numeric source fails.
+Rounding to `digits` places, where a negative `digits` rounds left of the
+decimal point, sends a value exactly halfway between two candidates, or within
+`2^-26 * 10^-digits` below such a tie, away from zero; a result of zero is
+positive zero. The `round_half_away_from_zero` verb, CSV display precision
+([CSV-9](reference/csv.md#csv-9)), project-function result comparison
+([FUNC-13](profiles/functions.md#func-13)) and second resolution in
+`datetime_shift` ([TIME-16](temporal.md#time-16)) all use it. No other
+rounding exists.
 
 Fails: `incompatible_input_type`.
 Evidence: `schema-round-half-away-from-zero-ties`, `negative-round-half-away-from-zero-non-numeric-source`, `rust/crates/yamaa-adapters/tests/scalar_declarative_rounding.rs`.
 Replaces: REQ-0418, REQ-0419, REQ-1172.
 
-The `compute` grammar has no rounding function, and a derivation must not
-round by any other spelling. A non-numeric source is an
-`incompatible_input_type` validation error. Analysis datasets otherwise carry
+`2^-26` is `sqrt(2^-52)`. At two places, `2.675` (stored as
+`2.674999999999999822...`, inside the window) rounds to `2.68`, and
+`1.0049999999` (`1e-8` below the tie) rounds to `1.01`, while `1.004999999`
+(`1e-7` below) rounds to `1.00`. The `round_half_away_from_zero` verb takes a numeric `source` and an
+integer `digits`; missing stays missing and the result is a `float`. The
+`compute` grammar has no rounding function, and a derivation must not round by
+any other spelling. A non-numeric source is an `incompatible_input_type`
+validation error. Analysis datasets otherwise carry
 computed values at full precision; reporting decides the displayed places.
 [Values](values.md) has the same rule at conversion, where
 a non-integral value fails rather than being truncated.

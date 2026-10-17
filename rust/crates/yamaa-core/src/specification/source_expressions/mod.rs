@@ -151,9 +151,6 @@ impl Declaration {
                     crate::predicate_parser::ParseError::Grammar { .. },
                 )))
                 | None => {}
-                Some(Err(predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-                ))) => reject(extra, "predicate_regex", format!("{path}.filter")),
                 Some(Err(predicate_compiler::Error::Internal)) => {
                     return Err(PrepareError::Internal)
                 }

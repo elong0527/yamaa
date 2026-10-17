@@ -195,8 +195,6 @@ conditions:
   unpaired_fields: {phases: [validation]}
   unresolvable_name: {phases: [validation]}
   unsupported_operation: {phases: [planning]}
-  unsupported_regex_engine: {phases: [validation]}
-  unsupported_text_contract: {phases: [validation]}
   untransportable_text: {phases: [validation]}
   # REQ-1166
   value_metadata_not_output_column: {phases: [validation]}

@@ -30,6 +30,7 @@ pub mod numeric_compiler;
 pub mod numeric_parser;
 pub mod odm_source;
 pub mod parquet_source;
+pub mod portable_regex;
 pub mod predicate;
 pub mod predicate_compiler;
 pub mod predicate_parser;
@@ -60,8 +61,6 @@ pub mod verification_logs;
 
 /// Version of the shared core compiled into a native installation.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-pub mod regex;
 
 pub mod reduction;
 pub mod table;

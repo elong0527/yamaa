@@ -3,16 +3,14 @@ use super::{ConditionCode as C, Context, Diagnostic};
 use crate::json::Value as V;
 use crate::{
     predicate::{Condition, ErrorKind, EvaluationError, Route},
-    regex,
     value::ValueType,
 };
 
-/// Native resolver/resource failures remain borrowed and never acquire an
-/// invented predicate condition when diagnostic inspection cannot represent them.
+/// Native resolver failures remain borrowed and never acquire an invented
+/// predicate condition when diagnostic inspection cannot represent them.
 #[derive(Debug)]
 pub enum PredicateDiagnosticError<'a, E> {
     Resolution(&'a E),
-    Regex(&'a regex::MatchError),
 }
 fn text(s: &str) -> V {
     V::String(s.into())
@@ -63,7 +61,6 @@ impl<E> EvaluationError<E> {
             ErrorKind::Resolution { error, .. } => {
                 return Err(PredicateDiagnosticError::Resolution(error))
             }
-            ErrorKind::Regex(error) => return Err(PredicateDiagnosticError::Regex(error)),
             ErrorKind::Condition(condition) => condition,
         };
         Ok(condition.static_diagnostic(&self.spec_path, &self.route))

@@ -4,8 +4,8 @@
 use crate::limits::Limits;
 pub use crate::numeric_parser::{ParseResource, SourcePosition, SourceSpan};
 use crate::{
+    portable_regex,
     predicate::Comparison,
-    regex,
     temporal::{Date, DateTime, TemporalError},
 };
 use std::collections::BTreeSet;
@@ -49,7 +49,7 @@ impl GrammarFailure {
     }
 }
 
-/// Resource and unsupported outcomes never become a grammar rejection.
+/// Resource outcomes never become a grammar rejection.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ParseError {
     #[error(
@@ -72,14 +72,8 @@ pub enum ParseError {
     #[error("predicate parser regex limit: position={position:?}, resource={resource:?}, limit={limit:?}")]
     RegexLimit {
         position: SourcePosition,
-        resource: regex::Resource,
+        resource: portable_regex::Resource,
         limit: usize,
-    },
-    #[error("predicate parser unsupported regex: position={position:?}, byte={byte:?}, feature={feature:?}")]
-    UnsupportedRegex {
-        position: SourcePosition,
-        byte: usize,
-        feature: &'static str,
     },
 }
 
@@ -754,22 +748,17 @@ impl Parser<'_> {
             unreachable!()
         };
         let site = self.nodes[pattern].span.start;
-        regex::Pattern::compile(text).map_err(|error| match error {
-            regex::CompileError::Invalid { byte, reason } => grammar(
+        portable_regex::Pattern::compile(text).map_err(|error| match error {
+            portable_regex::CompileError::Invalid { byte, reason } => grammar(
                 self.text,
                 site,
                 GrammarFailure::InvalidRegex { byte, reason },
                 format!("invalid regex in str_contains pattern: {reason}"),
             ),
-            regex::CompileError::Limit { resource, limit } => ParseError::RegexLimit {
+            portable_regex::CompileError::Limit { resource, limit } => ParseError::RegexLimit {
                 position: position(self.text, site),
                 resource,
                 limit,
-            },
-            regex::CompileError::Unsupported { byte, feature } => ParseError::UnsupportedRegex {
-                position: position(self.text, site),
-                byte,
-                feature,
             },
         })?;
         self.require(
