@@ -19,7 +19,7 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 import yaml12
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 REPORT_VERSION = "0.3.0-draft"
 RUNTIME: Literal["python"] = "python"
@@ -156,6 +156,12 @@ class SourceSpanObservation(_FrozenModel):
 
     start: int = Field(ge=0)
     end: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_order(self):
+        if self.start > self.end:
+            raise ValueError("source span start must not exceed end")
+        return self
 
 
 class DiagnosticObservation(_FrozenModel):
@@ -660,11 +666,15 @@ def parse_report(text: str) -> ExampleReport:
     """Require every complete observation field before strict JSON model admission."""
     raw = json.loads(text)
 
+    # Geometry keys ride the wire only when recorded; every other
+    # observation field is always present in a complete report.
+    WIRE_OPTIONAL = {"source_span", "operand_route"}
+
     def complete(value, model):
         if not isinstance(value, dict):
             raise ValueError("complete report fields differ: " + model.__name__)
         fields = model.model_fields
-        required = {name for name, field in fields.items() if field.is_required()}
+        required = set(fields) - WIRE_OPTIONAL
         allowed = set(fields)
         actual = set(value)
         if not required.issubset(actual) or not actual.issubset(allowed):
@@ -687,6 +697,7 @@ def parse_report(text: str) -> ExampleReport:
         for item in raw[group]:
             complete(item, model)
     for node in raw["nodes"]:
+        complete(node, NodeObservation)
         for group, model in (
             ("diagnostics", DiagnosticObservation),
             ("unsupported", UnsupportedObservation),

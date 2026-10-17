@@ -53,10 +53,11 @@ fn parse_span(value: &Value) -> Result<SourceSpan, InvalidIssue> {
             .and_then(|bound| usize::try_from(bound).ok())
             .ok_or(InvalidIssue)
     };
-    Ok(SourceSpan {
-        start: bound("start")?,
-        end: bound("end")?,
-    })
+    let (start, end) = (bound("start")?, bound("end")?);
+    if start > end {
+        return Err(InvalidIssue);
+    }
+    Ok(SourceSpan { start, end })
 }
 
 fn parse_route(value: &Value) -> Result<Vec<String>, InvalidIssue> {
@@ -389,6 +390,7 @@ mod tests {
             ("source_span", json!({"start": 0})),
             ("source_span", json!({"start": -1, "end": 0})),
             ("source_span", json!({"start": 0.5, "end": 1})),
+            ("source_span", json!({"start": 9, "end": 3})),
             ("source_span", json!({"start": 0, "end": 1, "extra": 2})),
             ("operand_route", json!([1])),
             ("operand_route", json!("root")),
