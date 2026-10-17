@@ -36,6 +36,24 @@ the different Python and R i64 vectors, including R's value beyond 2^53.
 | public-define | Existing Define input/XML/JSON owners, creation time, column schemas and numeric metadata variants |
 | public-contract | Shared YAML, issue/argument/view names, empty/fatal log variants; distinct host i64 vectors |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
+| diagnostic-parity | Refusal cases with their complete expected diagnostic records |
+
+`diagnostic-parity` is the cross-host diagnostic parity truth. Each case holds a
+specification, its input and every record the public `check` or `domain` call
+returns, in order: phase, condition, requirement, specification paths,
+context, source span and operand route. Both public contract suites require
+their records to equal this truth field for field, so the two hosts equal each
+other. Together the cases cover every value shape a host converts: integers at
+and beyond 2^53, the signed 64-bit bounds and a wider literal, fractional and
+whole floats, null, non-ASCII text, text holding NUL, nested and empty objects
+and arrays, absent and present geometry, an empty route, an absent
+requirement, empty specification paths and several records. A zero-width span
+is not reachable from a specification, because spans come only from expression
+nodes; the adapter record tests own it. Context numbers are tagged
+(`{"integer": "<decimal>"}` or `{"float": "<decimal>"}`) and text holding NUL
+is `{"hex": "<UTF-8 bytes>"}`, so no JSON reader chooses a host number type.
+Each host then applies its documented representation; R keeps an integer
+wider than 2^53 as its exact decimal text.
 
 The R grammar suite's conditional failure and original
 CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid

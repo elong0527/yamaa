@@ -382,6 +382,70 @@ qualify_diagnostic_records <- function() {
   cat("diagnostic records keep exact wide integers and distinguish recorded from absent geometry\n")
 }
 qualify_diagnostic_records()
+
+# Python reads the same cases, and both hosts equal this one truth. Numbers
+# are tagged ({"integer": text} or {"float": text}) and text holding NUL is
+# {"hex": bytes}, so no JSON reader chooses a number type. Under this host's
+# documented rules an integer of magnitude at most 2^53 is a double, a wider
+# one keeps its exact decimal text, and text holding NUL is a yamaa_utf8 raw.
+parity_value <- function(value) {
+  # A number token is read by jsonlite, not as.numeric: R's own conversion
+  # can mis-round a long token (seen on macOS).
+  tag <- if (is.list(value) && length(value) == 1L) names(value) else NULL
+  if (identical(tag, "integer")) {
+    digits <- sub("^-", "", value$integer)
+    exact <- nchar(digits) < 16L || (nchar(digits) == 16L && digits <= "9007199254740992")
+    return(if (exact) as.double(jsonlite::fromJSON(value$integer)) else value$integer)
+  }
+  if (identical(tag, "float")) return(as.double(jsonlite::fromJSON(value$float)))
+  if (identical(tag, "hex")) {
+    bytes <- fixture_bytes(value)
+    if (any(bytes == as.raw(0L))) return(structure(bytes, class = "yamaa_utf8"))
+    return(enc2utf8(rawToChar(bytes)))
+  }
+  if (is.list(value)) return(lapply(value, parity_value))
+  stopifnot(is.null(value) || is.character(value) || is.logical(value))
+  value
+}
+parity_record <- function(truth) {
+  span <- truth$source_span
+  list(phase = truth$phase, condition = truth$condition, requirement = truth$requirement,
+    spec_paths = as.character(unlist(truth$spec_paths)),
+    context = parity_value(truth$context),
+    source_span = if (is.null(span)) NULL else
+      list(start = as.numeric(span[[1L]]), end = as.numeric(span[[2L]])),
+    operand_route = if (is.null(truth$operand_route)) NULL else
+      as.character(unlist(truth$operand_route)))
+}
+qualify_diagnostic_parity <- function() {
+  root <- tempfile("yamaa-diagnostic-parity-"); dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  for (case in read_host_fixture(host_fixture_root, "diagnostic-parity")$cases) {
+    directory <- file.path(root, case$name); dir.create(directory)
+    spec <- file.path(directory, "spec.yaml")
+    if (!is.null(case$specification_yaml)) {
+      writeBin(charToRaw(enc2utf8(case$specification_yaml)), spec)
+      writeBin(fixture_bytes(case$input_csv), file.path(directory, "input.csv"))
+    }
+    result <- switch(case$entry, check = yamaa_check(spec), domain = yamaa_domain(spec))
+    frame <- result$issues
+    expected <- lapply(case$records, parity_record)
+    if (!identical(result$diagnostics, expected)) {
+      str(result$diagnostics); str(expected)
+      stop("diagnostic records differ from the shared parity truth: ", case$name)
+    }
+    # The frame is the projection of the same records. jsonlite cuts decoded
+    # text at an escaped NUL, so a context holding one is compared above only.
+    if (!any(grepl("\\u0000", frame$context, fixed = TRUE))) check_issues(result)
+    stopifnot(identical(frame$phase, vapply(expected, `[[`, "", "phase")),
+      identical(frame$condition, vapply(expected, `[[`, "", "condition")),
+      identical(frame$requirement, vapply(expected, function(record)
+        if (is.null(record$requirement)) NA_character_ else record$requirement, "")),
+      identical(frame$spec_paths, lapply(expected, `[[`, "spec_paths")))
+  }
+  cat("diagnostic records equal the shared parity truth field for field\n")
+}
+qualify_diagnostic_parity()
 cat("public signatures, argument errors, owned results and logs, exact values, interrupts and reentrancy passed\n")
 
 qualify_public_integer_callback <- function() {
