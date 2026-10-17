@@ -247,11 +247,11 @@ them are checked before matching.
 | --- | --- |
 | Referenced variable's type | `source` |
 | Declared YAML scalar's type (`str`, `int`, `float`, or `bool`); a missing literal has no static type | `literal` |
-| `date` | `date_impute`, `to_date` |
-| `datetime` | `datetime_impute` |
-| `int` | `date_diff`, `rank`, `row_number`, `study_day`, `to_epoch_day` |
+| `date` | `impute` with `type: date`, `to_date` |
+| `datetime` | `impute` with `type: datetime` |
+| `int` | `diff` with `type: date`, `rank`, `row_number`, `study_day`, `to_epoch_day` |
 | `float` | `round_half_away_from_zero` |
-| `str` | `baseline_flag`, `cut`, `date_precision`, `datetime_precision`, `str_case`, `str_extract`, `str_pad`, `str_replace`, `str_template` |
+| `str` | `baseline_flag`, `cut`, `imputation_flag`, `precision`, `str_case`, `str_extract`, `str_pad`, `str_replace`, `str_template` |
 | Numeric (`int` or `float`) | `compute` |
 
 For `compute`, either possible result type compares with `int` and `float`
