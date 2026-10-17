@@ -335,12 +335,38 @@ class TestClosedGrammarContracts(unittest.TestCase):
         self.assertEqual(OWNER_GRAMMAR_CHECKS.validate_grammar_contracts(self.root), [])
 
     def test_every_rule_that_owns_a_grammar_has_a_contract(self):
-        for contract, rule_id in OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS.items():
+        for contract in OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS:
             with self.subTest(contract=contract):
                 path = self.root / "yaml" / "grammar" / f"{contract}.yaml"
                 self.assertTrue(path.is_file())
                 document = yaml.safe_load(path.read_text())
-                self.assertEqual(document["rule"], rule_id)
+                self.assertEqual(
+                    document["rule"],
+                    OWNER_GRAMMAR_CHECKS.grammar_rule_id(self.root, contract),
+                )
+
+    def test_a_marked_card_block_owns_its_grammar(self):
+        text = (
+            "### FORMULA-1. Title\n\nStatement.\n\n<!-- grammar: numeric -->\n\n"
+            "```text\nexpr := term\n```\n"
+        )
+        self.assertEqual(
+            OWNER_GRAMMAR_CHECKS.rule_grammar_block(text, "numeric"), "expr := term"
+        )
+        self.assertIsNone(OWNER_GRAMMAR_CHECKS.rule_grammar_block(text, "predicate"))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "rules").mkdir()
+            (root / "rules" / "formulas.md").write_text(text)
+            self.assertEqual(
+                OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "numeric"), "formulas"
+            )
+            self.assertEqual(
+                OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "predicate"),
+                "operations/predicates",
+            )
+            (root / "rules" / "copy.md").write_text(text)
+            self.assertIsNone(OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "numeric"))
 
     def test_a_continuation_aligns_under_its_definition_or_its_bar(self):
         rendered = OWNER_GRAMMAR_CHECKS.render_grammar_block(
