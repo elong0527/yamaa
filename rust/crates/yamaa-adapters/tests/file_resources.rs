@@ -24,6 +24,7 @@ mod file {
                 .unwrap();
                 let path = study.text(&format!("{name}/spec.yaml"));
                 let result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -185,6 +186,7 @@ mod file {
                 drop(prepared);
 
                 let mut result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -245,6 +247,7 @@ mod file {
                 .unwrap();
                 let path = study.text("entry/spec.yaml");
                 let issues = file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -303,8 +306,17 @@ mod file {
                         specification: &path,
                         base_directory: ".",
                     };
-                    let checked = file_application::check(request(), identity());
-                    let built = file_application::domain(request(), identity()).map_or_else(
+                    let checked = file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    );
+                    let built = file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    )
+                    .map_or_else(
                         |issues| issues,
                         |result| {
                             assert!(result.output().is_none());
@@ -355,6 +367,7 @@ mod file {
                 fs::write(study.0.join("entry/spec.yaml"), spec).unwrap();
                 let path = study.text("entry/spec.yaml");
                 let issues = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,

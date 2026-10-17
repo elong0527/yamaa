@@ -67,10 +67,16 @@ mod scalar {
                 specification: &path,
                 environment: None,
             };
-            assert!(file_application::check(request, identity(&path)).is_empty());
+            assert!(file_application::check(
+                yamaa_core::project_function::Language::Python,
+                request,
+                identity(&path)
+            )
+            .is_empty());
             fs::create_dir(study.0.join("input")).unwrap();
             fs::write(study.0.join("input/adsl.csv"), INPUT).unwrap();
             let result = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -91,7 +97,11 @@ mod scalar {
                 specification: &path,
                 environment: None,
             };
-            let findings = file_application::check(request, identity(&path));
+            let findings = file_application::check(
+                yamaa_core::project_function::Language::Python,
+                request,
+                identity(&path),
+            );
             assert_eq!(findings.len(), 1, "{findings:?}");
             let finding = &findings[0];
             assert_eq!(finding.phase, "validation");
@@ -107,6 +117,7 @@ mod scalar {
             );
             assert_eq!(
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None
@@ -127,6 +138,7 @@ mod scalar {
             let study = Study::new(&source, false);
             let path = study.path();
             let findings = file_application::check(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -152,6 +164,7 @@ mod scalar {
             );
             let path = study.path();
             let findings = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -229,6 +242,7 @@ mod scalar {
             }
             let path = study.path();
             let issues = file_application::check(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -237,6 +251,7 @@ mod scalar {
             );
             assert!(issues.is_empty(), "{issues:?}");
             let result = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -274,6 +289,7 @@ mod scalar {
             let study = Study::new(&source, false);
             let path = study.path();
             let findings = file_application::check(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -357,6 +373,7 @@ mod scalar {
                 let study = Study::new(name, true);
                 let path = study.path();
                 let check = file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -365,6 +382,7 @@ mod scalar {
                 );
                 assert!(check.is_empty(), "{name}: {check:?}");
                 let mut result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -402,6 +420,7 @@ mod scalar {
                 let study = Study::new(name, false);
                 let path = study.path();
                 let findings = file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -422,6 +441,7 @@ mod scalar {
                 let actual = yamaa_adapters::json!({"phase":finding.phase, "condition":finding.condition, "requirement":finding.requirement, "spec_paths":finding.spec_paths, "context":finding.context.clone()});
                 assert_eq!(actual, expected, "{name}");
                 let failed = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -470,9 +490,9 @@ mod scalar {
         fs::write(study.0.join("spec.yaml"), source).unwrap();
         fs::write(study.0.join("input.csv"), input).unwrap();
         let path = study.path();
-        let issues = file_application::check(Request { specification: &path, environment: None }, identity(&path));
+        let issues = file_application::check(yamaa_core::project_function::Language::Python, Request { specification: &path, environment: None }, identity(&path));
         assert!(issues.is_empty(), "{issues:?}");
-        let mut result = file_application::domain(Request { specification: &path, environment: None }, identity(&path)).unwrap();
+        let mut result = file_application::domain(yamaa_core::project_function::Language::Python, Request { specification: &path, environment: None }, identity(&path)).unwrap();
         assert!(result.issues().is_empty(), "{:?}", result.issues());
         assert!(!study.0.join("result.csv").exists());
         assert!(result.save().unwrap());
@@ -700,6 +720,7 @@ mod scalar {
                 }
                 let path = study.path();
                 let result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -793,6 +814,7 @@ mod scalar {
                     base_directory: ".",
                 };
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -870,6 +892,7 @@ mod scalar {
                     base_directory: ".",
                 };
                 let issues = match file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -1027,6 +1050,7 @@ columns:
                 base_directory: ".",
             };
             let issues = match file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &specification,
                     environment: None,
@@ -1225,6 +1249,7 @@ intermediates:
                     base_directory: ".",
                 };
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -1297,6 +1322,7 @@ intermediates:
                     base_directory: ".",
                 };
                 let issues = match file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -1453,6 +1479,7 @@ columns:
                     base_directory: ".",
                 };
                 let issues = match file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -1522,6 +1549,7 @@ columns:
                     base_directory: ".",
                 };
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -1583,6 +1611,7 @@ columns:
         ) -> Result<file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>> {
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
             file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &specification,
                     environment: None,
@@ -1869,6 +1898,7 @@ columns:
                     base_directory: ".",
                 };
                 let mut result = match file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -1931,6 +1961,7 @@ columns:
                 base_directory: ".",
             };
             let issues = match file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &specification,
                     environment: None,
@@ -1991,6 +2022,7 @@ columns:
                     base_directory: ".",
                 };
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -2067,6 +2099,7 @@ columns:
         ) -> Result<file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>> {
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
             file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &specification,
                     environment: None,

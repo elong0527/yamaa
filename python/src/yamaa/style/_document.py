@@ -109,6 +109,8 @@ def last_line(node: yaml.Node) -> int:
     if isinstance(node, yaml.ScalarNode) and node.style in ("|", ">"):
         # A block scalar's end mark follows its trailing blank lines; the
         # scalar ends on its last written line.
+        # `parse` composes from text, so every mark keeps its buffer.
+        assert end.buffer is not None
         written = end.buffer[: end.pointer].rstrip()
         # The buffer keeps the file's written breaks, so count CR, LF and
         # CRLF alike (as `parse` splits them): counting "\n" alone ends a
@@ -124,7 +126,9 @@ def last_line(node: yaml.Node) -> int:
 def _content_lines(node: yaml.Node) -> Iterator[int]:
     """Lines after the first of every multi-line scalar or flow collection."""
     first, final = node.start_mark.line, last_line(node)
-    if isinstance(node, yaml.ScalarNode) or node.flow_style:
+    if isinstance(node, yaml.ScalarNode) or (
+        isinstance(node, yaml.CollectionNode) and node.flow_style
+    ):
         yield from range(first + 1, final + 1)
         return
     children: list[yaml.Node] = []
@@ -137,8 +141,13 @@ def _content_lines(node: yaml.Node) -> Iterator[int]:
         yield from _content_lines(child)
 
 
-def walk(node: yaml.Node, path: str = "$") -> Iterator[tuple[str, yaml.Node]]:
-    """Yield every node with its positional spec path (`columns[3].name`)."""
+def walk(node: yaml.Node | None, path: str = "$") -> Iterator[tuple[str, yaml.Node]]:
+    """Yield every node with its positional spec path (`columns[3].name`).
+
+    An empty document has no root and yields nothing.
+    """
+    if node is None:
+        return
     yield path, node
     if isinstance(node, yaml.MappingNode):
         for key, value in node.value:
