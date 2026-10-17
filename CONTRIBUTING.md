@@ -58,6 +58,8 @@ and supported targets. Its inventory is the command reference. Set
 | `make test-rust` | Run `cargo test --locked --workspace`, including both host bindings. |
 | `make test-python` | Run package/tool tests and standalone installed-host suites. |
 | `make test-r` | Build, install and strictly check a fresh R source package. |
+| `make check-equivalence` | Require unchanged results from fresh builds of both hosts (executor gate). |
+| `make probe-executor` | Time the executor probe on a release build; not part of CI. |
 | `make docs-test docs` | Test page ownership, generate dashboards and build the strict site. |
 
 For a focused Rust change, run `cargo test --locked -p <crate>` from `rust/`.
@@ -101,6 +103,20 @@ is a partial structured assertion: the expected first issue, every declared
 path and context facts must match. Complete authored reports additionally pin
 all findings, exact values, logs, callbacks and artifact observations. Passing
 static repository validation does not establish engine release qualification.
+
+A change to the executor, such as rewrite 1 (#2785), must leave every result
+unchanged. Each such PR passes ordinary CI and `make check-equivalence` on its
+exact head, and says so in the PR. The gate builds the Python and R packages
+from the checkout and installs both outside it. On each host it runs public
+benchmark conformance: every active benchmark must reproduce its expected
+bytes, and every negative benchmark its first diagnostic's phase, condition,
+requirement and specification paths. On the same installs it then runs the
+installed Python suites and `R CMD check`, which carry the cross-host
+diagnostic parity truth and the host-fixture families. `make probe-executor`
+times one specification at 10,000, 100,000 and 1,000,000 rows, with and
+without one keyed intermediate lookup; `examples/executor_probe.rs` in the
+`yamaa` crate documents its shapes and arguments. Record its timings on an
+issue, never in the repository.
 
 ## CI and release qualification
 

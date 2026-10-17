@@ -12,6 +12,10 @@ HELP = """yamaa repository commands (run from the repository root)
   test-python       Package/tools tests and standalone public-host suites outside checkout.
   test-r            Build/install a standalone R archive and require R CMD check OK.
                     Needs R 4.6.1, Rust, GNU make and the package's Suggests installed.
+  check-equivalence Executor equivalence gate: build both hosts from the checkout, then
+                    public benchmark conformance, installed Python suites, R CMD check.
+                    Needs what test-python and test-r need. Not part of CI.
+  probe-executor    Time the executor probe on a release build. Not part of CI.
   docs-test         Canonical page and benchmark dashboard tests.
   docs-generate     Generate benchmark dashboards from current authored data.
   docs-build        Strict MkDocs build (generate dashboards first).
