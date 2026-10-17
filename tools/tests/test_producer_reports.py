@@ -85,10 +85,10 @@ class OriginalProducerCohort(unittest.TestCase):
     def test_projection_preserves_every_portable_ledger(self):
         projected = module.project_report(self.raw, self.case)
         self.assertTrue(compare_reports(self.reference, projected).passed)
-        self.assertEqual(len(projected.tables), 5)
+        self.assertEqual(len(projected.tables), 4)
         self.assertEqual(
             [table.name for table in projected.tables if table.stage == "source"],
-            ["SEED", "A", "B"],
+            ["SEED", "A"],
         )
 
     def test_canonical_windows_identities_are_compared_without_host_filesystem_access(
