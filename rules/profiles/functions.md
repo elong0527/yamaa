@@ -5,7 +5,8 @@ caller supplies a project environment declaring `functions`, and to the
 specification calls that name them. Project code runs in the environment's one
 host language through statically named installed callables, its contract is
 closed, and its inline tests run before any study data is read. A build
-without project functions is unaffected.
+without project functions is unaffected, except that a supplied project
+environment is admitted under [FUNC-2](#func-2).
 
 ## The project environment
 

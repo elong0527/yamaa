@@ -4,7 +4,8 @@ This file is a profile: it is optional, and it applies to a build whose study
 environment declares `codelists` and to the specifications that bind them
 through `submission.codelist`. A codelist is declared once in the environment,
 every binding names it, and a binding enforces the items its list declares. A
-build whose environment declares no codelists is unaffected.
+build whose environment declares no codelists is unaffected, except for a
+column that declares `inventory_vocabulary` under [CT-11](#ct-11).
 
 ## Declaring codelists
 
