@@ -188,6 +188,12 @@ class MemoryResolver(ResourceResolver):
 
     def put_frame(self, key: str, frame, *, reference: str | None = None):
         """Retain an immutable Arrow-compatible frame without IPC serialization."""
+        if frame is None:
+            # A None frame stores a result with neither data nor frame:
+            # capture then fails 'rejected', misleadingly blaming the
+            # specification or session instead of this call. Refuse it
+            # here, at put time. Frames are otherwise opaque host objects.
+            raise TypeError("resource frame must not be None")
         self._validate_key_reference(key, reference)
         self._next += 1
         self.objects[key] = ResourceResult(

@@ -5,16 +5,19 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this when you need a maintainer decision about what the rules or
-        docs mean - not for general chat (that lives in Discussions).
-        Title it like "<area>: <the question>" - for example
-        "rules: is an odm column derivation row-local?".
+        Everything here is public: use public fixtures or invented data only.
+        Checking yamaa against a private study? Follow
+        [Reporting findings from private studies](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#reporting-findings-from-private-studies)
+        first. Use this when the rules or docs are silent or ambiguous; if
+        they contradict each other or the engine, file a bug report instead.
+        Title it `<area>: <the question>`, where the area is rules, schema,
+        engine, python, R, benchmark, harbor or docs.
 
   - type: textarea
     id: question
     attributes:
       label: "The question"
-      description: "One clear question. Explain it like I'm five."
+      description: "One clear question in plain words. Add the answer you would propose, if you have one."
       placeholder: "Is an odm column derivation inside a row template row-local or dataset-level?"
     validations:
       required: true
@@ -23,29 +26,14 @@ body:
     id: current-rule
     attributes:
       label: "What the rule says today"
-      description: "Quote or link the rule, REQ ID, or docs that bear on this. If the engines or docs disagree, show both sides."
-      placeholder: "REQ-1260 says a column-level derivation is row-local unless it uses a lookup... but the old engine treats odm as dataset-level."
+      description: "Quote or link the rule, REQ ID or docs that bear on this, and say where they are silent or ambiguous."
+      placeholder: "REQ-1260 makes a column-level derivation row-local unless it uses a lookup, an aggregate or a window, but does not mention odm bindings."
 
   - type: textarea
     id: why
     attributes:
       label: "Why it matters"
       description: "What decision does this unblock?"
-      placeholder: "The clean-room engine and the old engine disagree, so specs behave differently depending on which one runs them."
-    validations:
-      required: true
-
-  - type: dropdown
-    id: area
-    attributes:
-      label: "Area"
-      description: "Which part of yamaa is this about?"
-      options:
-        - rules
-        - benchmark
-        - docs
-        - python
-        - schema
-        - other
+      placeholder: "Study teams cannot tell whether a row template may read an odm column directly or needs an intermediate first."
     validations:
       required: true

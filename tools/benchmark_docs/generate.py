@@ -116,6 +116,8 @@ def linked_specs(spec):
     parents = spec.get("parents", [])
     if isinstance(parents, str):
         parents = [parents]
+    if not isinstance(parents, list):
+        parents = []
     linked = [parent for parent in parents if isinstance(parent, str) and parent]
     inputs = spec.get("input", {})
     if isinstance(inputs, dict):
@@ -830,7 +832,10 @@ def render_benchmark(benchmark, previous=None, next=None):
     labels = {}
     derived = set()
     for owner in reversed(column_specs):
-        columns = [item for item in owner.get("columns", []) if isinstance(item, dict)]
+        declared = owner.get("columns", [])
+        if not isinstance(declared, list):
+            declared = []
+        columns = [item for item in declared if isinstance(item, dict)]
         labels.update(
             (item["name"], item["label"])
             for item in columns
