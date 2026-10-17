@@ -240,9 +240,12 @@ result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]]); 
 stopifnot(grepl('xlink:href="dm.json"', rawToChar(artifacts(result)[[2L]]$bytes), fixed = TRUE),
   isTRUE(result$save()), file.exists(file.path(root, "artifacts/dm.json")), !file.exists(file.path(root, "dm.json")))
 previous <- rawfile(file.path(root, "artifacts/define.xml"))
-writeLines(gsub("values: [F, M, U]", "values: [F, M]", spec, fixed = TRUE), file.path(root, "parents/base.yaml"))
+# The SEX codelist lists its items, so an allowed_values beside it states the same value set twice.
+sex <- which(spec == "    derivation: DM_RAW.SEX"); stopifnot(length(sex) == 1L)
+writeLines(append(spec, c("    verifications:", "      - allowed_values:", "          values: [F, M, U]"), after = sex),
+  file.path(root, "parents/base.yaml"))
 result <- yamaa_define(environment, "sdtm", created = host_truth[["created"]])
-stopifnot("codelist_values_conflict" %in% result$issues$condition, "REQ-0955" %in% result$issues$requirement,
+stopifnot("redundant_declaration" %in% result$issues$condition, "REQ-0955" %in% result$issues$requirement,
   refused(result), identical(rawfile(file.path(root, "artifacts/define.xml")), previous))
 unlink(root, recursive = TRUE)
 root <- fixture("sdtm-dm-metadata")

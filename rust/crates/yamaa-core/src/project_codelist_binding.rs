@@ -4,15 +4,10 @@ use crate::{
     dataset::{Check, Verification},
     diagnostic::{ConditionCode as C, Diagnostic},
     project_terminology::{BindingFinding, Catalogue},
-    value::{ColumnType, Value},
+    value::ColumnType,
 };
 use std::vec;
 
-#[derive(Clone, Copy, Debug)]
-pub struct AllowedValues<'a> {
-    pub path: &'a str,
-    pub values: &'a [Value],
-}
 #[derive(Clone, Copy, Debug)]
 pub enum Path<'a> {
     Authored(&'a str),
@@ -36,30 +31,29 @@ pub struct Binding<'a> {
     pub kind: ColumnType,
     pub path: Path<'a>,
     pub codelist: &'a str,
-    pub allowed_values: &'a [AllowedValues<'a>],
+    /// Paths of the column's `allowed_values` verifications. Only a column-level
+    /// binding is compared with them; a value-level binding supplies none.
+    pub allowed_values: &'a [&'a str],
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cause {
     Unknown,
     TypeMismatch {
         expected: ColumnType,
         actual: ColumnType,
     },
-    ValuesConflict {
+    /// The `allowed_values` verification at this path restates the bound items.
+    Redundant {
         verification: String,
-        codelist_values: Vec<Value>,
-        allowed_values: Vec<Value>,
     },
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Finding {
     path: String,
     column: String,
     codelist: String,
     cause: Cause,
 }
-// All Value floats are finite by construction; structural equality is reflexive.
-impl Eq for Finding {}
 impl Finding {
     pub fn cause(&self) -> &Cause {
         &self.cause
@@ -93,21 +87,12 @@ impl Finding {
                 context.insert("column_type".into(), V::String(kind(*actual).into()));
                 C::CodelistBindingTypeMismatch
             }
-            Cause::ValuesConflict {
-                verification,
-                codelist_values,
-                allowed_values,
-            } => {
-                paths.push(verification.clone());
-                context.insert(
-                    "codelist_values".into(),
-                    V::Array(codelist_values.iter().cloned().map(V::from).collect()),
-                );
-                context.insert(
-                    "allowed_values".into(),
-                    V::Array(allowed_values.iter().cloned().map(V::from).collect()),
-                );
-                C::CodelistBindingValuesConflict
+            Cause::Redundant { verification } => {
+                // The redundant declaration is the verification; the binding
+                // that already states the value set is reported beside it.
+                paths = vec![verification.clone()];
+                context.insert("stated_by".into(), V::String(self.path.clone()));
+                C::CodelistAllowedValuesRedundant
             }
         };
         Diagnostic {
@@ -125,7 +110,7 @@ pub struct BoundCodelist {
     pub verification: Verification,
 }
 /// Bind every admitted codelist and retain all independent semantic findings.
-/// Extensible/external bindings retain their ordinary explicit verification only.
+/// Every list of items is enforced; an external dictionary binding is not.
 pub fn bind(
     catalogue: &Catalogue,
     bindings: &[Binding<'_>],
@@ -142,30 +127,23 @@ pub fn bind(
             codelist: binding.codelist.into(),
             cause,
         };
-        let faults = catalogue.bind(binding.codelist, binding.kind, None);
+        let faults = catalogue.bind(
+            binding.codelist,
+            binding.kind,
+            !binding.allowed_values.is_empty(),
+        );
         for fault in faults {
-            findings.push(make(match fault {
-                BindingFinding::UnknownCodelist => Cause::Unknown,
+            match fault {
+                BindingFinding::UnknownCodelist => findings.push(make(Cause::Unknown)),
                 BindingFinding::TypeMismatch { expected, actual } => {
-                    Cause::TypeMismatch { expected, actual }
+                    findings.push(make(Cause::TypeMismatch { expected, actual }))
                 }
-                BindingFinding::ValuesConflict => unreachable!("no explicit value set supplied"),
-            }));
-        }
-        for allowed in binding.allowed_values {
-            for fault in catalogue.bind(binding.codelist, binding.kind, Some(allowed.values)) {
-                // Unknown/type findings were emitted once per binding above.
-                if let BindingFinding::ValuesConflict = fault {
-                    findings.push(make(Cause::ValuesConflict {
-                        verification: allowed.path.into(),
-                        codelist_values: catalogue
-                            .enforced_items(binding.codelist)
-                            .expect("only fixed item lists conflict")
-                            .iter()
-                            .map(|item| item.value.clone())
-                            .collect(),
-                        allowed_values: allowed.values.to_vec(),
-                    }));
+                BindingFinding::RedundantAllowedValues => {
+                    for verification in binding.allowed_values {
+                        findings.push(make(Cause::Redundant {
+                            verification: (*verification).into(),
+                        }));
+                    }
                 }
             }
         }

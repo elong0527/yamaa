@@ -209,8 +209,6 @@ rows:
           - otherwise: {literal: null}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VISIT, PARAMCD]
   - row_count:
       min: 22
       max: 22

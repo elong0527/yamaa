@@ -310,8 +310,9 @@ mod execution {
                     ],
                 ]
             );
-            assert_eq!(execution.verifications.len(), 1);
-            assert_eq!(execution.verifications[0].failed_count, 0);
+            // The organization level declares no verification: its `unique`
+            // repeated the study's keys, which output-key validation asserts.
+            assert!(execution.verifications.is_empty());
             assert_eq!(
                 yamaa_adapters::csv_artifact::render(&execution.dataset, &[0, 1, 2, 3], None)
                     .unwrap(),
@@ -927,7 +928,7 @@ mod execution {
             replay_source_selection_truth(
                 include_str!("fixtures/original_not_missing.json"),
                 "column-check",
-                10,
+                9,
             );
         }
 
@@ -1095,7 +1096,7 @@ mod execution {
             replay_source_selection_truth(
                 include_str!("fixtures/row_column_checks.json"),
                 "row-column",
-                48,
+                47,
             );
         }
 

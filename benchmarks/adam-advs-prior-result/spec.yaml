@@ -57,8 +57,6 @@ columns:
           order_by: [{variable: AVISITN, nulls: last}, VSSEQ]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
       min: 14
       max: 14

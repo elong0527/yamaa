@@ -740,7 +740,7 @@ rows:
             let mut result = study.build(&raw);
             assert!(result.issues().is_empty());
             assert!(result.output().is_some());
-            assert_eq!(result.log_table(false).unwrap().rows(), 4);
+            assert_eq!(result.log_table(false).unwrap().rows(), 3);
             assert_eq!(result.log_table(true).unwrap().rows(), 1);
             assert_eq!(
                 result.observations()["artifacts"],
@@ -915,7 +915,7 @@ rows:
             assert!(result.save().unwrap());
             let report = result.observations();
             for (name, rows, integer_columns) in
-                [("checks", 4, vec![10, 11]), ("warnings", 1, vec![7])]
+                [("checks", 3, vec![10, 11]), ("warnings", 1, vec![7])]
             {
                 let artifact = report["artifacts"]
                     .as_array()

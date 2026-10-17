@@ -63,7 +63,3 @@ columns:
     type: str
     label: Standard Units
     derivation: VS.VSSTRESU
-
-verifications:
-  - unique:
-      columns: [USUBJID, ASEQ]

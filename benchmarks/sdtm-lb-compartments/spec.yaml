@@ -97,8 +97,6 @@ rows:
       LBORRES: BX_RAW.NLESRES
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, LBSEQ]
   - row_count:
       min: 5
       max: 5

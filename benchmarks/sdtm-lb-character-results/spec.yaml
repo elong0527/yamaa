@@ -178,5 +178,3 @@ verifications:
   - row_count:
       min: 17
       max: 17
-  - unique:
-      columns: [STUDYID, USUBJID, LBSEQ]

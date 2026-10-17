@@ -998,7 +998,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(first.get().to_bits(), 0.6000000000000001f64.to_bits());
             assert_eq!(second.get().to_bits(), 0.6f64.to_bits());
             assert_eq!(result.dataset.rows()[16][values], Value::Missing);
-            assert_eq!(result.verifications.len(), 2);
+            assert_eq!(result.verifications.len(), 1);
             assert!(result.verifications.iter().all(|v| v.failed_count == 0));
         }
 
@@ -1225,22 +1225,23 @@ output: {{path: output.csv, columns: [I, S]}}
             let attempt = run.execute_with_port(&mut port, Scope::default());
             let actual =
                 specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
-            let diagnostic = json!({"phase":"verification","condition":"row_count_failed","requirement":"REQ-0385","spec_paths":["verifications[1].row_count"],"context":{"count":17,"failure_count":1,"keys":[{}]}});
+            let diagnostic = json!({"phase":"verification","condition":"row_count_failed","requirement":"REQ-0385","spec_paths":["verifications[0].row_count"],"context":{"count":17,"failure_count":1,"keys":[{}]}});
             expected["diagnostics"] = json!([diagnostic.clone()]);
             expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
             let mut failure = diagnostic;
             failure["severity"] = json!("error");
             failure["offending_keys"] = json!([{}]);
             failure["log_context"] = failure["context"].clone();
-            expected["verifications"][1]["failure"] = failure;
+            expected["verifications"][0]["failure"] = failure;
             assert_eq!(actual, expected);
             assert_eq!(publisher.calls, 2);
             // All checks execute despite an earlier data failure; output diagnostics
             // remain later than verification and no derived/accepted artifact is exposed.
+            // A `unique` over a non-key column comes first and fails on repeats.
             let written = raw
                 .replace(
-                    "columns: [STUDYID, USUBJID, PARAMCD, AVISIT]",
-                    "columns: [USUBJID]",
+                    "verifications:\n",
+                    "verifications:\n  - unique:\n      columns: [USUBJID]\n",
                 )
                 .replace("path: adlb.csv", "path: adlb.bad");
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
@@ -1265,9 +1266,16 @@ output: {{path: output.csv, columns: [I, S]}}
             failure["offending_keys"] = json!(keys);
             failure["log_context"] = failure["context"].clone();
             failure["log_context"]["keys"] = failure["offending_keys"].clone();
-            expected["verifications"][0]["evaluated_count"] = json!(5);
-            expected["verifications"][0]["failure"] = failure;
-            expected["verifications"][1]["failure"] = Json::Null;
+            let mut count = expected["verifications"][0].clone();
+            count["spec_path"] = json!("verifications[1].row_count");
+            count["failure"] = Json::Null;
+            let mut unique = count.clone();
+            unique["check"] = json!("unique");
+            unique["requirement"] = json!("REQ-0381");
+            unique["spec_path"] = json!("verifications[0].unique");
+            unique["evaluated_count"] = json!(5);
+            unique["failure"] = failure;
+            expected["verifications"] = json!([unique, count]);
             assert_eq!(actual, expected);
             assert_eq!(publisher.calls, 2);
             std::fs::remove_dir_all(directory).unwrap();
@@ -1865,8 +1873,7 @@ output: {{path: output.csv, columns: [I, S]}}
                         std::fs::read(case.join("expected/adsl.csv")).unwrap()
                     );
                     assert_eq!(bytes.len(), 138);
-                    assert_eq!(execution.verifications.len(), 1);
-                    assert_eq!(execution.verifications[0].failed_count, 0);
+                    assert!(execution.verifications.is_empty());
                     let actual = attempt
                         .handler_counts
                         .iter()

@@ -90,6 +90,49 @@ vocabulary!(DatasetClass {
     Occurrence => "OCCURRENCE DATA STRUCTURE", Reference => "REFERENCE DATA STRUCTURE", Relationship => "RELATIONSHIP",
     SpecialPurpose => "SPECIAL PURPOSE", StudyReference => "STUDY REFERENCE", SubjectLevel => "SUBJECT LEVEL ANALYSIS DATASET", TrialDesign => "TRIAL DESIGN"
 });
+impl DatasetClass {
+    /// The classes the tabulation families (`sdtm`, `send`) publish. Every other
+    /// class is an analysis class, where `core` never derives `mandatory`.
+    pub fn tabulation(self) -> bool {
+        matches!(
+            self,
+            Self::Events
+                | Self::Findings
+                | Self::FindingsAbout
+                | Self::Interventions
+                | Self::Relationship
+                | Self::SpecialPurpose
+                | Self::StudyReference
+                | Self::TrialDesign
+        )
+    }
+    /// Read a written class name; a name outside the vocabulary is not tabulation.
+    pub fn tabulation_name(name: &str) -> bool {
+        Self::VALUES
+            .iter()
+            .any(|(text, class)| *text == name && class.tabulation())
+    }
+}
+impl Core {
+    /// Read a written core designation.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::VALUES
+            .iter()
+            .find(|(text, _)| *text == name)
+            .map(|(_, core)| *core)
+    }
+}
+/// The one `mandatory` resolution shared by the domain build and composition: a
+/// key column is mandatory; otherwise a declared value wins, and without one a
+/// tabulation class gives true for `Req` and false for every other designation.
+pub fn resolve_mandatory(
+    key: bool,
+    declared: Option<bool>,
+    core: Option<Core>,
+    tabulation: bool,
+) -> bool {
+    key || declared.unwrap_or(tabulation && core == Some(Core::Required))
+}
 vocabulary!(DatasetSubclass {
     AdverseEvent => "ADVERSE EVENT", MedicalDeviceTimeToEvent => "MEDICAL DEVICE TIME-TO-EVENT",
     NonCompartmental => "NON-COMPARTMENTAL ANALYSIS", PopulationPharmacokinetic => "POPULATION PHARMACOKINETIC ANALYSIS", TimeToEvent => "TIME-TO-EVENT"

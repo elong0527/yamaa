@@ -213,7 +213,6 @@ rows:
           expr: "ONLY(FA.FASTRESC)"
 
 verifications:
-  - unique: {columns: [STUDYID, USUBJID, ASEQ]}
   - unique: {columns: [STUDYID, USUBJID, AESEQ, ASTDTM]}
   - row_count: {min: 14, max: 14}
   - assert:

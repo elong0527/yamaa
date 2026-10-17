@@ -176,8 +176,6 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by: [VSDTC, TESTORD]
-    verifications:
-      not_missing: {}
 
 # One row template per test, so every visit form group yields one record
 # per test even when the test's items are absent. Each template names its
@@ -239,8 +237,6 @@ rows:
       VSORRESU: {odm: ODM.IT.VS.WEIGHTU}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
       min: 24
       max: 24

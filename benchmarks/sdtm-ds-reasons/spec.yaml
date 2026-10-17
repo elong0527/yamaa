@@ -40,7 +40,6 @@ columns:
           EOT: 1
           EOS: 2
     verifications:
-      - not_missing: {}
       - allowed_values:
           values: [1, 2]
 
@@ -122,8 +121,6 @@ columns:
       - not_missing: {}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, DSSEQ]
   - row_count:
       min: 6
       max: 6

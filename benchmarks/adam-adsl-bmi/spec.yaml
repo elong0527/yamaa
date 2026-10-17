@@ -53,8 +53,6 @@ columns:
           cm_per_m: 100
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 7
       max: 7

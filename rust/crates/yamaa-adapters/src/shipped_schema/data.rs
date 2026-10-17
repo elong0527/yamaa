@@ -993,7 +993,7 @@ submission_column_class:
     - mandatory:
         type: bool
         required: false
-        description: Whether the column must carry a value, derived or declared by family (SUB-10).
+        description: Whether every completed value must be present, resolved from keys, declaration and class (SUB-10) and enforced (SUB-11).
     - role:
         type: str
         required: false
@@ -1536,7 +1536,7 @@ codelist_class:
 - extensible:
     type: bool
     default: false
-    description: Whether a value outside the list is admitted (CT-7).
+    description: Whether the published list admits sponsor items marked extended (CT-6).
 - alias:
     type: str
     required: false
@@ -1550,7 +1550,7 @@ codelist_class:
 - items:
     type: list[codelist_item_class]
     required: false
-    description: Coded values this codelist admits, in the order the document presents them.
+    description: Coded values this codelist admits, the whole value set of a bound column, in the order the document presents them (CT-7).
 - external:
     type: external_codelist_class
     required: false
@@ -1577,7 +1577,7 @@ codelist_item_class:
 - extended:
     type: bool
     default: false
-    description: Whether the sponsor added this value to a published list.
+    description: Whether the sponsor added this value to an extensible published list (CT-6).
 external_codelist_class:
 - dictionary:
     type: str

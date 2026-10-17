@@ -54,6 +54,7 @@ mod cases;
 mod derivations;
 mod flags;
 mod imputation;
+mod mandatory;
 mod mapping_cut;
 mod odm;
 mod rounding;
@@ -1347,6 +1348,8 @@ impl PreparedSpecification {
                 Err(error) => return Err(error),
             }
         }
+        mandatory::admit(d, columns, &mut column_verifications, &mut findings)?;
+        verifications::redundant_unique(d, &mut findings)?;
         submission::admit(
             d,
             columns,

@@ -111,8 +111,6 @@ columns:
           then: {literal: 0}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - row_count:
       min: 10
       max: 10

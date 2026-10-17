@@ -113,8 +113,6 @@ columns:
           NOT REPORTED, UNKNOWN]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 12
       max: 12

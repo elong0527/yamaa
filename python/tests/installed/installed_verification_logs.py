@@ -108,7 +108,7 @@ class VerificationLogs(unittest.TestCase):
                 self.assertTrue(view.equals(golden))
             # Each public view is a fresh host copy of privately owned bytes.
             result.verification_log.replace_column(
-                0, pl.Series("REPORT_VERSION", ["changed"] * 4)
+                0, pl.Series("REPORT_VERSION", ["changed"] * 3)
             )
             result.warning_log.replace_column(0, pl.Series("LOG_VERSION", ["changed"]))
             for name in NAMES:
@@ -128,7 +128,7 @@ class VerificationLogs(unittest.TestCase):
             held = result.verification_log
             del result
             gc.collect()
-            self.assertEqual(held.height, 4)
+            self.assertEqual(held.height, 3)
             self.assertEqual(
                 held["EVALUATED_COUNT"].to_list(),
                 [int(value) for value in TRUTH["evaluated_counts"]],

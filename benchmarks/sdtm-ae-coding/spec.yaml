@@ -21,8 +21,6 @@ columns:
     type: str
     label: Domain Abbreviation
     derivation: {literal: AE}
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Identifier
@@ -113,8 +111,6 @@ columns:
         AE_RAW.AETERM, and no match yields "NOT CODED".
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 8
       max: 8

@@ -64,7 +64,10 @@ Replaces: REQ-0221, REQ-0240.
 
 Key order is significant to [Lookup and joins](lookup.md), which
 joins on the output keys a right side also carries; those applicable keys are
-used for enrichment and do not change the identity asserted here. A
+used for enrichment and do not change the identity asserted here. The keys
+state this identity once: a `not_missing` on a key column or a `unique` over
+exactly the keys repeats it and fails validation
+([CHECK-5](verification.md#check-5), [CHECK-10](verification.md#check-10)). A
 specification without `rows` emits one row per key combination under
 [ROW-8](rows.md#row-8), so a duplicate key can come only from
 row templates emitting one combination more than once, under

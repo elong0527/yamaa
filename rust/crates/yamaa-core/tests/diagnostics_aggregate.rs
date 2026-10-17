@@ -1030,7 +1030,7 @@ mod diagnostics {
             use crate::support::diagnostic::submission::*;
             #[test]
 
-            fn large_binding_values_are_retained_and_real_unequal_sets_keep_their_language_owner() {
+            fn large_binding_values_are_retained_and_a_restating_verification_is_redundant() {
                 // Held semantic metadata has no cumulative copy allowance. File loaders
                 // enforce their own per-file boundary before producing these arenas.
                 let long = "X".repeat(8_388_609);
@@ -1040,6 +1040,14 @@ mod diagnostics {
                     &["columns", "0", "submission", "codelist"],
                     Tree::text("LIST"),
                 );
+                let study = one(environment(), spec.clone(), &lists).unwrap();
+                assert_eq!(study.codelists().len(), 1);
+                assert_eq!(
+                    study.codelists()[0].declaration.items.as_ref().unwrap()[0].value,
+                    Value::Str(long.clone())
+                );
+                // A list of items states the column's value set; an equal
+                // `allowed_values` beside it states it twice.
                 spec.set(
                     &["columns", "0", "verifications"],
                     Tree::list(vec![Tree::map(vec![(
@@ -1047,37 +1055,21 @@ mod diagnostics {
                         Tree::map(vec![("values", Tree::list(vec![Tree::text(&long)]))]),
                     )])]),
                 );
-                let study = one(environment(), spec, &lists).unwrap();
-                assert_eq!(study.codelists().len(), 1);
-                assert_eq!(
-                    study.codelists()[0].declaration.items.as_ref().unwrap()[0].value,
-                    Value::Str(long)
-                );
-                // Ordinary finite unequal sets retain their language conflict classification.
-                let mut spec = specification();
-                spec.set(
-                    &["columns", "0", "submission", "codelist"],
-                    Tree::text("LIST"),
-                );
-                spec.set(
-                    &["columns", "0", "verifications"],
-                    Tree::list(vec![Tree::map(vec![(
-                        "allowed_values",
-                        Tree::map(vec![("values", Tree::list(vec![Tree::text("Y")]))]),
-                    )])]),
-                );
-                let findings = one(
-                    environment(),
-                    spec,
-                    &catalogue(false, Value::Str("X".into())),
-                )
-                .unwrap_err();
+                let findings = one(environment(), spec, &lists).unwrap_err();
                 assert_eq!(findings.len(), 1);
                 assert_eq!(
                     findings[0].code,
-                    ConditionCode::CodelistBindingValuesConflict
+                    ConditionCode::CodelistAllowedValuesRedundant
                 );
                 assert_eq!(findings[0].definition().requirement, Some("REQ-0955"));
+                assert_eq!(
+                    findings[0].path,
+                    "sdtm.specs[0].columns.VALUE.verifications[0].allowed_values"
+                );
+                assert_eq!(
+                    findings[0].context["stated_by"],
+                    JsonValue::String("sdtm.specs[0].columns.VALUE.submission.codelist".into())
+                );
             }
             #[test]
 

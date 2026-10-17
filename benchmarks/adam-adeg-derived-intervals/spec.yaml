@@ -121,8 +121,6 @@ rows:
       AVALU: {literal: ms}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - row_count:
       min: 51
       max: 51

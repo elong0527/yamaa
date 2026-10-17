@@ -77,8 +77,6 @@ columns:
           then: {literal: SCREENING}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, MHSEQ]
   - row_count:
       min: 7
       max: 7

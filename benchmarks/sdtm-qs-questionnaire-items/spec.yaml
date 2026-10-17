@@ -226,8 +226,6 @@ rows:
       QSREASND: {literal: null}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, QSSEQ]
   - row_count:
       min: 30
       max: 30

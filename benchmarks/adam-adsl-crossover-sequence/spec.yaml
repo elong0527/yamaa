@@ -93,8 +93,6 @@ columns:
         missing: null
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 4
       max: 4

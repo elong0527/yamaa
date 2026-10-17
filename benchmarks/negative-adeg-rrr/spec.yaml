@@ -75,8 +75,6 @@ rows:
       _PROVENANCE: {literal: derived}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - assert:
       id: contributing-hr-uses-beats-per-minute
       when: "PARAMCD = 'HR' AND AVAL IS NOT NULL AND AVAL <> 0"

@@ -53,7 +53,3 @@ columns:
     type: str
     label: Cause of Death Preferred Term
     derivation: MEDDRA_PT.PTNAME
-
-verifications:
-  - unique:
-      columns: [USUBJID]

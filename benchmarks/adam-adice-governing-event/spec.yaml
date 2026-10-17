@@ -154,11 +154,6 @@ columns:
     not_missing: {}
 
 verifications:
-- unique:
-    columns:
-    - STUDYID
-    - USUBJID
-    - ASEQ
 - assert:
     id: governing-event-agrees-with-selection
     when: GOVFL = 'Y'

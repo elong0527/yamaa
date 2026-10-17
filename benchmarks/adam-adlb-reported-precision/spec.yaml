@@ -49,8 +49,6 @@ columns:
         expr: "AVAL / NULLIF(ANRLO, 0)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD]
   - row_count:
       min: 8
       max: 8

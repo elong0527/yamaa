@@ -26,18 +26,18 @@ columns:
     label: Study Identifier
     derivation: {literal: YAMAA-01}
 
-  # The completeness check is written as a lone check; it expands to a
-  # one-check list.
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: DM.USUBJID
-    verifications: {not_missing: {}}
 
+  # The completeness check is written as a lone check; it expands to a
+  # one-check list.
   - name: SEX
     type: str
     label: Sex
     derivation: DM.SEX
+    verifications: {not_missing: {}}
 
   - name: AGE
     type: int

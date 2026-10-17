@@ -131,8 +131,6 @@ rows:
       AVALU: LB.LBSTRESU
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]
   - row_count:
       min: 20
       max: 20

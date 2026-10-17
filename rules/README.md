@@ -113,7 +113,7 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | [SAS source profiles](reference/sas.md) | SAS | Read SAS datasets and Transport v5/v8 through declared encoding and explicit numeric narrowing. |
 | [Schema language](reference/schema-language.md) | SCHEMA | Define schema notation, registries, constraints, and canonical shorthand expansion. |
 | [Submission metadata](profiles/submission.md) | SUB | Govern dataset and column metadata, origin, methods, and document references. |
-| [Controlled terminology](profiles/terminology.md) | CT | Declare codelists once and validate their bindings and allowed values. |
+| [Controlled terminology](profiles/terminology.md) | CT | Declare codelists once and enforce the items each binding lists. |
 | [Define-XML](profiles/define-xml.md) | DEFINE | Compose study metadata into deterministic Define-XML 2.1 documents. |
 | [Dataset-JSON](profiles/dataset-json.md) | JSON | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
 | [Project functions](profiles/functions.md) | FUNC | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |

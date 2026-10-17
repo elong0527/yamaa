@@ -251,9 +251,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             3,
         ),
         (
-            SubmissionMandatoryUnenforced,
-            "mandatory_not_enforced",
-            "REQ-0916",
+            VerificationNotMissingRedundant,
+            "redundant_declaration",
+            "REQ-0375",
             4,
         ),
         (SubmissionAdamField, "value_not_permitted", "REQ-0917", 5),
@@ -319,9 +319,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             16,
         ),
         (
-            SubmissionAllowedValuesLiteral,
+            SubmissionKeyMandatory,
             "value_not_permitted",
-            "REQ-0955",
+            "REQ-0881",
             17,
         ),
         (
@@ -366,6 +366,25 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0909",
             24,
         ),
+        (SubmissionClassFamily, "value_not_permitted", "REQ-0882", 25),
+        (
+            VerificationUniqueRedundant,
+            "redundant_declaration",
+            "REQ-0381",
+            26,
+        ),
+        (
+            CodelistAllowedValuesRedundant,
+            "redundant_declaration",
+            "REQ-0955",
+            27,
+        ),
+        (
+            SubmissionMandatoryRedundant,
+            "redundant_declaration",
+            "REQ-0916",
+            28,
+        ),
     ] {
         let mut env = environment();
         let mut spec = specification();
@@ -379,10 +398,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 *spec.at(&["domain"]) = Tree::text("LONGDOMAIN");
             }
             3 => spec.remove(&["columns", "0", "submission", "core"]),
-            4 => {
-                *spec.at(&["keys"]) = Tree::list(vec![]);
-                spec.at(&meta).set(&["mandatory"], Tree::boolean(true));
-            }
+            // A key column is mandatory on every row; a `not_missing` restates it.
+            4 => spec.set(
+                &["columns", "0", "verifications"],
+                Tree::list(vec![Tree::map(vec![("not_missing", Tree::map(vec![]))])]),
+            ),
             5 => {
                 env = Tree::Map(match env {
                     Tree::Map(mut fields) => {
@@ -440,20 +460,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                     Tree::map(vec![("max", Tree::integer("4"))]),
                 )])]),
             ),
-            17 => {
-                lists = catalogue(false, Value::Str("X".into()));
-                spec.at(&meta).set(&["codelist"], Tree::text("LIST"));
-                spec.set(
-                    &["columns", "0", "verifications"],
-                    Tree::list(vec![Tree::map(vec![(
-                        "allowed_values",
-                        Tree::map(vec![(
-                            "values",
-                            Tree::list(vec![Tree::map(vec![("nested", Tree::text("X"))])]),
-                        )]),
-                    )])]),
-                );
-            }
+            17 => spec.at(&meta).set(&["mandatory"], Tree::boolean(false)),
             18 => spec.at(&meta).set(
                 &["origin", "documents"],
                 Tree::list(vec![Tree::text("UNKNOWN")]),
@@ -475,6 +482,40 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             }
             23 => *spec.at(&["keys"]) = Tree::list(vec![Tree::text("MISSING")]),
             24 => *spec.at(&["output", "columns"]) = Tree::list(vec![]),
+            25 => *spec.at(&["submission", "class"]) = Tree::text("BASIC DATA STRUCTURE"),
+            26 => spec.set(
+                &["verifications"],
+                Tree::list(vec![Tree::map(vec![(
+                    "unique",
+                    Tree::list(vec![Tree::text("VALUE")]),
+                )])]),
+            ),
+            27 => {
+                lists = catalogue(false, Value::Str("X".into()));
+                spec.at(&meta).set(&["codelist"], Tree::text("LIST"));
+                spec.set(
+                    &["columns", "0", "verifications"],
+                    Tree::list(vec![Tree::map(vec![(
+                        "allowed_values",
+                        Tree::map(vec![("values", Tree::list(vec![Tree::text("X")]))]),
+                    )])]),
+                );
+            }
+            // A declared `mandatory: true` on a non-key column already requires
+            // every value; a `not_missing` beside it restates it.
+            28 => {
+                let mut extra = column("EXTRA");
+                extra
+                    .at(&["submission"])
+                    .set(&["mandatory"], Tree::boolean(true));
+                extra.set(
+                    &["verifications"],
+                    Tree::list(vec![Tree::map(vec![("not_missing", Tree::map(vec![]))])]),
+                );
+                *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), extra]);
+                *spec.at(&["output", "columns"]) =
+                    Tree::list(vec![Tree::text("VALUE"), Tree::text("EXTRA")]);
+            }
             _ => unreachable!(),
         }
         let findings = one(env, spec, &lists).unwrap_err();

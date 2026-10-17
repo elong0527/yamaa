@@ -407,17 +407,5 @@
     }
   ],
   "unsupported": [],
-  "verifications": [
-    {
-      "check": "unique",
-      "evaluated_count": 4,
-      "failure": null,
-      "requirement": "REQ-0381",
-      "severity": "error",
-      "spec_path": "verifications[0].unique",
-      "specification": "spec.yaml",
-      "target": null,
-      "verification_id": null
-    }
-  ]
+  "verifications": []
 }

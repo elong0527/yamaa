@@ -138,8 +138,6 @@ columns:
     derivation: {literal: null}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, ETCD]
   - row_count:
       min: 6
       max: 6

@@ -1219,9 +1219,9 @@ mod file {
         fn independent_metadata_refutations_preserve_shared_conditions_and_zero_writes() {
             for (from, to, condition, requirement) in [
                 (
-                    "values: [F, M, U]",
-                    "values: [F, M]",
-                    "codelist_values_conflict",
+                    "derivation: DM_RAW.SEX\n",
+                    "derivation: DM_RAW.SEX\n    verifications:\n      - allowed_values:\n          values: [F, M, U]\n",
+                    "redundant_declaration",
                     "REQ-0955",
                 ),
                 (

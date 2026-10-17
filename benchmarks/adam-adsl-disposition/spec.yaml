@@ -141,8 +141,6 @@ columns:
           then: LASTTRT.DSTERM
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 7
       max: 7

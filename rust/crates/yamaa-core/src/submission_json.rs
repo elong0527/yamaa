@@ -249,7 +249,6 @@ fn validate_artifact<T: TableAccess>(
                 continue;
             }
             let outside_list = list
-                .filter(|list| !list.extensible)
                 .and_then(|list| list.items.as_ref())
                 .is_some_and(|items| !items.iter().any(|item| equal_value(value, &item.value)));
             let outside_inventory = inventory

@@ -120,8 +120,6 @@ columns:
         values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]
   - row_count:
       min: 16
       max: 16

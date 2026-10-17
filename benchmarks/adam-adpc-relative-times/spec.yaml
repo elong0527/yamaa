@@ -131,8 +131,6 @@ columns:
         unit: hour
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PCSEQ]
   - row_count:
       min: 14
       max: 14
