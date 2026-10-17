@@ -1215,7 +1215,7 @@ S1,002,2024-06
         /// finding is decided from. `domain` reaches each of them once it reads or
         /// binds the inputs. A case that `check` starts to report fails until it
         /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 22] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 23] = [
             (
                 "negative-adlb-computed-param",
                 "a cycle through an aggregate and a case",
@@ -1240,6 +1240,10 @@ S1,002,2024-06
             (
                 "negative-lookup-mismatched",
                 "the fields stored in the current input",
+            ),
+            (
+                "negative-lookup-range-other-input",
+                "the rows that read a lookup range",
             ),
             (
                 "negative-lookup-unknown-key",
@@ -2720,9 +2724,10 @@ S1,002,2024-06
         }
 
         /// A `between.value` qualified by an input reads that input's record
-        /// where it drives the reading row or donor record (#2888).
+        /// only where it drives the reading row or donor record. Elsewhere it
+        /// names no current-row value, however the intermediate is reached.
         #[test]
-        fn a_qualified_between_value_reads_its_own_driver_record() {
+        fn a_qualified_between_value_reads_only_its_own_driver_record() {
             const WINDOW: &str = "  - id: W\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\n    no_match: null\n";
             let run = |body: &str| {
                 let fixture = Fixture::new();
@@ -2763,11 +2768,8 @@ S1,002,2024-06
             let column = |derivation: &str| {
                 format!("columns:\n  - {{name: USUBJID, type: str, derivation: SUBJ.USUBJID}}\n  - {{name: WINDOW, type: str, derivation: {derivation}}}\n")
             };
-            // The base driver's rows name no REF record, read directly, through
+            // The base driver's rows name no REF record: read directly, through
             // another intermediate's value, or from an aggregate's derive step.
-            // Whether such a value reads REF or is refused awaits the owner's
-            // decision on #2888; it is never the driver's field at the same
-            // column, nor REF's record at the driver's row position.
             let direct = format!("{base}{WINDOW}{}", column("W.NAME"));
             let chained = WINDOW.replace("id: W\n", "id: W2\n")
                 + &WINDOW.replace("value: REF.REFDAY", "value: W2.LO");
@@ -2777,12 +2779,16 @@ S1,002,2024-06
                 "type: str, derivation: {aggregate",
                 "type: int, derivation: {aggregate",
             );
-            let misread = |first: &str, second: &str| {
-                Some(format!("USUBJID,WINDOW\nS1,{first}\nS2,{second}\n"))
+            let refused = |intermediate: &str| {
+                Err(vec![yamaa_adapters::json!({
+                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-0121",
+                    "spec_paths": ["intermediates[0].between.value"],
+                    "context": {"intermediate": intermediate, "identifier": "REF.REFDAY"}
+                })])
             };
-            assert_ne!(run(&direct).ok(), misread("EARLY", "LATE"));
-            assert_ne!(run(&chained).ok(), misread("EARLY", "LATE"));
-            assert_ne!(run(&derived).ok(), misread("1", "11"));
+            assert_eq!(run(&direct), refused("W"));
+            assert_eq!(run(&chained), refused("W2"));
+            assert_eq!(run(&derived), refused("W"));
             // A donor record of REF supplies the value under REQ-1263.
             let reader = "  - id: R\n    dataset: REF\n    key: [USUBJID]\n    derivations: {WINNAME: W.NAME}\n";
             assert_eq!(

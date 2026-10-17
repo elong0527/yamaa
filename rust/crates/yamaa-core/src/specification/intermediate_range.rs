@@ -192,6 +192,24 @@ pub(super) fn bind(
         Err(_) => Err(BindError::Internal),
     }
 }
+/// A qualified `value` reads the record of the reading row's driver port
+/// (REQ-0085). Another input's record is not a current-row value (REQ-0121).
+pub(super) fn admit_read(
+    range: &RelationRange,
+    intermediate: &str,
+    driver: usize,
+    findings: &mut Vec<BindFinding>,
+) {
+    if matches!(range.current().read, CurrentRead::Record { source, .. } if source != driver) {
+        reference(
+            &format!("{}.value", range.path()),
+            &range.current().identifier,
+            intermediate,
+            C::IntermediateRangeReference,
+            findings,
+        );
+    }
+}
 pub(super) fn prepare_columns(
     d: &Document,
     item: usize,
@@ -257,6 +275,7 @@ pub(super) fn bind_columns(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::json::Value as JsonValue;
 
     fn schema(names: &[&str]) -> TableSchema {
         TableSchema::new(
@@ -295,7 +314,7 @@ mod tests {
     /// The driver is the second input, so source order differs from port
     /// order, and the driver holds another field at the named column.
     #[test]
-    fn a_qualified_value_keeps_its_input_port() {
+    fn a_qualified_value_keeps_its_input_port_and_admits_only_that_driver() {
         let other = schema(&["ID", "REFDAY"]);
         let driver = schema(&["ID", "DAY"]);
         let donor = schema(&["ID", "LO", "HI"]);
@@ -350,6 +369,25 @@ mod tests {
                 source: 1,
                 column: 1
             }
+        );
+        admit_read(&range, "W", 1, &mut findings);
+        assert!(findings.is_empty());
+        admit_read(&range, "W", 0, &mut findings);
+        let [BindFinding::Lookup(finding)] = findings.as_slice() else {
+            panic!("one range finding: {findings:?}");
+        };
+        let diagnostic = finding.diagnostic();
+        assert_eq!(diagnostic.code, C::IntermediateRangeReference);
+        assert_eq!(diagnostic.spec_paths, ["intermediates[0].between.value"]);
+        assert_eq!(
+            diagnostic.context,
+            BTreeMap::from([
+                (
+                    "identifier".into(),
+                    JsonValue::String("OTHER.REFDAY".into())
+                ),
+                ("intermediate".into(), JsonValue::String("W".into())),
+            ])
         );
     }
 }
