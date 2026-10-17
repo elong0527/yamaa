@@ -364,6 +364,36 @@ class SheetStructureTests(unittest.TestCase):
         base = load_spec("sdtm-dm-basic")
         for spec in (
             {**base, "columns": None},
+            {**base, "columns": 42},
+            {**base, "columns": True},
+            {**base, "columns": [{"name": ["DOMAIN"], "type": "str"}]},
+            {
+                **base,
+                "output": {"columns": ["DOMAIN"]},
+                "columns": [{"name": {"id": "DOMAIN"}, "type": "str"}],
+            },
+            {**base, "intermediates": 7},
+            {
+                **base,
+                "columns": [
+                    {
+                        "name": "DOMAIN",
+                        "type": ["str"],
+                        "submission": {"data_type": ["text"], "codelist": ["CL"]},
+                        "verifications": 3,
+                    }
+                ],
+            },
+            {
+                **base,
+                "columns": [
+                    {
+                        "name": "DOMAIN",
+                        "type": "str",
+                        "verifications": [{"allowed_values": 5}],
+                    }
+                ],
+            },
             {
                 **base,
                 "output": None,
@@ -380,6 +410,14 @@ class SheetStructureTests(unittest.TestCase):
                 sheets = mapping_doc.mapping_sheets(spec)
                 self.assertEqual(sheets[0][0], "mapping")
                 self.assertIsInstance(rendered_tables(spec), str)
+        for define in (
+            {"codelists": 9},
+            {"codelists": [{"id": "C1", "items": 5}]},
+            {"codelists": [{"id": ["C1"]}]},
+        ):
+            with self.subTest(define=define):
+                sheets = mapping_doc.mapping_sheets(base, define)
+                self.assertEqual(sheets[0][0], "mapping")
 
 
 if __name__ == "__main__":
