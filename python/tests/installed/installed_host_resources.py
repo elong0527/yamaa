@@ -61,6 +61,50 @@ class HostResources(unittest.TestCase):
             self.assertTrue(result.save())
             self.assertEqual(outputs.outputs["memory:/out.csv"], b"ID\n7\n")
 
+    def test_put_rejects_unreachable_keys_and_bad_references(self):
+        # A non-string or empty key stores an object no lookup can reach,
+        # and a bad reference is only discovered at capture time as
+        # 'rejected'; both must be refused at put time instead.
+        for backend in (MemoryResolver, SyntheticRemoteResolver):
+            with self.subTest(backend=backend):
+                resolver = backend()
+                for key in (123, None, b"raw.csv", 1.5):
+                    with self.subTest(key=key), self.assertRaises(TypeError):
+                        resolver.put(key, b"ID\n7\n")
+                    with (
+                        self.subTest(key=key, frame=True),
+                        self.assertRaises(TypeError),
+                    ):
+                        resolver.put_frame(key, object())
+                for key in ("", "raw\x00.csv"):
+                    with self.subTest(key=key), self.assertRaises(ValueError):
+                        resolver.put(key, b"ID\n7\n")
+                    with (
+                        self.subTest(key=key, frame=True),
+                        self.assertRaises(ValueError),
+                    ):
+                        resolver.put_frame(key, object())
+                for reference in (123, b"ref", 1.5):
+                    with (
+                        self.subTest(reference=reference),
+                        self.assertRaises(TypeError),
+                    ):
+                        resolver.put("raw.csv", b"ID\n7\n", reference=reference)
+                for reference in ("", "ref\x00"):
+                    with (
+                        self.subTest(reference=reference),
+                        self.assertRaises(ValueError),
+                    ):
+                        resolver.put("raw.csv", b"ID\n7\n", reference=reference)
+                self.assertEqual(resolver.objects, {})
+                with self.assertRaises(TypeError):
+                    backend({123: b"ID\n7\n"})
+                # Valid keys and references still work.
+                resolver.put("raw.csv", b"ID\n7\n", reference="memory:/raw.csv#v1")
+                self.assertEqual(
+                    resolver.objects["raw.csv"].reference, "memory:/raw.csv#v1"
+                )
+
     def test_frame_exporter_interrupt_preserves_original_object(self):
         interruption = KeyboardInterrupt("frame exporter interrupted")
 
