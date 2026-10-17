@@ -301,14 +301,13 @@ pub(super) fn read_joined<T: TableAccess + ?Sized>(
     for (index, key) in joined.keys.iter().enumerate() {
         let value = if let Some(records) = &joined.record_keys {
             let source_row = candidate.members[0];
-            let value = current.cell(source_row, records[index]).map_err(|error| {
+            current.cell(source_row, records[index]).map_err(|error| {
                 Box::new(ExecutionError::Cell {
                     path: assignment.path.clone(),
                     source_row,
                     error,
                 })
-            })?;
-            value
+            })?
         } else {
             ValueRef::from(&candidate.values[key.output_column])
         };

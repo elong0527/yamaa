@@ -144,7 +144,9 @@ impl<'a> SchemaDiagnosticReport<'a> {
     pub fn source_context(&self) -> &'a [(&'a str, &'a str)] {
         self.source_context
     }
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = ResolvedSchemaDiagnostic<'a>> + 'a {
+    pub fn iter(
+        &self,
+    ) -> impl ExactSizeIterator<Item = ResolvedSchemaDiagnostic<'a>> + 'a + use<'a> {
         let schema = self.schema;
         let document = self.document;
         let source_context = self.source_context;
