@@ -100,7 +100,7 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | [Row construction](rows.md) | ROW | Construct output rows from declared input records or groups, or from the distinct keys of the base records. |
 | [Column derivation](columns.md) | COLUMN | Sequence a run, order column dependencies, complete each value's lifecycle, and handle conditions at their site. |
 | [Expressions](expressions.md) | EXPR | Register and dispatch expressions, restrict nesting, and copy, select and classify values. |
-| [Formulas](formulas.md) | FORMULA | Evaluate the closed predicate, numeric and reducer languages exactly as written. |
+| [Formulas](formulas.md) | FORMULA | Read the one closed expression language in its predicate, compute and aggregate fields, and evaluate it exactly as written. |
 | [Lookup and joins](lookup.md) | LOOKUP | Match declared keys, narrow and select records, answer absence, and scope aggregates to one relation. |
 | [Windows](windows.md) | WINDOW | Declare complete named windows and compute partitions, ranks, neighbors, carried values, and baseline flags. |
 | [Text](text.md) | TEXT | Pad, change case, interpolate templates, and extract and replace with portable regular expressions. |

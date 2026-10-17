@@ -12,7 +12,7 @@ mod execution {
         };
         use yamaa_core::{
             bound_expression::{Binding, BoundPredicate, Read},
-            predicate_compiler,
+            expression::{compile, Context},
             table::{CellError, TableAccess, TableSchema, ValueRef},
             value::{ColumnType, Value},
         };
@@ -75,8 +75,12 @@ mod execution {
         }
         fn predicate() -> BoundPredicate {
             BoundPredicate::new_contextual(
-                predicate_compiler::compile("SRC.FLAG > 0", "columns.V.derivation.case[0].when")
-                    .unwrap(),
+                compile(
+                    "SRC.FLAG > 0",
+                    Context::Predicate,
+                    "columns.V.derivation.case[0].when",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "SRC.FLAG".into(),
                     read: Read::Source(1),
@@ -122,8 +126,9 @@ mod execution {
                             CaseBranch {
                                 when: Some(
                                     BoundPredicate::new(
-                                        predicate_compiler::compile(
+                                        compile(
                                             "FALSE",
+                                            Context::Predicate,
                                             "columns.V.derivation.case[1].when",
                                         )
                                         .unwrap(),
@@ -281,8 +286,9 @@ mod execution {
         fn false_boolean_operand_keeps_the_written_eager_source_read_and_original_error() {
             let source = source();
             let when = BoundPredicate::new_contextual(
-                predicate_compiler::compile(
+                compile(
                     "FALSE AND SRC.BAD = 'bad'",
+                    Context::Predicate,
                     "columns.V.derivation.case[0].when",
                 )
                 .unwrap(),
@@ -329,7 +335,7 @@ mod execution {
                 IntermediateDerivations, IntermediateKey, IntermediateSource, MatchRead,
                 MatchValue, RowMode, RowTemplate, SecondarySource, SourceSchemas, Verification,
             },
-            predicate_compiler,
+            expression::{compile, Context},
             table::{CellError, TableAccess, TableSchema, ValueRef},
             value::{ColumnType as T, Value},
         };
@@ -398,12 +404,14 @@ mod execution {
             }
         }
         fn predicate(text: &str, part: &str) -> BoundPredicate {
-            let compiled =
-                predicate_compiler::compile(text, &format!("verifications[1].assert.{part}"))
-                    .unwrap();
+            let compiled = compile(
+                text,
+                Context::Predicate,
+                &format!("verifications[1].assert.{part}"),
+            )
+            .unwrap();
             let bindings = compiled
                 .identifiers()
-                .into_iter()
                 .collect::<std::collections::BTreeSet<_>>()
                 .into_iter()
                 .map(|name| Binding {
@@ -691,7 +699,7 @@ mod execution {
             assert_eq!(error.spec_path, "verifications[1].assert.require");
             assert!(matches!(
                 error.kind,
-                yamaa_core::predicate::ErrorKind::Condition(_)
+                yamaa_core::expression::ErrorKind::Condition(_)
             ));
             assert_eq!(records.len(), 1);
             assert_eq!(records[0].evaluated_count, 0);
@@ -801,7 +809,7 @@ mod execution {
         use std::cell::RefCell;
         use yamaa_core::{
             bound_expression::{Binding, BoundPredicate, Read},
-            predicate_compiler,
+            expression::{compile, Context},
         };
         use yamaa_core::{
             dataset::{
@@ -890,7 +898,7 @@ mod execution {
             };
             let filter = RelationPredicate::new(
                 BoundPredicate::new(
-                    predicate_compiler::compile(text, "intermediates[0].filter").unwrap(),
+                    compile(text, Context::Predicate, "intermediates[0].filter").unwrap(),
                     vec![
                         Binding {
                             name: "D.TIME".into(),
@@ -1695,8 +1703,8 @@ mod execution {
         use yamaa_core::dataset::*;
         use yamaa_core::json::Value as V;
         use yamaa_core::{
-            aggregate_compiler::compile_aggregate,
             diagnostic::ConditionCode as C,
+            expression::{compile, Context},
             table::{CellError, Column, TableAccess, TableSchema, ValueRef},
             value::{ColumnType, Value},
         };
@@ -1767,7 +1775,12 @@ mod execution {
         ) -> Expression {
             Expression::Aggregate(Box::new(
                 BoundAggregate::new(
-                    compile_aggregate(text, "columns.RESULT.derivation.aggregate.expr").unwrap(),
+                    compile(
+                        text,
+                        Context::Aggregate,
+                        "columns.RESULT.derivation.aggregate.expr",
+                    )
+                    .unwrap(),
                     relation,
                     bindings
                         .iter()
@@ -1795,7 +1808,12 @@ mod execution {
             ]);
             donor.fail = Some((1, 1));
             let predicate = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("S.V > 0", "aggregate.filter").unwrap(),
+                yamaa_core::expression::compile(
+                    "S.V > 0",
+                    yamaa_core::expression::Context::Predicate,
+                    "aggregate.filter",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "S.V".into(),
                     read: Read::Source(1),
@@ -1803,7 +1821,7 @@ mod execution {
             )
             .unwrap();
             let bound = BoundAggregate::new(
-                compile_aggregate("SUM(S.V)", "aggregate").unwrap(),
+                compile("SUM(S.V)", Context::Aggregate, "aggregate").unwrap(),
                 AggregateRelation::Matched {
                     source: AggregateSource::Secondary(0),
                     keys: vec![IntermediateKey {
@@ -2319,7 +2337,7 @@ mod execution {
             };
             let plan_for = |group_by: Vec<usize>| {
                 let bound = BoundAggregate::new(
-                    compile_aggregate("SUM(S.V)", "aggregate").unwrap(),
+                    compile("SUM(S.V)", Context::Aggregate, "aggregate").unwrap(),
                     AggregateRelation::Matched {
                         source: AggregateSource::Secondary(0),
                         keys: vec![IntermediateKey {

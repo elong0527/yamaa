@@ -347,26 +347,28 @@ class TestClosedGrammarContracts(unittest.TestCase):
 
     def test_a_marked_card_block_owns_its_grammar(self):
         text = (
-            "### FORMULA-1. Title\n\nStatement.\n\n<!-- grammar: numeric -->\n\n"
+            "### FORMULA-1. Title\n\nStatement.\n\n<!-- grammar: expression -->\n\n"
             "```text\nexpr := term\n```\n"
         )
         self.assertEqual(
-            OWNER_GRAMMAR_CHECKS.rule_grammar_block(text, "numeric"), "expr := term"
+            OWNER_GRAMMAR_CHECKS.rule_grammar_block(text, "expression"), "expr := term"
         )
-        self.assertIsNone(OWNER_GRAMMAR_CHECKS.rule_grammar_block(text, "predicate"))
+        self.assertIsNone(
+            OWNER_GRAMMAR_CHECKS.rule_grammar_block(text, "string-template")
+        )
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "rules").mkdir()
             (root / "rules" / "formulas.md").write_text(text)
             self.assertEqual(
-                OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "numeric"), "formulas"
+                OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "expression"), "formulas"
             )
             self.assertEqual(
-                OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "predicate"),
-                OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS["predicate"],
+                OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "string-template"),
+                OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS["string-template"],
             )
             (root / "rules" / "copy.md").write_text(text)
-            self.assertIsNone(OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "numeric"))
+            self.assertIsNone(OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "expression"))
 
     def test_a_continuation_aligns_under_its_definition_or_its_bar(self):
         rendered = OWNER_GRAMMAR_CHECKS.render_grammar_block(
@@ -424,15 +426,90 @@ class TestClosedGrammarContracts(unittest.TestCase):
             root = self.contract_root(
                 temp_dir,
                 **{
-                    "yaml/grammar/numeric.yaml": (
-                        "imports:\n  name: predicate\n",
-                        "imports:\n  name: string-template\n",
+                    "yaml/grammar/expression.yaml": (
+                        "imports: {}\n",
+                        "imports:\n  digits: string-template\n",
                     )
                 },
             )
-            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, "numeric")
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, "expression")
         self.assertEqual(len(errors), 1)
-        self.assertIn("defines no 'name' to import", errors[0])
+        self.assertIn("defines no 'digits' to import", errors[0])
+
+    # -- each case is read in a declared context ----------------------------
+
+    def test_the_expression_contexts_are_closed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    "yaml/grammar/expression.yaml": (
+                        "contexts: [predicate, compute, aggregate]\n",
+                        "contexts: [predicate, compute]\n",
+                    )
+                },
+            )
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, "expression")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("contexts must be", errors[0])
+
+    def test_every_case_names_a_declared_context(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    "yaml/grammar/expression.yaml": (
+                        "    context: predicate\n",
+                        "    context: filter\n",
+                    )
+                },
+            )
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, "expression")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("context must be one of", errors[0])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    "yaml/grammar/string-template.yaml": (
+                        "  - id: ",
+                        "  - context: predicate\n    id: ",
+                    )
+                },
+            )
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(
+                root, "string-template"
+            )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("read in no contexts", errors[0])
+
+    def test_a_function_declares_its_result_and_a_reducer_its_forms(self):
+        for old, new, message in (
+            (
+                "ABS: {min_arguments: 1, max_arguments: 1, result: numeric}",
+                "ABS: {min_arguments: 1, max_arguments: 1}",
+                "function ABS must declare min_arguments, max_arguments and result",
+            ),
+            (
+                "ABS: {min_arguments: 1, max_arguments: 1, result: numeric}",
+                "ABS: {min_arguments: 1, max_arguments: 1, result: text}",
+                "function ABS must return one of",
+            ),
+            (
+                "SUM: {argument: [expression]}",
+                "SUM: {argument: [expr]}",
+                "reducer SUM must declare its argument forms",
+            ),
+        ):
+            with self.subTest(new=new), tempfile.TemporaryDirectory() as temp_dir:
+                root = self.contract_root(
+                    temp_dir, **{"yaml/grammar/expression.yaml": (old, new)}
+                )
+                errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(
+                    root, "expression"
+                )
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(message, errors[0])
 
     def test_every_named_category_has_an_authored_case(self):
         self.assertIn(

@@ -2,7 +2,7 @@
 use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
-    numeric_parser::SourceSpan,
+    expression::SourceSpan,
     table::ValueRef,
     value::Value,
 };

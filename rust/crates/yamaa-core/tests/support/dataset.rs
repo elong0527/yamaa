@@ -99,11 +99,15 @@ pub(crate) fn record_plan(
 
 /// Compile authored arithmetic with a closed static name-to-read map.
 pub(crate) fn computed(text: &str, bindings: &[(&str, Read)]) -> Expression {
-    pub(crate) use yamaa_core::numeric_compiler::compile_numeric;
     pub(crate) use yamaa_core::{bound_expression::Binding, dataset::BoundNumeric};
     Expression::Compute(
         BoundNumeric::new(
-            compile_numeric(text, "columns.N.derivation.compute").unwrap(),
+            yamaa_core::expression::compile(
+                text,
+                yamaa_core::expression::Context::Compute,
+                "columns.N.derivation.compute",
+            )
+            .unwrap(),
             bindings
                 .iter()
                 .map(|(name, read)| Binding {
@@ -161,21 +165,164 @@ pub(crate) fn fixture(text: &str, float_column: usize) -> Table {
 pub(crate) use yamaa_core::bound_expression::{
     Binding, BindingError, BoundPredicate as Filter, Read,
 };
-pub(crate) use yamaa_core::predicate::{self, Comparison, Node, Scalar};
+pub(crate) use yamaa_core::expression::{self, Comparison, CompiledExpression};
+
+/// One authored predicate operand, written into the predicate's text.
+#[derive(Clone, Debug)]
+pub(crate) enum Scalar {
+    Literal(Value),
+    Identifier(String),
+}
+
+/// An authored predicate node; Boolean children index earlier entries.
+#[derive(Clone, Debug)]
+pub(crate) enum Node {
+    Contains {
+        value: Scalar,
+        pattern: String,
+    },
+    Boolean(bool),
+    Not(usize),
+    And(usize, usize),
+    Or(usize, usize),
+    Compare {
+        operator: Comparison,
+        left: Scalar,
+        right: Scalar,
+    },
+    IsNull {
+        value: Scalar,
+        negated: bool,
+    },
+    In {
+        value: Scalar,
+        items: Vec<Scalar>,
+        negated: bool,
+    },
+    Between {
+        value: Scalar,
+        lower: Scalar,
+        upper: Scalar,
+        negated: bool,
+    },
+    Like {
+        value: Scalar,
+        pattern: Scalar,
+        escape: Option<char>,
+        negated: bool,
+    },
+}
+
+fn quoted(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "''"))
+}
+
+fn scalar_text(scalar: &Scalar) -> String {
+    match scalar {
+        Scalar::Identifier(name) => name.clone(),
+        Scalar::Literal(Value::Missing) => "NULL".into(),
+        Scalar::Literal(Value::Int(value)) => value.to_string(),
+        Scalar::Literal(Value::Float(value)) => format!("{:?}", value.get()),
+        Scalar::Literal(Value::Str(value)) => quoted(value),
+        Scalar::Literal(Value::Date(value)) => format!("DATE {}", quoted(&value.to_string())),
+        Scalar::Literal(Value::DateTime(value)) => {
+            format!("DATETIME {}", quoted(&value.to_string()))
+        }
+        Scalar::Literal(Value::Bool(_)) => panic!("a truth value is not an operand"),
+    }
+}
+
+/// Write an authored arena as the predicate text it stands for.
+pub(crate) fn predicate_text(nodes: &[Node], root: usize) -> String {
+    let negation = |negated: &bool| if *negated { "NOT " } else { "" };
+    match &nodes[root] {
+        Node::Contains { value, pattern } => {
+            format!("str_contains({}, {})", scalar_text(value), quoted(pattern))
+        }
+        Node::Boolean(value) => if *value { "TRUE" } else { "FALSE" }.into(),
+        Node::Not(child) => format!("NOT ({})", predicate_text(nodes, *child)),
+        Node::And(left, right) => format!(
+            "({}) AND ({})",
+            predicate_text(nodes, *left),
+            predicate_text(nodes, *right)
+        ),
+        Node::Or(left, right) => format!(
+            "({}) OR ({})",
+            predicate_text(nodes, *left),
+            predicate_text(nodes, *right)
+        ),
+        Node::Compare {
+            operator,
+            left,
+            right,
+        } => format!(
+            "{} {} {}",
+            scalar_text(left),
+            match operator {
+                Comparison::Equal => "=",
+                Comparison::NotEqual => "<>",
+                Comparison::Less => "<",
+                Comparison::LessEqual => "<=",
+                Comparison::Greater => ">",
+                Comparison::GreaterEqual => ">=",
+            },
+            scalar_text(right)
+        ),
+        Node::IsNull { value, negated } => {
+            format!("{} IS {}NULL", scalar_text(value), negation(negated))
+        }
+        Node::In {
+            value,
+            items,
+            negated,
+        } => format!(
+            "{} {}IN ({})",
+            scalar_text(value),
+            negation(negated),
+            items.iter().map(scalar_text).collect::<Vec<_>>().join(", ")
+        ),
+        Node::Between {
+            value,
+            lower,
+            upper,
+            negated,
+        } => format!(
+            "{} {}BETWEEN {} AND {}",
+            scalar_text(value),
+            negation(negated),
+            scalar_text(lower),
+            scalar_text(upper)
+        ),
+        Node::Like {
+            value,
+            pattern,
+            escape,
+            negated,
+        } => format!(
+            "{} {}LIKE {}{}",
+            scalar_text(value),
+            negation(negated),
+            scalar_text(pattern),
+            escape
+                .map(|escape| format!(" ESCAPE {}", quoted(&escape.to_string())))
+                .unwrap_or_default()
+        ),
+    }
+}
+
+/// Compile an authored arena through the one predicate language.
+pub(crate) fn predicate_plan(nodes: Vec<Node>, root: usize, path: &str) -> CompiledExpression {
+    yamaa_core::expression::compile(
+        &predicate_text(&nodes, root),
+        yamaa_core::expression::Context::Predicate,
+        path,
+    )
+    .unwrap()
+}
 
 /// Admit a single authored predicate and its explicit scope bindings.
 pub(crate) fn filter(node: Node, bindings: Vec<Binding>) -> Filter {
-    Filter::new(
-        predicate::Plan::new(
-            vec![node],
-            0,
-            "rows[0].filter".into(),
-            "authored predicate".into(),
-        )
-        .unwrap(),
-        bindings,
-    )
-    .unwrap()
+    Filter::new(predicate_plan(vec![node], 0, "rows[0].filter"), bindings).unwrap()
 }
 /// Bind an occurrence without guessing whether it belongs to source or candidate scope.
 pub(crate) fn binding(name: &str, read: Read) -> Binding {
@@ -198,17 +345,7 @@ pub(crate) fn positive(read: Read) -> Filter {
 
 /// Supply a verification predicate with its actual owning declaration path.
 pub(crate) fn check_predicate(node: Node, bindings: Vec<Binding>, path: &str) -> Filter {
-    Filter::new(
-        predicate::Plan::new(
-            vec![node],
-            0,
-            path.into(),
-            "authored verification predicate".into(),
-        )
-        .unwrap(),
-        bindings,
-    )
-    .unwrap()
+    Filter::new(predicate_plan(vec![node], 0, path), bindings).unwrap()
 }
 
 /// Bind no-template keys separately from later whole-column derivations.
@@ -343,13 +480,7 @@ pub(crate) fn missing_or_bad_window_predicate(and_false: bool) -> Filter {
         },
     ];
     Filter::new(
-        predicate::Plan::new(
-            nodes,
-            2,
-            "columns.SEQ.derivation.row_number".into(),
-            "V IS NULL OR V > 'x'".into(),
-        )
-        .unwrap(),
+        predicate_plan(nodes, 2, "columns.SEQ.derivation.row_number"),
         vec![binding("V", Read::Column(2))],
     )
     .unwrap()

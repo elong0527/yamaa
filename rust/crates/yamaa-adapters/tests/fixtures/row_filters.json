@@ -3266,7 +3266,7 @@
       "callbacks": [],
       "diagnostics": [
         {
-          "condition": "invalid_predicate",
+          "condition": "invalid_expression",
           "context": {
             "position": 4,
             "predicate": "ID >"
@@ -3286,7 +3286,7 @@
         {
           "diagnostics": [
             {
-              "condition": "invalid_predicate",
+              "condition": "invalid_expression",
               "context": {
                 "position": 4,
                 "predicate": "ID >"

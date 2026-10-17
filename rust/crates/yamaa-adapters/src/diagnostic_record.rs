@@ -63,7 +63,7 @@
 //! the severity vocabulary, or weakening the ordering guarantees above.
 
 use yamaa_core::diagnostic::{ConditionCode, Context, Definition, Diagnostic};
-use yamaa_core::numeric_parser::SourceSpan;
+use yamaa_core::expression::SourceSpan;
 
 /// The boundary version both hosts read, covering the diagnostic, result and
 /// plan records. See the module documentation for the extension rules that

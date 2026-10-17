@@ -2,13 +2,19 @@
 #[allow(dead_code)]
 mod support;
 mod relations {
-    mod aggregate_compiler {
+    mod aggregate_expressions {
         use yamaa_core::{
-            aggregate_compiler::{compile_aggregate, AggregateOperand, AggregateResult},
-            evaluation::NumericResolver,
+            expression::{
+                compile, AggregateResult, CompileError, CompiledExpression, Context, Failure,
+                ReductionOperand, Resolver as ExpressionResolver,
+            },
             numeric::Number,
             value::{Selection, Value},
         };
+
+        fn compile_aggregate(text: &str, path: &str) -> Result<CompiledExpression, CompileError> {
+            compile(text, Context::Aggregate, path)
+        }
 
         struct Resolver {
             calls: Vec<String>,
@@ -29,79 +35,73 @@ mod relations {
             let plan = compile_aggregate(&expression, path).unwrap();
             assert_eq!(plan.reductions().len(), 512);
             for reduction in plan.reductions() {
-                let AggregateOperand::Numeric(operand) = &reduction.operand else {
-                    panic!("numeric aggregate operand")
-                };
-                assert_eq!(operand.expression(), expression);
-                assert_eq!(operand.spec_path(), path);
+                assert_eq!(reduction.operand, ReductionOperand::Numeric);
             }
+            assert_eq!(plan.expression(), expression);
+            assert_eq!(plan.spec_path(), path);
             assert_eq!(expression.matches("SUM(").count(), 512);
         }
 
         #[test]
         fn a_bare_identifier_outside_reduction_uses_numeric_coercion() {
             let plan = compile_aggregate("A", "columns.VALUE.aggregate").unwrap();
-            let AggregateResult::Numeric(result) = plan.result() else {
-                panic!("outer expressions use the numeric language")
-            };
+            assert_eq!(plan.result(), AggregateResult::Numeric);
             assert_eq!(
-                result
-                    .evaluate(&mut Resolver { calls: Vec::new() })
+                plan.evaluate_aggregate(&mut Resolver { calls: Vec::new() }, &[])
                     .unwrap(),
                 Number::Int(7)
             );
             assert_eq!(plan.ungrouped_identifiers().collect::<Vec<_>>(), ["A"]);
         }
-        impl NumericResolver for Resolver {
+        impl ExpressionResolver for Resolver {
             type Error = std::convert::Infallible;
             fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
                 self.calls.push(name.into());
                 Ok(Selection::Present(Value::Int(match name {
                     "EX.DOSE" => 3,
-                    "SUM(EX.DOSE * 2)" => 6,
-                    "MAX(EX.DOSE)" => 4,
                     "A" => 7,
                     _ => panic!("unbound aggregate resolver identity {name}"),
                 })))
             }
         }
 
+        /// Reductions reach the arithmetic as values, never as resolver names.
         #[test]
         fn outer_and_per_record_arithmetic_share_the_numeric_evaluator_without_rewriting() {
             let expression = "POWER(SUM(EX.DOSE * 2), 2) + MAX(EX.DOSE)";
             let plan = compile_aggregate(expression, "columns.VALUE.derivation.aggregate").unwrap();
             assert_eq!(plan.identifiers().collect::<Vec<_>>(), ["EX.DOSE"]);
-            let AggregateOperand::Numeric(operand) = &plan.reductions()[0].operand else {
-                panic!()
-            };
+            assert_eq!(plan.reductions()[0].operand, ReductionOperand::Numeric);
+            assert_eq!(plan.reductions()[0].reference, "SUM(EX.DOSE * 2)");
             let mut resolver = Resolver { calls: Vec::new() };
-            assert_eq!(operand.evaluate(&mut resolver).unwrap(), Number::Int(6));
-            assert_eq!(operand.expression(), expression);
-            let AggregateResult::Numeric(result) = plan.result() else {
-                panic!()
-            };
-            assert_eq!(result.evaluate(&mut resolver).unwrap(), Number::float(40.0));
             assert_eq!(
-                resolver.calls,
-                ["EX.DOSE", "SUM(EX.DOSE * 2)", "MAX(EX.DOSE)"]
+                plan.evaluate_operand(0, &mut resolver).unwrap(),
+                Number::Int(6)
             );
-            assert_eq!(result.expression(), expression);
+            assert_eq!(plan.result(), AggregateResult::Numeric);
+            assert_eq!(
+                plan.evaluate_aggregate(&mut resolver, &[Value::Int(6), Value::Int(4)])
+                    .unwrap(),
+                Number::float(40.0)
+            );
+            assert_eq!(resolver.calls, ["EX.DOSE"]);
+            assert_eq!(plan.expression(), expression);
         }
 
         #[test]
         fn bare_reducers_retain_typed_reads_and_record_stars() {
             let plan =
                 compile_aggregate("(ONLY(EX.TEXT))", "rows[0].derivations.TEXT.aggregate").unwrap();
-            assert_eq!(plan.result(), &AggregateResult::Reduction(0));
+            assert_eq!(plan.result(), AggregateResult::Reduction(0));
             assert_eq!(
                 plan.reductions()[0].operand,
-                AggregateOperand::Value("EX.TEXT".into())
+                ReductionOperand::Value("EX.TEXT".into())
             );
             let count = compile_aggregate("COUNT(EX.*)", "columns.N.aggregate").unwrap();
             assert_eq!(count.record_relations().collect::<Vec<_>>(), ["EX"]);
             assert_eq!(
                 count.reductions()[0].operand,
-                AggregateOperand::Records("EX".into())
+                ReductionOperand::Records("EX".into())
             );
             let group = compile_aggregate("KEY + SUM(EX.DOSE)", "columns.X.aggregate").unwrap();
             assert_eq!(group.ungrouped_identifiers().collect::<Vec<_>>(), ["KEY"]);
@@ -111,24 +111,23 @@ mod relations {
         fn failures_preserve_full_authored_expression_and_inner_span() {
             let expression = "SUM(A / 0) + 1";
             let plan = compile_aggregate(expression, "columns.X.aggregate").unwrap();
-            let AggregateOperand::Numeric(operand) = &plan.reductions()[0].operand else {
-                panic!()
-            };
-            let error = operand
-                .evaluate(&mut Resolver { calls: Vec::new() })
+            assert_eq!(plan.reductions()[0].operand, ReductionOperand::Numeric);
+            let error = plan
+                .evaluate_operand(0, &mut Resolver { calls: Vec::new() })
                 .unwrap_err();
-            assert_eq!(error.evaluation.location.expression, expression);
-            assert_eq!(
-                &expression[error.source_span.start..error.source_span.end],
-                "A / 0"
-            );
-            assert_eq!(error.evaluation.location.spec_path, "columns.X.aggregate");
+            assert_eq!(error.expression, expression);
+            let span = error.source_span.unwrap();
+            assert_eq!(&expression[span.start..span.end], "A / 0");
+            assert_eq!(error.spec_path, "columns.X.aggregate");
             let complete = compile_aggregate("SUM(A + B) + SUM(C)", "columns.X.aggregate").unwrap();
             assert_eq!(complete.reductions().len(), 2);
             assert_eq!(complete.identifiers().collect::<Vec<_>>(), ["A", "B", "C"]);
             assert!(matches!(
                 compile_aggregate("SUM(MEAN(A))", "columns.X.aggregate"),
-                Err(yamaa_core::aggregate_parser::ParseError::Grammar { .. })
+                Err(CompileError::Invalid {
+                    failure: Failure::NestedReduction { .. },
+                    ..
+                })
             ));
         }
     }
@@ -389,7 +388,7 @@ mod relations {
             assert!(matches!(
                 compile_dataset(declaration(compute("ID +", "ID", Read::Column(0)))),
                 Err(Error::Numeric(
-                    yamaa_core::numeric_parser::ParseError::Grammar { .. }
+                    yamaa_core::expression::CompileError::Invalid { .. }
                 ))
             ));
             assert!(matches!(
@@ -705,7 +704,12 @@ mod relations {
             for mode in [RowMode::Records, RowMode::Groups(vec![0]), RowMode::Keys] {
                 for column in [1, usize::MAX] {
                     let filter = BoundPredicate::new(
-                        yamaa_core::predicate_compiler::compile("F > 0", "row.filter").unwrap(),
+                        yamaa_core::expression::compile(
+                            "F > 0",
+                            yamaa_core::expression::Context::Predicate,
+                            "row.filter",
+                        )
+                        .unwrap(),
                         vec![Binding {
                             name: "F".into(),
                             read: Read::Column(column),
@@ -746,7 +750,12 @@ mod relations {
             for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
                 for column in [0, 1, 2] {
                     let filter = BoundPredicate::new(
-                        yamaa_core::predicate_compiler::compile("F > 0", "row.filter").unwrap(),
+                        yamaa_core::expression::compile(
+                            "F > 0",
+                            yamaa_core::expression::Context::Predicate,
+                            "row.filter",
+                        )
+                        .unwrap(),
                         vec![Binding {
                             name: "F".into(),
                             read: Read::Column(column),
@@ -880,7 +889,12 @@ mod relations {
             };
             assert!(make(window.clone()).is_ok());
             let predicate = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("ID > 0", "case.when").unwrap(),
+                yamaa_core::expression::compile(
+                    "ID > 0",
+                    yamaa_core::expression::Context::Predicate,
+                    "case.when",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "ID".into(),
                     read: Read::Column(0),
@@ -1422,7 +1436,7 @@ mod relations {
         #[test]
 
         fn raw_truth_literals_presence_null_and_complete_name_map() {
-            let plan = predicate_compiler::compile("ID = 1", "flag.condition").unwrap();
+            let plan = compile("ID = 1", Context::Predicate, "flag.condition").unwrap();
             let bindings = vec![FlagBinding {
                 name: "ID".into(),
                 read: FlagRead::Read(Read::Column(0)),
@@ -1466,7 +1480,7 @@ mod relations {
                 [
                     C::FlagMissingValueRequired,
                     C::PredicateUnknownField,
-                    C::PredicateInvalidExpression,
+                    C::ExpressionInvalid,
                     C::FlagMissingValueRequired
                 ]
             );
@@ -1505,7 +1519,7 @@ mod relations {
                     .map(|d| d.code)
                     .collect::<Vec<_>>(),
                 [
-                    C::PredicateInvalidExpression,
+                    C::ExpressionInvalid,
                     C::FlagMissingValueRequired,
                     C::PredicateUnknownField
                 ]
@@ -1525,7 +1539,7 @@ mod relations {
             assert_eq!(first, second);
             assert_eq!(
                 first.iter().map(|d| d.code).collect::<Vec<_>>(),
-                [C::PredicateInvalidExpression, C::PredicateUnknownField]
+                [C::ExpressionInvalid, C::PredicateUnknownField]
             );
             assert_eq!(first[0].spec_paths, ["columns.A.derivation.flag.condition"]);
             assert_eq!(first[1].spec_paths, ["columns.B.derivation.flag.condition"]);
@@ -1541,6 +1555,7 @@ mod relations {
                 spec_path: "flag.condition".into(),
                 expression: "original".into(),
                 route: vec![Route::Value],
+                source_span: None,
                 kind: ErrorKind::Condition(condition),
             };
             let diagnostic = yamaa_core::dataset::flag_condition_diagnostic(&error).unwrap();
@@ -1624,7 +1639,22 @@ mod relations {
             };
             let when = branches[0].when.as_ref().unwrap();
             assert_eq!(when.bindings().len(), 1);
-            assert_eq!(when.plan().identifiers(), ["ID", "ID"]);
+            assert_eq!(when.plan().identifiers().collect::<Vec<_>>(), ["ID"]);
+            // The subject is one written operand, resolved again for each comparison.
+            struct Trace(Vec<String>);
+            impl yamaa_core::expression::Resolver for Trace {
+                type Error = std::convert::Infallible;
+                fn resolve(
+                    &mut self,
+                    name: &str,
+                ) -> Result<yamaa_core::value::Selection, Self::Error> {
+                    self.0.push(name.into());
+                    Ok(yamaa_core::value::Selection::Present(Value::Int(1)))
+                }
+            }
+            let mut trace = Trace(Vec::new());
+            assert_eq!(when.plan().evaluate_truth(&mut trace).unwrap(), Truth::True);
+            assert_eq!(trace.0, ["ID", "ID"]);
         }
     }
     mod dependency_analysis {

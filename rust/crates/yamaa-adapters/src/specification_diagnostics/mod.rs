@@ -57,7 +57,7 @@ pub(crate) fn portable_definition(
     definition: yamaa_core::diagnostic::Definition,
     paths: Vec<String>,
     context: yamaa_core::diagnostic::Context,
-    source_span: Option<yamaa_core::numeric_parser::SourceSpan>,
+    source_span: Option<yamaa_core::expression::SourceSpan>,
     operand_route: Option<Vec<String>>,
 ) -> Value {
     crate::issue_rows::Issue {
@@ -186,7 +186,12 @@ pub(crate) fn preparation_outcome(error: &PrepareError) -> Value {
     }
     if let PrepareError::Numeric {
         path,
-        error: yamaa_core::numeric_parser::ParseError::Limit { limit, .. },
+        error:
+            yamaa_core::expression::CompileError::Limit {
+                resource: yamaa_core::expression::Resource::Depth,
+                limit,
+                ..
+            },
     } = error
     {
         return json!({"status":"rejected","stage":"prepare","code":"numeric_policy",
@@ -382,7 +387,7 @@ mod resource_refusal_tests {
         let expression = format!("{}1{}", "(".repeat(129), ")".repeat(129));
         let error = PrepareError::Numeric {
             path: "columns.VALUE.derivation.compute.expr".into(),
-            error: yamaa_core::numeric_parser::parse_numeric(&expression).unwrap_err(),
+            error: yamaa_core::expression::parse(&expression).unwrap_err(),
         };
         assert_eq!(
             preparation_outcome(&error),

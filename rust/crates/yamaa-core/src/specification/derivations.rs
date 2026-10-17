@@ -218,9 +218,9 @@ pub(super) fn prepare_value_with_driver(
                 }
             }
             let expression = text(d, field(d, payload, "expr")?)?;
-            match compile_numeric(expression, &result_path) {
+            match compile(expression, ExpressionContext::Compute, &result_path) {
                 Ok(compiled) => Operation::Compute(compiled),
-                Err(error @ ParseError::Grammar { .. }) => Operation::InvalidNumeric {
+                Err(error @ CompileError::Invalid { .. }) => Operation::InvalidNumeric {
                     expression: expression.into(),
                     error,
                 },
@@ -253,7 +253,7 @@ pub(super) fn prepare_value_with_driver(
 
 #[allow(clippy::too_many_arguments)]
 fn bind_row_compute(
-    compiled: &CompiledNumeric,
+    compiled: &CompiledExpression,
     path: &str,
     catalog: &Catalog,
     driver: &str,
@@ -976,10 +976,11 @@ fn references_mode(
         }
     }
     if let Some(payload) = d.field(value, "compute") {
-        match crate::numeric_parser::parse_numeric(text(d, field(d, payload, "expr")?)?) {
-            Ok(parsed) => names.extend(parsed.identifiers().map(String::from)),
-            Err(crate::numeric_parser::ParseError::Grammar { .. }) => (),
-            Err(error) => return Err(PrepareError::numeric_parse(error, None)),
+        let expression = text(d, field(d, payload, "expr")?)?;
+        match compile(expression, ExpressionContext::Compute, "") {
+            Ok(compiled) => names.extend(compiled.identifiers().map(String::from)),
+            Err(CompileError::Invalid { .. }) => (),
+            Err(error) => return Err(PrepareError::expression(error, None)),
         }
     }
     if let Some(payload) = d.field(value, "aggregate") {
@@ -988,20 +989,24 @@ fn references_mode(
         } else {
             field(d, payload, "expr")?
         };
-        match crate::aggregate_parser::parse_aggregate(text(d, id)?) {
-            Ok(parsed) => {
+        match compile(text(d, id)?, ExpressionContext::Aggregate, "") {
+            Ok(compiled) => {
                 names.extend(
-                    parsed
+                    compiled
                         .identifiers()
                         .filter(|name| aggregate_relation || !name.contains('.'))
                         .map(String::from),
                 );
                 if aggregate_relation {
-                    names.extend(parsed.star_datasets().map(|dataset| format!("{dataset}.*")));
+                    names.extend(
+                        compiled
+                            .record_relations()
+                            .map(|dataset| format!("{dataset}.*")),
+                    );
                 }
             }
-            Err(crate::aggregate_parser::ParseError::Grammar { .. }) => (),
-            Err(error) => return Err(PrepareError::aggregate_parse(error, None)),
+            Err(CompileError::Invalid { .. }) => (),
+            Err(error) => return Err(PrepareError::expression(error, None)),
         }
         if let Some(key) = d.field(payload, "key") {
             match &d.nodes()[key] {
@@ -1171,10 +1176,10 @@ fn predicate_references(
     id: usize,
     names: &mut Vec<String>,
 ) -> Result<(), PrepareError> {
-    match crate::predicate_parser::parse_predicate(text(d, id)?) {
-        Ok(parsed) => names.extend(parsed.identifiers().map(String::from)),
-        Err(crate::predicate_parser::ParseError::Grammar { .. }) => (),
-        Err(error) => return Err(PrepareError::predicate_parse(error, None)),
+    match compile(text(d, id)?, ExpressionContext::Predicate, "") {
+        Ok(compiled) => names.extend(compiled.identifiers().map(String::from)),
+        Err(CompileError::Invalid { .. }) => (),
+        Err(error) => return Err(PrepareError::expression(error, None)),
     }
     Ok(())
 }

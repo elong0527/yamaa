@@ -4038,20 +4038,12 @@
     },
     "public-grammar": {
       "grammar_conditions": {
-        "aggregate": [
-          "invalid_aggregate_expression",
+        "expression": [
+          "invalid_expression",
+          "integer_overflow",
           "nested_reduction",
           "prohibited_function",
           "prohibited_construct"
-        ],
-        "numeric": [
-          "invalid_numeric_expression",
-          "prohibited_function",
-          "prohibited_construct"
-        ],
-        "predicate": [
-          "invalid_predicate",
-          "integer_overflow"
         ],
         "string-template": [
           "invalid_string_template"

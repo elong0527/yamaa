@@ -1457,8 +1457,9 @@ mod execution {
             use yamaa_core::dataset::CaseBranch;
             let table = table(Value::Str("abc".into()), Value::Missing);
             let when = yamaa_core::bound_expression::BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile(
+                yamaa_core::expression::compile(
                     "ID = 'row1'",
+                    yamaa_core::expression::Context::Predicate,
                     "columns.RESULT.case[0].when",
                 )
                 .unwrap(),
@@ -1796,20 +1797,10 @@ mod execution {
         #[test]
         fn repeated_predicate_attempts_keep_the_original_source_values() {
             use yamaa_core::bound_expression::{Binding, BoundPredicate, Read};
-            use yamaa_core::predicate::{self, Comparison, Node, Scalar};
+            use yamaa_core::expression::{compile, Context};
             let (table, _) = fixture(Expression::Literal(Value::Int(1)));
             let filter = BoundPredicate::new(
-                predicate::Plan::new(
-                    vec![Node::Compare {
-                        operator: Comparison::Greater,
-                        left: Scalar::Identifier("x".into()),
-                        right: Scalar::Literal(Value::Int(0)),
-                    }],
-                    0,
-                    "rows[0].filter".into(),
-                    "x > 0".into(),
-                )
-                .unwrap(),
+                compile("x > 0", Context::Predicate, "rows[0].filter").unwrap(),
                 vec![Binding {
                     name: "x".into(),
                     read: Read::Source(0),

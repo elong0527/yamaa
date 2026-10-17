@@ -24,10 +24,10 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
                 .map_err(|error| {
                     Box::new(ExecutionError::Predicate {
                         source_row: row,
-                        error,
+                        error: *error,
                     })
                 })?;
-            if truth != crate::predicate::Truth::True {
+            if truth != crate::expression::Truth::True {
                 continue;
             }
         }
@@ -198,8 +198,13 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
         for &source_row in &candidate.members {
             let truth =
                 crate::dataset::execution::predicates::evaluate(filter, table, source_row, &[])
-                    .map_err(|error| Box::new(ExecutionError::Predicate { source_row, error }))?;
-            if truth == crate::predicate::Truth::True {
+                    .map_err(|error| {
+                        Box::new(ExecutionError::Predicate {
+                            source_row,
+                            error: *error,
+                        })
+                    })?;
+            if truth == crate::expression::Truth::True {
                 retained.push(source_row);
             }
         }

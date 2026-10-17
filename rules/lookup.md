@@ -69,7 +69,7 @@ with declared `key` pairs, and its match values have the same availability:
 input-record fields or columns of the same row template. The join binds one
 value per row, and later derivations in the same row template read that value
 through the bound column. A row-phase `compute` still names no qualified
-cross-dataset identifier ([FORMULA-11](formulas.md#formula-11)).
+cross-dataset identifier ([FORMULA-9](formulas.md#formula-9)).
 
 In grouped row construction every applicable key must be a group key of the
 row template ([ROW-4](rows.md#row-4)). A key the group does not
@@ -761,10 +761,10 @@ an unqualified one, fails. A reduction is not a join: an expression combining
 two dataset relations first binds each relation to a column and then combines
 the results with `compute`, which admits a qualified identifier only for a
 record selected by a named intermediate and still rejects an arbitrary
-dataset-qualified identifier ([FORMULA-11](formulas.md#formula-11)). Every join
+dataset-qualified identifier ([FORMULA-9](formulas.md#formula-9)). Every join
 remains under these lookup rules.
 
-A qualified name in the aggregate grammar reaches a field of its relation,
+A qualified name in an aggregate expression reaches a field of its relation,
 never an ODM item by its `ItemOID`, and a qualified name that names an ODM item
 fails. ODM item identifiers carry further periods; read the item into a column
 with [`odm`](names.md#name-7) first.
@@ -848,7 +848,7 @@ Replaces: REQ-1189, REQ-1190, REQ-1191, REQ-1192, REQ-1242.
 A derive binding is not an expression function. Text becomes a number only
 through the binding's declared `type`, and a date becomes an integer only
 through an operation such as `to_epoch_day` in the binding's own derivation;
-the aggregate and numeric grammars never parse text or dates themselves. Each
+an `aggregate` or `compute` expression never parses text or dates itself. Each
 binding's evaluated value converts to its declared `type` under
 [VALUE-3](values.md#value-3). Text that is not convertible to the
 declared numeric type fails as a conversion failure under

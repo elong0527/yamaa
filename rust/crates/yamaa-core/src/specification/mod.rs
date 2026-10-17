@@ -7,8 +7,7 @@ use crate::{
 };
 use crate::{
     column_dependencies,
-    numeric_compiler::{compile_numeric, CompiledNumeric},
-    numeric_parser::ParseError,
+    expression::{compile, CompileError, CompiledExpression, Context as ExpressionContext},
     reference_binding::{self, Catalog},
     schema::{Document, DocumentNode as N, SpecificationDocument},
     table::{Column, TableSchema},
@@ -79,7 +78,7 @@ pub enum PrepareError {
     #[error("specification unsupported: {0:?}")]
     Unsupported(Vec<UnsupportedFeature>),
     #[error("specification numeric: path={path:?}, error={error:?}")]
-    Numeric { path: String, error: ParseError },
+    Numeric { path: String, error: CompileError },
     #[error("specification invalid: {0:?}")]
     Invalid(Vec<PreflightFinding>),
     #[error("specification output schema: {0:?}")]
@@ -194,8 +193,8 @@ pub enum BindError {
     InvalidDiagnostic,
     #[error("specification source count")]
     SourceCount,
-    #[error("specification predicate policy: {0:?}")]
-    PredicatePolicy(crate::predicate_compiler::Error),
+    #[error("specification expression policy: {0:?}")]
+    ExpressionPolicy(CompileError),
     #[error("specification invalid predicate binding: {0:?}")]
     InvalidPredicateBinding(crate::bound_expression::BindingError),
     #[error("specification invalid: {0:?}")]
@@ -239,7 +238,7 @@ pub enum BindFinding {
     Aggregate {
         path: String,
         expression: String,
-        error: crate::aggregate_parser::GrammarFailure,
+        error: crate::expression::Failure,
     },
     AggregateScope {
         path: String,
@@ -260,7 +259,7 @@ pub enum BindFinding {
     Numeric {
         path: String,
         expression: String,
-        error: ParseError,
+        error: CompileError,
     },
     UnknownReference {
         path: String,
@@ -343,7 +342,7 @@ enum Operation {
     Window(std::boxed::Box<windows::Declaration>),
     Source(std::boxed::Box<source_expressions::Declaration>),
     FirstAvailable(std::boxed::Box<source_expressions::FirstAvailable>),
-    Compute(CompiledNumeric),
+    Compute(CompiledExpression),
     Round(crate::dataset::Rounding),
     Temporal(crate::dataset::Temporal),
     StrCase(crate::text_case::StringCase),
@@ -352,7 +351,7 @@ enum Operation {
     /// Reference planning emits formula diagnostics after source ingestion.
     InvalidNumeric {
         expression: String,
-        error: ParseError,
+        error: CompileError,
     },
 }
 #[derive(Clone, Debug)]
@@ -2263,7 +2262,7 @@ impl PreparedSpecification {
     #[allow(clippy::too_many_arguments)]
     fn bind_compute(
         &self,
-        compiled: &CompiledNumeric,
+        compiled: &CompiledExpression,
         reference_path: String,
         catalog: &Catalog,
         secondary: &[crate::dataset::SecondarySource],

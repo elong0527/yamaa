@@ -1,7 +1,7 @@
 //! Predicate binding to already available source/candidate columns, without joins.
 use crate::bound_expression::{Binding, BoundPredicate, Read};
 use crate::{
-    predicate::{self, Resolved, Resolver},
+    expression::{EvaluationError, Resolved, Resolver, Truth},
     table::{CellError, TableAccess, ValueRef},
     value::{Selection, Value},
 };
@@ -12,8 +12,8 @@ pub(crate) fn evaluate<T: TableAccess + ?Sized>(
     table: &T,
     source_row: usize,
     columns: &[Value],
-) -> Result<predicate::Truth, predicate::EvaluationError<CellError<T::Error>>> {
-    predicate.plan().evaluate(&mut RowResolver {
+) -> Result<Truth, Box<EvaluationError<CellError<T::Error>>>> {
+    predicate.plan().evaluate_truth(&mut RowResolver {
         table,
         source_row,
         columns,

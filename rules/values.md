@@ -145,9 +145,9 @@ allows missing through `may_return_missing: true`.
 
 `int` is a signed 64-bit integer, from `-2^63` through `2^63 - 1`, and `float`
 is IEEE 754 binary64. An integer literal outside the `int` range fails with
-`integer_overflow`: in a predicate while it is parsed, and as any other runtime
-literal during validation at its specification path. An `int` result of `+`,
-`-` or `*` outside the range fails arithmetic evaluation with
+`integer_overflow` during validation at its specification path, whether it is
+written in an expression or as any other runtime literal. An `int` result of
+`+`, `-` or `*` outside the range fails arithmetic evaluation with
 `integer_overflow`.
 
 Fails: `integer_overflow`.
@@ -168,7 +168,7 @@ not runtime integer values. Non-finite floats become missing under
 
 ### VALUE-6. Numeric text parses by one grammar, and every other spelling fails
 
-Text parses as a number only when it is the numeric grammar's `number`
+Text parses as a number only when it is the expression grammar's `number`
 production with an optional leading `+` or `-` and no surrounding whitespace,
 or exactly `.inf`, `.Inf` or `.INF` with an optional sign, or `.nan`, `.NaN` or
 `.NAN` without a sign. The non-finite spellings parse as floats and become

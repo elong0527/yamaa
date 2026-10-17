@@ -1312,7 +1312,7 @@ mod project {
                 cases("ID >", pad("SRC.ABSENT", "0"), pad("SRC.ID", "2")),
             )]);
             let actual = findings(&spec);
-            assert_eq!(actual[0].0.definition().condition, "invalid_predicate");
+            assert_eq!(actual[0].0.definition().condition, "invalid_expression");
             assert_eq!(actual[1].0, ConditionCode::StrPadWidth);
             assert_eq!(
                 actual.into_iter().map(|(_, path)| path).collect::<Vec<_>>(),
@@ -1361,7 +1361,7 @@ mod project {
                     .any(|(code, _)| *code == ConditionCode::StrPadWidth));
                 assert!(actual[..2]
                     .iter()
-                    .any(|(code, _)| code.definition().condition == "invalid_numeric_expression"));
+                    .any(|(code, _)| code.definition().condition == "invalid_expression"));
                 assert_eq!(
                     actual.into_iter().map(|(_, path)| path).collect::<Vec<_>>(),
                     expected

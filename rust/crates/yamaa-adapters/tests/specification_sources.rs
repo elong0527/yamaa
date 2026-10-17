@@ -121,10 +121,8 @@ output: {{path: output.csv, columns: [I, S]}}
                 let dataset::ExecutionError::Numeric { error, identity } = *error else {
                     panic!("unexpected {error:?}")
                 };
-                assert_eq!(error.evaluation.location.spec_path, path);
-                let EvaluationErrorKind::Numeric(actual) = error.evaluation.kind else {
-                    panic!("not numeric")
-                };
+                assert_eq!(error.spec_path, path);
+                let EvaluationErrorKind::Condition(actual) = error.kind;
                 assert_eq!(actual.condition(), condition);
                 assert_eq!(actual.requirement(), requirement);
                 assert_eq!(
@@ -449,8 +447,8 @@ output: {{path: output.csv, columns: [I, S]}}
             for (expr, condition, requirement, context) in [
                 (
                     "AVAL +",
-                    "invalid_numeric_expression",
-                    Some("REQ-0439"),
+                    "invalid_expression",
+                    Some("REQ-0188"),
                     json!({"expr":"AVAL +"}),
                 ),
                 (
@@ -1040,8 +1038,8 @@ output: {{path: output.csv, columns: [I, S]}}
                 ),
                 (
                     "SUM(",
-                    "invalid_aggregate_expression",
-                    "REQ-0499",
+                    "invalid_expression",
+                    "REQ-0188",
                     json!({"expr":"SUM("}),
                 ),
                 (
@@ -1052,8 +1050,8 @@ output: {{path: output.csv, columns: [I, S]}}
                 ),
                 (
                     "SUM(LB.LBSTRESN, LB.LBSTRESN)",
-                    "invalid_aggregate_expression",
-                    "REQ-0499",
+                    "invalid_expression",
+                    "REQ-0188",
                     json!({"expr":"SUM(LB.LBSTRESN, LB.LBSTRESN)"}),
                 ),
             ] {

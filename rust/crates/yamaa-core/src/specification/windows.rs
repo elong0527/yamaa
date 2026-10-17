@@ -3,7 +3,6 @@ use super::*;
 use crate::{
     bound_expression::BoundPredicate,
     dataset::{OrderTerm, Window, WindowKind},
-    predicate_compiler,
 };
 use std::collections::BTreeSet;
 
@@ -35,10 +34,7 @@ pub(super) struct Declaration {
     path: String,
     groups: Vec<String>,
     order: Vec<(String, bool, bool)>,
-    filter: Option<(
-        String,
-        Result<crate::predicate::Plan, predicate_compiler::Error>,
-    )>,
+    filter: Option<(String, Result<CompiledExpression, CompileError>)>,
 }
 #[derive(Debug)]
 pub enum WindowFinding {
@@ -222,15 +218,11 @@ impl Declaration {
             {
                 let expression = text(d, id)?;
                 let filter_path = format!("{path}.window.filter");
-                let compiled = predicate_compiler::compile(expression, &filter_path);
+                let compiled = compile(expression, ExpressionContext::Predicate, &filter_path);
                 match &compiled {
-                    Ok(_)
-                    | Err(predicate_compiler::Error::Parse(
-                        crate::predicate_parser::ParseError::Grammar { .. },
-                    )) => {}
-                    Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
+                    Ok(_) | Err(CompileError::Invalid { .. }) => {}
                     Err(error) => {
-                        return Err(PrepareError::predicate(error.clone(), Some(&filter_path)))
+                        return Err(PrepareError::expression(error.clone(), Some(&filter_path)))
                     }
                 }
                 filter = Some((expression.into(), compiled));
@@ -281,11 +273,9 @@ impl Declaration {
         let filter = match &self.filter {
             Some((
                 text,
-                Err(predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::Grammar {
-                        position, failure, ..
-                    },
-                )),
+                Err(CompileError::Invalid {
+                    position, failure, ..
+                }),
             )) => {
                 findings.push(BindFinding::Lookup(LookupFinding::grammar(
                     &format!("{}.window.filter", self.path),
@@ -295,7 +285,7 @@ impl Declaration {
                 )));
                 None
             }
-            Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
+            Some((_, Err(error))) => return Err(BindError::ExpressionPolicy(error.clone())),
             Some((_, Ok(plan))) => Some(plan),
             None => None,
         };
@@ -403,7 +393,7 @@ impl Declaration {
         order_by.extend(tie_break);
         let mut bindings = Vec::new();
         if let Some(plan) = filter {
-            let names: BTreeSet<_> = plan.identifiers().into_iter().collect();
+            let names: BTreeSet<_> = plan.identifiers().collect();
             for name in names {
                 bindings.push(Binding {
                     name: name.into(),

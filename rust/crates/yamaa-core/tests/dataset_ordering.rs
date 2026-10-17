@@ -744,8 +744,12 @@ mod execution {
             rows[99][16] = Value::Int(1);
             let source = table(&fields, rows);
             let filter = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("KEEP = 1", "intermediates[0].filter")
-                    .unwrap(),
+                yamaa_core::expression::compile(
+                    "KEEP = 1",
+                    yamaa_core::expression::Context::Predicate,
+                    "intermediates[0].filter",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "KEEP".into(),
                     read: Read::Source(16),

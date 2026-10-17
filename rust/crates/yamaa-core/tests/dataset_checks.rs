@@ -326,12 +326,12 @@ mod execution {
         /// Binding is complete before execution, while each written occurrence still reads once.
         #[test]
         fn dataset_numeric_bindings_and_occurrence_reads_are_explicit() {
-            use yamaa_core::numeric_compiler::compile_numeric;
             use yamaa_core::{
                 bound_expression::{Binding, BindingError},
                 dataset::BoundNumeric,
+                expression::{compile, Context},
             };
-            let compiled = compile_numeric("X + X * 2", "compute").unwrap();
+            let compiled = compile("X + X * 2", Context::Compute, "compute").unwrap();
             assert_eq!(compiled.identifiers().collect::<Vec<_>>(), vec!["X"]);
             assert_eq!(
                 BoundNumeric::new(compiled.clone(), vec![]),
@@ -403,7 +403,7 @@ mod execution {
         /// Numeric validation has no output identity; reached arithmetic and conversion do.
         #[test]
         fn dataset_numeric_failure_priority_preserves_ports_missingness_and_identity() {
-            use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition};
+            use yamaa_core::expression::{Condition, ErrorKind};
             let mut source = table(
                 &[("ID", ColumnType::Int), ("X", ColumnType::Str)],
                 vec![vec![Value::Int(1), Value::Str("7".into())]],
@@ -456,25 +456,22 @@ mod execution {
             source.fail = None;
             let plan = make(&source, "X + 1", &[("X", Read::Source(1))]);
             assert!(
-                matches!(*plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),ExecutionError::Numeric { error,identity:None } if matches!(error.evaluation.kind,EvaluationErrorKind::Numeric(NumericCondition::IncompatibleInput { .. })))
+                matches!(*plan.execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(),ExecutionError::Numeric { error,identity:None } if matches!(error.kind,ErrorKind::Condition(Condition::NumericInput { .. })))
             );
-            let plan = make(&source, "9223372036854775808", &[]);
+            // A literal outside the int range is refused before any record is read.
             assert!(matches!(
-                *plan
-                    .execute(
-                        &source,
-                        &[],
-                        &mut yamaa_core::function_invocation::NoFunctions::new(),
-                        None
-                    )
-                    .result
-                    .unwrap_err(),
-                ExecutionError::Numeric {
-                    identity: Some(_),
+                yamaa_core::expression::compile(
+                    "9223372036854775808",
+                    yamaa_core::expression::Context::Compute,
+                    "columns.N.derivation.compute"
+                ),
+                Err(yamaa_core::expression::CompileError::Invalid {
+                    failure: yamaa_core::expression::Failure::IntegerOverflow,
                     ..
-                }
+                })
             ));
             source.rows.clear();
+            let plan = make(&source, "-9223372036854775808", &[]);
             assert!(plan
                 .execute(
                     &source,
@@ -1961,16 +1958,14 @@ mod execution {
                     BindingError::UnusedName,
                 ),
             ] {
-                let predicate = predicate::Plan::new(
+                let predicate = predicate_plan(
                     vec![Node::IsNull {
                         value: Scalar::Identifier("x".into()),
                         negated: false,
                     }],
                     0,
-                    "rows[0].filter".into(),
-                    "x IS NULL".into(),
-                )
-                .unwrap();
+                    "rows[0].filter",
+                );
                 assert_eq!(Filter::new(predicate, bindings), Err(expected));
             }
             let source = table(&[("id", ColumnType::Int)], vec![vec![Value::Int(1)]]);
@@ -2042,7 +2037,7 @@ mod execution {
             assert_eq!(error.spec_path, "rows[0].filter");
             assert!(matches!(
                 error.kind,
-                predicate::ErrorKind::Resolution {
+                expression::ErrorKind::Resolution {
                     error: CellError::Access("source failure"),
                     ..
                 }
