@@ -134,7 +134,7 @@ class PublicContract(unittest.TestCase):
                 self.assertFalse(hasattr(_native, name))
         self.assertIsInstance(_native._CORE_VERSION, str)
         self.assertTrue(_native._CORE_VERSION)
-        self.assertEqual(yamaa.__version__, "0.4.0")
+        self.assertEqual(yamaa.__version__, "0.5.0")
         self.assertEqual(_native._CORE_VERSION, yamaa.__version__)
 
     def test_signatures_argument_types_and_removed_options(self):

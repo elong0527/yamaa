@@ -9,16 +9,17 @@
 #    rustc >= 1.90), so dplyr's oldrel-* matrix entries cannot run here;
 #    the matrix keeps release on all three operating systems plus devel
 #    on Ubuntu, and installs the pinned Rust toolchain before checking.
-# 3. Like the existing native qualification in native.yml, this runs as
-#    a regular build every two hours (offset to :47 so it does not pile
-#    onto the native run at :17), not only on push / pull request.
+# 3. Like the native qualification in native.yml, this also runs as a
+#    scheduled nightly build (at 02:47 UTC, so it does not pile onto the
+#    native run at 05:17), not only on push / pull request.
 
 on:
   schedule:
-    - cron: '47 */2 * * *'
+    # Nightly, two and a half hours before the native qualification run.
+    - cron: '47 2 * * *'
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, 'release/**']
     paths:
       - 'R/**'
       - 'crates/**'
