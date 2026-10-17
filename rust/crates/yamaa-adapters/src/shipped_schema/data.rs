@@ -369,7 +369,7 @@ derive_binding_class:
 aggregate_expression:
     type: str
     min_length: 1
-    description: Reducer expression in the closed aggregate grammar (FORMULA-17).
+    description: Expression in the closed expression grammar that admits the reducers (FORMULA-27).
 "#),
     ("schema_expression_core.yaml", r#"version: "1.0"
 
@@ -691,7 +691,7 @@ expressions:
         - expr:
             type: numeric_expression
             required: true
-            description: Closed numeric expression over named variables (FORMULA-10).
+            description: Numeric expression over named variables in the compute field of the expression language (FORMULA-27).
     round_half_away_from_zero: # See REQ-1172.
         - source:
             type: variable
@@ -705,7 +705,7 @@ expressions:
 numeric_expression:
     type: str
     min_length: 1
-    description: Numeric formula in the closed numeric grammar (FORMULA-10).
+    description: Expression in the closed expression grammar with a numeric root (FORMULA-1).
 "#),
     ("schema_expression_odm.yaml", r#"version: "1.0"
 
