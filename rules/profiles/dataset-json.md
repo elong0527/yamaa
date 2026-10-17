@@ -89,11 +89,11 @@ document.
 
 The file's rows are the rows of the artifact the entry's specification
 published at its `output.path`, read exactly as a consuming specification reads
-a producer's artifact, and the producer completes before the document is
-generated. Composition does not re-derive, re-order, filter or round: column
-order is `output.columns`, row order is the artifact's, and a value is the
-value the artifact carries. An artifact that is unpublished or does not match
-its producing specification fails.
+a producer's artifact; the artifact must already be published, and generation
+never runs the specification. Composition does not re-derive, re-order, filter
+or round: column order is `output.columns`, row order is the artifact's, and a
+value is the value the artifact carries. An artifact that is unpublished or
+does not match its producing specification fails.
 
 Fails: `producer_contract_mismatch`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
@@ -101,8 +101,8 @@ Replaces: REQ-1199, REQ-1200, REQ-1230.
 
 The artifact is read:
 
-- under the profile [INPUT-1](../inputs.md#input-1) says the
-  producer wrote it with;
+- under the profile its `output.path` extension selects under
+  [INPUT-1](../inputs.md#input-1);
 - with the field agreement [INPUT-11](../inputs.md#input-11)
   requires; and
 - with the typed values [INPUT-11](../inputs.md#input-11)

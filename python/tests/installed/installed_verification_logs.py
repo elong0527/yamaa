@@ -282,6 +282,38 @@ columns:
             self.assertEqual((root / "checks.csv").read_bytes().count(b"\n"), 1)
             self.assertEqual((root / "warnings.csv").read_bytes().count(b"\n"), 1)
 
+    def test_sidecar_collisions_and_unknown_profiles_precede_study_access(self):
+        for sidecar, condition in (
+            ("out.csv", "artifact_path_collision"),
+            ("checks.arrow", "unknown_artifact_profile"),
+        ):
+            with (
+                self.subTest(sidecar=sidecar),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_text(
+                    "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+                    "input: {SRC: input.csv}\n"
+                    "output: {path: out.csv, columns: [ID], warning_log: warnings.csv, "
+                    f"verification_log: {sidecar}}}\n"
+                    "columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
+                    encoding="utf-8",
+                )
+                # The input is absent: the refusal precedes any study access.
+                result = yamaa.domain(entry)
+                self.assertIsNone(result.output)
+                self.assertEqual(result.issues["condition"].to_list(), [condition])
+                self.assertEqual(
+                    result.issues["spec_paths"].to_list()[0][-1],
+                    "output.verification_log",
+                )
+                with self.assertRaises(yamaa.DomainError):
+                    result.save()
+                for name in ("out.csv", "warnings.csv", sidecar):
+                    self.assertFalse((root / name).exists())
+
 
 if __name__ == "__main__":
     unittest.main()
