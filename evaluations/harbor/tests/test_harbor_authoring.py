@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -19,7 +20,7 @@ BENCHMARKS = ROOT / "benchmarks"
 DEATH = BENCHMARKS / "adam-adae-death"
 PROMPTED = sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
 # Several outputs, a record-level override, a project function, a schema-linked
-# input, and the worked examples.
+# input, and the pilots.
 CASES = (
     "adam-adae-death",
     "adam-adsl-age-group",
@@ -90,7 +91,7 @@ def test_the_sources_hold_no_checks_prompts_or_solutions(tmp_path):
         assert "verifications:" not in spec.read_text()
         assert "row_count" not in spec.read_text()
         assert yaml.safe_load(spec.read_text())
-    assert not (sources / "full.md").exists() and not (sources / "previous.md").exists()
+    assert sorted(p.name for p in sources.glob("*.md")) == ["README.md", "skeleton.md"]
     assert not list(out.rglob("result.*"))
     functions = (sources / "functions" / "python.yaml").read_text()
     assert "bmi" in functions and "tests" not in functions
@@ -169,6 +170,47 @@ def test_the_full_checks_reject_a_changed_request():
     )
 
 
+def test_a_procedure_is_rejected_but_rules_and_literals_pass():
+    paraphrase = (
+        'Filter AE to records with AEOUT "FATAL", sort the records by ASTDT, '
+        "keep the last one per subject, and take the first available date."
+    )
+    assert check.procedure_problems(paraphrase) == [
+        "reads as a procedure: 'Filter'",
+        "reads as a procedure: 'sort the records'",
+        "reads as a procedure: 'keep the last'",
+        "reads as a procedure: 'first available'",
+    ]
+    rules = (
+        'A "FILTER" label stays as collected. TRTSEQP is TRT01P and TRT02P '
+        'joined by "/". A year alone takes the first day of that year, and ties '
+        "break by earliest ASTDT, then lowest AESEQ."
+    )
+    assert check.procedure_problems(rules) == []
+
+
+def test_the_writer_instruction_quotes_no_committed_prompt():
+    # The recipe is the writer's instruction. Its examples are invented, so it
+    # hands no writer a rule that a committed prompt took from the golden.
+    recipe = (build.HERE / "prompts" / "recipe.md").read_text()
+    examples = {
+        check.words(a or b)
+        for a, b in re.findall(r'`([^`\n]+)`|"([^"\n]+)"', recipe)
+        if len((a or b).split()) >= 4
+    }
+    assert examples
+    prompts = {
+        name: check.words((build.PROMPTS / name / "full.md").read_text())
+        for name in PROMPTED
+    }
+    assert [
+        (example, name)
+        for example in sorted(examples)
+        for name, text in prompts.items()
+        if example in text
+    ] == []
+
+
 def test_the_writing_task_runs_the_checks_on_what_it_wrote(tmp_path):
     task_config = pytest.importorskip("harbor.models.task.config")
     task = author.writing_task(DEATH, tmp_path / "tasks", "test")
@@ -181,9 +223,10 @@ def test_the_writing_task_runs_the_checks_on_what_it_wrote(tmp_path):
         "yamaa_commit": "test",
     }
     assert config["verifier"]["environment"]["network_mode"] == "no-network"
-    assert (task / "instruction.md").read_text() == (
-        build.HERE / "author-full.md"
-    ).read_text()
+    # The recipe is the instruction; no other document tells the writer what
+    # to do.
+    recipe = build.HERE / "prompts" / "recipe.md"
+    assert (task / "instruction.md").read_text() == recipe.read_text()
     environment = task / "environment"
     assert (environment / "Dockerfile").read_text() == (
         f"FROM {build.AGENT_IMAGES['python']}\n"
@@ -221,17 +264,25 @@ def test_the_writing_task_runs_the_checks_on_what_it_wrote(tmp_path):
     assert json.loads((tmp_path / "reward.json").read_text()) == {"reward": 1.0}
 
 
-def test_an_earlier_candidate_and_its_feedback_join_the_sources(tmp_path):
-    previous = tmp_path / "round-1" / DEATH.name
-    previous.mkdir(parents=True)
-    (previous / "full.md").write_text("an earlier candidate\n")
-    (previous / "feedback.md").write_text("- adae.csv DTHDT differs: 2 of 3 attempts\n")
-    task = author.writing_task(
-        DEATH, tmp_path / "tasks", "test", prompts=previous.parent
-    )
+def test_the_full_writer_gets_the_benchmark_sources_alone(tmp_path):
+    # No earlier candidate, solver result, prompt or solution reaches the
+    # writer of a full prompt: only what packet.py renders from the case.
+    task = author.writing_task(DEATH, tmp_path / "tasks", "test")
     sources = task / "environment" / "sources"
-    assert (sources / "previous.md").read_text() == "an earlier candidate\n"
-    assert "DTHDT differs" in (sources / "feedback.md").read_text()
+    assert sorted(p.name for p in sources.iterdir()) == [
+        "README.md",
+        "brief.py",
+        "check.json",
+        "check.py",
+        "rules",
+        "skeleton.md",
+        "specification",
+    ]
+    earlier = tmp_path / "round-1" / DEATH.name
+    earlier.mkdir(parents=True)
+    (earlier / "full.md").write_text("an earlier candidate\n")
+    with pytest.raises(build.BuildError, match="sources alone"):
+        author.writing_task(DEATH, tmp_path / "tasks", "test", prompts=earlier.parent)
 
 
 def test_the_conventions_writer_narrows_the_full_prompt(tmp_path):
@@ -242,18 +293,94 @@ def test_the_conventions_writer_narrows_the_full_prompt(tmp_path):
         "brief.py",
         "check.py",
         "full.md",
-        "tiers.md",
     ]
     assert (
         (sources / "full.md").read_text()
         == full
         == (task / "tests/full.md").read_text()
     )
+    tiers = build.HERE / "prompts" / "README.md"
+    assert (task / "instruction.md").read_text() == tiers.read_text()
+    candidates = tmp_path / "prompts" / DEATH.name
+    candidates.mkdir(parents=True)
+    (candidates / "full.md").write_text(full.replace("most recent", "latest"))
+    task = author.writing_task(
+        DEATH, tmp_path / "tasks", "test", "conventions", prompts=candidates.parent
+    )
+    assert "latest" in (task / "environment" / "sources" / "full.md").read_text()
     assert "/app/input" not in (task / "environment" / "Dockerfile").read_text()
     test = (task / "tests" / "test.sh").read_text()
     assert (
         "check.py conventions /app/output/conventions.md --full /tests/full.md" in test
     )
+
+
+def test_a_writer_folder_holds_what_the_writing_task_holds(tmp_path):
+    task = author.writing_task(DEATH, tmp_path / "tasks", "test")
+    folder = author.writer_folder(DEATH, tmp_path / "folders")
+    assert folder.name == "adam-adae-death-write-full"
+    assert sorted(p.name for p in folder.iterdir()) == [
+        "input",
+        "instruction.md",
+        "output",
+        "sources",
+    ]
+    for part in ("sources", "input"):
+        assert _tree(folder / part) == _tree(task / "environment" / part)
+    assert (folder / "instruction.md").read_text() == (
+        task / "instruction.md"
+    ).read_text()
+    assert not list((folder / "output").iterdir())
+    conventions = author.writer_folder(DEATH, tmp_path / "folders", "conventions")
+    assert sorted(p.name for p in (conventions / "sources").iterdir()) == [
+        "brief.py",
+        "check.py",
+        "full.md",
+    ]
+    assert not (conventions / "input").exists()
+    with pytest.raises(build.BuildError, match="sources alone"):
+        author.writer_folder(DEATH, tmp_path / "folders", prompts=tmp_path)
+
+
+def test_a_solver_folder_holds_only_what_the_evaluated_agent_gets(tmp_path):
+    candidate = (build.PROMPTS / DEATH.name / "full.md").read_text()
+    folder = author.solver_folder(DEATH, candidate, "python", tmp_path / "folders")
+    assert folder.name == "adam-adae-death-candidate-python"
+    assert sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*")) == [
+        "input",
+        "input/ae.csv",
+        "input/dm.csv",
+        "instruction.md",
+        "output",
+    ]
+    task = build.build_task(
+        DEATH, tmp_path / "tasks", None, "test", "python", candidate=candidate
+    )
+    assert (folder / "instruction.md").read_text() == (
+        task / "instruction.md"
+    ).read_text()
+
+
+def test_grading_solver_folders_names_columns_and_never_a_value(tmp_path):
+    candidate = (build.PROMPTS / DEATH.name / "full.md").read_text()
+    folder = author.solver_folder(DEATH, candidate, "python", tmp_path)
+    assert author.grade_folders(tmp_path) == {
+        DEATH.name: "0 of 1 solver attempts reproduced every requested dataset.\n"
+        "- adae.csv was not written: 1 of 1 attempts\n"
+        "- the required script was not saved: 1 of 1 attempts\n"
+    }
+    output = folder / "output"
+    shutil.copyfile(DEATH / "expected" / "adae.csv", output / "adae.csv")
+    (output / "result.py").write_text("print('derived')\n")
+    assert author.grade_folders(tmp_path) == {
+        DEATH.name: "1 of 1 solver attempts reproduced every requested dataset.\n"
+    }
+    rows = (output / "adae.csv").read_text().splitlines(keepends=True)
+    rows[1] = rows[1].replace("HEART ATTACK", "HEART FAILURE", 1)
+    (output / "adae.csv").write_text("".join(rows))
+    text = author.grade_folders(tmp_path)[DEATH.name]
+    assert "- adae.csv AEDECOD differs: 1 of 1 attempts" in text
+    assert "HEART" not in text and "KN189" not in text
 
 
 def test_a_candidate_prompt_is_tried_without_a_reference_and_never_ranked(tmp_path):
@@ -310,7 +437,7 @@ def test_a_writing_job_denies_web_tools_and_no_runtime(tmp_path):
     job_config = pytest.importorskip("harbor.models.job.config")
     tasks = [
         author.writing_task(DEATH, tmp_path / "tasks", "test", tier)
-        for tier in author.WRITERS
+        for tier in author.INSTRUCTIONS
     ]
     config = build.job_config(
         tasks,
@@ -353,7 +480,7 @@ def _trial(
         (output / file).write_text(text)
 
 
-def test_feedback_names_columns_and_never_a_value(tmp_path):
+def test_the_report_names_columns_and_never_a_value(tmp_path):
     job = tmp_path / "job"
     job.mkdir()
     secret_key, secret_value = "KN189-104", "2031-07-04"
@@ -381,7 +508,7 @@ def test_feedback_names_columns_and_never_a_value(tmp_path):
     _trial(job, "adam-adae-death-candidate-python", 0.0, failed, {})
     _trial(job, "adam-adae-death-candidate-r", 1.0, {"passed": True, "outputs": []}, {})
     _trial(job, "adam-adae-death-candidate-r", 0.0, None, {})
-    texts = author.feedback([job])
+    texts = author.report([job])
     assert texts == {
         "adam-adae-death": "1 of 3 solver attempts reproduced every requested dataset.\n"
         "- adae.csv DTHDT differs: 1 of 3 attempts\n"
