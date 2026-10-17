@@ -90,7 +90,7 @@ def test_the_sources_hold_no_checks_prompts_or_solutions(tmp_path):
         assert "verifications:" not in spec.read_text()
         assert "row_count" not in spec.read_text()
         assert yaml.safe_load(spec.read_text())
-    assert not (sources / "full.md").exists() and not (sources / "previous.md").exists()
+    assert sorted(p.name for p in sources.glob("*.md")) == ["README.md", "skeleton.md"]
     assert not list(out.rglob("result.*"))
     functions = (sources / "functions" / "python.yaml").read_text()
     assert "bmi" in functions and "tests" not in functions
@@ -181,9 +181,10 @@ def test_the_writing_task_runs_the_checks_on_what_it_wrote(tmp_path):
         "yamaa_commit": "test",
     }
     assert config["verifier"]["environment"]["network_mode"] == "no-network"
-    assert (task / "instruction.md").read_text() == (
-        build.HERE / "author-full.md"
-    ).read_text()
+    # The recipe is the instruction; no other document tells the writer what
+    # to do.
+    recipe = build.HERE / "prompts" / "recipe.md"
+    assert (task / "instruction.md").read_text() == recipe.read_text()
     environment = task / "environment"
     assert (environment / "Dockerfile").read_text() == (
         f"FROM {build.AGENT_IMAGES['python']}\n"
@@ -221,17 +222,25 @@ def test_the_writing_task_runs_the_checks_on_what_it_wrote(tmp_path):
     assert json.loads((tmp_path / "reward.json").read_text()) == {"reward": 1.0}
 
 
-def test_an_earlier_candidate_and_its_feedback_join_the_sources(tmp_path):
-    previous = tmp_path / "round-1" / DEATH.name
-    previous.mkdir(parents=True)
-    (previous / "full.md").write_text("an earlier candidate\n")
-    (previous / "feedback.md").write_text("- adae.csv DTHDT differs: 2 of 3 attempts\n")
-    task = author.writing_task(
-        DEATH, tmp_path / "tasks", "test", prompts=previous.parent
-    )
+def test_the_full_writer_gets_the_benchmark_sources_alone(tmp_path):
+    # No earlier candidate, solver result, prompt or solution reaches the
+    # writer of a full prompt: only what packet.py renders from the case.
+    task = author.writing_task(DEATH, tmp_path / "tasks", "test")
     sources = task / "environment" / "sources"
-    assert (sources / "previous.md").read_text() == "an earlier candidate\n"
-    assert "DTHDT differs" in (sources / "feedback.md").read_text()
+    assert sorted(p.name for p in sources.iterdir()) == [
+        "README.md",
+        "brief.py",
+        "check.json",
+        "check.py",
+        "rules",
+        "skeleton.md",
+        "specification",
+    ]
+    earlier = tmp_path / "round-1" / DEATH.name
+    earlier.mkdir(parents=True)
+    (earlier / "full.md").write_text("an earlier candidate\n")
+    with pytest.raises(build.BuildError, match="sources alone"):
+        author.writing_task(DEATH, tmp_path / "tasks", "test", prompts=earlier.parent)
 
 
 def test_the_conventions_writer_narrows_the_full_prompt(tmp_path):
@@ -242,13 +251,21 @@ def test_the_conventions_writer_narrows_the_full_prompt(tmp_path):
         "brief.py",
         "check.py",
         "full.md",
-        "tiers.md",
     ]
     assert (
         (sources / "full.md").read_text()
         == full
         == (task / "tests/full.md").read_text()
     )
+    tiers = build.HERE / "prompts" / "README.md"
+    assert (task / "instruction.md").read_text() == tiers.read_text()
+    candidates = tmp_path / "prompts" / DEATH.name
+    candidates.mkdir(parents=True)
+    (candidates / "full.md").write_text(full.replace("most recent", "latest"))
+    task = author.writing_task(
+        DEATH, tmp_path / "tasks", "test", "conventions", prompts=candidates.parent
+    )
+    assert "latest" in (task / "environment" / "sources" / "full.md").read_text()
     assert "/app/input" not in (task / "environment" / "Dockerfile").read_text()
     test = (task / "tests" / "test.sh").read_text()
     assert (
@@ -310,7 +327,7 @@ def test_a_writing_job_denies_web_tools_and_no_runtime(tmp_path):
     job_config = pytest.importorskip("harbor.models.job.config")
     tasks = [
         author.writing_task(DEATH, tmp_path / "tasks", "test", tier)
-        for tier in author.WRITERS
+        for tier in author.INSTRUCTIONS
     ]
     config = build.job_config(
         tasks,
@@ -353,7 +370,7 @@ def _trial(
         (output / file).write_text(text)
 
 
-def test_feedback_names_columns_and_never_a_value(tmp_path):
+def test_the_report_names_columns_and_never_a_value(tmp_path):
     job = tmp_path / "job"
     job.mkdir()
     secret_key, secret_value = "KN189-104", "2031-07-04"
@@ -381,7 +398,7 @@ def test_feedback_names_columns_and_never_a_value(tmp_path):
     _trial(job, "adam-adae-death-candidate-python", 0.0, failed, {})
     _trial(job, "adam-adae-death-candidate-r", 1.0, {"passed": True, "outputs": []}, {})
     _trial(job, "adam-adae-death-candidate-r", 0.0, None, {})
-    texts = author.feedback([job])
+    texts = author.report([job])
     assert texts == {
         "adam-adae-death": "1 of 3 solver attempts reproduced every requested dataset.\n"
         "- adae.csv DTHDT differs: 1 of 3 attempts\n"
