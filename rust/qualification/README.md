@@ -74,7 +74,9 @@ parent, and for eligible positive entries (no `rows`, no `parent`, at least
 two key columns reading one input field or a literal) a JSON control copy and
 a copy with the key columns moved to the front in reverse key order must agree
 (REQ-0060, REQ-0062, REQ-0220). Positive variants must report no issues with
-equal output and log tables; negative variants must report the same first
+equal output and run report tables (report rows compared as a set for the
+key-order copy, whose check rows follow column declaration order); negative
+variants must report the same first
 issue (phase, condition, requirement and spec paths). Known differences are
 declared in the case's `benchmark.yaml` under `conformance.metamorphic`,
 linked to a tracking issue or marked permanent with a by-design reason. A

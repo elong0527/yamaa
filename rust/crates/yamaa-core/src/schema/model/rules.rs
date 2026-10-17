@@ -92,8 +92,7 @@ model!(
         field!("relative_to", Enum(&["declaring", "entry"])),
         optional!("decimals", Integer),
         required!("columns", STRINGS),
-        optional!("warning_log", Text),
-        optional!("verification_log", Text),
+        optional!("report", Text),
         optional!("order_by", ORDER_TERMS),
     ]
 );

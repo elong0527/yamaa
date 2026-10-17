@@ -2378,33 +2378,35 @@ mod relations {
             ));
         }
     }
-    mod verification_logs {
+    mod run_report {
         use std::collections::BTreeMap;
         use yamaa_core::json::Value as Json;
         use yamaa_core::{
             dataset::VerificationSeverity,
-            verification_logs::{self, Error, Failure, PreparedCell, Record},
+            run_report::{self, Error, Facts, Failure, PreparedCell},
+            table::{TableAccess, ValueRef},
+            value::Value,
         };
 
-        fn held() -> Record {
-            Record {
+        fn held() -> run_report::Check {
+            run_report::Check {
                 path: "columns.AGE.verifications[0].not_missing".into(),
+                name: "not_missing".into(),
                 id: None,
-                check: "not_missing".into(),
                 target: Some("AGE".into()),
-                requirement: "REQ-0376".into(),
+                rule: "REQ-0375".into(),
                 severity: VerificationSeverity::Error,
                 evaluated: 8,
                 failure: None,
             }
         }
-        fn warning() -> Record {
-            Record {
+        fn warning() -> run_report::Check {
+            run_report::Check {
                 path: "columns.AGE.verifications[1].range".into(),
+                name: "range".into(),
                 id: Some("é🙂".into()),
-                check: "range".into(),
                 target: Some("AGE".into()),
-                requirement: "REQ-0377".into(),
+                rule: "REQ-0377".into(),
                 severity: VerificationSeverity::Warning,
                 evaluated: 8,
                 failure: Some(Failure {
@@ -2420,115 +2422,356 @@ mod relations {
                 }),
             }
         }
+        fn facts(checks: Vec<run_report::Check>) -> Facts {
+            Facts {
+                artifact: "out.csv".into(),
+                run: run_report::Run::Succeeded { rows: 8 },
+                inputs: vec![
+                    run_report::Input {
+                        name: "DM".into(),
+                        path: "input/dm.csv".into(),
+                        profile: "csv",
+                        schema: None,
+                        records: Some(8),
+                        bytes: Some(96),
+                    },
+                    run_report::Input {
+                        name: "LINKED".into(),
+                        path: "produced.parquet".into(),
+                        profile: "parquet",
+                        schema: Some("producer.yaml".into()),
+                        records: None,
+                        bytes: None,
+                    },
+                ],
+                rows: vec![run_report::Rows {
+                    path: "base".into(),
+                    driver: "DM".into(),
+                    emitted: Some(8),
+                    read: Some(9),
+                }],
+                handlers: vec![run_report::Handler {
+                    path: "columns.AGE.derivation.source.absent".into(),
+                    name: "absent".into(),
+                    count: 0,
+                }],
+                columns: vec![
+                    run_report::Column {
+                        name: "USUBJID".into(),
+                        missing: 0,
+                        rows: 8,
+                        max_length: Some(6),
+                    },
+                    run_report::Column {
+                        name: "AGE".into(),
+                        missing: 1,
+                        rows: 8,
+                        max_length: None,
+                    },
+                ],
+                checks,
+            }
+        }
+        /// Stand in for the adapter's canonical JSON projection: verification
+        /// reads only the presence of KEYS and DETAILS text.
+        fn plain(rows: Vec<Vec<PreparedCell>>) -> Vec<Vec<Value>> {
+            rows.into_iter()
+                .map(|row| {
+                    row.into_iter()
+                        .map(|cell| match cell {
+                            PreparedCell::Missing => Value::Missing,
+                            PreparedCell::Text(text) => Value::Str(text),
+                            PreparedCell::Count(count) => Value::Int(count),
+                            PreparedCell::Details(_) => Value::Str("{}".into()),
+                            PreparedCell::Keys(_) => Value::Str("[]".into()),
+                        })
+                        .collect()
+                })
+                .collect()
+        }
         #[test]
-        fn governed_column_schemas_stay_owned_by_core() {
+        fn the_column_schema_stays_owned_by_core() {
             assert_eq!(
-                verification_logs::VERIFICATION_COLUMNS,
+                run_report::COLUMNS,
                 [
-                    "REPORT_VERSION",
                     "ARTIFACT",
+                    "KIND",
                     "SPEC_PATH",
-                    "VERIFICATION_ID",
-                    "CHECK",
+                    "NAME",
+                    "ID",
                     "TARGET",
-                    "REQUIREMENT",
+                    "RULE",
                     "SEVERITY",
                     "OUTCOME",
                     "CONDITION",
-                    "EVALUATED_COUNT",
-                    "FAILURE_COUNT",
+                    "COUNT",
+                    "TOTAL",
+                    "KEYS",
                     "DETAILS"
                 ]
             );
-            assert_eq!(verification_logs::WARNING_COLUMNS.len(), 10);
-        }
-        #[test]
-        fn complete_ordered_logs_prepare_missing_metadata_typed_details_and_all_keys() {
-            let prepared =
-                verification_logs::prepare(&[held(), warning()], "out.csv", true, true, true)
-                    .unwrap();
-            let verification = prepared.verification.unwrap();
-            assert_eq!(verification.len(), 2);
-            assert_eq!(verification[0][3], PreparedCell::Missing);
-            assert_eq!(verification[0][8], PreparedCell::Text("held".into()));
-            assert_eq!(verification[0][9], PreparedCell::Missing);
-            assert_eq!(verification[0][11], PreparedCell::Count(0));
-            assert_eq!(verification[0][12], PreparedCell::Details(BTreeMap::new()));
-            let warning_record = warning();
-            let failure = warning_record.failure.as_ref().unwrap();
+            let kinds = run_report::schema()
+                .columns()
+                .iter()
+                .map(|column| column.kind)
+                .collect::<Vec<_>>();
             assert_eq!(
-                verification[1][12],
-                PreparedCell::Details(failure.details.clone())
-            );
-            let warning_rows = prepared.warning.unwrap();
-            assert_eq!(warning_rows.len(), 1);
-            assert_eq!(warning_rows[0][7], PreparedCell::Count(7));
-            assert_eq!(warning_rows[0][8], PreparedCell::Keys(failure.keys.clone()));
-            assert_eq!(
-                warning_rows[0][9],
-                PreparedCell::Details(failure.details.clone())
+                kinds
+                    .iter()
+                    .filter(|&&kind| kind == yamaa_core::value::ColumnType::Int)
+                    .count(),
+                2
             );
         }
         #[test]
-        fn failures_expose_only_verification_prefix_and_empty_declarations_prepare_no_rows() {
-            let prepared =
-                verification_logs::prepare(&[warning()], "out.csv", true, true, false).unwrap();
-            assert_eq!(prepared.verification.unwrap().len(), 1);
-            assert!(prepared.warning.is_none());
-            let prepared = verification_logs::prepare(&[], "out.csv", true, true, true).unwrap();
-            assert_eq!(prepared.verification.unwrap().len(), 0);
-            assert_eq!(prepared.warning.unwrap().len(), 0);
+        fn complete_reports_prepare_kinds_in_order_with_typed_cells_and_all_keys() {
+            let facts = facts(vec![held(), warning()]);
+            let rows = run_report::prepare(&facts).unwrap();
+            let kinds = rows.iter().map(|row| row[1].clone()).collect::<Vec<_>>();
+            assert_eq!(
+                kinds,
+                [
+                    "run", "input", "input", "rows", "handler", "column", "column", "check",
+                    "check"
+                ]
+                .map(|kind| PreparedCell::Text(kind.into()))
+            );
+            assert_eq!(rows[0][2], PreparedCell::Text("output".into()));
+            assert_eq!(rows[0][3], PreparedCell::Missing);
+            assert_eq!(rows[0][8], PreparedCell::Text("succeeded".into()));
+            assert_eq!(rows[0][10], PreparedCell::Count(8));
+            assert_eq!(rows[0][11], PreparedCell::Missing);
+            assert_eq!(rows[1][2], PreparedCell::Text("input.DM".into()));
+            assert_eq!(
+                rows[1][13],
+                PreparedCell::Details(BTreeMap::from([
+                    ("bytes".into(), Json::from(96)),
+                    ("path".into(), Json::from("input/dm.csv")),
+                    ("profile".into(), Json::from("csv")),
+                ]))
+            );
+            assert_eq!(rows[2][10], PreparedCell::Missing);
+            assert_eq!(
+                rows[2][13],
+                PreparedCell::Details(BTreeMap::from([
+                    ("bytes".into(), Json::Null),
+                    ("path".into(), Json::from("produced.parquet")),
+                    ("profile".into(), Json::from("parquet")),
+                    ("schema".into(), Json::from("producer.yaml")),
+                ]))
+            );
+            assert_eq!(rows[3][2], PreparedCell::Text("base".into()));
+            assert_eq!(rows[3][10], PreparedCell::Count(8));
+            assert_eq!(rows[3][11], PreparedCell::Count(9));
+            assert_eq!(rows[4][5], PreparedCell::Text("AGE".into()));
+            assert_eq!(rows[4][6], PreparedCell::Text("REQ-0103".into()));
+            assert_eq!(rows[4][10], PreparedCell::Count(0));
+            assert_eq!(
+                rows[5][13],
+                PreparedCell::Details(BTreeMap::from([("max_length".into(), Json::from(6))]))
+            );
+            assert_eq!(rows[6][13], PreparedCell::Details(BTreeMap::new()));
+            assert_eq!(rows[7][4], PreparedCell::Missing);
+            assert_eq!(rows[7][8], PreparedCell::Text("held".into()));
+            assert_eq!(rows[7][9], PreparedCell::Missing);
+            assert_eq!(rows[7][10], PreparedCell::Count(0));
+            assert_eq!(rows[7][11], PreparedCell::Count(8));
+            assert_eq!(rows[7][12], PreparedCell::Missing);
+            let warning = warning();
+            let failure = warning.failure.as_ref().unwrap();
+            assert_eq!(rows[8][10], PreparedCell::Count(7));
+            assert_eq!(rows[8][12], PreparedCell::Keys(failure.keys.clone()));
+            assert_eq!(rows[8][13], PreparedCell::Details(failure.details.clone()));
+            let report = run_report::assemble(plain(rows));
+            run_report::verify(&report, &facts).unwrap();
+            assert_eq!(report.row_count(), 9);
+            assert_eq!(report.cell(8, 7).unwrap(), ValueRef::Str("warning"));
         }
         #[test]
-        fn malformed_records_refuse_before_rows_are_returned() {
-            for malformed in [
-                {
-                    let mut record = warning();
-                    record.failure.as_mut().unwrap().count = 9;
-                    record
-                },
-                {
-                    let mut record = warning();
-                    record
-                        .failure
-                        .as_mut()
-                        .unwrap()
-                        .details
-                        .insert("keys".into(), Json::Null);
-                    record
-                },
-                {
-                    let mut record = warning();
-                    record.failure.as_mut().unwrap().keys.push(Json::from(1));
-                    record
-                },
-                {
-                    let mut record = warning();
-                    record
-                        .failure
-                        .as_mut()
-                        .unwrap()
-                        .details
-                        // Number owns JSON grammar; a numeric log context still requires
-                        // a finite binary64 value for fractional/exponent spellings.
-                        .insert("bad".into(), Json::Number("1e999".parse().unwrap()));
-                    record
-                },
-            ] {
+        fn failed_runs_name_their_condition_and_carry_no_column_rows() {
+            let mut failed = facts(vec![held()]);
+            failed.run = run_report::Run::Failed {
+                condition: "not_missing_failed".into(),
+            };
+            assert!(matches!(
+                run_report::prepare(&failed),
+                Err(Error::InvalidRecord)
+            ));
+            failed.columns.clear();
+            failed.rows[0].emitted = None;
+            failed.rows[0].read = None;
+            let rows = run_report::prepare(&failed).unwrap();
+            assert_eq!(rows[0][8], PreparedCell::Text("failed".into()));
+            assert_eq!(rows[0][9], PreparedCell::Text("not_missing_failed".into()));
+            assert_eq!(rows[0][10], PreparedCell::Missing);
+            assert_eq!(rows[3][10], PreparedCell::Missing);
+            assert_eq!(rows[3][11], PreparedCell::Missing);
+            run_report::verify(&run_report::assemble(plain(rows)), &failed).unwrap();
+        }
+        #[test]
+        fn malformed_facts_refuse_before_rows_are_returned() {
+            let mut malformed = Vec::new();
+            for change in 0..5 {
+                let mut check = warning();
+                let failure = check.failure.as_mut().unwrap();
+                match change {
+                    0 => failure.count = 9,
+                    1 => {
+                        failure.details.insert("keys".into(), Json::Null);
+                    }
+                    2 => failure.keys.push(Json::from(1)),
+                    // Number owns JSON grammar; a numeric context still requires
+                    // a finite binary64 value for fractional/exponent spellings.
+                    3 => {
+                        failure
+                            .details
+                            .insert("bad".into(), Json::Number("1e999".parse().unwrap()));
+                    }
+                    _ => failure.count = 0,
+                }
+                malformed.push(facts(vec![check]));
+            }
+            malformed.push(facts(vec![held(), held()]));
+            let mut collision = facts(vec![held()]);
+            collision.handlers[0].path = held().path;
+            malformed.push(collision);
+            let mut uneven = facts(vec![]);
+            uneven.rows[0].read = None;
+            malformed.push(uneven);
+            for facts in malformed {
                 assert!(matches!(
-                    verification_logs::prepare(&[malformed], "out.csv", true, true, true),
+                    run_report::prepare(&facts),
                     Err(Error::InvalidRecord)
                 ));
             }
-            assert!(matches!(
-                verification_logs::prepare(&[held(), held()], "out.csv", true, true, true),
-                Err(Error::InvalidRecord)
-            ));
         }
-
+        #[test]
+        fn verification_rejects_any_row_that_breaks_the_contract() {
+            let facts = facts(vec![held(), warning()]);
+            let rows = plain(run_report::prepare(&facts).unwrap());
+            let tamper = |row: usize, column: usize, value: Value| {
+                let mut rows = rows.clone();
+                rows[row][column] = value;
+                run_report::verify(&run_report::assemble(rows), &facts)
+            };
+            assert!(tamper(0, 0, Value::Str("other.csv".into())).is_err());
+            assert!(tamper(1, 1, Value::Str("rows".into())).is_err());
+            assert!(tamper(8, 2, Value::Str(held().path)).is_err());
+            assert!(tamper(2, 2, Value::Missing).is_err());
+            assert!(tamper(0, 8, Value::Str("held".into())).is_err());
+            assert!(tamper(7, 8, Value::Str("failed".into())).is_err());
+            assert!(tamper(7, 7, Value::Str("fatal".into())).is_err());
+            assert!(tamper(3, 10, Value::Int(10)).is_err());
+            assert!(tamper(7, 10, Value::Int(1)).is_err());
+            assert!(tamper(8, 12, Value::Missing).is_err());
+            assert!(tamper(7, 12, Value::Str("[]".into())).is_err());
+            assert!(tamper(5, 10, Value::Str("0".into())).is_err());
+            assert!(tamper(5, 13, Value::Missing).is_err());
+            let mut short = rows.clone();
+            short.pop();
+            assert!(run_report::verify(&run_report::assemble(short), &facts).is_err());
+            assert!(run_report::verify(&run_report::assemble(rows), &facts).is_ok());
+        }
+        #[test]
+        fn handler_rows_cite_the_condition_their_handler_answers() {
+            for (path, handler, target, rule) in [
+                (
+                    "columns.A.derivation.mapping.missing",
+                    "missing",
+                    Some("A"),
+                    Some("REQ-0334"),
+                ),
+                (
+                    "rows[0].derivations.V.mapping.unmapped",
+                    "unmapped",
+                    Some("V"),
+                    Some("REQ-0334"),
+                ),
+                (
+                    "columns.A.derivation.source.no_match",
+                    "no_match",
+                    Some("A"),
+                    Some("REQ-0124"),
+                ),
+                (
+                    "columns.A.derivation.str_extract.no_match",
+                    "no_match",
+                    Some("A"),
+                    Some("REQ-0334"),
+                ),
+                (
+                    "columns.A.derivation.case[0].then.source.multiple_matches",
+                    "multiple_matches",
+                    Some("A"),
+                    Some("REQ-0127"),
+                ),
+                (
+                    "columns.D.derivation.impute.missing",
+                    "missing",
+                    Some("D"),
+                    None,
+                ),
+                (
+                    "columns.D.derivation.impute.fallback",
+                    "missing",
+                    Some("D"),
+                    None,
+                ),
+                (
+                    "columns.D.derivation.impute.not_after",
+                    "crossed_bounds",
+                    Some("D"),
+                    None,
+                ),
+                (
+                    "columns.D.derivation.to_date.partial",
+                    "partial",
+                    Some("D"),
+                    None,
+                ),
+                (
+                    "columns.D.derivation.precision.invalid",
+                    "invalid",
+                    Some("D"),
+                    Some("REQ-0588"),
+                ),
+                (
+                    "columns.E.derivation.duration_value.invalid",
+                    "invalid",
+                    Some("E"),
+                    Some("REQ-1301"),
+                ),
+                (
+                    "columns.N.derivation.unconvertible",
+                    "unconvertible",
+                    Some("N"),
+                    Some("REQ-0013"),
+                ),
+                (
+                    "intermediates[0].derivations.PICK.unconvertible",
+                    "unconvertible",
+                    None,
+                    Some("REQ-0013"),
+                ),
+                (
+                    "columns.N.derivation.round.invalid",
+                    "invalid",
+                    Some("N"),
+                    None,
+                ),
+            ] {
+                assert_eq!(run_report::handler_target(path), target, "{path}");
+                assert_eq!(
+                    run_report::handler_condition(path, handler)
+                        .and_then(|code| code.definition().requirement),
+                    rule,
+                    "{path}"
+                );
+            }
+        }
         #[test]
         fn canonical_json_numbers_and_temporal_values_are_retained_as_typed_details() {
-            let mut record = warning();
+            let mut check = warning();
             let details = BTreeMap::from([
                 (
                     "date".into(),
@@ -2547,16 +2790,8 @@ mod relations {
                     Json::from(yamaa_core::value::Value::float(1.0)),
                 ),
                 (
-                    "large".into(),
-                    Json::from(yamaa_core::value::Value::float(1.0e20)),
-                ),
-                (
                     "negzero".into(),
                     Json::from(yamaa_core::value::Value::float(-0.0)),
-                ),
-                (
-                    "tiny".into(),
-                    Json::from(yamaa_core::value::Value::float(1.0e-7)),
                 ),
                 (
                     "wide".into(),
@@ -2567,49 +2802,35 @@ mod relations {
                     ),
                 ),
             ]);
-            record.failure.as_mut().unwrap().details = details.clone();
-            let prepared =
-                verification_logs::prepare(&[record], "out.csv", true, true, true).unwrap();
+            check.failure.as_mut().unwrap().details = details.clone();
+            let rows = run_report::prepare(&facts(vec![check])).unwrap();
             // The governed byte spelling of these exact typed values is
             // asserted by the adapter projection tests.
-            assert_eq!(
-                prepared.verification.as_ref().unwrap()[0][12],
-                PreparedCell::Details(details.clone())
-            );
-            assert_eq!(
-                prepared.warning.as_ref().unwrap()[0][9],
-                PreparedCell::Details(details)
-            );
+            assert_eq!(rows[7][13], PreparedCell::Details(details));
         }
-
         #[test]
-        fn complete_record_sets_keep_all_rows_and_metadata_without_copy_allowances() {
-            let records: Vec<_> = (0..6_000)
+        fn complete_check_sets_keep_all_rows_and_metadata_without_copy_allowances() {
+            let checks: Vec<_> = (0..6_000)
                 .map(|index| {
-                    let mut record = held();
-                    record.path = format!("columns.AGE.verifications[{index}].not_missing");
-                    record.id = Some(format!("check {index}"));
-                    record
+                    let mut check = held();
+                    check.path = format!("columns.AGE.verifications[{index}].not_missing");
+                    check.id = Some(format!("check {index}"));
+                    check
                 })
                 .collect();
-            let prepared =
-                verification_logs::prepare(&records, "out.csv", true, true, true).unwrap();
-            let verification = prepared.verification.unwrap();
-            assert_eq!(verification.len(), records.len());
-            for (index, record) in records.iter().enumerate() {
+            let facts = facts(checks.clone());
+            let rows = run_report::prepare(&facts).unwrap();
+            assert_eq!(rows.len(), checks.len() + 7);
+            for (index, check) in checks.iter().enumerate() {
+                assert_eq!(rows[index + 7][2], PreparedCell::Text(check.path.clone()));
                 assert_eq!(
-                    verification[index][2],
-                    PreparedCell::Text(record.path.clone())
+                    rows[index + 7][4],
+                    PreparedCell::Text(check.id.clone().unwrap())
                 );
-                assert_eq!(
-                    verification[index][3],
-                    PreparedCell::Text(record.id.clone().unwrap())
-                );
-                assert_eq!(verification[index][10], PreparedCell::Count(8));
+                assert_eq!(rows[index + 7][11], PreparedCell::Count(8));
             }
-            assert_eq!(prepared.warning.unwrap().len(), 0);
+            run_report::verify(&run_report::assemble(plain(rows)), &facts).unwrap();
         }
-
         #[test]
         fn recursive_json_details_use_the_shared_semantic_depth_boundary() {
             use yamaa_core::limits::Limits;
@@ -2622,14 +2843,14 @@ mod relations {
                 for _ in 0..depth {
                     detail = Json::Array(vec![detail]);
                 }
-                let mut record = held();
-                record.failure = Some(Failure {
-                    condition: "missing_value".into(),
+                let mut check = held();
+                check.failure = Some(Failure {
+                    condition: "not_missing_failed".into(),
                     count: 1,
                     keys: vec![],
                     details: BTreeMap::from([("nested".into(), detail)]),
                 });
-                let result = verification_logs::prepare(&[record], "out.csv", true, false, false);
+                let result = run_report::prepare(&facts(vec![check]));
                 if depth <= Limits::SEMANTIC_DEPTH {
                     assert!(result.is_ok());
                 } else {

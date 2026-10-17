@@ -83,6 +83,16 @@ class ArrowBridge(unittest.TestCase):
             [-62135596800, None, 253402300799],
         )
         self.assertEqual(addresses(first), addresses(built.output_arrow))
+        # The run report crosses the same bridge with its two int64 counts.
+        report = built.report_arrow
+        self.assertEqual(
+            report["KIND"].to_pylist(), ["run", "input", "rows"] + ["column"] * 6
+        )
+        self.assertEqual(report.schema.field("COUNT").type, pa.int64())
+        self.assertEqual(report.schema.field("TOTAL").type, pa.int64())
+        self.assertEqual(report["COUNT"].to_pylist(), [3, 3, 3, 0, 1, 1, 1, 1, 1])
+        self.assertEqual(report["DETAILS"][4].as_py(), '{"max_length":3}')
+        self.assertEqual(addresses(report), addresses(built.report_arrow))
         # The default public result traverses the same bridge, without IPC.
         with patch.object(
             pl, "read_ipc_stream", side_effect=AssertionError("IPC host handoff")

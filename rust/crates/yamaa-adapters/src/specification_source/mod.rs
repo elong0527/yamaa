@@ -782,7 +782,7 @@ impl PreparedDocument {
         &self,
         field: &str,
     ) -> Option<yamaa_core::resource::WrittenPath<'_>> {
-        if !["path", "verification_log", "warning_log"].contains(&field) {
+        if !["path", "report"].contains(&field) {
             return None;
         }
         // Output is an atomic top-level field in shared layer composition.

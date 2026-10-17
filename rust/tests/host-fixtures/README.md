@@ -27,9 +27,9 @@ R's value beyond 2^53.
 | original-specifications | Original case selection, lookup/ordering/casing inputs and exact CSV; existing independent TSV/JSON reports |
 | file-resources | Named lookup paths, issue schema and exact alias context; existing inspection/capture reports |
 | public-environment | Original case selection, schema link references, quota/version inputs and exact callback CSV |
-| verification-logs | `specification-original/schema-verification-log`, artifact names, evaluated counts and fatal outcomes |
+| run-report | `specification-original/schema-verification-log`, artifact names, check totals, and the failed run's row kinds and check outcomes |
 | public-define | Existing Define input/XML/JSON owners, creation time, column schemas and numeric metadata variants |
-| public-contract | Shared YAML, issue/argument/view names, empty/fatal log variants; distinct host i64 vectors |
+| public-contract | Shared YAML, issue/argument/view names, empty/fatal report variants; distinct host i64 vectors |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
 | diagnostic-parity | Refusal cases with their complete expected diagnostic records |
 
@@ -92,7 +92,7 @@ owners while adding host or private lifecycle assertions:
   `adam-adlb-ordered-sum` and the original negative specification families.
 - `public-environment.original_case_names` names the active `schema-functions`,
   `schema-non-finite`, `adam-adsl-bmi` and `adam-advs-percentiles` cases.
-- File-resource controls reuse `schema-lookup`; verification-log controls reuse
+- File-resource controls reuse `schema-lookup`; run-report controls reuse
   `schema-verification-log`; their independent report/CSV truth stays under
   `specification-original`. They also exercise real source deletion, held views,
   native capture authority and repeated publication.

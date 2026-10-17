@@ -43,9 +43,9 @@ pub mod specification_diagnostics;
 
 pub mod diagnostic_record;
 pub mod issue_rows;
+pub(crate) mod run_report;
 pub mod specification_check;
 pub mod specification_report;
-mod verification_logs;
 
 pub mod typed_csv;
 

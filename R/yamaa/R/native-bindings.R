@@ -37,8 +37,8 @@
   .Call(wrap__domain_arrow, handle, destination, kind)
 }
 
-.native_domain_log <- function(handle, warning) {
-  .Call(wrap__domain_log, handle, warning)
+.native_domain_report <- function(handle) {
+  .Call(wrap__domain_report, handle)
 }
 
 .native_domain_observations <- function(handle, include_measurements) {

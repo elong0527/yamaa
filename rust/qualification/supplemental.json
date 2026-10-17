@@ -896,12 +896,12 @@
     },
     {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/specs/schema-verification-log.json",
-      "family": "verification_logs",
+      "family": "run_report",
       "level": "compile",
       "consumers": [
-        "R/yamaa/tests/verification_logs.R",
+        "R/yamaa/tests/run_report.R",
         "rust/crates/yamaa-adapters/tests/scalar_language.rs",
-        "python/tests/installed/installed_verification_logs.py"
+        "python/tests/installed/installed_run_report.py"
       ]
     },
     {
@@ -1011,8 +1011,8 @@
         "python/tests/installed/installed_file_resources.py",
         "python/tests/installed/installed_public_environment.py",
         "R/yamaa/tests/public_environment.R",
-        "python/tests/installed/installed_verification_logs.py",
-        "R/yamaa/tests/verification_logs.R",
+        "python/tests/installed/installed_run_report.py",
+        "R/yamaa/tests/run_report.R",
         "python/tests/installed/installed_public_define.py",
         "R/yamaa/tests/public_define.R",
         "python/tests/installed/installed_public_contract.py",
@@ -1064,7 +1064,7 @@
     "python/public-grammar": "shared_run",
     "python/sas-sources": "shared_run",
     "python/saved-readers": "shared_run",
-    "python/verification-logs": "shared_run",
+    "python/run-report": "shared_run",
     "r/arrow-bridge": "shared_run",
     "r/column-ceilings": "shared_run",
     "r/compact-yaml": "shared_run",
@@ -1077,7 +1077,7 @@
     "r/public-grammar": "shared_run",
     "r/sas-sources": "shared_run",
     "r/saved-readers": "shared_run",
-    "r/verification-logs": "shared_run",
+    "r/run-report": "shared_run",
     "python/host-resources": "shared_run",
     "r/host-resources": "shared_run"
   },

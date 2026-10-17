@@ -92,9 +92,9 @@ conditions:
   missing_derivation: {phases: [validation]}
   missing_input: {phases: [cut, mapping]}
   missing_key: {phases: [output]}
+  missing_report: {phases: [validation]}
   missing_required_field: {phases: [validation]}
   missing_value_required: {phases: [validation]}
-  missing_warning_log: {phases: [validation]}
   # REQ-0504; also emitted by the retained aggregate reference validator.
   mixed_relations: {phases: [validation]}
   model_contract_mismatch: {phases: [validation]}

@@ -87,8 +87,8 @@ describes the existing `{value, error}` list and `r_scalar_reply` its
 `operations` maps equivalent semantic operations despite different calling
 conventions. Python's optional resolver corresponds to R's separate resolved
 entry points; Python table exporters correspond to R's frame and destination
-stream accessors. R `domain_arrow` selects output/verification/warning with
-`kind` 0/1/2. `host_only` declares intentional helpers. Generating both hosts does not mean inventing a public
+stream accessors. R `domain_arrow` selects the output or the run report with
+`kind` 0/1. `host_only` declares intentional helpers. Generating both hosts does not mean inventing a public
 scalar-helper API in Python or a style API in R. extendr-generated `wrap__*`,
 metadata, registration and finalizer functions are framework machinery, not
 additional engine operations. Public package facades remain the owners of

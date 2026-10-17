@@ -127,7 +127,8 @@ run_contract <- function() {
       identical(class(result$output$VALUE), "yamaa_int64_vector"),
       identical(as.character(result$output$VALUE), truth),
       identical(is.na(result$output$VALUE), c(FALSE, FALSE, FALSE, FALSE, TRUE)),
-      is.null(result$verification_log), is.null(result$warning_log))
+      identical(result$report$KIND, c("run", "input", "rows", "column", "column")))
+    # The owned views, the run report included, are read only.
     for (field in fixture_strings(host_truth[["owned_view_names"]])) {
       stopifnot(inherits(tryCatch({ result[[field]] <- NULL }, error = identity), "error"))
     }
@@ -154,7 +155,8 @@ run_contract <- function() {
     if (is.environment(result)) {
       before <- result$issues
       records <- result$diagnostics
-      stopifnot(is.null(result$output))
+      # A specification that cannot be read is never admitted and has no report.
+      stopifnot(is.null(result$output), is.null(result$report))
       for (attempt in 1:2) stopifnot(
         inherits(tryCatch(result$save(), error = identity), "yamaa_domain_error"),
         identical(result$issues, before), identical(result$diagnostics, records))
@@ -200,35 +202,39 @@ run_contract <- function() {
   failed_spec <- sub("output: {", host_truth[["unreached_row_count_yaml"]],
     failed_spec, fixed = TRUE)
   failed_spec <- sub("columns: [ID, VALUE]}",
-    host_truth[["log_output_yaml"]],
+    host_truth[["report_output_yaml"]],
     failed_spec, fixed = TRUE)
   write("spec.yaml", failed_spec); write("input.csv", "ID,VALUE\na,-3\nb,7\nc,\n")
-  for (name in c("output.csv", "warnings.csv")) write(name, "sentinel")
+  write("output.csv", "sentinel")
   failed <- yamaa_domain(path("spec.yaml")); issues <- check_issues(failed)
   # The same failure through the named record.
   records <- failed$diagnostics
   stopifnot(length(records) == 1L, identical(records[[1L]]$condition, "range_failed"),
     identical(records[[1L]]$phase, issues$phase), identical(records[[1L]]$requirement, issues$requirement),
     identical(records[[1L]]$spec_paths, issues$spec_paths[[1L]]), is.list(records[[1L]]$context))
+  # The failed run's report records both reached checks; the dataset row_count
+  # after the fatal check is never reached, so it has no row.
+  report <- failed$report; checks <- report$KIND == "check"
   stopifnot(identical(issues$condition, "range_failed"), is.null(failed$output),
-    is.null(failed$warning_log),
-    identical(failed$verification_log$VERIFICATION_ID, c("warn", "fatal")),
-    identical(failed$verification_log$OUTCOME, c("violated", "violated")),
-    identical(as.character(failed$verification_log$EVALUATED_COUNT), c("3", "3")),
-    identical(as.character(failed$verification_log$FAILURE_COUNT), c("1", "1")),
-    identical(failed$verification_log$REQUIREMENT, c("REQ-0377", "REQ-0377")))
-  log <- failed$verification_log
-  changed <- log; changed$REPORT_VERSION[] <- "changed"
+    identical(report$KIND, c("run", "input", "rows", "check", "check")),
+    identical(report$OUTCOME[[1L]], "failed"), identical(report$CONDITION[[1L]], "range_failed"),
+    identical(report$ID[checks], c("warn", "fatal")),
+    identical(report$OUTCOME[checks], c("violated", "violated")),
+    identical(as.character(report$TOTAL[checks]), c("3", "3")),
+    identical(as.character(report$COUNT[checks]), c("1", "1")),
+    identical(report$RULE[checks], c("REQ-0377", "REQ-0377")),
+    !file.exists(path("report.csv")))
+  changed <- failed$report; changed$ID[] <- "changed"
+  stopifnot(identical(failed$report, report))
   unlink(path(c("spec.yaml", "input.csv"))); gc()
   for (attempt in 1:2) stopifnot(
     inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"),
     identical(failed$issues, issues), identical(failed$diagnostics, records),
-    identical(failed$verification_log, log),
+    identical(failed$report, report),
     identical(rawfile("output.csv"), charToRaw("sentinel")),
-    identical(rawfile("warnings.csv"), charToRaw("sentinel")),
-    length(readLines(path("checks.csv"))) == 3L)
+    length(readLines(path("report.csv"))) == 6L)
   rm(failed); gc()
-  stopifnot(identical(log$VERIFICATION_ID, c("warn", "fatal")))
+  stopifnot(identical(report$ID[checks], c("warn", "fatal")))
 
   # Reenter public facades from an installed function callback; the callback
   # adapter is replaced only to inject behavior, never to inspect native state.
@@ -446,7 +452,7 @@ qualify_diagnostic_parity <- function() {
   cat("diagnostic records equal the shared parity truth field for field\n")
 }
 qualify_diagnostic_parity()
-cat("public signatures, argument errors, owned results and logs, exact values, interrupts and reentrancy passed\n")
+cat("public signatures, argument errors, owned results and run reports, exact values, interrupts and reentrancy passed\n")
 
 qualify_public_integer_callback <- function() {
   directory <- tempfile("public-integer-callback-"); dir.create(directory)

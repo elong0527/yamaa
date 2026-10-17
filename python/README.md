@@ -12,8 +12,7 @@ built = yamaa.domain("spec.yaml", environment="python/environment.yaml")
 built.output
 built.issues
 built.diagnostics
-built.verification_log
-built.warning_log
+built.report
 built.save()
 
 checked = yamaa.check("spec.yaml", environment="python/environment.yaml")
@@ -26,9 +25,18 @@ study uses project functions or terminology. Paths resolve relative to their
 original declaring YAML layer by default. Set `relative_to: entry` on an input
 dataset or `output` declaration to select the study entry's directory under the
 [local path policy](../rules/reference/files.md). An input setting applies to
-both its data path and producer `schema` link; output settings cover all logs
-and the primary artifact.
+both its data path and producer `schema` link; output settings cover the report
+file and the primary artifact.
 There is no upward project-root discovery.
+
+`built.report` is the run report every executed build returns, whether it
+succeeds or fails: one row for the run, each input, each row template, each
+counted handler, each output column of a successful run and each evaluated
+check, with the offending keys of every violated check. Naming `output.report`
+writes it to a file on save, a failed build included; a specification with a
+`warning` verification must name one. The
+[verification rules](../rules/verification.md#check-22) fix its rows and
+columns.
 
 An input's `schema` link names the producing specification whose output columns
 and declared types type a stored artifact. The link is metadata only: the
@@ -90,8 +98,8 @@ specification's. The operation contract is:
 | `abort` | Remove the provisional token after failure or interruption. |
 
 Abort is idempotent and must also accept a target reference when Stage raises
-before returning a token. Save preflights every target and publishes logs before
-primary output. A later failure keeps the completed
+before returning a token. Save preflights every target and publishes the report
+file before primary output. A later failure keeps the completed
 prefix and cleans the current provisional object. Source resources are never
 reopened at Save. Original callback exceptions and interrupts propagate after
 cleanup, including errors raised while exporting a frame.
@@ -137,7 +145,7 @@ or Parquet.
 Build reads inputs and invokes the declared project functions through the shared
 engine. Check performs preparation/static validation without reading study data
 or invoking project code. Each result owns its native state; owned Polars output,
-issue and log views remain independent.
+issue and report views remain independent.
 
 ## Diagnostics
 
@@ -171,7 +179,7 @@ retain Unicode and embedded NUL, and date/datetime columns retain ordinary Polar
 types. Capacity refusals retain the shared condition and authored paths;
 [release guidance](../docs/release.md#resource-refusals) describes their context.
 
-`built.output_arrow`, `built.verification_log_arrow` and `built.warning_log_arrow`
+`built.output_arrow` and `built.report_arrow`
 return PyArrow tables through the Arrow C Stream/PyCapsule protocol, supported
 with PyArrow 23.0.1 or newer. Every access creates an independent cursor and shares
 the retained immutable value and validity buffers. A table remains valid after
@@ -188,10 +196,10 @@ the exact operations and domain checks.
 
 Build publishes nothing. Explicit `save()` uses the declared destinations and
 held bytes, without rereading inputs or rerunning callbacks. A failed build has
-no accepted output and Save raises `yamaa.DomainError`; a diagnostic verification
-sidecar can still be publishable. An operational publication failure returns
+no accepted output and Save raises `yamaa.DomainError`; its declared report file
+is still written. An operational publication failure returns
 `False` and remains in issues. Publication preflights targets, then writes the
-ordered log/output set. Replacement is atomic for each file; completed
+report file and then the output. Replacement is atomic for each file; completed
 writes remain if a later target fails. There is no whole-run file rollback.
 
 ## Resolved specification inspection

@@ -106,7 +106,7 @@ Installed Python and R conformance compares actual public results and saved
 artifacts with independent truth. A negative benchmark's `expected/error.yaml`
 is a partial structured assertion: the expected first issue, every declared
 path and context facts must match. Complete authored reports additionally pin
-all findings, exact values, logs, callbacks and artifact observations. Passing
+all findings, exact values, run reports, callbacks and artifact observations. Passing
 static repository validation does not establish engine release qualification.
 
 ## CI and release qualification

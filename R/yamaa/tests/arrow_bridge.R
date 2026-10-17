@@ -33,6 +33,14 @@ run_arrow_bridge <- function() {
     inherits(tryCatch(as.double(frame$I), error = identity), "error"),
     identical(unclass(frame$D), c(-719162, NA_real_, 2932896)),
     identical(as.numeric(frame$T), c(-62135596800, NA_real_, 253402300799)))
+  # The run report crosses the same bridge with its two int64 counts.
+  report <- result$report_arrow
+  stopifnot(identical(vapply(report$get_schema()$children, function(child) child$format,
+    character(1L), USE.NAMES = FALSE), c(rep("u", 10L), "l", "l", "u", "u")))
+  rows <- report$get_next()
+  report$release()
+  stopifnot(identical(rows$length, 9L),
+    identical(result$report$KIND, c("run", "input", "rows", rep("column", 6L))))
   source <- result$output_arrow
   schema <- source$get_schema()
   stopifnot(identical(vapply(schema$children, function(child) child$format, character(1L), USE.NAMES = FALSE),

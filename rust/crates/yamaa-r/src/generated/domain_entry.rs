@@ -10,7 +10,7 @@ extendr_module! {
     fn domain_diagnostics;
     fn domain_output;
     fn domain_arrow;
-    fn domain_log;
+    fn domain_report;
     fn domain_observations;
     fn domain_save;
     fn domain_interrupt;

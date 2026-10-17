@@ -145,7 +145,7 @@ origins identify the retained schema module. `mapping_order` uses the same
 pointers to retain every mapping's original key order; JSON object keys alone
 cannot retain semantic iteration order. Arrays retain their normal order.
 
-Resources include final input data and producer links, output and both logs,
+Resources include final input data and producer links, output and the report file,
 named dictionaries and every inherited-parent reference. Each record contains
 `spec_path`, `role`, `owning_entry`, `declaring_source`, `relative_to`,
 `base_source`, `written`, and `location: {kind: local, path: ...}`. The composed
@@ -263,8 +263,8 @@ pub struct Build { /* owned attempt state */ }
 impl Build {
     pub fn output(&self) -> Option<&Table>;
     pub fn output_bytes(&self) -> Option<&[u8]>;
-    pub fn log(&self, warning: bool) -> Option<&Table>;
-    pub fn log_bytes(&self, warning: bool) -> Option<&[u8]>;
+    pub fn run_report(&self) -> Option<&Table>;
+    pub fn run_report_bytes(&self) -> Option<&[u8]>;
     pub fn report(&self) -> &Report;
     pub fn save(&mut self) -> Result<SaveOutcome, Error>;
 }
@@ -286,8 +286,8 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   admission and preparation failures come back as diagnostics in the returned
   `Report`, never as a second error channel.
 - `build` mirrors today's `Result<Domain, Failure>`: a rejected build returns
-  `Error::Rejected(Report)`; a successful `Build` carries the same outputs,
-  logs and observations as today's `Domain`.
+  `Error::Rejected(Report)`; a successful `Build` carries the same output,
+  run report and observations as today's `Domain`.
 - `save` is a method on the build handle, as `Domain::save` is today; it is
   the only mutating operation and publishes through the resolver.
 - `define` mirrors `file_define::Define::prepare` plus its save step.
@@ -709,12 +709,16 @@ empty partitions $r_i = 0$ and single-row partitions $r_i = 1$):
      diagnostic before publishing any output rather than computing
      partition-local approximations.
 
-4. **Retained observations (`handler_counts` and `verifications`)**:
+4. **Retained observations (`handler_counts`, `template_rows` and `verifications`)**:
    - `ExecutionAttempt.handler_counts`: Handler sites are registered in
      deterministic plan order during `Admission`; per-site counts sum across
      partitions via checked addition in `HandlerCounter` (raising
      `ExecutionError::HandlerAccounting` on overflow) and match the whole-table
      snapshot on both success and failure at the same checkpoint.
+   - `ExecutionAttempt.template_rows`: Each completed row template's emitted
+     rows and driver records read, in construction order, feed the run
+     report's `rows` rows. Partition counts sum per template, and a failed
+     attempt retains exactly the templates completed before the failure.
    - `Execution.verifications` and `ExecutionAttempt.retained_verifications`:
      Every emitted `CheckRecord` equals the whole-table `CheckRecord` in `path`,
      `code`, `evaluated_count`, `failed_count`, `output_rows` (total dataset

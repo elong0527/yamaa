@@ -24,6 +24,57 @@ columns:
 
 METADATA = "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
 
+# A run report for SPEC, written by hand: COUNT and TOTAL are int, every other
+# column is str, and an unquoted empty cell is missing.
+REPORT_CSV = (
+    b"ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,"
+    b"COUNT,TOTAL,KEYS,DETAILS\n"
+    b"result.csv,run,output,,,,,,succeeded,,3,,,{}\n"
+    b'result.csv,column,columns.VALUE,VALUE,,,,,,,1,3,,"{""max_length"":3}"\n'
+)
+REPORT_COLUMNS = (
+    "ARTIFACT KIND SPEC_PATH NAME ID TARGET RULE SEVERITY OUTCOME CONDITION "
+    "COUNT TOTAL KEYS DETAILS"
+).split()
+
+
+def report_view():
+    """REPORT_CSV's public host view in the runner's table encoding."""
+    rows = [
+        {
+            "ARTIFACT": "result.csv",
+            "KIND": "run",
+            "SPEC_PATH": "output",
+            "OUTCOME": "succeeded",
+            "COUNT": 3,
+            "DETAILS": "{}",
+        },
+        {
+            "ARTIFACT": "result.csv",
+            "KIND": "column",
+            "SPEC_PATH": "columns.VALUE",
+            "NAME": "VALUE",
+            "COUNT": 1,
+            "TOTAL": 3,
+            "DETAILS": '{"max_length":3}',
+        },
+    ]
+    kinds = ["int" if name in ("COUNT", "TOTAL") else "str" for name in REPORT_COLUMNS]
+    return {
+        "columns": [[name, kind] for name, kind in zip(REPORT_COLUMNS, kinds)],
+        "rows": [
+            [
+                None
+                if row.get(name) is None
+                else str(row[name])
+                if kind == "int"
+                else row[name].encode("utf-8").hex()
+                for name, kind in zip(REPORT_COLUMNS, kinds)
+            ]
+            for row in rows
+        ],
+    }
+
 
 class PublicConformance(unittest.TestCase):
     def setUp(self):
@@ -50,7 +101,8 @@ class PublicConformance(unittest.TestCase):
                 "source_revision": "test",
             },
         )
-        # Written independently rather than produced by an engine or oracle helper.
+        # Written independently rather than produced by an engine or oracle
+        # helper. Every executed build holds its run report, declared or not.
         self.build = {
             "specification": "spec.yaml",
             "environment": None,
@@ -61,8 +113,7 @@ class PublicConformance(unittest.TestCase):
                     "columns": [["ID", "int"], ["VALUE", "str"]],
                     "rows": [["9223372036854775807", ""], ["2", None], ["3", "612c62"]],
                 },
-                "verification_log": None,
-                "warning_log": None,
+                "report": report_view(),
             },
         }
         self.example = judge.plan(self.fixtures)["examples"][0]
@@ -177,8 +228,18 @@ class PublicConformance(unittest.TestCase):
             "requirement": "REQ-test",
             "context": {"keys": [{"ID": 2}], "extra": "retained"},
         }
-        self.build.update(issues=[issue], saved=False, tables={"output": None})
+        output = self.build["tables"]["output"]
+        # A failed build that compiled still holds its run report; only an
+        # exposed primary output is a finding.
+        self.build.update(
+            issues=[issue],
+            saved=False,
+            tables={"output": None, "report": report_view()},
+        )
         self.assertEqual(self.verdict()["verdict"], "pass")
+        self.build["tables"]["output"] = output
+        self.assertEqual(self.verdict()["verdict"], "mismatch")
+        self.build["tables"]["output"] = None
         issue["context"]["keys"][0]["ID"] = 3
         self.assertEqual(self.verdict()["verdict"], "mismatch")
         self.build["issues"].insert(0, {**issue, "condition": "earlier_failure"})
@@ -243,10 +304,18 @@ class PublicConformance(unittest.TestCase):
         )
         self.assertEqual(self.verdict()["verdict"], "error")
 
-    def test_undeclared_or_uncompared_table_cannot_pass(self):
-        self.build["tables"]["warning_log"] = {"columns": [], "rows": []}
-        self.assertEqual(self.verdict()["verdict"], "mismatch")
-        self.build["tables"]["warning_log"] = None
+    def test_undeclared_report_view_passes_but_other_unmatched_tables_cannot(self):
+        # Every executed build holds its run report; without output.report
+        # there is no independent truth to compare it with.
+        self.assertIsNotNone(self.build["tables"]["report"])
+        self.assertEqual(self.verdict()["verdict"], "pass")
+        self.build["tables"]["report"] = {"columns": [], "rows": []}
+        self.assertEqual(self.verdict()["verdict"], "pass")
+        (self.case / "spec.yaml").write_text(SPEC.replace("path: result.csv, ", ""))
+        result = self.verdict()
+        self.assertEqual(result["verdict"], "mismatch")
+        self.assertIn("undeclared output host view", result["findings"])
+        (self.case / "spec.yaml").write_text(SPEC)
         (self.case / "expected/forgotten.csv").write_text("ID\n1\n")
         self.assertEqual(self.verdict()["verdict"], "mismatch")
 
@@ -296,23 +365,32 @@ class PublicConformance(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unexpected installed runner"):
             judge.compare(self.fixtures, self.observed, self.root / "inventory.json")
 
-    def test_log_types_are_independent_and_saved_logs_are_compared(self):
-        with (self.case / "spec.yaml").open("a") as stream:
-            stream.write("  # unused comment\n")
+    def test_report_types_are_independent_and_saved_report_is_compared(self):
         (self.case / "spec.yaml").write_text(
-            SPEC.replace(
-                "path: result.csv,", "path: result.csv, warning_log: warnings.csv,"
-            )
+            SPEC.replace("path: result.csv,", "path: result.csv, report: report.csv,")
         )
-        truth = b"FAILURE_COUNT,CONDITION\n1,test_warning\n"
-        (self.case / "expected/warnings.csv").write_bytes(truth)
-        (self.observed / "work/simple/warnings.csv").write_bytes(truth)
-        self.build["tables"]["warning_log"] = {
-            "columns": [["FAILURE_COUNT", "int"], ["CONDITION", "str"]],
-            "rows": [["1", "746573745f7761726e696e67"]],
-        }
+        (self.case / "expected/report.csv").write_bytes(REPORT_CSV)
+        saved = self.observed / "work/simple/report.csv"
+        saved.write_bytes(REPORT_CSV)
         self.assertEqual(self.verdict()["verdict"], "pass")
-        self.build["tables"]["warning_log"]["columns"][0][1] = "str"
+        # COUNT and TOTAL are int and every other report column is str,
+        # whatever the specification declares for its own columns.
+        for name in ("ARTIFACT", "COUNT", "TOTAL"):
+            with self.subTest(column=name):
+                column = self.build["tables"]["report"]["columns"][
+                    REPORT_COLUMNS.index(name)
+                ]
+                declared = column[1]
+                column[1] = "int" if declared == "str" else "str"
+                self.assertEqual(self.verdict()["verdict"], "mismatch")
+                column[1] = declared
+        self.assertEqual(self.verdict()["verdict"], "pass")
+        saved.write_bytes(REPORT_CSV.replace(b"\n", b"\r\n"))
+        self.assertEqual(self.verdict()["verdict"], "mismatch")
+        saved.unlink()
+        self.assertIn("save did not publish report.csv", self.verdict()["findings"])
+        saved.write_bytes(REPORT_CSV)
+        self.build["tables"]["report"] = None
         self.assertEqual(self.verdict()["verdict"], "mismatch")
 
     def test_parquet_logical_comparison_ignores_metadata_and_serialization(self):
@@ -346,14 +424,15 @@ class PublicConformance(unittest.TestCase):
         )
         self.assertEqual(self.verdict()["verdict"], "mismatch")
 
-    def test_original_parquet_primary_and_review_log_mutations_are_refused(self):
+    def test_original_parquet_primary_and_report_mutations_are_refused(self):
         import pyarrow as pa
         import pyarrow.parquet as pq
 
         # Retain the retired TestParquetGolden inputs and its AGE=99,
-        # FAILURE_COUNT=2, renamed-column, float-type and empty-table probes.
+        # COUNT=2, renamed-column, float-type and empty-table probes; the
+        # benchmark declares its run report in output.report.
         original_case = ROOT / "benchmarks/schema-parquet"
-        specification = (original_case / "spec.yaml").read_text()
+        (self.case / "spec.yaml").write_text((original_case / "spec.yaml").read_text())
         (self.case / "expected/result.csv").unlink()
         originals = {}
         tables = {}
@@ -392,114 +471,95 @@ class PublicConformance(unittest.TestCase):
                 judge.compare(self.fixtures, self.observed, inventory)
             return judge.read_json(inventory)["benchmarks"][0]
 
-        # The original benchmark uses warning_log; the same independent
-        # Parquet checks must also cover the public verification_log slot.
-        for log_slot in ("warning_log", "verification_log"):
-            (self.case / "spec.yaml").write_text(
-                specification.replace("warning_log:", f"{log_slot}:")
-            )
-            self.build["tables"] = {
-                "output": public_view(tables["adsl.parquet"]),
-                "warning_log": None,
-                "verification_log": None,
+        self.build["tables"] = {
+            "output": public_view(tables["adsl.parquet"]),
+            "report": public_view(tables["adsl-violations.parquet"]),
+        }
+        judge.write_json(
+            self.observed / "records/simple.json", {"builds": [self.build]}
+        )
+        self.assertEqual(verdict()["verdict"], "pass")
+        for name, table in tables.items():
+            primary = name == "adsl.parquet"
+            field = "AGE" if primary else "COUNT"
+            index = table.schema.get_field_index(field)
+            renamed = "AGE" if primary else "ARTIFACT"
+            mutations = {
+                "cell": table.set_column(
+                    index,
+                    field,
+                    pa.array([99 if primary else 2] * table.num_rows, pa.int64()),
+                ),
+                "column name": table.rename_columns(
+                    [
+                        f"{column}_X" if column == renamed else column
+                        for column in table.column_names
+                    ]
+                ),
+                "logical type": table.set_column(
+                    index, field, table[field].cast(pa.float64())
+                ),
+                "row count": table.slice(0, 0),
             }
-            self.build["tables"][log_slot] = public_view(
-                tables["adsl-violations.parquet"]
-            )
-            judge.write_json(
-                self.observed / "records/simple.json", {"builds": [self.build]}
-            )
-            self.assertEqual(verdict()["verdict"], "pass")
-            for name, table in tables.items():
-                primary = name == "adsl.parquet"
-                field = "AGE" if primary else "FAILURE_COUNT"
-                index = table.schema.get_field_index(field)
-                renamed = "AGE" if primary else "ARTIFACT"
-                mutations = {
-                    "cell": table.set_column(
-                        index,
-                        field,
-                        pa.array([99 if primary else 2] * table.num_rows, pa.int64()),
-                    ),
-                    "column name": table.rename_columns(
-                        [
-                            f"{column}_X" if column == renamed else column
-                            for column in table.column_names
-                        ]
-                    ),
-                    "logical type": table.set_column(
-                        index, field, table[field].cast(pa.float64())
-                    ),
-                    "row count": table.slice(0, 0),
-                }
-                if table.num_rows > 1:
-                    mutations["row order"] = table.take(
-                        pa.array(list(reversed(range(table.num_rows))))
-                    )
-                for directory in (
-                    self.case / "expected",
-                    self.observed / "work/simple",
-                ):
-                    target = directory / name
-                    for mutation, changed in mutations.items():
-                        with self.subTest(
-                            slot=log_slot,
-                            artifact=name,
-                            target=directory,
-                            mutation=mutation,
-                        ):
-                            try:
-                                pq.write_table(changed, target)
-                                result = verdict()
-                                malformed_truth = (
-                                    directory == self.case / "expected"
-                                    and (
-                                        mutation == "logical type"
-                                        or (primary and mutation == "column name")
-                                    )
-                                )
-                                self.assertEqual(
-                                    result["verdict"],
-                                    "error" if malformed_truth else "mismatch",
-                                )
-                                self.assertTrue(result["findings"])
-                            finally:
-                                target.write_bytes(originals[name])
-                    removed = target.with_name("removed-" + target.name)
+            if table.num_rows > 1:
+                mutations["row order"] = table.take(
+                    pa.array(list(reversed(range(table.num_rows))))
+                )
+            for directory in (self.case / "expected", self.observed / "work/simple"):
+                target = directory / name
+                for mutation, changed in mutations.items():
                     with self.subTest(
-                        slot=log_slot,
-                        artifact=name,
-                        target=directory,
-                        mutation="renamed artifact",
+                        artifact=name, target=directory, mutation=mutation
                     ):
                         try:
-                            target.rename(removed)
-                            self.assertEqual(verdict()["verdict"], "mismatch")
+                            pq.write_table(changed, target)
+                            result = verdict()
+                            # Report types derive from the truth's own header,
+                            # so only a renamed primary column is malformed.
+                            malformed_truth = directory == self.case / "expected" and (
+                                mutation == "logical type"
+                                or (primary and mutation == "column name")
+                            )
+                            self.assertEqual(
+                                result["verdict"],
+                                "error" if malformed_truth else "mismatch",
+                            )
+                            self.assertTrue(result["findings"])
                         finally:
-                            removed.rename(target)
-            self.assertEqual(verdict()["verdict"], "pass")
+                            target.write_bytes(originals[name])
+                removed = target.with_name("removed-" + target.name)
+                with self.subTest(
+                    artifact=name, target=directory, mutation="renamed artifact"
+                ):
+                    try:
+                        target.rename(removed)
+                        self.assertEqual(verdict()["verdict"], "mismatch")
+                    finally:
+                        removed.rename(target)
+        self.assertEqual(verdict()["verdict"], "pass")
 
-    def test_parquet_verification_log_row_order_is_compared(self):
+    def test_parquet_report_row_order_is_compared(self):
         import pyarrow as pa
         import pyarrow.parquet as pq
 
         (self.case / "spec.yaml").write_text(
             SPEC.replace(
-                "path: result.csv,", "path: result.csv, verification_log: log.parquet,"
+                "path: result.csv,", "path: result.csv, report: report.parquet,"
             )
         )
         table = pa.table(
             {
-                "FAILURE_COUNT": pa.array([1, 2], pa.int64()),
-                "ARTIFACT": ["first.csv", "second.csv"],
+                "KIND": ["run", "column"],
+                "COUNT": pa.array([3, 1], pa.int64()),
+                "TOTAL": pa.array([None, 3], pa.int64()),
             }
         )
-        self.build["tables"]["verification_log"] = {
-            "columns": [["FAILURE_COUNT", "int"], ["ARTIFACT", "str"]],
-            "rows": [["1", "66697273742e637376"], ["2", "7365636f6e642e637376"]],
+        self.build["tables"]["report"] = {
+            "columns": [["KIND", "str"], ["COUNT", "int"], ["TOTAL", "int"]],
+            "rows": [["72756e", "3", None], ["636f6c756d6e", "1", "3"]],
         }
-        truth = self.case / "expected/log.parquet"
-        candidate = self.observed / "work/simple/log.parquet"
+        truth = self.case / "expected/report.parquet"
+        candidate = self.observed / "work/simple/report.parquet"
         pq.write_table(table, truth)
         pq.write_table(table, candidate)
         self.assertEqual(self.verdict()["verdict"], "pass")
@@ -631,6 +691,11 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(
             verdict["metamorphic"]["differences"][0]["check"], "empty_child"
         )
+        # An empty child resolves to its parent's specification, so it
+        # reproduces the run report exactly, row order included.
+        reordered = self.child_variant()
+        reordered["tables"]["report"]["rows"].reverse()
+        self.assertEqual(self.verdict_with_variants([reordered])["verdict"], "mismatch")
         # A record predating the metamorphic checks is reported, not judged.
         self.assertFalse(self.verdict()["metamorphic"]["judged"])
         self.assertEqual(self.verdict()["verdict"], "pass")
@@ -662,7 +727,7 @@ class PublicConformance(unittest.TestCase):
                 }
             ],
             saved=False,
-            tables={"output": None, "verification_log": None, "warning_log": None},
+            tables={"output": None, "report": None},
         )
         verdict = self.verdict_with_variants([failing])
         self.assertEqual(verdict["verdict"], "pass")
@@ -764,6 +829,30 @@ class PublicConformance(unittest.TestCase):
         )
         self.assertEqual(verdict["verdict"], "mismatch")
         self.assertEqual(verdict["metamorphic"]["differences"][0]["check"], "key_order")
+        # Report check rows follow column declaration order (CHECK-23), so the
+        # permutation may reorder report rows but must report the same rows.
+        variants[2]["tables"] = copy.deepcopy(self.build["tables"])
+        variants[2]["tables"]["report"]["rows"].reverse()
+        verdict = judge.compare_example(
+            example, "python", record, fixtures, observed, {}
+        )
+        self.assertEqual(verdict["verdict"], "pass")
+        variants[2]["tables"]["report"]["rows"][0][REPORT_COLUMNS.index("COUNT")] = "4"
+        verdict = judge.compare_example(
+            example, "python", record, fixtures, observed, {}
+        )
+        self.assertEqual(verdict["verdict"], "mismatch")
+        # The control keeps declaration order and reproduces its entry exactly.
+        variants[2]["tables"] = copy.deepcopy(self.build["tables"])
+        variants[1]["tables"]["report"]["rows"].reverse()
+        verdict = judge.compare_example(
+            example, "python", record, fixtures, observed, {}
+        )
+        self.assertEqual(verdict["verdict"], "mismatch")
+        self.assertEqual(
+            [d["kind"] for d in verdict["metamorphic"]["differences"]],
+            ["key_order_control"],
+        )
 
     def test_corpus_inventory_has_all_entries_and_approved_exclusions(self):
         fixtures = ROOT / "benchmarks"

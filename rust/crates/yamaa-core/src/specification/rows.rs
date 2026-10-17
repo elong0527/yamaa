@@ -1292,6 +1292,12 @@ fn prepare_filter_defaults(
 }
 
 impl Rows {
+    /// Each row template's driver name, in construction order.
+    pub(super) fn drivers(&self) -> impl Iterator<Item = &str> {
+        self.templates
+            .iter()
+            .map(|template| template.driver.as_str())
+    }
     pub(super) fn self_columns(&self) -> Vec<usize> {
         self.templates[0]
             .declarations

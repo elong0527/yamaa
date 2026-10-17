@@ -157,10 +157,7 @@ def main(argv=None):
             case / specification,
             environment=None if environment is None else case / environment,
         )
-        tables = {
-            slot: table(getattr(built, slot))
-            for slot in ("output", "verification_log", "warning_log")
-        }
+        tables = {"output": table(built.output), "report": table(built.report)}
         saved = False if built.issues.height else built.save()
         issues = built.issues.to_dicts()
         for issue in issues:

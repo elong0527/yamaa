@@ -13,8 +13,12 @@ data review.
   neither case stops the run.
 
 **Note:** an age outside 18 to 100 does not stop the run: every subject keeps
-its record, and the review log records one row for the failed check, naming
-the dataset (`ARTIFACT`, `LOG_VERSION`), what was checked (`CONDITION`,
-`REQUIREMENT`, `SPEC_PATH`, `VERIFICATION_ID`), how serious the failure is
-(`SEVERITY`), and which subjects failed (`FAILURE_COUNT`, `OFFENDING_KEYS`,
-`DETAILS`).
+its record, and the run report (`adsl-violations.csv`) records the review.
+It has one row per item the run handled (`KIND`, `SPEC_PATH`, `NAME`): the
+run and its outcome (`OUTCOME`), the demographics read, the subjects built,
+each output column with its missing values and longest text, and the age
+check. The check's row names the dataset (`ARTIFACT`), the column checked
+(`TARGET`), the rule it applies (`RULE`), how serious a failure is
+(`SEVERITY`), the failure (`CONDITION`), how many subjects failed out of how
+many were checked (`COUNT`, `TOTAL`), which subjects failed (`KEYS`) and the
+remaining facts (`DETAILS`); the check has no label of its own (`ID`).

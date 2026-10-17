@@ -10,8 +10,7 @@ result <- yamaa_domain("spec.yaml")
 result$output
 result$issues
 result$diagnostics
-result$verification_log
-result$warning_log
+result$report
 result$save()
 yamaa_check("spec.yaml")$issues
 yamaa_check("spec.yaml")$diagnostics
@@ -57,8 +56,9 @@ Credentials remain private to the callback, independently from retained
 `resource_provenance`. Returned URI references do not change authored path rules.
 
 `yamaa_domain` computes without publishing files. Explicit Save publishes the
-retained log and output bytes and reuses those bytes on repeated calls. A failed
-build raises `yamaa_domain_error` on Save. Owned result attributes are read only.
+retained report and output bytes and reuses those bytes on repeated calls. A
+failed build publishes only its declared report file and raises
+`yamaa_domain_error` on Save. Owned result attributes are read only.
 Capacity refusals retain the shared condition and authored paths;
 [release guidance](../../docs/release.md#resource-refusals) describes their
 context. `yamaa_check` reads no study data or project code.
@@ -67,8 +67,22 @@ Set `relative_to: entry` on an input dataset or `output` declaration to select
 the study entry's directory under the
 [local-path policy](../../rules/reference/files.md). Input settings cover
 both data paths and producer `schema` links; output settings cover the primary
-artifact and both logs. `result$save()` publishes the held bytes to those
+artifact and the report file. `result$save()` publishes the held bytes to those
 selected destinations.
+
+`result$report` is the run report every executed build returns, whether it
+succeeds or fails: a data frame with one row for the run, each input, each row
+template, each counted handler, each output column of a successful run and each
+evaluated check, with the offending keys of every violated check. `COUNT` and
+`TOTAL` use `yamaa_int64_vector`; the other columns are character. A
+specification rejected before admission, by an invalid declaration or an
+unreadable specification file, has no report: `result$report` is `NULL` and the
+issues are the whole result. Naming `output.report` writes the report to
+that file on Save, before the output and for a failed build too; its `.csv` or
+`.parquet` extension selects the format, and a specification with a `warning`
+verification must name one. The
+[verification rules](../../rules/verification.md#check-22) fix its rows and
+columns.
 
 An input's `schema` link names the producing specification whose output columns
 and declared types type a stored artifact. The link is metadata only: the
@@ -98,12 +112,12 @@ containing NUL use lossless `yamaa_utf8_vector`. Subsetting preserves the exact
 values. Conversions preserve values or raise an error. Dates use Date and
 datetimes use POSIXct with UTC.
 
-With nanoarrow 0.8.0 or newer installed, `result$output_arrow`,
-`result$verification_log_arrow` and `result$warning_log_arrow` return standard
-`nanoarrow_array_stream` objects. Every access creates an independent stream
-cursor sharing immutable Arrow buffers. Nanoarrow owns each stream header and
-calls its release callback on explicit release or garbage collection. Imported
-arrays remain valid after releasing the stream or build result. These views
+With nanoarrow 0.8.0 or newer installed, `result$output_arrow` and
+`result$report_arrow` return standard `nanoarrow_array_stream` objects. Every
+access creates an independent stream cursor sharing immutable Arrow buffers.
+Nanoarrow owns each stream header and calls its release callback on explicit
+release or garbage collection. Imported arrays remain valid after releasing the
+stream or build result. These views
 preserve signed i64 extrema, NUL UTF-8, nulls and date/datetime epoch values.
 The ordinary data-frame views explicitly copy into the established exact R
 representations above; conversion to R character or numeric preserves values

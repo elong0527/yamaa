@@ -25,7 +25,7 @@ from tools.paths import ROOT
 PROTOCOL = "public-conformance/1"
 FIELD_REFERENCE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
 RESOLVED_REASON = "reference-only resolved specification until cutover (#1973.14)"
-LOG_INTS = {"EVALUATED_COUNT", "FAILURE_COUNT"}
+REPORT_INTS = {"COUNT", "TOTAL"}
 
 
 def platform_matches(runtime, platform, recorded):
@@ -485,14 +485,15 @@ def parquet_signature(path):
     ]
 
 
-def log_types(path):
+def report_types(path):
+    """Run report column types: COUNT and TOTAL are int, every other is str."""
     if path.suffix == ".csv":
         columns = csv_cells(path)[0]
     else:
         import pyarrow.parquet as pq
 
         columns = pq.read_schema(path).names
-    return {c: "int" if c in LOG_INTS else "str" for c in columns}
+    return {c: "int" if c in REPORT_INTS else "str" for c in columns}
 
 
 def load_metamorphic_expectations(fixtures):
@@ -514,11 +515,30 @@ def load_metamorphic_expectations(fixtures):
     return expectations
 
 
-def build_difference(reference, variant):
-    """None when two builds are metamorphically equal, else the difference."""
+def unordered_report(tables):
+    """The typed tables with the run report's rows as a multiset."""
+    report = tables.get("report")
+    if report is None:
+        return tables
+    return {
+        **tables,
+        "report": {**report, "rows": sorted(report["rows"], key=json.dumps)},
+    }
+
+
+def build_difference(reference, variant, ordered_report=True):
+    """None when two builds are metamorphically equal, else the difference.
+
+    Report check rows follow column declaration order (CHECK-23), so a
+    key-order permutation compares the run report's rows as a multiset; every
+    other variant reproduces its reference report exactly.
+    """
     reference_issues, variant_issues = reference["issues"], variant["issues"]
     if not reference_issues and not variant_issues:
-        if reference["tables"] != variant["tables"]:
+        tables = reference["tables"], variant["tables"]
+        if not ordered_report:
+            tables = tuple(map(unordered_report, tables))
+        if tables[0] != tables[1]:
             return "typed tables differ"
         if reference.get("saved") != variant.get("saved"):
             return "saved outcome differs"
@@ -588,7 +608,11 @@ def judge_metamorphic(example, runtime, record, expectations):
                 f"missing reference build for variant {identity(variant)}"
             )
             continue
-        detail = build_difference(reference, by_identity[identity(variant)])
+        detail = build_difference(
+            reference,
+            by_identity[identity(variant)],
+            ordered_report=variant["kind"] != "key_order_permuted",
+        )
         if detail is not None:
             check = (
                 "key_order"
@@ -758,6 +782,8 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
             missing = [path for path in paths if path not in matched]
             if missing:
                 result["findings"].append({"missing_validation_paths": missing})
+        # A failed build that compiled still holds its run report; only the
+        # primary output must stay absent and unsaved.
         if any(b["tables"].get("output") is not None or b.get("saved") for b in builds):
             result["findings"].append("negative build exposed or saved output")
         result["verdict"] = "mismatch" if result["findings"] else "pass"
@@ -769,15 +795,13 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
     compared = set()
     for entry, build in zip(entries, builds):
         types, output = declarations(case / entry["specification"])
-        for slot, key in (
-            ("output", "path"),
-            ("verification_log", "verification_log"),
-            ("warning_log", "warning_log"),
-        ):
+        for slot, key in (("output", "path"), ("report", "report")):
             declared = output.get(key)
             actual = build["tables"].get(slot)
             if declared is None:
-                if actual is not None:
+                # Every executed build holds its run report, so only a
+                # declared report file has independent truth to compare.
+                if slot != "report" and actual is not None:
                     result["findings"].append(f"undeclared {slot} host view")
                 continue
             target = Path(entry["specification"]).parent / declared
@@ -789,7 +813,7 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
                     f"declared {slot} lacks independent expected artifact: {declared}"
                 )
                 continue
-            expected_types = types if slot == "output" else log_types(truth)
+            expected_types = types if slot == "output" else report_types(truth)
             expected = expected_table(truth, expected_types)
             if (
                 slot == "output"

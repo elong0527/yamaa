@@ -230,7 +230,7 @@ fn domain_arrow(handle: Robj, destination: Robj, kind: i32) -> List {
             .map_err(|_| "domain result already borrowed")?;
         let table = match kind {
             0 => state.build.output(),
-            1 | 2 => state.build.log(kind == 2),
+            1 => state.build.run_report(),
             _ => return Err("unknown Arrow table selection".into()),
         };
         table.map_or_else(
@@ -253,14 +253,15 @@ fn domain_observations(handle: Robj, include_measurements: bool) -> List {
         ))
     })
 }
+/// The run report every executed build holds, success or failure.
 #[extendr]
-fn domain_log(handle: Robj, warning: bool) -> List {
+fn domain_report(handle: Robj) -> List {
     boundary(|| {
         let state = resolve(&handle)?;
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        match state.build.log(warning) {
+        match state.build.run_report() {
             Some(table) => crate::public_table::frame(table),
             None => Ok(NULL.into_robj()),
         }

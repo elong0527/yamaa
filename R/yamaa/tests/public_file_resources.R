@@ -46,8 +46,7 @@ qualify_entry_relative_programs <- function(producer) {
     for(attempt in 1:2) {
       stopifnot(isTRUE(results[[name]]$save()),
         identical(rawfile(file.path(study,"output/result.csv")),expected),
-        file.exists(file.path(study,"output/warnings.csv")),
-        file.exists(file.path(study,"output/verifications.csv")))
+        file.exists(file.path(study,"output/report.csv")))
       if(producer) stopifnot(identical(rawfile(file.path(study,"output/produced.csv")),expected))
     }
   }

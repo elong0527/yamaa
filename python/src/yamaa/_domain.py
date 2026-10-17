@@ -54,25 +54,21 @@ class Domain:
         return () if self._resolver is None else self._resolver.provenance
 
     @property
-    def verification_log(self) -> pl.DataFrame | None:
-        data = self._native.log(False)
+    def report(self) -> pl.DataFrame | None:
+        """The run report every executed build holds, success or failure."""
+        data = self._native.report()
         return None if data is None else pl.DataFrame(data)
 
     @property
-    def verification_log_arrow(self) -> pa.Table | None:
-        return _arrow_view(self._native.log(False))
-
-    @property
-    def warning_log(self) -> pl.DataFrame | None:
-        data = self._native.log(True)
-        return None if data is None else pl.DataFrame(data)
-
-    @property
-    def warning_log_arrow(self) -> pa.Table | None:
-        return _arrow_view(self._native.log(True))
+    def report_arrow(self) -> pa.Table | None:
+        return _arrow_view(self._native.report())
 
     def save(self) -> bool:
-        """Publish held logs and output; a failed build raises DomainError."""
+        """Publish the declared report file and output.
+
+        A failed build publishes only its declared report file and raises
+        DomainError.
+        """
         try:
             return self._native.save()
         finally:

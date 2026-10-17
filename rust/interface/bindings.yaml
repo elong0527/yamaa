@@ -93,7 +93,7 @@ python:
         - {name: observations, args: {include_measurements: "bool = false"}, returns: "optional<text>"}
         - {name: output, args: {}, returns: "optional<_ArrowTable>"}
         - {name: issues, args: {}, returns: "list<issue_record>"}
-        - {name: log, args: {warning: bool}, returns: "optional<_ArrowTable>"}
+        - {name: report, args: {}, returns: "optional<_ArrowTable>"}
         - {name: save, args: {}, returns: bool}
     - kind: exception
       name: DomainError
@@ -152,7 +152,7 @@ r:
         - {name: domain_diagnostics, args: {handle: robj}, returns: r_reply}
         - {name: domain_output, args: {handle: robj}, returns: r_reply}
         - {name: domain_arrow, args: {handle: robj, destination: robj, kind: i32}, returns: r_reply}
-        - {name: domain_log, args: {handle: robj, warning: bool}, returns: r_reply}
+        - {name: domain_report, args: {handle: robj}, returns: r_reply}
         - {name: domain_observations, args: {handle: robj, include_measurements: bool}, returns: r_reply}
         - {name: domain_save, args: {handle: robj}, returns: r_reply}
         - {name: domain_interrupt, args: {handle: robj}, returns: r_reply}
@@ -191,7 +191,7 @@ operations:
   read_resolved_specification: {python: [_read_resolved_specification], r: [read_resolved_specification]}
   domain_issues: {python: [_DomainResult.issues], r: [domain_issues, domain_diagnostics]}
   domain_output: {python: [_DomainResult.output], r: [domain_output, domain_arrow]}
-  domain_logs: {python: [_DomainResult.log], r: [domain_log, domain_arrow]}
+  domain_report: {python: [_DomainResult.report], r: [domain_report, domain_arrow]}
   domain_save: {python: [_DomainResult.save], r: [domain_save]}
   domain_observations: {python: [_DomainResult.observations], r: [domain_observations]}
   # Python raises a retained interrupt from the domain call itself.

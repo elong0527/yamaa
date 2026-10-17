@@ -152,8 +152,8 @@ owns decoding behavior.
   `yamaa_resource_failure`.
 - Expose Build results as Arrow C Stream views in both hosts: Python returns
   PyArrow tables through the Arrow PyCapsule interface (`output_arrow`,
-  `verification_log_arrow`, `warning_log_arrow`), and R returns nanoarrow array
-  streams from the same read-only attributes, with a nanoarrow 0.8.0 floor.
+  `report_arrow`), and R returns nanoarrow array streams from the same
+  read-only attributes, with a nanoarrow 0.8.0 floor.
 - Keep the Rust adapter features `yaml`, `parquet` and `readstat` independent,
   all enabled by default; the Python and R packages enable all three.
 - Preserve full signed-i64 values and separate missingness, lossless R
@@ -166,7 +166,7 @@ owns decoding behavior.
 - Resolve resources from their original declaring file by default; explicit
   input/output `relative_to: entry` selects each specification entry. Admit
   absolute and parent-relative local paths without project-root fallback. Preserve snapshots,
-  original failures, callback counts and log-first publication order. A `schema`
+  original failures, callback counts and report-first publication order. A `schema`
   link types a stored artifact from its producing specification and never runs
   it; callers build and save producers before their consumers.
 - Keep normative diagnostics registry-owned, including the reviewed

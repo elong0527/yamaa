@@ -55,7 +55,7 @@ class CompletePublicTruth(unittest.TestCase):
                     }
                     for suffix in (
                         "original-specifications",
-                        "verification-logs",
+                        "run-report",
                     )
                 ],
             }

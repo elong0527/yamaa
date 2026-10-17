@@ -152,6 +152,7 @@ pub(super) fn apply(
                         values: values.clone(),
                         codes: Vec::new(),
                         default: false,
+                        path: declaration.path.clone(),
                     });
                     lists.len() - 1
                 }

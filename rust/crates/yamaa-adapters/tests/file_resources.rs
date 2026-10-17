@@ -9,7 +9,7 @@ mod file {
             use yamaa_adapters::{file_application, specification_report::Identity};
             use yamaa_core::domain_entry::Request;
             let study = Study::new();
-            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], warning_log: output/warnings.csv, verification_log: output/verifications.csv}\n").unwrap();
+            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n").unwrap();
             fs::create_dir(study.0.join("shared/input")).unwrap();
             fs::write(study.0.join("shared/input/data.csv"), b"ID\n999\n").unwrap();
             let mut results = Vec::new();
@@ -54,12 +54,7 @@ mod file {
                         fs::read(study.0.join(*name).join("output/result.csv")).unwrap(),
                         *bytes
                     );
-                    assert!(study.0.join(*name).join("output/warnings.csv").is_file());
-                    assert!(study
-                        .0
-                        .join(*name)
-                        .join("output/verifications.csv")
-                        .is_file());
+                    assert!(study.0.join(*name).join("output/report.csv").is_file());
                 }
             }
             assert!(!study.0.join("shared/output").exists());
@@ -140,14 +135,14 @@ mod file {
         }
 
         #[test]
-        fn complete_output_replacement_resets_the_base_for_primary_and_both_sidecars() {
+        fn complete_output_replacement_resets_the_base_for_primary_and_report_files() {
             use yamaa_adapters::{file_application, specification_report::Identity};
             use yamaa_core::{domain_entry::Request, schema::DocumentNode};
 
             for inherited_base in ["", "relative_to: entry, "] {
                 let study = Study::new();
-                fs::write(study.0.join("shared/base.yaml"), format!("schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {{SRC: {{path: data.csv, types: {{ID: int}}}}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: ignored.csv, {inherited_base}columns: [ID], warning_log: ignored-warning.csv, verification_log: ignored-verification.csv}}\n")).unwrap();
-                fs::write(study.0.join("shared/replacement.yaml"), "schema_version: '1.0'\nparent: base.yaml\noutput: {path: result.csv, columns: [ID], warning_log: warnings.csv, verification_log: verifications.csv}\n").unwrap();
+                fs::write(study.0.join("shared/base.yaml"), format!("schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {{SRC: {{path: data.csv, types: {{ID: int}}}}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: ignored.csv, {inherited_base}columns: [ID], report: ignored-report.csv}}\n")).unwrap();
+                fs::write(study.0.join("shared/replacement.yaml"), "schema_version: '1.0'\nparent: base.yaml\noutput: {path: result.csv, columns: [ID], report: report.csv}\n").unwrap();
                 fs::write(
                     study.0.join("entry/spec.yaml"),
                     "schema_version: '1.0'\nparent: ../shared/replacement.yaml\n",
@@ -159,11 +154,7 @@ mod file {
                 let prepared = FileSpecification::prepare(resources, &entry).unwrap();
                 let document = prepared.run().document().model().document();
                 let output = document.field(document.root(), "output").unwrap();
-                for (field, written) in [
-                    ("path", "result.csv"),
-                    ("warning_log", "warnings.csv"),
-                    ("verification_log", "verifications.csv"),
-                ] {
+                for (field, written) in [("path", "result.csv"), ("report", "report.csv")] {
                     let node = document.field(output, field).unwrap();
                     assert_eq!(
                         document.nodes()[node],
@@ -206,16 +197,12 @@ mod file {
                     fs::read(study.0.join("shared/result.csv")).unwrap(),
                     b"ID\n7\n"
                 );
-                for written in ["result.csv", "warnings.csv", "verifications.csv"] {
+                for written in ["result.csv", "report.csv"] {
                     assert!(study.0.join("shared").join(written).is_file());
                     assert!(!study.0.join("entry").join(written).exists());
                 }
                 for directory in ["shared", "entry"] {
-                    for written in [
-                        "ignored.csv",
-                        "ignored-warning.csv",
-                        "ignored-verification.csv",
-                    ] {
+                    for written in ["ignored.csv", "ignored-report.csv"] {
                         assert!(!study.0.join(directory).join(written).exists());
                     }
                 }
@@ -228,7 +215,7 @@ mod file {
             use yamaa_core::domain_entry::Request;
 
             let study = Study::new();
-            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: result.csv, relative_to: entry, columns: [ID], warning_log: warnings.csv, verification_log: verifications.csv}\n").unwrap();
+            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: result.csv, relative_to: entry, columns: [ID], report: report.csv}\n").unwrap();
             for (output, expected) in [
                 (
                     "{relative_to: declaring}",

@@ -138,14 +138,14 @@ yamaa::engine::AttemptFailure::stage: pub stage: &'static str
 yamaa::engine::Build: impl Build
 yamaa::engine::Build: pub struct Build
 yamaa::engine::Build::interrupt: pub fn interrupt(&self) -> Option<&FunctionError>
-yamaa::engine::Build::log: pub fn log(&self, warning: bool) -> Option<&Table>
-yamaa::engine::Build::log_bytes: pub fn log_bytes(&self, warning: bool) -> Option<&[u8]>
 yamaa::engine::Build::observations: pub fn observations(&self, include_measurements: bool) -> Option<String>
 yamaa::engine::Build::output: pub fn output(&self) -> Option<&Table>
 yamaa::engine::Build::output_bytes: pub fn output_bytes(&self) -> Option<&[u8]>
 yamaa::engine::Build::preparation_sources: pub fn preparation_sources(&self) -> &SourceBytes
 yamaa::engine::Build::project_failures: pub fn project_failures(&self) -> Option<&[AttemptFailure]>
 yamaa::engine::Build::report: pub fn report(&self) -> &Report
+yamaa::engine::Build::run_report: pub fn run_report(&self) -> Option<&Table>
+yamaa::engine::Build::run_report_bytes: pub fn run_report_bytes(&self) -> Option<&[u8]>
 yamaa::engine::Build::save: pub fn save(&mut self) -> Result<SaveOutcome, Error>
 yamaa::engine::DefineArtifact: pub struct DefineArtifact [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::engine::DefineArtifact::bytes: pub bytes: Vec<u8>

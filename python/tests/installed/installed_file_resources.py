@@ -81,8 +81,7 @@ class FileResources(unittest.TestCase):
                 for _ in range(2):
                     self.assertTrue(result.save())
                     self.assertEqual((study / "output/result.csv").read_bytes(), csv)
-                    self.assertTrue((study / "output/warnings.csv").is_file())
-                    self.assertTrue((study / "output/verifications.csv").is_file())
+                    self.assertTrue((study / "output/report.csv").is_file())
                     if producer:
                         self.assertEqual(
                             (study / "output/produced.csv").read_bytes(), csv

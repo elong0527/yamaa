@@ -7,10 +7,9 @@ input:
 output:
   path: adsl.csv
   columns: [USUBJID, ARM, FLAG, VAL]
-  # The deliberately violated warning goes to the warning log; every
-  # declared check, held or violated, gets one line in the check log.
-  warning_log: adsl-warnings.csv
-  verification_log: adsl-checks.csv
+  # Every evaluated check, held or violated, gets one line in the run
+  # report, which a declared warning requires.
+  report: adsl-checks.csv
 
 columns:
   - name: USUBJID
@@ -63,7 +62,7 @@ verifications:
       filter: "VAL IS NOT NULL"
       min: 7
   # Deliberately violated: 5 of 8 unflagged exceeds one half. A warning,
-  # so the run logs it and still succeeds.
+  # so the run reports it and still succeeds.
   - row_count:
       id: unflagged-share-warning
       filter: "FLAG = 'N'"

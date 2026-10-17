@@ -1,4 +1,4 @@
-"""Installed public logs, complete independent run truth and held publication."""
+"""Installed public run report, complete independent run truth and held publication."""
 
 import builtins
 import csv
@@ -18,14 +18,14 @@ from host_fixtures import load as load_truth
 import yamaa
 from yamaa import _native
 
-TRUTH = load_truth(__file__, "verification-logs")
+TRUTH = load_truth(__file__, "run-report")
 
 ROOT = Path(__file__).with_name("specification-original")
 CASE = TRUTH["case_name"]
 NAMES = tuple(TRUTH["artifact_names"])
 
 
-class VerificationLogs(unittest.TestCase):
+class RunReport(unittest.TestCase):
     def setUp(self):
         original = builtins.__import__
         blocked = (
@@ -82,6 +82,16 @@ class VerificationLogs(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def golden(self, case, artifact, name, extension=".csv"):
+        kinds = {
+            column: pl.Int64 if kind == "int" else pl.String
+            for column, kind in zip(artifact["columns"], artifact["types"])
+        }
+        return kinds, pl.read_csv(
+            case / "expected" / name.replace(extension, ".csv"),
+            schema_overrides=kinds,
+        )
+
     def test_original_full_report_typed_views_saved_goldens_and_owned_lifetime(self):
         with tempfile.TemporaryDirectory() as directory:
             case = Path(directory) / "case"
@@ -93,24 +103,15 @@ class VerificationLogs(unittest.TestCase):
             self.assertEqual(
                 json.loads(result._native.observations()), dict(expected, artifacts=[])
             )
-            for index, view in enumerate(
-                (result.verification_log, result.warning_log, result.output)
-            ):
-                artifact = expected["artifacts"][index]
-                kinds = {
-                    column: pl.Int64 if kind == "int" else pl.String
-                    for column, kind in zip(artifact["columns"], artifact["types"])
-                }
-                golden = pl.read_csv(
-                    case / "expected" / NAMES[index], schema_overrides=kinds
+            for index, view in enumerate((result.report, result.output)):
+                kinds, golden = self.golden(
+                    case, expected["artifacts"][index], NAMES[index]
                 )
                 self.assertEqual(view.schema, kinds)
                 self.assertTrue(view.equals(golden))
             # Each public view is a fresh host copy of privately owned bytes.
-            result.verification_log.replace_column(
-                0, pl.Series("REPORT_VERSION", ["changed"] * 3)
-            )
-            result.warning_log.replace_column(0, pl.Series("LOG_VERSION", ["changed"]))
+            result.report.replace_column(0, pl.Series("ARTIFACT", ["changed"] * 8))
+            self.assertEqual(result.report["ARTIFACT"].to_list(), ["adsl.csv"] * 8)
             for name in NAMES:
                 self.assertFalse((case / name).exists())
             entry.unlink()
@@ -125,16 +126,16 @@ class VerificationLogs(unittest.TestCase):
                         (case / "expected" / name).read_bytes(),
                     )
             self.retain(result, entry)
-            held = result.verification_log
+            held = result.report
             del result
             gc.collect()
-            self.assertEqual(held.height, 3)
+            self.assertEqual(held.height, 8)
             self.assertEqual(
-                held["EVALUATED_COUNT"].to_list(),
-                [int(value) for value in TRUTH["evaluated_counts"]],
+                held.filter(pl.col("KIND") == "check")["TOTAL"].to_list(),
+                [int(value) for value in TRUTH["check_totals"]],
             )
 
-    def test_fatal_checks_publish_only_verification_and_keep_original_issues(self):
+    def test_fatal_checks_publish_only_the_report_and_keep_original_issues(self):
         with tempfile.TemporaryDirectory() as directory:
             case = Path(directory) / "case"
             shutil.copytree(ROOT / "cases" / CASE, case)
@@ -144,10 +145,14 @@ class VerificationLogs(unittest.TestCase):
             )
             result = yamaa.domain(entry)
             self.assertIsNone(result.output)
-            self.assertIsNone(result.warning_log)
+            report = result.report
+            self.assertEqual(report["KIND"].to_list(), TRUTH["fatal_kinds"])
             self.assertEqual(
-                result.verification_log["OUTCOME"].to_list(), TRUTH["fatal_outcomes"]
+                report.filter(pl.col("KIND") == "check")["OUTCOME"].to_list(),
+                TRUTH["fatal_outcomes"],
             )
+            self.assertEqual(report.row(0, named=True)["OUTCOME"], "failed")
+            self.assertEqual(report.row(0, named=True)["CONDITION"], "range_failed")
             issues = result.issues.clone()
             self.assertEqual(issues["condition"].to_list(), ["range_failed"])
             for name in NAMES:
@@ -159,20 +164,21 @@ class VerificationLogs(unittest.TestCase):
                     result.save()
                 self.assertTrue(result.issues.equals(issues))
                 self.assertEqual((case / NAMES[1]).read_bytes(), b"sentinel")
-                self.assertEqual((case / NAMES[2]).read_bytes(), b"sentinel")
+                self.assertEqual(
+                    (case / NAMES[0]).read_bytes().count(b"\n"),
+                    1 + len(TRUTH["fatal_kinds"]),
+                )
                 self.assertEqual(
                     len(json.loads(result._native.observations())["artifacts"]), 1
                 )
 
-    def test_parquet_logs_decode_to_independent_csv_goldens(self):
+    def test_parquet_report_decodes_to_the_independent_csv_golden(self):
         with tempfile.TemporaryDirectory() as directory:
             case = Path(directory) / "case"
             shutil.copytree(ROOT / "cases" / CASE, case)
             entry = case / "spec.yaml"
             entry.write_text(
-                entry.read_text()
-                .replace("adsl-checks.csv", "adsl-checks.parquet")
-                .replace("adsl-warnings.csv", "adsl-warnings.parquet")
+                entry.read_text().replace("adsl-checks.csv", "adsl-checks.parquet")
             )
             expected = self.expected(entry)
             result = yamaa.domain(entry)
@@ -180,19 +186,9 @@ class VerificationLogs(unittest.TestCase):
             self.assertEqual(
                 json.loads(result._native.observations()), dict(expected, artifacts=[])
             )
-            goldens = []
-            for index, view in enumerate((result.verification_log, result.warning_log)):
-                artifact = expected["artifacts"][index]
-                kinds = {
-                    column: pl.Int64 if kind == "int" else pl.String
-                    for column, kind in zip(artifact["columns"], artifact["types"])
-                }
-                golden = pl.read_csv(
-                    case / "expected" / NAMES[index], schema_overrides=kinds
-                )
-                self.assertEqual(view.schema, kinds)
-                self.assertTrue(view.equals(golden))
-                goldens.append(golden)
+            kinds, golden = self.golden(case, expected["artifacts"][0], NAMES[0])
+            self.assertEqual(result.report.schema, kinds)
+            self.assertTrue(result.report.equals(golden))
             entry.unlink()
             (case / "input/dm.csv").unlink()
             gc.collect()
@@ -201,25 +197,24 @@ class VerificationLogs(unittest.TestCase):
             actual_artifacts = report.pop("artifacts")
             expected.pop("artifacts")
             self.assertEqual(report, expected)
-            for index, golden in enumerate(goldens):
-                path = case / NAMES[index].replace(".csv", ".parquet")
-                actual = pl.read_parquet(path)
-                self.assertEqual(actual.schema, golden.schema)
-                self.assertTrue(actual.equals(golden))
-                artifact = actual_artifacts[index]
-                self.assertEqual(artifact["name"], path.stem)
-                self.assertEqual(artifact["profile"], "parquet")
-                self.assertEqual(artifact["columns"], golden.columns)
-                self.assertEqual(artifact["row_count"], golden.height)
-                self.assertEqual(artifact["byte_length"], path.stat().st_size)
-                self.assertEqual(artifact["content"], "")
-                self.assertEqual(
-                    [json.loads(row) for row in artifact["records"][1:]],
-                    [list(row) for row in golden.rows()],
-                )
+            path = case / NAMES[0].replace(".csv", ".parquet")
+            actual = pl.read_parquet(path)
+            self.assertEqual(actual.schema, golden.schema)
+            self.assertTrue(actual.equals(golden))
+            artifact = actual_artifacts[0]
+            self.assertEqual(artifact["name"], path.stem)
+            self.assertEqual(artifact["profile"], "parquet")
+            self.assertEqual(artifact["columns"], golden.columns)
+            self.assertEqual(artifact["row_count"], golden.height)
+            self.assertEqual(artifact["byte_length"], path.stat().st_size)
+            self.assertEqual(artifact["content"], "")
             self.assertEqual(
-                (case / NAMES[2]).read_bytes(),
-                (case / "expected" / NAMES[2]).read_bytes(),
+                [json.loads(row) for row in artifact["records"][1:]],
+                [list(row) for row in golden.rows()],
+            )
+            self.assertEqual(
+                (case / NAMES[1]).read_bytes(),
+                (case / "expected" / NAMES[1]).read_bytes(),
             )
 
     def test_full_warning_keys_unicode_identity_empty_types_and_target_retry(self):
@@ -230,7 +225,7 @@ class VerificationLogs(unittest.TestCase):
 domain: TEST
 keys: [ID]
 input: {SRC: input.csv}
-output: {path: absent/out.csv, columns: [ID], warning_log: warnings.csv, verification_log: checks.csv}
+output: {path: absent/out.csv, columns: [ID], report: checks.csv}
 columns:
   - name: ID
     type: int
@@ -244,11 +239,12 @@ columns:
             )
             result = yamaa.domain(entry)
             self.assertTrue(result.issues.is_empty())
-            warning = result.warning_log
-            self.assertEqual(warning["VERIFICATION_ID"].to_list(), ["\u00e9\U0001d11e"])
-            self.assertEqual(warning["FAILURE_COUNT"].to_list(), [8])
+            check = result.report.filter(pl.col("KIND") == "check")
+            self.assertEqual(check["ID"].to_list(), ["\u00e9\U0001d11e"])
+            self.assertEqual(check["COUNT"].to_list(), [8])
+            self.assertEqual(check["TOTAL"].to_list(), [8])
             self.assertEqual(
-                warning["OFFENDING_KEYS"].to_list(),
+                check["KEYS"].to_list(),
                 [
                     json.dumps(
                         [{"ID": i} for i in range(1, 9)],
@@ -257,38 +253,39 @@ columns:
                     )
                 ],
             )
-            for name in ("checks.csv", "warnings.csv"):
-                (root / name).write_bytes(b"stale")
+            (root / "checks.csv").write_bytes(b"stale")
             self.assertFalse(result.save())
-            for name in ("checks.csv", "warnings.csv"):
-                self.assertEqual((root / name).read_bytes(), b"stale")
+            self.assertEqual((root / "checks.csv").read_bytes(), b"stale")
             (root / "absent").mkdir()
             entry.unlink()
             (root / "input.csv").unlink()
             self.assertTrue(result.save())
             self.assertTrue(result.issues.is_empty())
-            # The ASCII canonical details remain stable independently of host JSON.
-            with (root / "warnings.csv").open(newline="", encoding="utf-8") as stream:
-                row = next(csv.DictReader(stream))
-            self.assertEqual(row["OFFENDING_KEYS"], warning["OFFENDING_KEYS"][0])
+            # The ASCII canonical keys remain stable independently of host JSON.
+            with (root / "checks.csv").open(newline="", encoding="utf-8") as stream:
+                (row,) = [
+                    row for row in csv.DictReader(stream) if row["KIND"] == "check"
+                ]
+            self.assertEqual(row["KEYS"], check["KEYS"][0])
+            self.assertEqual(row["ID"], "\u00e9\U0001d11e")
             entry.write_text(raw.split("    verifications:")[0])
             (root / "input.csv").write_text("ID\n1\n")
             empty = yamaa.domain(entry)
-            self.assertEqual(empty.verification_log.height, 0)
-            self.assertEqual(empty.warning_log.height, 0)
-            self.assertEqual(empty.verification_log.schema["EVALUATED_COUNT"], pl.Int64)
-            self.assertEqual(empty.warning_log.schema["FAILURE_COUNT"], pl.Int64)
+            self.assertEqual(
+                empty.report["KIND"].to_list(), ["run", "input", "rows", "column"]
+            )
+            self.assertEqual(empty.report.schema["COUNT"], pl.Int64)
+            self.assertEqual(empty.report.schema["TOTAL"], pl.Int64)
             self.assertTrue(empty.save())
-            self.assertEqual((root / "checks.csv").read_bytes().count(b"\n"), 1)
-            self.assertEqual((root / "warnings.csv").read_bytes().count(b"\n"), 1)
+            self.assertEqual((root / "checks.csv").read_bytes().count(b"\n"), 5)
 
-    def test_sidecar_collisions_and_unknown_profiles_precede_study_access(self):
-        for sidecar, condition in (
+    def test_report_collisions_and_unknown_profiles_precede_study_access(self):
+        for report, condition in (
             ("out.csv", "artifact_path_collision"),
             ("checks.arrow", "unknown_artifact_profile"),
         ):
             with (
-                self.subTest(sidecar=sidecar),
+                self.subTest(report=report),
                 tempfile.TemporaryDirectory() as directory,
             ):
                 root = Path(directory)
@@ -296,22 +293,21 @@ columns:
                 entry.write_text(
                     "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
                     "input: {SRC: input.csv}\n"
-                    "output: {path: out.csv, columns: [ID], warning_log: warnings.csv, "
-                    f"verification_log: {sidecar}}}\n"
+                    f"output: {{path: out.csv, columns: [ID], report: {report}}}\n"
                     "columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
                     encoding="utf-8",
                 )
                 # The input is absent: the refusal precedes any study access.
                 result = yamaa.domain(entry)
                 self.assertIsNone(result.output)
+                self.assertIsNone(result.report)
                 self.assertEqual(result.issues["condition"].to_list(), [condition])
                 self.assertEqual(
-                    result.issues["spec_paths"].to_list()[0][-1],
-                    "output.verification_log",
+                    result.issues["spec_paths"].to_list()[0][-1], "output.report"
                 )
                 with self.assertRaises(yamaa.DomainError):
                     result.save()
-                for name in ("out.csv", "warnings.csv", sidecar):
+                for name in ("out.csv", report):
                     self.assertFalse((root / name).exists())
 
 

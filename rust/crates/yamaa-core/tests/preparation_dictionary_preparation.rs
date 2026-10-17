@@ -479,8 +479,7 @@ mod preparation {
                             seq(vec![
                                 field("path", "str"),
                                 field("columns", "list[str]"),
-                                field("warning_log", "str"),
-                                field("verification_log", "str"),
+                                field("report", "str"),
                             ]),
                         ),
                         (
@@ -532,8 +531,7 @@ mod preparation {
                         map(vec![
                             ("path", text("output.csv")),
                             ("columns", seq(vec![text("ID")])),
-                            ("warning_log", text("warnings.csv")),
-                            ("verification_log", text("verification.csv")),
+                            ("report", text("report.csv")),
                         ]),
                     ),
                 ]);
@@ -682,8 +680,7 @@ mod preparation {
                     map(vec![
                         ("path", text("output.csv")),
                         ("columns", seq(vec![text("ID")])),
-                        ("warning_log", text("warnings.csv")),
-                        ("verification_log", text("verification.csv")),
+                        ("report", text("report.csv")),
                     ]),
                 ),
                 (
@@ -1068,8 +1065,7 @@ mod preparation {
                     map(vec![
                         ("path", text("output.csv")),
                         ("columns", seq(vec![text("ID")])),
-                        ("warning_log", text("warnings.csv")),
-                        ("verification_log", text("verification.csv")),
+                        ("report", text("report.csv")),
                     ]),
                 ),
                 (
@@ -2118,8 +2114,7 @@ mod preparation {
                             seq(vec![
                                 field("path", "str"),
                                 field("columns", "list[str]"),
-                                field("warning_log", "str"),
-                                field("verification_log", "str"),
+                                field("report", "str"),
                             ]),
                         ),
                         (
@@ -2171,8 +2166,7 @@ mod preparation {
                         map(vec![
                             ("path", text("output.csv")),
                             ("columns", seq(vec![text("ID")])),
-                            ("warning_log", text("warnings.csv")),
-                            ("verification_log", text("verification.csv")),
+                            ("report", text("report.csv")),
                         ]),
                     ),
                 ]);
@@ -2380,13 +2374,7 @@ mod preparation {
                 ("b", vec!["b.csv", "b-source.yaml"]),
                 (
                     "entry",
-                    vec![
-                        "entry.csv",
-                        "entry-source.yaml",
-                        "output.csv",
-                        "warnings.csv",
-                        "verification.csv",
-                    ],
+                    vec!["entry.csv", "entry-source.yaml", "output.csv", "report.csv"],
                 ),
             ] {
                 for path in paths {
@@ -2465,7 +2453,7 @@ mod preparation {
         #[test]
         fn every_opaque_effect_error_keeps_original_allocation_and_exact_completed_catalog_prefix()
         {
-            for index in [0, 1, 3, 4, 6, 7, 9, 10, 19] {
+            for index in [0, 1, 3, 4, 6, 7, 9, 10, 18] {
                 let (source, raw, mut host, mut decoder) = fixture();
                 let identity = Rc::new(());
                 let allocation = Box::new(99);

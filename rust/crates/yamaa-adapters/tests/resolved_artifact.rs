@@ -46,7 +46,7 @@ impl Drop for Study {
 }
 
 const PRODUCER: &str = "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\ninput: {RAW: {path: input/raw.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: output/produced.csv, relative_to: entry, columns: [ID]}\n";
-const CONSUMER: &str = "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\noutput: {path: output/final.csv, relative_to: entry, columns: [ID], warning_log: output/warnings.csv, verification_log: output/checks.csv}\n";
+const CONSUMER: &str = "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\noutput: {path: output/final.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n";
 
 #[test]
 fn two_studies_and_their_schema_links_match_the_actual_direct_preparation() {
@@ -148,7 +148,7 @@ fn two_studies_and_their_schema_links_match_the_actual_direct_preparation() {
 fn selector_only_overrides_and_atomic_output_keep_original_paths_and_selected_roots() {
     let study = Study::new();
     study.write("shared/base.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: {path: ../data/raw.csv, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Original, derivation: RAW.ID}]\noutput: {path: ../data/base.csv, columns: [ID]}\n");
-    study.write("study/spec.yaml", "schema_version: '1.0'\nparent: ../shared/base.yaml\ninput: {RAW: {relative_to: entry}}\ncolumns: [{name: ID, label: Override}]\noutput: {path: ../result/final.csv, columns: [ID], relative_to: entry, warning_log: ../result/warnings.csv, verification_log: ../result/checks.csv}\n");
+    study.write("study/spec.yaml", "schema_version: '1.0'\nparent: ../shared/base.yaml\ninput: {RAW: {relative_to: entry}}\ncolumns: [{name: ID, label: Override}]\noutput: {path: ../result/final.csv, columns: [ID], relative_to: entry, report: ../result/report.csv}\n");
     let artifact = study.resolve("study/spec.yaml");
     let entry = &artifact.entries()[0];
     let input = entry
@@ -173,11 +173,7 @@ fn selector_only_overrides_and_atomic_output_keep_original_paths_and_selected_ro
         entry.origins["/columns/0/type"].declaring_source,
         Some(study.path("shared/base.yaml"))
     );
-    for role in [
-        ResourceRole::OutputData,
-        ResourceRole::WarningLog,
-        ResourceRole::VerificationLog,
-    ] {
+    for role in [ResourceRole::OutputData, ResourceRole::Report] {
         let resource = entry
             .resources
             .iter()

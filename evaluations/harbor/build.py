@@ -238,8 +238,8 @@ def output_specs(benchmark: Path) -> list[dict]:
         name = Path(output.get("path") or "").name
         if not name or name in seen or not (benchmark / "expected" / name).is_file():
             continue
-        if output.get("warning_log") or output.get("verification_log"):
-            raise BuildError(f"{benchmark.name}: log outputs are not graded yet")
+        if output.get("report"):
+            raise BuildError(f"{benchmark.name}: run report files are not graded yet")
         seen.add(name)
         specs.append(spec)
     if not specs:

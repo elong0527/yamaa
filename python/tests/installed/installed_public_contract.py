@@ -197,8 +197,10 @@ class PublicContract(unittest.TestCase):
         for result in (first, second):
             self.assertTrue(self.issues(result).is_empty())
             self.assertEqual(result.output["VALUE"].to_list(), VALUES)
-            self.assertIsNone(result.verification_log)
-            self.assertIsNone(result.warning_log)
+            self.assertEqual(
+                result.report["KIND"].to_list(),
+                ["run", "input", "rows", "column", "column"],
+            )
             for name in tuple(TRUTH["owned_view_names"]):
                 with self.subTest(name=name), self.assertRaises(AttributeError):
                     setattr(result, name, None)
@@ -240,7 +242,7 @@ class PublicContract(unittest.TestCase):
             b'ID,VALUE,EMPTY\na,a\x00b,""\nb,\xc3\xa9,""\nc,,""\n',
         )
 
-    def test_failed_verification_retains_owned_diagnostic_log(self):
+    def test_failed_verification_retains_the_owned_run_report(self):
         self.spec.write_text(
             SPEC.replace(
                 TRUTH["integer_column_yaml"],
@@ -255,13 +257,12 @@ class PublicContract(unittest.TestCase):
             )
             .replace(
                 "columns: [ID, VALUE]}",
-                TRUTH["log_output_yaml"],
+                TRUTH["report_output_yaml"],
             ),
             encoding="utf-8",
         )
         (self.root / "input.csv").write_bytes(b"ID,VALUE\na,-3\nb,7\nc,\n")
-        for name in ("output.csv", "warnings.csv"):
-            (self.root / name).write_bytes(b"sentinel")
+        (self.root / "output.csv").write_bytes(b"sentinel")
         result = yamaa.domain(self.spec)
         issues = self.issues(result).to_dicts()
         self.assertEqual(len(issues), 1)
@@ -274,17 +275,22 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(record.spec_paths, issues[0]["spec_paths"])
         self.assertEqual(record.context, json.loads(issues[0]["context"]))
         self.assertIsNone(result.output)
-        # REQ-0396 builds the warning artifact only for successful runs;
-        # REQ-1177 retains the evaluated diagnostic prefix on failure.
-        self.assertIsNone(result.warning_log)
-        view = result.verification_log
-        self.assertEqual(view["VERIFICATION_ID"].to_list(), ["warn", "fatal"])
-        self.assertEqual(view["OUTCOME"].to_list(), ["violated", "violated"])
-        self.assertEqual(view["EVALUATED_COUNT"].to_list(), [3, 3])
-        self.assertEqual(view["FAILURE_COUNT"].to_list(), [1, 1])
-        self.assertEqual(view["REQUIREMENT"].to_list(), ["REQ-0377", "REQ-0377"])
+        # A failed run still reports its run and the checks it evaluated; the
+        # dataset check it never reached has no row.
+        view = result.report
+        self.assertEqual(
+            view["KIND"].to_list(), ["run", "input", "rows", "check", "check"]
+        )
+        self.assertEqual(view["OUTCOME"][0], "failed")
+        self.assertEqual(view["CONDITION"][0], "range_failed")
+        checks = view.filter(pl.col("KIND") == "check")
+        self.assertEqual(checks["ID"].to_list(), ["warn", "fatal"])
+        self.assertEqual(checks["OUTCOME"].to_list(), ["violated", "violated"])
+        self.assertEqual(checks["TOTAL"].to_list(), [3, 3])
+        self.assertEqual(checks["COUNT"].to_list(), [1, 1])
+        self.assertEqual(checks["RULE"].to_list(), ["REQ-0377", "REQ-0377"])
         truth = view.to_dicts()
-        view[0, "REPORT_VERSION"] = "changed"
+        view[0, "ARTIFACT"] = "changed"
         self.spec.unlink()
         (self.root / "input.csv").unlink()
         gc.collect()
@@ -293,12 +299,11 @@ class PublicContract(unittest.TestCase):
                 result.save()
             self.assertEqual(result.issues.to_dicts(), issues)
             self.assertEqual(result.diagnostics, [record])
-            self.assertEqual(result.verification_log.to_dicts(), truth)
+            self.assertEqual(result.report.to_dicts(), truth)
             self.assertEqual((self.root / "output.csv").read_bytes(), b"sentinel")
-            self.assertEqual((self.root / "warnings.csv").read_bytes(), b"sentinel")
-            lines = (self.root / "checks.csv").read_bytes().splitlines()
-            self.assertEqual(len(lines), 3)
-        held = result.verification_log
+            lines = (self.root / "report.csv").read_bytes().splitlines()
+            self.assertEqual(len(lines), 6)
+        held = result.report
         del result
         gc.collect()
         self.assertEqual(held.to_dicts(), truth)

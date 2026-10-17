@@ -34,8 +34,8 @@
 #' @param specification One domain-specification path.
 #' @param environment Optional study environment path for functions and codelists.
 #' @param resolver Optional host resource resolver.
-#' @return An owned result with output, issues, diagnostics, declared logs and a
-#'   save method. `issues` is the data-frame projection of the same retained
+#' @return An owned result with output, issues, diagnostics, the run report and
+#'   a save method. `issues` is the data-frame projection of the same retained
 #'   diagnostics that `diagnostics` returns as named records.
 #' @export
 yamaa_domain <- function(specification, environment = NULL, resolver = NULL) {
@@ -62,13 +62,9 @@ yamaa_domain <- function(specification, environment = NULL, resolver = NULL) {
     if (!missing(value)) stop("output_arrow is read only", call. = FALSE)
     .domain_arrow(h, 0L)
   }}), result)
-  makeActiveBinding("verification_log_arrow", local({ h <- handle; function(value) {
-    if (!missing(value)) stop("verification_log_arrow is read only", call. = FALSE)
+  makeActiveBinding("report_arrow", local({ h <- handle; function(value) {
+    if (!missing(value)) stop("report_arrow is read only", call. = FALSE)
     .domain_arrow(h, 1L)
-  }}), result)
-  makeActiveBinding("warning_log_arrow", local({ h <- handle; function(value) {
-    if (!missing(value)) stop("warning_log_arrow is read only", call. = FALSE)
-    .domain_arrow(h, 2L)
   }}), result)
   makeActiveBinding("issues", local({ h <- handle; function(value) {
     if (!missing(value)) stop("issues are read only", call. = FALSE)
@@ -78,13 +74,9 @@ yamaa_domain <- function(specification, environment = NULL, resolver = NULL) {
     if (!missing(value)) stop("diagnostics are read only", call. = FALSE)
     .domain_reply(.native_domain_diagnostics(h))
   }}), result)
-  makeActiveBinding("verification_log", local({ h <- handle; function(value) {
-    if (!missing(value)) stop("verification_log is read only", call. = FALSE)
-    .domain_reply(.native_domain_log(h, FALSE))
-  }}), result)
-  makeActiveBinding("warning_log", local({ h <- handle; function(value) {
-    if (!missing(value)) stop("warning_log is read only", call. = FALSE)
-    .domain_reply(.native_domain_log(h, TRUE))
+  makeActiveBinding("report", local({ h <- handle; function(value) {
+    if (!missing(value)) stop("report is read only", call. = FALSE)
+    .domain_reply(.native_domain_report(h))
   }}), result)
   result$save <- local({ h <- handle; function() {
     if (!is.null(resolver)) on.exit(resolver$raise_pending())

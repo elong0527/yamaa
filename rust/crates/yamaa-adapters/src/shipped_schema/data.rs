@@ -82,7 +82,7 @@ output_class:
     - relative_to:
         type: path_base
         default: declaring
-        description: Base for the primary artifact and its warning and verification logs (FILE-2).
+        description: Base for the primary artifact and the run report file (FILE-2).
     - decimals:
         type: int
         required: false
@@ -91,14 +91,10 @@ output_class:
         type: "list[identifier]"
         required: true
         description: Declared columns selected for the artifact, in artifact order (OUTPUT-1).
-    - warning_log:
+    - report:
         type: path
         required: false
-        description: Sidecar dataset recording warning-level verification violations; the verification rules fix its schema (OUTPUT-10).
-    - verification_log:
-        type: path
-        required: false
-        description: Sidecar dataset recording the outcome of every declared verification; the verification rules fix its schema (OUTPUT-10).
+        description: File the run report is written to, its extension selecting its profile; required when any verification is a warning (CHECK-22).
     - order_by:
         type: "list[order_by_term]"
         required: false

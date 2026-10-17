@@ -117,8 +117,7 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     built <- yamaa_domain(file.path(case, specification),
       environment=if(is.null(environment)) NULL else file.path(case, environment))
     issues <- issue_rows(built$issues)
-    tables <- list(output=public_table(built$output), verification_log=public_table(built$verification_log),
-      warning_log=public_table(built$warning_log))
+    tables <- list(output=public_table(built$output), report=public_table(built$report))
     saved <- if(length(issues)) FALSE else built$save()
     issues <- issue_rows(built$issues)
     list(specification=specification, environment=environment, issues=issues, tables=tables, saved=saved)

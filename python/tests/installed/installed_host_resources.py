@@ -237,7 +237,7 @@ class HostResources(unittest.TestCase):
     def test_partial_publication_preserves_order_and_failed_stage_cleanup(self):
         spec = SPEC.replace(
             b"path: out.csv",
-            b"path: out.csv, verification_log: checks.parquet, warning_log: warnings.parquet",
+            b"path: out.csv, report: report.parquet",
         )
         backend = MemoryResolver({"spec.yaml": spec, "raw.csv": b"ID\n7\n"})
         commits = []
@@ -253,9 +253,7 @@ class HostResources(unittest.TestCase):
 
         result = domain("spec.yaml", resolver=ResourceResolver(callback))
         self.assertFalse(result.save())
-        self.assertEqual(
-            commits, ["memory:/checks.parquet", "memory:/warnings.parquet"]
-        )
+        self.assertEqual(commits, ["memory:/report.parquet"])
         self.assertNotIn("memory:/out.csv", backend.outputs)
         self.assertEqual(backend.staging, {})
 

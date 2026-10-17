@@ -3695,9 +3695,9 @@
       },
       "entry_relative": {
         "shared": {
-          "ordinary.yaml": "schema_version: '1.0'\ndomain: DIRECT\nkeys: [ID]\ninput: {RAW: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], warning_log: output/warnings.csv, verification_log: output/verifications.csv}\n",
+          "ordinary.yaml": "schema_version: '1.0'\ndomain: DIRECT\nkeys: [ID]\ninput: {RAW: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n",
           "producer.yaml": "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\ninput: {RAW: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: output/produced.csv, relative_to: entry, columns: [ID]}\n",
-          "consumer.yaml": "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], warning_log: output/warnings.csv, verification_log: output/verifications.csv}\n"
+          "consumer.yaml": "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n"
         },
         "studies": {
           "first": "ID\n1\n",
@@ -3790,17 +3790,23 @@
         }
       }
     },
-    "verification-logs": {
+    "run-report": {
       "artifact_names": [
         "adsl-checks.csv",
-        "adsl-warnings.csv",
         "adsl.csv"
       ],
       "case_name": "schema-verification-log",
-      "evaluated_counts": [
+      "check_totals": [
         "3",
         "3",
         "1"
+      ],
+      "fatal_kinds": [
+        "run",
+        "input",
+        "rows",
+        "check",
+        "check"
       ],
       "fatal_outcomes": [
         "held",
@@ -3998,8 +4004,7 @@
         "output",
         "issues",
         "diagnostics",
-        "verification_log",
-        "warning_log"
+        "report"
       ],
       "diagnostic_record_names": [
         "phase",
@@ -4016,7 +4021,7 @@
         "standard",
         "created"
       ],
-      "log_output_yaml": "columns: [ID, VALUE], verification_log: checks.csv, warning_log: warnings.csv}",
+      "report_output_yaml": "columns: [ID, VALUE], report: report.csv}",
       "empty_text_column": "  - {name: EMPTY, type: str, derivation: {literal: ''}}\noutput: {",
       "unreached_row_count_yaml": "verifications:\n  - row_count: {min: 0, id: unreached}\noutput: {",
       "integer_column_yaml": "  - {name: VALUE, type: int, derivation: SRC.VALUE}",

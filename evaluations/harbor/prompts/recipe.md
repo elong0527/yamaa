@@ -24,8 +24,8 @@ golden files.
   prompt.
 - **What is graded.** Every golden dataset the benchmark's specifications
   write, several for domains built together (DM and SUPPDM). A benchmark
-  whose golden is a warning or violation log (`adam-adsl-age-quality`) is
-  not built yet. A generated document (`define.xml`) is not graded; only
+  whose golden includes a run report file (`adam-adsl-age-quality`) is not
+  built yet. A generated document (`define.xml`) is not graded; only
   its datasets are. A project function (`environment.yaml`) is the
   agent's to compute: state what the value is, as for any other column.
 - **Where.** `evaluations/harbor/prompts/<name>/full.md`, beside the

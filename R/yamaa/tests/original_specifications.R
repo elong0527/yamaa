@@ -118,8 +118,10 @@ for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"
   }
   stopifnot(identical(observed,unsaved))
   check_issue_frame(built$issues,issue_frame_truth[[case_name]])
-  stopifnot(is.null(built$verification_log),is.null(built$warning_log))
   expected <- public_output_truth[[case_name]]
+  # Every case here compiles (its observations exist), so it has a run report.
+  stopifnot(is.data.frame(built$report),identical(built$report$KIND[[1L]],"run"),
+    identical(built$report$OUTCOME[[1L]],if(is.null(expected)) "failed" else "succeeded"))
   if(is.null(expected)) {
     stopifnot(is.null(built$output),inherits(tryCatch(built$save(),error=identity),"yamaa_domain_error"))
     stopifnot(identical(rawToChar(domain_observations(built)),unsaved))

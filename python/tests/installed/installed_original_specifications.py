@@ -1811,8 +1811,13 @@ columns:
                         "context": pl.String,
                     },
                 )
-                self.assertIsNone(result.verification_log)
-                self.assertIsNone(result.warning_log)
+                # Every executed build reports its run, success or failure.
+                report = result.report
+                self.assertEqual(report["KIND"][0], "run")
+                self.assertEqual(
+                    report["OUTCOME"][0],
+                    "succeeded" if expected["artifacts"] else "failed",
+                )
                 if not expected["artifacts"]:
                     self.assertIsNone(result.output)
                     with self.assertRaises(yamaa.DomainError):

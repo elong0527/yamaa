@@ -70,12 +70,13 @@ impl Domain {
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
         crate::report_fields::issue_rows(py, &guard.report().diagnostics)
     }
-    fn log(&self, warning: bool) -> PyResult<Option<crate::arrow_bridge::ArrowTable>> {
+    /// The run report every executed build holds, success or failure.
+    fn report(&self) -> PyResult<Option<crate::arrow_bridge::ArrowTable>> {
         Ok(self
             .inner
             .try_lock()
             .map_err(|_| poisoned())?
-            .log(warning)
+            .run_report()
             .map(crate::arrow_bridge::ArrowTable::from))
     }
     fn save(&self) -> PyResult<bool> {

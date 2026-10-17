@@ -92,7 +92,7 @@ impl fmt::Display for Number {
     }
 }
 
-/// Structured context shared by diagnostics and retained verification logs.
+/// Structured context shared by diagnostics and the retained run report.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum Value {
     #[default]

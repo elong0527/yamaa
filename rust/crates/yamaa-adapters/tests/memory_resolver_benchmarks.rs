@@ -717,7 +717,15 @@ fn odm_datasets(case: &Path, files: &[(String, PathBuf)]) -> std::collections::B
 /// always carry identical content or the capture fails as `Changed`).
 /// Frame construction failures are reported, not hidden: the affected
 /// input keeps its byte reply so the run can proceed and be classified.
-fn backend_for(case: &Path) -> (Arc<MemoryResolver>, BTreeMap<String, String>) {
+/// The memory resolver for one case, the inputs that could not become
+/// frames, and the input paths served as frames.
+fn backend_for(
+    case: &Path,
+) -> (
+    Arc<MemoryResolver>,
+    BTreeMap<String, String>,
+    std::collections::BTreeSet<String>,
+) {
     let backend = Arc::new(MemoryResolver::default());
     let files = case_files(case);
     let identities = spec_identities(&files);
@@ -746,6 +754,7 @@ fn backend_for(case: &Path) -> (Arc<MemoryResolver>, BTreeMap<String, String>) {
         }
     }
     let mut frame_failures = BTreeMap::new();
+    let mut served = std::collections::BTreeSet::new();
     for (name, info) in &sources {
         if info.schema.is_some() || info.path.is_empty() || odm.contains(name) {
             continue;
@@ -778,13 +787,68 @@ fn backend_for(case: &Path) -> (Arc<MemoryResolver>, BTreeMap<String, String>) {
                         backend.insert_frame(declaring, &spelling, &reference, Arc::clone(&frame));
                     }
                 }
+                served.insert(info.path.clone());
             }
             Err(error) => {
                 frame_failures.insert(info.path.clone(), error);
             }
         }
     }
-    (backend, frame_failures)
+    (backend, frame_failures, served)
+}
+
+/// A host table is not a file: an input served as a frame reports no file
+/// byte length. Rewrite the expected report's `bytes` for those inputs to the
+/// `null` the frame route reports; every other cell is compared unchanged.
+fn frame_report_text(text: &str, served: &std::collections::BTreeSet<String>) -> String {
+    let mut text = text.to_owned();
+    for (quote, path) in served
+        .iter()
+        .flat_map(|path| [("\"\"", path), ("\"", path)])
+    {
+        let suffix = format!(",{quote}path{quote}:{quote}{path}{quote}");
+        let marker = format!("{quote}bytes{quote}:");
+        let mut rewritten = String::new();
+        let mut rest = text.as_str();
+        while let Some(start) = rest.find(&marker) {
+            let digits_start = start + marker.len();
+            let digits = rest[digits_start..]
+                .bytes()
+                .take_while(u8::is_ascii_digit)
+                .count();
+            let end = digits_start + digits;
+            if digits > 0 && rest[end..].starts_with(&suffix) {
+                rewritten.push_str(&rest[..digits_start]);
+                rewritten.push_str("null");
+            } else {
+                rewritten.push_str(&rest[..end]);
+            }
+            rest = &rest[end..];
+        }
+        rewritten.push_str(rest);
+        text = rewritten;
+    }
+    text
+}
+
+impl TypedTable {
+    /// Apply [`frame_report_text`] to the scalar-encoded DETAILS cells.
+    fn frame_inputs(&mut self, served: &std::collections::BTreeSet<String>) {
+        let Some(details) = self.columns.iter().position(|(name, _)| name == "DETAILS") else {
+            return;
+        };
+        for row in &mut self.rows {
+            let Some(Some(cell)) = row.get_mut(details) else {
+                continue;
+            };
+            let bytes = (0..cell.len())
+                .step_by(2)
+                .map(|index| u8::from_str_radix(&cell[index..index + 2], 16).unwrap())
+                .collect::<Vec<_>>();
+            let text = frame_report_text(&String::from_utf8(bytes).unwrap(), served);
+            *cell = text.bytes().map(|byte| format!("{byte:02x}")).collect();
+        }
+    }
 }
 
 /// A built entry. Every route this harness admits is the plain route.
@@ -799,12 +863,12 @@ impl Built {
         self.0.output_table().is_some()
     }
 
-    /// The host tables as Arrow IPC bytes, one per declared slot.
+    /// The host tables as Arrow IPC bytes: the output when the build has
+    /// one, and the run report every build holds.
     fn table_ipc(&self, slot: &str) -> Option<&[u8]> {
         match slot {
             "output" => self.0.output(),
-            "verification_log" => self.0.verification_log(),
-            "warning_log" => self.0.warning_log(),
+            "report" => Some(self.0.run_report()),
             _ => None,
         }
     }
@@ -935,8 +999,7 @@ fn conformance_exclusion(case: &Path) -> Option<String> {
 
 struct OutputDecl {
     path: Option<String>,
-    verification_log: Option<String>,
-    warning_log: Option<String>,
+    report: Option<String>,
     decimals: Option<u32>,
 }
 
@@ -963,8 +1026,7 @@ fn declarations_for(
         let mut types = BTreeMap::new();
         let mut output = OutputDecl {
             path: None,
-            verification_log: None,
-            warning_log: None,
+            report: None,
             decimals: None,
         };
         if let Some(parent) = doc.get("parent").and_then(Sj::as_str) {
@@ -977,11 +1039,8 @@ fn declarations_for(
             if inherited_output.path.is_some() {
                 output.path = inherited_output.path;
             }
-            if inherited_output.verification_log.is_some() {
-                output.verification_log = inherited_output.verification_log;
-            }
-            if inherited_output.warning_log.is_some() {
-                output.warning_log = inherited_output.warning_log;
+            if inherited_output.report.is_some() {
+                output.report = inherited_output.report;
             }
             if inherited_output.decimals.is_some() {
                 output.decimals = inherited_output.decimals;
@@ -1002,11 +1061,8 @@ fn declarations_for(
             if let Some(value) = text("path") {
                 output.path = Some(value);
             }
-            if let Some(value) = text("verification_log") {
-                output.verification_log = Some(value);
-            }
-            if let Some(value) = text("warning_log") {
-                output.warning_log = Some(value);
+            if let Some(value) = text("report") {
+                output.report = Some(value);
             }
             if let Some(Sj::Number(number)) = out.get("decimals") {
                 output.decimals = number.as_u64().map(|value| value as u32);
@@ -1658,7 +1714,7 @@ fn parquet_column_names(_bytes: &[u8]) -> Result<Vec<String>, String> {
 
 /// The kinds the runner assigns a log artifact's columns: integers for
 /// the two count columns, text for everything else.
-fn log_types(case: &Path, truth_name: &str) -> Result<BTreeMap<String, String>, String> {
+fn report_types(case: &Path, truth_name: &str) -> Result<BTreeMap<String, String>, String> {
     let truth = case.join("expected").join(truth_name);
     let names: Vec<String> = if truth_name.ends_with(".parquet") {
         let bytes = fs::read(&truth).map_err(|error| format!("{truth_name}: {error}"))?;
@@ -1668,7 +1724,7 @@ fn log_types(case: &Path, truth_name: &str) -> Result<BTreeMap<String, String>, 
         let text = std::str::from_utf8(&bytes).map_err(|error| format!("not UTF-8: {error}"))?;
         csv_cells(text)
             .first()
-            .ok_or_else(|| "empty log CSV".to_string())?
+            .ok_or_else(|| "empty report CSV".to_string())?
             .iter()
             .map(|cell| cell.clone().unwrap_or_default())
             .collect()
@@ -1676,7 +1732,7 @@ fn log_types(case: &Path, truth_name: &str) -> Result<BTreeMap<String, String>, 
     Ok(names
         .into_iter()
         .map(|name| {
-            let kind = if name == "EVALUATED_COUNT" || name == "FAILURE_COUNT" {
+            let kind = if name == "COUNT" || name == "TOTAL" {
                 "int"
             } else {
                 "str"
@@ -1893,6 +1949,7 @@ fn check_positive(
     name: &str,
     case: &Path,
     backend: &Arc<MemoryResolver>,
+    served: &std::collections::BTreeSet<String>,
     runs: Vec<EntryRun>,
     findings: &mut Vec<String>,
 ) {
@@ -1920,10 +1977,9 @@ fn check_positive(
                 continue;
             }
         };
-        let host_ipc: [Option<Vec<u8>>; 3] = [
+        let host_ipc: [Option<Vec<u8>>; 2] = [
             built.table_ipc("output").map(<[u8]>::to_vec),
-            built.table_ipc("verification_log").map(<[u8]>::to_vec),
-            built.table_ipc("warning_log").map(<[u8]>::to_vec),
+            built.table_ipc("report").map(<[u8]>::to_vec),
         ];
         let issues = built.issues();
         if !issues.is_empty() {
@@ -1932,10 +1988,7 @@ fn check_positive(
                 issues.len(),
                 brief_issue(&issues[0])
             ));
-            for declared in [&output.path, &output.verification_log, &output.warning_log]
-                .into_iter()
-                .flatten()
-            {
+            for declared in [&output.path, &output.report].into_iter().flatten() {
                 compared.insert(basename(declared));
             }
             continue;
@@ -1945,12 +1998,13 @@ fn check_positive(
         }
         let slots = [
             ("output", &output.path, &host_ipc[0]),
-            ("verification_log", &output.verification_log, &host_ipc[1]),
-            ("warning_log", &output.warning_log, &host_ipc[2]),
+            ("report", &output.report, &host_ipc[1]),
         ];
         for (slot, declared, host) in &slots {
+            // Every build holds its run report; only a declared file has an
+            // independent expected artifact to compare.
             let Some(declared) = declared else {
-                if host.is_some() {
+                if *slot == "output" && host.is_some() {
                     findings.push(format!(
                         "{name}: entry {spec} produced an undeclared {slot} table"
                     ));
@@ -1966,7 +2020,11 @@ fn check_positive(
                 ));
                 continue;
             }
-            let truth_bytes = fs::read(&truth_path).unwrap();
+            let mut truth_bytes = fs::read(&truth_path).unwrap();
+            if *slot == "report" && artifact.ends_with(".csv") {
+                truth_bytes = frame_report_text(std::str::from_utf8(&truth_bytes).unwrap(), served)
+                    .into_bytes();
+            }
             // An entry below the case root saves beside its own file.
             let target = normalize(&spec, declared);
             let published = backend.published(&format!("memory:/{target}"));
@@ -1985,10 +2043,10 @@ fn check_positive(
             let slot_types = if *slot == "output" {
                 types.clone()
             } else {
-                match log_types(case, &artifact) {
+                match report_types(case, &artifact) {
                     Ok(map) => map,
                     Err(error) => {
-                        findings.push(format!("{name}: log types for {artifact}: {error}"));
+                        findings.push(format!("{name}: report types for {artifact}: {error}"));
                         continue;
                     }
                 }
@@ -2024,7 +2082,15 @@ fn check_positive(
                         }
                         (_, None) => {}
                     }
-                    let expected_typed = typed_from_parquet(&truth_bytes, &slot_types);
+                    let frame = |table: Result<TypedTable, String>| {
+                        table.map(|mut table| {
+                            if *slot == "report" {
+                                table.frame_inputs(served);
+                            }
+                            table
+                        })
+                    };
+                    let expected_typed = frame(typed_from_parquet(&truth_bytes, &slot_types));
                     let actual_typed = published
                         .as_deref()
                         .map(|bytes| typed_from_parquet(bytes, &slot_types));
@@ -2049,7 +2115,8 @@ fn check_positive(
                     if let Some(ipc) = host {
                         match typed_from_ipc(ipc, None) {
                             Ok(actual) => {
-                                if let Ok(expected) = typed_from_parquet(&truth_bytes, &slot_types)
+                                if let Ok(expected) =
+                                    frame(typed_from_parquet(&truth_bytes, &slot_types))
                                 {
                                     if actual != expected {
                                         findings.push(format!(
@@ -2160,7 +2227,7 @@ fn check_case(name: &str, case: &Path) -> CaseOutcome {
         ));
         return CaseOutcome::Findings(findings);
     }
-    let (backend, frame_failures) = backend_for(case);
+    let (backend, frame_failures, served) = backend_for(case);
     for (path, error) in &frame_failures {
         findings.push(format!(
             "{name}: input {path} could not be built as an in-memory frame: {error}"
@@ -2189,7 +2256,7 @@ fn check_case(name: &str, case: &Path) -> CaseOutcome {
     }
     match expected {
         Some(want) => check_negative(name, &sj(&want), runs, &mut findings),
-        None => check_positive(name, case, &backend, runs, &mut findings),
+        None => check_positive(name, case, &backend, &served, runs, &mut findings),
     }
     if findings.is_empty() {
         CaseOutcome::Pass
@@ -2209,10 +2276,7 @@ fn offer_saved(
     let Ok((_, output)) = declarations_for(case, &call.specification) else {
         return;
     };
-    for declared in [&output.path, &output.verification_log, &output.warning_log]
-        .into_iter()
-        .flatten()
-    {
+    for declared in [&output.path, &output.report].into_iter().flatten() {
         let target = normalize(&call.specification, declared);
         let Some(bytes) = backend.published(&format!("memory:/{target}")) else {
             continue;
