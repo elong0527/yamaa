@@ -235,6 +235,11 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> String {
     {
         return capture_response(decoder_limit(limit, "capture"));
     }
+    if let Error::Dependencies(error) = error {
+        if let Ok(outcome) = crate::schema_outcomes::inheritance_dependencies(error.clone()) {
+            return capture_response(outcome);
+        }
+    }
     let resource = match error {
         Error::Normalize(error) => crate::schema_outcomes::normalization(error.clone()).ok(),
         Error::Validation(error) => crate::schema_outcomes::validation(*error).ok(),
@@ -271,6 +276,7 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> String {
         Error::Decode { .. } => "yaml_decode",
         Error::Bundle(_) => "schema_bundle",
         Error::Normalize(_) => "normalization",
+        Error::Dependencies(_) => "dependencies",
         Error::Validation(_) => "validation_policy",
         Error::Findings(_) => unreachable!("handled captured findings"),
         Error::InheritanceRequired => "inheritance_required",

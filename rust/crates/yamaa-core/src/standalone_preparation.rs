@@ -2,10 +2,29 @@
 //!
 //! Physical decoding and occurrence locations remain codec authority. This service
 //! neither captures sources nor grants data, function, path or publication authority.
+use crate::diagnostic::ConditionCode;
 use crate::schema::{
-    Document, ExpandedWindows, NormalizationError, NormalizedDocument, SchemaDiagnostic,
-    SchemaOrigin, SchemaStructure, SpecificationDocument, ValidationError, WindowReference,
+    Document, DocumentNode, ExpandedWindows, InheritanceDependencyError, NormalizationError,
+    NormalizedDocument, SchemaContext, SchemaDiagnostic, SchemaOrigin, SchemaSource,
+    SchemaStructure, SpecificationDocument, ValidationError, WindowReference,
 };
+
+/// Map each origin through the previous pass's origin list, mirroring
+/// `LayerNodeOrigin::through`: input origins resolve to the earlier arena,
+/// schema-default origins are retained as authored.
+fn through(origins: &[SchemaOrigin], prior: &[SchemaOrigin]) -> Vec<SchemaOrigin> {
+    origins
+        .iter()
+        .map(|&origin| match origin.source {
+            SchemaSource::Input => {
+                let mut mapped = prior[origin.node];
+                mapped.generated |= origin.generated;
+                mapped
+            }
+            SchemaSource::Default { .. } => origin,
+        })
+        .collect()
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -13,6 +32,8 @@ pub enum Error {
     InheritanceRequired,
     #[error("standalone preparation normalize: {0:?}")]
     Normalize(Box<FailureContext>),
+    #[error("standalone preparation dependencies: {0:?}")]
+    Dependencies(Box<DependencyFailureContext>),
     #[error("standalone preparation validation: {0:?}")]
     Validation(ValidationError),
     /// Final model findings have no document-value references.
@@ -30,6 +51,29 @@ pub struct FailureContext {
 fn normalization_failure(error: NormalizationError, input: Document) -> Error {
     let input = matches!(&error, NormalizationError::Invalid(_)).then_some(input);
     Error::Normalize(Box::new(FailureContext { error, input }))
+}
+
+/// The pruning pass retains its input arena only for authored semantic findings,
+/// mirroring the inheritance lifecycle's dependency failure context.
+#[derive(Debug)]
+pub struct DependencyFailureContext {
+    pub error: InheritanceDependencyError,
+    pub input: Option<Document>,
+}
+fn dependency_failure(error: InheritanceDependencyError, input: Document) -> Error {
+    use crate::schema::InheritanceReferenceError;
+    let retained = matches!(
+        &error,
+        InheritanceDependencyError::Normalization(NormalizationError::Invalid(_))
+            | InheritanceDependencyError::Reference(InheritanceReferenceError::Normalization(
+                NormalizationError::Invalid(_)
+            ))
+    )
+    .then_some(input);
+    Error::Dependencies(Box::new(DependencyFailureContext {
+        error,
+        input: retained,
+    }))
 }
 
 /// Retain the original raw allocation and every final occurrence's origin.
@@ -83,9 +127,16 @@ fn expand(
     Ok((expanded, origins))
 }
 
-/// Parent presence (including null) precedes normalization. Normalization, strict
-/// window expansion and model admission preserve the source provenance.
+/// Parent presence (including null) precedes normalization. Normalization,
+/// pruning and strict window expansion preserve the source provenance.
 /// No study data is read during preparation.
+///
+/// A specification without `parents` is a composition of one layer (REQ-0614):
+/// after normalization it is pruned on the same terms as a composed
+/// specification (REQ-0638–REQ-0641), so a dead declaration's unresolved
+/// reference is discarded with it and semantic validation runs on the pruned
+/// document. Declaration order remains the resolved order (REQ-0060); the
+/// pruning pass does not reorder columns.
 pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStandalone, Error> {
     if raw.field(raw.root(), "parents").is_some() {
         return Err(Error::InheritanceRequired);
@@ -94,16 +145,135 @@ pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStanda
         Ok(normalized) => normalized,
         Err(error) => return Err(normalization_failure(error, raw)),
     };
-    let (expanded, origins) = expand(schema, normalized)?;
+    // A specification without `parents` is a composition of one layer
+    // (REQ-0614), so it admits the same repeated-identifier findings as any
+    // other layer (REQ-0659) before pruning can discard a duplicated
+    // declaration and hide the repetition.
+    let repeated = repeated_identifier_findings(schema, &normalized.document);
+    if !repeated.is_empty() {
+        return Err(normalization_failure(
+            NormalizationError::Invalid(repeated),
+            normalized.document,
+        ));
+    }
+    let expanded = match schema.expand_named_windows(&normalized.document, false) {
+        Ok(expanded) => expanded,
+        Err(error) => return Err(normalization_failure(error, normalized.document)),
+    };
+    let expanded_origins = expanded
+        .origins
+        .iter()
+        .map(|&id| normalized.origins[id])
+        .collect::<Vec<_>>();
+    let expanded_references = expanded.references;
+    let pruned = match schema.prune_inheritance_dependencies(&expanded.document) {
+        Ok(pruned) => pruned,
+        Err(error) => return Err(dependency_failure(error, expanded.document)),
+    };
+    let pruned_origins = through(&pruned.origins, &expanded_origins);
+    let resolved = match schema.normalize_resolved_document(&pruned.document) {
+        Ok(resolved) => resolved,
+        Err(error) => return Err(normalization_failure(error, pruned.document)),
+    };
+    let resolved = NormalizedDocument {
+        document: resolved.document,
+        origins: through(&resolved.origins, &pruned_origins),
+    };
+    let (expanded, origins) = expand(schema, resolved)?;
     let model = SpecificationDocument::admit(expanded.document)
         .map_err(Error::Validation)?
         .map_err(Error::Model)?;
+    // The strict expansion runs on the pruned document, whose surviving
+    // window selections were already inlined by the non-strict expansion,
+    // so it records no references. Report the non-strict references whose
+    // declaring column or intermediate survived pruning instead.
+    let windows = surviving_references(&pruned.document, expanded_references);
     Ok(PreparedStandalone {
         raw,
         model,
         origins,
-        windows: expanded.references,
+        windows,
     })
+}
+
+/// Repeated identifiers inside one keyed collection (columns by name, rows
+/// and intermediates by id), in schema field order, mirroring the layer
+/// admission check (REQ-0659) a composed specification passes through.
+fn repeated_identifier_findings(
+    schema: &SchemaStructure,
+    document: &Document,
+) -> Vec<SchemaDiagnostic> {
+    let mut findings = Vec::new();
+    for field in &schema.root_class().fields {
+        let identity = match field.name.as_str() {
+            "columns" => "name",
+            "rows" | "intermediates" => "id",
+            _ => continue,
+        };
+        let Some(list) = document.field(document.root(), &field.name) else {
+            continue;
+        };
+        let DocumentNode::Sequence(items) = &document.nodes()[list] else {
+            continue;
+        };
+        let mut seen: Vec<&str> = Vec::new();
+        for &item in items {
+            let Some(id) = document.field(item, identity) else {
+                continue;
+            };
+            let DocumentNode::Text(name) = &document.nodes()[id] else {
+                continue;
+            };
+            if seen.contains(&name.as_str()) {
+                findings.push(SchemaDiagnostic {
+                    path: format!("{}.{name}.{identity}", field.name),
+                    code: ConditionCode::SchemaLayerIdentifierRepeated,
+                    context: vec![("identifier", SchemaContext::Text(name.clone()))],
+                });
+            } else {
+                seen.push(name);
+            }
+        }
+    }
+    findings
+}
+
+/// Keep the window references recorded before pruning whose declaring
+/// column or intermediate is still present in the pruned document.
+/// References outside `columns`/`intermediates` are kept as recorded.
+fn surviving_references(
+    pruned: &Document,
+    references: Vec<WindowReference>,
+) -> Vec<WindowReference> {
+    fn declared(document: &Document, field: &str, identity: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        if let Some(list) = document.field(document.root(), field) {
+            if let crate::schema::DocumentNode::Sequence(items) = &document.nodes()[list] {
+                for &item in items {
+                    if let Some(id) = document.field(item, identity) {
+                        if let crate::schema::DocumentNode::Text(name) = &document.nodes()[id] {
+                            names.push(name.clone());
+                        }
+                    }
+                }
+            }
+        }
+        names
+    }
+    let columns = declared(pruned, "columns", "name");
+    let intermediates = declared(pruned, "intermediates", "id");
+    references
+        .into_iter()
+        .filter(|reference| {
+            for (prefix, names) in [("columns.", &columns), ("intermediates.", &intermediates)] {
+                if let Some(rest) = reference.path.strip_prefix(prefix) {
+                    let name = rest.split('.').next().unwrap_or(rest);
+                    return names.iter().any(|candidate| candidate == name);
+                }
+            }
+            true
+        })
+        .collect()
 }
 
 #[cfg(test)]

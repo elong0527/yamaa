@@ -140,6 +140,9 @@ class ParquetOriginalOutput(unittest.TestCase):
 
     def test_parquet_semantic_failures_collect_in_source_order(self):
         aliases = tuple(TRUTH["input_aliases"])
+        # Every specification is pruned after composition: keep every input live
+        # through a row-phase default so ingest failures are still collected
+        # instead of pruned away with unused inputs.
         source = {
             "schema_version": "1.0",
             "domain": "TEST",
@@ -147,7 +150,15 @@ class ParquetOriginalOutput(unittest.TestCase):
             "input": {name: {"path": name + ".parquet"} for name in aliases},
             "keys": ["ID"],
             "columns": [
-                {"name": "ID", "type": "int", "derivation": {"compute": {"expr": "1"}}}
+                {
+                    "name": "ID",
+                    "type": "int",
+                    "derivation": {
+                        "first_available": {
+                            "sources": [f"{name}.ID" for name in aliases]
+                        }
+                    },
+                }
             ],
             "output": {"path": "output.csv", "columns": ["ID"]},
         }
@@ -249,9 +260,13 @@ class ParquetOriginalOutput(unittest.TestCase):
         self.assertFalse((self.root / "input").exists())
 
     def test_parquet_ingestion_failures_retain_exact_conditions_and_never_publish(self):
+        # Every specification is pruned after composition: keep the input live
+        # via base so the ingest failure is still exercised instead of being
+        # pruned away with an unused input.
         source = {
             "schema_version": "1.0",
             "domain": "TEST",
+            "base": "SRC",
             "input": {"SRC": {"path": "input.parquet"}},
             "keys": ["ID"],
             "columns": [
@@ -562,6 +577,22 @@ class PublicDomains(unittest.TestCase):
                 for path, content in case["inputs"].items():
                     (work / path).write_text(content, encoding="utf-8")
                 result = yamaa.domain(entry)
+                if variant == "unused":
+                    # Every specification is pruned after composition (REQ-0638,
+                    # REQ-0641): no column reads LOOK, so pruning discards the
+                    # intermediate together with its ill-typed filter and the
+                    # specification builds with no issues instead of refusing
+                    # the dead declaration.
+                    self.assertEqual(findings(result), [])
+                    self.assertIsNotNone(result.output)
+                    self.assertTrue(result.save())
+                    self.assertEqual(
+                        (work / "out.csv").read_bytes(), b"ID,V,V2\na,ok,ok\n"
+                    )
+                    for path in case["inputs"]:
+                        (work / path).unlink()
+                    self.assertEqual(findings(yamaa.check(entry)), [])
+                    continue
                 expected = case["findings"] if variant == "duplicate" else type_findings
                 self.assertEqual(findings(result), expected)
                 self.assertIsNone(result.output)

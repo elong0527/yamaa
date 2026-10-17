@@ -16,7 +16,9 @@ status: normative
 file**. The entry file and every file reached through `parents` are
 **layers**. A layer contributes the root fields and keyed declarations it
 writes. The **resolved specification** is the complete mapping produced from
-all contributions.
+all contributions. An entry file that declares no `parents` is a composition
+of one layer, itself, and is composed, pruned and validated on the same
+terms as a multi-layer composition.
 
 <a id="req-0615"></a>
 
@@ -289,8 +291,9 @@ retry the spelling from another directory under
 <a id="req-0638"></a>
 
 **REQ-0638.** After composition, the resolver removes declarations that cannot
-affect the artifact or a declared assertion. Definitions do not make themselves
-live. Reachability begins with:
+affect the artifact or a declared assertion. This pruning applies to every
+entry file, including one that declares no `parents`. Definitions do not
+make themselves live. Reachability begins with:
 
 - columns named by `output.columns`, `keys`, or `output.order_by`;
 - columns read by dataset verifications;
@@ -320,14 +323,15 @@ when no other declaration names its `id`.
 
 <a id="req-0641"></a>
 
-**REQ-0641.** An inherited declaration excluded from `output.columns` may remain
+**REQ-0641.** A declaration excluded from `output.columns` may remain
 as an internal column when a derivation or verification uses it. If no semantic
 path reaches it, it and the declarations used only by it are removed.
 Structural
 validation still applies to every written layer field, but semantic name and
 reference validation applies after pruning. An unresolved reference reachable
 from a semantic root fails; one contained only in a dead declaration is
-discarded with that declaration and is not an error.
+discarded with that declaration and is not an error. This applies whether or
+not the entry file declares `parents`.
 
 ### Deterministic column order
 

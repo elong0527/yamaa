@@ -1351,6 +1351,8 @@ mod preparation {
         fn success_moves_raw_arena_and_retains_complete_default_and_window_provenance() {
             let mut fields = basic_fields();
             fields.remove(1);
+            // Keys name both columns, so pruning (REQ-0638) keeps them live.
+            fields[2].1 = V::List(vec![V::text("Z"), V::text("A")]);
             fields.last_mut().unwrap().1 = V::List(vec![
                 column("Z", V::text("VISITS")),
                 column("A", V::text("VISITS")),
@@ -1365,6 +1367,7 @@ mod preparation {
             assert_eq!(prepared.raw(), &raw_expected);
             let mut expected = basic_fields();
             expected[1].1 = V::text("DEFAULT");
+            expected[3].1 = V::List(vec![V::text("Z"), V::text("A")]);
             expected.last_mut().unwrap().1 =
                 V::List(vec![column("Z", window()), column("A", window())]);
             let model = prepared.model().document();
@@ -1593,6 +1596,9 @@ mod preparation {
         fn strict_windows_preserve_complete_order_and_precede_model_findings() {
             let mut fields = basic_fields();
             fields[4].1 = V::map(vec![]);
+            // Keys name both columns, so pruning (REQ-0638) keeps them live
+            // and strict window expansion still reports their unknown windows.
+            fields[3].1 = V::List(vec![V::text("Z"), V::text("A")]);
             fields.last_mut().unwrap().1 = V::List(vec![
                 column("Z", V::text("SECOND")),
                 column("A", V::text("FIRST")),

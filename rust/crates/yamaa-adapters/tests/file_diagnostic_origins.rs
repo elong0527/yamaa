@@ -688,7 +688,11 @@ mod file {
                     "columns.ID.derivation.first_available.sources",
                 ),
                 ("group_keys", 64, 65, "rows[0].group_by"),
-                ("row_columns", 1024, 1025, "rows[0].derivations"),
+                // No row_columns case: after pruning (REQ-0638) a row's
+                // derivations survive only for live columns, and 1025 live
+                // columns refuse at the columns capacity first — a composed
+                // specification (parents: []) behaves identically, so the
+                // row_columns limit cannot be isolated here.
             ] {
                 let study = Study::new();
                 let mut body = String::from(VALID);
@@ -699,14 +703,38 @@ mod file {
                                 "  - {{name: C{i}, type: int, derivation: {{literal: 1}}}}\n"
                             ));
                         }
+                        // The generated columns must be live under pruning
+                        // (REQ-0638) for the resolved-column capacity to be
+                        // what the compiler refuses.
+                        let projected = (1..actual)
+                            .map(|i| format!("C{i}"))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        body = body.replace(
+                            "columns: [ID]}",
+                            &format!("columns: [ID, {projected}]}}"),
+                        );
                     }
                     "inputs" => {
                         let inputs = (0..actual)
                             .map(|i| format!("S{i}: input.csv"))
                             .collect::<Vec<_>>()
                             .join(", ");
+                        let sources = (0..actual)
+                            .map(|i| format!("S{i}.ID"))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        // Every declared input must be read, or pruning
+                        // (REQ-0638) discards it before the inputs capacity
+                        // is counted.
                         body = body
-                            .replace("input: {SRC: input.csv}", &format!("input: {{{inputs}}}"));
+                            .replace("input: {SRC: input.csv}", &format!("input: {{{inputs}}}"))
+                            .replace(
+                                "derivation: {source: SRC.ID}",
+                                &format!(
+                                    "derivation: {{first_available: {{sources: [{sources}]}}}}"
+                                ),
+                            );
                     }
                     "source_fields" => {
                         let fields = (0..actual)
@@ -736,13 +764,6 @@ mod file {
                     "group_keys" => body.push_str(&format!(
                         "rows:\n  - {{id: r, dataset: SRC, filter: 'ID >', group_by: [{}], derivations: {{ID: SRC.ID}}}}\n",
                         vec!["ID"; actual].join(", ")
-                    )),
-                    "row_columns" => body.push_str(&format!(
-                        "rows:\n  - {{id: r, dataset: SRC, filter: 'ID >', derivations: {{{}}}}}\n",
-                        (0..actual)
-                            .map(|i| format!("C{i}: SRC.ID"))
-                            .collect::<Vec<_>>()
-                            .join(", ")
                     )),
                     _ => unreachable!(),
                 }
@@ -1243,7 +1264,13 @@ mod file {
                     "right.csv",
                 ),
             );
-            let root = yaml("{RIGHT: {path: right.csv, schema: right.yaml}, LEFT: {path: left.csv, schema: left.yaml}, AGAIN: {path: left.csv, schema: './left.yaml'}}", "RIGHT", "root.csv");
+            // VALUE reads all three producer datasets so pruning (REQ-0638)
+            // keeps every link of the diamond in the resolved model.
+            let root = yaml("{RIGHT: {path: right.csv, schema: right.yaml}, LEFT: {path: left.csv, schema: left.yaml}, AGAIN: {path: left.csv, schema: './left.yaml'}}", "RIGHT", "root.csv")
+                .replace(
+                    "derivation: RIGHT.VALUE",
+                    "derivation: {first_available: {sources: [RIGHT.VALUE, LEFT.VALUE, AGAIN.VALUE]}}",
+                );
             study.write("root.yaml", &root);
             let graph = study.graph().unwrap();
             assert_eq!(graph.capture_reads(), 4);

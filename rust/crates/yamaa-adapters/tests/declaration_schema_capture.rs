@@ -906,7 +906,9 @@ mod declaration {
             assert_eq!(captured.document(), Some(&decoded.document));
             let expected:Value=yamaa_adapters::json_wire::decode("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":\"REQ-0281\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
             assert_eq!(outcome(&error), invalid(json!([expected])));
-            let text="schema_version: '1.0'\ninput: {}\nkeys: []\noutput: {}\ncolumns:\n  - {name: Z, type: int, derivation: {value: {row_number: {window: SECOND}}}}\n  - {name: A, type: int, derivation: {value: {row_number: {window: FIRST}}}}\n";
+            // Output names both columns so pruning (REQ-0638) keeps them live
+            // and strict window expansion still reports their unknown windows.
+            let text="schema_version: '1.0'\ninput: {}\nkeys: []\noutput: {columns: [Z, A]}\ncolumns:\n  - {name: Z, type: int, derivation: {value: {row_number: {window: SECOND}}}}\n  - {name: A, type: int, derivation: {value: {row_number: {window: FIRST}}}}\n";
             let entry = source(text);
             let bytes = entry.bytes.as_ptr();
             let identity = entry.identity.as_ptr();

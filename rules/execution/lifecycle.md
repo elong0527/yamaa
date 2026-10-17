@@ -115,9 +115,12 @@ and runs only after all columns have completed.
 
 **REQ-0060.** After row construction, build the column dependency graph. Every
 dependency must refer to a column declared earlier. Evaluate columns in
-declaration order. When a specification declares `parents`, [Specification composition](../specification/composition.md) composes,
-prunes, and orders the resolved columns before [Execution lifecycle](lifecycle.md) applies.
-Declaration order is the resolved order.
+declaration order. [Specification composition](../specification/composition.md) composes and
+prunes every specification before [Execution lifecycle](lifecycle.md) applies:
+a specification that declares no `parents` is a composition of one layer and
+is pruned on the same terms as one that declares `parents`. Composition
+orders the resolved columns only when a specification declares `parents`;
+otherwise declaration order is the resolved order.
 
 <a id="req-0061"></a>
 

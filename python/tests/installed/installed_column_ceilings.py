@@ -101,14 +101,20 @@ class ColumnCeilings(unittest.TestCase):
         self.assert_build(
             self.write_case("admit-columns", columns=1024, selected=["ID"])
         )
-        spec = self.write_case("refuse-columns", columns=1025, selected=["ID"])
+        # The declared-column ceiling counts live columns after pruning: a narrow
+        # output with one live column builds, so exercise the ceiling with a live
+        # 1,025-column output.
+        spec = self.write_case("refuse-columns", columns=1025)
         for operation in (yamaa.check, yamaa.domain):
             self.assert_refusal(operation(spec), compiler=True)
 
     def test_fixed_refusal_and_retry_expose_the_remaining_error(
         self,
     ):
-        spec = self.write_case("incomplete-checks", columns=1025, selected=["ID"])
+        # Every specification is pruned after composition: keep all 1,025
+        # columns live so the columns capacity is still exercised instead of
+        # being pruned away.
+        spec = self.write_case("incomplete-checks", columns=1025)
         document = json.loads(spec.read_text())
         document["columns"][1].update(type="int", derivation={"literal": 1})
         document["columns"][2]["derivation"] = {
@@ -127,8 +133,20 @@ class ColumnCeilings(unittest.TestCase):
                 self.assertNotIn("incomplete_checks_from", context)
                 self.assertEqual((context["limit"], context["actual"]), (1024, 1025))
                 self.assertIsNone(rows[0]["requirement"])
-            repaired_capacity = {**document, "columns": document["columns"][:-1]}
-            spec.write_text(json.dumps(repaired_capacity))
+            repaired = dict(document)
+            repaired["columns"] = document["columns"][:-1]
+            # Dropping the C1024 declaration must also drop it from the live
+            # output list, otherwise the repaired specification would fail on
+            # the dangling output reference instead of the remaining type error.
+            repaired["output"] = {
+                **document["output"],
+                "columns": [
+                    name
+                    for name in document["output"]["columns"]
+                    if name != document["columns"][-1]["name"]
+                ],
+            }
+            spec.write_text(json.dumps(repaired))
             for operation in (yamaa.check, yamaa.domain):
                 rows = operation(spec, environment=route).issues.to_dicts()
                 self.assertEqual(len(rows), 1)

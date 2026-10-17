@@ -129,11 +129,16 @@ def specification(contract, case):
     later name binding rejects a case. Exact dependencies and shapes are checked
     separately through the typed core replay.
     """
+    # Every specification is pruned after composition (REQ-0638): no column
+    # reads SRC, so declare it as the driver with base to keep it live.
+    # Otherwise the unread input is discarded, the implicit driver is gone and
+    # driver_unavailable replaces the grammar decision under test.
     spec = {
         "schema_version": "1.0",
         "domain": "GRAMMAR",
         "keys": ["ID"],
         "input": {"SRC": "input.csv"},
+        "base": "SRC",
         "columns": [{"name": "ID", "type": "str", "derivation": {"literal": "one"}}],
         "output": {"path": "unwritten.csv", "columns": ["ID", "RESULT"]},
     }

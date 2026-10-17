@@ -498,9 +498,12 @@ output: {{path: output.csv, columns: [I, S]}}
                     json!({"phase":"ingest","condition":"source_quote_unterminated","requirement":"REQ-0851","spec_paths":["input.LB.path"],"context":{"dataset":"LB","path":"input/lb.csv","record":2,"field":1}})
                 ]
             );
+            // BOGUS joins the projection as an undeclared column while PCHG
+            // stays in it: pruning (REQ-0638) would otherwise discard PCHG
+            // and its division before execution.
             let written = raw.replace(
                 "columns: [STUDYID, USUBJID, PARAMCD, AVAL, BASE, PCHG]",
-                "columns: [STUDYID, USUBJID, PARAMCD, AVAL, BASE, BOGUS]",
+                "columns: [STUDYID, USUBJID, PARAMCD, AVAL, BASE, PCHG, BOGUS]",
             );
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let response = run.execute_csv(&data).unwrap();
@@ -1779,8 +1782,10 @@ output: {{path: output.csv, columns: [I, S]}}
                     json!({"phase":"validation","condition":"duplicate_derivation","requirement":"REQ-1260","spec_paths":["columns.AVAL.derivation"],"context":{"column":"AVAL","rows":["collected","total"],"not_row_local":"aggregate"}})
                 ]
             );
-            // Unknown row names are reported first, then missing coverage in declared
-            // column order, then the independently conflicting root filter.
+            // Missing coverage is reported in declared column order, then the
+            // independently conflicting root filter. The ABSENT row derivation
+            // names an undeclared column, so pruning (REQ-0638) discards it
+            // with the dead declaration instead of reporting it.
             let bad = raw
                 .replace("domain: ADLB", "domain: ADLB\nfilter: 'TRUE'")
                 .replace("      PARAM: LB.LBTEST\n", "")
@@ -1794,7 +1799,6 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, None).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"undeclared_column","requirement":"REQ-0202","spec_paths":["rows[0].derivations.ABSENT"],"context":{"column":"ABSENT"}}),
                     json!({"phase":"validation","condition":"missing_derivation","requirement":"REQ-0200","spec_paths":["columns.PARAM.derivation"],"context":{"column":"PARAM","rows":["collected"]}}),
                     json!({"phase":"validation","condition":"conflicting_row_construction","requirement":"REQ-1171","spec_paths":["filter","rows"],"context":{}}),
                 ]

@@ -258,7 +258,7 @@ local({
   directory <- tempfile("public-parquet-refusals-"); dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
   entry <- file.path(directory,"spec.yaml")
-  source <- '{"schema_version":"1.0","domain":"TEST","input":{"SRC":{"path":"input.parquet"}},"keys":["ID"],"columns":[{"name":"ID","type":"int","derivation":{"compute":{"expr":"1"}}}],"output":{"path":"output.csv","columns":["ID"]}}'
+  source <- '{"schema_version":"1.0","domain":"TEST","base":"SRC","input":{"SRC":{"path":"input.parquet"}},"keys":["ID"],"columns":[{"name":"ID","type":"int","derivation":{"compute":{"expr":"1"}}}],"output":{"path":"output.csv","columns":["ID"]}}'
   writeBin(charToRaw(source),entry)
   entry <- normalizePath(entry,winslash="/",mustWork=TRUE)
 cases <- list(
@@ -804,6 +804,18 @@ local({
     if(variant=="boolean_missing") written <- sub("TAB.KINT > 'bad'","FALSE AND TAB.KINT > 'bad'",written,fixed=TRUE)
     writeBin(charToRaw(written),entry)
     result <- yamaa_domain(entry)
+    if(variant=="unused") {
+      # Every specification is pruned after composition (REQ-0638, REQ-0641): no
+      # column reads LOOK, so pruning discards the intermediate together with its
+      # ill-typed filter and the specification builds with no issues instead of
+      # refusing the dead declaration.
+      stopifnot(nrow(result$issues)==0L,!is.null(result$output),identical(result$save(),TRUE),
+        identical(rawfile(output),charToRaw("ID,V,V2\na,ok,ok\n")))
+      unlink(file.path(case,c("src.csv","tab.csv")))
+      stopifnot(nrow(yamaa_check(entry)$issues)==0L)
+      unlink(case,recursive=TRUE)
+      next
+    }
     check_issue_frame(result$issues,if(variant=="duplicate") key_truth$dependency_before_bad_filter$issues else type_truth)
     stopifnot(is.null(result$output))
     for(i in seq_len(2L)) stopifnot(inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
