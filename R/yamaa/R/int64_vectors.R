@@ -88,7 +88,7 @@ as.integer.yamaa_int64_vector <- function(x, ...) {
   result <- vapply(seq_len(count), function(index) {
     a <- left$scalar((index - 1L) %% left$length + 1L)
     b <- right$scalar((index - 1L) %% right$length + 1L)
-    .scalar_unpack(.Call(wrap__scalar_operator, code, a$tag, a$payload,
+    .scalar_unpack(.native_scalar_operator(code, a$tag, a$payload,
                         b$tag, b$payload, FALSE))
   }, logical(1L), USE.NAMES = FALSE)
   names(result) <- if (left$length == count && !is.null(left$names)) {

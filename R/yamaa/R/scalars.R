@@ -17,7 +17,7 @@
 
 #' Validate raw bytes and raise only after the native call returns.
 .scalar_native <- function(tag, payload) {
-  result <- .Call(wrap__scalar_bytes, tag, payload)
+  result <- .native_scalar_bytes(tag, payload)
   if (!is.null(result$error)) stop(result$error, call. = FALSE)
   result
 }
@@ -126,7 +126,7 @@ print.yamaa_int64 <- function(x, ...) {
 #' Convert to binary64 only when the integer is exactly retained.
 as.double.yamaa_int64 <- function(x, ...) {
   value <- .scalar_pack(x)
-  .scalar_unpack(.Call(wrap__scalar_exact_double, value$tag, value$payload))
+  .scalar_unpack(.native_scalar_exact_double(value$tag, value$payload))
 }
 
 #' Convert only inside the non-missing R integer range.
@@ -168,12 +168,12 @@ print.yamaa_utf8 <- function(x, ...) {
     return(.int64_vector_ops(e1, e2, .Generic))
   }
   unary <- missing(e2)
-  reply <- .Call(wrap__scalar_operator_code, .scalar_text_bytes(.Generic), unary)
+  reply <- .native_scalar_operator_code(.scalar_text_bytes(.Generic), unary)
   if (!is.null(reply$error)) stop(reply$error, call. = FALSE)
   code <- reply$value
   left <- .scalar_pack(e1)
   right <- if (unary) .scalar_native(0L, raw()) else .scalar_pack(e2)
-  .scalar_unpack(.Call(wrap__scalar_operator, code, left$tag, left$payload,
+  .scalar_unpack(.native_scalar_operator(code, left$tag, left$payload,
                        right$tag, right$payload, unary))
 }
 
