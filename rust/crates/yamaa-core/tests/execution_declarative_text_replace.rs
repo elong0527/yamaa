@@ -187,7 +187,10 @@ fn unsupported_patterns_report_the_declaring_operation() {
                 T::list(vec![T::map(vec![
                     ("name", T::text("TEXT")),
                     ("type", T::text("str")),
-                    ("derivation", T::map(vec![(operation, T::map(fields))])),
+                    (
+                        "derivation",
+                        T::map(vec![("value", T::map(vec![(operation, T::map(fields))]))]),
+                    ),
                 ])]),
             ),
             (
