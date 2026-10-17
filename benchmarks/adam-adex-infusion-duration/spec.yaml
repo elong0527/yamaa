@@ -1,0 +1,115 @@
+schema_version: "1.0"
+domain: ADEX
+keys: [STUDYID, USUBJID, PARAMCD, EXSEQ]
+input:
+  EX: input/ex.csv
+
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, EXSEQ, EXSTDTC, EXENDTC, EXDUR, PARAMCD, PARAM,
+            AVAL, AVALU, CALCDUR]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EX.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX.USUBJID
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation: EX.EXSEQ
+
+  - name: EXSTDTC
+    type: str
+    label: Start Date/Time of Treatment
+    derivation: EX.EXSTDTC
+
+  - name: EXENDTC
+    type: str
+    label: End Date/Time of Treatment
+    derivation: EX.EXENDTC
+
+  - name: EXDUR
+    type: str
+    label: Duration of Treatment
+    derivation: EX.EXDUR
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: {literal: INFDUR}
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation: {literal: Infusion Duration (min)}
+
+  # A start or end collected as a date alone names a day, not a moment, so
+  # it converts to no value rather than taking an invented time of day.
+  - name: ASTDTM
+    type: datetime
+    label: Analysis Start Date/Time
+    derivation:
+      value:
+        source: EXSTDTC
+      unconvertible: null
+
+  - name: AENDTM
+    type: datetime
+    label: Analysis End Date/Time
+    derivation:
+      value:
+        source: EXENDTC
+      unconvertible: null
+
+  # Elapsed minutes from start to end, seconds kept as a fraction of a
+  # minute: nothing is added or rounded. Empty when either end has no time.
+  - name: CALCDUR
+    type: float
+    label: Duration from Start and End (min)
+    derivation:
+      datetime_diff:
+        start: ASTDTM
+        end: AENDTM
+        unit: minute
+
+  # The collected ISO 8601 duration in minutes. Text that is not a
+  # fixed-length duration (such as one without its leading P) counts as not
+  # collected.
+  - name: COLLDUR
+    type: float
+    label: Collected Duration (min)
+    derivation:
+      duration_value:
+        source: EXDUR
+        unit: minute
+        invalid: null
+
+  # A readable collected duration wins, even when it disagrees with the
+  # start and end; CALCDUR keeps the computed value beside it.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      first_available:
+        sources: [COLLDUR, CALCDUR]
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+    derivation: {literal: min}
+
+verifications:
+  - row_count:
+      min: 8
+      max: 8
+  - assert:
+      id: infusion-ends-after-it-starts
+      when: "CALCDUR IS NOT NULL"
+      require: "CALCDUR > 0"
