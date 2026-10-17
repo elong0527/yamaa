@@ -649,6 +649,22 @@ def describe_date_diff(node, ctx=None, depth=0):
     )
 
 
+def describe_datetime_diff(node, ctx=None, depth=0):
+    unit = str(node.get("unit", ""))
+    end = describe_variable(node.get("end"), ctx, depth)
+    text = (
+        ("Whole seconds" if unit == "second" else "Elapsed " + unit + "s")
+        + " from "
+        + describe_variable(node.get("start"), ctx, depth)
+        + " to "
+        + end
+        + ", negative when "
+        + end
+        + " is earlier"
+    )
+    return sentence(text if unit == "second" else text + ", not rounded")
+
+
 def describe_study_day(node, ctx=None, depth=0):
     return sentence(
         "CDISC study day of "
@@ -672,12 +688,18 @@ def describe_to_epoch_day(node, ctx=None, depth=0):
 
 
 def describe_precision(node, word, ctx=None, depth=0):
+    codes = (
+        "S when a time of day was collected, D when only the date was"
+        if word == "datetime"
+        else "D for a complete date, M for year and month, Y for a year alone"
+    )
     text = (
         "Collected "
         + word
         + " precision of "
         + describe_variable(node.get("source"), ctx, depth)
-        + ": D for a complete date, M for year and month, Y for a year alone"
+        + ": "
+        + codes
     )
     text += handler_phrase(node, "missing", "a missing source")
     return sentence(text + handler_phrase(node, "invalid", "invalid text"))
@@ -922,6 +944,7 @@ DERIVATION_DESCRIBERS = {
     "compute": describe_compute,
     "round_half_away_from_zero": describe_round,
     "date_diff": describe_date_diff,
+    "datetime_diff": describe_datetime_diff,
     "date_impute": describe_date_impute,
     "date_precision": lambda n, c, d: describe_precision(n, "date", c, d),
     "datetime_impute": describe_datetime_impute,

@@ -542,6 +542,39 @@ class DerivationShapeTests(unittest.TestCase):
             "Whole years from BRTHDT to RANDDT, counting the end date but not the start.",
         )
 
+    def test_datetime_diff_states_its_sign_and_rounding(self):
+        def rule(unit):
+            return mapping_doc.describe_derivation(
+                {"datetime_diff": {"start": "FANLDTM", "end": "ADTM", "unit": unit}}
+            )
+
+        self.assertEqual(
+            rule("hour"),
+            "Elapsed hours from FANLDTM to ADTM, negative when ADTM is earlier, "
+            "not rounded.",
+        )
+        self.assertEqual(
+            rule("second"),
+            "Whole seconds from FANLDTM to ADTM, negative when ADTM is earlier.",
+        )
+
+    def test_precision_names_the_codes_of_its_own_type(self):
+        def rule(word):
+            return mapping_doc.describe_derivation(
+                {word + "_precision": {"source": "PC.PCDTC"}}
+            )
+
+        self.assertEqual(
+            rule("datetime"),
+            "Collected datetime precision of PC.PCDTC: S when a time of day was "
+            "collected, D when only the date was.",
+        )
+        self.assertEqual(
+            rule("date"),
+            "Collected date precision of PC.PCDTC: D for a complete date, M for "
+            "year and month, Y for a year alone.",
+        )
+
     def test_cut_names_the_closed_side_of_each_interval(self):
         rule = method_column("adam-adsl-demographics")["AGEGR1"]
         self.assertIn("intervals closed on the left", rule)

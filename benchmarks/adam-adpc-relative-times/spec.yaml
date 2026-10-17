@@ -1,0 +1,152 @@
+schema_version: "1.0"
+domain: ADPC
+keys: [STUDYID, USUBJID, PCSEQ]
+input:
+  PC: {path: input/pc.csv, types: {PCSEQ: int}}
+  EX: {path: input/ex.csv, types: {EXSEQ: int, EXSTDTC: datetime}}
+base: PC
+
+output:
+  path: adpc.csv
+  columns: [STUDYID, USUBJID, PCSEQ, PARAMCD, ATPT, ADTM, FANLDTM, PCRFTDTM,
+            AFRLT, ARRLT]
+
+# Doses of the drug the analyte measures: the parent drug and its
+# metabolite both refer to DRUG X doses, never to DRUG Y doses given to the
+# same subject.
+intermediates:
+  - id: FIRSTDOSE
+    dataset: EX
+    key: {STUDYID: STUDYID, USUBJID: USUBJID, EXTRT: DRUG}
+    order_by: [EX.EXSTDTC, EX.EXSEQ]
+    keep: first
+    no_match: null
+
+  # The latest dose starting at or before the sample, the sample's own dose
+  # time included.
+  - id: PRIORDOSE
+    dataset: EX
+    key: {STUDYID: STUDYID, USUBJID: USUBJID, EXTRT: DRUG}
+    between: {value: ADTM, lower: EXSTDTC}
+    order_by: [EX.EXSTDTC, EX.EXSEQ]
+    keep: last
+    no_match: null
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: PC.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: PC.USUBJID
+
+  - name: PCSEQ
+    type: int
+    label: Sequence Number
+    derivation: PC.PCSEQ
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: PC.PCTESTCD
+    verifications:
+      allowed_values:
+        values: [DRGX, MET1, DRGY]
+
+  - name: ATPT
+    type: str
+    label: Analysis Time Point
+    derivation: PC.PCTPT
+
+  # The dosed treatment whose doses the analyte's times refer to.
+  - name: DRUG
+    type: str
+    label: Dosed Treatment of the Analyte
+    derivation:
+      mapping:
+        source: PC.PCTESTCD
+        dict:
+          DRGX: DRUG X
+          MET1: DRUG X
+          DRGY: DRUG Y
+
+  # S when the collected text carries a time of day, D when it is a date
+  # alone; text that is neither stops the run.
+  - name: PCDTPR
+    type: str
+    label: Sample Date/Time Collected Precision
+    derivation:
+      datetime_precision:
+        source: PC.PCDTC
+        missing: null
+
+  # The sample's collected date and time; a sample collected without a time
+  # gets none, so it has no relative times.
+  - name: ADTM
+    type: datetime
+    label: Analysis Date/Time
+    derivation:
+      case:
+        - when: "PCDTPR = 'S'"
+          then: PC.PCDTC
+
+  - name: FANLDTM
+    type: datetime
+    label: First Dose Date/Time of the Analyte's Drug
+    derivation: FIRSTDOSE.EXSTDTC
+
+  # The reference dose: the latest dose at or before the sample, or the first
+  # dose for a sample taken before every dose; none without a sample time.
+  - name: PCRFTDTM
+    type: datetime
+    label: Date/Time of Reference Dose
+    derivation:
+      case:
+        - when: "ADTM IS NULL"
+          then: {literal: null}
+        - when: "PRIORDOSE.EXSTDTC IS NOT NULL"
+          then: PRIORDOSE.EXSTDTC
+        - otherwise: FANLDTM
+
+  - name: AFRLT
+    type: float
+    label: Actual Relative Time from First Dose (h)
+    derivation:
+      datetime_diff:
+        start: FANLDTM
+        end: ADTM
+        unit: hour
+
+  - name: ARRLT
+    type: float
+    label: Actual Relative Time from Reference Dose (h)
+    derivation:
+      datetime_diff:
+        start: PCRFTDTM
+        end: ADTM
+        unit: hour
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PCSEQ]
+  - row_count:
+      min: 14
+      max: 14
+  - all_or_none:
+      id: relative-times-share-a-reference
+      columns: [PCRFTDTM, AFRLT, ARRLT]
+  - assert:
+      id: reference-dose-is-not-before-first-dose
+      when: "PCRFTDTM IS NOT NULL"
+      require: "PCRFTDTM >= FANLDTM"
+  - assert:
+      id: reference-time-never-exceeds-first-dose-time
+      when: "ARRLT IS NOT NULL"
+      require: "ARRLT <= AFRLT"
+  - assert:
+      id: negative-time-only-before-first-dose
+      when: "ARRLT < 0"
+      require: "PCRFTDTM = FANLDTM"
