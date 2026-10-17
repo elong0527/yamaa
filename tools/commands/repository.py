@@ -41,6 +41,8 @@ def main():
     if command == "lint":
         for arguments in (("format", "--check"), ("check",)):
             run(sys.executable, "-m", "ruff", *arguments, *LINT_PATHS)
+        # Type-check the package with the configuration in python/pyproject.toml.
+        run(sys.executable, "-m", "pyrefly", "check", cwd=ROOT / "python")
         run("cargo", "fmt", "--all", "--check", cwd=WORKSPACE)
         run(
             "cargo",

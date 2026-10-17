@@ -31,8 +31,10 @@ class Define:
             return self._native.save()
         except DefineError as error:
             rows = self._native.issues()
-            error.issues = issues_frame(rows)
-            error.diagnostics = diagnostic_records(rows)
+            # DefineError is a native exception class; the facade attaches
+            # both views here, so they are set as dynamic attributes.
+            setattr(error, "issues", issues_frame(rows))
+            setattr(error, "diagnostics", diagnostic_records(rows))
             raise
 
 

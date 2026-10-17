@@ -36,6 +36,8 @@ test = [
   "jsonschema>=4.25",
   "pytest>=9.1.1",
   "ruff>=0.16.7",
+  "pyrefly>=1.4.0",
+  "types-PyYAML>=6.0.12",
 ]
 
 [dependency-groups]
@@ -74,6 +76,10 @@ testpaths = ["tests"]
 
 [tool.ruff]
 extend = "../pyproject.toml"
+
+[tool.pyrefly]
+project-includes = ["src/yamaa"]
+preset = "default"
 
 [tool.uv.sources]
 yamaa-benchmarks = { path = "../rust/tests/project-programs/python", editable = true }
