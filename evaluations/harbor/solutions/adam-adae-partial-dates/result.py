@@ -36,13 +36,13 @@ def complete_row(collected: str | None, trt: str | None) -> tuple[str | None, st
         completed = f"{year:04d}-{mon:02d}-15"
         if trt is None:
             return completed, "D"
-        # A completed date is never placed before first exposure. When
-        # the whole collected month ends before the exposure date, the
-        # event is left without an analysis date.
+        # A supplied day is never placed before a first exposure that falls
+        # inside the collected month. When the whole collected month ends
+        # before the exposure date, the date stays on the 15th.
         last_day = calendar.monthrange(year, mon)[1]
         month_end = f"{year:04d}-{mon:02d}-{last_day:02d}"
         if month_end < trt:
-            return None, None
+            return completed, "D"
         if completed < trt:
             return trt, "D"
         return completed, "D"

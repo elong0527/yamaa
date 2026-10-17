@@ -6,8 +6,8 @@ use num_bigint::BigUint;
 /// under REQ-0418: |value| × 10^digits becomes an integer, where a fraction of
 /// one half, or within 2^-26 below one half, rounds away from zero. This is the
 /// language's only rounding interval. The rounding operation, CSV display
-/// precision, project-function result comparison and float `datetime_shift`
-/// amounts all select their integer here. Callers bound `digits`, which bounds
+/// precision, project-function result comparison and float `shift` amounts
+/// of a datetime all select their integer here. Callers bound `digits`, which bounds
 /// the intermediates; negative digits round left of the decimal point.
 pub(crate) fn rounded_magnitude(value: f64, digits: i64) -> BigUint {
     let (mut numerator, mut denominator) = binary64_fraction(value);

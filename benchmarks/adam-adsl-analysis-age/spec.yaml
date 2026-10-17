@@ -36,7 +36,8 @@ columns:
     type: int
     label: Analysis Age
     derivation:
-      date_diff:
+      diff:
+        type: date
         start: BRTHDT
         end: RANDDT
         unit: year

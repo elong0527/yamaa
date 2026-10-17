@@ -18,10 +18,10 @@ collected.
   with a missing day set to the last of the month, so February
   lands on the 28th or 29th by year; a full date stands as
   collected, and blank stays blank.
-- `DOB_PREC_TX` holds `Y` for a year alone, `M` for a year and
-  month, and `D` for a full date, read from the collected text;
-  blank when the text is blank.
-- `DOB_PREC_DT` holds the same code read from the completed
+- `DOB_PREC_TX` holds `year` for a year alone, `month` for a
+  year and month, and `day` for a full date, read from the
+  collected text; blank when the text is blank.
+- `DOB_PREC_DT` holds the same word read from the completed
   first-day date; blank when there is no completed date.
 - `DTMDT` holds the calendar day of the assessment moment;
   blank when the moment is blank.

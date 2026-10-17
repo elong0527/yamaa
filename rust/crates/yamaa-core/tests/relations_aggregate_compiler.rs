@@ -2389,21 +2389,41 @@ mod relations {
         #[test]
         fn operations_outside_the_complete_req1259_table_defer_comparison() {
             let catalog = Catalog::compile(&[], &[]).unwrap();
-            for name in [
-                "date_shift",
-                "datetime_shift",
-                "datetime_diff",
-                "duration_value",
-                "row_value",
-                "locf",
-                "mapping",
-                "case",
-                "greatest",
-                "least",
+            for (name, target) in [
+                ("shift", Some(ColumnType::Date)),
+                ("shift", Some(ColumnType::DateTime)),
+                ("diff", Some(ColumnType::DateTime)),
+                ("duration_value", None),
+                ("row_value", None),
+                ("locf", None),
+                ("mapping", None),
+                ("case", None),
+                ("greatest", None),
+                ("least", None),
             ] {
                 assert_eq!(
-                    result_type(&catalog, Expression::Operation(name)),
+                    result_type(&catalog, Expression::Operation { name, target }),
                     None,
+                    "{name}"
+                );
+            }
+        }
+
+        #[test]
+        fn a_declared_temporal_type_selects_the_static_result_type() {
+            let catalog = Catalog::compile(&[], &[]).unwrap();
+            for (name, target, expected) in [
+                ("impute", Some(ColumnType::Date), ColumnType::Date),
+                ("impute", Some(ColumnType::DateTime), ColumnType::DateTime),
+                ("diff", Some(ColumnType::Date), ColumnType::Int),
+                ("precision", Some(ColumnType::Date), ColumnType::Str),
+                ("precision", Some(ColumnType::DateTime), ColumnType::Str),
+                ("imputation_flag", None, ColumnType::Str),
+                ("to_date", None, ColumnType::Date),
+            ] {
+                assert_eq!(
+                    result_type(&catalog, Expression::Operation { name, target }),
+                    Some(expected.into()),
                     "{name}"
                 );
             }

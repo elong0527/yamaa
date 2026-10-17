@@ -123,10 +123,11 @@ columns:
     type: datetime
     label: Date/Time of Measurements as a Moment
     derivation:
-      datetime_impute:
+      impute:
+        type: datetime
         source: VSDTC
+        minimum_source_precision: day
         time: first
-        missing: null
         invalid: null
 
   - name: EPOCH

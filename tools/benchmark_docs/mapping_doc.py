@@ -289,6 +289,15 @@ def describe_variable(variable, ctx=None, depth=0):
     )
 
 
+def variable_name(variable, ctx=None):
+    """A variable named again in the same rule: a lookup reference keeps only
+    its column, its donor record having been spelt out at the first mention."""
+    head, tail = split_reference(variable)
+    if head and context(ctx).lookup(head) is not None:
+        return tail
+    return str(variable)
+
+
 def value_phrase(derivation, ctx=None, depth=0):
     """A derivation as a noun phrase, for reuse inside a larger sentence.
 
@@ -629,40 +638,76 @@ def describe_cut(node, ctx=None, depth=0):
     return sentence(text + handler_phrase(node, "missing", "a missing source"))
 
 
-def describe_date_diff(node, ctx=None, depth=0):
+def is_datetime(node):
+    """The temporal verbs read their declared `type`, never the data."""
+    return node.get("type") == "datetime"
+
+
+def describe_diff(node, ctx=None, depth=0):
+    """Whole calendar units between two dates, or the elapsed time between
+    two datetimes."""
     unit = str(node.get("unit", ""))
+    start = describe_variable(node.get("start"), ctx, depth)
+    end = describe_variable(node.get("end"), ctx, depth)
+    if is_datetime(node):
+        text = (
+            ("Whole seconds" if unit == "second" else "Elapsed " + unit + "s")
+            + " from "
+            + start
+            + " to "
+            + end
+            + ", negative when "
+            + end
+            + " is earlier"
+        )
+        return sentence(text if unit == "second" else text + ", not rounded")
     bounds = str(node.get("bounds") or "exclusive")
     counted = {
         "exclusive": "counting the end date but not the start",
         "inclusive": "counting both endpoints",
         "between": "counting neither endpoint",
     }.get(bounds, "counting " + bounds)
+    return sentence("Whole " + unit + "s from " + start + " to " + end + ", " + counted)
+
+
+def describe_shift(node, ctx=None, depth=0):
+    """A date moved by whole days, or a datetime by an elapsed amount.
+
+    Worded as the value the column holds, so it reads the same as a rule and
+    inside a case branch.
+    """
+    if is_datetime(node):
+        noun, amount, unit = "datetime", node.get("amount"), str(node.get("unit", ""))
+    else:
+        noun, amount, unit = "date", node.get("days"), "day"
+    source = describe_variable(node.get("source"), ctx, depth)
+    if isinstance(amount, bool) or not isinstance(amount, (int, float)):
+        # A variable amount is signed, so adding it moves either way.
+        return sentence(
+            "The "
+            + noun
+            + " "
+            + source
+            + " plus "
+            + describe_variable(amount, ctx, depth)
+            + " "
+            + unit
+            + "s"
+        )
+    if amount == 0:
+        return sentence("The same " + noun + " as " + source)
+    size = abs(amount)
     return sentence(
-        "Whole "
+        "The "
+        + noun
+        + " "
+        + str(size)
+        + " "
         + unit
-        + "s from "
-        + describe_variable(node.get("start"), ctx, depth)
-        + " to "
-        + describe_variable(node.get("end"), ctx, depth)
-        + ", "
-        + counted
+        + ("" if size == 1 else "s")
+        + (" after " if amount > 0 else " before ")
+        + source
     )
-
-
-def describe_datetime_diff(node, ctx=None, depth=0):
-    unit = str(node.get("unit", ""))
-    end = describe_variable(node.get("end"), ctx, depth)
-    text = (
-        ("Whole seconds" if unit == "second" else "Elapsed " + unit + "s")
-        + " from "
-        + describe_variable(node.get("start"), ctx, depth)
-        + " to "
-        + end
-        + ", negative when "
-        + end
-        + " is earlier"
-    )
-    return sentence(text if unit == "second" else text + ", not rounded")
 
 
 def describe_study_day(node, ctx=None, depth=0):
@@ -676,8 +721,11 @@ def describe_study_day(node, ctx=None, depth=0):
 
 
 def describe_to_date(node, ctx=None, depth=0):
+    # A comma, not a semicolon: the rule often sits inside a case branch.
     return sentence(
-        "Take the date part of " + describe_variable(node.get("source"), ctx, depth)
+        "Take the date part of "
+        + describe_variable(node.get("source"), ctx, depth)
+        + ", blank for a year or a year and month alone"
     )
 
 
@@ -687,63 +735,133 @@ def describe_to_epoch_day(node, ctx=None, depth=0):
     )
 
 
-PRECISION_CODES = {
-    "date": "D for a complete date, M for year and month, Y for a year alone",
+def invalid_text_phrase(node):
+    """What text that is not a date yields; with no handler it is fatal."""
+    if "invalid" in node:
+        return handler_phrase(node, "invalid", "invalid text")
+    return "; invalid text is an error"
+
+
+# The collected precision words, finest first. A date's precision stops at
+# day; "none" belongs to a value taken whole from an imputation fallback.
+PRECISION_WORDS = {
+    "date": (
+        '"day" for a complete date, "month" for a year and month, "year" for '
+        'a year alone, "none" for an entirely imputed date'
+    ),
     "datetime": (
-        "S through the second, M through the minute, H through the hour, "
-        "D for a date alone"
+        '"second" through the second, "minute" through the minute, "hour" '
+        'through the hour, "day" for a date alone, "month" for a year and '
+        'month, "year" for a year alone, "none" for an entirely imputed '
+        "datetime"
     ),
 }
 
 
-def describe_precision(node, word, ctx=None, depth=0):
+def describe_precision(node, ctx=None, depth=0):
+    kind = "datetime" if is_datetime(node) else "date"
     text = (
         "Collected "
-        + word
+        + kind
         + " precision of "
         + describe_variable(node.get("source"), ctx, depth)
         + ": "
-        + PRECISION_CODES[word]
+        + PRECISION_WORDS[kind]
     )
-    text += handler_phrase(node, "missing", "a missing source")
-    return sentence(text + handler_phrase(node, "invalid", "invalid text"))
+    return sentence(text + invalid_text_phrase(node))
 
 
-def describe_date_impute(node, ctx=None, depth=0):
-    bits = []
-    if node.get("month") is not None:
-        bits.append("month=" + str(node["month"]))
-    if node.get("day") is not None:
-        bits.append("day=" + str(node["day"]))
+# What a minimum source precision leaves uncompleted; year, the default,
+# completes every truncated source.
+UNCOMPLETED_SOURCES = {
+    "month": "a year alone gives blank",
+    "day": "a source without a complete date gives blank",
+}
+
+
+def describe_impute(node, ctx=None, depth=0):
+    """Truncated collected text completed to the declared type.
+
+    A bound moves only what imputation supplied, so one outside the collected
+    period is ignored, and not_after wins when the two bounds cross.
+    """
+    kind = "datetime" if is_datetime(node) else "date"
     text = (
-        "Impute incomplete date from "
+        "Impute incomplete "
+        + kind
+        + " from "
         + describe_variable(node.get("source"), ctx, depth)
-        + ", defaulting "
-        + ", ".join(bits)
     )
-    if node.get("not_before"):
-        text += ", never before " + str(node["not_before"])
-    if node.get("not_after"):
-        text += ", never after " + str(node["not_after"])
-    text += handler_phrase(node, "missing", "a missing source")
-    text += handler_phrase(node, "invalid", "invalid text")
-    if "missing" not in node and "invalid" not in node:
-        text += "; missing or invalid input yields null"
-    return sentence(text)
+    defaults = [
+        field + "=" + str(node[field])
+        for field in ("month", "day")
+        if node.get(field) is not None
+    ]
+    if defaults:
+        text += ", defaulting " + ", ".join(defaults)
+    if kind == "datetime":
+        edge = "earliest" if str(node.get("time", "")) == "first" else "latest"
+        text += ", giving each time part the source lacks its " + edge + " value"
+    before = node.get("not_before")
+    after = node.get("not_after")
+    if before:
+        text += ", never before " + describe_variable(before, ctx, depth)
+    if after:
+        text += ", never after " + describe_variable(after, ctx, depth)
+    if before or after:
+        text += "; a bound outside the collected period is ignored"
+    if before and after:
+        text += (
+            ", and "
+            + variable_name(after, ctx)
+            + " wins over a later "
+            + variable_name(before, ctx)
+        )
+    uncompleted = UNCOMPLETED_SOURCES.get(str(node.get("minimum_source_precision")))
+    if uncompleted:
+        text += "; " + uncompleted
+    if node.get("fallback"):
+        text += (
+            "; a missing source takes "
+            + describe_variable(node["fallback"], ctx, depth)
+            + ", counted as entirely imputed"
+        )
+    return sentence(text + invalid_text_phrase(node))
 
 
-def describe_datetime_impute(node, ctx=None, depth=0):
-    time = str(node.get("time", ""))
-    edge = "earliest" if time == "first" else "latest"
-    text = (
-        "Impute incomplete datetime from "
+# The ADaM date (--DTF) and time (--TMF) imputation flag codes, read from the
+# collected precision of the imputed value.
+IMPUTATION_FLAG_CODES = {
+    "date": (
+        '"Y" when the whole date was imputed, "M" when the month and day '
+        'were, "D" when only the day was; blank when the date was collected '
+        "in full"
+    ),
+    "time": (
+        '"H" when the whole time was imputed, "M" when the minutes and '
+        'seconds were, "S" when only the seconds were; blank when the time '
+        "was collected to the second"
+    ),
+}
+# A study that does not collect seconds never imputes them alone.
+MINUTE_TIME_FLAG_CODES = (
+    '"H" when the whole time was imputed, "M" when the minutes were; blank '
+    "when the minutes were collected, since the study does not collect seconds"
+)
+
+
+def describe_imputation_flag(node, ctx=None, depth=0):
+    part = "time" if node.get("part") == "time" else "date"
+    codes = IMPUTATION_FLAG_CODES[part]
+    if part == "time" and node.get("seconds_collected", True) is False:
+        codes = MINUTE_TIME_FLAG_CODES
+    return sentence(
+        part.capitalize()
+        + " imputation flag for "
         + describe_variable(node.get("source"), ctx, depth)
-        + ", giving each time part the source lacks its "
-        + edge
-        + " value"
+        + ": "
+        + codes
     )
-    text += handler_phrase(node, "missing", "a missing source")
-    return sentence(text + handler_phrase(node, "invalid", "invalid text"))
 
 
 def describe_round(node, ctx=None, depth=0):
@@ -919,12 +1037,11 @@ DERIVATION_DESCRIBERS = {
     "cut": describe_cut,
     "compute": describe_compute,
     "round_half_away_from_zero": describe_round,
-    "date_diff": describe_date_diff,
-    "datetime_diff": describe_datetime_diff,
-    "date_impute": describe_date_impute,
-    "date_precision": lambda n, c, d: describe_precision(n, "date", c, d),
-    "datetime_impute": describe_datetime_impute,
-    "datetime_precision": lambda n, c, d: describe_precision(n, "datetime", c, d),
+    "diff": describe_diff,
+    "shift": describe_shift,
+    "impute": describe_impute,
+    "precision": describe_precision,
+    "imputation_flag": describe_imputation_flag,
     "to_date": describe_to_date,
     "to_epoch_day": describe_to_epoch_day,
     "study_day": describe_study_day,
@@ -1309,6 +1426,17 @@ REVISION_HISTORY_HEADERS = [
 # entry whenever a change alters the text of a rendered cell. Reviewer and
 # Sign-off stay empty -- those are the reviewer's to fill, not the build's.
 RENDERER_REVISIONS = [
+    (
+        "1.5",
+        "2026-10-17",
+        (
+            "Name collected precision in words instead of letter codes; state "
+            "imputation fallbacks, minimum source precision, bounds ignored "
+            "outside the collected period, and invalid text with no handler "
+            "as an error; describe date and datetime shifts, imputation flag "
+            "codes, and partial text giving no date part"
+        ),
+    ),
     (
         "1.4",
         "2026-10-15",

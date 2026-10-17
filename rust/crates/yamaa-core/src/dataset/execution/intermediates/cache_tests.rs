@@ -314,17 +314,17 @@ fn key_index_matches_composite_keys_in_donor_order_and_skips_missing() {
 
 #[test]
 fn key_index_unifies_zero_signs_and_ignores_temporal_precision() {
-    use crate::temporal::{Date, DatePrecision};
+    use crate::temporal::{Date, Precision};
     let keys = Tuples {
         schema: schema(&[("F", ColumnType::Float), ("D", ColumnType::Date)]),
         rows: vec![
             vec![
                 Value::float(-0.0),
-                Value::Date(Date::new(2020, 1, 2, DatePrecision::Year).unwrap()),
+                Value::Date(Date::new(2020, 1, 2, Precision::Year).unwrap()),
             ],
             vec![
                 Value::float(0.5),
-                Value::Date(Date::new(2020, 1, 2, DatePrecision::Day).unwrap()),
+                Value::Date(Date::new(2020, 1, 2, Precision::Day).unwrap()),
             ],
         ],
     };
@@ -340,7 +340,7 @@ fn key_index_unifies_zero_signs_and_ignores_temporal_precision() {
                 (0, Value::Int(0)),
                 (
                     1,
-                    Value::Date(Date::new(2020, 1, 2, DatePrecision::Day).unwrap())
+                    Value::Date(Date::new(2020, 1, 2, Precision::Day).unwrap())
                 )
             ])
             .unwrap(),

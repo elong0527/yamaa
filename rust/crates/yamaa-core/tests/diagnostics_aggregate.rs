@@ -106,9 +106,9 @@ mod diagnostics {
             #[test]
 
             fn temporal_spelling_and_nonnumeric_reduction_types_remain_complete() {
-                let date = Date::new(1, 1, 1, DatePrecision::Year).unwrap();
+                let date = Date::new(1, 1, 1, Precision::Year).unwrap();
                 let datetime =
-                    Value::DateTime(DateTime::new(date, 1, 2, 3, DateTimePrecision::Day).unwrap());
+                    Value::DateTime(DateTime::new(date, 1, 2, 3, Precision::Day).unwrap());
                 let diagnostic = F::BaselineAmbiguity {
                     path: "baseline",
                     column: "B",

@@ -17,10 +17,7 @@ pub fn table_snapshot(input: &[u8]) -> Result<String, TableError> {
 }
 fn scalar(value: yamaa_core::value::Value) -> yamaa_core::json::Value {
     use yamaa_adapters::json;
-    use yamaa_core::{
-        temporal::{DatePrecision, DateTimePrecision},
-        value::Value,
-    };
+    use yamaa_core::value::Value;
     match value {
         Value::Missing => json!({"missing":null}),
         Value::Int(n) => json!({"int":n.to_string()}),
@@ -28,10 +25,10 @@ fn scalar(value: yamaa_core::value::Value) -> yamaa_core::json::Value {
         Value::Str(s) => json!({"str":s}),
         Value::Bool(b) => json!({"bool":b}),
         Value::Date(d) => {
-            json!({"date":{"text":d.to_string(),"precision":match d.collected_precision(){DatePrecision::Year=>"year",DatePrecision::Month=>"month",DatePrecision::Day=>"day"}}})
+            json!({"date":{"text":d.to_string(),"precision":d.collected_precision().word()}})
         }
         Value::DateTime(d) => {
-            json!({"datetime":{"text":d.to_string(),"precision":match d.collected_precision(){DateTimePrecision::Day=>"day",DateTimePrecision::Hour=>"hour",DateTimePrecision::Minute=>"minute",DateTimePrecision::Second=>"second"}}})
+            json!({"datetime":{"text":d.to_string(),"precision":d.collected_precision().word()}})
         }
     }
 }

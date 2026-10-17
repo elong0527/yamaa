@@ -1,0 +1,50 @@
+schema_version: "1.0"
+domain: ADCM
+keys: [STUDYID, USUBJID, CMSEQ]
+input:
+  CM: input/cm.csv
+base: CM
+
+output:
+  path: adcm.csv
+  columns: [STUDYID, USUBJID, CMSEQ, CMTRT, CMSTDTC, ASTDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: CM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: CM.USUBJID
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation: CM.CMSEQ
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Medication, or Therapy
+    derivation: CM.CMTRT
+
+  - name: CMSTDTC
+    type: str
+    label: Start Date/Time of Medication
+    derivation: CM.CMSTDTC
+
+  # The calendar date of a start carrying a complete date, with or without a
+  # time; a year and month or a year alone is partial and gives no date.
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      to_date:
+        source: CMSTDTC
+
+verifications:
+  - row_count:
+      min: 6
+      max: 6

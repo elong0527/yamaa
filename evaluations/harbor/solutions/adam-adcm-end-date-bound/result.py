@@ -19,7 +19,8 @@ death = {row["USUBJID"]: row["DTHDT"] for row in adsl.iter_rows(named=True)}
 
 def end_date(collected: str | None, died: str | None) -> tuple[str | None, str | None]:
     # A full date stands as collected; a year and month runs to its last
-    # day, a year alone to December 31, never past the date of death.
+    # day, a year alone to December 31, never past a date of death that
+    # falls inside the collected month or year.
     if collected is None:
         return None, None
     if len(collected) == 10:
@@ -36,10 +37,10 @@ def end_date(collected: str | None, died: str | None) -> tuple[str | None, str |
         flag = "M"
     if died is not None:
         bound = date.fromisoformat(died)
-        if bound < first:
-            # The whole collected month or year lies after death.
-            return None, None
-        last = min(last, bound)
+        # When the whole collected month or year lies after death, the
+        # last day stands.
+        if bound >= first:
+            last = min(last, bound)
     return last.isoformat(), flag
 
 

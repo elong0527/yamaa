@@ -27,6 +27,8 @@ pub(super) enum Declaration {
         branch: cases::Branch,
         references: Vec<String>,
         operation: String,
+        /// The temporal type the operation declares with `type`, if any.
+        target: Option<ColumnType>,
     },
 }
 impl Declaration {
@@ -79,13 +81,12 @@ impl Declaration {
                 extra,
             )?),
             "str_case"
-            | "date_impute"
-            | "datetime_impute"
+            | "impute"
             | "to_date"
-            | "date_precision"
-            | "datetime_precision"
+            | "precision"
+            | "imputation_flag"
             | "round_half_away_from_zero"
-            | "date_diff"
+            | "diff"
             | "study_day"
             | "to_epoch_day"
             | "mapping"
@@ -101,9 +102,7 @@ impl Declaration {
             | "baseline_flag"
             | "row_value"
             | "locf"
-            | "date_shift"
-            | "datetime_diff"
-            | "datetime_shift"
+            | "shift"
             | "duration_value" => {
                 let mut references = Vec::new();
                 derivations::references(d, value, project, &mut references, 0)?;
@@ -120,10 +119,17 @@ impl Declaration {
                     templates,
                 )?;
                 reject_deferred_owners(&branch, extra);
+                let target = match d.field(payload, "type").map(|id| text(d, id)).transpose()? {
+                    Some("date") => Some(ColumnType::Date),
+                    Some("datetime") => Some(ColumnType::DateTime),
+                    Some(_) => return Err(PrepareError::Internal),
+                    None => None,
+                };
                 Self::Expression {
                     branch,
                     references,
                     operation: op.into(),
+                    target,
                 }
             }
             _ => {
@@ -177,8 +183,16 @@ impl Declaration {
     pub(super) fn result_type(&self, catalog: &Catalog) -> Option<ComparableType> {
         let expression = match self {
             Self::Variable(name) | Self::Source(name) => match_value::Expression::Source(name),
-            Self::StrPad(_) => match_value::Expression::Operation("str_pad"),
-            Self::Expression { operation, .. } => match_value::Expression::Operation(operation),
+            Self::StrPad(_) => match_value::Expression::Operation {
+                name: "str_pad",
+                target: None,
+            },
+            Self::Expression {
+                operation, target, ..
+            } => match_value::Expression::Operation {
+                name: operation,
+                target: *target,
+            },
             Self::Literal(value) => match_value::Expression::Literal(match value {
                 crate::value::Value::Missing => LiteralKind::Missing,
                 crate::value::Value::Str(_) => LiteralKind::Str,
@@ -422,8 +436,8 @@ fn reject_deferred_owners(branch: &cases::Branch, extra: &mut Vec<UnsupportedFea
         Operation::Odm(_) => Some("odm"),
         Operation::Flag(_) => Some("flag"),
         Operation::FirstAvailable(_) => Some("first_available"),
-        Operation::Imputation(operation) if operation.bounds().next().is_some() => {
-            for (field, _) in operation.bounds() {
+        Operation::Imputation(operation) if operation.has_conditional_operands() => {
+            for (field, _) in operation.operands().skip(1) {
                 reject(extra, field, format!("{}.{field}", branch.path));
             }
             None

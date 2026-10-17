@@ -339,7 +339,8 @@ pub(super) fn operand_references(
     for &op in temporal::OPERATIONS {
         if let Some(payload) = d.field(value, op) {
             for &field_name in temporal::fields(op) {
-                if let N::Text(source) = &d.nodes()[field(d, payload, field_name)?] {
+                if let Some(N::Text(source)) = d.field(payload, field_name).map(|id| &d.nodes()[id])
+                {
                     names.push(source.clone());
                 }
             }
@@ -351,10 +352,9 @@ pub(super) fn operand_references(
         "str_pad",
         "str_replace",
         "round_half_away_from_zero",
-        "date_impute",
-        "datetime_impute",
-        "date_precision",
-        "datetime_precision",
+        "impute",
+        "precision",
+        "imputation_flag",
         "to_date",
     ] {
         if let Some(payload) = d.field(value, op) {

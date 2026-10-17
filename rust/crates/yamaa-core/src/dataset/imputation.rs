@@ -1,11 +1,34 @@
-//! Declarative partial-date completion and precision preserve collected fields.
+//! Declarative completion, precision and imputation flags read right-truncated
+//! ISO 8601 (SDTM `--DTC`) text and preserve each collected field.
 use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
-    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
-    value::Value,
+    temporal::{month_length, Date, DateTime, Precision},
+    value::{ColumnType, Value},
 };
+
+/// The temporal type an operation declares with `type`, never inferred from text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TemporalType {
+    Date,
+    DateTime,
+}
+
+impl TemporalType {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Date => "date",
+            Self::DateTime => "datetime",
+        }
+    }
+    pub fn column_type(self) -> ColumnType {
+        match self {
+            Self::Date => ColumnType::Date,
+            Self::DateTime => ColumnType::DateTime,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DayRule {
@@ -18,6 +41,11 @@ pub enum DayDeclaration<'a> {
     Number(&'a str),
     Position(&'a str),
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TimeRule {
+    First,
+    Last,
+}
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum DatePolicyError {
     #[error("dataset imputation diagnostic: {0:?}")]
@@ -25,14 +53,28 @@ pub enum DatePolicyError {
     #[error("dataset imputation shape")]
     Shape,
 }
-/// Validate written calendar policy without narrowing arbitrary-width integers.
-pub fn date_policy(
+
+/// What `impute` may invent and how: the declared target type, the coarsest
+/// collected precision it completes, and the month, day and time rules.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Completion {
+    pub target: TemporalType,
+    pub month: Option<u8>,
+    pub day: Option<DayRule>,
+    pub minimum: Precision,
+    pub time: Option<TimeRule>,
+}
+
+/// Validate written completion policy without narrowing arbitrary-width integers.
+pub fn completion_policy(
+    target: TemporalType,
     month: Option<&str>,
-    day: DayDeclaration<'_>,
-    minimum: DatePrecision,
+    day: Option<DayDeclaration<'_>>,
+    minimum: Precision,
+    time: Option<TimeRule>,
     path: &str,
-) -> Result<ImputationKind, DatePolicyError> {
-    date_policy_findings(month, day, minimum, path)?.map_err(|findings| {
+) -> Result<Completion, DatePolicyError> {
+    completion_policy_findings(target, month, day, minimum, time, path)?.map_err(|findings| {
         DatePolicyError::Diagnostic(
             findings
                 .into_iter()
@@ -42,13 +84,16 @@ pub fn date_policy(
     })
 }
 
-/// Retain independent written month/day findings in declaration order.
-pub(crate) fn date_policy_findings(
+/// Retain independent written month and day findings in declaration order.
+/// The type-dependent `time` field is checked where the operation is read.
+pub(crate) fn completion_policy_findings(
+    target: TemporalType,
     month: Option<&str>,
-    day: DayDeclaration<'_>,
-    minimum: DatePrecision,
+    day: Option<DayDeclaration<'_>>,
+    minimum: Precision,
+    time: Option<TimeRule>,
     path: &str,
-) -> Result<Result<ImputationKind, std::vec::Vec<Diagnostic>>, DatePolicyError> {
+) -> Result<Result<Completion, std::vec::Vec<Diagnostic>>, DatePolicyError> {
     fn canonical_integer(text: &str) -> bool {
         let digits = text.strip_prefix('-').unwrap_or(text);
         if digits == "0" {
@@ -59,9 +104,10 @@ pub(crate) fn date_policy_findings(
             && digits.bytes().all(|b| b.is_ascii_digit())
     }
     if path.is_empty()
-        || minimum == DatePrecision::Day
+        || !matches!(minimum, Precision::Year | Precision::Month | Precision::Day)
+        || (target == TemporalType::DateTime) != time.is_some()
         || month.is_some_and(|value| !canonical_integer(value))
-        || matches!(day, DayDeclaration::Number(value) if !canonical_integer(value))
+        || matches!(day, Some(DayDeclaration::Number(value)) if !canonical_integer(value))
     {
         return Err(DatePolicyError::Shape);
     }
@@ -84,17 +130,12 @@ pub(crate) fn date_policy_findings(
         }
     }
     let month = match (minimum, month) {
-        (DatePrecision::Month, Some(value)) => Err(error(
-            C::ImputationMonthNotPermitted,
-            &format!("{path}.month"),
-            vec![("month", number(value))],
-        )),
-        (DatePrecision::Year, None) => Err(error(
+        (Precision::Year, None) => Err(error(
             C::ImputationMonthRequired,
             &format!("{path}.month"),
             vec![("minimum_source_precision", V::String("year".into()))],
         )),
-        (_, Some(value)) => value
+        (Precision::Year, Some(value)) => value
             .parse::<u8>()
             .ok()
             .filter(|n| (1..=12).contains(n))
@@ -106,12 +147,34 @@ pub(crate) fn date_policy_findings(
                     vec![("month", number(value))],
                 )
             }),
+        (_, Some(value)) => Err(error(
+            C::ImputationMonthNotPermitted,
+            &format!("{path}.month"),
+            vec![("month", number(value))],
+        )),
         (_, None) => Ok(None),
     };
-    let day = match day {
-        DayDeclaration::Position("first") => Ok(DayRule::First),
-        DayDeclaration::Position("last") => Ok(DayRule::Last),
-        DayDeclaration::Position(value) => Err(error(
+    let day = match (minimum, day) {
+        (Precision::Day, None) => Ok(None),
+        (Precision::Day, Some(value)) => Err(error(
+            C::ImputationDayNotPermitted,
+            &format!("{path}.day"),
+            vec![(
+                "day",
+                match value {
+                    DayDeclaration::Number(value) => number(value),
+                    DayDeclaration::Position(value) => V::String(value.into()),
+                },
+            )],
+        )),
+        (_, None) => Err(error(
+            C::ImputationDayRequired,
+            &format!("{path}.day"),
+            vec![("minimum_source_precision", V::String(minimum.word().into()))],
+        )),
+        (_, Some(DayDeclaration::Position("first"))) => Ok(Some(DayRule::First)),
+        (_, Some(DayDeclaration::Position("last"))) => Ok(Some(DayRule::Last)),
+        (_, Some(DayDeclaration::Position(value))) => Err(error(
             C::ImputationDayRule,
             &format!("{path}.day"),
             vec![
@@ -122,11 +185,11 @@ pub(crate) fn date_policy_findings(
                 ),
             ],
         )),
-        DayDeclaration::Number(value) => value
+        (_, Some(DayDeclaration::Number(value))) => value
             .parse::<u8>()
             .ok()
             .filter(|n| (1..=31).contains(n))
-            .map(DayRule::Number)
+            .map(|day| Some(DayRule::Number(day)))
             .ok_or_else(|| {
                 error(
                     C::ImputationDayRange,
@@ -140,32 +203,34 @@ pub(crate) fn date_policy_findings(
             }),
     };
     match (month, day) {
-        (Ok(month), Ok(day)) => Ok(Ok(ImputationKind::Date {
+        (Ok(month), Ok(day)) => Ok(Ok(Completion {
+            target,
             month,
             day,
             minimum,
+            time,
         })),
         (month, day) => Ok(Err(month.err().into_iter().chain(day.err()).collect())),
     }
 }
 
+/// The ADaM imputation flag an `imputation_flag` derives: `*DTF` or `*TMF`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TimeRule {
-    First,
-    Last,
+pub enum FlagPart {
+    Date,
+    Time,
 }
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ImputationKind {
-    Date {
-        month: Option<u8>,
-        day: DayRule,
-        minimum: DatePrecision,
+    Impute(Completion),
+    Precision {
+        target: TemporalType,
     },
-    DatePrecision,
-    DateTime {
-        time: TimeRule,
+    Flag {
+        part: FlagPart,
+        seconds_collected: bool,
     },
-    DateTimePrecision,
     ToDate,
 }
 #[derive(Clone, Debug, PartialEq)]
@@ -174,89 +239,226 @@ pub struct Imputation {
     source: String,
     not_before: Option<String>,
     not_after: Option<String>,
+    fallback: Option<String>,
     path: String,
-    missing: Option<Value>,
     invalid: Option<Value>,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum ImputationStep {
     Value(Value),
-    Recovered { handler: &'static str },
-    Bound(PartialDate),
+    /// A declared `invalid` answers text that is not a right-truncated `--DTC` value.
+    Recovered {
+        handler: &'static str,
+    },
+    /// A missing source: `impute`'s fallback answers it, otherwise the result
+    /// is missing and counted as a default substitution.
+    Missing,
+    /// `to_date` read year or year-month text; the result is missing and counted.
+    Partial,
+    /// A completed value whose declared bounds still apply.
+    Bound(Pending),
 }
-/// A pending completion retains collected precision before calendar validation.
+
+/// A completion awaiting its bounds, with the interval the collected
+/// components admit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PartialDate {
-    year: u16,
-    month: u8,
-    day: u8,
-    precision: DatePrecision,
+pub enum Pending {
+    Date {
+        completed: Date,
+        earliest: Date,
+        latest: Date,
+    },
+    DateTime {
+        completed: DateTime,
+        earliest: DateTime,
+        latest: DateTime,
+    },
 }
-impl PartialDate {
-    pub fn collected_precision(self) -> DatePrecision {
-        self.precision
+
+impl Pending {
+    pub fn collected_precision(self) -> Precision {
+        match self {
+            Self::Date { completed, .. } => completed.collected_precision(),
+            Self::DateTime { completed, .. } => completed.collected_precision(),
+        }
     }
-    fn complete(self, path: &str) -> Result<Date, Diagnostic> {
-        Date::new(self.year, self.month, self.day, self.precision).map_err(|_| {
-            let value = match self.precision {
-                DatePrecision::Year => format!("{:04}", self.year),
-                DatePrecision::Month => format!("{:04}-{:02}", self.year, self.month),
-                DatePrecision::Day => unreachable!("partial completion"),
-            };
+}
+
+/// The collected components of right-truncated `--DTC` text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Collected {
+    year: u16,
+    month: Option<u8>,
+    day: Option<u8>,
+    time: [Option<u8>; 3],
+}
+
+impl Collected {
+    fn precision(self) -> Precision {
+        match (self.month, self.day, self.time) {
+            (_, _, [_, _, Some(_)]) => Precision::Second,
+            (_, _, [_, Some(_), _]) => Precision::Minute,
+            (_, _, [Some(_), _, _]) => Precision::Hour,
+            (_, Some(_), _) => Precision::Day,
+            (Some(_), _, _) => Precision::Month,
+            _ => Precision::Year,
+        }
+    }
+    fn date(self) -> Option<Date> {
+        Date::new(self.year, self.month?, self.day?, Precision::Day).ok()
+    }
+    /// Collected year or year-month text, the part a calendar diagnostic names.
+    fn prefix(self) -> String {
+        match self.month {
+            Some(month) => format!("{:04}-{month:02}", self.year),
+            None => format!("{:04}", self.year),
+        }
+    }
+}
+
+/// Read `YYYY[-MM[-DD[Thh[:mm[:ss]]]]]`, each field with the width and range
+/// of a complete temporal value. Any other text is not collected date text.
+fn collected(text: &str) -> Option<Collected> {
+    let bytes = text.as_bytes();
+    if !matches!(bytes.len(), 4 | 7 | 10 | 13 | 16 | 19) {
+        return None;
+    }
+    let digits = |range: std::ops::Range<usize>| {
+        bytes[range].iter().try_fold(0u16, |number, byte| {
+            byte.is_ascii_digit()
+                .then(|| number * 10 + u16::from(byte - b'0'))
+        })
+    };
+    let field = |at: usize, separator: u8, last: u8| -> Option<Option<u8>> {
+        if bytes.len() <= at {
+            return Some(None);
+        }
+        let value = digits(at + 1..at + 3)? as u8;
+        (bytes[at] == separator && value <= last).then_some(Some(value))
+    };
+    let year = digits(0..4).filter(|year| *year > 0)?;
+    let month = field(4, b'-', 12)?.filter(|month| *month > 0);
+    if bytes.len() > 4 && month.is_none() {
+        return None;
+    }
+    let day = field(7, b'-', 31)?;
+    if let (Some(month), Some(day)) = (month, day) {
+        if day == 0 || day > month_length(year, month)? {
+            return None;
+        }
+    }
+    Some(Collected {
+        year,
+        month,
+        day,
+        time: [
+            field(10, b'T', 23)?,
+            field(13, b':', 59)?,
+            field(16, b':', 59)?,
+        ],
+    })
+}
+
+impl Completion {
+    fn day_of(&self, year: u16, month: u8) -> u8 {
+        match self.day.expect("admitted completion day") {
+            DayRule::First => 1,
+            DayRule::Last => month_length(year, month).expect("admitted month"),
+            DayRule::Number(day) => day,
+        }
+    }
+    /// Complete the date part from the declared rules, or the calendar diagnostic.
+    fn complete_date(
+        &self,
+        collected: Collected,
+        precision: Precision,
+        path: &str,
+    ) -> Result<Date, Diagnostic> {
+        if let Some(date) = collected.date() {
+            return Ok(date.with_precision(precision));
+        }
+        let month = collected
+            .month
+            .or(self.month)
+            .expect("admitted completion month");
+        let day = self.day_of(collected.year, month);
+        Date::new(collected.year, month, day, precision.min(Precision::Day)).map_err(|_| {
             diagnostic(
-                C::DateImputeCalendar,
+                C::ImputeCalendar,
                 path,
                 &[
-                    ("value", Value::Str(value)),
+                    ("value", Value::Str(collected.prefix())),
                     (
                         "completed",
-                        Value::Str(format!(
-                            "{:04}-{:02}-{:02}",
-                            self.year, self.month, self.day
-                        )),
+                        Value::Str(format!("{:04}-{month:02}-{day:02}", collected.year)),
                     ),
                 ],
             )
         })
     }
+    /// The earliest or latest day the collected date components admit.
+    fn edge_date(collected: Collected, last: bool) -> Date {
+        let month = collected.month.unwrap_or(if last { 12 } else { 1 });
+        let day = collected.day.unwrap_or(if last {
+            month_length(collected.year, month).expect("admitted month")
+        } else {
+            1
+        });
+        Date::new(collected.year, month, day, Precision::Day).expect("admitted collected date")
+    }
+    fn moment(date: Date, time: [u8; 3], precision: Precision) -> DateTime {
+        DateTime::new(date, time[0], time[1], time[2], precision).expect("admitted time")
+    }
+    fn edge_time(collected: Collected, last: bool) -> [u8; 3] {
+        let edge = if last { [23, 59, 59] } else { [0, 0, 0] };
+        std::array::from_fn(|index| collected.time[index].unwrap_or(edge[index]))
+    }
 }
+
 impl Imputation {
-    /// Validate the declared calendar policy and required source metadata.
+    /// Validate the declared policy and required source metadata.
     pub fn new(
         kind: ImputationKind,
         source: String,
         not_before: Option<String>,
         not_after: Option<String>,
+        fallback: Option<String>,
         path: String,
-        missing: Option<Value>,
         invalid: Option<Value>,
     ) -> Option<Self> {
         if source.is_empty()
             || path.is_empty()
-            || [&not_before, &not_after]
+            || [&not_before, &not_after, &fallback]
                 .into_iter()
-                .any(|bound| bound.as_ref().is_some_and(String::is_empty))
+                .any(|operand| operand.as_ref().is_some_and(String::is_empty))
         {
             return None;
         }
         match kind {
-            ImputationKind::Date {
-                month,
-                day,
-                minimum,
-            } => {
-                if !matches!(
-                    (minimum, month),
-                    (DatePrecision::Year, Some(1..=12)) | (DatePrecision::Month, None)
-                ) || matches!(day, DayRule::Number(0 | 32..=255))
-                {
+            ImputationKind::Impute(completion) => {
+                let month = matches!(
+                    (completion.minimum, completion.month),
+                    (Precision::Year, Some(1..=12)) | (Precision::Month | Precision::Day, None)
+                );
+                let day = match (completion.minimum, completion.day) {
+                    (Precision::Day, None) => true,
+                    (Precision::Year | Precision::Month, Some(DayRule::Number(day))) => {
+                        (1..=31).contains(&day)
+                    }
+                    (Precision::Year | Precision::Month, Some(_)) => true,
+                    _ => false,
+                };
+                let time =
+                    (completion.target == TemporalType::DateTime) == completion.time.is_some();
+                if !(month && day && time) {
                     return None;
                 }
             }
-            _ if not_before.is_some() || not_after.is_some() => return None,
+            _ if not_before.is_some() || not_after.is_some() || fallback.is_some() => return None,
             _ => (),
         }
-        if matches!(kind, ImputationKind::ToDate) && (missing.is_some() || invalid.is_some()) {
+        if matches!(kind, ImputationKind::ToDate | ImputationKind::Flag { .. }) && invalid.is_some()
+        {
             return None;
         }
         Some(Self {
@@ -264,8 +466,8 @@ impl Imputation {
             source,
             not_before,
             not_after,
+            fallback,
             path,
-            missing,
             invalid,
         })
     }
@@ -275,8 +477,7 @@ impl Imputation {
     pub fn source(&self) -> &str {
         &self.source
     }
-    /// Declared bounds as `(field, source)`, `not_before` first. Bound operands
-    /// follow the source operand in this order.
+    /// Declared bounds as `(field, source)`, `not_before` first.
     pub fn bounds(&self) -> impl Iterator<Item = (&'static str, &str)> + '_ {
         [
             ("not_before", self.not_before.as_deref()),
@@ -285,48 +486,107 @@ impl Imputation {
         .into_iter()
         .filter_map(|(field, source)| source.map(|source| (field, source)))
     }
+    pub fn fallback(&self) -> Option<&str> {
+        self.fallback.as_deref()
+    }
+    /// Every operand as `(field, source)`: the source, then the declared
+    /// bounds, then the fallback. Bound operands follow the source in this order.
+    pub fn operands(&self) -> impl Iterator<Item = (&'static str, &str)> + '_ {
+        std::iter::once(("source", self.source.as_str()))
+            .chain(self.bounds())
+            .chain(self.fallback().map(|source| ("fallback", source)))
+    }
+    /// Bounds and a fallback are read only when a source needs them.
+    pub fn has_conditional_operands(&self) -> bool {
+        self.operands().nth(1).is_some()
+    }
     pub fn path(&self) -> &str {
         &self.path
     }
     pub fn handler(&self, name: &str) -> Option<&Value> {
         match name {
-            "missing" => self.missing.as_ref(),
             "invalid" => self.invalid.as_ref(),
             _ => None,
         }
     }
+    /// Whether a missing source is counted as a default substitution at
+    /// `<path>.missing`; a declared fallback is counted at `<path>.fallback`.
+    pub fn counts_missing_source(&self) -> bool {
+        matches!(
+            self.kind,
+            ImputationKind::Impute(_) | ImputationKind::Precision { .. }
+        )
+    }
+    /// Crossed bounds are counted only where both bounds are declared.
+    pub fn counts_crossed_bounds(&self) -> bool {
+        self.not_before.is_some() && self.not_after.is_some()
+    }
     pub fn operation(&self) -> &'static str {
         match self.kind {
-            ImputationKind::Date { .. } => "date_impute",
-            ImputationKind::DatePrecision => "date_precision",
-            ImputationKind::DateTime { .. } => "datetime_impute",
-            ImputationKind::DateTimePrecision => "datetime_precision",
+            ImputationKind::Impute(_) => "impute",
+            ImputationKind::Precision { .. } => "precision",
+            ImputationKind::Flag { .. } => "imputation_flag",
             ImputationKind::ToDate => "to_date",
+        }
+    }
+    fn target(&self) -> Option<TemporalType> {
+        match self.kind {
+            ImputationKind::Impute(Completion { target, .. })
+            | ImputationKind::Precision { target } => Some(target),
+            ImputationKind::Flag { .. } | ImputationKind::ToDate => None,
         }
     }
     pub fn expected(&self) -> &'static str {
         match self.kind {
-            ImputationKind::Date { .. } | ImputationKind::DateTime { .. } => "str",
-            ImputationKind::DatePrecision => "str or date",
-            ImputationKind::DateTimePrecision => "str or datetime",
+            ImputationKind::Impute(Completion { target, .. })
+            | ImputationKind::Precision { target } => match target {
+                TemporalType::Date => "str or date",
+                TemporalType::DateTime => "str or datetime",
+            },
+            ImputationKind::Flag {
+                part: FlagPart::Date,
+                ..
+            } => "date or datetime",
+            ImputationKind::Flag {
+                part: FlagPart::Time,
+                ..
+            } => "datetime",
             ImputationKind::ToDate => "datetime, ISO date text, or ISO 8601 datetime text",
         }
     }
-    pub fn accepts(&self, kind: crate::value::ColumnType) -> bool {
-        use crate::value::ColumnType as T;
+    pub fn accepts(&self, kind: ColumnType) -> bool {
+        use ColumnType as T;
         match self.kind {
-            ImputationKind::Date { .. } | ImputationKind::DatePrecision => {
-                matches!(kind, T::Str | T::Date)
+            ImputationKind::Impute(Completion { target, .. })
+            | ImputationKind::Precision { target } => {
+                kind == T::Str || kind == target.column_type()
             }
-            ImputationKind::DateTime { .. }
-            | ImputationKind::DateTimePrecision
-            | ImputationKind::ToDate => matches!(kind, T::Str | T::DateTime),
+            ImputationKind::Flag {
+                part: FlagPart::Date,
+                ..
+            } => matches!(kind, T::Date | T::DateTime),
+            ImputationKind::Flag {
+                part: FlagPart::Time,
+                ..
+            } => kind == T::DateTime,
+            ImputationKind::ToDate => matches!(kind, T::Str | T::DateTime),
         }
+    }
+    /// A bound or fallback has the declared target type.
+    pub fn accepts_operand(&self, kind: ColumnType) -> bool {
+        self.target()
+            .is_some_and(|target| kind == target.column_type())
     }
     pub(crate) fn input_diagnostic(&self, actual: &str) -> Diagnostic {
         let code = match self.kind {
-            ImputationKind::DateTime { .. } => C::DatetimeImputeInput,
-            ImputationKind::DateTimePrecision => C::DatetimePrecisionInput,
+            ImputationKind::Impute(Completion {
+                target: TemporalType::DateTime,
+                ..
+            }) => C::ImputeDatetimeInput,
+            ImputationKind::Precision {
+                target: TemporalType::DateTime,
+            } => C::PrecisionDatetimeInput,
+            ImputationKind::Flag { .. } => C::ImputationFlagInput,
             ImputationKind::ToDate => C::ToDateInput,
             _ => C::TemporalOperand,
         };
@@ -340,7 +600,8 @@ impl Imputation {
             ],
         )
     }
-    pub(crate) fn bound_input_diagnostic(
+    /// A bound or fallback whose value is not of the declared target type.
+    pub(crate) fn operand_input_diagnostic(
         &self,
         field: &str,
         source: &str,
@@ -351,62 +612,99 @@ impl Imputation {
             &format!("{}.{field}", self.path),
             &[
                 ("source", Value::Str(source.into())),
-                ("expected", Value::Str("date".into())),
+                (
+                    "expected",
+                    Value::Str(self.target().map_or("date", TemporalType::name).into()),
+                ),
                 ("actual", Value::Str(actual.into())),
             ],
         )
     }
-    fn recover(
-        &self,
-        name: &'static str,
-        text: Option<&str>,
-    ) -> Result<ImputationStep, Diagnostic> {
-        if self.handler(name).is_some() {
-            return Ok(ImputationStep::Recovered { handler: name });
+    fn recover(&self, text: &str) -> Result<ImputationStep, Diagnostic> {
+        if self.invalid.is_some() {
+            return Ok(ImputationStep::Recovered { handler: "invalid" });
         }
-        let code = match (self.kind, name) {
-            (ImputationKind::DateTime { .. }, "missing") => C::DatetimeImputeMissing,
-            (ImputationKind::DateTime { .. }, _) => C::DatetimeImputeInvalid,
-            (ImputationKind::DateTimePrecision, "missing") => C::DatetimePrecisionMissing,
-            (ImputationKind::DateTimePrecision, _) => C::DatetimePrecisionInvalid,
-            (_, "missing") => C::DateImputeMissing,
-            _ => C::DateImputeInvalid,
-        };
-        let mut fields = vec![
-            ("operation", Value::Str(self.operation().into())),
-            ("source", Value::Str(self.source.clone())),
-        ];
-        if let Some(text) = text {
-            fields.push(("value", Value::Str(text.into())));
-        }
-        Err(diagnostic(code, &self.path, &fields))
+        Err(diagnostic(
+            C::ImputeInvalid,
+            &self.path,
+            &[
+                ("operation", Value::Str(self.operation().into())),
+                ("source", Value::Str(self.source.clone())),
+                ("value", Value::Str(text.into())),
+            ],
+        ))
     }
-    /// Source completion is a separate step so unused bounds have no read effects.
-    /// This
-    /// pure service preserves semantic findings and does not own runtime quotas.
+    /// Source completion is a separate step so unused bounds and an unused
+    /// fallback have no read effects. This pure service preserves semantic
+    /// findings and does not own runtime quotas.
     pub fn source_value(&self, value: ValueRef<'_>) -> Result<ImputationStep, Diagnostic> {
         use ImputationKind as K;
         if value == ValueRef::Missing {
-            return if matches!(self.kind, K::ToDate) {
-                Ok(ImputationStep::Value(Value::Missing))
-            } else {
-                self.recover("missing", None)
-            };
+            return Ok(match self.kind {
+                K::Impute(_) | K::Precision { .. } => ImputationStep::Missing,
+                K::Flag { .. } | K::ToDate => ImputationStep::Value(Value::Missing),
+            });
         }
         let result = match (self.kind, value) {
-            (K::Date { .. }, ValueRef::Date(date)) => Value::Date(date),
-            (K::DatePrecision, ValueRef::Date(date)) => date_code(date.collected_precision()),
-            (K::DateTime { .. }, ValueRef::DateTime(date)) => Value::DateTime(date),
-            (K::DateTimePrecision, ValueRef::DateTime(date)) => {
-                datetime_code(date.collected_precision())
+            (K::Impute(completion), ValueRef::Date(date))
+                if completion.target == TemporalType::Date =>
+            {
+                Value::Date(date)
             }
-            (K::ToDate, ValueRef::DateTime(moment)) => Value::Date(moment_date(moment)),
-            (K::ToDate, ValueRef::Str(text)) => {
-                if let Ok(date) = text.parse::<Date>() {
-                    Value::Date(date)
-                } else if let Ok(moment) = text.parse::<DateTime>() {
-                    Value::Date(moment_date(moment))
-                } else {
+            (K::Impute(completion), ValueRef::DateTime(moment))
+                if completion.target == TemporalType::DateTime =>
+            {
+                Value::DateTime(moment)
+            }
+            (K::Impute(completion), ValueRef::Str(text)) => {
+                let Some(collected) = collected(text) else {
+                    return self.recover(text);
+                };
+                return self.complete(completion, collected);
+            }
+            (
+                K::Precision {
+                    target: TemporalType::Date,
+                },
+                ValueRef::Date(date),
+            ) => Value::Str(date.collected_precision().word().into()),
+            (
+                K::Precision {
+                    target: TemporalType::DateTime,
+                },
+                ValueRef::DateTime(moment),
+            ) => Value::Str(moment.collected_precision().word().into()),
+            (K::Precision { target }, ValueRef::Str(text)) => {
+                let Some(collected) = collected(text) else {
+                    return self.recover(text);
+                };
+                let precision = match target {
+                    TemporalType::Date => collected.precision().min(Precision::Day),
+                    TemporalType::DateTime => collected.precision(),
+                };
+                Value::Str(precision.word().into())
+            }
+            (
+                K::Flag {
+                    part: FlagPart::Date,
+                    ..
+                },
+                ValueRef::Date(date),
+            ) => flag(FlagPart::Date, true, date.collected_precision()),
+            (
+                K::Flag {
+                    part,
+                    seconds_collected,
+                },
+                ValueRef::DateTime(moment),
+            ) => flag(part, seconds_collected, moment.collected_precision()),
+            (K::ToDate, ValueRef::DateTime(moment)) => Value::Date(moment.date()),
+            (K::ToDate, ValueRef::Str(text)) => match collected(text) {
+                Some(collected) => match collected.date() {
+                    Some(date) => Value::Date(date),
+                    None => return Ok(ImputationStep::Partial),
+                },
+                None => {
                     return Err(diagnostic(
                         C::ToDateInvalid,
                         &self.path,
@@ -414,129 +712,186 @@ impl Imputation {
                             ("operation", Value::Str("to_date".into())),
                             ("value", Value::Str(text.into())),
                         ],
-                    ));
+                    ))
                 }
-            }
-            (
-                K::Date {
-                    month,
-                    day,
-                    minimum,
-                },
-                ValueRef::Str(text),
-            ) => {
-                let Some((year, collected_month, collected_day, precision)) = prefix(text) else {
-                    return self.recover("invalid", Some(text));
-                };
-                if precision == DatePrecision::Year && minimum == DatePrecision::Month {
-                    return Ok(ImputationStep::Value(Value::Missing));
-                }
-                if let Some(day) = collected_day {
-                    return Ok(ImputationStep::Value(Value::Date(
-                        Date::new(year, collected_month.unwrap(), day, DatePrecision::Day).unwrap(),
-                    )));
-                }
-                let month = collected_month
-                    .or(month)
-                    .expect("admitted completion month");
-                let day = match day {
-                    DayRule::First => 1,
-                    DayRule::Last => month_length(year, month),
-                    DayRule::Number(day) => day,
-                };
-                let partial = PartialDate {
-                    year,
-                    month,
-                    day,
-                    precision,
-                };
-                if self.bounds().next().is_some() {
-                    return Ok(ImputationStep::Bound(partial));
-                }
-                Value::Date(partial.complete(&self.path)?)
-            }
-            (K::DatePrecision, ValueRef::Str(text)) => {
-                let Some((_, _, _, precision)) = prefix(text) else {
-                    return self.recover("invalid", Some(text));
-                };
-                date_code(precision)
-            }
-            (K::DateTime { time }, ValueRef::Str(text)) => {
-                let Some(moment) = reduced_datetime(text, time) else {
-                    return self.recover("invalid", Some(text));
-                };
-                Value::DateTime(moment)
-            }
-            (K::DateTimePrecision, ValueRef::Str(text)) => {
-                let Some(moment) = reduced_datetime(text, TimeRule::First) else {
-                    return self.recover("invalid", Some(text));
-                };
-                datetime_code(moment.collected_precision())
-            }
+            },
             (_, other) => return Err(self.input_diagnostic(type_name(other))),
         };
         Ok(ImputationStep::Value(result))
     }
-    /// Move only imputed components within the collected year or month.
-    /// A missing bound, like an undeclared one, is no bound.
-    pub fn apply_bounds(
+    /// Complete collected text under the declared rules. A source coarser than
+    /// the minimum precision gives missing, and a complete source stands.
+    fn complete(
         &self,
-        completed: PartialDate,
-        not_before: ValueRef<'_>,
-        not_after: ValueRef<'_>,
-    ) -> Result<Value, Diagnostic> {
-        let bound = |field: &str, source: Option<&str>, value: ValueRef<'_>| match (source, value) {
-            (None, _) | (_, ValueRef::Missing) => Ok(None),
-            (_, ValueRef::Date(date)) => Ok(Some(date)),
-            (Some(source), other) => {
-                Err(self.bound_input_diagnostic(field, source, type_name(other)))
+        completion: Completion,
+        collected: Collected,
+    ) -> Result<ImputationStep, Diagnostic> {
+        let precision = collected.precision();
+        let value = match completion.target {
+            TemporalType::Date => {
+                if let Some(date) = collected.date() {
+                    return Ok(ImputationStep::Value(Value::Date(date)));
+                }
+                if precision < completion.minimum {
+                    return Ok(ImputationStep::Value(Value::Missing));
+                }
+                let completed = completion.complete_date(collected, precision, &self.path)?;
+                if self.bounds().next().is_some() {
+                    return Ok(ImputationStep::Bound(Pending::Date {
+                        completed,
+                        earliest: Completion::edge_date(collected, false),
+                        latest: Completion::edge_date(collected, true),
+                    }));
+                }
+                Value::Date(completed)
+            }
+            TemporalType::DateTime => {
+                if precision == Precision::Second {
+                    let date = collected.date().expect("collected date");
+                    let time = Completion::edge_time(collected, false);
+                    return Ok(ImputationStep::Value(Value::DateTime(Completion::moment(
+                        date, time, precision,
+                    ))));
+                }
+                if precision < completion.minimum {
+                    return Ok(ImputationStep::Value(Value::Missing));
+                }
+                let date = completion.complete_date(collected, precision, &self.path)?;
+                let last = completion.time == Some(TimeRule::Last);
+                let completed =
+                    Completion::moment(date, Completion::edge_time(collected, last), precision);
+                if self.bounds().next().is_some() {
+                    let edge = |last| {
+                        Completion::moment(
+                            Completion::edge_date(collected, last),
+                            Completion::edge_time(collected, last),
+                            precision,
+                        )
+                    };
+                    return Ok(ImputationStep::Bound(Pending::DateTime {
+                        completed,
+                        earliest: edge(false),
+                        latest: edge(true),
+                    }));
+                }
+                Value::DateTime(completed)
             }
         };
-        let lower = bound("not_before", self.not_before.as_deref(), not_before)?;
-        let upper = bound("not_after", self.not_after.as_deref(), not_after)?;
-        let completed = completed.complete(&self.path)?;
-        let precision = completed.collected_precision();
-        let (year, month, _) = completed.fields();
-        let (first, last) = match precision {
-            DatePrecision::Year => (1, 12),
-            DatePrecision::Month => (month, month),
-            DatePrecision::Day => unreachable!("complete dates skip bounds"),
-        };
-        let first = Date::new(year, first, 1, DatePrecision::Day).unwrap();
-        let last = Date::new(year, last, month_length(year, last), DatePrecision::Day).unwrap();
-        let earliest = lower.map_or(first, |lower| lower.max(first));
-        let latest = upper.map_or(last, |upper| upper.min(last));
-        if earliest > latest {
-            return Ok(Value::Missing);
+        Ok(ImputationStep::Value(value))
+    }
+    /// A fallback answers a missing source with its whole value, collected
+    /// precision `none`; a missing fallback gives missing.
+    pub fn fallback_value(&self, value: ValueRef<'_>) -> Result<Value, Diagnostic> {
+        match (self.target(), value) {
+            (_, ValueRef::Missing) => Ok(Value::Missing),
+            (Some(TemporalType::Date), ValueRef::Date(date)) => {
+                Ok(Value::Date(date.with_precision(Precision::None)))
+            }
+            (Some(TemporalType::DateTime), ValueRef::DateTime(moment)) => {
+                Ok(Value::DateTime(moment.with_precision(Precision::None)))
+            }
+            (_, other) => Err(self.operand_input_diagnostic(
+                "fallback",
+                self.fallback().unwrap_or_default(),
+                type_name(other),
+            )),
         }
-        let (year, month, day) = completed.clamp(earliest, latest).fields();
-        Ok(Value::Date(Date::new(year, month, day, precision).unwrap()))
+    }
+    /// Move only imputed components within the interval the collected
+    /// components admit. A missing bound, or one outside that interval, is no
+    /// bound; crossed bounds resolve to `not_after`. Returns the bounded value
+    /// and whether the bounds crossed.
+    pub fn apply_bounds(
+        &self,
+        pending: Pending,
+        not_before: ValueRef<'_>,
+        not_after: ValueRef<'_>,
+    ) -> Result<(Value, bool), Diagnostic> {
+        let lower = self
+            .not_before
+            .as_deref()
+            .map(|source| ("not_before", source));
+        let upper = self
+            .not_after
+            .as_deref()
+            .map(|source| ("not_after", source));
+        let precision = pending.collected_precision();
+        Ok(match pending {
+            Pending::Date {
+                completed,
+                earliest,
+                latest,
+            } => {
+                let read =
+                    |declared: Option<(&str, &str)>, value: ValueRef<'_>| match (declared, value) {
+                        (None, _) | (_, ValueRef::Missing) => Ok(None),
+                        (_, ValueRef::Date(date)) => Ok(Some(date)),
+                        (Some((field, source)), other) => {
+                            Err(self.operand_input_diagnostic(field, source, type_name(other)))
+                        }
+                    };
+                let (value, crossed) = clamp(
+                    completed,
+                    earliest,
+                    latest,
+                    read(lower, not_before)?,
+                    read(upper, not_after)?,
+                );
+                (Value::Date(value.with_precision(precision)), crossed)
+            }
+            Pending::DateTime {
+                completed,
+                earliest,
+                latest,
+            } => {
+                let read =
+                    |declared: Option<(&str, &str)>, value: ValueRef<'_>| match (declared, value) {
+                        (None, _) | (_, ValueRef::Missing) => Ok(None),
+                        (_, ValueRef::DateTime(moment)) => Ok(Some(moment)),
+                        (Some((field, source)), other) => {
+                            Err(self.operand_input_diagnostic(field, source, type_name(other)))
+                        }
+                    };
+                let (value, crossed) = clamp(
+                    completed,
+                    earliest,
+                    latest,
+                    read(lower, not_before)?,
+                    read(upper, not_after)?,
+                );
+                (Value::DateTime(value.with_precision(precision)), crossed)
+            }
+        })
     }
 }
-fn moment_date(moment: DateTime) -> Date {
-    let (year, month, day, _, _, _) = moment.fields();
-    Date::new(year, month, day, DatePrecision::Day).unwrap()
+/// `min(max(completed, lower), upper)` over the bounds that lie inside
+/// `[earliest, latest]`, and whether those bounds crossed.
+fn clamp<T: Ord + Copy>(
+    completed: T,
+    earliest: T,
+    latest: T,
+    lower: Option<T>,
+    upper: Option<T>,
+) -> (T, bool) {
+    let inside = |bound: &T| earliest <= *bound && *bound <= latest;
+    let (lower, upper) = (lower.filter(inside), upper.filter(inside));
+    let crossed = matches!((lower, upper), (Some(lower), Some(upper)) if lower > upper);
+    let raised = lower.map_or(completed, |lower| completed.max(lower));
+    (upper.map_or(raised, |upper| raised.min(upper)), crossed)
 }
-fn date_code(precision: DatePrecision) -> Value {
-    Value::Str(
-        match precision {
-            DatePrecision::Year => "Y",
-            DatePrecision::Month => "M",
-            DatePrecision::Day => "D",
-        }
-        .into(),
-    )
-}
-fn datetime_code(precision: DateTimePrecision) -> Value {
-    Value::Str(
-        match precision {
-            DateTimePrecision::Day => "D",
-            DateTimePrecision::Hour => "H",
-            DateTimePrecision::Minute => "M",
-            DateTimePrecision::Second => "S",
-        }
-        .into(),
-    )
+/// The ADaM `*DTF` or `*TMF` code for an imputed value's collected precision.
+fn flag(part: FlagPart, seconds_collected: bool, precision: Precision) -> Value {
+    let code = match (part, precision) {
+        (FlagPart::Date, Precision::None) => "Y",
+        (FlagPart::Date, Precision::Year) => "M",
+        (FlagPart::Date, Precision::Month) => "D",
+        (FlagPart::Date, _) => return Value::Missing,
+        (FlagPart::Time, Precision::Hour) => "M",
+        (FlagPart::Time, Precision::Minute) if seconds_collected => "S",
+        (FlagPart::Time, Precision::Minute | Precision::Second) => return Value::Missing,
+        (FlagPart::Time, _) => "H",
+    };
+    Value::Str(code.into())
 }
 fn type_name(value: ValueRef<'_>) -> &'static str {
     match value {
@@ -549,69 +904,6 @@ fn type_name(value: ValueRef<'_>) -> &'static str {
         ValueRef::Missing => "missing",
     }
 }
-fn month_length(year: u16, month: u8) -> u8 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400)) => {
-            29
-        }
-        2 => 28,
-        _ => unreachable!("admitted month"),
-    }
-}
-fn prefix(text: &str) -> Option<(u16, Option<u8>, Option<u8>, DatePrecision)> {
-    let bytes = text.as_bytes();
-    if !matches!(bytes.len(), 4 | 7 | 10) || !bytes[..4].iter().all(u8::is_ascii_digit) {
-        return None;
-    }
-    let year = text[..4].parse::<u16>().ok().filter(|n| *n > 0)?;
-    if bytes.len() == 4 {
-        return Some((year, None, None, DatePrecision::Year));
-    }
-    if bytes[4] != b'-' || !bytes[5..7].iter().all(u8::is_ascii_digit) {
-        return None;
-    }
-    let month = text[5..7]
-        .parse::<u8>()
-        .ok()
-        .filter(|n| (1..=12).contains(n))?;
-    if bytes.len() == 7 {
-        return Some((year, Some(month), None, DatePrecision::Month));
-    }
-    let date = text.parse::<Date>().ok()?;
-    Some((year, Some(month), Some(date.fields().2), DatePrecision::Day))
-}
-/// Complete ISO 8601 date text, or datetime text cut after its hour, minute or
-/// second. The time rule supplies only the fields the text does not carry, and
-/// the result's collected precision is the last field the text carried.
-fn reduced_datetime(text: &str, time: TimeRule) -> Option<DateTime> {
-    let bytes = text.as_bytes();
-    let precision = match bytes.len() {
-        10 => DateTimePrecision::Day,
-        13 => DateTimePrecision::Hour,
-        16 => DateTimePrecision::Minute,
-        19 => DateTimePrecision::Second,
-        _ => return None,
-    };
-    let date = text.get(..10)?.parse::<Date>().ok()?;
-    let mut fields = match time {
-        TimeRule::First => [0, 0, 0],
-        TimeRule::Last => [23, 59, 59],
-    };
-    // Each collected field is two digits after `T` (hour) or `:` (minute, second).
-    for (index, field) in fields.iter_mut().enumerate().take((bytes.len() - 10) / 3) {
-        let start = 10 + 3 * index;
-        let separator = if index == 0 { b'T' } else { b':' };
-        let (high, low) = (bytes[start + 1], bytes[start + 2]);
-        if bytes[start] != separator || !high.is_ascii_digit() || !low.is_ascii_digit() {
-            return None;
-        }
-        *field = (high - b'0') * 10 + (low - b'0');
-    }
-    let [hour, minute, second] = fields;
-    DateTime::new(date, hour, minute, second, precision).ok()
-}
 pub(crate) fn diagnostic(code: C, path: &str, fields: &[(&str, Value)]) -> Diagnostic {
     Diagnostic {
         code,
@@ -622,5 +914,126 @@ pub(crate) fn diagnostic(code: C, path: &str, fields: &[(&str, Value)]) -> Diagn
             .collect(),
         source_span: None,
         operand_route: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collected_text_reads_every_right_truncated_form_and_nothing_else() {
+        for (text, precision) in [
+            ("2025", Precision::Year),
+            ("2025-03", Precision::Month),
+            ("2025-03-04", Precision::Day),
+            ("2025-03-04T08", Precision::Hour),
+            ("2025-03-04T08:30", Precision::Minute),
+            ("2025-03-04T08:30:15", Precision::Second),
+            ("2024-02-29T23:59:59", Precision::Second),
+        ] {
+            assert_eq!(
+                collected(text).map(Collected::precision),
+                Some(precision),
+                "{text}"
+            );
+        }
+        for text in [
+            "",
+            "0000",
+            "202",
+            "20250",
+            "2025-00",
+            "2025-13",
+            "2025-1",
+            "2025/03",
+            "2025-02-29",
+            "2025-04-31",
+            "2025-03-00",
+            "2025-03-04 08",
+            "2025-03-04t08",
+            "2025-03-04T24",
+            "2025-03-04T08:60",
+            "2025-03-04T08:30:60",
+            "2025-03-04T08:30:15Z",
+            "2025-03-04T08:30:15.5",
+            "2025---04",
+            "UNK",
+            "２０２５",
+        ] {
+            assert_eq!(collected(text), None, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn crossed_bounds_resolve_to_the_upper_bound_and_outside_bounds_are_ignored() {
+        let day = |d| Date::new(2025, 2, d, Precision::Day).unwrap();
+        let (earliest, latest, completed) = (day(1), day(28), day(15));
+        assert_eq!(
+            clamp(completed, earliest, latest, Some(day(20)), Some(day(10))),
+            (day(10), true)
+        );
+        assert_eq!(
+            clamp(completed, earliest, latest, Some(day(10)), Some(day(20))),
+            (day(15), false)
+        );
+        let march = Date::new(2025, 3, 20, Precision::Day).unwrap();
+        assert_eq!(
+            clamp(completed, earliest, latest, Some(march), None),
+            (day(15), false)
+        );
+        let january = Date::new(2025, 1, 5, Precision::Day).unwrap();
+        assert_eq!(
+            clamp(completed, earliest, latest, None, Some(january)),
+            (day(15), false)
+        );
+    }
+
+    #[test]
+    fn flags_follow_the_one_precision_ladder() {
+        use Precision as P;
+        let code = |part, seconds, precision| match flag(part, seconds, precision) {
+            Value::Str(code) => Some(code),
+            _ => None,
+        };
+        let date = [
+            P::None,
+            P::Year,
+            P::Month,
+            P::Day,
+            P::Hour,
+            P::Minute,
+            P::Second,
+        ]
+        .map(|precision| code(FlagPart::Date, true, precision));
+        assert_eq!(
+            date,
+            [Some("Y"), Some("M"), Some("D"), None, None, None, None].map(|c| c.map(String::from))
+        );
+        let time = [
+            P::None,
+            P::Year,
+            P::Month,
+            P::Day,
+            P::Hour,
+            P::Minute,
+            P::Second,
+        ]
+        .map(|precision| code(FlagPart::Time, true, precision));
+        assert_eq!(
+            time,
+            [
+                Some("H"),
+                Some("H"),
+                Some("H"),
+                Some("H"),
+                Some("M"),
+                Some("S"),
+                None
+            ]
+            .map(|c| c.map(String::from))
+        );
+        assert_eq!(code(FlagPart::Time, false, P::Minute), None);
+        assert_eq!(code(FlagPart::Time, false, P::Hour), Some("M".into()));
     }
 }

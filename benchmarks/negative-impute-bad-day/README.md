@@ -23,7 +23,8 @@ latest date the collected text allows, name the last day of the month rather
 than a number:
 
 ```yaml
-date_impute:
+impute:
+  type: date
   source: AE.AEENDTC
   month: 12
   day: last

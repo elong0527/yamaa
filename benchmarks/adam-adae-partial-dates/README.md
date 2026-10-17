@@ -30,11 +30,12 @@ dataset (ADSL), empty when the subject has no ADSL record.
   collected one would, so `ASTDTF` tells a reader which flagged
   events rested on a supplied day.
 
-**Note:** a completed date is never placed before first exposure.
-When the 15th would fall before `TRTSDT`, the date moves forward to
-the exposure date, which the collected month still allows. When the
-whole collected month ends before the exposure date, no day it
-allows can satisfy that, so the event is left without an analysis
-date rather than moved into a month nobody recorded. A fully
-collected date is left exactly as collected even when it falls
-before `TRTSDT`, because there is nothing about it to choose.
+**Note:** a supplied day is never placed before a first exposure
+that falls inside the collected month. When the 15th would fall
+before `TRTSDT`, the date moves forward to the exposure date, which
+the collected month still allows. When the whole collected month
+ends before the exposure date, no day it allows could reach it, so
+the date stays on the 15th rather than moving into a month nobody
+recorded, and the event is not treatment emergent. A fully collected
+date is left exactly as collected even when it falls before
+`TRTSDT`, because there is nothing about it to choose.

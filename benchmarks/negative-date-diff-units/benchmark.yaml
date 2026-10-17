@@ -2,4 +2,4 @@ lifecycle: reviewed
 standard: ADaM
 domain: ADSL
 covers:
-- date_diff
+- diff

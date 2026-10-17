@@ -11,7 +11,7 @@ mod project {
         };
         use yamaa_core::{
             table::ValueRef,
-            temporal::{Date, DatePrecision},
+            temporal::{Date, Precision},
             value::{ColumnType, Value, ValueType},
         };
 
@@ -272,11 +272,11 @@ mod project {
                     let ValueRef::Date(date) = args[0].value else {
                         panic!("date")
                     };
-                    assert_eq!(date.collected_precision(), DatePrecision::Year);
+                    assert_eq!(date.collected_precision(), Precision::Year);
                     Ok(Value::Date(date))
                 }
             }
-            let date = Date::new(2025, 1, 1, DatePrecision::Year).unwrap();
+            let date = Date::new(2025, 1, 1, Precision::Year).unwrap();
             let plan = InvocationPlan::new(
                 identity(),
                 parameters("x/date/false/required/host_x"),
@@ -295,7 +295,7 @@ mod project {
             let Value::Date(result) = result else {
                 panic!("date")
             };
-            assert_eq!(result.collected_precision(), DatePrecision::Year);
+            assert_eq!(result.collected_precision(), Precision::Year);
             assert_eq!(calls.get(), 1);
         }
 

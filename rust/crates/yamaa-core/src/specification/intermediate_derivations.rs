@@ -145,26 +145,30 @@ fn prepare_kind(
                 })
                 .collect::<Result<_, _>>()?,
         ),
-        "row_number" | "rank" | "date_diff" | "study_day" | "to_epoch_day" => {
+        "row_number" | "rank" | "study_day" | "to_epoch_day" => {
             Kind::Literal(Some(ColumnType::Int))
         }
-        "str_pad" | "str_case" | "str_template" | "str_extract" | "str_replace"
-        | "date_precision" | "datetime_precision" | "baseline_flag" => {
-            Kind::Literal(Some(ColumnType::Str))
-        }
+        "str_pad" | "str_case" | "str_template" | "str_extract" | "str_replace" | "precision"
+        | "imputation_flag" | "baseline_flag" => Kind::Literal(Some(ColumnType::Str)),
         "flag" => d
             .field(payload, "true_value")
             .map(|id| literal_kind(&d.nodes()[id]))
             .unwrap_or(Kind::Literal(Some(ColumnType::Str))),
-        "date_impute" | "to_date" | "date_shift" => Kind::Literal(Some(ColumnType::Date)),
-        "datetime_impute" | "datetime_shift" => Kind::Literal(Some(ColumnType::DateTime)),
-        "datetime_diff" => {
-            Kind::Literal(Some(if text(d, field(d, payload, "unit")?)? == "second" {
-                ColumnType::Int
-            } else {
-                ColumnType::Float
-            }))
-        }
+        "to_date" => Kind::Literal(Some(ColumnType::Date)),
+        "impute" | "shift" => Kind::Literal(Some(match text(d, field(d, payload, "type")?)? {
+            "date" => ColumnType::Date,
+            "datetime" => ColumnType::DateTime,
+            _ => return Err(PrepareError::Internal),
+        })),
+        "diff" => Kind::Literal(Some(
+            match (
+                text(d, field(d, payload, "type")?)?,
+                text(d, field(d, payload, "unit")?)?,
+            ) {
+                ("date", _) | ("datetime", "second") => ColumnType::Int,
+                _ => ColumnType::Float,
+            },
+        )),
         "duration_value" => {
             if text(d, field(d, payload, "unit")?)? == "second" {
                 Kind::Unavailable

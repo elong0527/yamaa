@@ -43,7 +43,7 @@ mod scalar {
         }
     }
     mod temporal {
-        use yamaa_core::temporal::{Date, DatePrecision as DP, DateTime, DateTimePrecision as TP};
+        use yamaa_core::temporal::{Date, DateTime, Precision as DP, Precision as TP};
 
         #[test]
         /// Check range endpoints and the Gregorian leap-century exception.
@@ -183,7 +183,7 @@ mod scalar {
     mod temporal_arithmetic {
         use yamaa_core::{
             dataset::{ElapsedUnit as U, Temporal, TemporalKind as K, TemporalStep},
-            temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+            temporal::{Date, DateTime, Precision},
             value::Value,
         };
 
@@ -226,12 +226,12 @@ mod scalar {
                     date(expected)
                 );
             }
-            let source = Value::Date(Date::new(2024, 2, 1, DatePrecision::Month).unwrap());
+            let source = Value::Date(Date::new(2024, 2, 1, Precision::Month).unwrap());
             let Value::Date(shifted) = result(K::DateShift, &[source, Value::Int(28)]) else {
                 panic!()
             };
             assert_eq!(shifted.to_string(), "2024-02-29");
-            assert_eq!(shifted.collected_precision(), DatePrecision::Month);
+            assert_eq!(shifted.collected_precision(), Precision::Month);
         }
 
         #[test]
@@ -377,14 +377,14 @@ mod scalar {
                 );
             }
             let date: Date = "2024-02-28".parse().unwrap();
-            let source = DateTime::new(date, 0, 0, 0, DateTimePrecision::Day).unwrap();
+            let source = DateTime::new(date, 0, 0, 0, Precision::Day).unwrap();
             let Value::DateTime(shifted) = result(
                 K::DateTimeShift { unit: U::Day },
                 &[Value::DateTime(source), Value::Int(1)],
             ) else {
                 panic!()
             };
-            assert_eq!(shifted.collected_precision(), DateTimePrecision::Day);
+            assert_eq!(shifted.collected_precision(), Precision::Day);
         }
 
         #[test]
@@ -813,7 +813,7 @@ mod scalar {
     }
     mod text_pad {
         use yamaa_core::{
-            temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+            temporal::{Date, DateTime, Precision},
             text_pad::{DeclarationError, OutputError, StringPad},
             value::{FiniteFloat, Value},
         };
@@ -856,8 +856,8 @@ mod scalar {
         }
         #[test]
         fn temporal_text_reuses_canonical_conversion_without_precision_suffixes() {
-            let date = Date::new(2025, 7, 19, DatePrecision::Month).unwrap();
-            let time = DateTime::new(date, 12, 34, 56, DateTimePrecision::Day).unwrap();
+            let date = Date::new(2025, 7, 19, Precision::Month).unwrap();
+            let time = DateTime::new(date, 12, 34, 56, Precision::Day).unwrap();
             assert_eq!(
                 pad(&Value::Date(date), "12").unwrap(),
                 Value::Str("  2025-07-19".into())
@@ -1144,7 +1144,7 @@ mod scalar {
     mod values {
         use std::cmp::Ordering::{Equal, Greater, Less};
         use yamaa_core::numeric::Number;
-        use yamaa_core::temporal::{Date, DatePrecision};
+        use yamaa_core::temporal::{Date, Precision};
         use yamaa_core::value::{
             compare_present, ComparisonError, FiniteFloat, Selection, Value, ValueType,
         };
@@ -1252,7 +1252,7 @@ mod scalar {
                 compare_present(&Value::Str("é".into()), &Value::Str("e\u{301}".into())),
                 Ok(Greater)
             );
-            let imputed = Date::new(2024, 2, 29, DatePrecision::Year).unwrap();
+            let imputed = Date::new(2024, 2, 29, Precision::Year).unwrap();
             let collected: Date = "2024-02-29".parse().unwrap();
             assert_eq!(
                 compare_present(&Value::Date(imputed), &Value::Date(collected)),

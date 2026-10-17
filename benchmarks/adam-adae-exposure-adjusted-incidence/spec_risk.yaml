@@ -47,7 +47,8 @@ intermediates:
   no_match: null
   derivations:
     POSTDAYS:
-      date_diff:
+      diff:
+        type: date
         start: ADSL.TRTEDT
         end: ASTDT
         unit: day
@@ -90,7 +91,8 @@ columns:
   type: int
   label: Full Collection Window Days
   derivation:
-    date_diff:
+    diff:
+      type: date
       start: ADSL.TRTSDT
       end: ADSL.TRTEDT
       unit: day
@@ -100,7 +102,8 @@ columns:
   type: int
   label: Days to First Eligible Onset
   derivation:
-    date_diff:
+    diff:
+      type: date
       start: ADSL.TRTSDT
       end: FIRSTDT
       unit: day

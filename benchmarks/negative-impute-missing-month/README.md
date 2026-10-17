@@ -25,7 +25,8 @@ Write the month the policy can use. Because this benchmark describes
 mid-month imputation, June is the consistent correction:
 
 ```yaml
-date_impute:
+impute:
+  type: date
   source: AE.AESTDTC
   month: 6
   day: 15

@@ -7,7 +7,7 @@ TRTETMF, TRTDURD, SAFFL
 
 TRT01A is the treatment in upper case, or the text NOT TREATED.
 
-TRTSTMF and TRTETMF each hold H or have no value.
+TRTSTMF and TRTETMF each hold H, M or S, or have no value.
 
 TRTDURD counts both the first and the last day. SAFFL is Y or N.
 

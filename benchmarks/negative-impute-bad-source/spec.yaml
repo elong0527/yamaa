@@ -24,14 +24,15 @@ columns:
     label: Sequence Number
     derivation: AE.AESEQ
 
-  # Month 1 and day 1 give the earliest date the text allows. No outcome is
-  # declared for a missing onset or for text that is not a date (UNKNOWN), so
-  # either one stops the run.
+  # Month 1 and day 1 give the earliest date the text allows, and a missing
+  # onset gives no date. No outcome is declared for text that is not a date
+  # (UNKNOWN), so it stops the run.
   - name: ASTDT
     type: date
     label: Analysis Start Date
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: AE.AESTDTC
         month: 1
         day: 1

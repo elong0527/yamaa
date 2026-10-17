@@ -6,7 +6,7 @@ pub(crate) use std::cell::RefCell;
 pub(crate) use yamaa_core::{
     reduction::NumericReducer,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
-    temporal::{Date, DatePrecision},
+    temporal::{Date, Precision},
     value::{ColumnType, Value},
 };
 

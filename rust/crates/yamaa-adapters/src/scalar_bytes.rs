@@ -1,8 +1,5 @@
 //! Closed byte-carried host scalars; validate before constructing a Rust string.
-use yamaa_core::{
-    temporal::{DatePrecision, DateTimePrecision},
-    value::Value,
-};
+use yamaa_core::{temporal::Precision, value::Value};
 
 /// A logical scalar, not a vector: tag 0 missing, 1 int, 2 float, 3 str, 4 bool.
 /// Integers use canonical ASCII decimal; float bits use eight little-endian bytes.
@@ -45,16 +42,13 @@ pub fn decode(tag: i32, bytes: &[u8]) -> Result<Value, &'static str> {
             }
             if tag == 5 {
                 Value::Date(
-                    crate::arrow_temporal::date_from_days(epoch as i64, DatePrecision::Day)
+                    crate::arrow_temporal::date_from_days(epoch as i64, Precision::Day)
                         .ok_or("invalid temporal scalar")?,
                 )
             } else {
                 Value::DateTime(
-                    crate::arrow_temporal::datetime_from_seconds(
-                        epoch as i64,
-                        DateTimePrecision::Second,
-                    )
-                    .ok_or("invalid temporal scalar")?,
+                    crate::arrow_temporal::datetime_from_seconds(epoch as i64, Precision::Second)
+                        .ok_or("invalid temporal scalar")?,
                 )
             }
         }

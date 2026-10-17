@@ -1,7 +1,7 @@
 phase: validation
 condition: value_not_permitted
 spec_paths:
-  - columns.ASTDT.derivation.date_impute.day
+  - columns.ASTDT.derivation.impute.day
 requirement: REQ-0609
 context:
   value: mid

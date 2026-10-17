@@ -45,13 +45,15 @@ columns:
     label: Date/Time of Assessment
     derivation: RS.RSDTC
 
-  # A year and month take the first of the month, a year alone 1 January.
-  # No replacement is declared, so a blank or non-date RSDTC stops the run.
+  # A year and month take the first of the month, a year alone 1 January,
+  # and a blank RSDTC gives no date. No replacement is declared for text
+  # that is not a date, so such an RSDTC stops the run.
   - name: ADT
     type: date
     label: Analysis Date
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: RSDTC
         month: 1
         day: 1

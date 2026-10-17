@@ -286,7 +286,7 @@ fn unknown_choices_report_the_actual_integer_when_date_sources_are_missing() {
 fn assert_integer_day_count(expression: &str, integer_row: &str, float_row: &str) {
     let specification = SPECIFICATION
             .replace("EX: {path: ex.csv}", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
-            .replace("EXENDT: DERIVATION", &format!("SELECTED: {expression}\n      EXENDT: {{date_shift: {{source: EXSTDT, days: SELECTED}}}}"));
+            .replace("EXENDT: DERIVATION", &format!("SELECTED: {expression}\n      EXENDT: {{shift: {{type: date, source: EXSTDT, days: SELECTED}}}}"));
     let study = Study::new(&specification);
     let path = study.specification();
     let request = || Request {
@@ -324,7 +324,7 @@ fn assert_integer_day_count(expression: &str, integer_row: &str, float_row: &str
     assert_eq!(issues[0].requirement.as_deref(), Some("REQ-1298"));
     assert_eq!(
         issues[0].spec_paths,
-        ["intermediates[0].derivations.EXENDT.date_shift.days"]
+        ["intermediates[0].derivations.EXENDT.shift.days"]
     );
     assert_eq!(
         issues[0].context.clone(),

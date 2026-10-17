@@ -9,7 +9,7 @@ class TestVocabularyCoverage(unittest.TestCase):
     def test_shared_refusals_cover_the_declared_operation(self):
         self.assertEqual(
             OWNER_VOCABULARY.check_shared(
-                "date_shift",
+                "shift",
                 ["date_shift_float_days", "date_shift_upper_overflow"],
             ),
             [],
@@ -17,7 +17,7 @@ class TestVocabularyCoverage(unittest.TestCase):
 
     def test_successful_shared_case_cannot_cover_a_failure_contract(self):
         errors = OWNER_VOCABULARY.check_shared(
-            "date_shift", ["date_literal_days_and_phase_dates"]
+            "shift", ["date_literal_days_and_phase_dates"]
         )
         self.assertTrue(any("lacks a refusal contract" in error for error in errors))
 
@@ -31,7 +31,7 @@ class TestVocabularyCoverage(unittest.TestCase):
     def test_original_benchmark_refusal_owner_is_preserved(self):
         self.assertEqual(
             OWNER_VOCABULARY.check(
-                "date_diff",
+                "diff",
                 ["negative-date-diff-endpoints", "negative-date-diff-units"],
             ),
             [],
@@ -43,12 +43,10 @@ class TestVocabularyCoverage(unittest.TestCase):
         coverage = OWNER_VOCABULARY.declared_coverage()
         self.assertEqual(set(coverage), set(OWNER_VOCABULARY.registered_operations()))
         self.assertEqual(
-            coverage["date_diff"]["benchmarks"],
+            coverage["diff"]["benchmarks"],
             ["negative-date-diff-endpoints", "negative-date-diff-units"],
         )
-        self.assertIn(
-            "date_shift_upper_overflow", coverage["date_shift"]["shared_cases"]
-        )
+        self.assertIn("date_shift_upper_overflow", coverage["shift"]["shared_cases"])
         self.assertEqual(OWNER_VOCABULARY.main(), 0)
 
 

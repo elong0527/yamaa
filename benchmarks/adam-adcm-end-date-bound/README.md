@@ -2,8 +2,9 @@
 
 **Goal:** one row per concomitant medication with an analysis end date
 (`AENDT`) completed from the collected end at whatever precision it was
-collected, never later than the subject's date of death, and a flag
-(`AENDTF`) marking how much of the date was supplied.
+collected, never later than a date of death that falls within the
+collected month or year, and a flag (`AENDTF`) marking how much of the
+date was supplied.
 
 **Input:** concomitant medication records, each identified by its
 sequence number (`CMSEQ`), carrying the reported name (`CMTRT`) and the
@@ -24,11 +25,12 @@ died.
 - `DTHDT` is the subject's date of death, empty when the subject has not
   died.
 
-**Note:** a completed end date is never placed after death. When the
-last day of the collected month or year falls after `DTHDT`, the date
-moves back to the date of death, which the collected month or year still
-allows, and the flag still records what was supplied. When the whole
-collected month begins after the date of death, no day it allows can
-satisfy that, so the medication is left without an analysis end date
-rather than moved into a month nobody recorded. A fully collected date
-is left exactly as collected even when it falls after `DTHDT`.
+**Note:** a supplied end is never placed after a death that falls
+inside the collected month or year. When the last day of the collected
+month or year falls after `DTHDT`, the date moves back to the date of
+death, which the collected month or year still allows, and the flag
+still records what was supplied. When the whole collected month begins
+after the date of death, no day it allows could reach it, so the end
+stays on the last day of that month rather than moving into a month
+nobody recorded. A fully collected date is left exactly as collected
+even when it falls after `DTHDT`.

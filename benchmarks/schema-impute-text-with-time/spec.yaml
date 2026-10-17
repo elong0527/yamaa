@@ -1,0 +1,73 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, ASTDT, ASTDTF]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation: AE.AESTDTC
+
+  # A start carrying a complete date gives that date, whether or not a time
+  # follows it; a year and month take the first of the month, and a year
+  # alone 1 January. A start never collected gives no date.
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      impute:
+        type: date
+        source: AESTDTC
+        month: 1
+        day: first
+
+  - name: ASTDTF
+    type: str
+    label: Analysis Start Date Imputation Flag
+    derivation:
+      imputation_flag:
+        source: ASTDT
+        part: date
+    verifications:
+      allowed_values:
+        values: [D, M]
+
+verifications:
+  - row_count:
+      min: 7
+      max: 7
+  - assert:
+      id: imputation-flag-requires-an-analysis-date
+      when: "ASTDTF IS NOT NULL"
+      require: "ASTDT IS NOT NULL"
+  - assert:
+      id: collected-start-gives-an-analysis-date
+      when: "AESTDTC IS NOT NULL"
+      require: "ASTDT IS NOT NULL"

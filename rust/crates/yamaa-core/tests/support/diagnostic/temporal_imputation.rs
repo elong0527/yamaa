@@ -2,12 +2,12 @@ use std::collections::BTreeSet;
 use yamaa_core::json::Value as V;
 use yamaa_core::{
     dataset::{
-        date_policy, DatePolicyError, DayDeclaration as D, Imputation, ImputationKind as K,
-        TimeRule,
+        completion_policy, DatePolicyError, DayDeclaration as D, FlagPart, Imputation,
+        ImputationKind as K, ImputationStep, TemporalType as T, TimeRule,
     },
     diagnostic::{ConditionCode, Diagnostic},
     table::ValueRef,
-    temporal::DatePrecision as P,
+    temporal::Precision as P,
 };
 fn text(value: &str) -> V {
     V::String(value.into())
@@ -18,8 +18,8 @@ fn operation(kind: K) -> Imputation {
         "SRC.V".into(),
         None,
         None,
-        "columns.V.derivation.impute".into(),
         None,
+        "columns.V.derivation.impute".into(),
         None,
     )
     .unwrap()
@@ -56,7 +56,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     for (month, day, minimum, condition, requirement, path, fields) in [
         (
             Some("6"),
-            D::Number("1"),
+            Some(D::Number("1")),
             P::Month,
             "month_not_permitted",
             "REQ-0592",
@@ -65,7 +65,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ),
         (
             None,
-            D::Number("1"),
+            Some(D::Number("1")),
             P::Year,
             "month_required",
             "REQ-0592",
@@ -74,7 +74,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ),
         (
             Some("15"),
-            D::Number("1"),
+            Some(D::Number("1")),
             P::Year,
             "month_out_of_range",
             "REQ-0608",
@@ -82,8 +82,26 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![("month", V::from(15))],
         ),
         (
+            None,
+            None,
+            P::Month,
+            "day_required",
+            "TIME-10",
+            "impute.day",
+            vec![("minimum_source_precision", text("month"))],
+        ),
+        (
+            None,
+            Some(D::Position("last")),
+            P::Day,
+            "day_not_permitted",
+            "TIME-10",
+            "impute.day",
+            vec![("day", text("last"))],
+        ),
+        (
             Some("6"),
-            D::Number("32"),
+            Some(D::Number("32")),
             P::Year,
             "value_not_permitted",
             "REQ-0608",
@@ -96,7 +114,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ),
         (
             Some("6"),
-            D::Position("mid"),
+            Some(D::Position("mid")),
             P::Year,
             "value_not_permitted",
             "REQ-0609",
@@ -108,7 +126,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ),
     ] {
         let DatePolicyError::Diagnostic(diagnostic) =
-            date_policy(month, day, minimum, "impute").unwrap_err()
+            completion_policy(T::Date, month, day, minimum, None, "impute").unwrap_err()
         else {
             panic!("admitted semantic policy failure")
         };
@@ -121,35 +139,48 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             fields,
         );
     }
-    let date = date_policy(Some("12"), D::Number("31"), P::Year, "impute").unwrap();
-    for (kind, requirement, condition) in [
-        (date, "REQ-0588", "invalid_date_text"),
-        (
-            K::DateTime {
-                time: TimeRule::First,
-            },
-            "REQ-1182",
-            "invalid_datetime_text",
-        ),
-        (K::DateTimePrecision, "REQ-1183", "invalid_datetime_text"),
+    let date = K::Impute(
+        completion_policy(
+            T::Date,
+            Some("12"),
+            Some(D::Number("31")),
+            P::Year,
+            None,
+            "impute",
+        )
+        .unwrap(),
+    );
+    let datetime = K::Impute(
+        completion_policy(
+            T::DateTime,
+            None,
+            None,
+            P::Day,
+            Some(TimeRule::First),
+            "impute",
+        )
+        .unwrap(),
+    );
+    // One grammar serves both types: a missing source is no failure, and text
+    // that is not right-truncated --DTC text is invalid date text.
+    for kind in [
+        date,
+        datetime,
+        K::Precision { target: T::Date },
+        K::Precision {
+            target: T::DateTime,
+        },
     ] {
         let op = operation(kind);
-        check(
-            op.source_value(ValueRef::Missing).unwrap_err(),
-            "impute",
-            "missing_input",
-            requirement,
-            "columns.V.derivation.impute",
-            vec![
-                ("operation", text(op.operation())),
-                ("source", text("SRC.V")),
-            ],
+        assert_eq!(
+            op.source_value(ValueRef::Missing),
+            Ok(ImputationStep::Missing)
         );
         check(
             op.source_value(ValueRef::Str("UNK")).unwrap_err(),
             "impute",
-            condition,
-            requirement,
+            "invalid_date_text",
+            "REQ-0588",
             "columns.V.derivation.impute",
             vec![
                 ("operation", text(op.operation())),
@@ -172,14 +203,23 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ],
     );
     for (kind, requirement, expected) in [
+        (date, "REQ-0606", "str or date"),
+        (datetime, "REQ-1182", "str or datetime"),
         (
-            K::DateTime {
-                time: TimeRule::First,
+            K::Precision {
+                target: T::DateTime,
             },
-            "REQ-1182",
-            "str",
+            "REQ-1183",
+            "str or datetime",
         ),
-        (K::DateTimePrecision, "REQ-1183", "str or datetime"),
+        (
+            K::Flag {
+                part: FlagPart::Date,
+                seconds_collected: true,
+            },
+            "TIME-18",
+            "date or datetime",
+        ),
         (
             K::ToDate,
             "REQ-0607",
@@ -199,15 +239,19 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             ],
         );
     }
+    assert_eq!(
+        operation(K::ToDate).source_value(ValueRef::Str("2024")),
+        Ok(ImputationStep::Partial)
+    );
     check(
         operation(K::ToDate)
-            .source_value(ValueRef::Str("2024"))
+            .source_value(ValueRef::Str("2024-13"))
             .unwrap_err(),
         "validation",
         "invalid_date_text",
         "REQ-0607",
         "columns.V.derivation.impute",
-        vec![("operation", text("to_date")), ("value", text("2024"))],
+        vec![("operation", text("to_date")), ("value", text("2024-13"))],
     );
     reached
 }

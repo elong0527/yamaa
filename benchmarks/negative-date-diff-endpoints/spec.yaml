@@ -35,7 +35,8 @@ columns:
     type: int
     label: Survival Duration in Days
     derivation:
-      date_diff:
+      diff:
+        type: date
         start: RFSTDTM
         end: DTHDT
         unit: day

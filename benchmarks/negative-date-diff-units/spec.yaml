@@ -35,7 +35,8 @@ columns:
     type: int
     label: Total Duration of Treatment (Months)
     derivation:
-      date_diff:
+      diff:
+        type: date
         start: TRTSDT
         end: TRTEDT
         unit: month

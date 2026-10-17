@@ -18,7 +18,7 @@ use yamaa_adapters::{
 };
 use yamaa_core::{
     table::{Column, TableAccess, TableSchema, ValueRef},
-    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+    temporal::{Date, DateTime, Precision},
     value::ColumnType,
 };
 
@@ -339,8 +339,8 @@ fn public_temporals_preserve_existing_epoch_view_without_mutating_collected_prec
         },
     ])
     .unwrap();
-    let date = Date::new(2024, 2, 29, DatePrecision::Year).unwrap();
-    let datetime = DateTime::new(date, 12, 34, 56, DateTimePrecision::Day).unwrap();
+    let date = Date::new(2024, 2, 29, Precision::Year).unwrap();
+    let datetime = DateTime::new(date, 12, 34, 56, Precision::Day).unwrap();
     let batch = RecordBatch::try_new(
         yamaa_adapters::arrow_table::physical_schema(&logical),
         vec![
@@ -381,9 +381,9 @@ fn public_temporals_preserve_existing_epoch_view_without_mutating_collected_prec
     let ValueRef::Date(value) = table.cell(0, 0).unwrap() else {
         panic!()
     };
-    assert_eq!(value.collected_precision(), DatePrecision::Year);
+    assert_eq!(value.collected_precision(), Precision::Year);
     let ValueRef::DateTime(value) = table.cell(0, 1).unwrap() else {
         panic!()
     };
-    assert_eq!(value.collected_precision(), DateTimePrecision::Day);
+    assert_eq!(value.collected_precision(), Precision::Day);
 }

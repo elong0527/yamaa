@@ -1585,7 +1585,7 @@ mod declaration {
             use yamaa_core::{
                 project_function::{Case, Definition, Function, Language, Parameter},
                 project_function_document,
-                temporal::{Date, DatePrecision},
+                temporal::{Date, Precision},
                 value::{ColumnType, Value, ValueType},
             };
             let schema =
@@ -1597,7 +1597,7 @@ mod declaration {
             let document = &captured.normalized().document;
             let decoded =
                 project_function_document::decode(document, document.root(), "identity").unwrap();
-            let date = Value::Date(Date::new(2024, 2, 29, DatePrecision::Day).unwrap());
+            let date = Value::Date(Date::new(2024, 2, 29, Precision::Day).unwrap());
             assert_eq!(
                 decoded,
                 Definition {
@@ -1642,7 +1642,7 @@ mod declaration {
         fn scalar_decoder_keeps_exact_int_float_boolean_nul_and_temporal_defaults() {
             use yamaa_core::{
                 project_function_document,
-                temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+                temporal::{Date, DateTime, Precision},
                 value::Value,
             };
             let schema =
@@ -1651,7 +1651,7 @@ mod declaration {
             let captured = schema.prepare_class(source("function.yaml", text)).unwrap();
             let doc = &captured.normalized().document;
             let decoded = project_function_document::decode(doc, doc.root(), "defaults").unwrap();
-            let date = Date::new(2024, 2, 29, DatePrecision::Day).unwrap();
+            let date = Date::new(2024, 2, 29, Precision::Day).unwrap();
             assert_eq!(
                 decoded
                     .params
@@ -1665,7 +1665,7 @@ mod declaration {
                     Some(Value::Str("a\0b\u{96ea}".into())),
                     Some(Value::Date(date)),
                     Some(Value::DateTime(
-                        DateTime::new(date, 8, 30, 0, DateTimePrecision::Second).unwrap()
+                        DateTime::new(date, 8, 30, 0, Precision::Second).unwrap()
                     )),
                     Some(Value::Missing),
                 ]

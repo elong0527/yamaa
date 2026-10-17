@@ -31,7 +31,8 @@ month count stands on its own with no endpoint adjustment:
 - name: TRTDURM
   type: int
   derivation:
-    date_diff:
+    diff:
+      type: date
       start: TRTSDT
       end: TRTEDT
       unit: month

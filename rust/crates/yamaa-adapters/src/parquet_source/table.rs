@@ -9,10 +9,7 @@ use arrow_array::{
     TimestampMicrosecondArray,
 };
 use std::sync::Arc;
-use yamaa_core::{
-    temporal::{DatePrecision, DateTimePrecision},
-    value::ColumnType,
-};
+use yamaa_core::{temporal::Precision, value::ColumnType};
 
 #[derive(Debug)]
 pub(super) enum Error {
@@ -71,8 +68,7 @@ pub(super) fn convert(decoded: Decoded) -> Result<ArrowTable, Error> {
                         .iter()
                         .map(|v| {
                             v.map(|day| {
-                                date_from_days(i64::from(day), DatePrecision::Day)
-                                    .ok_or(Error::Invalid)
+                                date_from_days(i64::from(day), Precision::Day).ok_or(Error::Invalid)
                             })
                             .transpose()
                         })
@@ -91,7 +87,7 @@ pub(super) fn convert(decoded: Decoded) -> Result<ArrowTable, Error> {
                                 if micros % 1_000_000 != 0 {
                                     return Err(Error::Invalid);
                                 }
-                                datetime_from_seconds(micros / 1_000_000, DateTimePrecision::Second)
+                                datetime_from_seconds(micros / 1_000_000, Precision::Second)
                                     .ok_or(Error::Invalid)
                             })
                             .transpose()
@@ -190,7 +186,7 @@ mod tests {
                 panic!()
             };
             assert_eq!(value.to_string(), text);
-            assert_eq!(value.collected_precision(), DatePrecision::Day);
+            assert_eq!(value.collected_precision(), Precision::Day);
         }
         for (row, fields) in [
             (0, (1969, 12, 31, 23, 59, 59)),
@@ -200,7 +196,7 @@ mod tests {
                 panic!()
             };
             assert_eq!(value.fields(), fields);
-            assert_eq!(value.collected_precision(), DateTimePrecision::Second);
+            assert_eq!(value.collected_precision(), Precision::Second);
         }
     }
 }
