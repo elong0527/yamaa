@@ -1047,7 +1047,7 @@ columns:
                         "condition": issue.condition,
                         "requirement": issue.requirement,
                         "spec_paths": issue.spec_paths,
-                        "context": yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                        "context": issue.context.clone(),
                     })
                 })
                 .collect()
