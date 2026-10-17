@@ -503,9 +503,10 @@ Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-adapters/tests/fix
 Replaces: REQ-0139, REQ-0143, REQ-0144, REQ-0149.
 
 Neither failure renames the other's fields. Handler accounting follows
-[Column derivation](columns.md): a `keep` that chose among surviving
-records counts one `multiple_matches` handling, and a declared `no_match` that
-answered an absence counts one `no_match` handling.
+[COLUMN-14](columns.md#column-14), whose counts are `handler` rows of the run
+report: a `keep` that chose among surviving records counts one
+`multiple_matches` handling, and a declared `no_match` that answered an
+absence counts one `no_match` handling.
 
 ## Intermediate derivations
 

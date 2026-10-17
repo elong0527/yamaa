@@ -38,8 +38,8 @@ diagnostics retain the original declaring field and written path.
 A relative path uses its declaration's `relative_to` base: `declaring` selects
 the directory of the file that writes the path, and `entry` selects the
 directory of the specification's entry file. On an input dataset the setting
-applies to both `path` and `schema`; on `output` it applies to `path`,
-`warning_log` and `verification_log`. Other document resources use their
+applies to both `path` and `schema`; on `output` it applies to `path` and
+`report`. Other document resources use their
 declaring file. A rooted path names its absolute local location regardless of
 `relative_to`.
 

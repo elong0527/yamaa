@@ -324,10 +324,11 @@ Replaces: REQ-0885, REQ-0916.
 
 The domain build enforces the resolution of [SUB-10](#sub-10) without a study
 document. The check runs after the column's declared verifications and before
-its terminology checks, and the verification log records it as a `not_missing`
-check. Its failure reports the column, the failure count and the offending
-keys, as a failed `not_missing` does, at the path of the declaration that makes
-the column mandatory: `columns.<column>.submission.mandatory`, or
+its terminology checks, and the run report records it as a `not_missing` check
+row ([CHECK-23](../verification.md#check-23)). Its failure reports the column,
+the failure count and the offending keys, as a failed `not_missing` does, at
+the path of the declaration that makes the column mandatory:
+`columns.<column>.submission.mandatory`, or
 `columns.<column>.submission.core` when `core` derives it, and the same fields
 under `rows.<row>.submission.<column>` for a value-level entry.
 

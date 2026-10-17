@@ -2,9 +2,9 @@
 
 Verifications assert properties of completed values: column verifications over
 one converted column, dataset verifications over the completed output. A failed
-`error` verification fails the run; a violated `warning` is recorded in the
-warning log, and a declared verification log records every check the run
-evaluated.
+`error` verification fails the run; a violated `warning` fails nothing. Every
+run builds one report recording its inputs, row templates, handlers, columns
+and every check it evaluated, held or violated.
 
 ## Running verifications
 
@@ -40,10 +40,10 @@ Replaces: REQ-0373, REQ-0389, REQ-0390, REQ-0406.
 An `error` stops the run at the stage of [COLUMN-1](columns.md#column-1) that
 evaluates it. Warning findings before a later error do not make the failed run
 successful, and no accepted artifact is produced. Reporting limits may be
-configurable but must not change pass or fail. A `warning` violation instead
-follows [CHECK-17](#check-17) to [CHECK-19](#check-19) and records every
-offending key under [CHECK-18](#check-18) rather than applying the reporting
-limit.
+configurable but must not change pass or fail. Every evaluated check, a
+`warning` violation included, is a row of the run report under
+[CHECK-23](#check-23), which records every offending key under
+[CHECK-24](#check-24) rather than applying the reporting limit.
 
 <a id="check-3"></a>
 
@@ -51,10 +51,10 @@ limit.
 
 Every column, dataset, and intermediate verification may declare a nonempty
 `id`, unique within its list. A declared ID names the check for readers and is
-included in failure reports; column and dataset IDs also appear in the governed
-logs. When the `id` is omitted, the verification's specification path
-identifies the check and the `VERIFICATION_ID` field stays missing rather than
-copying the path.
+included in failure reports; column and dataset IDs also appear in the run
+report. When the `id` is omitted, the verification's specification path
+identifies the check and the report's `ID` stays missing rather than copying
+the path.
 
 Fails: `invalid_declaration`, `duplicate_identifier`.
 Evidence: `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.json`.
@@ -345,177 +345,189 @@ The claim that every parent record has a supplemental record is not an
 artifact property, and no verification here can state it. A specification that
 must assert the claim derives at the parent's keys.
 
-## The warning log
+## The run report
 
-<a id="check-17"></a>
+<a id="check-22"></a>
 
-### CHECK-17. A specification declaring a warning declares a warning log, which every successful run produces
+### CHECK-22. Every run builds one report, which a warning requires a file for and a failed run still writes
 
-A specification declaring any warning must declare `output.warning_log`. Its
-path must differ from `output.path` and selects an
-[Output](output.md) profile by the same closed
-extension mapping. The log is built only for a successful execution, after all
-verifications and before publication, and a successful run produces it even
-when no warning is violated; the empty case is a header-only dataset.
+Once a specification is admitted, every run builds one run report, whether it
+succeeds or fails, and every host returns it. `output.report` names a file the
+report is written to: its extension selects an [Output](output.md) profile, it
+has no default, and it must differ from `output.path`. A specification
+declaring any `warning` verification must declare `output.report`. Publication
+writes the report file for a failed run too; the report is diagnostic output,
+never an accepted artifact.
 
-Fails: `missing_warning_log`.
-Evidence: `adam-adsl-age-quality`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`.
-Replaces: REQ-0391, REQ-0396.
+Fails: `missing_report`.
+Evidence: `adam-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `python/tests/installed/installed_run_report.py::test_fatal_checks_publish_only_the_report_and_keep_original_issues`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`.
+Replaces: REQ-0391, REQ-0396, REQ-1173, REQ-1177, REQ-1179.
 
-Publication thus replaces a stale non-empty log from an earlier run. A
-warning-log build or serialization failure fails the run and prevents
-primary-artifact publication. [Output](output.md)
-defines how a runner publishes the completed pair.
+A specification refused while it is prepared, before its run begins, has no
+report: its issues are the whole result. Once the run has begun, every
+failure is a failed run with a report, a declaration finding raised when its
+inputs are bound included. A run that stops before it reads an input or before
+execution still reports its run, its inputs and its row templates, leaving
+missing every count it never reached.
 
-<a id="check-18"></a>
+The report is built after the run's last stage, once the outcome is final:
+after every verification and the output declaration checks for a run that got
+that far, and after the primary artifact is encoded. A report that cannot be
+built, verified or rendered refuses the build instead of recording a failure
+inside itself ([CHECK-26](#check-26)). [CHECK-2](#check-2) is unchanged: a
+failed run's report records the failure and makes nothing publishable.
 
-### CHECK-18. The warning log has one row per violated warning declaration, in ten fixed columns
+[OUTPUT-9](output.md#output-9) rejects a report path that collides with
+`output.path` or whose extension names no profile, and
+[OUTPUT-10](output.md#output-10) orders its publication. Publication replaces
+a stale report from an earlier run.
 
-The warning log is version 1.0 and has exactly the columns below, in this
-order and with these [Values](values.md) types. It has one
-row per violated warning declaration, keyed by `SPEC_PATH`, in execution order:
-column declaration order first, then dataset-verification order.
-`FAILURE_COUNT` is positive, and `OFFENDING_KEYS` is the complete ordered
-sequence, not the bounded sample an error report may show.
+<a id="check-23"></a>
 
-Evidence: `adam-adsl-age-quality`, `schema-verification-log`, `schema-row-count-fractions`.
-Replaces: REQ-0392, REQ-0393, REQ-0395.
+### CHECK-23. The report has one row per run, input dataset, row template, handler path, output column and evaluated check, in that order
 
-| Column | Type | Value |
-|---|---|---|
-| `LOG_VERSION` | `str` | `1.0` |
-| `ARTIFACT` | `str` | the specification's `output.path` |
-| `SEVERITY` | `str` | `warning` |
-| `CONDITION` | `str` | the stable failed condition |
-| `REQUIREMENT` | `str` | the numbered requirement defining the check |
-| `SPEC_PATH` | `str` | the violated check's stable specification path |
-| `VERIFICATION_ID` | `str` | its declared ID, or missing when it has none |
-| `FAILURE_COUNT` | `int` | the total number of offending rows or groups |
-| `OFFENDING_KEYS` | `str` | every offending key or group as canonical JSON |
-| `DETAILS` | `str` | remaining condition context as canonical JSON |
+The report's rows come in this order: one `run` row; one `input` row per input
+dataset in declaration order; one `rows` row per row template, or one for root
+`base` without row templates; one `handler` row per handler path in execution
+order, zero counts included; one `column` row per output column in
+`output.columns` order, for a successful run only; and one `check` row per
+evaluated verification in execution order. A check a stopped run never reached
+has no row.
 
-For grouped `row_count`, `DETAILS.counts` is the complete sequence of observed
-counts aligned with those groups.
+Evidence: `schema-verification-log`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::failed_runs_report_the_prefix_they_reached_and_no_columns`.
+Replaces: REQ-0393, REQ-1175.
 
-The log is verified before it becomes an artifact. These properties of the log
-must hold:
+`SPEC_PATH` names each row's stable specification item and is unique within
+the report:
 
-- its columns, types, and order;
-- non-missing and unique `SPEC_PATH`;
-- fixed version and severity;
-- positive count;
-- complete key sequence;
-- one-to-one correspondence with the executor's warning findings.
+| Kind | `SPEC_PATH` |
+|---|---|
+| `run` | `output` |
+| `input` | `input.<NAME>` |
+| `rows` | `rows[<i>]`, or `base` without row templates |
+| `handler` | the handler path [COLUMN-14](columns.md#column-14) counts |
+| `column` | `columns.<NAME>` |
+| `check` | the check's stable specification path |
 
-A malformed log is an execution defect, not a warning that can be logged
-inside itself.
+The `rows` row of root `base` names the driver even when `base` is omitted
+and the single declared input drives row construction. The handler rows are
+exactly the handler paths the run counted under
+[COLUMN-14](columns.md#column-14), in that order, the default substitutions
+counted like handlers included: a `partial` date ([TIME-2](temporal.md#time-2)),
+`crossed_bounds` ([TIME-9](temporal.md#time-9)) and a missing `impute` or
+`precision` source ([TIME-13](temporal.md#time-13)). A run that never reached
+execution counted none. Check rows keep execution order: column declaration
+order first, then dataset-verification order, each check that ran and held
+included. A failed stage contributes the checks it evaluated, at least one of
+them `violated` at `error` severity. A check that submission metadata adds, the
+presence check of [SUB-11](profiles/submission.md#sub-11) or a bound codelist
+check, is a row like a declared verification, at the path of the declaration
+that adds it. A value-level codelist check runs once per bound codelist; each
+run is its own row, at the path that declares that codelist.
 
-<a id="check-19"></a>
+<a id="check-24"></a>
 
-### CHECK-19. The warning log's two JSON fields are compact ASCII JSON with names in text order
+### CHECK-24. The report has fourteen fixed columns, and a kind leaves missing each column it has no value for
 
-The two JSON fields, `OFFENDING_KEYS` and `DETAILS`, are compact ASCII JSON:
-no insignificant whitespace, object names ordered by
-[Values](values.md), `null`, `true`, and `false` in lower case,
-numbers in [Values](values.md)'s `str` form, and strings
-escaped to ASCII by JSON's short escapes where one exists and lower-case `\\u`
-hexadecimal escapes otherwise.
+The report has exactly the columns of the table below, in that order and with
+those [Values](values.md) types. A kind leaves missing each column the table
+gives it no value for. The report carries no version and no timestamp: the
+same specification and inputs give the same report bytes.
 
-Evidence: `schema-verification-log`, `adam-adsl-age-quality`.
-Replaces: REQ-0394.
-
-A scalar above `U+FFFF` is its JSON surrogate-pair escape. The empty key
-sequence is `[]` and empty remaining context is `{}`.
-
-## The verification log
-
-<a id="check-20"></a>
-
-### CHECK-20. A declared verification log records every check the run evaluated, for failed runs too
-
-`output.verification_log` names a governed sidecar recording the outcome of
-every verification the specification declares, held or violated, whatever its
-severity. A run that declares the field always produces the log, violations or
-not, for a failed run as well as a successful one. The log is diagnostic output
-rather than one of [Output](output.md)'s artifacts:
-a failed `error` verification still produces no accepted artifact.
-
-Evidence: `schema-verification-log`, `python/tests/installed/installed_public_contract.py::test_failed_verification_retains_owned_diagnostic_log`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`.
-Replaces: REQ-1173, REQ-1177, REQ-1179.
-
-A specification whose checks are all `error` may declare it, and one declaring
-warnings may omit it. [Output](output.md) selects
-its profile from its path by the same closed extension mapping and requires
-that path to differ from `output.path` and `output.warning_log`. A path that
-collides with either, or whose extension names no profile, fails validation
-under [OUTPUT-9](output.md#output-9). Publication replaces a stale
-log from an earlier run.
-
-The log records a failure but does not make the run publishable, and
-[CHECK-2](#check-2) is unchanged. Its rows are the checks the run evaluated, in
-execution order. The stage that failed contributes the checks it evaluated, at
-least one of them `violated` at `error` severity, and a check a stopped run
-never reached has no row. The log states what was checked and nothing more.
-
-<a id="check-21"></a>
-
-### CHECK-21. The verification log has one row per declared check, in thirteen fixed columns
-
-The verification log is version 1.0 and has exactly the columns below, in this
-order and with these [Values](values.md) types. It has one
-row for every declared check rather than one per violation, in execution order
-exactly as [CHECK-18](#check-18) orders the warning log. `SPEC_PATH` is
-its key and its join to the warning log. `EVALUATED_COUNT` and `FAILURE_COUNT`
-count the unit the check itself counts.
-
-Evidence: `schema-verification-log`, `schema-row-count-fractions`.
-Replaces: REQ-1174, REQ-1175, REQ-1176, REQ-1178.
+Evidence: `schema-verification-log`, `schema-parquet`, `adam-adsl-age-quality`.
+Replaces: REQ-0392, REQ-1174, REQ-1176.
 
 | Column | Type | Value |
 |---|---|---|
-| `REPORT_VERSION` | `str` | `1.0` |
 | `ARTIFACT` | `str` | the specification's `output.path` |
-| `SPEC_PATH` | `str` | the check's stable specification path |
-| `VERIFICATION_ID` | `str` | its declared ID, or missing when it has none |
-| `CHECK` | `str` | the registered verification name |
-| `TARGET` | `str` | the verified column, or missing for a dataset verification |
-| `REQUIREMENT` | `str` | the numbered requirement defining the check |
-| `SEVERITY` | `str` | `error` or `warning` |
-| `OUTCOME` | `str` | `held` or `violated` |
-| `CONDITION` | `str` | the stable failed condition, or missing when `OUTCOME` is `held` |
-| `EVALUATED_COUNT` | `int` | rows, or groups for a grouped check, the check examined |
-| `FAILURE_COUNT` | `int` | offending rows or groups; `0` when `OUTCOME` is `held` |
-| `DETAILS` | `str` | remaining condition context as canonical JSON |
+| `KIND` | `str` | `run`, `input`, `rows`, `handler`, `column` or `check` |
+| `SPEC_PATH` | `str` | the row's stable specification path ([CHECK-23](#check-23)) |
+| `NAME` | `str` | input dataset name; the driver dataset of a row template; handler name; column name; the check's registered verification name; missing for `run` |
+| `ID` | `str` | a check's declared `id`, else missing |
+| `TARGET` | `str` | the column a handler or a column check belongs to, else missing |
+| `RULE` | `str` | the citation the diagnostics registry gives a check's condition or the condition a handler answers, else missing |
+| `SEVERITY` | `str` | check: `error` or `warning` |
+| `OUTCOME` | `str` | run: `succeeded` or `failed`; check: `held` or `violated` |
+| `CONDITION` | `str` | run: the fatal condition of a failed run; check: the failed condition |
+| `COUNT` | `int` | run: output rows, missing when failed; input: records read; rows: rows emitted; handler: records answered; column: missing values; check: offending rows or groups, `0` when held |
+| `TOTAL` | `int` | rows: driver records read; column: output rows; check: rows or groups evaluated; else missing |
+| `KEYS` | `str` | violated check: every offending key or group as canonical JSON; else missing |
+| `DETAILS` | `str` | canonical JSON: the condition context of a violated check, the input's file facts, a `str` column's longest value, else `{}` |
 
-A check that ran and held is a row. `SPEC_PATH` is non-missing and unique
-within the log; the warning log's row for the same path carries the complete
-`OFFENDING_KEYS` evidence [CHECK-18](#check-18) requires, and offending keys
-stay out of this log. `CHECK` is the verification's registered name under
-[CHECK-1](#check-1), and `TARGET` is the column a column verification infers
-under [CHECK-1](#check-1), missing for a dataset verification.
+`NAME` of a check is its registered name under [CHECK-1](#check-1), and a
+column check's `TARGET` is the column it infers there; a handler's `TARGET` is
+the output column whose derivation declares it, missing for a named
+intermediate's own derivations and match keys. A handler answers the condition
+its operation raises without it, and its `RULE` is that condition's citation:
+`unconvertible` cites the conversion rule of [VALUE-3](values.md#value-3) and
+`absent` the unknown-name rule of [NAME-3](names.md#name-3). It is missing for
+a default substitution and for an `impute` `fallback`, which answer no
+condition, and whenever the registry names none.
 
-The unit `EVALUATED_COUNT` and `FAILURE_COUNT` count is:
+An input's `COUNT` is the records it decoded and its `DETAILS` is
+`{"bytes": <file byte length>, "path": "<path as declared>", "profile":
+"<profile>"}`, with `"schema": "<producing specification path as declared>"`
+for an input linked under [INPUT-10](inputs.md#input-10). `bytes` is the byte
+length of the file snapshot read, `null` for an input supplied as a host table
+and for one never read, whose `COUNT` is missing. A row template's `TOTAL` is
+every record of its input dataset driver, or the records a named intermediate
+driver selects; `COUNT` is the rows it emitted after its filter. Both are
+missing for a row template that did not complete.
+
+A `column` row's `COUNT` is the column's missing values over the output rows
+in `TOTAL`, and a `str` column's `DETAILS` is `{"max_length": <n>}`, the
+longest present value in Unicode scalar values (`0` when none is present).
+
+A check's `COUNT` and `TOTAL` count the unit the check itself counts:
 
 - output rows for a row-wise check;
 - distinct combinations for `unique`;
 - groups for a check that partitions the artifact, where an ungrouped
   `row_count` is the one group [CHECK-13](#check-13) bounds.
 
-`FAILURE_COUNT` is therefore never greater than `EVALUATED_COUNT`, and is `0`
-exactly when `OUTCOME` is `held`. A held check leaves `CONDITION` missing and
-`DETAILS` `{}`. A violated one carries the stable condition its failure reports
-and that failure's remaining context, encoded by [CHECK-19](#check-19)
-unchanged rather than by a second encoding.
+`COUNT` is therefore never greater than `TOTAL`, and is `0` exactly when
+`OUTCOME` is `held`. A held check leaves `CONDITION` and `KEYS` missing and
+`DETAILS` `{}`. A violated one carries the condition its failure reports,
+`KEYS` with the complete ordered sequence of offending keys or groups rather
+than the bounded sample an error report may show, and `DETAILS` with that
+failure's remaining context. For grouped `row_count`, `DETAILS.counts` is the
+complete sequence of observed counts aligned with those groups.
 
-The log is verified before it is written:
+<a id="check-25"></a>
 
-- its columns, types, and order;
-- its fixed version;
-- non-missing and unique `SPEC_PATH`;
-- `OUTCOME` exactly `held` or `violated`;
-- the count relationship above;
-- one-to-one correspondence with the checks the executor evaluated, including
-  agreement with the warning log about every warning that log carries.
+### CHECK-25. KEYS and DETAILS are compact ASCII JSON with names in text order
 
-A malformed log is an execution defect, not a finding that can be recorded
-inside itself.
+`KEYS` and `DETAILS` are compact ASCII JSON: no insignificant whitespace,
+object names ordered by [Values](values.md), `null`, `true`, and `false` in
+lower case, numbers in [Values](values.md)'s `str` form, and strings escaped to
+ASCII by JSON's short escapes where one exists and lower-case `\\u`
+hexadecimal escapes otherwise.
+
+Evidence: `schema-verification-log`, `adam-adsl-age-quality`, `rust/crates/yamaa-adapters/src/run_report.rs::governed_projection_preserves_ascii_details_and_all_keys`.
+Replaces: REQ-0394.
+
+A scalar above `U+FFFF` is its JSON surrogate-pair escape. `KEYS` is an array
+holding one object per offending row, its output keys by name, or per
+offending group, its grouping columns by name; a dataset-level `row_count` has
+the one empty group `[{}]`. Empty remaining context is `{}`.
+
+<a id="check-26"></a>
+
+### CHECK-26. The report is verified before it is written or returned, and a malformed report is an execution defect
+
+The report is verified before any host sees it or any byte of it is written:
+its columns, types and order; one row per run, input dataset, row template,
+handler path, output column and evaluated check, each kind in order; a
+non-missing `SPEC_PATH` unique within the report; each kind's outcome,
+severity and condition vocabularies; `KEYS` on exactly the violated checks;
+and `COUNT` no greater than `TOTAL` where both exist. A malformed report is an
+execution defect, not a finding it can record.
+
+Evidence: `rust/crates/yamaa-core/tests/relations_reference_scope.rs::verification_rejects_any_row_that_breaks_the_contract`.
+Replaces: REQ-0395, REQ-1178.
+
+The rows correspond one to one with what the executor evaluated: the declared
+inputs, the row templates, the handler paths it counted, the declared output
+columns and the checks it evaluated. A run fails with a named condition only
+under [CHECK-2](#check-2) and the other rules; a report that fails its own
+verification refuses the build, and no partial report is returned or written.

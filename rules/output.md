@@ -1,6 +1,6 @@
 # Output
 
-A run publishes one artifact, the output dataset, and the sidecars its
+A run publishes one artifact, the output dataset, and the run report file its
 specification declares. These rules select the artifact's columns, assert its
 keys, choose each file's profile, publish complete files atomically and fix
 the order of the artifact's rows.
@@ -25,10 +25,10 @@ Replaces: REQ-0062, REQ-0193, REQ-0210, REQ-0234, REQ-1047.
 
 A declared column that `output.columns` does not list is internal
 ([SPEC-7](specification.md#spec-7)). `output.order_by` orders the artifact's
-rows independent of construction order ([OUTPUT-11](#output-11)). A
-specification may also produce the governed warning log of
-[Verification](verification.md); that log reports the run and is
-neither a second derivation target nor a source within the specification.
+rows independent of construction order ([OUTPUT-11](#output-11)). Every
+run also builds the run report of [Verification](verification.md); the report
+describes the run and is neither a second derivation target nor a source
+within the specification.
 
 <a id="output-2"></a>
 
@@ -105,9 +105,9 @@ the separate uniqueness check changes it.
 ### OUTPUT-4. `output.path` is required and names the primary file
 
 `output.path` is required, names the primary file and has no default.
-`output.warning_log` and `output.verification_log` name the sidecars of
-[Verification](verification.md) when the specification declares
-them. `output.relative_to` selects the base for all three paths under
+`output.report` names the file the run report of
+[Verification](verification.md) is written to when the specification declares
+it. `output.relative_to` selects the base for both paths under
 [FILE-2](reference/files.md#file-2). A missing `output.path` fails
 validation, reporting the specification.
 
@@ -122,8 +122,7 @@ each study ([LAYER-5](inheritance.md#layer-5)).
 ### OUTPUT-5. Each output path's extension selects the `csv` or `parquet` profile from a closed mapping
 
 The case-insensitive extension of `output.path` selects its profile from the
-closed mapping below; `output.warning_log` and `output.verification_log`
-select theirs the same way. An extension outside the mapping, or none, fails
+closed mapping below; `output.report` selects its own the same way. An extension outside the mapping, or none, fails
 validation, reporting the path. No extension is treated as a default, and a
 profile is never inferred from file contents.
 
@@ -145,7 +144,7 @@ SAS Transport v5 (`.xpt`) is not an output profile. Dataset-JSON is generated
 by a study document under [Dataset-JSON](profiles/dataset-json.md); `.json`
 is not a specification output profile and fails like any other unmapped
 extension. A derivation run publishes only the primary artifact and its
-declared sidecars; conversion to a transport container is a separate
+declared report file; conversion to a transport container is a separate
 packaging step outside the language.
 
 <a id="output-6"></a>
@@ -192,7 +191,8 @@ Evidence: `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicate
 Replaces: REQ-0239, REQ-0755.
 
 A conversion failure with no `unconvertible` on the result wrapper fails the
-run ([VALUE-3](values.md#value-3)), and nothing is published.
+run ([VALUE-3](values.md#value-3)), and no artifact is published; the failed
+run writes only its declared report file, as [OUTPUT-10](#output-10) states.
 
 <a id="output-8"></a>
 
@@ -233,49 +233,55 @@ Cleanup does not remove an entry whose ownership is unconfirmed or whose
 observed identity has changed. The failed publication still produces no
 accepted artifact and leaves the target untouched.
 
-## Sidecars
+## The report file
 
 <a id="output-9"></a>
 
-### OUTPUT-9. The primary file and its sidecars have distinct paths, each selecting its own profile
+### OUTPUT-9. The primary file and the report file have distinct paths, each selecting its own profile
 
-`output.path`, `output.warning_log` and `output.verification_log` must be
-three different paths; reusing one path for two of them fails validation,
-reporting both fields. Each path's extension selects its profile under
-[OUTPUT-5](#output-5) independently of the others: the primary file may be
-Parquet while its log is CSV, or the reverse. A sidecar extension the mapping
-does not name fails validation as it does for `output.path`.
+`output.path` and `output.report` must be different paths; naming one file
+for both fails validation, reporting both fields. Each path's extension
+selects its profile under [OUTPUT-5](#output-5) independently of the other:
+the primary file may be Parquet while the report is CSV, or the reverse. A
+report extension the mapping does not name fails validation as it does for
+`output.path`.
 
 Fails: `artifact_path_collision`, `unknown_artifact_profile`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `python/tests/installed/installed_verification_logs.py::test_sidecar_collisions_and_unknown_profiles_precede_study_access`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `python/tests/installed/installed_run_report.py::test_report_collisions_and_unknown_profiles_precede_study_access`.
 Replaces: REQ-0756, REQ-1180.
+
+Two spellings that resolve to the same file collide as well; the comparison
+uses the resolved locations without requiring either file or its parent to
+exist.
 
 <a id="output-10"></a>
 
-### OUTPUT-10. Logs publish before the primary file, and a failed run publishes only its verification log
+### OUTPUT-10. The report file publishes before the primary file, and a failed run publishes only its report
 
 A successful run renders and validates every file it publishes before
 touching any target, then replaces each under [OUTPUT-8](#output-8): the
-verification log first, then the warning log, then the primary artifact. Warning violations do
-not prevent publication. A failed run publishes neither a primary artifact nor
-a warning log and replaces only its verification log; it is the only file a
-failed run writes, and writing it accepts nothing.
+declared report file first, then the primary artifact. Warning violations do
+not prevent publication. A failed run publishes no primary artifact and
+replaces only its declared report file; it is the only file a failed run
+writes, and writing it accepts nothing.
 
-Evidence: `schema-verification-log`, `python/tests/installed/installed_verification_logs.py::test_fatal_checks_publish_only_verification_and_keep_original_issues`, `rust/crates/yamaa-adapters/src/file_application.rs::actual_late_failures_retain_original_error_entered_prefix_and_retry`, `rust/crates/yamaa-adapters/src/file_application.rs::failed_build_ancillary_log_keeps_original_failure_and_fresh_retry_prefix`.
+Evidence: `schema-verification-log`, `python/tests/installed/installed_run_report.py::test_fatal_checks_publish_only_the_report_and_keep_original_issues`, `rust/crates/yamaa-adapters/src/file_application.rs::actual_late_failures_retain_original_error_entered_prefix_and_retry`, `rust/crates/yamaa-adapters/src/file_application.rs::failed_build_report_keeps_original_failure_and_fresh_retry_prefix`.
 Replaces: REQ-0757, REQ-0758, REQ-1181.
 
 A successful publication therefore never exposes a new primary artifact
-without its completed logs already visible. The verification log
-[Verification](verification.md) fixes is diagnostic output, not one
-of the artifacts of [OUTPUT-1](#output-1).
+without its completed report already visible. The run report
+[Verification](verification.md) fixes is diagnostic output, not one of the
+artifacts of [OUTPUT-1](#output-1); a run that declares no report file
+publishes only its primary artifact.
 
-Failure to render or replace the warning log is an output failure, not a
-warning, and the primary target is not touched. Failure to render or replace
-the verification log is an output failure that leaves every other target
-untouched. If replacing the primary artifact fails after the log was replaced,
-the publication fails and the prior primary artifact remains; the complete
-log may remain as the record of the completed candidate run. Atomic
-replacement is guaranteed per file, not simultaneously across paths.
+The report is rendered when the build completes, so a report that cannot be
+rendered refuses the build ([CHECK-26](verification.md#check-26)) before
+publication. Failure to replace the report file is an output failure that
+leaves every other target untouched. If replacing the primary artifact fails
+after the report was replaced, the publication fails and the prior primary
+artifact remains; the complete report may remain as the record of the
+completed candidate run. Atomic replacement is guaranteed per file, not
+simultaneously across paths.
 
 ## Row order
 
