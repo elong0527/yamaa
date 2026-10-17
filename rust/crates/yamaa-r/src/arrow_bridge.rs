@@ -34,7 +34,7 @@ pub(crate) fn export(table: &Table, destination: Robj) -> std::result::Result<Ro
     // live owner. Transfer our header once; nanoarrow now invokes its release
     // on consumption/error/GC, and then frees its own allocated shell.
     unsafe {
-        if (*pointer).release().is_some() {
+        if (*pointer).release.is_some() {
             return Err("Arrow stream destination already owns a stream".into());
         }
         pointer.write(table.stream());
