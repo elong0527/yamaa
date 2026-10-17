@@ -30,20 +30,16 @@ use arrow_array::{Float64Array, Int64Array, RecordBatch, StringArray};
 use yamaa_adapters::{
     arrow_table::{self, ArrowTable},
     file_application::{self, Domain, RuntimePort},
-    file_graph::FileGraph,
     file_preparation::FileSpecification,
     host_resources::MemoryResolver,
     issue_rows::Issue,
-    producer_result::RootResult,
     specification_report::Identity,
     yaml_decode::decode_yaml,
 };
 use yamaa_core::{
     application_observer::Scope,
     domain_entry,
-    function_invocation::HostError,
     json::Value as Json,
-    project_activation::ActivationPort,
     project_function::Language,
     schema::{Document, DocumentNode},
     table::{Column, TableSchema},
@@ -501,16 +497,6 @@ fn collect_sources(
             }
         }
     }
-    // A schema-linked input is produced by its schema specification; the
-    // schema specification's own inputs are sources too.
-    let linked: Vec<String> = out
-        .values()
-        .filter_map(|info| info.schema.clone())
-        .collect();
-    for schema in linked {
-        let schema = normalize(spec, &schema);
-        merge_sources(&mut out, collect_sources(case, &schema, seen));
-    }
     out
 }
 
@@ -801,88 +787,36 @@ fn backend_for(case: &Path) -> (Arc<MemoryResolver>, BTreeMap<String, String>) {
     (backend, frame_failures)
 }
 
-/// Project functions execute in a host language runtime; the adapters
-/// test embeds none, so activation is refused if it is ever reached.
-/// Producer graphs of pure engine derivations never invoke it.
-struct NoActivation;
-
-impl ActivationPort for NoActivation {
-    type Handle = ();
-    type Error = String;
-
-    fn verify_lock(
-        &mut self,
-        _: Language,
-        _: &yamaa_core::project_environment::LockReference,
-        _: &[yamaa_core::function_signature::ProjectFunctionIdentity],
-    ) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn bind(
-        &mut self,
-        _: &yamaa_core::function_signature::ProjectFunctionIdentity,
-        _: &yamaa_core::function_signature::LogicalSignature,
-    ) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn invoke(
-        &mut self,
-        _: &(),
-        _: &[yamaa_core::function_invocation::Argument<'_>],
-    ) -> Result<yamaa_core::value::Value, HostError<String>> {
-        Err(HostError::Raised(
-            "no project language runtime in the adapters benchmark route".to_string(),
-        ))
-    }
-}
-
-/// A built entry, whichever route the application selected.
-enum Built {
-    Plain(Domain),
-    Producer(RootResult),
-}
+/// A built entry. Every route this harness admits is the plain route.
+struct Built(Domain);
 
 impl Built {
     fn issues(&self) -> Vec<Issue> {
-        match self {
-            Built::Plain(domain) => domain.issues(),
-            Built::Producer(result) => result.issues().to_vec(),
-        }
+        self.0.issues()
     }
 
     fn output_present(&self) -> bool {
-        match self {
-            Built::Plain(domain) => domain.output_table().is_some(),
-            Built::Producer(result) => result.output_table().is_some(),
-        }
+        self.0.output_table().is_some()
     }
 
     /// The host tables as Arrow IPC bytes, one per declared slot.
     fn table_ipc(&self, slot: &str) -> Option<&[u8]> {
-        match (self, slot) {
-            (Built::Plain(domain), "output") => domain.output(),
-            (Built::Plain(domain), "verification_log") => domain.verification_log(),
-            (Built::Plain(domain), "warning_log") => domain.warning_log(),
-            (Built::Producer(result), "output") => result.output(),
-            (Built::Producer(result), "verification_log") => result.verification_log(),
-            (Built::Producer(result), "warning_log") => result.warning_log(),
+        match slot {
+            "output" => self.0.output(),
+            "verification_log" => self.0.verification_log(),
+            "warning_log" => self.0.warning_log(),
             _ => None,
         }
     }
 
     fn save(&mut self) -> Result<bool, file_application::FailedBuild> {
-        match self {
-            Built::Plain(domain) => domain.save(),
-            Built::Producer(result) => result.save(),
-        }
+        self.0.save()
     }
 }
 
-/// The runtime port for this route: plain and producer builds run in
-/// process; project builds refuse, exactly like the adapters' native
-/// port, because project functions need a host language runtime.
+/// The runtime port for this route: plain builds run in process; project
+/// builds refuse, exactly like the adapters' native port, because project
+/// functions need a host language runtime.
 struct MemoryRuntime<'a> {
     identity: Identity<'a>,
     resolver: Arc<MemoryResolver>,
@@ -914,7 +848,7 @@ impl RuntimePort for MemoryRuntime<'_> {
         prepared: FileSpecification,
         scope: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
-        file_application::plain(prepared, self.identity(), scope).map(Built::Plain)
+        file_application::plain(prepared, self.identity(), scope).map(Built)
     }
 
     fn project(
@@ -926,32 +860,6 @@ impl RuntimePort for MemoryRuntime<'_> {
             "environment",
             Some("environment"),
         ))
-    }
-
-    fn producer(
-        &mut self,
-        graph: Box<FileGraph>,
-        scope: Scope<'_>,
-    ) -> Result<Built, file_application::Failure> {
-        let mut build = graph.into_build();
-        let mut activation = NoActivation;
-        let owned = build.build_owned_reported(&mut activation, self.identity(), scope);
-        match yamaa_adapters::producer_result::prepare_owned_classified(
-            &owned,
-            self.identity(),
-            &[],
-        ) {
-            Ok(result) => Ok(Built::Producer(result)),
-            Err(error) => Err(vec![Issue {
-                phase: "engine".to_string(),
-                condition: "engine_rejected".to_string(),
-                requirement: None,
-                spec_paths: Vec::new(),
-                context: yamaa_adapters::json!({"detail": format!("producer result projection failed: {error:?}").chars().take(300).collect::<String>()}),
-                source_span: None,
-                operand_route: None,
-            }]),
-        }
     }
 }
 
@@ -2059,7 +1967,9 @@ fn check_positive(
                 continue;
             }
             let truth_bytes = fs::read(&truth_path).unwrap();
-            let published = backend.published(&format!("memory:/{declared}"));
+            // An entry below the case root saves beside its own file.
+            let target = normalize(&spec, declared);
+            let published = backend.published(&format!("memory:/{target}"));
             match &published {
                 None => findings.push(format!(
                     "{name}: entry {spec} save did not publish {declared}"
@@ -2261,14 +2171,23 @@ fn check_case(name: &str, case: &Path) -> CaseOutcome {
         findings.push(format!("{name}: no entries planned"));
         return CaseOutcome::Findings(findings);
     }
-    let runs: Vec<EntryRun> = entries
-        .into_iter()
-        .map(|call| {
-            let outcome = run_entry_caught(case, &call, &backend);
-            EntryRun { call, outcome }
-        })
-        .collect();
-    match expected_error(case) {
+    let expected = expected_error(case);
+    let identities = spec_identities(&case_files(case));
+    let mut runs = Vec::new();
+    for call in entries {
+        let mut outcome = run_entry_caught(case, &call, &backend);
+        // Callers order builds: a successful entry saves its artifacts before
+        // the next entry reads them, exactly as the file route's runners do.
+        if expected.is_none() {
+            if let EntryOutcome::Built(built) = &mut outcome {
+                if built.issues().is_empty() && matches!(built.save(), Ok(true)) {
+                    offer_saved(case, &call, &backend, &identities);
+                }
+            }
+        }
+        runs.push(EntryRun { call, outcome });
+    }
+    match expected {
         Some(want) => check_negative(name, &sj(&want), runs, &mut findings),
         None => check_positive(name, case, &backend, runs, &mut findings),
     }
@@ -2276,6 +2195,34 @@ fn check_case(name: &str, case: &Path) -> CaseOutcome {
         CaseOutcome::Pass
     } else {
         CaseOutcome::Findings(findings)
+    }
+}
+
+/// Serve an entry's saved artifacts to later entries under the same
+/// declaring identities and spellings as the authored case files.
+fn offer_saved(
+    case: &Path,
+    call: &EntryCall,
+    backend: &Arc<MemoryResolver>,
+    identities: &[String],
+) {
+    let Ok((_, output)) = declarations_for(case, &call.specification) else {
+        return;
+    };
+    for declared in [&output.path, &output.verification_log, &output.warning_log]
+        .into_iter()
+        .flatten()
+    {
+        let target = normalize(&call.specification, declared);
+        let Some(bytes) = backend.published(&format!("memory:/{target}")) else {
+            continue;
+        };
+        let reference = format!("object:{target}");
+        for declaring in identities {
+            for spelling in spellings(declaring, &target) {
+                backend.insert(declaring, &spelling, &reference, Arc::clone(&bytes));
+            }
+        }
     }
 }
 
@@ -2382,9 +2329,9 @@ const EXEMPTIONS: &[(&str, &str)] = &[
 ];
 
 /// A representative subset across every mechanism class (inheritance,
-/// schema-linked producers, metadata documents, ODM, Parquet in and
-/// out, reported precision, log artifacts, negatives of several
-/// phases), for a fast signal while iterating.
+/// schema-linked stored artifacts and ordered entries, metadata documents,
+/// ODM, Parquet in and out, reported precision, log artifacts, negatives of
+/// several phases), for a fast signal while iterating.
 const REPRESENTATIVE: &[&str] = &[
     "adam-adsl-age-group",
     "adam-adlb-reported-precision",

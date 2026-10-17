@@ -296,7 +296,7 @@ class HostResources(unittest.TestCase):
         )
         self.assertEqual(list(backend.staging), [second.reference])
 
-    def test_inherited_and_producer_resources_use_each_owning_logical_entry(self):
+    def test_linked_resources_use_each_owning_logical_entry(self):
         producer = SPEC.replace(b"raw.csv", b"../raw/data.csv").replace(
             b"out.csv", b"../out/producer.csv"
         )
@@ -311,6 +311,19 @@ class HostResources(unittest.TestCase):
                 "raw/data.csv": b"ID\n7\n",
             }
         )
+        # A link only types the stored artifact; the producer never runs inside
+        # its consumer. Before the caller supplies the artifact it is missing.
+        missing = domain("consumer/root.yaml", resolver=backend)
+        self.assertEqual(
+            missing.issues["condition"].to_list(), ["resource_path_missing"]
+        )
+        self.assertEqual(backend.outputs, {})
+        produced = domain("producer/root.yaml", resolver=backend)
+        self.assertTrue(produced.issues.is_empty(), produced.issues)
+        self.assertTrue(produced.save())
+        saved = backend.outputs["object://synthetic/out/producer.csv"]
+        self.assertEqual(saved, b"ID\n7\n")
+        backend.put("out/producer.csv", saved)
         result = domain("consumer/root.yaml", resolver=backend)
         self.assertTrue(result.issues.is_empty(), result.issues)
         self.assertEqual(result.output["ID"].to_list(), [7])
@@ -323,12 +336,21 @@ class HostResources(unittest.TestCase):
             },
         )
         backend.put_frame(
-            "raw/data.csv", pa.table({"ID": pa.array([7], type=pa.int64())})
+            "out/producer.csv", pa.table({"ID": pa.array([7], type=pa.int64())})
         )
         framed = domain("consumer/root.yaml", resolver=backend)
         self.assertTrue(framed.issues.is_empty(), framed.issues)
         self.assertEqual(framed.output["ID"].to_list(), [7])
         self.assertTrue(framed.save())
+        # A supplied frame must still match the producer's output contract.
+        backend.put_frame(
+            "out/producer.csv", pa.table({"ID": pa.array(["7"], type=pa.string())})
+        )
+        refused = domain("consumer/root.yaml", resolver=backend)
+        self.assertIsNone(refused.output)
+        self.assertEqual(
+            refused.issues["condition"].to_list(), ["producer_contract_mismatch"]
+        )
 
 
 if __name__ == "__main__":

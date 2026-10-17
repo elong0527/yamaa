@@ -62,7 +62,10 @@ entries:
 ```
 
 `sdtm-dm-race-ethnicity` is the worked producer/consumer example. Each producer
-commits its own expected artifact beside the entry's. Multi-level inheritance
+commits its own expected artifact beside the entry's. A `schema` link only types
+the stored artifact; a consumer never runs its producer. List each producer
+before its consumers: the runners build and save every entry in order, so a
+later entry reads the artifact an earlier entry saved. Multi-level inheritance
 and alternative specifications also declare their entries; source files are
 not guessed from a parent graph. The metadata is the shared owner for native
 conformance and the dashboard's generated Python and R usage snippets. Do not
@@ -368,7 +371,8 @@ check merely to make the sample pass.
 
 Use the supported setup and repository checks in [CONTRIBUTING.md](../CONTRIBUTING.md).
 From the repository root, run a positive case through its declared Python
-entries without publishing any output files:
+entries in a staged copy. Each entry is saved there before the next is built;
+nothing is published into the checkout:
 
 ```sh
 uv run --project python --no-sync python -m tools.benchmark benchmarks/<name>

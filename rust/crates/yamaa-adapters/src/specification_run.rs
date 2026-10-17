@@ -4,7 +4,7 @@ use crate::{
     arrow_table::ArrowTable,
     csv_source::{self, TextTableError},
     dataset_result::{self, DatasetError, DatasetResponse},
-    specification_source::PreparedDocument,
+    specification_source::{LinkedSpecification, PreparedDocument},
 };
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use yamaa_core::domain::{self, CheckedSpecification};
@@ -54,17 +54,31 @@ pub struct PreparedRun {
 impl PreparedRun {
     /// Entire vocabulary admission precedes obtaining a study-data snapshot.
     pub fn prepare(document: PreparedDocument) -> Result<Self, Error> {
-        Self::prepare_with_profile_inspection(document, |_, _, _| None)
+        Self::prepare_with_profile_inspection(document, &[], |_, _, _| None)
     }
+    /// Compile with the producing specifications that the document's `schema`
+    /// links name; each supplies only its output contract.
     pub(crate) fn prepare_with_profile_inspection(
         document: PreparedDocument,
+        links: &[LinkedSpecification],
         mut inspect: impl FnMut(
             &PreparedDocument,
             &str,
             &str,
         ) -> Option<(yamaa_core::resource::ResourceFailure, String)>,
     ) -> Result<Self, Error> {
-        let checked = domain::check(document.compilation_model()).map_err(|error| {
+        let checked = {
+            let metadata = crate::specification_source::link_metadata(&document, links);
+            domain::check_linked(
+                document.compilation_model(),
+                None,
+                yamaa_core::producer_contract::Links {
+                    consumer: &document.source().identity,
+                    links: &metadata,
+                },
+            )
+        };
+        let checked = checked.map_err(|error| {
             Error::Prepare(yamaa_core::source_profile_inspection::refine(
                 error,
                 |dataset, path| inspect(&document, dataset, path),
@@ -244,6 +258,30 @@ impl application::SourceDecoder for SourceDecoder {
     }
 }
 
+/// A linked artifact's stored fields, in order and with their decoded types,
+/// must equal the producing specification's output contract (REQ-0535). The
+/// generated ordinal is appended only after this comparison.
+fn stored_contract(
+    source: &SourceDeclaration,
+    contract: &yamaa_core::producer_contract::Contract,
+    table: &ArrowTable,
+) -> Result<(), Error> {
+    use yamaa_core::table::TableAccess;
+    let fields = table
+        .schema()
+        .columns()
+        .iter()
+        .map(|field| (field.name.as_str(), field.kind))
+        .collect::<Vec<_>>();
+    match contract
+        .validate_typed_fields(&source.name, &fields)
+        .map_err(Error::ProducerContract)?
+    {
+        Some(diagnostic) => Err(Error::ProducerMetadata(diagnostic)),
+        None => Ok(()),
+    }
+}
+
 /// A frame has already admitted physical types at the Arrow boundary. Preserve
 /// those values, enforce explicit source declarations and reuse ODM/ordinal,
 /// empty-string and producer-contract admission before ordinary binding and
@@ -255,6 +293,11 @@ pub(crate) fn decode_frame(
     contract: Option<&yamaa_core::producer_contract::Contract>,
 ) -> Result<ArrowTable, Error> {
     use yamaa_core::table::TableAccess;
+    // A linked artifact's declared types are its producer's contract; compare
+    // the whole stored field list before any single declared field.
+    if let Some(contract) = contract {
+        stored_contract(source, contract, &table)?;
+    }
     yamaa_core::typed_csv::PreparedTypes::new(&source.types)
         .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
     for (name, kind) in &source.types {
@@ -274,20 +317,6 @@ pub(crate) fn decode_frame(
             return Err(typed_source_error(crate::typed_csv::Error::Typing(
                 yamaa_core::typed_csv::Error::InvalidSource,
             )));
-        }
-    }
-    if let Some(contract) = contract {
-        let fields = table
-            .schema()
-            .columns()
-            .iter()
-            .map(|field| (field.name.as_str(), field.kind))
-            .collect::<Vec<_>>();
-        if let Some(diagnostic) = contract
-            .validate_typed_fields(&source.name, &fields)
-            .map_err(Error::ProducerContract)?
-        {
-            return Err(Error::ProducerMetadata(diagnostic));
         }
     }
     let table = if interpretation == yamaa_core::specification::SourceInterpretation::Odm {
@@ -371,6 +400,9 @@ pub(crate) fn decode_source(
             }
         }
     };
+    if let Some(contract) = contract {
+        stored_contract(source, contract, &table)?;
+    }
     crate::source_ordinal::append(source, table)
 }
 

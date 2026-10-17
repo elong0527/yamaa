@@ -810,7 +810,11 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertEqual(
             snippets["Python"],
-            'import yamaa\n\nyamaa.domain("spec_dm.yaml").output\nyamaa.domain("spec_suppdm.yaml").output\n',
+            'import yamaa\n\nyamaa.domain("spec_dm.yaml").save()\nyamaa.domain("spec_suppdm.yaml").output\n',
+        )
+        self.assertEqual(
+            snippets["R"],
+            'library(yamaa)\n\nyamaa_domain("spec_dm.yaml")$save()\nyamaa_domain("spec_suppdm.yaml")$output\n',
         )
         snippets = dict(
             generate.benchmark_code(generate.BENCHMARKS / "schema-functions")

@@ -52,7 +52,7 @@ pub trait SourceDecoder {
     /// Semantic ingestion findings can be collected across the remaining declared
     /// sources. Resource, transport and opaque boundary failures must abort.
     fn continue_after(&self, error: &Self::Error) -> bool;
-    /// Apply the declared interpretation and any actual producer contract before
+    /// Apply the declared interpretation and any linked producer contract before
     /// value conversion. The table owns its decoded physical storage.
     fn decode(
         &mut self,
@@ -157,13 +157,12 @@ fn ingestion_failure<E>(error: Box<dataset::ExecutionError<E>>) -> ExecutionAtte
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SourceOrigin {
     Resource,
-    Generated,
 }
 
 #[derive(Debug)]
 pub struct SourceRead {
     pub source: SourceDeclaration,
-    /// None means routing stopped before either acquisition branch was entered.
+    /// None means routing stopped before the acquisition was entered.
     pub origin: Option<SourceOrigin>,
     pub captured: bool,
     pub failure: Option<ResourceFailure>,
@@ -273,7 +272,7 @@ fn decode_and_execute<D: SourceDecoder>(
                 prepared
                     .source_interpretation(prepared.driver_index())
                     .expect("admitted source interpretation"),
-                None,
+                prepared.source_contract(prepared.driver_index()),
             )
             .map_err(RunError::Decode)?,
     );
@@ -433,11 +432,7 @@ fn execute_inner_into<P: SpecificationSourcePort, D: SourceDecoder>(
                 return;
             }
         }
-        if observed.read.snapshots_created.is_none()
-            || observed.read.origin.is_none()
-            || (observed.read.origin == Some(SourceOrigin::Generated)
-                && observed.read.snapshots_created != Some(0))
-        {
+        if observed.read.snapshots_created.is_none() || observed.read.origin.is_none() {
             attempt.result = Err(PortError::CaptureAccounting);
             return;
         }
@@ -453,14 +448,15 @@ fn execute_inner_into<P: SpecificationSourcePort, D: SourceDecoder>(
         let interpretation = prepared
             .source_interpretation(index)
             .expect("admitted source interpretation");
+        let contract = prepared.source_contract(index);
         let owned_decoded = owned.as_ref().and_then(|table| {
-            decoder.decode_owned(declaration, table.as_ref(), interpretation, None)
+            decoder.decode_owned(declaration, table.as_ref(), interpretation, contract)
         });
         // Only a table the owned decoder accepted replaces the byte snapshot;
         // a byte fallback keeps the bytes it actually decoded.
         let used_owned = owned_decoded.is_some();
         let decoded = owned_decoded
-            .unwrap_or_else(|| decoder.decode(declaration, bytes, interpretation, None));
+            .unwrap_or_else(|| decoder.decode(declaration, bytes, interpretation, contract));
         if used_owned {
             observed.snapshot = None;
             observed.owned_snapshot = owned;

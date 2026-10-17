@@ -12,11 +12,9 @@ plain fixtures are discovered by glob.
 
 `python -m tools.conformance.public_conformance complete-reports` compares every
 complete authored report under `crates/yamaa-adapters/tests/fixtures/specs/`
-with retained actual installed Python and R file runs. It also compares the
-original producer's complete reports before and after two Save calls with
-`producer-cohort/` truth. Complete-report objects are discovered from their
-files; malformed report objects fail, while array-shaped partial diagnostic
-fixtures belong to their direct native tests.
+with retained actual installed Python and R file runs. Complete-report objects
+are discovered from their files; malformed report objects fail, while
+array-shaped partial diagnostic fixtures belong to their direct native tests.
 
 One inventory retains both installed owners, unchanged authored truth and all
 complete observations. Comparisons cover values, types, exact float bits,
@@ -33,7 +31,7 @@ python -m tools.conformance.public_conformance complete-reports \
   --source-revision REVISION
 ```
 
-The output directory must be fresh and outside both authored fixture trees.
+The output directory must be fresh and outside the authored fixture tree.
 The revision must equal the reviewed checkout and both installed owners' actual
 source revision. Comparator unit fixtures are deliberately marked unqualified;
 their successful mutation controls never establish installed release evidence.

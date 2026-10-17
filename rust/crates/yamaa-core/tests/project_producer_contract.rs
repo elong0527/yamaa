@@ -1,0 +1,210 @@
+//! Project contracts.
+#[allow(dead_code)]
+mod support;
+mod project {
+    mod producer_contract {
+        use yamaa_core::{
+            producer_contract::{prepare, Cause, Error},
+            schema::{Document, SpecificationDocument},
+            value::ColumnType,
+        };
+
+        use crate::support::document::Tree;
+
+        fn document(
+            columns: &[(&str, &str, Option<&str>)],
+            output: &[&str],
+        ) -> SpecificationDocument {
+            let tree = Tree::map(vec![
+                ("schema_version", Tree::text("1.0")),
+                ("domain", Tree::text("PRODUCER")),
+                (
+                    "input",
+                    Tree::map(vec![(
+                        "SRC",
+                        Tree::map(vec![("path", Tree::text("input.csv"))]),
+                    )]),
+                ),
+                ("keys", Tree::List(vec![Tree::text("ID")])),
+                (
+                    "columns",
+                    Tree::List(
+                        columns
+                            .iter()
+                            .map(|(name, kind, label)| {
+                                let mut fields = vec![
+                                    ("name", Tree::text(name)),
+                                    ("type", Tree::text(kind)),
+                                    (
+                                        "derivation",
+                                        Tree::map(vec![(
+                                            "value",
+                                            Tree::map(vec![(
+                                                "source",
+                                                Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
+                                            )]),
+                                        )]),
+                                    ),
+                                ];
+                                if let Some(label) = label {
+                                    fields.push(("label", Tree::text(label)));
+                                }
+                                Tree::map(fields)
+                            })
+                            .collect(),
+                    ),
+                ),
+                (
+                    "output",
+                    Tree::map(vec![
+                        ("path", Tree::text("produced.csv")),
+                        (
+                            "columns",
+                            Tree::List(output.iter().copied().map(Tree::text).collect()),
+                        ),
+                    ]),
+                ),
+            ]);
+            let mut nodes = Vec::new();
+            let root = tree.append(&mut nodes);
+            SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+                .unwrap()
+                .unwrap()
+        }
+        const FIELDS: &[(&str, &str, Option<&str>)] = &[
+            ("VALUE", "float", Some("Reported value")),
+            ("ID", "int", Some("Identifier")),
+            ("INTERNAL", "str", None),
+        ];
+
+        #[test]
+        fn producer_width_admits_1023_and_1024_and_refuses_each_1025_boundary() {
+            let names: Vec<_> = (0..1_025).map(|i| format!("C{i:04}")).collect();
+            let selected: Vec<_> = names.iter().map(String::as_str).collect();
+            let columns: Vec<_> = selected
+                .iter()
+                .map(|&name| (name, "str", Some(name)))
+                .collect();
+            for width in [1_023, 1_024] {
+                let contract = prepare(&document(&columns[..width], &selected[..width])).unwrap();
+                assert_eq!(contract.fields().len(), width);
+                assert!(contract.matches_header(&selected[..width]));
+            }
+            assert_eq!(
+                prepare(&document(&columns, &selected[..1_024])),
+                Err(Error::Limit(yamaa_core::limits::LimitExceeded {
+                    resource: "columns",
+                    limit: 1024,
+                    actual: Some(1025)
+                }))
+            );
+            assert_eq!(
+                prepare(&document(&columns[..1_024], &selected)),
+                Err(Error::Limit(yamaa_core::limits::LimitExceeded {
+                    resource: "columns",
+                    limit: 1024,
+                    actual: Some(1025)
+                }))
+            );
+        }
+
+        #[test]
+        fn producer_projection_is_the_stored_order_and_internal_columns_are_excluded() {
+            let contract = prepare(&document(FIELDS, &["ID", "VALUE"])).unwrap();
+            assert_eq!(
+                contract
+                    .fields()
+                    .iter()
+                    .map(|f| (f.name.as_str(), f.kind, f.label.as_str()))
+                    .collect::<Vec<_>>(),
+                vec![
+                    ("ID", ColumnType::Int, "Identifier"),
+                    ("VALUE", ColumnType::Float, "Reported value")
+                ]
+            );
+            assert!(contract.matches_header(&["ID", "VALUE"]));
+            for actual in [
+                vec!["VALUE", "ID"],
+                vec!["ID"],
+                vec!["ID", "VALUE", "OTHER"],
+                vec!["ID", "ID"],
+                vec![],
+            ] {
+                assert!(!contract.matches_header(&actual));
+            }
+            assert!(contract
+                .matches_typed_fields(&[("ID", ColumnType::Int), ("VALUE", ColumnType::Float)]));
+            assert!(!contract
+                .matches_typed_fields(&[("ID", ColumnType::Int), ("VALUE", ColumnType::Str)]));
+            assert!(!contract
+                .matches_typed_fields(&[("VALUE", ColumnType::Float), ("ID", ColumnType::Int)]));
+        }
+
+        #[test]
+        fn producer_projection_rejects_empty_duplicate_and_undeclared_fields_in_order() {
+            assert_eq!(
+                prepare(&document(FIELDS, &[])),
+                Err(Error::Invalid(vec![Cause::Empty]))
+            );
+            assert_eq!(
+                prepare(&document(FIELDS, &["ID", "ID", "OTHER"])),
+                Err(Error::Invalid(vec![
+                    Cause::Duplicate {
+                        position: 1,
+                        field: "ID".into()
+                    },
+                    Cause::Declaration {
+                        position: 2,
+                        field: "OTHER".into(),
+                        count: 0
+                    }
+                ]))
+            );
+        }
+
+        #[test]
+        fn producer_requires_one_typed_declaration_and_a_nonblank_label_per_stored_field() {
+            let duplicates = [
+                ("ID", "int", Some("Identifier")),
+                ("ID", "str", Some("Other")),
+            ];
+            assert_eq!(
+                prepare(&document(&duplicates, &["ID"])),
+                Err(Error::Invalid(vec![Cause::Declaration {
+                    position: 0,
+                    field: "ID".into(),
+                    count: 2
+                }]))
+            );
+            for label in [None, Some(""), Some(" \t\n")] {
+                assert_eq!(
+                    prepare(&document(&[("ID", "int", label)], &["ID"])),
+                    Err(Error::Invalid(vec![Cause::Label { field: "ID".into() }]))
+                );
+            }
+        }
+
+        #[test]
+        fn every_declared_logical_type_survives_without_value_inference() {
+            let fields = [
+                ("ID", "int", Some("ID")),
+                ("TEXT", "str", Some("Text")),
+                ("VALUE", "float", Some("Value")),
+                ("DATE", "date", Some("Date")),
+                ("TIME", "datetime", Some("Time")),
+            ];
+            let names = ["TIME", "DATE", "VALUE", "TEXT", "ID"];
+            let contract = prepare(&document(&fields, &names)).unwrap();
+            assert_eq!(
+                contract.fields().iter().map(|f| f.kind).collect::<Vec<_>>(),
+                vec![
+                    ColumnType::DateTime,
+                    ColumnType::Date,
+                    ColumnType::Float,
+                    ColumnType::Str,
+                    ColumnType::Int
+                ]
+            );
+        }
+    }
+}

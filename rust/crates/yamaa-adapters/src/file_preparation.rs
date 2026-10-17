@@ -113,11 +113,15 @@ impl RejectedPlain {
 impl FileSpecification {
     pub fn prepare(mut resources: Resources, written: &str) -> Result<Self, Error> {
         let document = prepare_document(&mut resources, written, None)?;
-        let run =
-            PreparedRun::prepare_with_profile_inspection(document, |document, dataset, path| {
+        let links = capture_links(&mut resources, &document, None, &mut None)?;
+        let run = PreparedRun::prepare_with_profile_inspection(
+            document,
+            &links,
+            |document, dataset, path| {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
-            })
-            .map_err(Error::Compile)?;
+            },
+        )
+        .map_err(Error::Compile)?;
         let findings = crate::verification_logs::location_findings(&resources, &run);
         if !findings.is_empty() {
             return Err(Error::Compile(crate::specification_run::Error::Prepare(
@@ -127,23 +131,26 @@ impl FileSpecification {
         Ok(Self { run, resources })
     }
     pub(crate) fn from_workflow(
-        entry: crate::file_graph::CapturedEntry,
+        entry: crate::file_entry::CapturedEntry,
     ) -> Result<Self, Box<RejectedPlain>> {
-        let (resources, entry, document, _) = entry.into_ordinary_parts();
-        let result =
-            PreparedRun::prepare_with_profile_inspection(document, |document, dataset, path| {
+        let (resources, entry, document, links, _) = entry.into_parts();
+        let result = PreparedRun::prepare_with_profile_inspection(
+            document,
+            &links,
+            |document, dataset, path| {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
-            })
-            .and_then(|run| {
-                let findings = crate::verification_logs::location_findings(&resources, &run);
-                if findings.is_empty() {
-                    Ok(run)
-                } else {
-                    Err(crate::specification_run::Error::Prepare(
-                        yamaa_core::specification::PrepareError::Invalid(findings),
-                    ))
-                }
-            });
+            },
+        )
+        .and_then(|run| {
+            let findings = crate::verification_logs::location_findings(&resources, &run);
+            if findings.is_empty() {
+                Ok(run)
+            } else {
+                Err(crate::specification_run::Error::Prepare(
+                    yamaa_core::specification::PrepareError::Invalid(findings),
+                ))
+            }
+        });
         match result {
             Ok(run) => Ok(Self { run, resources }),
             Err(error) => Err(Box::new(RejectedPlain {
@@ -228,6 +235,107 @@ pub(crate) fn prepare_document_from(
     })
 }
 
+/// A classified failure observed for a `schema` link keeps its authored field.
+fn link_resource(error: ResourceError, field: &str, written: &str) -> Error {
+    match crate::file_resources::resource_failure(&error) {
+        Some(failure) => Error::ResourceFinding {
+            error,
+            diagnostic: Box::new(failure.field_diagnostic(field, written)),
+        },
+        None => Error::Resource(error),
+    }
+}
+
+/// Read each producing specification a `schema` link names once, as a validated
+/// specification document; aliases share the one prepared document. A linked
+/// producer's own links are not followed: a link supplies only the stored
+/// artifact's output contract, and the producer is never compiled or executed.
+/// `origin` names the input being read when a failure returns.
+pub(crate) fn capture_links(
+    resources: &mut Resources,
+    document: &crate::specification_source::PreparedDocument,
+    schema: Option<&Arc<crate::specification_source::CapturedSchema>>,
+    origin: &mut Option<String>,
+) -> Result<Vec<crate::specification_source::LinkedSpecification>, Error> {
+    use crate::specification_source::LinkedSpecification;
+    use yamaa_core::schema::DocumentNode as N;
+    let d = document.model().document();
+    let Some(N::Mapping(entries)) = d.field(d.root(), "input").map(|id| &d.nodes()[id]) else {
+        return Ok(Vec::new());
+    };
+    let mut links: Vec<LinkedSpecification> = Vec::new();
+    let mut prepared_any = false;
+    for &(name, declaration) in entries {
+        let N::Text(dataset) = &d.nodes()[name] else {
+            continue;
+        };
+        if !d
+            .field(declaration, "schema")
+            .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
+        {
+            continue;
+        }
+        // Without an authored origin no link is supplied; link admission then
+        // reports the declaration's missing metadata.
+        let Some(link) = document.written_input_origin(dataset, "schema") else {
+            continue;
+        };
+        *origin = Some(dataset.clone());
+        let field = format!("input.{dataset}.schema");
+        let identity = resources
+            .resolve_from(link.base_source, link.written)
+            .map_err(|error| link_resource(error, &field, link.written))?;
+        let linked = if identity == document.source().identity {
+            // A link naming the consuming specification is refused by link
+            // admission; it holds no separate document.
+            None
+        } else if let Some(known) = links
+            .iter()
+            .filter_map(|prior| prior.document.as_ref())
+            .find(|prior| prior.source().identity == identity)
+        {
+            // An alias spelling verifies its own snapshot but reuses the one
+            // canonical prepared document.
+            let known = Arc::clone(known);
+            resources
+                .capture_metadata_from(link.base_source, link.written)
+                .map_err(|error| link_resource(error, &field, link.written))?;
+            Some(known)
+        } else {
+            let prepared = prepare_document_from(
+                resources,
+                Some(link.base_source),
+                link.written,
+                schema.cloned(),
+            )
+            .map_err(|error| error.entry_field(&field, link.written))?;
+            prepared_any = true;
+            if prepared.source().identity != identity {
+                return Err(Error::resource_at(
+                    ResourceError::Changed,
+                    &field,
+                    link.written,
+                ));
+            }
+            Some(Arc::new(prepared))
+        };
+        links.push(LinkedSpecification {
+            dataset: dataset.clone(),
+            identity,
+            document: linked,
+        });
+    }
+    *origin = None;
+    if prepared_any {
+        // Producing-specification preparation selects its own entry base.
+        // Restore the consumer's before its source paths acquire read authority.
+        resources
+            .select_entry_base(&document.source().identity)
+            .map_err(Error::Resource)?;
+    }
+    Ok(links)
+}
+
 /// Return only unclassified native failures; observed facts retain their source owner.
 pub fn opaque_resource_failure(attempt: &CapturedAttempt<ResourceError>) -> Option<&ResourceError> {
     use crate::specification_run::PortError;
@@ -305,6 +413,7 @@ mod profile_inspection_tests {
                 yamaa_core::specification::PrepareError::Invalid(findings),
             )) = PreparedRun::prepare_with_profile_inspection(
                 document,
+                &[],
                 |document, dataset, path| {
                     crate::source_profile_inspection::inspect(document, &resources, dataset, path)
                 },

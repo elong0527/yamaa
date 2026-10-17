@@ -170,45 +170,11 @@ pub struct ActivatedFunction<H> {
 /// resolves namespaces, verifies versions or re-runs conformance cases here.
 pub struct Bindings<'a, P: ActivationPort> {
     functions: &'a [ActivatedFunction<P::Handle>],
-    projection: Option<&'a [usize]>,
     port: &'a mut P,
 }
 impl<'a, P: ActivationPort> Bindings<'a, P> {
     pub fn new(functions: &'a [ActivatedFunction<P::Handle>], port: &'a mut P) -> Self {
-        Self {
-            functions,
-            projection: None,
-            port,
-        }
-    }
-    /// Borrow one node's local slots from a complete graph's activated union.
-    /// Validate every full identity/signature before accepting the projection;
-    /// construction never invokes the host or observes study data.
-    pub fn projected(
-        functions: &'a [ActivatedFunction<P::Handle>],
-        projection: &'a [usize],
-        plans: &[ProjectInvocationPlan],
-        port: &'a mut P,
-    ) -> Result<Self, usize> {
-        if projection.len() != plans.len() {
-            return Err(std::cmp::min(projection.len(), plans.len()));
-        }
-        for (local, (global, expected)) in projection.iter().zip(plans).enumerate() {
-            if functions.get(*global).map(|function| &function.plan) != Some(expected) {
-                return Err(local);
-            }
-        }
-        Ok(Self {
-            functions,
-            projection: Some(projection),
-            port,
-        })
-    }
-    fn slot(&self, local: usize) -> Option<usize> {
-        match self.projection {
-            Some(projection) => projection.get(local).copied(),
-            None => Some(local),
-        }
+        Self { functions, port }
     }
 }
 impl<P: ActivationPort> crate::function_invocation::FunctionPort for Bindings<'_, P> {
@@ -217,9 +183,7 @@ impl<P: ActivationPort> crate::function_invocation::FunctionPort for Bindings<'_
         None
     }
     fn project_signature(&self, slot: usize) -> Option<&ProjectInvocationPlan> {
-        self.functions
-            .get(self.slot(slot)?)
-            .map(|function| &function.plan)
+        self.functions.get(slot).map(|function| &function.plan)
     }
     fn call(
         &mut self,
@@ -228,10 +192,9 @@ impl<P: ActivationPort> crate::function_invocation::FunctionPort for Bindings<'_
     ) -> Result<Value, HostError<Self::Error>> {
         // The dataset service checks each complete signature and slot before
         // observing table cardinality or cells; slots are immutable thereafter.
-        let global = self.slot(slot).expect("preflighted local activated slot");
         let function = self
             .functions
-            .get(global)
+            .get(slot)
             .expect("preflighted activated slot");
         self.port.invoke(&function.handle, arguments)
     }

@@ -403,59 +403,51 @@ mod project {
             }
         }
     }
-    mod producer_admission {
+    mod producer_links {
         use crate::support::producer as support;
-        use support::{candidate, consumer, document, producer, Tree};
+        use support::{consumer, document, link, links, producer, Tree, CONSUMER};
         use yamaa_core::json::Value as V;
         use yamaa_core::schema::DocumentNode as N;
         use yamaa_core::{
             diagnostic::Diagnostic,
-            producer_admission::{prepare, Error, Input},
-            producer_contract,
+            producer_contract::{self, Link, Links},
             specification::{PrepareError, PreparedSpecification},
             value::ColumnType,
         };
-        fn invalid(
-            result: Result<yamaa_core::producer_admission::Prepared, Error>,
-        ) -> Vec<Diagnostic> {
+        fn invalid(result: Result<PreparedSpecification, PrepareError>) -> Vec<Diagnostic> {
             match result {
-                Err(Error::Invalid(findings)) => findings,
-                _ => panic!("producer admission findings"),
+                Err(PrepareError::Invalid(findings)) => findings
+                    .iter()
+                    .map(|finding| finding.diagnostic())
+                    .collect(),
+                _ => panic!("link admission findings"),
             }
         }
         fn text(s: &str) -> V {
             V::String(s.into())
         }
         #[test]
-        fn sealed_compiler_preserves_distinct_producer_identity_fields_and_authored_origins() {
+        fn linked_contract_types_the_stored_fields_without_compiling_the_producer() {
+            // The producer's own source and derivations never enter the
+            // consumer's compilation: only its selected output contract does.
             let source = producer();
             let consumer = consumer(None);
-            let metadata =
-                prepare("/consumer.yaml", &consumer, &[candidate(&source)], None).unwrap();
-            let inputs = metadata.inputs().collect::<Vec<_>>();
-            let [Input::Producer(declaration)] = inputs.as_slice() else {
-                panic!("producer kind")
-            };
-            assert_eq!(declaration.dataset(), "SRC");
-            assert_eq!(declaration.schema_path(), "nested/producer.yaml");
+            let compiled =
+                PreparedSpecification::prepare_linked(&consumer, None, links(&[link(&source)]))
+                    .unwrap();
+            assert_eq!(compiled.sources().len(), 1);
+            assert_eq!(compiled.sources()[0].name, "SRC");
+            assert_eq!(compiled.sources()[0].path, "produced.csv");
             assert_eq!(
-                declaration.schema_origin().declaring_source(),
-                "/parent.yaml"
+                compiled.sources()[0].types,
+                [
+                    ("ID".to_owned(), ColumnType::Int),
+                    ("VALUE".to_owned(), ColumnType::Float)
+                ]
             );
+            let contract = compiled.source_contract(0).unwrap();
             assert_eq!(
-                declaration.schema_origin().written(),
-                "../nested/producer.yaml"
-            );
-            assert_eq!(
-                declaration.input_origin().declaring_source(),
-                "/consumer.yaml"
-            );
-            assert_eq!(declaration.input_origin().written(), "./produced.csv");
-            assert_eq!(declaration.producer_identity(), "/producer.yaml");
-            assert_eq!(declaration.artifact_identity(), "/produced.csv");
-            assert_eq!(
-                declaration
-                    .contract()
+                contract
                     .fields()
                     .iter()
                     .map(|f| (f.name.as_str(), f.kind, f.label.as_str()))
@@ -465,15 +457,12 @@ mod project {
                     ("VALUE", ColumnType::Float, "Reported value")
                 ]
             );
-            assert_eq!(metadata.projection(), ["ID"]);
-            assert!(metadata.called_functions().is_empty());
-            assert!(matches!(
-                PreparedSpecification::prepare(&consumer),
-                Err(PrepareError::Unsupported(_))
-            ));
+            assert!(compiled.source_contract(1).is_none());
+            assert_eq!(compiled.projection(), ["ID"]);
+            assert!(compiled.called_functions().is_empty());
         }
         #[test]
-        fn input_declaration_order_is_independent_of_supplied_metadata_order() {
+        fn input_declaration_order_is_independent_of_supplied_link_order() {
             let input = Tree::map(vec![
                 (
                     "B",
@@ -493,31 +482,25 @@ mod project {
             ]);
             let consumer = document(input, &[("ID", "int", Some("ID"))], &["ID"], false);
             let source = producer();
-            let mut a = candidate(&source);
-            let mut b = candidate(&source);
+            let mut a = link(&source);
+            let mut b = link(&source);
             a.dataset = "A";
-            a.schema_path = "a.yaml";
             b.dataset = "B";
-            b.schema_path = "b.yaml";
-            let metadata = prepare("/consumer.yaml", &consumer, &[a, b], None).unwrap();
+            let compiled =
+                PreparedSpecification::prepare_linked(&consumer, None, links(&[a, b])).unwrap();
             assert_eq!(
-                metadata
-                    .inputs()
-                    .map(|i| match i {
-                        Input::Producer(p) => (p.dataset(), true),
-                        Input::External(s) => (s.name.as_str(), false),
-                    })
+                compiled
+                    .sources()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, source)| (
+                        source.name.as_str(),
+                        compiled.source_contract(index).is_some()
+                    ))
                     .collect::<Vec<_>>(),
                 [("B", true), ("EXT", false), ("A", true)]
             );
-            assert_eq!(
-                metadata
-                    .producers()
-                    .iter()
-                    .map(|p| p.dataset())
-                    .collect::<Vec<_>>(),
-                ["B", "A"]
-            );
+            assert!(compiled.sources()[1].types.is_empty());
         }
         #[test]
         fn inline_types_are_redundant_even_when_equal_empty_or_null() {
@@ -527,11 +510,10 @@ mod project {
                 Tree::map(vec![]),
                 Tree::Scalar(N::Null),
             ] {
-                let findings = invalid(prepare(
-                    "/consumer.yaml",
+                let findings = invalid(PreparedSpecification::prepare_linked(
                     &consumer(Some(types)),
-                    &[candidate(&source)],
                     None,
+                    links(&[link(&source)]),
                 ));
                 assert_eq!(findings.len(), 1);
                 assert_eq!(
@@ -549,87 +531,57 @@ mod project {
         fn missing_duplicate_and_undeclared_metadata_are_never_external_file_reads() {
             let source = producer();
             let consumer = consumer(None);
-            let findings = invalid(prepare("/consumer.yaml", &consumer, &[], None));
+            for supplied in [Links::default(), links(&[])] {
+                let findings = invalid(PreparedSpecification::prepare_linked(
+                    &consumer, None, supplied,
+                ));
+                assert_eq!(findings[0].context["reason"], text("missing_metadata"));
+            }
+            let findings = invalid(PreparedSpecification::prepare(&consumer));
             assert_eq!(findings[0].context["reason"], text("missing_metadata"));
-            let findings = invalid(prepare(
-                "/consumer.yaml",
+            let findings = invalid(PreparedSpecification::prepare_linked(
                 &consumer,
-                &[candidate(&source), candidate(&source)],
                 None,
+                links(&[link(&source), link(&source)]),
             ));
             assert_eq!(findings[0].context["reason"], text("duplicate_metadata"));
-            let mut extra = candidate(&source);
+            let mut extra = link(&source);
             extra.dataset = "ABSENT";
-            let findings = invalid(prepare(
-                "/consumer.yaml",
+            let findings = invalid(PreparedSpecification::prepare_linked(
                 &consumer,
-                &[candidate(&source), extra],
                 None,
+                links(&[link(&source), extra]),
             ));
+            assert_eq!(findings[0].spec_paths, ["input.ABSENT.schema"]);
             assert_eq!(findings[0].context["reason"], text("undeclared_metadata"));
         }
         #[test]
-        fn contradictory_identities_and_self_dependency_fail_at_metadata_admission() {
-            let source = producer();
+        fn a_link_cannot_name_the_consuming_specification() {
             let consumer = consumer(None);
-            for variation in 0..4 {
-                let mut c = candidate(&source);
-                match variation {
-                    0 => c.schema_path = "other.yaml",
-                    1 => c.schema_identity = "/other.yaml",
-                    2 => c.input_origin.written = "",
-                    _ => {
-                        c.schema_identity = "/consumer.yaml";
-                        c.producer_identity = "/consumer.yaml";
-                    }
-                }
-                let findings = invalid(prepare("/consumer.yaml", &consumer, &[c], None));
-                assert_eq!(
-                    findings[0].context["reason"],
-                    text(if variation == 3 {
-                        "producer_workflow_cycle"
-                    } else {
-                        "contradictory_metadata"
-                    })
-                );
-                assert_eq!(findings.len(), 1);
-                assert_eq!(findings[0].spec_paths, ["input.SRC.schema"]);
-                let definition = findings[0].definition();
-                assert_eq!(
-                    (
-                        definition.phase,
-                        definition.condition,
-                        definition.requirement
-                    ),
-                    ("validation", "invalid_producer_contract", Some("REQ-0534")),
-                );
-                assert_eq!(findings[0].context.len(), 2);
-                assert_eq!(findings[0].context["dataset"], text("SRC"));
-            }
-        }
-        #[test]
-        fn canonical_artifact_mismatch_keeps_written_geometry_and_normative_mapping() {
-            let source = producer();
-            let consumer = consumer(None);
-            let mut c = candidate(&source);
-            c.output_identity = "/other.csv";
-            let findings = invalid(prepare("/consumer.yaml", &consumer, &[c], None));
-            let f = &findings[0];
+            let own = Link {
+                dataset: "SRC",
+                identity: CONSUMER,
+                document: &consumer,
+            };
+            let findings = invalid(PreparedSpecification::prepare_linked(
+                &consumer,
+                None,
+                links(&[own]),
+            ));
+            assert_eq!(findings.len(), 1);
+            assert_eq!(findings[0].spec_paths, ["input.SRC.schema"]);
+            let definition = findings[0].definition();
             assert_eq!(
                 (
-                    f.definition().phase,
-                    f.definition().condition,
-                    f.definition().requirement
+                    definition.phase,
+                    definition.condition,
+                    definition.requirement
                 ),
-                (
-                    "validation",
-                    "producer_output_path_mismatch",
-                    Some("REQ-0534")
-                )
+                ("validation", "invalid_producer_contract", Some("REQ-0534")),
             );
-            assert_eq!(f.spec_paths, ["input.SRC.path", "input.SRC.schema"]);
-            assert_eq!(f.context["source_path"], text("./produced.csv"));
-            assert_eq!(f.context["output_path"], text("produced.csv"));
+            assert_eq!(findings[0].context.len(), 2);
+            assert_eq!(findings[0].context["dataset"], text("SRC"));
+            assert_eq!(findings[0].context["reason"], text("self_reference"));
         }
         #[test]
         fn producer_contract_findings_retain_selected_field_order() {
@@ -642,11 +594,10 @@ mod project {
                 &["ID", "ID", "OTHER"],
                 false,
             );
-            let findings = invalid(prepare(
-                "/consumer.yaml",
+            let findings = invalid(PreparedSpecification::prepare_linked(
                 &consumer(None),
-                &[candidate(&source)],
                 None,
+                links(&[link(&source)]),
             ));
             assert_eq!(
                 findings
@@ -684,7 +635,7 @@ mod project {
                 true,
             );
             assert!(
-                matches!(prepare("/consumer.yaml",&consumer,&[candidate(&source)],None),Err(Error::Compilation(PrepareError::Unsupported(features))) if features.iter().any(|f| f.path=="parent" && f.operation == "parent"))
+                matches!(PreparedSpecification::prepare_linked(&consumer, None, links(&[link(&source)])), Err(PrepareError::Unsupported(features)) if features.iter().any(|f| f.path=="parent" && f.operation == "parent"))
             );
         }
         #[test]
@@ -763,13 +714,15 @@ mod project {
                 &["ID", "VALUE"],
                 false,
             );
-            let mut a = candidate(&source);
+            let mut a = link(&source);
             a.dataset = "A";
-            a.schema_path = "a.yaml";
-            let mut b = candidate(&other);
+            let mut b = link(&other);
             b.dataset = "B";
-            b.schema_path = "b.yaml";
-            let findings = invalid(prepare("/consumer.yaml", &consumer, &[a, b], None));
+            let findings = invalid(PreparedSpecification::prepare_linked(
+                &consumer,
+                None,
+                links(&[a, b]),
+            ));
             assert_eq!(findings[0].spec_paths, ["input.B.schema"]);
             assert_eq!(
                 findings[0].context["reason"],

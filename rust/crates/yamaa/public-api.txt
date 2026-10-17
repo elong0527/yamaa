@@ -52,7 +52,6 @@ yamaa::LockKind: pub use yamaa::functions::LockKind
 yamaa::LockReason: pub use yamaa::error::LockReason
 yamaa::LockSyntaxError: pub use yamaa::error::LockSyntaxError
 yamaa::MemoryResolver: pub use yamaa::resolver::MemoryResolver
-yamaa::Node: pub use yamaa::observe::Node
 yamaa::Outcome: pub use yamaa::observe::Outcome
 yamaa::Parameter: pub use yamaa::functions::Parameter
 yamaa::Phase: pub use yamaa::observe::Phase
@@ -145,15 +144,7 @@ yamaa::engine::Build::observations: pub fn observations(&self, include_measureme
 yamaa::engine::Build::output: pub fn output(&self) -> Option<&Table>
 yamaa::engine::Build::output_bytes: pub fn output_bytes(&self) -> Option<&[u8]>
 yamaa::engine::Build::preparation_sources: pub fn preparation_sources(&self) -> &SourceBytes
-yamaa::engine::Build::producer_accepted: pub fn producer_accepted(&self) -> Option<bool>
-yamaa::engine::Build::producer_artifact: pub fn producer_artifact(&self, node: usize) -> Option<&[u8]>
-yamaa::engine::Build::producer_failures: pub fn producer_failures(&self) -> Option<&[AttemptFailure]>
-yamaa::engine::Build::producer_interrupt: pub fn producer_interrupt(&self) -> Option<&FunctionError>
-yamaa::engine::Build::producer_nodes: pub fn producer_nodes(&self) -> Option<&[usize]>
-yamaa::engine::Build::producer_sources: pub fn producer_sources(&self) -> Option<&SourceBytes>
 yamaa::engine::Build::project_failures: pub fn project_failures(&self) -> Option<&[AttemptFailure]>
-yamaa::engine::Build::project_interrupt: pub fn project_interrupt(&self) -> Option<&FunctionError>
-yamaa::engine::Build::projection_failure: pub fn projection_failure(&self) -> Option<&str>
 yamaa::engine::Build::report: pub fn report(&self) -> &Report
 yamaa::engine::Build::save: pub fn save(&mut self) -> Result<SaveOutcome, Error>
 yamaa::engine::DefineArtifact: pub struct DefineArtifact [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
@@ -335,16 +326,13 @@ yamaa::observe::DatasetPhase::Derivation: Derivation
 yamaa::observe::DatasetPhase::Finished: Finished
 yamaa::observe::DatasetPhase::OutputKeys: OutputKeys
 yamaa::observe::DatasetPhase::Verification: Verification
-yamaa::observe::Event: impl<'a> Event<'a>
-yamaa::observe::Event: pub enum Event<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::observe::Event::Exit: Exit { node: Option<Node<'a>>, phase: Phase, outcome: Outcome, }
-yamaa::observe::Event::FunctionCall: FunctionCall { node: Option<Node<'a>>, stage: CallStage, }
-yamaa::observe::Event::FunctionReturn: FunctionReturn { node: Option<Node<'a>>, stage: CallStage, outcome: Outcome, }
-yamaa::observe::Event::Phase: Phase { node: Option<Node<'a>>, phase: Phase, }
-yamaa::observe::Event::Refusal: Refusal { node: Option<Node<'a>>, phase: Phase, refusal: Refusal, }
-yamaa::observe::Node: pub struct Node<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::observe::Node::identity: pub identity: &'a str
-yamaa::observe::Node::index: pub index: usize
+yamaa::observe::Event: impl Event
+yamaa::observe::Event: pub enum Event [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::observe::Event::Exit: Exit { phase: Phase, outcome: Outcome }
+yamaa::observe::Event::FunctionCall: FunctionCall { stage: CallStage }
+yamaa::observe::Event::FunctionReturn: FunctionReturn { stage: CallStage, outcome: Outcome }
+yamaa::observe::Event::Phase: Phase { phase: Phase }
+yamaa::observe::Event::Refusal: Refusal { phase: Phase, refusal: Refusal }
 yamaa::observe::Outcome: impl Outcome
 yamaa::observe::Outcome: pub enum Outcome [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::observe::Outcome::Failed: Failed
@@ -359,7 +347,7 @@ yamaa::observe::Phase::Input: Input
 yamaa::observe::Phase::Output: Output
 yamaa::observe::Phase::Preparation: Preparation
 yamaa::observe::Progress: pub trait Progress: Send + Sync
-yamaa::observe::Progress::observe: fn observe(&self, event: Event<'_>) [required]
+yamaa::observe::Progress::observe: fn observe(&self, event: Event) [required]
 yamaa::observe::Refusal: impl Refusal
 yamaa::observe::Refusal: pub struct Refusal [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::observe::Refusal::limit: pub limit: usize

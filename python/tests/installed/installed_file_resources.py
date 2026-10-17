@@ -60,6 +60,16 @@ class FileResources(unittest.TestCase):
                 (study / "producer.yaml").write_text(
                     truth["producer_entry"], encoding="ascii"
                 )
+                if producer:
+                    # A link only types the stored artifact: callers build and
+                    # save each study's producer before its consumer reads it.
+                    produced = yamaa.domain(study / "producer.yaml")
+                    self.assertTrue(produced.issues.is_empty(), produced.issues)
+                    self.assertTrue(produced.save())
+                    self.assertEqual(
+                        (study / "output/produced.csv").read_bytes(),
+                        csv.encode("ascii"),
+                    )
                 self.assertTrue(yamaa.check(entry).issues.is_empty())
                 result = yamaa.domain(entry)
                 self.assertTrue(result.issues.is_empty(), result.issues)

@@ -181,3 +181,8 @@ Replaces: REQ-0705.
 
 For example, the YAML double-quoted escape `"\u00E9"` denotes the
 one-character string U+00E9.
+
+The repository holding the language keeps the same boundary: its conformance
+documents, rules, documentation and implementation source are ASCII, and they
+name a non-ASCII character by its code point, such as `U+00E9`, rather than
+embedding it. Repository validation enforces this.

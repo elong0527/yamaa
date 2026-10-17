@@ -56,8 +56,8 @@ held-content comparison establish snapshot freshness; no content hashing is used
 Credentials remain private to the callback, independently from retained
 `resource_provenance`. Returned URI references do not change authored path rules.
 
-`yamaa_domain` computes without publishing files. Explicit Save publishes retained
-producer bytes before consumers and reuses those bytes on repeated calls. A failed
+`yamaa_domain` computes without publishing files. Explicit Save publishes the
+retained log and output bytes and reuses those bytes on repeated calls. A failed
 build raises `yamaa_domain_error` on Save. Owned result attributes are read only.
 Capacity refusals retain the shared condition and authored paths;
 [release guidance](../../docs/release.md#resource-refusals) describes their
@@ -67,9 +67,21 @@ Set `relative_to: entry` on an input dataset or `output` declaration to select
 the study entry's directory under the
 [local-path policy](../../rules/reference/files.md). Input settings cover
 both data paths and producer `schema` links; output settings cover the primary
-artifact and both logs. A producer uses its own linked entry file, which may
-inherit shared code. `result$save()` publishes the held bytes to those selected
-destinations.
+artifact and both logs. `result$save()` publishes the held bytes to those
+selected destinations.
+
+An input's `schema` link names the producing specification whose output columns
+and declared types type a stored artifact. The link is metadata only: the
+consumer never runs its producer. A producing specification is read from its
+own file, which may inherit shared code. Build and save the producer first; the
+consumer then reads the artifact at its own `path` like any other input, and
+refuses a stored header or Parquet schema that differs from the producer's
+output columns.
+
+```r
+yamaa_domain("dm.yaml")$save()
+result <- yamaa_domain("suppdm.yaml")
+```
 
 Inputs can use CSV, Parquet, SAS datasets (`.sas7bdat`), or SAS Transport v5/v8
 (`.xpt`). SAS inputs explicitly declare `encoding`, for example
@@ -144,7 +156,8 @@ restored <- yamaa_read_resolved_specification(serialized)
 
 These APIs use the shared [resolved artifact format](../../rust/README.md#resolved-specification-artifact).
 The owned JSON records the complete composed normalized model, original field
-provenance, selected resource roots and producer-specific entry identities.
+provenance and selected resource roots, including each linked producing
+specification as a `producer_schema` resource of its consumer.
 The optional `environment` argument admits declared project metadata without
 invoking callbacks. Missing study data and nonexistent output locations can be
 inspected; missing required metadata signals `yamaa_resolved_specification_error`

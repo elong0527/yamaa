@@ -961,14 +961,10 @@ def main(argv=None):
             parser.error(
                 "complete report truth requires the reviewed benchmark checkout"
             )
-        if args.output.exists() or any(
-            args.output.resolve().is_relative_to(directory.resolve())
-            for directory in (
-                args.fixtures,
-                ROOT / "rust/qualification/producer-cohort",
-            )
+        if args.output.exists() or args.output.resolve().is_relative_to(
+            args.fixtures.resolve()
         ):
-            parser.error("output must be fresh and outside the authored fixture trees")
+            parser.error("output must be fresh and outside the authored fixture tree")
         actual = subprocess.check_output(
             ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
         ).strip()

@@ -550,8 +550,8 @@ qualify_resolved_specification <- function() {
 }
 qualify_resolved_specification()
 
-qualify_resolved_producer_entries <- function() {
-  root <- tempfile("yamaa-resolved-producers-")
+qualify_resolved_schema_links <- function() {
+  root <- tempfile("yamaa-resolved-links-")
   dir.create(root)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
   root <- normalizePath(root, winslash = "/")
@@ -573,16 +573,22 @@ qualify_resolved_producer_entries <- function() {
     writeLines(c("schema_version: '1.0'", "parent: ../shared/producer.yaml"), file.path(study, "producer.yaml"))
     artifact <- yamaa_resolve_specification(file.path(study, "spec.yaml"))
     entries <- jsonlite::fromJSON(as.character(artifact), simplifyVector = FALSE)$entries
-    stopifnot(length(entries) == 2L, identical(entries[[1L]]$producers$P, file.path(study, "producer.yaml")))
-    resource <- Filter(function(value) identical(value$role, "input_data"), entries[[2L]]$resources)[[1L]]
-    stopifnot(identical(resource$location$path, file.path(study, "input/raw.csv")))
+    # A linked producer is type metadata, not a resolved entry.
+    stopifnot(length(entries) == 1L, is.null(entries[[1L]]$producers))
+    schema <- Filter(function(value) identical(value$role, "producer_schema"), entries[[1L]]$resources)[[1L]]
+    stopifnot(identical(schema$location$path, file.path(study, "producer.yaml")))
+    source <- Filter(function(value) identical(value$role, "input_data"), entries[[1L]]$resources)[[1L]]
+    stopifnot(identical(source$location$path, file.path(study, "output/produced.csv")))
+    # Callers build and save each study's producer first.
+    dir.create(file.path(study, "output"))
+    stopifnot(isTRUE(yamaa_domain(file.path(study, "producer.yaml"))$save()))
     result <- yamaa_domain(file.path(study, "spec.yaml"))
     stopifnot(nrow(result$issues) == 0L, identical(as.character(result$output$ID), identifier),
-      !dir.exists(file.path(study, "output")))
+      !file.exists(file.path(study, "output/final.csv")))
   }
-  cat("resolved producer entries agree with direct builds for both studies\n")
+  cat("resolved schema links agree with ordered direct builds for both studies\n")
 }
-qualify_resolved_producer_entries()
+qualify_resolved_schema_links()
 
 qualify_resolved_origins <- function() {
   root <- tempfile("yamaa-resolved-origins-")

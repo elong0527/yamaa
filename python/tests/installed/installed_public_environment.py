@@ -172,7 +172,9 @@ class PublicEnvironment(unittest.TestCase):
                 ["environment.yaml", "spec.yaml"],
             )
 
-    def test_selected_functionless_producer_failure_retains_actual_source_prefix(self):
+    def test_functionless_link_reads_its_missing_artifact_without_running_the_producer(
+        self,
+    ):
         os.chdir(self.directory)
         (self.directory / "environment.yaml").write_text(
             "schema_version: '1.0'\nlanguage: python\n"
@@ -204,11 +206,12 @@ class PublicEnvironment(unittest.TestCase):
             checked = yamaa.check("spec.yaml", environment="environment.yaml")
             failed = yamaa.domain("spec.yaml", environment="environment.yaml")
         self.assertTrue(checked.issues.is_empty(), checked.issues)
+        # The producer never runs: the consumer reads its own linked path, and
+        # that stored artifact does not exist yet.
         self.assertEqual(
             failed.issues["condition"].to_list(), ["resource_path_missing"]
         )
-        self.assertEqual(failed.issues["spec_paths"].to_list(), [["input.RAW.path"]])
-        self.assertEqual(failed._native.producer_attempt().entered_nodes(), [1])
+        self.assertEqual(failed.issues["spec_paths"].to_list(), [["input.P.path"]])
         self.assertEqual(self.report(failed)["source_reads"], [])
         self.assertIsNone(failed.output)
         with self.assertRaises(yamaa.DomainError):
@@ -216,9 +219,7 @@ class PublicEnvironment(unittest.TestCase):
         self.assertFalse((self.directory / "produced.csv").exists())
         self.assertFalse((self.directory / "consumer.csv").exists())
 
-    def test_original_recursive_graph_checks_diagnostics_without_activation_or_data(
-        self,
-    ):
+    def test_linked_checks_report_only_the_entry_without_activation_or_data(self):
         os.chdir(self.directory)
         Path("environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
 
@@ -264,53 +265,38 @@ class PublicEnvironment(unittest.TestCase):
             ),
         ):
             for _ in range(2):
+                # Linked producers supply output contracts only: their own
+                # findings are never compiled, and only the entry is checked.
                 rows = yamaa.check(
                     "spec.yaml", environment="environment.yaml"
                 ).issues.to_dicts()
-                self.assertEqual(len(rows), 2)
-                for row, source in zip(rows, ("spec.yaml", "leaf.yaml"), strict=True):
-                    context = {
-                        "entry": Path("spec.yaml").resolve().as_posix(),
-                        "pattern": "\u00e9(",
-                        "source": Path(source).resolve().as_posix(),
-                    }
-                    if source == "leaf.yaml":
-                        context["declaring_sources"] = [
-                            Path("parents/base.yaml").resolve().as_posix()
-                        ]
-                    self.assertEqual(
-                        row,
+                self.assertEqual(
+                    rows,
+                    [
                         {
                             "phase": "validation",
                             "condition": "invalid_regex",
                             "requirement": "REQ-0827",
                             "spec_paths": [TRUTH["verification_pattern_path"]],
                             "context": json.dumps(
-                                context,
+                                {"pattern": "\u00e9("},
                                 sort_keys=True,
                                 ensure_ascii=False,
                                 separators=(",", ":"),
                             ),
-                        },
-                    )
-            # The original authored mismatch is admitted independently of any
-            # absent serialized artifact. Checking never opens the CSV paths.
+                        }
+                    ],
+                )
+            # A link types whatever file the consumer names; a path that differs
+            # from the producer's own output is admitted. Checking never opens
+            # the CSV paths.
             Path("spec.yaml").write_text(
                 document(TRUTH["wrong_leaf_reference"], "P", "consumer.csv")
             )
             rows = yamaa.check(
                 "spec.yaml", environment="environment.yaml"
             ).issues.to_dicts()
-            self.assertEqual(
-                [(r["condition"], r["requirement"], r["spec_paths"]) for r in rows],
-                [
-                    (
-                        "producer_output_path_mismatch",
-                        "REQ-0534",
-                        ["input.P.path", "input.P.schema"],
-                    )
-                ],
-            )
+            self.assertEqual(rows, [])
             Path("spec.yaml").write_text(
                 document(TRUTH["incompatible_leaf_reference"], "P", "consumer.csv")
             )

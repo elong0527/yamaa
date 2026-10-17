@@ -1,7 +1,5 @@
 //! Project existing native preparation into versioned facts, without a second compiler.
-use crate::{
-    file_graph::FileGraph, file_resources::Resources, specification_source::PreparedDocument,
-};
+use crate::{file_resources::Resources, specification_source::PreparedDocument};
 use std::collections::BTreeMap;
 pub mod model;
 pub use model::ResolvedArtifact;
@@ -41,7 +39,6 @@ pub fn resolve(
     let artifact = match selected {
         yamaa_core::build::Prepared::Plain(prepared) => prepared.resolved_specification(),
         yamaa_core::build::Prepared::Ordinary(prepared) => prepared.resolved_specification(),
-        yamaa_core::build::Prepared::Producer(prepared) => prepared.resolved_specification(),
     };
     artifact.map_err(|error| match error {
         Error::Resource(error) => crate::file_application::resource_failure("resolve", &error),
@@ -57,41 +54,7 @@ pub(crate) fn single(
     Ok(ResolvedArtifact::new(
         document.source().identity.clone(),
         environment,
-        vec![entry(document, resources, BTreeMap::new())?],
-    )?)
-}
-
-pub(crate) fn graph(graph: &FileGraph, resources: &Resources) -> Result<ResolvedArtifact, Error> {
-    let entries = graph
-        .graph()
-        .nodes()
-        .iter()
-        .map(|node| {
-            let producers = node
-                .producers
-                .iter()
-                .map(|producer| {
-                    (
-                        producer.dataset.clone(),
-                        producer.document.source().identity.clone(),
-                    )
-                })
-                .collect();
-            entry(&node.document, resources, producers)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let entry = entries
-        .first()
-        .ok_or_else(|| Error::Origin("entry".into()))?
-        .entry
-        .clone();
-    Ok(ResolvedArtifact::new(
-        entry,
-        graph
-            .environment()
-            .root_optional()
-            .map(|root| root.source().identity.clone()),
-        entries,
+        vec![entry(document, resources)?],
     )?)
 }
 
@@ -102,11 +65,7 @@ fn text<'a>(document: &'a Document, parent: usize, field: &str) -> Option<&'a st
     }
 }
 
-fn entry(
-    document: &PreparedDocument,
-    resources: &Resources,
-    producers: BTreeMap<String, String>,
-) -> Result<Entry, Error> {
+fn entry(document: &PreparedDocument, resources: &Resources) -> Result<Entry, Error> {
     let normalized = document.model().document();
     let (specification, mapping_order) = model::specification_value(normalized)?;
     let origins = origins(document);
@@ -130,7 +89,6 @@ fn entry(
         origins,
         layers,
         resources: Vec::new(),
-        producers,
     };
     if let Some(input) = normalized.field(normalized.root(), "input") {
         if let N::Mapping(inputs) = &normalized.nodes()[input] {
@@ -201,7 +159,7 @@ fn entry(
             reference.path().into(),
             ResourceRole::MappingDictionary,
             RelativeTo::Declaring,
-            yamaa_core::producer_admission::WrittenPath {
+            yamaa_core::resource::WrittenPath {
                 declaring_source,
                 base_source: declaring_source,
                 written: reference.written(),
@@ -222,7 +180,7 @@ fn entry(
                     "parent".into(),
                     ResourceRole::ParentSpecification,
                     RelativeTo::Declaring,
-                    yamaa_core::producer_admission::WrittenPath {
+                    yamaa_core::resource::WrittenPath {
                         declaring_source: &source.identity,
                         base_source: &source.identity,
                         written,
@@ -251,7 +209,7 @@ fn resource(
     spec_path: String,
     role: ResourceRole,
     relative_to: RelativeTo,
-    origin: yamaa_core::producer_admission::WrittenPath<'_>,
+    origin: yamaa_core::resource::WrittenPath<'_>,
 ) -> Result<Resource, Error> {
     let location = resources
         .location_from(origin.base_source, origin.written)

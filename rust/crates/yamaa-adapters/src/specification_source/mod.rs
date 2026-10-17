@@ -449,6 +449,34 @@ fn standalone_dependency_error(
     }
 }
 
+/// One `schema` link of a consuming document: the input dataset, the producing
+/// specification's canonical identity and its prepared document. A link naming
+/// the consuming specification itself holds no separate document.
+#[derive(Debug)]
+pub struct LinkedSpecification {
+    pub dataset: String,
+    pub identity: String,
+    pub document: Option<Arc<PreparedDocument>>,
+}
+/// Borrow the engine's link metadata for one consuming document. Only the
+/// producers' output contracts are read; no producer is compiled or executed.
+pub fn link_metadata<'a>(
+    consumer: &'a PreparedDocument,
+    links: &'a [LinkedSpecification],
+) -> Vec<yamaa_core::producer_contract::Link<'a>> {
+    links
+        .iter()
+        .map(|link| yamaa_core::producer_contract::Link {
+            dataset: &link.dataset,
+            identity: &link.identity,
+            document: link
+                .document
+                .as_deref()
+                .map_or(consumer.model(), PreparedDocument::model),
+        })
+        .collect()
+}
+
 /// Retains every final occurrence's raw/schema-default origin and schema snapshot.
 /// Construction is private; structural admission is never execution qualification.
 #[derive(Debug)]
@@ -710,13 +738,13 @@ impl PreparedDocument {
         self.written_input_origin(dataset, "path")
             .map(|p| p.written)
     }
-    /// Retain the layer that authored each producer link independently from the
+    /// Retain the layer that authored each `schema` link independently from the
     /// layer that authored its artifact path. No source is reopened or resolved.
     pub fn written_input_origin(
         &self,
         dataset: &str,
         field: &str,
-    ) -> Option<yamaa_core::producer_admission::WrittenPath<'_>> {
+    ) -> Option<yamaa_core::resource::WrittenPath<'_>> {
         if !["path", "schema"].contains(&field) {
             return None;
         }
@@ -737,7 +765,7 @@ impl PreparedDocument {
             _ => raw.field(source, field)?,
         };
         match raw.nodes().get(node)? {
-            DocumentNode::Text(path) => Some(yamaa_core::producer_admission::WrittenPath {
+            DocumentNode::Text(path) => Some(yamaa_core::resource::WrittenPath {
                 declaring_source: identity,
                 base_source,
                 written: path,
@@ -745,15 +773,15 @@ impl PreparedDocument {
             _ => None,
         }
     }
-    /// The producer's diagnostic path also belongs to its contributing layer.
-    pub fn written_output_origin(&self) -> Option<yamaa_core::producer_admission::WrittenPath<'_>> {
+    /// The output path's diagnostic origin belongs to its contributing layer.
+    pub fn written_output_origin(&self) -> Option<yamaa_core::resource::WrittenPath<'_>> {
         self.written_output_field_origin("path")
     }
     /// Every governed output field retains its original atomic output layer.
     pub(crate) fn written_output_field_origin(
         &self,
         field: &str,
-    ) -> Option<yamaa_core::producer_admission::WrittenPath<'_>> {
+    ) -> Option<yamaa_core::resource::WrittenPath<'_>> {
         if !["path", "verification_log", "warning_log"].contains(&field) {
             return None;
         }
@@ -770,7 +798,7 @@ impl PreparedDocument {
         let node = raw.field(output, field)?;
         match &raw.nodes()[node] {
             yamaa_core::schema::DocumentNode::Text(path) => {
-                Some(yamaa_core::producer_admission::WrittenPath {
+                Some(yamaa_core::resource::WrittenPath {
                     declaring_source: identity,
                     base_source,
                     written: path,

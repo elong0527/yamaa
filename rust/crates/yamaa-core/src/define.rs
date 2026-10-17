@@ -5,8 +5,8 @@ use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
     limits::Limits,
-    producer_admission::WrittenPath,
     project_terminology::Catalogue,
+    resource::WrittenPath,
     schema::Document,
     submission_composition::{self as composition, Finding},
     submission_document,

@@ -6,7 +6,8 @@ composes such specifications into a [Define-XML](define-xml.md) document and
 [Dataset-JSON](dataset-json.md) files. It governs the dataset and column
 metadata a submission document is generated from: what each field means,
 which combinations a standard admits, and what the derivation refutes. A
-specification that declares no submission metadata is unaffected.
+specification that declares no submission metadata is unaffected, except that
+its free-form `metadata` maps follow [SUB-2](#sub-2).
 
 ## Declaring submission metadata
 

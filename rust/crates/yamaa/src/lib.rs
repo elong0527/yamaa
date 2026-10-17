@@ -49,7 +49,7 @@ pub use functions::{
     decode_renv_lock, Argument, BatchArgument, CallError, FunctionHandle, FunctionIdentity,
     HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock, Signature,
 };
-pub use observe::{CallStage, DatasetPhase, Event, Node, Outcome, Phase, Progress, Refusal};
+pub use observe::{CallStage, DatasetPhase, Event, Outcome, Phase, Progress, Refusal};
 pub use resolver::{
     MemoryResolver, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
     ResourceResolver,

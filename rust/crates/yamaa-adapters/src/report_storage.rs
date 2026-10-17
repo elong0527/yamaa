@@ -136,12 +136,6 @@ impl PartialEq for StoredReport {
     }
 }
 impl StoredReport {
-    pub(crate) fn empty(metadata: Value) -> Self {
-        Self {
-            metadata,
-            rows: Vec::new(),
-        }
-    }
     pub(crate) fn with_tables(mut metadata: Value, tables: Vec<StoredTable>) -> Self {
         let mut rows = Vec::with_capacity(tables.len());
         metadata["tables"] = Value::Array(
@@ -161,18 +155,6 @@ impl StoredReport {
             .ok_or(Error::InvalidObservation)?
             .push(table.metadata);
         self.rows.push(table.rows);
-        Ok(())
-    }
-    pub(crate) fn append_tables(&mut self, other: &mut Self) -> Result<(), Error> {
-        self.metadata["tables"]
-            .as_array_mut()
-            .ok_or(Error::InvalidObservation)?
-            .append(
-                other.metadata["tables"]
-                    .as_array_mut()
-                    .ok_or(Error::InvalidObservation)?,
-            );
-        self.rows.append(&mut other.rows);
         Ok(())
     }
     pub(crate) fn without_artifacts_cloned(&self) -> Result<Self, Error> {

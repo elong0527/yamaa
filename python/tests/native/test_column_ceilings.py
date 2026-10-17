@@ -124,6 +124,8 @@ def test_wide_producer_contract_and_decoder_build(tmp_path):
     spec = tmp_path / "consumer.yaml"
     spec.write_text(yaml.safe_dump(consumer))
     assert yamaa.check(spec).issues.height == 0
+    # Callers build and save the producer before the consumer reads its artifact.
+    assert yamaa.domain(producer).save()
     built = yamaa.domain(spec)
     assert built.issues.height == 0
     assert built.output.to_dict(as_series=False) == {"ID": ["S-001"]}

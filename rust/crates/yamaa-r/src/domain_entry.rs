@@ -300,48 +300,6 @@ fn domain_interrupt(handle: Robj) -> List {
         Ok(interrupted.unwrap_or_else(|| r!(NULL)))
     })
 }
-/// Private installed evidence consults the exact held public-domain owner.
-#[extendr]
-fn domain_producer_evidence(handle: Robj) -> List {
-    boundary(|| {
-        let state = resolve(&handle)?;
-        let state = state
-            .try_borrow()
-            .map_err(|_| "domain result already borrowed")?;
-        let build = &state.build;
-        let Some(nodes) = build.producer_nodes() else {
-            return Ok(r!(NULL));
-        };
-        let failures = build
-            .producer_failures()
-            .into_iter()
-            .flatten()
-            .map(|failure| {
-                list!(
-                    stage = failure.stage,
-                    facts = crate::project_activation::facts(&failure.error)
-                )
-            })
-            .collect::<Vec<_>>();
-        Ok(list!(
-            accepted = build.producer_accepted().unwrap_or(false),
-            entered = List::from_values(nodes.iter().map(|node| r!(*node as f64))),
-            failures = List::from_values(failures),
-            sources = List::from_values(
-                build
-                    .producer_sources()
-                    .into_iter()
-                    .flatten()
-                    .map(|(name, bytes)| list!(
-                        name = Raw::from_bytes(name.as_bytes()),
-                        bytes = Raw::from_bytes(bytes)
-                    ))
-                    .collect::<Vec<_>>()
-            )
-        )
-        .into_robj())
-    })
-}
 #[extendr]
 fn domain_preparation_sources(handle: Robj) -> List {
     boundary(|| {
@@ -365,17 +323,4 @@ fn domain_preparation_sources(handle: Robj) -> List {
     })
 }
 
-#[extendr]
-fn domain_projection_failure(handle: Robj) -> List {
-    boundary(|| {
-        let state = resolve(&handle)?;
-        let state = state
-            .try_borrow()
-            .map_err(|_| "domain result already borrowed")?;
-        match state.build.projection_failure() {
-            Some(value) => Ok(r!(value)),
-            None => Ok(r!(NULL)),
-        }
-    })
-}
 include!("generated/domain_entry.rs");

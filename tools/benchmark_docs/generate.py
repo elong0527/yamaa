@@ -128,14 +128,20 @@ def linked_specs(spec):
 
 
 def sibling_producers(benchmark, spec):
-    """Return the spec files beside the entry that it reads through `schema`."""
+    """Return the producers the entry reads through `schema` that the benchmark
+    builds itself: spec files beside the entry or other declared entries."""
     inputs = spec.get("input", {}) if isinstance(spec, dict) else {}
+    built = set(benchmark_spec_files(benchmark))
+    built.update(
+        benchmark / call["specification"]
+        for call in benchmark_entries(benchmark)["python"]
+    )
     producers = []
     for source in inputs.values() if isinstance(inputs, dict) else ():
         if not isinstance(source, dict) or not isinstance(source.get("schema"), str):
             continue
         candidate = benchmark / source["schema"]
-        if candidate in benchmark_spec_files(benchmark):
+        if candidate in built:
             producers.append(candidate)
     return producers
 
@@ -570,21 +576,26 @@ def render_spec_pane(filename, text, slug, single, edit_url=None):
 
 
 def benchmark_code(benchmark):
-    """Render public calls from the same ordered metadata as conformance."""
+    """Render public calls from the same ordered metadata as conformance.
+
+    Every call before the last saves its artifact, so a later entry reads it
+    at the path its `schema` link types; the last call shows its output.
+    """
     if benchmark.name.startswith("negative-"):
         return []
     entries = benchmark_entries(benchmark)
     result = []
-    for host, title, opening, function, output in (
-        ("r", "R", "library(yamaa)", "yamaa_domain", "$output"),
-        ("python", "Python", "import yamaa", "yamaa.domain", ".output"),
+    for host, title, opening, function, save, output in (
+        ("r", "R", "library(yamaa)", "yamaa_domain", "$save()", "$output"),
+        ("python", "Python", "import yamaa", "yamaa.domain", ".save()", ".output"),
     ):
         calls = []
-        for entry in entries[host]:
+        for index, entry in enumerate(entries[host], 1):
             arguments = json.dumps(entry["specification"])
             if entry["environment"] is not None:
                 arguments += ", environment=" + json.dumps(entry["environment"])
-            calls.append(f"{function}({arguments}){output}")
+            final = output if index == len(entries[host]) else save
+            calls.append(f"{function}({arguments}){final}")
         result.append((title, opening + "\n\n" + "\n".join(calls) + "\n"))
     return result
 

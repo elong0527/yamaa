@@ -9,6 +9,9 @@ and safety flag, and adverse event analysis records with emergence flag.
 
 **Variables:**
 
+- The subject-level file holds one record per safety subject: `TRT01P` and
+  `TRT01PN` are the planned treatment name and code, and `EVENTN` is 1 when
+  the subject has a treatment-emergent adverse event and 0 otherwise.
 - `ANALYSISID`, `ANALYSISSETID`, `DATASET`, `VARIABLE` and `METHODID` are
   AEINC, SAFETY, ADAE, USUBJID and AEINCIDENCE, respectively.
 - `ANALYSISSET` is SAFFL = 'Y', limiting the numerator and denominator to

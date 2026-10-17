@@ -323,10 +323,10 @@ Replaces: REQ-0367, REQ-0368.
   and a cumulative property of collected values thus reaches the row it must be
   asserted about.
 - **A derived property at coarser keys or upstream.** The specification that
-  derives it publishes it, and [Inputs](inputs.md)'s
-  producing-specification link makes it an ordinary source field of the
-  specification that asserts over it, the same split every other change of keys
-  uses.
+  derives it is built and saved first, and the specification that asserts over
+  it reads that artifact as an ordinary source, typed through the
+  producing-specification link of [Inputs](inputs.md), the same split every
+  other change of keys uses.
 
 <a id="check-16"></a>
 

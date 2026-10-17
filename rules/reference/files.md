@@ -43,19 +43,18 @@ applies to both `path` and `schema`; on `output` it applies to `path`,
 declaring file. A rooted path names its absolute local location regardless of
 `relative_to`.
 
-Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::entry_relative_shared_program_uses_each_study_input_and_saves_held_artifacts`, `rust/crates/yamaa-adapters/tests/file_resources.rs::composed_relative_input_base_can_change_without_redeclaring_the_inherited_path`, `rust/crates/yamaa-adapters/tests/file_producer.rs::study_relative_schema_links_select_each_producer_wrapper_and_its_output_base`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::entry_relative_shared_program_uses_each_study_input_and_saves_held_artifacts`, `rust/crates/yamaa-adapters/tests/file_resources.rs::composed_relative_input_base_can_change_without_redeclaring_the_inherited_path`, `rust/crates/yamaa-adapters/tests/resolved_artifact.rs::two_studies_and_their_schema_links_match_the_actual_direct_preparation`, `python/tests/installed/installed_file_resources.py::test_entry_relative_schema_links_select_each_study_producer_wrapper`.
 Replaces: REQ-0780, REQ-1151.
 
 The schema fixes the closed values and the default. An inherited input uses
 its composed setting, even when another layer supplied the path. An inherited
 output uses its complete inherited declaration.
 
-The entry file of a producing specification is the file its consumer's
-`schema` link selects. It does not inherit the outer workflow's entry
-directory. A shared consumer can select a study's producer wrapper with
-`relative_to: entry`; that wrapper may inherit a shared producer program, and
-the producer's own setting then selects its wrapper directory. Input and
-output must still name the same artifact under [FILE-3](#file-3).
+A `schema` link selects the producing specification's file, which may inherit
+shared layers. A shared consumer can select a study's producer wrapper with
+`relative_to: entry`. The producer is built as its own entry, so its own paths
+resolve from its own file and settings, never from its consumer's entry
+directory.
 
 Composition retains the original declaring file and written spelling.
 Materialized paths name the selected location from the entry file. A missing
@@ -64,21 +63,23 @@ directory, a project root, a data root or the process working directory.
 
 <a id="file-3"></a>
 
-### FILE-3. A path to an artifact the run produces names its selected location before the file exists
+### FILE-3. A schema-linked artifact is an ordinary input at its own path, and its producer is never run
 
-A path that names an artifact the run itself produces, through the `schema`
-link of [Inputs](../inputs.md), denotes its selected
-location even before that file exists. Both the artifact path and the
-`schema` link use the input's selected `relative_to` base under
-[FILE-2](#file-2). The producing specification that `schema` names already
-exists, and its `output.path`, resolved with the producer's own selected base,
-must name the same artifact location.
+A linked input's artifact `path` and its `schema` link both use the input's
+selected `relative_to` base under [FILE-2](#file-2). The producing
+specification that `schema` names must exist; it is read as metadata only.
+The artifact at `path` is an ordinary input that must exist when the consumer
+is built. The consumer neither runs the producer nor compares the producer's
+`output.path` with its own `path`.
 
-Evidence: `adam-adae-exposure-adjusted-incidence`, `sdtm-dm-race-ethnicity`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::mismatch_preserves_portable_req_0534_and_original_metadata_after_files_disappear`.
+Evidence: `ars-ae-incidence-results`, `sdtm-dm-race-ethnicity`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`.
 Replaces: REQ-1247.
 
-Workflow execution consumes held serialized producer bytes; explicit Save
-publishes those bytes under [Output](../output.md).
+Checking reads no study data, so a link whose artifact does not exist yet
+passes `check`, and building fails with the ordinary missing-input finding at
+`input.<dataset>.path`. The caller builds and saves the producer as its own
+entry first; its explicit Save publishes the artifact under
+[Output](../output.md).
 
 ## Written form
 

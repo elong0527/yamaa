@@ -27,6 +27,13 @@ qualify_entry_relative_programs <- function(producer) {
     program <- if(producer) "consumer" else "ordinary"
     writeLines(c("schema_version: '1.0'",paste0("parent: ../shared/",program,".yaml")),entry)
     writeBin(charToRaw(truth$producer_entry),file.path(study,"producer.yaml"))
+    if(producer) {
+      # A link only types the stored artifact: callers build and save each
+      # study's producer before its consumer reads it.
+      produced <- yamaa_domain(file.path(study,"producer.yaml"))
+      stopifnot(nrow(produced$issues)==0L,isTRUE(produced$save()),
+        identical(rawfile(file.path(study,"output/produced.csv")),charToRaw(truth$studies[[name]])))
+    }
     stopifnot(nrow(yamaa_check(entry)$issues)==0L)
     result <- yamaa_domain(entry)
     stopifnot(nrow(result$issues)==0L,!file.exists(file.path(study,"output/result.csv")))
