@@ -57,9 +57,10 @@ class SpecContext:
 
     def __init__(self, spec=None):
         spec = spec or {}
+        intermediates = spec.get("intermediates")
         self.lookups = {
             str(item.get("id")): item
-            for item in (spec.get("intermediates") or [])
+            for item in (intermediates if isinstance(intermediates, list) else [])
             if isinstance(item, dict) and item.get("id")
         }
         # Columns a `rows:` template fills, which carry no derivation of
@@ -1128,15 +1129,25 @@ TEMPORAL_SUBMISSION_TYPES = frozenset(
 def resolved_data_type(col):
     """Submission data type, including the default from the column type."""
     declared = submission(col).get("data_type")
-    if declared:
+    if isinstance(declared, str) and declared:
         return declared
-    return {"str": "text", "int": "integer"}.get(col.get("type"), col.get("type"))
+    # A non-string `type` (a list where the type name belongs) is unhashable,
+    # so the mapping lookup itself would raise TypeError; it names no known
+    # type, so it resolves to no submission type.
+    col_type = col.get("type")
+    if not isinstance(col_type, str):
+        return ""
+    return {"str": "text", "int": "integer"}.get(col_type, col_type)
 
 
 def controlled_terms(col, code_by_var, definitions):
     """The named terminology, permitted values, or ISO 8601 format."""
     code = submission(col).get("codelist")
     if code:
+        # A codelist id is a string; an unhashable value cannot be looked
+        # up, so it renders as written, like an unknown id below.
+        if not isinstance(code, str):
+            return str(code)
         definition = definitions.get(code)
         if definition is None:
             return str(code)
@@ -1177,9 +1188,14 @@ def allowed_value_codelists(columns):
         checks = col.get("verifications") or []
         if isinstance(checks, dict):
             checks = [checks]
+        if not isinstance(checks, list):
+            checks = []
         for check in checks:
             if isinstance(check, dict) and "allowed_values" in check:
-                values = check["allowed_values"].get("values", [])
+                allowed = check["allowed_values"]
+                values = allowed.get("values", []) if isinstance(allowed, dict) else []
+                if not isinstance(values, list):
+                    values = []
                 out.append((col.get("name", ""), ", ".join(str(v) for v in values)))
     return out
 
@@ -1188,8 +1204,11 @@ def document_codelists(define):
     """The study document's codelists in declaration order."""
     if not isinstance(define, dict):
         return []
+    codelists = define.get("codelists")
     return [
-        item for item in define.get("codelists", []) or [] if isinstance(item, dict)
+        item
+        for item in (codelists if isinstance(codelists, list) else [])
+        if isinstance(item, dict)
     ]
 
 
@@ -1199,7 +1218,8 @@ def document_codelist_rows(definitions):
     for definition in definitions:
         external = definition.get("external")
         external = external if isinstance(external, dict) else {}
-        items = definition.get("items") or [None]
+        items = definition.get("items")
+        items = items if isinstance(items, list) and items else [None]
         for item in items:
             item = item if isinstance(item, dict) else {}
             rows.append(
@@ -1376,7 +1396,15 @@ def mapping_sheets(spec, define=None):
     # this function (and SpecContext above) already guard with `or` /
     # isinstance, and a malformed field must render an empty sheet instead
     # of crashing the whole dashboard build with a TypeError/KeyError.
-    columns = [c for c in spec.get("columns") or [] if isinstance(c, dict)]
+    # Only a list is a valid `columns` value: a truthy scalar (a count or a
+    # flag written where the list belongs) is not iterable, so the `or []`
+    # guard alone still let it escape as a TypeError.
+    raw_columns = spec.get("columns")
+    columns = (
+        [c for c in raw_columns if isinstance(c, dict)]
+        if isinstance(raw_columns, list)
+        else []
+    )
     # Normalize `rows` before SpecContext reads it: a scalar `rows` value
     # would otherwise raise TypeError inside SpecContext before the sheet
     # filter below ever runs, and a non-mapping `derivations` value would
@@ -1408,16 +1436,32 @@ def mapping_sheets(spec, define=None):
         declared_output
         if isinstance(declared_output, list)
         and all(isinstance(name, str) for name in declared_output)
-        else [c.get("name") for c in columns if c.get("name")]
+        else [
+            c.get("name")
+            for c in columns
+            if isinstance(c.get("name"), str) and c.get("name")
+        ]
     )
     output_set = set(output_names)
-    shown = [c for c in columns if c.get("name") in output_set]
+    # A column name is an identifier, so a non-string `name` (a list or a
+    # mapping where the identifier belongs) can never match the declared
+    # output; testing it against the set would raise TypeError on the
+    # unhashable value instead of omitting the column.
+    shown = [
+        c
+        for c in columns
+        if isinstance(c.get("name"), str) and c.get("name") in output_set
+    ]
 
     adam = is_adam(spec)
     fallback_codes = allowed_value_codelists(shown)
     code_by_var = dict(fallback_codes)
     document_codes = document_codelists(define)
-    definitions = {item["id"]: item for item in document_codes if item.get("id")}
+    definitions = {
+        item["id"]: item
+        for item in document_codes
+        if isinstance(item.get("id"), str) and item.get("id")
+    }
     map_headers = ADAM_HEADERS if adam else SDTM_HEADERS
     map_rows = [
         mapping_row(col, index, spec, adam, input_names, code_by_var, definitions, ctx)
