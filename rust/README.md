@@ -485,3 +485,315 @@ default.
 | `yamaa_core::temporal` | Facade -- `Date` and `DateTime`; collected precision is dropped at the boundary. |
 | `yamaa_core::value::Value` | Facade -- `Scalar`. |
 | `yamaa_core::VERSION` (crate root) | Facade -- re-exported as `yamaa::VERSION` with the same value. |
+
+## Partition-safety inventory and whole-table equivalence
+
+This section is the specification for #2683 (step A of #2600; steps B-F are
+#2684-#2688). It classifies every operation family and verification `Check`
+variant in `yamaa-core` dataset execution, defines exact equivalence between
+partitioned execution and whole-table execution, and identifies the seams where
+partition boundaries sit. It changes no code behavior.
+
+### Terminology: key groups vs. data partitions
+
+On `main` today, the word "partition" in `table_grouping::partition`
+(`rust/crates/yamaa-core/src/table_grouping.rs`) and `windows::Run`
+(`rust/crates/yamaa-core/src/dataset/execution/windows.rs`) means a **key
+group**: an equivalence class of row indices (`Vec<usize>`) sharing equal bound
+column values within one materialized table snapshot, ordered by first source
+occurrence.
+
+In the partitioned and streaming execution contract (#2600, #2683-#2688), a
+**data partition** (or **input partition**) is one table chunk $P_i$ in an
+ordered sequence of primary-source batches $P_0, P_1, \dots, P_{k-1}$ ($k \ge
+1$) whose row-wise concatenation $T = P_0 \mathbin{\Vert} P_1 \mathbin{\Vert}
+\dots \mathbin{\Vert} P_{k-1}$ forms the logical primary input table. Secondary
+lookup sources (`secondary: &[&dyn TableAccess]`) are immutable whole-table
+snapshots shared across all primary partitions in the run.
+
+### Classification vocabulary
+
+Every operation family and verification check is classified into one of three
+categories over an arbitrary (un-clustered) stream of primary data partitions:
+
+- **`safe`**: Evaluates independently per primary data partition $P_i$ (and per
+  candidate row within $P_i$) using only the immutable `DatasetPlan` and
+  immutable secondary tables. Concatenating the per-partition outputs in
+  partition order reproduces the whole-table output directly.
+- **`safe-with-combine-step`**: Evaluates per partition $P_i$ while updating a
+  bounded, named per-dataset accumulator (`HandlerCounter`, key-group state, or
+  `CheckRecord` partials), followed by a deterministic combine/finalize step
+  once all partitions have been consumed.
+- **`global`**: Requires visibility of the complete primary table, completed
+  cross-template `SELF` rows, or all candidate rows across partitions before
+  evaluation can complete (for example, un-co-partitioned window sorting/ranking
+  or primary-table self-joins). In partitioned execution (#2686), any plan
+  containing an operation classified as `global` must be refused explicitly with
+  a typed diagnostic unless whole-table materialization fallback is explicitly
+  selected.
+
+### Operation family inventory
+
+#### 1. Row construction modes, drivers, and source binding
+
+Key files: `rust/crates/yamaa-core/src/dataset/execution/mod.rs`,
+`row_drivers.rs`, `key_grain.rs`, `lookup.rs`, `joined.rs`, `functions.rs`,
+`scalar.rs`, `numeric.rs`, `flags.rs`, `imputation.rs`, `conversion.rs`,
+`odm.rs`; `rust/crates/yamaa-core/src/table_grouping.rs`.
+
+| Operation / construct | Location | Classification | Partition state and notes |
+| --- | --- | --- | --- |
+| `RowMode::Records` (primary driver) | `execution/mod.rs` (`process_template`) | `safe` (or `safe-with-combine-step` with handlers) | Each row $j$ in $P_i$ forms a single-member candidate `[base_i + j]`. Pre-window row-local filters run per row; `SelectionIdentity::Candidate` advances monotonically across partitions. |
+| `RowMode::Keys` (`key_grain::construct`) | `execution/key_grain.rs`, `table_grouping.rs` | `safe-with-combine-step` (key/collect/reduce plans) / `global` (unprojected random primary reads) | Source filter and key assignments run per row. Distinct non-missing key tuples accumulate in first-occurrence order across partitions; each missing-key record remains an independent candidate at its global row position so `OutputKeys` reports it. `Collect`, `Count`, and `Reduce` fold per key group across partitions. Plans that later index arbitrary unprojected primary rows via `candidate.members` require whole-table state (`global`). |
+| `RowMode::Groups(keys)` | `execution/mod.rs`, `table_grouping.rs` | `global` (arbitrary partitions) / `safe-with-combine-step` (group-accumulator fold or key-disjoint partitions) | On arbitrary partitions, a key group in `table_grouping::partition` can span multiple $P_i$, and template assignments/post-window filters read `candidate.members`. Safe per partition when inputs are co-partitioned by `keys`, or combinable when all member reads reduce through per-group accumulators. |
+| `RowMode::Driver { source, mode }` | `execution/mod.rs`, `row_drivers.rs` | `global` (run-once secondary driver) | Drives candidates from `secondary[source - 1]`, not the primary table. Must execute once per dataset run rather than repeating per primary partition. |
+| `RowMode::IntermediateDriver { index, source, mode }` | `execution/mod.rs`, `intermediates/mod.rs` | `global` | Consumes `intermediates::driver(index)` over the full donor relation; runs once per dataset when backed by a secondary source and requires full primary/`SELF` state otherwise. |
+| `Expression::Literal`, `Expression::Column` | `execution/mod.rs` (`evaluate_leaf`) | `safe` | Pure candidate-local reads with no source or cross-row state. |
+| `Expression::Source(column)` | `execution/mod.rs` (`evaluate_leaf`) | `safe` | Reads `candidate.members[0]` in the active partition; cell errors translate `source_row` to `base_i + local_row`. |
+| `Expression::SourceBinding` | `execution/mod.rs` | `safe-with-combine-step` | Row evaluation delegates to `source` or returns the `absent` literal; `HandlerCounter` (`absent`, `multiple_matches`) combines across partitions by checked addition. |
+| `Expression::FirstAvailable` | `execution/mod.rs` (`evaluate_first_available`) | `safe` (row-local operands) / `safe-with-combine-step` (with `Collect` or handlers) | Evaluates operands in authored order per candidate; combines handler counts and any per-key `SelectionRead::Collect` state. |
+| Pure scalar and string/temporal expressions (`Compute`, `Round`, `Extreme`, `StrConcat`, `StrContains`, `StrTemplate`, `StrExtract`, `StrCase`, `StrPad`, `Imputation`, `Temporal`, `Flag`, `Case`) | `execution/scalar.rs`, `numeric.rs`, `flags.rs`, `imputation.rs`, `str_*.rs`, `case_predicates.rs`, `conversion.rs` | `safe` (pure) / `safe-with-combine-step` (with recovery handlers or `Collect`) | Value computation is row-local when bindings are `Read::Column` or `Read::Source`. Recovery counts (`Missing`, `Invalid`, `Unconvertible`) in `HandlerCounter` combine by checked sum in registration order. |
+| `Expression::Lookup`, `Expression::RowLookup`, `Expression::SourceLookup` | `execution/lookup.rs` | `safe` (no selection handler) / `safe-with-combine-step` (with `selection`) | Matches candidate keys or driver fields against the immutable whole-table `secondary[lookup.source]`. When `selection` resolves `count > 1`, `HandlerKind::MultipleMatches` combines in `HandlerCounter`. |
+| `Expression::Joined`, `Expression::JoinedSource` | `execution/joined.rs`, `lookup.rs` | `safe-with-combine-step` (`Secondary`) / `global` (`Primary`) | Secondary joins scan immutable `secondary[index]` and combine `MultipleMatches` handler counts. Primary self-joins (`AggregateSource::Primary`) scan all primary rows and are `global`. |
+| `Expression::Collect`, `Expression::Count`, `Expression::Reduce` | `execution/key_grain.rs`, `table_reduction.rs` | `safe` (`RowMode::Records`) / `safe-with-combine-step` (grouped/key-grain) | In `Records` mode `candidate.members` has length 1. Across partitions in `Keys`/`Groups` mode, `Count` sums `usize`, `Reduce` merges `Sum`/`Mean`/`Min`/`Max` accumulators, and `Collect` merges distinct present `Key` sets plus the best `(order_by, global_source_row)` extremum and `MultipleMatches` handler count. |
+| `Expression::Function`, `Expression::ProjectFunction` | `execution/functions.rs`, `function_batch.rs` | `safe` (row-local inputs) / `safe-with-combine-step` (with `FunctionInput::Collect`) | `functions::admit_plan` runs once at `Admission`. Invocations run in deterministic global candidate order with failure `RowIdentity.position = out_base_i + local_row`. |
+| `Expression::Odm` | `execution/odm.rs` | `global` (arbitrary partitions) / `safe-with-combine-step` (key-scoped or hierarchy-partitioned) | `odm::evaluate` scans the source (or `candidate.members` under `OdmScope::Keys`) to enforce strict item uniqueness (`OdmFinding::NotUnique`). On arbitrary partitions, non-key scopes are `global`; under `OdmScope::Keys` or hierarchy-co-partitioned inputs, selected values and `IDENTIFYING` sets combine per scope key. |
+
+#### 2. Mapping and cut
+
+Key files: `rust/crates/yamaa-core/src/mapping_cut.rs`,
+`rust/crates/yamaa-core/src/dataset/execution/mapping_cut.rs`.
+
+| Operation / construct | Location | Classification | Partition state and notes |
+| --- | --- | --- | --- |
+| `Mapping::new`, `Cut::new`, `Cut::declaration_findings` | `mapping_cut.rs` | `safe` | Plan-admission validation (`MappingAmbiguousDictionary`, `CutDeclaration`); runs once before data access. |
+| `Expression::MappingCut` (`Mapping::select`, `Cut::select`) | `mapping_cut.rs`, `execution/mapping_cut.rs` | `safe-with-combine-step` | Dictionary matching and `breaks.partition_point` interval selection are pure functions of a single cell. Reached `missing` and `unmapped` handlers record into `HandlerCounter`, which combines across partitions by checked addition. Fatal diagnostics (`MappingMissing`, `MappingUnmapped`, `MappingInput`, `CutMissing`, `CutInput`, and unconvertible handler literals) attach `RowIdentity` at global position `out_base_i + local_row`. |
+
+#### 3. Intermediates
+
+Key files: `rust/crates/yamaa-core/src/dataset/execution/intermediates/mod.rs`,
+`intermediates/key_index.rs`, `intermediates/match_values.rs`,
+`self_relations.rs`.
+
+| Operation / construct | Location | Classification | Partition state and notes |
+| --- | --- | --- | --- |
+| `IntermediateSource::Input(index)` (uncorrelated filter, `unique`, `StringIndex`, uncorrelated `derivations`) | `intermediates/mod.rs`, `key_index.rs` | `safe-with-combine-step` | Depends only on immutable `secondary[index]`. `intermediates::verify(..., false, ...)` runs once before primary partitions; `eligible[&index]`, `string_indexes[&index]`, and uncorrelated `materialized[&(index, None)]` are computed lazily once and shared across all partitions. Per-candidate `choices` and `HandlerCounter` (`NoMatch`, `MultipleMatches`, nested `Unconvertible`) combine across partitions. |
+| `IntermediateSource::Input(index)` (correlated `filter`, `range`, or correlated `derivations` where `!derived.current.is_empty()`) | `intermediates/mod.rs`, `match_values.rs`, `relation_predicates.rs` | `safe-with-combine-step` | Evaluates current-row operands per candidate and scans/materializes against the full immutable `secondary[index]`. Cache entries keyed by `SelectionIdentity` are candidate-local and dropped at partition end; handler counts combine across partitions. |
+| `IntermediateSource::Primary` (all reads, `driver`, `materialize`, and `unique` verification) | `intermediates/mod.rs` | `global` | Scans `0..primary.row_count()` to check uniqueness, evaluate eligibility, count matches, and break ties by global donor row index. Cannot execute on a single primary partition without whole-table primary state. |
+| `IntermediateSource::SelfRows` (`SELF` donors, `Run::publish_self`, `verify(..., true, ...)`) | `intermediates/mod.rs`, `self_relations.rs` | `global` | `Donors` borrows completed candidates from prior `RowTemplate`s (`&candidates[..first]`), and `verify(..., true, ...)` partitions all `SELF` rows to enforce `IntermediateUnique`. Requires all prior templates' global candidates. |
+| Windowed intermediate match keys (`MatchValue::Expression` with `expression.windowed`, `Run::begin_columns`) | `intermediates/mod.rs`, `match_values.rs` | `global` | Key values depend on a window over the constructed relation; `begin_columns` invalidates template-phase caches because column-phase windows observe the complete output relation. |
+| `intermediates::check_unobserved_filter_types` | `intermediates/mod.rs` | `safe` | Inspects static deferred filter-type findings on `plan.intermediates()` after column completion; independent of partition count. |
+
+#### 4. Aggregates
+
+Key files: `rust/crates/yamaa-core/src/dataset/execution/aggregates.rs`,
+`rust/crates/yamaa-core/src/aggregate_reduction.rs`.
+
+| Operation / construct | Location | Classification | Partition state and notes |
+| --- | --- | --- | --- |
+| `AggregateRelation::CurrentGroup` (within single-partition candidates, e.g., `RowMode::Records` or key-disjoint partitions) | `execution/aggregates.rs` | `safe` (or `safe-with-combine-step` with `derive_records` handlers) | All `candidate.members` reside in the active partition $P_i$; `select`, `derive_records`, and `reduce_selected` complete locally and merge `HandlerCounter`. |
+| `AggregateRelation::CurrentGroup` (groups split across arbitrary partitions) | `execution/aggregates.rs` | `safe-with-combine-step` (pure reducers) / `global` (correlated primary/output derivations or non-reduced representative reads) | Reducers (`Count`, `Sum`, `Mean`, `Min`, `Max`, `SingleValue`) and input-type checks combine across partitions per group; plans whose `AggregateResult::Numeric` reads an unreduced donor column from `representative` or whose `derive_records` performs global lookups require full group materialization (`global`). |
+| `AggregateRelation::Matched { source: AggregateSource::Secondary(index), .. }` | `execution/aggregates.rs` | `safe-with-combine-step` | Matches each candidate against immutable `secondary[index]`, runs `derive_records` and `reduce_selected` locally, and combines `HandlerCounter`. |
+| `AggregateRelation::Matched { source: AggregateSource::Primary, .. }` | `execution/aggregates.rs` | `global` | Scans `0..primary.row_count()` for every candidate row to select matching primary donors and reduce them. |
+| `AggregateRelation::Output { group_by }` | `execution/aggregates.rs` | `global` | Scans `0..state.output_rows.len()` across all constructed output candidates matching `group_by`. |
+
+#### 5. Windows and output ordering
+
+Key files: `rust/crates/yamaa-core/src/dataset/execution/windows.rs`,
+`row_windows.rs`, `ordering.rs`.
+
+| Operation / construct | Location | Classification | Partition state and notes |
+| --- | --- | --- | --- |
+| `Expression::Window`, `Expression::ContextWindow` (`WindowKind::BaselineFlag`, `RowValue`, `PreviousNonMissing`, `Locf`, `RowNumber`, `Competition`, `Dense`) | `execution/windows.rs`, `row_windows.rs` | `global` (arbitrary partitions) / `safe-with-combine-step` (only when input partitions are disjoint on non-empty `window.group_by` and preserve within-group order) | `windows::Run::new_schema` partitions the entire candidate relation by `window.group_by` (or places all rows into one group when `group_by` is empty), sorts members by `window.order_by` with global candidate index tie-breaking (`left.cmp(&right)`), evaluates `window.filter` in sorted order, and computes ranks, row-offset lookups, carry-forward values, or `BaselineFlag` / `BaselineAmbiguity`. Over arbitrary partitions, all window kinds are `global`. |
+| `ordering::apply` (`DatasetPlan::output_order`) | `execution/ordering.rs`, `execution/mod.rs` | `global` (or `safe-with-combine-step` via global k-way merge after verification) | Runs after `OutputKeys` and `Verification` succeed. Sorts accepted rows by `output_order` terms using pre-sort global candidate index `left.cmp(&right)` as the final tie-breaker. |
+
+#### 6. Output key checks and verification `Check` variants
+
+Key files: `rust/crates/yamaa-core/src/dataset/mod.rs`,
+`rust/crates/yamaa-core/src/dataset/execution/mod.rs`, `verification.rs`,
+`rust/crates/yamaa-core/src/dataset_checks.rs`.
+
+| Check / variant | Phase & location | Classification | Combine state and notes |
+| --- | --- | --- | --- |
+| `OutputMissingKeyFailed` (`keys[position]` completeness) | `OutputKeys` (`execution/mod.rs`) | `safe-with-combine-step` | Per key column, each partition records offending global row identities (`out_base_i + local_row`); combine sums `evaluated_count` and `failed_count`, sets `output_rows = N`, and concatenates `offending_rows`. |
+| `OutputDuplicateKeyFailed` (`keys` uniqueness) | `OutputKeys` (`execution/mod.rs`, `table_grouping.rs`) | `safe-with-combine-step` | Accumulates distinct key tuples across partitions with first-seen group order, first member `RowIdentity`, and member count. At finalize, `evaluated_count` is total distinct key groups, `failed_count` is groups with count $> 1$, and `offending_rows` lists `members[0]` for each duplicate group in first-seen group order. |
+| `IntermediateUnique` (`intermediates::verify`) | `Derivation` (`intermediates/mod.rs`) | `safe-with-combine-step` (`Input`) / `global` (`Primary`, `SelfRows`) | Secondary-source `unique` checks run once against immutable `secondary[index]`. Primary and `SELF` `unique` checks require the global donor table. |
+| `Check::NotMissing` | Column / `Verification` (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local `matches!(value, Value::Missing)`; combine sums `evaluated_count` and `failed_count`, sets `output_rows = N`, and concatenates `offending_rows` in global row order. |
+| `Check::AllowedValues(values)` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local membership test against fixed `values`; `CheckRecord` combines by addition/concatenation across partitions. |
+| `Check::Codelist { id, values }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local `compare_present` test against `values`; combines `CheckRecord` counts, `offending_rows`, and `CodelistObservation { id, values }`. |
+| `Check::ValueCodelists { discriminator, overrides, bindings }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Runs once both the target column and `discriminator` are complete on the candidate. Emits one `CheckRecord` per binding in `bindings` order; each binding's counts, `offending_rows`, and `CodelistObservation.values` combine across partitions. |
+| `Check::Inventory { values, scope }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local check gated by optional `scope.discriminator` on the same candidate; combines counts, `offending_rows`, and `inventory: Some(Vec<Value>)`. |
+| `Check::ValueMaxLength { max, discriminator, codes, include }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local `text.chars().count()` bound check gated by `discriminator`; `CheckRecord` combines across partitions. |
+| `Check::Range { min, max }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local numeric range comparison against `min`/`max`; `CheckRecord` combines across partitions. |
+| `Check::MaxLength(usize)` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local Unicode scalar count check `text.chars().count() > max`; `CheckRecord` combines across partitions. |
+| `Check::WideMaxLength(RowCountBound)` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local `max.compare_count(text.chars().count()) == Ordering::Less`; `CheckRecord` combines across partitions. |
+| `Check::Matches(Pattern)` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local regex search with per-cell `Resource::RegexWork` step guard; `CheckRecord` combines across partitions (or aborts at the first `ScopedLimit`). |
+| `Check::InvalidDiagnostic(Diagnostic)` | Column / `Verification` (`execution/mod.rs`) | `safe` | Data-independent deferred diagnostic; fires at its declaration checkpoint with the prefix `records` accumulated before that checkpoint. |
+| `Check::InvalidDeclaration { code, reason }` | Column / `Verification` (`execution/mod.rs`) | `safe` | Data-independent deferred compiler finding; fires at its declaration checkpoint with the prefix `records` accumulated before that checkpoint. |
+| `Check::PredicateDeclaration(BoundPredicate)` | `Verification` (`execution/verification.rs`) | `safe` | Schema-only sample validation (`validate_predicate`); reads no candidate rows and emits no `CheckRecord`. |
+| `Check::Assert { when, require }` | `Verification` (`execution/verification.rs`) | `safe-with-combine-step` (column / secondary-intermediate reads) / `global` (primary or `SELF` intermediate reads) | `validate_predicate` runs once on synthetic schema samples; each candidate evaluates `when` and `require` without short-circuiting. Counts and `offending_rows` combine across partitions unless a bound intermediate is `global`. |
+| `Check::AllOrNone(columns)` | `Verification` (`execution/mod.rs`) | `safe-with-combine-step` | Row-local check that all `columns` share the same missingness on each candidate; `CheckRecord` counts and `offending_rows` combine across partitions. |
+| `Check::Unique(columns)` | `Verification` (`execution/mod.rs`, `table_grouping.rs`) | `safe-with-combine-step` | Tracks distinct column-tuple keys across partitions with first-seen group order and all member `RowIdentity`s per group. At finalize, `evaluated_count` is total distinct groups, `failed_count` is groups with $> 1$ member, and `offending_rows` flattens repeated groups in first-seen group order, then within-group global row order. |
+| `Check::RowCount { min, max }` | `Verification` (`execution/mod.rs`) | `safe-with-combine-step` | Sums output row counts $N = \sum_i |P_i^{\text{out}}|$ across partitions and evaluates `row_count_accepts(N)` once at finalize (`evaluated_count = 1`, `output_rows = N`). |
+| `Check::WideRowCount { min, max }` | `Verification` (`execution/mod.rs`) | `safe-with-combine-step` | Sums output row counts $N = \sum_i |P_i^{\text{out}}|$ across partitions and compares against `RowCountBound` once at finalize (`evaluated_count = 1`, `output_rows = N`). |
+| `Check::ScopedRowCount(RowCount)` | `Verification` (`execution/verification.rs`) | `safe-with-combine-step` (column / secondary-intermediate predicates) / `global` (primary or `SELF` intermediate predicates) | Evaluates `filter` (`admitted`) and `when` (`bound`) per row and folds into per-`group_by` tuple accumulators (or one global group when `group_by` is `None`) storing `(first_seen_order, first_row_identity, total_members, admitted_count, any_bound)`. Filtered-empty groups remain counted in `evaluated_count` unless exempted by `when.is_some() && !any_bound`. Finalize checks `accepts(admitted_count, total_members)` in first-seen group order and populates `offending_rows`, `counts`, and optional `denominators`. |
+
+### Whole-table equivalence specification
+
+Let $T$ be a primary source table with schema $S$ and $R$ rows, and let $P_0,
+P_1, \dots, P_{k-1}$ ($k \ge 1$) be any partition of $T$ into tables with schema
+$S$ and row counts $r_0, r_1, \dots, r_{k-1}$ such that $\sum_{i=0}^{k-1} r_i =
+R$ and $P_i.\text{cell}(j, c) = T.\text{cell}(\text{base}_i + j, c)$ for all $i
+\in [0, k)$, $j \in [0, r_i)$, and columns $c$, where $\text{base}_i = \sum_{m <
+i} r_m$. Secondary tables and the function port are identical in both runs.
+
+Partitioned execution over $(P_0, \dots, P_{k-1})$ satisfies **whole-table
+equivalence** with `DatasetPlan::execute(T, secondary, functions, observer)` if
+and only if all five properties below hold for every partition split (including
+empty partitions $r_i = 0$ and single-row partitions $r_i = 1$):
+
+1. **Values and representation**:
+   - On success, the partitioned `Dataset.schema` and `Dataset.rows` are equal
+     (`PartialEq`) to the whole-table `Dataset.schema` and `Dataset.rows`. Every
+     cell matches in logical `Value`, including canonicalized `FiniteFloat` bit
+     patterns, exact `Date` and `DateTime` components, private collected
+     temporal precision metadata prior to public projection, and UTF-8 string
+     bytes.
+   - Exported public `Table` schemas, Arrow batch columns, validity bitmaps, and
+     saved artifact bytes match the whole-table output byte for byte.
+
+2. **Row-order guarantees**:
+   - **Candidate construction order**: Before presentation sorting, output rows
+     are ordered by `(template_index, global_first_occurrence)`:
+     - In `RowMode::Records`, retained rows appear in strictly increasing global
+       source index $\text{base}_i + j$.
+     - In `RowMode::Keys` and `RowMode::Groups`, groups appear in ascending
+       order of their first feeding global source index $\min_{m \in
+       \text{members}} m$ across $T$, with missing-key records in `RowMode::Keys`
+       kept as individual candidates at their global source positions.
+   - **Tie-breaking**: Every stability tie-breaker in source selection
+     (`key_grain::select`, `intermediates::select`, `lookup::select`), window
+     sorting (`windows::sort`), and presentation sorting (`ordering::apply`)
+     compares global source row indices $\text{base}_i + j$ or global pre-sort
+     candidate positions $\text{out\_base}_i + r$, never partition-local offsets.
+   - **Presentation order**: When `output_order` is non-empty, `ordering::apply`
+     runs after `OutputKeys` and `Verification` succeed and produces the exact
+     stable merge-sort permutation of the whole-table candidate sequence.
+
+3. **Diagnostic and error identity**:
+   - **Phase and checkpoint precedence**: Execution preserves the whole-table
+     phase order (`Admission` -> `Derivation` [eager secondary/primary
+     intermediate `verify` -> template candidate construction -> column-by-column
+     completion with interleaved `check_columns` prefix checkpoints ->
+     `check_unobserved_filter_types`] -> `OutputKeys` -> `Verification` ->
+     `ordering::apply` -> `Finished`). If whole-table execution fails,
+     partitioned execution fails at the same phase and checkpoint with an
+     identical `ExecutionError` variant, `ConditionCode`, `spec_paths`,
+     `source_span`, `operand_route`, and structured `DiagnosticContext`.
+   - **Global coordinate translation**:
+     - Primary-source cell and predicate errors (`ExecutionError::Cell`,
+       `ExecutionError::Predicate`) report `source_row = base_i + local_row`.
+     - Output-row identities (`RowIdentity { position, values }` on execution
+       errors and inside `CheckRecord.offending_rows`) report the global
+       pre-sort candidate index `position = out_base_i + local_row` and the
+       completed key `values`.
+   - **Explicit refusal of `global` operations**: When a plan containing any
+     `global` operation is executed through the partitioned surface without an
+     explicit whole-table fallback (#2686), execution refuses with a typed
+     diagnostic before publishing any output rather than computing
+     partition-local approximations.
+
+4. **Retained observations (`handler_counts` and `verifications`)**:
+   - `ExecutionAttempt.handler_counts`: Handler sites are registered in
+     deterministic plan order during `Admission`; per-site counts sum across
+     partitions via checked addition in `HandlerCounter` (raising
+     `ExecutionError::HandlerAccounting` on overflow) and match the whole-table
+     snapshot on both success and failure at the same checkpoint.
+   - `Execution.verifications` and `ExecutionAttempt.retained_verifications`:
+     Every emitted `CheckRecord` equals the whole-table `CheckRecord` in `path`,
+     `code`, `evaluated_count`, `failed_count`, `output_rows` (total dataset
+     output rows $N$), `offending_rows` (ordered by global candidate position or
+     first-seen group order), `codelist`, `inventory`, and `row_count`. On a
+     verification failure, `retained_verifications` preserves the exact prefix
+     of records completed before the failing check.
+
+5. **Resource limits (`Limits`)**:
+   - Table capacity guards (`Limits::table` for `SourceRows`, `SourceCells`,
+     `OutputRows`, and `OutputCells`) are enforced against cumulative global
+     source rows $\sum_{m \le i} r_m$ and cumulative global output candidates,
+     producing the same `SourceLimit`, `Limit`, and `ScopedLimit` refusals and
+     `ExecutionEvent::Refusal` observer events as whole-table execution.
+
+### Architectural seams for partition boundaries
+
+1. **Attempt driver seam (`rust/crates/yamaa-core/src/dataset/execution/mod.rs`)**:
+   - Split `DatasetPlan::execute_inner` / `execute_admitted` (`mod.rs:752-878`)
+     into three explicit stages:
+     1. *Run admission*: `functions::admit_plan`, secondary-source schema and
+        `Limits::table` checks, `HandlerCounter` site registration
+        (`mod.rs:663-700`), and one-time `intermediates::verify(..., false,
+        ...)` for `IntermediateSource::Input`.
+     2. *Per-partition step*: Accept each primary partition $P_i$ with
+        `(base_source_row, base_output_row)`, update cumulative `Limits::table`
+        counters, construct partition candidates, and evaluate row-local /
+        combinable column assignments. Poll the cancellation token (#2684) at
+        `ExecutionEvent::Phase` transitions, between partitions, and between
+        intermediates.
+     3. *Combine and finalize*: Finalize cross-partition group/key state, run
+        `check_unobserved_filter_types`, combine `OutputKeys` and
+        `Verification` accumulators against total `output_rows = N`, and run
+        `ordering::apply`.
+
+2. **Grouping and key-grain seam (`rust/crates/yamaa-core/src/table_grouping.rs`, `rust/crates/yamaa-core/src/dataset/execution/key_grain.rs`)**:
+   - `table_grouping::Key<'a>` (`table_grouping.rs:14-40`) borrows `&'a str`
+     from a single table snapshot. Cross-partition grouping introduces an owned
+     counterpart (`OwnedKey` / canonical `Vec<Value>` with `-0.0` canonicalized
+     to `0` bits and temporal precision ignored in `Ord`/`Eq`, matching `Key<'a>`
+     semantics) so group maps outlive individual partition borrows by direct
+     value comparison.
+   - In `key_grain::construct` and `key_grain::collect_bound`
+     (`key_grain.rs:7-266`), replace retained whole-table row-index vectors
+     (`Candidate.members: Vec<usize>`) with a per-key combine state holding:
+     first global source row index, per-column `BTreeSet<OwnedKey>` of distinct
+     present values plus best `(order_by_values, global_source_row)` for
+     `Collect`, and running `(count, NumericReducer)` state for `Count` and
+     `Reduce`.
+
+3. **Intermediate cache lifecycle seam (`rust/crates/yamaa-core/src/dataset/execution/intermediates/mod.rs`, `key_index.rs`)**:
+   - Separate `intermediates::Run` (`intermediates/mod.rs:18-23`) into two
+     lifetimes:
+     - *Run-scoped state* (retained across all primary partitions):
+       `eligible[&index]`, `string_indexes[&index]`, and uncorrelated
+       `materialized[&(index, None)]` for `IntermediateSource::Input(index)`.
+     - *Partition-scoped state* (cleared after each partition $P_i$ finishes its
+       column pass): `choices` (keyed by `(SelectionIdentity, usize)`) and
+       correlated `materialized` entries (keyed by `(index,
+       Some(SelectionIdentity))`). Clearing partition-scoped entries at each
+       partition boundary bounds intermediate memory to the active partition and
+       static secondary tables.
+
+4. **Column-verification checkpoint seam (`rust/crates/yamaa-core/src/dataset/execution/mod.rs:1245-1308`, `1550-1772`)**:
+   - `complete_columns` interleaves column derivation with `check_columns`
+     prefix checkpoints so an error-severity column check at column $c$ preempts
+     derivation failures in column $c + 1$.
+   - In partitioned execution, per-column `CheckRecord` accumulators collect
+     `(evaluated_count, failed_count, offending_rows, codelist, inventory)` per
+     column checkpoint across partitions, while any derivation failure in a
+     later column $c' > c$ is ordered after earlier column-$c$ check failures so
+     whole-table failure precedence is preserved.
+
+5. **Dataset verification combine seam (`rust/crates/yamaa-core/src/dataset/execution/mod.rs:1313-1547`, `verification.rs`)**:
+   - Factor `verify_output` (`mod.rs:1313`) and `verification::predicate_check` /
+     `verification::row_count_check` (`verification.rs:129-302`) behind a
+     per-partition accumulator that ingests `(out_base_i, &[Candidate])` per
+     partition and finalizes once with total `output_rows = N`:
+     - Row-local checks (`OutputMissingKeyFailed`, `NotMissing`, `AllowedValues`,
+       `Codelist`, `ValueCodelists`, `Inventory`, `ValueMaxLength`, `Range`,
+       `MaxLength`, `WideMaxLength`, `Matches`, `Assert`, `AllOrNone`) append
+       global `RowIdentity`s and sum counts.
+     - Key-grouped checks (`OutputDuplicateKeyFailed`, `Check::Unique`,
+       `Check::ScopedRowCount`) fold into `BTreeMap<Vec<OwnedKey>, GroupState>`
+       preserving first-seen group order.
+     - Whole-table count checks (`Check::RowCount`, `Check::WideRowCount`)
+       evaluate `row_count_accepts(N)` at finalize.
+
