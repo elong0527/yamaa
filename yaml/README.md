@@ -5,17 +5,17 @@ SDTM-to-ADaM derivations. The design is under active development.
 
 ## Start here
 
-The [contract index](../rules/README.md) organizes the language by semantic owner:
+The [contract index](../rules/README.md#rule-files) organizes the language by semantic owner:
 
 | Block | Subject |
 | --- | --- |
-| [Specification](../rules/README.md#specification) | Structure, composition, and binding |
-| [Values](../rules/README.md#values) | Types, numbers, text, and temporal values |
-| [Execution](../rules/README.md#execution) | Lifecycle, rows, ordering, handlers, and verification |
-| [Operations](../rules/README.md#operations) | Expressions, languages, lookup, windows, and functions |
-| [Storage](../rules/README.md#storage) | Resources, ingestion, CSV, Parquet, and publication |
-| [Submission](../rules/README.md#submission) | Metadata, terminology, and Define-XML |
-| [Reference](../rules/README.md#reference) | Schema notation for maintainers |
+| Specification | Structure, composition, and binding |
+| Values | Types, numbers, text, and temporal values |
+| Execution | Lifecycle, rows, ordering, handlers, and verification |
+| Operations | Expressions, languages, lookup, windows, and functions |
+| Storage | Resources, ingestion, CSV, Parquet, and publication |
+| Submission | Metadata, terminology, and Define-XML |
+| Reference | Schema notation for maintainers |
 
 ## Sources of authority
 

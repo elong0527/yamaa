@@ -253,9 +253,9 @@ string-template placeholders, verifications and lookup matching. A qualified
 variable makes its dataset or lookup live; a live lookup makes its dataset and
 matching inputs live; a live row makes its driver, filter inputs, grouping
 inputs and the derivations live columns need live. A row template is itself a
-root because it can add rows, and `base` is live when a surviving row falls
-back to it. Dead entries are removed from `input`, `intermediates` and
-`columns`, together with row derivations that target dead columns.
+root, and `base` is live when a surviving row falls back to it. Dead entries
+are removed from `input`, `intermediates` and `columns`, together with row
+derivations that target dead columns.
 
 <a id="layer-12"></a>
 
@@ -280,11 +280,10 @@ file that omits `output` is not itself an error.
 
 ### LAYER-13. Resolved columns follow dependency order with a stable tie-break
 
-After pruning, columns are ordered so that each comes after every column its
-derivation reads. When more than one column can come next, the one with the
-earliest contribution position comes first, which keeps `Common`, earlier
-parent and child order for independent columns. `output.columns` is never
-reordered.
+After pruning, each column is ordered after every column its derivation
+reads. When more than one column can come next, the one with the earliest
+contribution position comes first, which keeps `Common`, earlier parent and
+child order for independent columns. `output.columns` is never reordered.
 
 Replaces: REQ-0643, REQ-0644.
 

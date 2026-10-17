@@ -128,7 +128,8 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | [Dataset-JSON](submission/dataset-json.md) | REQ | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
 | [Schema language](reference/schema-language.md) | REQ | Define schema notation, registries, constraints, and canonical shorthand expansion. |
 
-The [requirement index](https://elong0527.github.io/yamaa/reference/requirements/)
+The [requirement index](https://elong0527.github.io/yamaa/reference/requirements/),
+[rules at a glance](https://elong0527.github.io/yamaa/reference/rules-summary/)
 and [schema fields](https://elong0527.github.io/yamaa/reference/schema-fields/)
 are generated from these files and `yaml/` on every docs build. The
 [glossary](reference/glossary.md) pins one meaning per shared clinical term; it

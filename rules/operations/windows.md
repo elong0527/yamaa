@@ -31,7 +31,7 @@ All operation-specific restrictions apply to the expanded window. Definition
 shapes are checked in every written layer, including unused definitions.
 Expanded dependencies participate in reachability and column ordering;
 unreachable inherited declarations retain the pruning behavior of
-[REQ-0641](../specification/composition.md#req-0641). The resolved
+[LAYER-12](../inheritance.md#layer-12). The resolved
 specification contains only inline windows and omits root `windows`.
 Diagnostic provenance retains the reference location and attributes expanded
 fields to their named definition.

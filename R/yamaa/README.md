@@ -103,7 +103,7 @@ bridge floor is 0.8.0. See the [ownership contract](../../rust/README.md#arrow-h
 Dataset-JSON requests read already published artifacts. Save publishes retained
 JSON in specification order and XML last, stopping after an operational failure.
 A failed Define Save raises `yamaa_define_error`. See the
-[submission contracts](../../rules/README.md#submission).
+[submission contracts](../../rules/README.md#rule-files).
 
 ## Diagnostics
 

@@ -27,7 +27,7 @@ expands before validation
 <a id="req-1280"></a>
 
 **REQ-1280.** A style check reads one specification file as its author
-wrote it, before [Specification composition](composition.md) resolves any
+wrote it, before [Inheritance](../inheritance.md) resolves any
 layer. It reports each finding with the file, the one-based line and column
 where the departure starts, the finding name, and the requirement that
 names it. Repository validation reports every finding in a benchmark
@@ -237,7 +237,7 @@ join is indexed and the alias can be removed.
 `label` is reported as `missing_label` at its `columns[]` entry. A column
 not declared in the same file, and any file with `parents`, is never
 reported: the label may come from a parent layer resolved under
-[Specification composition](composition.md). Labels do not change
+[Inheritance](../inheritance.md). Labels do not change
 derivation behavior; they carry the reader-facing description a submission
 document is generated from.
 

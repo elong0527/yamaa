@@ -17,4 +17,5 @@ docs/coverage/
 .coverage
 .coverage.*
 rules/reference/requirements.md
+rules/reference/rules-summary.md
 rules/reference/schema-fields.md

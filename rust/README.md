@@ -24,7 +24,7 @@ Expected benchmark data and Parquet fixtures are authored truth. Preserve their
 bytes when changing implementation or repository structure.
 
 Layer composition and null handling follow the
-[composition contract](../rules/specification/composition.md).
+[composition contract](../rules/inheritance.md).
 
 The adapter enables independent `yaml`, `parquet` and `readstat` Cargo features
 by default. Python wheels, Python source installations and R source packages use

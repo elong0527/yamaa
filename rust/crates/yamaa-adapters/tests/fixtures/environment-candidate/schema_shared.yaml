@@ -27,7 +27,7 @@ identifier:
 function_contract_version:
     type: str
     min_length: 1
-    description: See REQ-1087.
+    description: See REQ-1085.
 
 function_param_type:
     type: str

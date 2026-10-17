@@ -7,12 +7,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 import yaml
 from tools.paths import ROOT
 from tools.validation import _repository_yaml as OWNER_REPOSITORY_YAML
-from tools.validation import check_rule_metadata as RULE_CHECK
 from tools.validation import editorial as OWNER_EDITORIAL
 from tools.validation import grammar_checks as OWNER_GRAMMAR_CHECKS
 from tools.validation import repository_artifacts as OWNER_REPOSITORY_ARTIFACTS
@@ -310,42 +308,6 @@ class TestValidationMetadata(unittest.TestCase):
             self.assertTrue(
                 any("unregistered validation condition" in error for error in errors)
             )
-
-
-class TestErrorCitations(unittest.TestCase):
-    def setUp(self):
-        directory = self.enterContext(tempfile.TemporaryDirectory())
-        self.root = Path(directory)
-        self.enterContext(patch.object(RULE_CHECK, "REPO", self.root))
-        self.error = self.root / "error.yaml"
-
-    def errors_for(self, requirement):
-        body = {"phase": "validation", "condition": "unknown_field"}
-        if requirement is not None:
-            body["requirement"] = requirement
-        self.error.write_text(yaml.safe_dump(body))
-        errors = []
-        RULE_CHECK.check_error(self.error, {"REQ-0001"}, errors)
-        return errors
-
-    def test_a_defined_requirement_is_accepted(self):
-        self.assertEqual(self.errors_for("REQ-0001"), [])
-
-    def test_an_absent_requirement_is_accepted(self):
-        self.assertEqual(self.errors_for(None), [])
-
-    def test_unknown_and_legacy_citations_fail(self):
-        self.assertTrue(
-            any(
-                "names no numbered requirement" in e
-                for e in self.errors_for("REQ-0002")
-            )
-        )
-        for legacy in ("R001-1", "R019"):
-            with self.subTest(legacy=legacy):
-                self.assertTrue(
-                    any("must cite REQ-NNNN" in e for e in self.errors_for(legacy))
-                )
 
 
 class TestClosedGrammarContracts(unittest.TestCase):

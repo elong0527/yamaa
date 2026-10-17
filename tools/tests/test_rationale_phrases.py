@@ -1,4 +1,4 @@
-"""Tests for check_rationale_phrases.py.
+"""Tests for the rationale-phrase check of tools.rules.check.
 
 Rules state expected behavior without rationale phrases (because, in order to,
 the reason is, this ensures, so that, to ensure).
@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.validation import check_rationale_phrases
+from tools.rules import check as rules_check
 
 
 class RationalePhraseTests(unittest.TestCase):
@@ -17,11 +17,11 @@ class RationalePhraseTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.rules = Path(temporary.name) / "rules"
         (self.rules / "values").mkdir(parents=True)
-        self._saved_allowlist = check_rationale_phrases.ALLOWLIST
-        check_rationale_phrases.ALLOWLIST = {}
+        self._saved_allowlist = rules_check.RATIONALE_ALLOWLIST
+        rules_check.RATIONALE_ALLOWLIST = {}
 
     def tearDown(self):
-        check_rationale_phrases.ALLOWLIST = self._saved_allowlist
+        rules_check.RATIONALE_ALLOWLIST = self._saved_allowlist
 
     def write(self, label, body):
         path = self.rules / label
@@ -29,7 +29,7 @@ class RationalePhraseTests(unittest.TestCase):
         return path
 
     def errors(self):
-        return check_rationale_phrases.check(self.rules.parent)
+        return rules_check.rationale_errors(self.rules.parent)
 
     def test_each_banned_phrase_fails(self):
         for phrase in (
@@ -105,7 +105,7 @@ class RationalePhraseTests(unittest.TestCase):
         body = "# One\n\nA column fails because the value is missing.\n"
         self.write("values/one.md", body)
         self.assertTrue(self.errors())
-        check_rationale_phrases.ALLOWLIST = {
+        rules_check.RATIONALE_ALLOWLIST = {
             "values/one.md": [(r"because the value is missing", "unavoidable quote")]
         }
         self.assertEqual(self.errors(), [])
@@ -115,7 +115,7 @@ class RationalePhraseTests(unittest.TestCase):
             "values/one.md",
             "# One\n\nA column fails because the row is missing.\n",
         )
-        check_rationale_phrases.ALLOWLIST = {
+        rules_check.RATIONALE_ALLOWLIST = {
             "values/one.md": [(r"because the value is missing", "unavoidable quote")]
         }
         self.assertTrue(self.errors())
@@ -133,6 +133,30 @@ class RationalePhraseTests(unittest.TestCase):
             "---\ntitle: Because things fail\n---\n\nA column fails.\n",
         )
         self.assertEqual(self.errors(), [])
+
+    def test_line_numbers_count_front_matter(self):
+        self.write(
+            "values/one.md",
+            "---\ntitle: One\n---\n\nA column fails so that it is seen.\n",
+        )
+        self.assertEqual(len(self.errors()), 1)
+        self.assertIn("values/one.md:5:", self.errors()[0])
+
+    def test_card_files_are_checked(self):
+        self.write(
+            "inheritance.md",
+            '# Inheritance\n\n<a id="layer-1"></a>\n\n'
+            "### LAYER-1. Layers compose in one order\n\n"
+            "Layers compose depth first because order matters.\n\n"
+            "Fails: `inheritance_cycle`.\n",
+        )
+        self.assertEqual(
+            self.errors(),
+            [
+                "inheritance.md:7: rationale phrase 'because': Layers compose depth "
+                "first because order matters."
+            ],
+        )
 
 
 if __name__ == "__main__":

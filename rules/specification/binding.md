@@ -25,8 +25,8 @@ intermediate under [REQ-1262](../execution/rows.md#req-1262).
 <a id="req-0078"></a>
 
 **REQ-0078.** A declared path is a `project_path`. [Resource resolution](../storage/resources.md) fixes its written form,
-selected relative base, and readable bytes. [Specification composition](composition.md) preserves the path origin when a
-declaration is inherited. [Specification composition](composition.md) rebases a relative path in a materialized
+selected relative base, and readable bytes. [Inheritance](../inheritance.md) preserves the path origin when a
+declaration is inherited. [Inheritance](../inheritance.md) rebases a relative path in a materialized
 resolved specification.
 
 <a id="req-0079"></a>
