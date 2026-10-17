@@ -88,17 +88,17 @@ A `number` has the number form of the numeric grammar
 otherwise. A `string` is delimited by single quotes, a doubled quote denotes
 one quote, backslash has no escape meaning, and its type is `str`. `DATE '...'`
 and `DATETIME '...'` are temporal literals whose text must parse under
-[Temporal values](values/temporal.md) for the named type.
+[Values](values.md) for the named type.
 
 Fails: `invalid_predicate`.
 Evidence: `yaml/grammar/predicate.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/predicate_diagnostics.tsv`.
 Replaces: REQ-0163, REQ-0164, REQ-0165, REQ-0192.
 
 `'C:\new'` contains a backslash, and a string literal is text under
-[Text values](values/text.md). The temporal keyword is required:
+[Values](values.md). The temporal keyword is required:
 `'2025-06-01'` alone is a `str`, not a `date`.
 
-A temporal literal that [Temporal values](values/temporal.md) rejects while
+A temporal literal that [Values](values.md) rejects while
 the predicate is parsed fails with `invalid_predicate`. The parser finding
 keeps the literal kind and the applicable temporal cause, which standalone
 syntax diagnostic context reports; a finding in the original document keeps
@@ -132,7 +132,7 @@ Replaces: REQ-0159, REQ-0166, REQ-0171.
 | **FALSE** | TRUE | FALSE | UNKNOWN |
 | **UNKNOWN** | TRUE | UNKNOWN | UNKNOWN |
 
-[Verification](execution/verification.md) defines every other consequence of
+[Verification](verification.md) defines every other consequence of
 a predicate's result.
 
 <a id="formula-5"></a>
@@ -140,10 +140,10 @@ a predicate's result.
 ### FORMULA-5. Two non-missing operands compare only when their runtime types are mutually comparable
 
 Two non-missing operands compare only when
-[REQ-0005](values/types.md#req-0005) makes their runtime types mutually
+[VALUE-19](values.md#value-19) makes their runtime types mutually
 comparable, in the order the table below gives, and no other operand
 conversion occurs. A mixed `int` and `float` pair widens the integer to
-binary64 under [REQ-0017](values/numbers.md#req-0017) before comparing. Every
+binary64 under [VALUE-8](values.md#value-8) before comparing. Every
 other pair fails: a temporal value is not comparable to text, and a `date` is
 not comparable to a `datetime`.
 
@@ -155,15 +155,15 @@ Replaces: REQ-0167, REQ-0168, REQ-0169, REQ-0190.
 |---|---|
 | `int` with `int` | Exact integer order |
 | `float` with `float` | Binary64 numeric order |
-| Mixed `int` and `float` | Widen the integer to binary64 under [REQ-0017](values/numbers.md#req-0017), then compare |
-| `str` with `str` | [Text values](values/text.md) text order |
-| `date` with `date` | Chronological under [Temporal values](values/temporal.md) |
-| `datetime` with `datetime` | Chronological under [Temporal values](values/temporal.md) |
+| Mixed `int` and `float` | Widen the integer to binary64 under [VALUE-8](values.md#value-8), then compare |
+| `str` with `str` | [Values](values.md) text order |
+| `date` with `date` | Chronological under [Values](values.md) |
+| `datetime` with `datetime` | Chronological under [Values](values.md) |
 
-Strings use the equality and total order [Text values](values/text.md)
+Strings use the equality and total order [Values](values.md)
 defines. Above `2^53`, widening can make a neighboring integer equal to a
 float: `9007199254740993 = 9007199254740992.0` is `TRUE`. The same pair stays
-unequal in the exact comparisons [REQ-0005](values/types.md#req-0005) lists.
+unequal in the exact comparisons [VALUE-19](values.md#value-19) lists.
 Two non-missing operands that are not mutually comparable, or a non-string
 operand to `LIKE` ([FORMULA-7](#formula-7)), fail with
 `incompatible_input_type`.
@@ -190,7 +190,7 @@ These compound operators expand into the primitive logic of
 
 Both non-missing `LIKE` operands must be `str`. In the pattern, `%` matches
 any sequence of scalar values, `_` matches exactly one, and every other scalar
-matches by [Text values](values/text.md) equality; matching is
+matches by [Values](values.md) equality; matching is
 case-sensitive. No escape character exists by default. `ESCAPE` declares a
 string literal of exactly one scalar value, which marks the next pattern scalar
 as literal. An invalid `ESCAPE` literal or a trailing escape character fails.
@@ -223,7 +223,7 @@ Evidence: `schema-str-contains`, `negative-str-contains-invalid-regex`.
 Replaces: REQ-1244.
 
 The portable regex contract is the one of
-[Text operations](operations/text.md#req-0798). Function-name matching is
+[Text operations](text.md#text-6). Function-name matching is
 case-insensitive, so `STR_CONTAINS(...)` is the same call. `str_contains` is
 the sole Boolean function the grammar permits: any other `name(...)` is
 `invalid_predicate`, and a bare `str_contains` without `(` stays an
@@ -234,7 +234,7 @@ identifier.
 ### FORMULA-9. A predicate identifier names a value visible at its site, and any other name fails
 
 Each predicate site sees the names the table below gives, under
-[Execution lifecycle](execution/lifecycle.md). An identifier in a right-side
+[Column derivation](columns.md). An identifier in a right-side
 predicate is qualified by the right-side dataset's ID, and an identifier over
 a completed or candidate output row is unqualified. No predicate can reach an
 undeclared relation. Predicate identifiers are collected for dependency
@@ -248,7 +248,7 @@ REQ-0184, REQ-0185, REQ-0186, REQ-0189.
 
 | Predicate site | Visible names |
 | --- | --- |
-| Ungrouped row filter | The names [REQ-0068](execution/rows.md#req-0068) defines |
+| Ungrouped row filter | The names [ROW-6](rows.md#row-6) defines |
 | Grouped row filter | Only unqualified columns derived by that row |
 | Aggregate, record-lookup and multiple-match filters | Records of their owning right-side dataset |
 | Window filter | Constructed output columns in row construction; in an intermediate derivation, the augmented donor records [LOOKUP-15](lookup.md#lookup-15) describes |
@@ -256,7 +256,7 @@ REQ-0184, REQ-0185, REQ-0186, REQ-0189.
 | `case` | The values available to its enclosing derivation |
 
 An enclosing column derivation may also bind a qualified dataset or
-record-lookup field under [Name binding](specification/binding.md) and
+record-lookup field under [Name binding](names.md) and
 [Lookup and joins](lookup.md). A verification may read a declared record
 lookup for its completed row.
 
@@ -264,7 +264,7 @@ An identifier that is unavailable at its predicate site fails. An unqualified
 identifier that names a field of an in-scope dataset fails with
 `unresolvable_name` and suggests the qualified spelling; any other unavailable
 identifier fails with `unknown_field`. Both report under
-[Execution lifecycle](execution/lifecycle.md).
+[Column derivation](columns.md).
 
 ## Numeric formulas
 
@@ -275,7 +275,7 @@ identifier fails with `unknown_field`. Both report under
 `compute` evaluates `expr`, a formula in the closed numeric grammar below, over
 constructed output columns, fields of a declared record lookup and numeric
 literals, and returns one numeric value per current row.
-[Numeric values](values/numbers.md)' representation, promotion and overflow
+[Values](values.md)' representation, promotion and overflow
 rules apply to every operator and function. Precedence is unary sign, then `*`
 and `/`, then binary `+` and `-`, all left-associative, and parentheses
 override it. Function names and `NULL` are case-insensitive; identifiers are
@@ -349,9 +349,9 @@ dataset but its own.
       expr: "WEIGHTKG / POWER(HEIGHTCM / 100, 2)"
 ```
 
-A lookup field carries the type [Source ingestion](storage/ingestion.md)
+A lookup field carries the type [Inputs](inputs.md)
 assigns to the field in the lookup's dataset.
-[Execution lifecycle](execution/lifecycle.md) collects formula identifiers and
+[Column derivation](columns.md) collects formula identifiers and
 lookup source dependencies, so a `compute` derivation takes part in dependency
 ordering as a predicate does.
 
@@ -361,7 +361,7 @@ ordering as a predicate does.
 
 Every identifier in a `compute` formula must have runtime type `int` or
 `float`, and an identifier of any other type fails.
-[REQ-0004](values/types.md#req-0004) forbids implicit conversion between
+[VALUE-2](values.md#value-2) forbids implicit conversion between
 operation inputs, and formulas do not relax that rule: a collected string is
 converted by binding it to a numeric column first.
 
@@ -428,7 +428,7 @@ Evidence: `negative-zero-division`, `negative-negative-sqrt`, `negative-log-zero
 Replaces: REQ-0429, REQ-0430, REQ-0431, REQ-0432, REQ-0433, REQ-0445.
 
 An invalid `POWER` fails with `invalid_power`. Failing rather than yielding
-missing is consistent with [Execution lifecycle](execution/lifecycle.md).
+missing is consistent with [Column derivation](columns.md).
 
 <a id="formula-16"></a>
 
@@ -450,13 +450,13 @@ The `compute` grammar has no rounding function, and a derivation must not
 round by any other spelling. A non-numeric source is an
 `incompatible_input_type` validation error. Analysis datasets otherwise carry
 computed values at full precision; reporting decides the displayed places.
-[Types and conversion](values/types.md) has the same rule at conversion, where
+[Values](values.md) has the same rule at conversion, where
 a non-integral value fails rather than being truncated.
 
 `CEIL`, `FLOOR` and `TRUNC` are not presentation rounding: they return an
 integral part, with no mode to choose. `FLOOR(a / b)` floors the binary64
-quotient under [REQ-0421](values/numbers.md#req-0421) and returns an integral
-`float` under [REQ-0423](values/numbers.md#req-0423). It need not equal the
+quotient under [VALUE-10](values.md#value-10) and returns an integral
+`float` under [VALUE-10](values.md#value-10). It need not equal the
 floor of the exact integer quotient.
 
 ## Aggregate expressions
@@ -542,8 +542,8 @@ Evidence: `adam-adlb-ordered-sum`, `rust/crates/yamaa-core/tests/fixtures/reduct
 Replaces: REQ-0479, REQ-0480, REQ-0498.
 
 The `filter`, when present, removes records and keeps the order of the records
-that remain. [Source ingestion](storage/ingestion.md) defines stored-source
-record order, and [Execution lifecycle](execution/lifecycle.md) defines
+that remain. [Inputs](inputs.md) defines stored-source
+record order, and [Column derivation](columns.md) defines
 constructed-output and grouped-input record order. `COUNT`, `MIN` and `MAX`
 are independent of record order, and `ONLY` accepts no group in which an order
 could choose among records ([FORMULA-20](#formula-20)). A rule that needs one
@@ -577,21 +577,21 @@ reporting the outer and inner reducers. Reducing at one key level and reducing
 that result at another uses two specifications: the first artifact names and
 validates the intermediate keys, and the downstream specification declares
 that artifact as an ordinary source under
-[Name binding](specification/binding.md), linking its producing specification
+[Name binding](names.md), linking its producing specification
 through `dataset_class.schema`.
 
 Evidence: `yaml/grammar/aggregate.yaml`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-adapters/tests/fixtures/syntax_controls.json`.
 Replaces: REQ-0483, REQ-0502.
 
 The link through `dataset_class.schema`
-([REQ-0520](storage/ingestion.md#req-0520)) supplies the workflow boundary:
+([INPUT-10](inputs.md#input-10)) supplies the workflow boundary:
 the producer completes first under
-[REQ-0521](storage/ingestion.md#req-0521), and the consumer reads its held
+[INPUT-10](inputs.md#input-10), and the consumer reads its held
 serialized artifact under [REQ-1247](storage/resources.md#req-1247). One
 domain build executes both levels; neither artifact must already exist, and
 only explicit Save publishes them. A source path alone does not establish this
 boundary. The producer's selected columns must declare their types and labels
-under [REQ-0522](storage/ingestion.md#req-0522).
+under [INPUT-11](inputs.md#input-11).
 
 For example, `daily.yaml` can group exposure records by subject, treatment
 and day and derive `ADOSE: {aggregate: "SUM(EX.EXDOSE)"}`. A downstream
@@ -628,7 +628,7 @@ numeric type, and `MIN`, `MAX` and `ONLY` keep the type they reduce, whatever
 it is. `SUM` and `MEAN` require a numeric argument, `MIN` and `MAX` mutually
 comparable values, and `COUNT` and `ONLY` accept any type. An expression using
 an operator or numeric function is numeric: every reduction and grouped
-identifier in it must be numeric, and [Numeric values](values/numbers.md)
+identifier in it must be numeric, and [Values](values.md)
 promotion gives its type.
 
 Evidence: `negative-sum-non-numeric`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
@@ -639,10 +639,10 @@ REQ-0510, REQ-0511.
 non-numeric reduction or grouped identifier. `MIN` or `MAX` over incomparable
 values fails: a column mixing incomparable types is an error rather than an
 implementation-defined order. Their string order is that of
-[Text values](values/text.md).
+[Values](values.md).
 
 No implicit conversion happens inside the grammar.
-[Types and conversion](values/types.md) converts the completed derivation
+[Values](values.md) converts the completed derivation
 result, as it does for every other expression. A `function` expression
 returns the type its logical contract declares under
 [Project functions](operations/functions.md).
@@ -692,7 +692,7 @@ that failed.
 
 Replaces: REQ-0496, REQ-0513.
 
-The non-finite normalization of [Types and conversion](values/types.md)
+The non-finite normalization of [Values](values.md)
 applies after every arithmetic or reduction result.
 
 ## Evaluation
@@ -705,7 +705,7 @@ Evaluating a predicate, numeric formula or aggregate expression is
 deterministic and free of side effects. Evaluation follows the written
 association: no expression is reassociated, redistributed or algebraically
 simplified, and no numeric option that does any of these is enabled. `/`
-never truncates. String comparison uses [Text values](values/text.md), and no
+never truncates. String comparison uses [Values](values.md), and no
 implicit coercion, collation, `LIKE` escape or missing-value behavior is taken
 from a host SQL engine.
 

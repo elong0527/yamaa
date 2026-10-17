@@ -165,7 +165,7 @@ the decimal point and is a non-negative integer.
 <a id="req-0874"></a>
 
 **REQ-0874.** A `length` on a `str` column is enforced. The column's completed
-values must contain at most `length` [Values](../values.md) scalar values, as [Verification](../execution/verification.md)'s
+values must contain at most `length` [Values](../values.md) scalar values, as [Verification](../verification.md)'s
 `max_length` requires, so the declared length binds rather than describes.
 
 <a id="req-0875"></a>
@@ -249,7 +249,7 @@ therefore tells nothing about `mandatory`, and a `mandatory: false` on a
 
 **REQ-0885.** A column declaring `mandatory: true` must also carry a
 `not_missing` verification or appear in `keys`, whose non-missing
-requirement [Artifact publication](../storage/publication.md) already states. A document that asserts a value is always
+requirement [OUTPUT-3](../output.md#output-3) already states. A document that asserts a value is always
 present, over an artifact nothing checks, asserts something no run proves.
 
 #### Codelist
@@ -392,7 +392,7 @@ algorithm attached is not traceable.
 
 <a id="req-0896"></a>
 
-**REQ-0896.** The [Execution lifecycle](../execution/lifecycle.md) derivation graph proves some facts about a column value.
+**REQ-0896.** The [Column derivation](../columns.md) derivation graph proves some facts about a column value.
 A declared origin that contradicts a proven fact is rejected. The graph never
 supplies an origin. The graph cannot tell an investigator-recorded
 value from a vendor-transmitted or protocol-fixed value. Origin is always
@@ -418,7 +418,7 @@ and a value the specification states outright is available.
 
 **REQ-0899.** A column derived by a bare `source` copies one value of one
 declared dataset, and a column derived by a bare `odm` copies the `Value` of
-the one ODM record it identifies ([REQ-1272](../specification/binding.md#req-1272)). The column's `origin.type` must not be `Derived`: nothing
+the one ODM record it identifies ([NAME-13](../names.md#name-13)). The column's `origin.type` must not be `Derived`: nothing
 was computed. Every remaining type stays admissible. Whether that
 stored value was collected, assigned, fixed by the protocol, or copied from
 a predecessor dataset is a fact about the source and not about this

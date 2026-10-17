@@ -22,7 +22,7 @@ Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/
 Replaces: REQ-0076, REQ-0077, REQ-0078, REQ-0079, REQ-0081, REQ-0105.
 
 A row template may also name a named intermediate under
-[REQ-1262](execution/rows.md#req-1262). [Source ingestion](storage/ingestion.md)
+[ROW-2](rows.md#row-2). [Inputs](inputs.md)
 owns both declaration forms and their shorthand. A declared path is a
 `project_path`: [Resource resolution](storage/resources.md) fixes its written
 form, its selected relative base and its readable bytes, and a source path it
@@ -43,7 +43,7 @@ Fails: `duplicate_identifier`.
 Evidence: `negative-source-self-reference`.
 Replaces: REQ-0080, REQ-0082.
 
-[Execution lifecycle](execution/lifecycle.md) owns what happens when a column
+[Column derivation](columns.md) owns what happens when a column
 reaches its own value through that column's window partition.
 
 ## Variables
@@ -66,7 +66,7 @@ Replaces: REQ-0083, REQ-0084, REQ-0103, REQ-0106, REQ-1057.
 source: DM.SEX
 ```
 
-[Lookup and joins](operations/lookup.md) defines record lookup resolution. An
+[Lookup and joins](lookup.md) defines record lookup resolution. An
 unresolved unqualified reference fails with `unknown_field`, or with
 `unresolvable_name` and the suggested qualified spelling when the bare name is
 a field of an in-scope dataset. A field typed `variable` holds a qualified
@@ -78,7 +78,7 @@ source variable or an unqualified constructed output column.
 
 A qualified reference to the current row template's driver reads the current
 driver record; a qualified reference to another dataset follows
-[Lookup and joins](operations/lookup.md). During grouped row construction
+[Lookup and joins](lookup.md). During grouped row construction
 there is no single current driver record: a qualified reference to the driver
 is scalar only when the exact variable appears in the enclosing
 `row.group_by`, and it then returns that group's key value. Reading any other
@@ -89,14 +89,14 @@ Evidence: `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, 
 Replaces: REQ-0085, REQ-0086, REQ-0087, REQ-0107.
 
 The driver is an input dataset or an eligible named intermediate under
-[REQ-1262](execution/rows.md#req-1262). A scalar `source` naming a source
+[ROW-2](rows.md#row-2). A scalar `source` naming a source
 variable absent from the `group_by` of the grouped row template that builds
 the row it reads fails. A column-level derivation reads every constructed row,
 so there a qualified reference to a row template's driver is scalar only when
 every grouped row template driven by that dataset has the exact variable in
 its `group_by`. A grouped row reduces non-key variables with an aggregate
-expression, as [Expression evaluation](operations/expressions.md) and
-[Aggregation](operations/aggregation.md) define.
+expression, as [Expressions](expressions.md) and
+[Formulas](formulas.md) define.
 
 <a id="name-5"></a>
 
@@ -108,7 +108,7 @@ expression in it, and operations compose through a named derived column. A
 `string_template` placeholder is a variable reference whose complete name
 binds as a `variable` field name, and text outside placeholders is literal.
 Plain strings outside fields typed `variable` are literal under
-[Text values](values/text.md).
+[Values](values.md).
 
 Evidence: `negative-variable-nested`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`.
 Replaces: REQ-0088, REQ-0089, REQ-0090, REQ-0091, REQ-1058.
@@ -128,9 +128,9 @@ Replaces: REQ-0088, REQ-0089, REQ-0090, REQ-0091, REQ-1058.
       dict: {A: Alpha}
 ```
 
-[Text operations](operations/text.md) owns placeholder braces and escaping. A
+[Text](text.md) owns placeholder braces and escaping. A
 field typed `regex` holds a regular expression applied to a string value under
-[Text operations](operations/text.md).
+[Text](text.md).
 
 <a id="name-6"></a>
 
@@ -138,7 +138,7 @@ field typed `regex` holds a regular expression applied to a string value under
 
 The `source` expression also accepts a mapping holding `variable` and local
 binding or join behavior. `absent` and a source's `order_by` and `keep`
-selection are handlers, which [Local handlers](execution/handlers.md) defines.
+selection are handlers, which [Column derivation](columns.md) defines.
 `filter` is not a handler: it states which records the source may read, and
 reading no record is an absent match rather than a handled condition.
 
@@ -151,7 +151,7 @@ source:
   absent: null
 ```
 
-[Lookup and joins](operations/lookup.md) defines the join uniqueness the
+[Lookup and joins](lookup.md) defines the join uniqueness the
 selection relaxes and the record selection `filter` states.
 
 ## ODM item reads
@@ -243,12 +243,12 @@ Replaces: REQ-1269.
 
 | The row was built by | Its ODM scope |
 | --- | --- |
-| no `rows`, with the ODM input as the base | the records its key combination was derived from ([REQ-0042](execution/rows.md#req-0042)) |
+| no `rows`, with the ODM input as the base | the records its key combination was derived from ([ROW-8](rows.md#row-8)) |
 | a row template grouped over the ODM input | the records equal to the row on every hierarchy field in the template's `group_by` |
 | a record-driven row template over the ODM input | the records equal to the driver record on all eight hierarchy fields |
 
 Missing equals missing on a hierarchy field as it does under
-[REQ-0037](execution/rows.md#req-0037).
+[ROW-4](rows.md#row-4).
 
 <a id="name-11"></a>
 
@@ -277,7 +277,7 @@ row built from another dataset would read.
 The read identifies the records of the row's scope whose `ItemOID` is the
 named item, whose `StudyEventOID`, `FormOID` and `ItemGroupOID` are among the
 OIDs that `event`, `form` and `item_group` list, when they list any, and for
-which `filter` is `TRUE` under [Predicates](operations/predicates.md).
+which `filter` is `TRUE` under [Formulas](formulas.md).
 `filter` names only schema fields, qualified with the ODM input.
 
 Evidence: `schema-odm-form-items`, `schema-odm-item-subject`, `rust/crates/yamaa-adapters/tests/fixtures/odm_reads.json`.
@@ -292,7 +292,7 @@ which may itself be missing. Two or more identified records fail. Values take
 no part in identification: two records that carry one value are still two.
 The read is a lookup, not a reduction; nothing is counted, ordered or chosen.
 The result is `str` and converts to the column's declared type at completion
-under [Types and conversion](values/types.md), as any derivation result does.
+under [Values](values.md), as any derivation result does.
 
 Fails: `odm_not_unique`.
 Evidence: `negative-odm-not-unique`, `negative-odm-repeated-record`, `schema-odm-item-subject`.

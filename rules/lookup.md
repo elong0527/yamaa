@@ -31,7 +31,7 @@ derivation:
 
 The driver's qualifier reads the input or intermediate record that built the
 row. An inferred key must compare equal on both sides, and
-[REQ-0004](values/types.md#req-0004) performs no implicit conversion: an
+[VALUE-2](values.md#value-2) performs no implicit conversion: an
 applicable key whose left and right types are not mutually comparable fails as
 `incompatible_input_type`, reporting both types. With no applicable key the
 intended match is unclear, and the read fails as `no_applicable_keys`. The
@@ -62,7 +62,7 @@ Evidence: `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adl
 Replaces: REQ-0126, REQ-0156, REQ-0157.
 
 In ungrouped row construction each retained input record builds one candidate
-row ([REQ-0036](execution/rows.md#req-0036)). The input record's fields are
+row ([ROW-3](rows.md#row-3)). The input record's fields are
 the only single values the match can read; values produced only by column
 derivation are not available then. A named intermediate states the same match
 with declared `key` pairs, and its match values have the same availability:
@@ -72,16 +72,16 @@ through the bound column. A row-phase `compute` still names no qualified
 cross-dataset identifier ([FORMULA-11](formulas.md#formula-11)).
 
 In grouped row construction every applicable key must be a group key of the
-row template ([REQ-0037](execution/rows.md#req-0037)). A key the group does not
+row template ([ROW-4](rows.md#row-4)). A key the group does not
 carry varies within the group and names no single match value, and fails as
-`ungrouped_driver_field` ([REQ-0067](execution/rows.md#req-0067)). A key no
+`ungrouped_driver_field` ([ROW-5](rows.md#row-5)). A key no
 input record carries fails as `unknown_field`
-([REQ-0103](specification/binding.md#req-0103)), in either mode.
+([NAME-3](names.md#name-3)), in either mode.
 
 During grouped row construction, every variable a lookup matches on must be
 derived by the row template that reads the lookup. The exceptions are the
 template's group keys and, for an ungrouped template, the driver record's own
-fields. [Execution lifecycle](execution/lifecycle.md) orders row derivations
+fields. [Column derivation](columns.md) orders row derivations
 before column derivation, and a match value available only in a later phase
 fails as `phase_boundary`.
 
@@ -216,11 +216,11 @@ same way; when the current row carries `field`, the diagnostic suggests that
 bare name.
 
 Each pair must be mutually comparable under
-[REQ-0005](values/types.md#req-0005): an intermediate's `key` requires each
+[VALUE-19](values.md#value-19): an intermediate's `key` requires each
 match value and its paired key column to have the same comparable type. The
 match converts no operand. A pair that cannot compare fails as
-`incompatible_input_type` under [REQ-0323](values/types.md#req-0323),
-reporting both declared types. [REQ-0517](storage/ingestion.md#req-0517) gives
+`incompatible_input_type` under [VALUE-2](values.md#value-2),
+reporting both declared types. [INPUT-5](inputs.md#input-5) gives
 an undeclared field of a typeless container the type `str`; a key typed on one
 side and defaulted on the other needs repair, not a wider comparison.
 
@@ -255,7 +255,7 @@ them are checked before matching.
 | Numeric (`int` or `float`) | `compute` |
 
 For `compute`, either possible result type compares with `int` and `float`
-under [REQ-0005](values/types.md#req-0005); `float` represents that numeric
+under [VALUE-19](values.md#value-19); `float` represents that numeric
 comparison class in a validation diagnostic, without changing the computed
 value. Every other expression operation states no static type for this check,
 even when a particular invocation's inputs could reveal one. For example,
@@ -341,7 +341,7 @@ current row's driver is root `base` (or the sole input) without explicit rows,
 or the enclosing `rows[].dataset` during row construction. During column
 derivation the qualifier must be the driver of every row template that the
 expression can evaluate on. The row driver may be an eligible named
-intermediate under [REQ-1262](execution/rows.md#req-1262). Other datasets,
+intermediate under [ROW-2](rows.md#row-2). Other datasets,
 intermediates that are not the current driver, and unqualified output names
 are not filter scopes. A filtered scalar source remains donor-only; correlated
 predicates are supported by named intermediates.
@@ -401,7 +401,7 @@ fails validation. A bound naming a field the augmented donor record does not
 have, or a `value` that is not a known variable, fails as `unknown_field`.
 
 The value and every stated bound must be mutually comparable: `int` and
-`float` compare exactly under [REQ-0005](values/types.md#req-0005), and every
+`float` compare exactly under [VALUE-19](values.md#value-19), and every
 other runtime type must match exactly, with no operand converted. A mismatch
 fails as `incomparable_range_types` before any record is compared, reporting
 the runtime types of the value and the stated bounds.
@@ -484,7 +484,7 @@ columns it sought. One column's handling never answers for another.
 keeps that meaning when an empty child inherits the specification. A later
 layer's null over an inherited `no_match` clears the handler under
 [LAYER-9](inheritance.md#layer-9). The answer is recorded under the `no_match`
-handler of [Local handlers](execution/handlers.md).
+handler of [Column derivation](columns.md).
 
 <a id="lookup-14"></a>
 
@@ -502,7 +502,7 @@ Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-adapters/tests/fix
 Replaces: REQ-0139, REQ-0143, REQ-0144, REQ-0149.
 
 Neither failure renames the other's fields. Handler accounting follows
-[Local handlers](execution/handlers.md): a `keep` that chose among surviving
+[Column derivation](columns.md): a `keep` that chose among surviving
 records counts one `multiple_matches` handling, and a declared `no_match` that
 answered an absence counts one `no_match` handling.
 
@@ -530,15 +530,15 @@ Each entry is either an untyped expression, including its
 `{type: <column_type>, derivation: <expression>, unconvertible: <literal>?}`.
 An untyped entry cannot declare `unconvertible`, and an untyped handler
 wrapper fails schema validation. A typed entry converts each result under
-[REQ-0009](values/types.md#req-0009) and
-[REQ-0010](values/types.md#req-0010) before any later derivation, filter,
+[VALUE-3](values.md#value-3) and
+[VALUE-3](values.md#value-3) before any later derivation, filter,
 match, ordering or verification reads it. Missing stays missing. A conversion
 failure is fatal without `unconvertible`; a declared literal replacement
 converts to the same type and is counted under
-[REQ-0358](execution/handlers.md#req-0358) and
-[REQ-0359](execution/handlers.md#req-0359). The conversion boundary is the
+[COLUMN-13](columns.md#column-13) and
+[COLUMN-13](columns.md#column-13). The conversion boundary is the
 binding's result; expressions still never convert implicitly
-([REQ-0004](values/types.md#req-0004)). For example:
+([VALUE-2](values.md#value-2)). For example:
 
 ```yaml
 derivations:
@@ -549,7 +549,7 @@ derivations:
 ```
 
 `WEEK 02` thus yields the integer `2` before numeric matching. `check` reports
-incompatible key types under [REQ-0323](values/types.md#req-0323) when the
+incompatible key types under [VALUE-2](values.md#value-2) when the
 declared source types and derivation result types establish the mismatch
 without reading data.
 
@@ -703,8 +703,8 @@ Replaces: REQ-1245.
 
 The mapping form `unique: {columns: [STUDYID, USUBJID], id: donor-key}` names a
 check when an explicit ID is useful, and both forms test the same donor
-records. Each check may declare an optional `id`, governed by REQ-0374 and
-REQ-0398. [LOOKUP-10](#lookup-10) already rejects multiple surviving matches
+records. Each check may declare an optional `id`, governed by CHECK-3 and
+CHECK-3. [LOOKUP-10](#lookup-10) already rejects multiple surviving matches
 without a selection rule.
 
 A repeated combination fails as `duplicate_intermediate_records` at the
@@ -739,7 +739,7 @@ Replaces: REQ-0296, REQ-0329, REQ-0465, REQ-0466, REQ-0467, REQ-0468,
 REQ-0469, REQ-0504, REQ-0506, REQ-1088.
 
 An identifier is `NAME` or `DATASET.NAME`, which
-[Name binding](specification/binding.md) resolves in the same phase; a
+[Name binding](names.md) resolves in the same phase; a
 reducer expression and a predicate resolve each name the same way. An
 aggregate reduces records from one relation, returns one value per group, and
 never changes the row count.
@@ -754,7 +754,7 @@ never changes the row count.
   partition.
 - **Grouped input.** The expression is a row derivation that reduces only the
   records of the current input group. The grouped row template asks it for one
-  value while [Execution lifecycle](execution/lifecycle.md) decides whether
+  value while [Column derivation](columns.md) decides whether
   that candidate row is appended.
 
 A single expression naming two datasets, or mixing a qualified identifier with
@@ -768,7 +768,7 @@ remains under these lookup rules.
 A qualified name in the aggregate grammar reaches a field of its relation,
 never an ODM item by its `ItemOID`, and a qualified name that names an ODM item
 fails. ODM item identifiers carry further periods; read the item into a column
-with [`odm`](specification/binding.md#req-1265) first.
+with [`odm`](names.md#name-7) first.
 
 The context decides what `group_by` ([LOOKUP-19](#lookup-19)), `filter`
 ([LOOKUP-20](#lookup-20)), `key` ([LOOKUP-21](#lookup-21)), `derive`
@@ -828,7 +828,7 @@ Replaces: REQ-0140, REQ-0141, REQ-0142.
 With no pairs the aggregate fails as `missing_aggregate_keys`. A declared `key`
 column the relation does not have, or a match value that is not known, fails
 as `unknown_field`, and a pair that cannot compare fails under
-[REQ-0004](values/types.md#req-0004).
+[VALUE-2](values.md#value-2).
 
 <a id="lookup-22"></a>
 
@@ -851,10 +851,10 @@ through the binding's declared `type`, and a date becomes an integer only
 through an operation such as `to_epoch_day` in the binding's own derivation;
 the aggregate and numeric grammars never parse text or dates themselves. Each
 binding's evaluated value converts to its declared `type` under
-[REQ-0009](values/types.md#req-0009) and
-[REQ-0010](values/types.md#req-0010). Text that is not convertible to the
+[VALUE-3](values.md#value-3) and
+[VALUE-3](values.md#value-3). Text that is not convertible to the
 declared numeric type fails as a conversion failure under
-[REQ-0013](values/types.md#req-0013), answered by a declared `unconvertible`
+[VALUE-3](values.md#value-3), answered by a declared `unconvertible`
 handler and fatal otherwise. A missing value stays missing without attempting
 conversion.
 
@@ -879,9 +879,9 @@ its neighbours with [window operations](windows.md), then derive each segment
 as an ordinary column. A second specification reduces the stored segments at
 the subject grain. Its input may declare
 `SEGS: {path: segments.csv, schema: segments.yaml}` under
-[REQ-0520](storage/ingestion.md#req-0520); the producing specification
+[INPUT-10](inputs.md#input-10); the producing specification
 completes before the consumer reads its artifact under
-[REQ-0521](storage/ingestion.md#req-0521). For the linear trapezoid, the
+[INPUT-10](inputs.md#input-10). For the linear trapezoid, the
 producer's segment expression is `0.5 * (PREVC + AVAL) * (ARELTM - PREVT)`,
 and the consumer's reduction is `SUM(SEGS.SEG)`. A first sample's missing
 neighbour produces a missing segment, which `SUM` skips under
@@ -905,7 +905,7 @@ Replaces: REQ-0330, REQ-0472, REQ-0473, REQ-0474, REQ-0509.
 The comparisons are `lower <= value` and `value <= upper`. Omitting one bound
 makes the match one-sided without excluding the stated endpoint. The value and
 every stated bound must be mutually comparable under
-[REQ-0005](values/types.md#req-0005). When no record is admitted the aggregate
+[VALUE-19](values.md#value-19). When no record is admitted the aggregate
 result is missing under the empty-group rule of
 [FORMULA-24](formulas.md#formula-24); a missing cutoff never reduces the
 unrestricted right side.

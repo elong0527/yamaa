@@ -32,7 +32,7 @@ status: normative
 
 <a id="req-0726"></a>
 
-**REQ-0726.** Each following record is one row, in the order [Ordering](../execution/ordering.md) fixes,
+**REQ-0726.** Each following record is one row, in the order [OUTPUT-11](../output.md#output-11) fixes,
   holding one field per header name in the same order.
 
 <a id="req-0727"></a>

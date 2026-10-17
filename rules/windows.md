@@ -69,7 +69,7 @@ Evidence: `schema-window-functions`, `schema-window-intermediate-rank`, `rust/cr
 Replaces: REQ-0293, REQ-0326, REQ-1122, REQ-1129.
 
 A window partition is a group of rows, and `window.order_by` orders the rows
-within each partition under [Ordering](execution/ordering.md). The
+within each partition under [Values](values.md). The
 intermediate-derivation context is the one of
 [LOOKUP-15](lookup.md#lookup-15).
 
@@ -79,8 +79,8 @@ template or from outside row construction fails. Row derivations follow their
 dependency graph. Each derivation completes for all rows of the template
 before a dependent derivation starts, so a window may read a completed column
 derived from another window, directly or through scalar derivations. A
-dependency cycle still fails under [REQ-0059](execution/lifecycle.md#req-0059)
-and [REQ-0072](execution/lifecycle.md#req-0072).
+dependency cycle still fails under [COLUMN-4](columns.md#column-4)
+and [COLUMN-6](columns.md#column-6).
 
 <a id="window-4"></a>
 
@@ -211,4 +211,4 @@ Evidence: `schema-window-functions`, `rust/crates/yamaa-adapters/tests/fixtures/
 Replaces: REQ-0311, REQ-0316.
 
 Scalar selection follows [EXPR-6](expressions.md#expr-6), and temporal
-operation results follow [REQ-0590](operations/temporal.md#req-0590).
+operation results follow [TIME-1](temporal.md#time-1).

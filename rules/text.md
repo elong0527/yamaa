@@ -24,8 +24,8 @@ Replaces: REQ-0308, REQ-1112.
 
 A source of another type fails under [VALUE-2](values.md#value-2).
 `str_concat`'s `missing` fires when any input is missing
-([REQ-0350](execution/handlers.md#req-0350)); without it, the missing input is
-fatal under [REQ-0344](execution/handlers.md#req-0344).
+([COLUMN-11](columns.md#column-11)); without it, the missing input is
+fatal under [COLUMN-10](columns.md#column-10).
 
 <a id="text-2"></a>
 
@@ -113,14 +113,14 @@ str_template:
 ```
 
 A qualified or unqualified placeholder name follows the `variable` field rules
-of [Name binding](specification/binding.md), and the
-[Execution lifecycle](execution/lifecycle.md) collects the placeholders as
+of [Name binding](names.md), and the
+[Column derivation](columns.md) collects the placeholders as
 dependencies. A placeholder that does not bind fails under the
-[Execution lifecycle](execution/lifecycle.md) and
-[Name binding](specification/binding.md). A value that is not a string fails
+[Column derivation](columns.md) and
+[Name binding](names.md). A value that is not a string fails
 under [VALUE-2](values.md#value-2). `missing` answers when any placeholder
 value is missing; without it, the missing value is fatal under
-[Local handlers](execution/handlers.md). The concatenation is exact under
+[Column derivation](columns.md). The concatenation is exact under
 [VALUE-12](values.md#value-12).
 
 ## Case
@@ -150,7 +150,7 @@ returned when the source is missing.
 Identifier and keyword case behavior comes from the closed ASCII grammars that
 own them and is unaffected by data casing. Predicate `LIKE` remains
 case-sensitive and compares literal scalar values under
-[Predicates](operations/predicates.md). Schema patterns, `str_extract`,
+[Formulas](formulas.md). Schema patterns, `str_extract`,
 `str_replace` and `matches` match under [TEXT-6](#text-6) to
 [TEXT-12](#text-12) and select no Unicode casing mode through this rule.
 
@@ -181,10 +181,10 @@ The consumers are:
   [Schema language](reference/schema-language.md) declares on a schema `str`;
 - `str_extract.pattern`;
 - `str_replace.pattern` ([TEXT-11](#text-11));
-- the `pattern` of [Verification](execution/verification.md)'s `matches`
+- the `pattern` of [Verification](verification.md)'s `matches`
   column verification;
 - the pattern literal in the predicate call `str_contains(source, pattern)`
-  ([REQ-1244](operations/predicates.md#req-1244)).
+  ([FORMULA-8](formulas.md#formula-8)).
 
 `regex` is the named schema type of `str_extract.pattern`,
 `str_replace.pattern` and the `matches` pattern. The schema descriptor and the
@@ -215,7 +215,7 @@ A pattern the grammar or the classes reject, in a schema descriptor,
 `str_extract`, `str_replace` or a `matches` verification, fails validation with
 `invalid_regex` and reports the declaring path and the rejection. The
 `str_contains` predicate call instead fails with `invalid_predicate` at parse
-time under [REQ-1244](operations/predicates.md#req-1244). Each consumer
+time under [FORMULA-8](formulas.md#formula-8). Each consumer
 rejects a pattern with its stated condition whether its syntax is malformed or
 merely outside the portable grammar.
 
@@ -238,7 +238,7 @@ ECMA-262 has no inline flag syntax, so `(?i)` is a syntax error. The `u` flag
 makes a pattern operate on the Unicode scalar values of
 [VALUE-11](values.md#value-11): one supplementary-plane scalar is one character
 to a pattern and one unit to [Schema language](reference/schema-language.md)'s
-`min_length` and [Verification](execution/verification.md)'s `max_length`. The
+`min_length` and [Verification](verification.md)'s `max_length`. The
 flag also admits `\u{...}` code point escapes and makes a malformed escape such
 as `\a` a syntax error rather than a silent literal. Casing is confined to
 ASCII under [TEXT-5](#text-5). Each consumer states its own iteration
@@ -265,7 +265,7 @@ The `\s` set is `U+0009`, `U+000B`, `U+000C`, `U+0020`, `U+00A0`, `U+1680`,
 would do; a default that widens a class to a Unicode category stays off.
 
 A pattern is text under [VALUE-11](values.md#value-11) and obeys the ASCII
-source boundary of [REQ-0705](specification/structure.md#req-0705), so
+source boundary of [SPEC-8](specification.md#spec-8), so
 `\u{00E9}` matches `U+00E9` and `\u{1D400}` matches that one supplementary-plane
 scalar. `\p{...}` is not part of the grammar ([TEXT-6](#text-6)).
 
@@ -320,7 +320,7 @@ A group that the pattern declares but the match does not enter has no value,
 so `str_extract` produces missing and `no_match` does not apply: the pattern
 did match, and `no_match` applies only when the pattern matched nowhere in the
 subject. A missing source returns the declared `missing` value. The handlers
-are those of [Local handlers](execution/handlers.md).
+are those of [Column derivation](columns.md).
 
 <a id="text-11"></a>
 
@@ -350,7 +350,7 @@ In `replacement`, `$`, the backslash and braces have no special meaning, and no
 capture group is referenced. A source the pattern matches nowhere is returned
 unchanged, and a result with no scalars is the empty string, never missing. A
 missing source returns the declared `missing` value; without that handler, the
-missing source is fatal under [Local handlers](execution/handlers.md).
+missing source is fatal under [Column derivation](columns.md).
 
 <a id="text-12"></a>
 

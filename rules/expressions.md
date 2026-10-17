@@ -48,7 +48,7 @@ evaluates over the partitions its own `group_by` declares
 ([WINDOW-3](windows.md#window-3)), and an aggregate expression evaluates in
 the contexts [LOOKUP-18](lookup.md#lookup-18) permits. A scalar or window
 expression that changes the row count fails under
-[Execution lifecycle](execution/lifecycle.md), which owns the phase
+[Column derivation](columns.md), which owns the phase
 invariant.
 
 Replaces: REQ-0046, REQ-0325.
@@ -71,7 +71,7 @@ Replaces: REQ-0290, REQ-0291, REQ-0292.
 
 `case` selects among expressions, and concatenation places literals beside
 sources. [FORMULA-10](formulas.md#formula-10),
-[Text operations](operations/text.md) and
+[Text](text.md) and
 [FORMULA-17](formulas.md#formula-17) resolve the identifiers of the three leaf
 types.
 
@@ -124,7 +124,7 @@ non-string.
 
 ### EXPR-6. An expression that selects a value returns it with its type and collected precision
 
-`source` keeps its source type under [Source ingestion](storage/ingestion.md),
+`source` keeps its source type under [Inputs](inputs.md),
 and `literal` keeps its YAML scalar type after non-finite normalization.
 Mapping, conditional, coalescing and extreme expressions keep the selected
 value's type, including its collected precision when the selected value is
@@ -205,9 +205,9 @@ sources must be mutually comparable.
 Evidence: `schema-expressions`, `negative-greatest-mixed`, `negative-least-mixed`.
 Replaces: REQ-0310, REQ-1096, REQ-1097.
 
-[REQ-0324](values/types.md#req-0324) checks that comparability and states
+[VALUE-19](values.md#value-19) checks that comparability and states
 which source an equal extreme keeps; `int` and `float` compare exactly under
-[REQ-0005](values/types.md#req-0005).
+[VALUE-19](values.md#value-19).
 
 ## Classification
 
@@ -220,7 +220,7 @@ dictionary written inline or as the path of a YAML file holding it, and
 returns the matching entry's value. A missing source returns `missing`, and a
 present source with no dictionary entry returns `unmapped`; `missing` never
 answers an unmapped source. Without the applicable handler, the source fails
-([REQ-0344](execution/handlers.md#req-0344)).
+([COLUMN-10](columns.md#column-10)).
 
 Evidence: `schema-text-mapping`, `schema-text-mapping-unmapped`, `negative-mapping-unmapped-value`.
 Replaces: REQ-0304, REQ-1110.
@@ -238,7 +238,7 @@ true and the ASCII fold of [EXPR-12](#expr-12) when false.
 ### EXPR-12. A case-insensitive mapping folds ASCII letters, and its folded keys must be unique
 
 With `case_sensitive: true`, `mapping` compares its source with the dictionary
-keys by [Text values](values/text.md) equality. With `false`, it folds the
+keys by [Values](values.md) equality. With `false`, it folds the
 source and every dictionary key by replacing `U+0061` through `U+007A` with
 `U+0041` through `U+005A`, leaving every other scalar unchanged, and compares
 the folded sequences by exact equality. Dictionary keys must be unique after
@@ -269,6 +269,6 @@ Replaces: REQ-0306, REQ-1118.
 
 The source may be a filtered source carrying the variable with its filter,
 selection or absent value ([LOOKUP-1](lookup.md#lookup-1)). Breaks compare
-mathematical values exactly under [REQ-0005](values/types.md#req-0005).
+mathematical values exactly under [VALUE-19](values.md#value-19).
 Without `missing`, a missing source fails under
-[REQ-0344](execution/handlers.md#req-0344).
+[COLUMN-10](columns.md#column-10).

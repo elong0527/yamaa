@@ -14,7 +14,7 @@ the order of the artifact's rows.
 The primary artifact is the output dataset the specification derives. Its
 columns are exactly the declared columns `output.columns` lists, in that
 order, independent of declaration order, and its rows are the rows
-[Row construction](execution/rows.md) constructs. `output.columns` must not
+[Row construction](rows.md) constructs. `output.columns` must not
 repeat a column or name an undeclared column. A missing `output.columns`, a
 repeated entry or an entry naming an undeclared column fails, reporting the
 column name.
@@ -27,7 +27,7 @@ A declared column that `output.columns` does not list is internal
 ([SPEC-7](specification.md#spec-7)). `output.order_by` orders the artifact's
 rows independent of construction order ([OUTPUT-11](#output-11)). A
 specification may also produce the governed warning log of
-[Verification](execution/verification.md); that log reports the run and is
+[Verification](verification.md); that log reports the run and is
 neither a second derivation target nor a source within the specification.
 
 <a id="output-2"></a>
@@ -53,8 +53,8 @@ repeated column as `duplicate_identifier`.
 
 Once every column's lifecycle is complete, the combined key values of each row
 must be non-missing and unique across the artifact. Key validation happens
-before dataset verifications, which [Verification](execution/verification.md)
-runs last. String key values compare under [Text values](values/text.md)
+before dataset verifications, which [Verification](verification.md)
+runs last. String key values compare under [Values](values.md)
 equality. A missing or duplicate combined key value fails, reporting the
 offending rows.
 
@@ -62,13 +62,13 @@ Fails: `duplicate_key`, `missing_key`.
 Evidence: `negative-output-duplicate`, `negative-output-missing-key`.
 Replaces: REQ-0221, REQ-0240.
 
-Key order is significant to [Lookup and joins](operations/lookup.md), which
+Key order is significant to [Lookup and joins](lookup.md), which
 joins on the output keys a right side also carries; those applicable keys are
 used for enrichment and do not change the identity asserted here. A
 specification without `rows` emits one row per key combination under
-[REQ-0042](execution/rows.md#req-0042), so a duplicate key can come only from
+[ROW-8](rows.md#row-8), so a duplicate key can come only from
 row templates emitting one combination more than once, under
-[REQ-0043](execution/rows.md#req-0043).
+[ROW-7](rows.md#row-7).
 
 Sponsor variables that may be missing can still define the presentation order
 and a separate uniqueness check. Declare a non-missing row identity in `keys`,
@@ -86,8 +86,8 @@ verifications:
   - unique: {columns: [USUBJID, EXTRT, ASTDT, AENDT], id: sponsor-keys}
 ```
 
-[Ordering](execution/ordering.md#req-0299) places missing values last by
-default. [REQ-0381](execution/verification.md#req-0381) treats missing values
+[Ordering](values.md#value-22) places missing values last by
+default. [CHECK-10](verification.md#check-10) treats missing values
 as values in the uniqueness check, so two rows with the same subject,
 treatment, start date and missing end date fail that check. The missing end
 date remains missing. Submission key metadata describes the identity in
@@ -103,7 +103,7 @@ the separate uniqueness check changes it.
 
 `output.path` is required, names the primary file and has no default.
 `output.warning_log` and `output.verification_log` name the sidecars of
-[Verification](execution/verification.md) when the specification declares
+[Verification](verification.md) when the specification declares
 them. `output.relative_to` selects the base for all three paths under
 [REQ-0780](storage/resources.md#req-0780). A missing `output.path` fails
 validation, reporting the specification.
@@ -160,15 +160,15 @@ value.
 Evidence: `schema-parquet`.
 Replaces: REQ-0719, REQ-0720, REQ-0721, REQ-0763, REQ-1234.
 
-The values are those of [Text values](values/text.md),
-[Numeric values](values/numbers.md) and [Temporal values](values/temporal.md),
+The values are those of [Values](values.md),
+[Values](values.md) and [Values](values.md),
 under the names [SPEC-2](specification.md#spec-2) admits. The `parquet`
 profile carries its own types: an artifact read by another specification needs
 no declaration to be understood. The `csv` profile's bytes are fixed exactly.
 
 A profile and the specification's `schema_version` identify the bytes exactly,
 and a consumer receives both; the producing-specification link of
-[Source ingestion](storage/ingestion.md) carries the whole producer document,
+[Inputs](inputs.md) carries the whole producer document,
 not only the profile. A profile's byte and value mapping is fixed by its
 producer's `schema_version`; a mapping that diverges at the same schema
 version must use a new profile name.
@@ -181,14 +181,14 @@ version must use a new profile name.
 
 Publication happens once, after the whole artifact is complete: after every
 value's lifecycle, key validation and verification under
-[Execution lifecycle](execution/lifecycle.md), and after its rows are ordered.
+[Column derivation](columns.md), and after its rows are ordered.
 Rows are not streamed to the target as they are constructed.
 
 Evidence: `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication`.
 Replaces: REQ-0239, REQ-0755.
 
 A conversion failure with no `unconvertible` on the result wrapper fails the
-run ([REQ-0013](values/types.md#req-0013)), and nothing is published.
+run ([VALUE-3](values.md#value-3)), and nothing is published.
 
 <a id="output-8"></a>
 
@@ -262,7 +262,7 @@ Replaces: REQ-0757, REQ-0758, REQ-1181.
 
 A successful publication therefore never exposes a new primary artifact
 without its completed logs already visible. The verification log
-[Verification](execution/verification.md) fixes is diagnostic output, not one
+[Verification](verification.md) fixes is diagnostic output, not one
 of the artifacts of [OUTPUT-1](#output-1).
 
 Failure to render or replace the warning log is an output failure, not a
@@ -289,10 +289,10 @@ changes whether a run passes or warns, and evaluation is unchanged.
 Evidence: `schema-ordering`, `adam-adae-review-order`.
 Replaces: REQ-0222, REQ-0226.
 
-The dependency order of the [Execution lifecycle](execution/lifecycle.md), a
+The dependency order of the [Column derivation](columns.md), a
 window's partitions and the neighbours `row_value` reads are fixed before
 ordering, and each uses construction order for its own tie-break.
-[Ordering](execution/ordering.md) defines order terms, their direction and
+[Values](values.md) defines order terms, their direction and
 missing placement, and the tie-break of rows equal on every term.
 
 <a id="output-12"></a>

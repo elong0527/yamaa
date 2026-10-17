@@ -43,7 +43,7 @@ Named operation inputs must have compatible runtime types. An operation must
 not implicitly convert one named input to the type of another, and an input
 with an incompatible runtime type fails. Column conversion applies only to the
 completed derivation result, at the conversion stage of the
-[Execution lifecycle](execution/lifecycle.md#req-0213).
+[Execution lifecycle](columns.md#column-8).
 
 Fails: `incompatible_input_type`.
 Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`.
@@ -87,9 +87,9 @@ Temporal parse is the lexical form of [VALUE-15](#value-15), canonical text is
 [VALUE-18](#value-18). Converting a temporal value to `str` keeps its
 canonical fields but not its collected precision. Ingestion uses the same
 `str` row for a field's declared type ([INPUT-7](inputs.md#input-7)). The
-`unconvertible` handler is [Local handlers](execution/handlers.md)'s, and an
+`unconvertible` handler is [Column derivation](columns.md)'s, and an
 unanswered failure is fatal under the
-[Execution lifecycle](execution/lifecycle.md).
+[Column derivation](columns.md).
 
 ## Missing values
 
@@ -159,7 +159,7 @@ Runtime literals include derivation and replacement literals,
 `str` result does not widen an integer literal's range: quote a numeric
 identifier as text, or write a floating-point literal when that is the
 intended value. Declaration integers such as the mathematical row-count bounds
-of [REQ-1152](execution/verification.md#req-1152) keep their own rules and are
+of [CHECK-13](verification.md#check-13) keep their own rules and are
 not runtime integer values. Non-finite floats become missing under
 [VALUE-4](#value-4) before any consumer can use them.
 
@@ -252,13 +252,13 @@ returns an integral `float`; it need not equal the floor of the exact integer
 quotient.
 
 To get an integer from `CEIL`, `FLOOR` or `TRUNC`, declare the column
-`type: int`: the [Execution lifecycle](execution/lifecycle.md) converts the
+`type: int`: the [Column derivation](columns.md) converts the
 completed result under [VALUE-7](#value-7).
 
 `NULLIF` compares two `int` arguments exactly. For a mixed `int` and `float`
 pair it first widens the integer under [VALUE-8](#value-8) and compares the
 binary64 values, like a predicate comparison under
-[REQ-0167](operations/predicates.md#req-0167). Thus
+[FORMULA-5](formulas.md#formula-5). Thus
 `NULLIF(9007199254740993, 9007199254740992.0)` returns missing.
 
 ## Text
@@ -421,8 +421,8 @@ only in what answers a bad value. An ingested value that does not parse is
 rejected before any derivation, so no handler applies
 ([INPUT-7](inputs.md#input-7)). A `str` field converted at a column declaring
 a temporal type fails there, where `unconvertible` can answer under
-[Local handlers](execution/handlers.md); otherwise the failure is fatal under
-the [Execution lifecycle](execution/lifecycle.md). A specification that wants
+[Column derivation](columns.md); otherwise the failure is fatal under
+the [Column derivation](columns.md). A specification that wants
 to see a malformed value therefore leaves the field `str`.
 
 <a id="value-16"></a>
@@ -455,7 +455,7 @@ omitted `ss` names second zero rather than claiming a coarser value.
 `datetime_impute` may instead complete collected text that stops after its
 day, hour or minute under a declared time rule, producing a complete datetime
 whose collected precision is the last field that text carried
-([TIME-12](temporal.md#time-12)). [Expression evaluation](operations/expressions.md)
+([TIME-12](temporal.md#time-12)). [Expressions](expressions.md)
 fixes the selecting row for the extreme, conditional, coalescing and offset
 expressions that return an operand rather than computing one.
 
@@ -512,7 +512,7 @@ the artifact records like any other.
 A `date` and a `datetime` do not convert in either direction; such a
 conversion fails and chooses neither value. A temporal value never enters
 `compute` arithmetic, whose grammar under
-[Numeric computation](operations/computation.md) is numeric. Differences and
+[Formulas](formulas.md) is numeric. Differences and
 shifts are the named operations of [Dates and times](temporal.md), with
 explicit units and input contracts.
 
@@ -539,7 +539,7 @@ Evidence: `negative-greatest-mixed`, `negative-least-mixed`, `rust/crates/yamaa-
 Replaces: REQ-0005, REQ-0324, REQ-0605.
 
 Predicate comparisons widen a mixed pair under
-[REQ-0167](operations/predicates.md#req-0167), as `NULLIF` does under
+[FORMULA-5](formulas.md#formula-5), as `NULLIF` does under
 [VALUE-10](#value-10). Collected temporal precision changes neither a value's
 runtime type nor its comparability. The type's owner defines its order:
 [VALUE-20](#value-20) for `str` and [VALUE-21](#value-21) for `date` and
@@ -597,7 +597,7 @@ month therefore:
 
 Both types are comparable wherever a rule requires mutually comparable values.
 `greatest` and `least` reduce them across a row, an `order_by` term orders by
-one, and [Aggregation](operations/aggregation.md)'s `MIN` and `MAX` reduce one.
+one, and [Formulas](formulas.md)'s `MIN` and `MAX` reduce one.
 [VALUE-22](#value-22) places missing values by the term's `nulls`, as it does
 for every other type. Every pair of non-missing values of one type stays
 ordered, which keeps an `order_by` term total and keeps the comparability of

@@ -39,7 +39,7 @@ Evidence: `negative-keys-conflict`, `negative-sex-duplicate`.
 Replaces: REQ-0033, REQ-0044, REQ-0075.
 
 A source `filter` decides which of those records the derivation reads before
-that count, as [REQ-0131](operations/lookup.md#req-0131) defines. A source
+that count, as [LOOKUP-13](lookup.md#lookup-13) defines. A source
 declaring `order_by` and `keep` keeps one of the records carrying those values
 instead of failing, as [COLUMN-12](#column-12) defines. A column derivation
 yielding more than one value for one key combination fails as
@@ -66,7 +66,7 @@ REQ-0055, REQ-0056, REQ-0057, REQ-0058.
 | Site | Collected references |
 |---|---|
 | `source` | every unqualified output variable it references |
-| a named lookup read by a qualified reference | its match values and `between.value` variable, or the applicable output keys when matching fields are omitted, under [Lookup and joins](operations/lookup.md) |
+| a named lookup read by a qualified reference | its match values and `between.value` variable, or the applicable output keys when matching fields are omitted, under [Lookup and joins](lookup.md) |
 | `group_by`, `order_by` and other fields typed `variable` | their variables |
 | `function.args` | the variables passed as leaves |
 | fields whose type contains a nested `expression` | the variables they reference |
@@ -82,10 +82,10 @@ derivations complete and before the window pass. A grouped `row.filter`
 resolves unqualified columns derived by that row template and runs after that
 graph completes. Both sites read values after stages 1 to 3, as
 [COLUMN-9](#column-9) defines. The four grammars are those of
-[Predicates](operations/predicates.md),
-[Numeric computation](operations/computation.md),
-[Text operations](operations/text.md) and
-[Aggregation](operations/aggregation.md).
+[Formulas](formulas.md),
+[Formulas](formulas.md),
+[Text](text.md) and
+[Formulas](formulas.md).
 
 <a id="column-4"></a>
 
@@ -174,14 +174,14 @@ Stages 1 to 3 run on each value, in whichever phase its derivation belongs to.
 Stage 4 runs once, after every row holds that column's final value. A
 row-level derivation therefore completes stages 1 to 3 during row
 construction, and a column derivation that depends on it reads a converted
-value of the declared type. [REQ-0004](values/types.md#req-0004) permits no
+value of the declared type. [VALUE-2](values.md#value-2) permits no
 implicit conversion between operation inputs, and an operation consuming a
 row-derived column must rely on the column's declared type.
 
 1. Evaluate the expression under
-   [Expression evaluation](operations/expressions.md), with the local handlers
+   [Expressions](expressions.md), with the local handlers
    of [COLUMN-10](#column-10).
-2. Convert the result under [Types and conversion](values/types.md).
+2. Convert the result under [Values](values.md).
 3. Apply conversion-failure handling under [COLUMN-13](#column-13).
 4. Run the column's verifications under [Verification](verification.md). An
    error stops execution; warnings accumulate without changing the column.
@@ -233,20 +233,20 @@ otherwise.
 |---|---|---|
 | bind | `source.absent` | Absent source variable or ODM item |
 | join | `source.order_by` and `source.keep` | Choose one `source.filter` result |
-| join | `intermediates[].no_match` | The intermediate selects no record ([REQ-0129](operations/lookup.md#req-0129)) |
+| join | `intermediates[].no_match` | The intermediate selects no record ([LOOKUP-13](lookup.md#lookup-13)) |
 | mapping | `missing` | Missing input |
 | mapping | `unmapped` | Non-missing value with no mapping |
 | cut | `missing` | Missing numeric input |
 | extract | `missing` | Missing string input |
 | extract | `no_match` | Non-missing string does not match |
 | template | `missing` | Any placeholder value is missing |
-| impute | `date_impute.missing`, `date_precision.missing`, `datetime_impute.missing`, `datetime_precision.missing` | See [Temporal values](values/temporal.md) |
-| impute | `date_impute.invalid`, `date_precision.invalid`, `datetime_impute.invalid`, `datetime_precision.invalid` | See [Temporal values](values/temporal.md) |
-| impute | `duration_value.invalid` | Invalid fixed-length duration text ([REQ-1301](operations/temporal.md#req-1301)) |
+| impute | `date_impute.missing`, `date_precision.missing`, `datetime_impute.missing`, `datetime_precision.missing` | See [Values](values.md) |
+| impute | `date_impute.invalid`, `date_precision.invalid`, `datetime_impute.invalid`, `datetime_precision.invalid` | See [Values](values.md) |
+| impute | `duration_value.invalid` | Invalid fixed-length duration text ([TIME-17](temporal.md#time-17)) |
 | convert | `unconvertible` | Failed output conversion |
 
 An implicit join that finds no record, for example, yields missing under
-[REQ-0111](operations/lookup.md#req-0111). An unhandled local absent, missing,
+[LOOKUP-1](lookup.md#lookup-1). An unhandled local absent, missing,
 mapping, or extraction condition fails. A handler field on an expression that
 does not register it is a schema failure. A handler literal incompatible with
 its result context fails, reporting both the handler and the original context.
@@ -267,22 +267,22 @@ Replaces: REQ-0345, REQ-0346, REQ-0347, REQ-0348, REQ-0349, REQ-0350, REQ-0357.
 
 On `mapping`, `missing` never answers a non-missing input with no dictionary
 entry; that is `unmapped`'s condition
-([REQ-1110](operations/text.md#req-1110)). An intermediate's `no_match` also
-answers a missing match value ([REQ-0131](operations/lookup.md#req-0131)).
+([EXPR-11](expressions.md#expr-11)). An intermediate's `no_match` also
+answers a missing match value ([LOOKUP-13](lookup.md#lookup-13)).
 
 The owning rule states which values an operation cannot use;
-[Temporal values](values/temporal.md) states them for the temporal operations
+[Values](values.md) states them for the temporal operations
 on the `impute` stage. One stage name can serve several operations with the
 same conditions. Date imputation and precision, and datetime imputation and
 precision, each read the same source domain and answer the same missing and
 invalid conditions, and all four use `impute` in structured errors.
 
 An aggregate declares no handler at all. A variable it names that does not
-exist is [Name binding](specification/binding.md)'s unresolved reference. A
+exist is [Name binding](names.md)'s unresolved reference. A
 right side that reduces to no matching record is
-[Lookup and joins](operations/lookup.md)'s absent match. A group whose records
+[Lookup and joins](lookup.md)'s absent match. A group whose records
 all hold missing values is neither condition;
-[Aggregation](operations/aggregation.md) states what each reducer returns for
+[Formulas](formulas.md) states what each reducer returns for
 such a group.
 
 <a id="column-12"></a>
@@ -312,12 +312,12 @@ and declare their handler fields beside `source`. Binding handlers belong to
 the source. The source reaches records through lookup and joins, and uses its
 own handlers after it holds a value.
 
-The several records are [Lookup and joins](operations/lookup.md)'s matched
+The several records are [Lookup and joins](lookup.md)'s matched
 records and the records a key combination was derived from. Without `order_by`
 and `keep`, several matched records fail as `multiple_matches` under
-[REQ-0127](operations/lookup.md#req-0127), and disagreement among the records a
+[LOOKUP-10](lookup.md#lookup-10), and disagreement among the records a
 key combination was derived from fails under [COLUMN-2](#column-2). The absent
-match follows [Lookup and joins](operations/lookup.md). `source.keep` outside
+match follows [Lookup and joins](lookup.md). `source.keep` outside
 `first` or `last` is a schema failure.
 
 <a id="column-13"></a>
@@ -345,7 +345,7 @@ derivation:
   unconvertible:
 ```
 
-[Types and conversion](values/types.md) defines which conversions fail and
+[Values](values.md) defines which conversions fail and
 states that a missing input is not converted at all, so `unconvertible` never
 fires for one. A conversion replacement that cannot be converted fails.
 

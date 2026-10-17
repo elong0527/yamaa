@@ -12,7 +12,7 @@ arithmetic with fixed-length durations.
 ### TIME-1. Each temporal operation has fixed input and result types, and a date operation rejects a datetime
 
 The temporal operations take and return the types below, under the input
-contracts of these rules; [Expression evaluation](operations/expressions.md)
+contracts of these rules; [Expressions](expressions.md)
 registers, orders and nests them. A temporal value never enters `compute`
 arithmetic. A `datetime` given to a date operation other than `to_date`,
 including as a `date_precision` value source, fails rather than widening the
@@ -43,7 +43,7 @@ values themselves. `date_diff`, `study_day`, `date_impute` and
 `date_precision` are date operations; a `datetime` operand to one of them is an
 error rather than a widened operand. A temporal value used as an operand in a
 `compute` expression fails under
-[Numeric computation](operations/computation.md), which admits only numeric
+[Formulas](formulas.md), which admits only numeric
 identifiers.
 
 <a id="time-2"></a>
@@ -231,11 +231,11 @@ the other. When no day in the interval lies between the bounds, including a
 in February.
 
 An unsatisfiable bound, like a source below the minimum precision, is neither
-a missing source nor invalid text, so no [Local handlers](execution/handlers.md)
+a missing source nor invalid text, so no [Column derivation](columns.md)
 handler answers it. A complete source date is returned unchanged whatever its
 bounds say; the bounds never move a collected date. A specification that
 constrains collected dates states a verification under
-[Verification](execution/verification.md).
+[Verification](verification.md).
 
 <a id="time-10"></a>
 
@@ -349,12 +349,12 @@ Fails: `missing_input`, `invalid_date_text`, `invalid_datetime_text`.
 Evidence: `negative-impute-bad-source`, `negative-datetime-impute-bad-source`, `negative-datetime-precision-bad-source`.
 Replaces: REQ-0588.
 
-The stage is `impute` under [Local handlers](execution/handlers.md), where the
+The stage is `impute` under [Column derivation](columns.md), where the
 operations reading one source domain answer the same missing and invalid
 conditions. A `date_precision` or `datetime_precision` reading a value has only
 the missing source to answer. `invalid` fires only when the source is present
-([REQ-0347](execution/handlers.md#req-0347)). Omitting a handler makes its
-condition fatal ([REQ-0344](execution/handlers.md#req-0344)): a missing source
+([COLUMN-11](columns.md#column-11)). Omitting a handler makes its
+condition fatal ([COLUMN-10](columns.md#column-10)): a missing source
 fails with `missing_input`, and invalid text with `invalid_date_text` for the
 date operations or `invalid_datetime_text` for the datetime operations.
 
@@ -388,7 +388,7 @@ inputs must be datetimes; other input types, including dates, fail validation
 as `incompatible_input_type`, and missing either input returns missing. In
 `second` the exact signed whole-second difference is an `int`. In `minute`,
 `hour` or `day` it is a `float`, that difference divided by 60, 3600 or 86400
-under [Numeric computation](operations/computation.md), without rounding. There
+under [Formulas](formulas.md), without rounding. There
 is no timezone or daylight-saving adjustment.
 
 Fails: `incompatible_input_type`.
@@ -446,7 +446,7 @@ invoking `invalid`. A non-text source fails validation as
 Decimal components are combined exactly before conversion. In `second`, a
 whole-second duration returns an `int` and a fractional-second duration a
 `float`. In other units, the seconds are converted to binary64 and divided by
-60, 3600 or 86400 under [Numeric computation](operations/computation.md). Text
+60, 3600 or 86400 under [Formulas](formulas.md). Text
 outside the resulting numeric range is invalid: whole seconds must fit the
 signed integer range, and float results must be finite.
 

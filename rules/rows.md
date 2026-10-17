@@ -46,14 +46,14 @@ The intermediate's `columns` list, when present, limits the fields the row
 template may read; otherwise all stored and derived fields are visible. Its
 filter may read only its own donor fields and earlier derived names. Its
 derivations may also read the records other intermediates select for each
-donor under [REQ-1263](operations/lookup.md#req-1263). Neither its filter nor
+donor under [LOOKUP-16](lookup.md#lookup-16). Neither its filter nor
 its derivations may reference a current row. An ineligible intermediate fails
 as `invalid_intermediate_driver` at the row template's `dataset` field.
 
 An exposed derived field has a determinable type when it is one of:
 
 - `source`, which keeps its source type, including a read of another
-  intermediate's column under [REQ-1263](operations/lookup.md#req-1263);
+  intermediate's column under [LOOKUP-16](lookup.md#lookup-16);
 - a string, integer or float `literal`, which has that type;
 - `row_number` or `rank`, which is integer;
 - `str_case`, which is string.
@@ -97,7 +97,7 @@ Fails: `invalid_field_type`, `unknown_field`.
 Evidence: `schema-row-templates`, `schema-lifecycle`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::row_group_declarations_and_shared_scope_keep_authored_diagnostics`.
 Replaces: REQ-0037, REQ-0038, REQ-0065, REQ-0066.
 
-[Text values](values/text.md) defines equality for strings. Groups follow the
+[Values](values.md) defines equality for strings. Groups follow the
 position of their first driver record, and driver order is kept within each
 group. `FALSE` or `UNKNOWN` suppresses the candidate. A grouped `filter` thus
 filters after a group reduction, while an ungrouped `filter` gates each driver
@@ -122,8 +122,8 @@ Evidence: `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `
 Replaces: REQ-0047, REQ-0067.
 
 The aggregate reduces the group under
-[Expression evaluation](operations/expressions.md) and
-[Aggregation](operations/aggregation.md). A grouped row derivation reading a
+[Expressions](expressions.md) and
+[Formulas](formulas.md). A grouped row derivation reading a
 non-grouped source variable without an aggregate fails as
 `ungrouped_driver_field` and reports the variable.
 
@@ -174,7 +174,7 @@ Dynamically counted expansion happens upstream, and the expanded records enter
 the specification as ordinary input.
 
 The built rows must still match the `keys`: repeating a key combination fails
-at the output gate under [REQ-0240](storage/publication.md#req-0240). A
+at the output gate under [OUTPUT-3](output.md#output-3). A
 `filter` states which rows the artifact carries, never which input record
 represents a key combination. A row template that keeps one of several driver
 records with one key combination still writes one row per key combination; the

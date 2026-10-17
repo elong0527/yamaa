@@ -24,7 +24,7 @@ Evidence: `negative-source-unknown-format`, `schema-parquet`, `rust/crates/yamaa
 Replaces: REQ-0751, REQ-0830, REQ-0831, REQ-0832, REQ-0852.
 
 The extension selects the profile under
-[REQ-0716](storage/publication.md#req-0716); a study that stores `DM.CSV`
+[OUTPUT-5](output.md#output-5); a study that stores `DM.CSV`
 names the same container as one that stores `dm.csv`.
 
 | Extension | Profile | Container | Source-profile owner |
@@ -35,7 +35,7 @@ names the same container as one that stores `dm.csv`.
 | `.xpt` | `xpt` | SAS Transport v5/v8 (read-only) | [SAS source profiles](storage/sas.md) |
 
 A source profile follows the artifact profile: a file
-[Artifact publication](storage/publication.md) writes and these rules read has
+[Output](output.md) writes and these rules read has
 one profile name in both directions. The read-only SAS and Transport profiles
 of [REQ-1310](storage/sas.md#req-1310) are the exceptions; no artifact
 publication profile corresponds to them.
@@ -68,9 +68,9 @@ floating-point reduction.
 Evidence: `adam-adlb-ordered-sum`, `schema-source-ordinal`.
 Replaces: REQ-0514, REQ-0515, REQ-0538.
 
-The [Execution lifecycle](execution/lifecycle.md) uses the sequence as
+The [Column derivation](columns.md) uses the sequence as
 base-record and grouped-input order, [VALUE-23](values.md#value-23) uses it to
-break window ties, and [Aggregation](operations/aggregation.md) consumes it for
+break window ties, and [Formulas](formulas.md) consumes it for
 ordered floating-point reduction. No reader reorders records while reading,
 decoding, typing, filtering or assembling parallel batches.
 
@@ -125,7 +125,7 @@ An `ordinal` name equal to a stored field name fails validation with
 stored field to expose an ordinal. The check also applies to an empty input
 dataset and a producer-linked input dataset. An input dataset used by an `odm`
 expression must not declare `ordinal`: its exposed fields are the fixed schema
-of [REQ-1266](specification/binding.md#req-1266), and the declaration fails
+of [NAME-8](names.md#name-8), and the declaration fails
 validation with `odm_schema_field_type`.
 
 Fails: `ordinal_field_collision`, `odm_schema_field_type`.
@@ -222,8 +222,8 @@ The YAML 1.2 non-finite spellings of [VALUE-6](values.md#value-6) remain text
 when the field's type is `str`, and normalize to missing only after parsing as
 numbers. `unconvertible` is declared on a result wrapper and answers for a
 value a derivation produced, as the
-[Execution lifecycle](execution/lifecycle.md) and
-[Local handlers](execution/handlers.md) define. A specification that wants to
+[Column derivation](columns.md) and
+[Column derivation](columns.md) define. A specification that wants to
 see a value that does not match its declared type declares the field `str` and
 converts it at the consuming column, where a handler exists.
 
@@ -234,7 +234,7 @@ converts it at the consuming column, where a handler exists.
 ### INPUT-8. A missing value is recognized before typing, and no text spells it
 
 A missing value is the absence of a value. It is recognized before typing,
-every type admits it, and [Local handlers](execution/handlers.md) answer for
+every type admits it, and [Column derivation](columns.md) answer for
 it. In a delimited source, a field with no characters, bare or quoted, is
 missing whatever its declared type, never a parse failure, and no type admits
 an empty string from a delimited source. No text is a missing-value sentinel:

@@ -24,8 +24,8 @@ Each root field's schema description states its meaning.
 [Schema language](reference/schema-language.md) requires `schema_version` to
 match the bundle exactly, and [Inheritance](inheritance.md) resolves `parents`
 before validation and execution. `filter` and `rows` exclude each other under
-[Row construction](execution/rows.md). `columns` are declared in the
-dependency order [Execution lifecycle](execution/lifecycle.md) requires, and
+[Row construction](rows.md). `columns` are declared in the
+dependency order [Column derivation](columns.md) requires, and
 `output.columns` alone sets the artifact's column order
 ([OUTPUT-1](output.md#output-1)).
 
@@ -67,7 +67,7 @@ Evidence: `schema-structure`, `adam-adae-query-flags`, `negative-query-overflow`
 Replaces: REQ-0196, REQ-1043.
 
 Competing values for one family member fail under
-[Lookup and joins](operations/lookup.md). A shared position suffix groups
+[Lookup and joins](lookup.md). A shared position suffix groups
 family members by name but imposes no schema relationship; column `metadata`
 may declare that relationship. A column declares its `name`, `type`, `label`,
 `derivation`, `verifications`, `submission` and `metadata`; each field's
@@ -131,12 +131,12 @@ one of these:
 - a grouped `rows` filter;
 - a donor field of a `SELF` intermediate;
 - a match variable or `between` value of a named intermediate that a `rows`
-  derivation reads ([REQ-0126](operations/lookup.md#req-0126)).
+  derivation reads ([LOOKUP-2](lookup.md#lookup-2)).
 
 A read of a named intermediate backed by an input dataset, including a read
 through another row-local column, may be such a default. A column-level read
 of a `SELF` intermediate keeps its column-phase meaning under
-[REQ-0120](operations/lookup.md#req-0120). A default's own reads of
+[LOOKUP-7](lookup.md#lookup-7). A default's own reads of
 column-level columns make those derivations defaults too. A qualified field
 or a literal that only spells a column's name does not read that column. An
 inherited default is evaluated in the inheriting `rows` entry's scope, exactly
@@ -158,7 +158,7 @@ Evidence: `schema-structure`, `sdtm-relrec-links`.
 Replaces: REQ-0205, REQ-0206, REQ-0208, REQ-0209.
 
 Internal columns hold the working values of a multi-step derivation and do
-not change evaluation; [Execution lifecycle](execution/lifecycle.md) builds
+not change evaluation; [Column derivation](columns.md) builds
 the dependency graph. Column verifications may be declared on an internal
 column and run normally. Dataset verifications may reference an internal
 column; they then assert a property of the derivation rather than of the

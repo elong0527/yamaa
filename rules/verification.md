@@ -98,7 +98,7 @@ Replaces: REQ-0375.
 ### CHECK-6. `allowed_values` requires every present value to equal one listed value
 
 `allowed_values` requires every non-missing value to equal one listed value
-under its type's equality, including [Text values](values/text.md) for
+under its type's equality, including [Values](values.md) for
 strings.
 
 Fails: `allowed_values_failed`.
@@ -122,9 +122,9 @@ Replaces: REQ-0377.
 ### CHECK-8. `max_length` bounds a string column's values by their count of Unicode scalar values
 
 `max_length` requires every non-missing string to contain at most `max`
-[Text values](values/text.md) scalar values, and `max` is at least one. It is
+[Values](values.md) scalar values, and `max` is at least one. It is
 declared only on a `str` column: the text a number or a temporal value renders
-as is a property of [Types and conversion](values/types.md)'s rendering rather
+as is a property of [Values](values.md)'s rendering rather
 than of the value.
 
 Fails: `length_failed`, `invalid_declaration`.
@@ -143,7 +143,7 @@ less than one fails.
 ### CHECK-9. `matches` requires every present string to match its regular expression
 
 `matches` requires every non-missing string to match its regular expression.
-[Text operations](operations/text.md) owns the pattern's syntax, the engine
+[Text](text.md) owns the pattern's syntax, the engine
 that reads it, and whether a match must span the whole value.
 
 Fails: `matches_failed`.
@@ -217,7 +217,7 @@ Fails: `row_count_failed`.
 Evidence: `schema-row-count-fractions`, `schema-verification-log`.
 Replaces: REQ-0385, REQ-0387, REQ-1152.
 
-`filter` is a [Predicates](operations/predicates.md) predicate over one
+`filter` is a [Formulas](formulas.md) predicate over one
 constructed output row; `FALSE` and `UNKNOWN` do not count, as `filter` means
 everywhere else. An empty artifact has proportion zero. `group_by` determines
 the groups as [CHECK-14](#check-14) defines, and `when` selects groups to check
@@ -255,7 +255,7 @@ Fails: `row_count_failed`, `invalid_declaration`.
 Evidence: `negative-adlb-two-baselines`, `negative-count-unnamed`, `schema-row-count-fractions`.
 Replaces: REQ-0386, REQ-0388, REQ-0402, REQ-0403, REQ-1154.
 
-`row_count` counts constructed output rows. [Text values](values/text.md)
+`row_count` counts constructed output rows. [Values](values.md)
 defines equality for strings, and missing values group as
 [ROW-4](rows.md#row-4) partitions an input dataset. Exactly one baseline record
 for each subject and parameter is a `min` and a `max` of one over the rows
@@ -267,11 +267,11 @@ A subject, visit, or parameter absent from the artifact entirely forms no
 group, so no `min` here can discover it. The absent-group assertion belongs to
 the derivation, where the relation defining the expected groups is readable: a
 record lookup declaring `unmatched: fail` under
-[Lookup and joins](operations/lookup.md) rejects an expected group the data
+[Lookup and joins](lookup.md) rejects an expected group the data
 cannot supply. A planning relation at the required keys gives every expected
 group an input record under [ROW-7](rows.md#row-7).
 
-`when` is a [Predicates](operations/predicates.md) predicate over one
+`when` is a [Formulas](formulas.md) predicate over one
 constructed output row. `FALSE` and `UNKNOWN` do not bind, as `filter` admits
 only `TRUE` rows everywhere else. One conditional existence is at least one
 baseline record for each subject and parameter that carries a baseline value:
@@ -298,18 +298,18 @@ property at coarser keys or from an upstream specification.
 Evidence: `negative-pr-after-cr`.
 Replaces: REQ-0367, REQ-0368.
 
-- **The adjacent row.** `row_value` under [Windows](operations/windows.md)
+- **The adjacent row.** `row_value` under [Windows](windows.md)
   places another row's value on the row and `assert` compares the two. An
   assertion over the immediately preceding assessment rejects a partial
   response next to a complete one and passes the same fault with an assessment
   in between.
 - **A partition, or its history up to the current row.** A qualified aggregate
-  under [Aggregation](operations/aggregation.md) reduces a source relation. Its
+  under [Formulas](formulas.md) reduces a source relation. Its
   `between` narrowing keeps only the records at or before a current-row value,
   and a cumulative property of collected values thus reaches the row it must be
   asserted about.
 - **A derived property at coarser keys or upstream.** The specification that
-  derives it publishes it, and [Source ingestion](storage/ingestion.md)'s
+  derives it publishes it, and [Inputs](inputs.md)'s
   producing-specification link makes it an ordinary source field of the
   specification that asserts over it, the same split every other change of keys
   uses.
@@ -339,7 +339,7 @@ must assert the claim derives at the parent's keys.
 
 A specification declaring any warning must declare `output.warning_log`. Its
 path must differ from `output.path` and selects an
-[Artifact publication](storage/publication.md) profile by the same closed
+[Output](output.md) profile by the same closed
 extension mapping. The log is built only for a successful execution, after all
 verifications and before publication, and a successful run produces it even
 when no warning is violated; the empty case is a header-only dataset.
@@ -350,7 +350,7 @@ Replaces: REQ-0391, REQ-0396.
 
 Publication thus replaces a stale non-empty log from an earlier run. A
 warning-log build or serialization failure fails the run and prevents
-primary-artifact publication. [Artifact publication](storage/publication.md)
+primary-artifact publication. [Output](output.md)
 defines how a runner publishes the completed pair.
 
 <a id="check-18"></a>
@@ -358,7 +358,7 @@ defines how a runner publishes the completed pair.
 ### CHECK-18. The warning log has one row per violated warning declaration, in ten fixed columns
 
 The warning log is version 1.0 and has exactly the columns below, in this
-order and with these [Types and conversion](values/types.md) types. It has one
+order and with these [Values](values.md) types. It has one
 row per violated warning declaration, keyed by `SPEC_PATH`, in execution order:
 column declaration order first, then dataset-verification order.
 `FAILURE_COUNT` is positive, and `OFFENDING_KEYS` is the complete ordered
@@ -402,8 +402,8 @@ inside itself.
 
 The two JSON fields, `OFFENDING_KEYS` and `DETAILS`, are compact ASCII JSON:
 no insignificant whitespace, object names ordered by
-[Text values](values/text.md), `null`, `true`, and `false` in lower case,
-numbers in [Types and conversion](values/types.md)'s `str` form, and strings
+[Values](values.md), `null`, `true`, and `false` in lower case,
+numbers in [Values](values.md)'s `str` form, and strings
 escaped to ASCII by JSON's short escapes where one exists and lower-case `\\u`
 hexadecimal escapes otherwise.
 
@@ -423,18 +423,18 @@ sequence is `[]` and empty remaining context is `{}`.
 every verification the specification declares, held or violated, whatever its
 severity. A run that declares the field always produces the log, violations or
 not, for a failed run as well as a successful one. The log is diagnostic output
-rather than one of [Artifact publication](storage/publication.md)'s artifacts:
+rather than one of [Output](output.md)'s artifacts:
 a failed `error` verification still produces no accepted artifact.
 
 Evidence: `schema-verification-log`, `python/tests/installed/installed_public_contract.py::test_failed_verification_retains_owned_diagnostic_log`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`.
 Replaces: REQ-1173, REQ-1177, REQ-1179.
 
 A specification whose checks are all `error` may declare it, and one declaring
-warnings may omit it. [Artifact publication](storage/publication.md) selects
+warnings may omit it. [Output](output.md) selects
 its profile from its path by the same closed extension mapping and requires
 that path to differ from `output.path` and `output.warning_log`. A path that
 collides with either, or whose extension names no profile, fails validation
-under [REQ-1180](storage/publication.md#req-1180). Publication replaces a stale
+under [OUTPUT-9](output.md#output-9). Publication replaces a stale
 log from an earlier run.
 
 The log records a failure but does not make the run publishable, and
@@ -448,7 +448,7 @@ never reached has no row. The log states what was checked and nothing more.
 ### CHECK-21. The verification log has one row per declared check, in thirteen fixed columns
 
 The verification log is version 1.0 and has exactly the columns below, in this
-order and with these [Types and conversion](values/types.md) types. It has one
+order and with these [Values](values.md) types. It has one
 row for every declared check rather than one per violation, in execution order
 exactly as [CHECK-18](#check-18) orders the warning log. `SPEC_PATH` is
 its key and its join to the warning log. `EVALUATED_COUNT` and `FAILURE_COUNT`
