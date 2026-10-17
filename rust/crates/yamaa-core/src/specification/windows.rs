@@ -16,8 +16,10 @@ enum Kind {
         source: String,
         offset: i64,
     },
-    PreviousNonMissing(String),
-    Locf(String),
+    Locf {
+        source: String,
+        include_current: bool,
+    },
     BaselineFlag {
         date: String,
         reference_date: String,
@@ -125,8 +127,15 @@ impl Declaration {
                     offset,
                 }
             }
-            "previous_non_missing" => Kind::PreviousNonMissing(name("source")?),
-            "locf" => Kind::Locf(name("source")?),
+            "locf" => Kind::Locf {
+                source: name("source")?,
+                include_current: match d.field(payload, "include_current").map(|id| &d.nodes()[id])
+                {
+                    Some(N::Boolean(value)) => *value,
+                    None => true,
+                    _ => return Err(PrepareError::Internal),
+                },
+            },
             "baseline_flag" => Kind::BaselineFlag {
                 date: name("date")?,
                 reference_date: name("reference_date")?,
@@ -329,11 +338,12 @@ impl Declaration {
                 column: resolve(source, format!("{}.source", self.path))?,
                 offset: *offset,
             },
-            Kind::PreviousNonMissing(source) => WindowKind::PreviousNonMissing {
+            Kind::Locf {
+                source,
+                include_current,
+            } => WindowKind::Locf {
                 column: resolve(source, format!("{}.source", self.path))?,
-            },
-            Kind::Locf(source) => WindowKind::Locf {
-                column: resolve(source, format!("{}.source", self.path))?,
+                include_current: *include_current,
             },
             Kind::BaselineFlag {
                 date,

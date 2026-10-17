@@ -201,7 +201,6 @@ pub(super) fn admit<E>(
             }
         }
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. }
         | Expression::Imputation { operands, .. } => {

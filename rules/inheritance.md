@@ -158,8 +158,8 @@ Replaces: REQ-0630.
 
 A field the accumulated member does not carry is taken whole. Every list
 replaces: a column's `verifications`, a lookup or aggregate `key` in any form,
-and ordered arguments such as `str_concat.sources`, `order_by`,
-`first_available.sources` and the `cut` breaks and labels. Every leaf a
+and ordered arguments such as `order_by`, `first_available.sources` and the
+`cut` breaks and labels. Every leaf a
 `columns` patch writes validates normally; only requiredness is deferred, so a
 required leaf that no layer supplies fails on the resolved specification. A
 schema default is applied to the composed value, not to each contribution, so a

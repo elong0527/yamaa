@@ -533,10 +533,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     {
         return str_template::evaluate(operands, operation, table, candidate, plan, row, state);
     }
-    if matches!(
-        &assignment.expression,
-        Expression::Extreme { .. } | Expression::StrConcat { .. }
-    ) {
+    if matches!(&assignment.expression, Expression::Extreme { .. }) {
         return scalar::evaluate(assignment, table, candidate, plan, row, state);
     }
     if let Expression::StrExtract { source, operation } = &assignment.expression {
@@ -2030,7 +2027,6 @@ fn evaluate_leaf<T: TableAccess + ?Sized>(
         }
         Expression::Literal(value) => value.clone(),
         Expression::Extreme { .. }
-        | Expression::StrConcat { .. }
         | Expression::Flag(_)
         | Expression::Compute(_)
         | Expression::Aggregate(_)

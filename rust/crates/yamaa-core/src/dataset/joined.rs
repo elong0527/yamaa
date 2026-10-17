@@ -141,7 +141,6 @@ pub(super) fn validate_sources(
             }
         }
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. }
         | Expression::Imputation { operands, .. } => {

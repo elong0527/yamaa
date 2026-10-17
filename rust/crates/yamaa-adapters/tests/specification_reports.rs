@@ -1066,7 +1066,7 @@ mod execution {
             replay_source_selection_truth(
                 include_str!("fixtures/odm_deferred.json"),
                 "odm-deferred",
-                8,
+                7,
             );
         }
 
@@ -1418,7 +1418,7 @@ mod execution {
                 }
                 count += 1;
             }
-            assert_eq!(count, 21);
+            assert_eq!(count, 20);
         }
 
         #[test]

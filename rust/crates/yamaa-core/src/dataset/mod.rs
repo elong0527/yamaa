@@ -93,11 +93,6 @@ pub enum Expression {
         operands: Vec<Assignment>,
         largest: bool,
     },
-    StrConcat {
-        operands: Vec<Assignment>,
-        missing: Option<Value>,
-        path: String,
-    },
     StrTemplate {
         operands: Vec<Assignment>,
         operation: StringTemplate,
@@ -841,7 +836,7 @@ fn key_expression(expression: &Expression) -> bool {
                 | SelectionRead::Collect { .. } => true,
             })
         }
-        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
+        Expression::Extreme { operands, .. } => operands
             .iter()
             .all(|source| key_expression(&source.expression)),
         Expression::StrCase { source, .. }
@@ -979,7 +974,7 @@ fn current_record_read(
                 SelectionRead::Column(_) | SelectionRead::Collect { .. } => false,
             })
         }
-        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
+        Expression::Extreme { operands, .. } => operands
             .iter()
             .any(|source| current_record_read(&source.expression, intermediates, scope)),
         Expression::StrCase { source, .. }
@@ -1754,7 +1749,7 @@ fn validate_operand_assignment(
                 available[assignment.column] = false;
             }
         }
-        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => {
+        Expression::Extreme { operands, .. } => {
             for operand in operands {
                 if operand.column != assignment.column {
                     return Err(PlanError::InvalidColumns);

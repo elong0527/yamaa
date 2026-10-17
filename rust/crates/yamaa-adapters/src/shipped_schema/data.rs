@@ -806,14 +806,6 @@ expressions:
         - missing:
             type: literal_value
             description: Value returned when the source is missing (TEXT-11).
-    str_concat: # See REQ-1112.
-        - sources:
-            type: "list[expression]"
-            required: true
-            description: Expressions to concatenate in order (TEXT-1).
-        - missing:
-            type: literal_value
-            description: Value returned when any source is missing (TEXT-1).
     str_template: # See REQ-1113.
         type: [string_template, str_template_class]
         description: Portable string template, concise or with missing handling (TEXT-4).
@@ -889,19 +881,15 @@ expressions:
         - window:
             type: window_selection
             description: Partition, ordering and row selection for the window (WINDOW-7).
-    previous_non_missing: # See REQ-1126.
-        - source:
-            type: variable
-            required: true
-            description: Variable searched for the closest earlier non-missing value (WINDOW-8).
-        - window:
-            type: window_selection
-            description: Partition and ordering for the window (WINDOW-8).
     locf: # See REQ-1239.
         - source:
             type: variable
             required: true
             description: Completed observed variable to carry forward (WINDOW-8).
+        - include_current:
+            type: bool
+            default: true
+            description: Whether a present current source answers before earlier rows (WINDOW-8).
         - window:
             type: window_selection
             description: Partition, ordering and optional row selection (WINDOW-8).

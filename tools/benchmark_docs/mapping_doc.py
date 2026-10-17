@@ -818,21 +818,6 @@ def describe_str_replace(node, ctx=None, depth=0):
     return sentence(text + handler_phrase(node, "missing", "a missing source"))
 
 
-def describe_str_concat(node, ctx=None, depth=0):
-    parts = []
-    for part in node.get("sources") or []:
-        if isinstance(part, dict) and "literal" in part:
-            parts.append('"' + str(part["literal"]) + '"')
-        elif isinstance(part, dict) and "source" in part:
-            parts.append(describe_variable(part["source"], ctx, depth))
-        elif isinstance(part, dict):
-            parts.append(value_phrase(part, ctx, depth))
-        else:
-            parts.append(describe_variable(part, ctx, depth))
-    text = "Concatenate " + join_and(parts)
-    return sentence(text + handler_phrase(node, "missing", "a missing part"))
-
-
 def describe_str_template(node, ctx=None, depth=0):
     if isinstance(node, str):
         node = {"template": node}
@@ -884,19 +869,12 @@ def describe_row_value(node, ctx=None, depth=0):
     return sentence(with_window(text, node, ctx, depth))
 
 
-def describe_previous_non_missing(node, ctx=None, depth=0):
-    text = (
-        "Most recent non-missing "
-        + describe_variable(node.get("source"), ctx, depth)
-        + " from an earlier row"
-    )
-    return sentence(with_window(text, node, ctx, depth))
-
-
 def describe_locf(node, ctx=None, depth=0):
-    text = "Last observation carried forward from " + describe_variable(
-        node.get("source"), ctx, depth
-    )
+    source = describe_variable(node.get("source"), ctx, depth)
+    if node.get("include_current", True) is False:
+        text = "Most recent non-missing " + source + " from an earlier row"
+    else:
+        text = "Last observation carried forward from " + source
     return sentence(with_window(text, node, ctx, depth))
 
 
@@ -948,12 +926,10 @@ DERIVATION_DESCRIBERS = {
     "str_pad": describe_str_pad,
     "str_extract": describe_str_extract,
     "str_replace": describe_str_replace,
-    "str_concat": describe_str_concat,
     "str_template": describe_str_template,
     "row_number": describe_row_number,
     "rank": describe_rank,
     "row_value": describe_row_value,
-    "previous_non_missing": describe_previous_non_missing,
     "locf": describe_locf,
     "baseline_flag": describe_baseline_flag,
 }

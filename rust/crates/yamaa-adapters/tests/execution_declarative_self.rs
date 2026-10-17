@@ -2049,7 +2049,7 @@ columns:
             }
         }
         #[test]
-        fn nested_case_and_concat_windows_use_the_full_completed_context() {
+        fn nested_case_windows_use_the_full_completed_context() {
             let study = Study::new(
                 "I,G,O,V\n1,A,2,a2\n2,A,1,a1\n3,A,3,a3\n4,B,1,b1\n",
                 r#"schema_version: '1.0'
@@ -2065,16 +2065,16 @@ columns:
         - when: 'I > 1'
           then: {row_number: {window: {group_by: [SRC.G], order_by: [SRC.O]}}}
         - otherwise: {literal: -1}
-  - name: C
+  - name: P
     type: str
     derivation:
-      str_concat:
-        sources:
-          - {literal: 'prior='}
-          - case:
-              - when: 'I = 3'
-                then: {row_value: {source: SRC.V, offset: -1, window: {group_by: [SRC.G], order_by: [SRC.O]}}}
-              - otherwise: {literal: skip}
+      case:
+        - when: 'I = 3'
+          then: {row_value: {source: SRC.V, offset: -1, window: {group_by: [SRC.G], order_by: [SRC.O]}}}
+        - otherwise: {literal: skip}
+  - name: C
+    type: str
+    derivation: {str_template: 'prior={P}'}
 output: {path: out.csv, columns: [I, N, C]}
 "#,
             );

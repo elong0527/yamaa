@@ -504,7 +504,7 @@ mod project {
         }
 
         #[test]
-        fn concat_function_signature_is_admitted_before_any_table_access() {
+        fn nested_function_signature_is_admitted_before_any_table_access() {
             struct Untouched;
             impl TableAccess for Untouched {
                 type Error = Payload;
@@ -518,21 +518,23 @@ mod project {
                     panic!("signature admission must precede cell access")
                 }
             }
+            let integer =
+                |value: &str| Tree::Scalar(yamaa_core::schema::DocumentNode::Integer(value.into()));
             let spec = specification(vec![(
                 "VALUE",
-                "str",
+                "int",
                 Tree::map(vec![(
-                    "str_concat",
-                    Tree::map(vec![(
-                        "sources",
-                        Tree::List(vec![call(
-                            "id",
-                            vec![(
-                                "x",
-                                Tree::Scalar(yamaa_core::schema::DocumentNode::Integer("7".into())),
-                            )],
+                    "case",
+                    Tree::List(vec![
+                        Tree::map(vec![
+                            ("when", Tree::text("ID > 0")),
+                            ("then", call("id", vec![("x", integer("7"))])),
+                        ]),
+                        Tree::map(vec![(
+                            "otherwise",
+                            Tree::map(vec![("literal", integer("0"))]),
                         )]),
-                    )]),
+                    ]),
                 )]),
             )]);
             let checked = domain::check_with_project(&spec, &[function("id")]).unwrap();

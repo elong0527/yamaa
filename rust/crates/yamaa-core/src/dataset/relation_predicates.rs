@@ -216,7 +216,6 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
             }
         }
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. }
         | Expression::Imputation { operands, .. } => {

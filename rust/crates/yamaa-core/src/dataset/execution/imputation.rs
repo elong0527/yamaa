@@ -39,9 +39,7 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
         | Expression::StrReplace { source, .. }
         | Expression::MappingCut { source, .. }
         | Expression::Round { source, .. } => register(&source.expression, counter),
-        Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
-        | Expression::StrTemplate { operands, .. } => {
+        Expression::Extreme { operands, .. } | Expression::StrTemplate { operands, .. } => {
             for source in operands {
                 register(&source.expression, counter);
             }

@@ -64,15 +64,12 @@ columns:
         sources: [DM.COUNTRY, DM.SITECNTY]
         missing: UNKNOWN
 
-  # str_concat.sources nests expressions: literals sit beside sources.
+  # str_template writes literal text beside a braced variable reference.
   - name: SUBJLBL
     type: str
     label: Subject Label
     derivation:
-      str_concat:
-        sources:
-          - literal: "Subject "
-          - source: DM.SUBJID
+      str_template: "Subject {DM.SUBJID}"
 
   # Greatest returns the largest non-missing source, or missing when none
   # exist. The sources must be mutually comparable.

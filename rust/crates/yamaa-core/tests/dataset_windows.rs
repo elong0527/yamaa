@@ -1197,7 +1197,8 @@ mod execution {
             );
         }
 
-        /// Offsets include missing donors; previous/LOCF cross gaps while retaining every output position.
+        /// Offsets include missing donors; LOCF with or without the current row crosses gaps while
+        /// retaining every output position.
         #[test]
         fn value_windows_distinguish_neighbor_reads_previous_present_and_current_present() {
             use yamaa_core::dataset::WindowKind;
@@ -1235,11 +1236,17 @@ mod execution {
                     vec![None, None, Some(9), None, None],
                 ),
                 (
-                    WindowKind::PreviousNonMissing { column: 2 },
+                    WindowKind::Locf {
+                        column: 2,
+                        include_current: false,
+                    },
                     vec![None, Some(7), Some(7), Some(7), Some(9)],
                 ),
                 (
-                    WindowKind::Locf { column: 2 },
+                    WindowKind::Locf {
+                        column: 2,
+                        include_current: true,
+                    },
                     vec![Some(7), Some(7), Some(7), Some(9), Some(9)],
                 ),
             ] {
@@ -1350,8 +1357,14 @@ mod execution {
                     column: 2,
                     offset: 0,
                 },
-                WindowKind::Locf { column: 3 },
-                WindowKind::PreviousNonMissing { column: 99 },
+                WindowKind::Locf {
+                    column: 3,
+                    include_current: true,
+                },
+                WindowKind::Locf {
+                    column: 99,
+                    include_current: false,
+                },
             ] {
                 assert_eq!(
                     value_window_plan(&source, kind, None),
@@ -1395,7 +1408,11 @@ mod execution {
                     vec![Value::Int(2), Value::Missing, Value::Missing],
                 ],
             );
-            let result = value_window_plan(&source, WindowKind::Locf { column: 2 }, None)
+            let locf = WindowKind::Locf {
+                column: 2,
+                include_current: true,
+            };
+            let result = value_window_plan(&source, locf, None)
                 .unwrap()
                 .execute(
                     &source,
@@ -1420,7 +1437,7 @@ mod execution {
                     vec![Value::Int(2), Value::Missing, Value::Missing],
                 ],
             );
-            let plan = value_window_plan(&source, WindowKind::Locf { column: 2 }, None).unwrap();
+            let plan = value_window_plan(&source, locf, None).unwrap();
             assert_eq!(
                 plan.execute(
                     &source,
@@ -1436,9 +1453,9 @@ mod execution {
             );
         }
 
-        /// Previous-present selection crosses a long run of missing values.
+        /// Earlier-present selection, excluding the current row, crosses a long run of missing values.
         #[test]
-        fn previous_non_missing_crosses_long_gaps() {
+        fn locf_excluding_current_crosses_long_gaps() {
             use yamaa_core::dataset::WindowKind;
             let source = table(
                 &[
@@ -1460,17 +1477,23 @@ mod execution {
                     })
                     .collect(),
             );
-            let result =
-                value_window_plan(&source, WindowKind::PreviousNonMissing { column: 2 }, None)
-                    .unwrap()
-                    .execute(
-                        &source,
-                        &[],
-                        &mut yamaa_core::function_invocation::NoFunctions::new(),
-                        None,
-                    )
-                    .result
-                    .unwrap();
+            let result = value_window_plan(
+                &source,
+                WindowKind::Locf {
+                    column: 2,
+                    include_current: false,
+                },
+                None,
+            )
+            .unwrap()
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+            .result
+            .unwrap();
             assert_eq!(result.dataset.rows()[0][3], Value::Missing);
             assert!(result.dataset.rows()[1..]
                 .iter()

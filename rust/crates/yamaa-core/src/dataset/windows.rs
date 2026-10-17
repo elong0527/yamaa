@@ -5,10 +5,20 @@ pub enum WindowKind {
     RowNumber,
     Competition,
     Dense,
-    RowValue { column: usize, offset: i64 },
-    PreviousNonMissing { column: usize },
-    Locf { column: usize },
-    BaselineFlag { date: usize, reference_date: usize },
+    RowValue {
+        column: usize,
+        offset: i64,
+    },
+    /// The closest earlier present donor; the current row's own present value
+    /// answers first only when `include_current` is set.
+    Locf {
+        column: usize,
+        include_current: bool,
+    },
+    BaselineFlag {
+        date: usize,
+        reference_date: usize,
+    },
 }
 
 /// Null placement is independent of direction; construction order breaks remaining ties.
@@ -51,9 +61,7 @@ impl Window {
             return Err(PlanError::InvalidWindow);
         }
         let source = match self.kind {
-            WindowKind::RowValue { column, .. }
-            | WindowKind::PreviousNonMissing { column }
-            | WindowKind::Locf { column } => Some(column),
+            WindowKind::RowValue { column, .. } | WindowKind::Locf { column, .. } => Some(column),
             _ => None,
         };
         if source.is_some_and(|column| !available.get(column).copied().unwrap_or(false)) {

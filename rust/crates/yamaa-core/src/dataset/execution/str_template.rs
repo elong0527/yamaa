@@ -23,7 +23,6 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
             }
         }
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::Imputation { operands, .. }
         | Expression::Temporal { operands, .. } => {
             for operand in operands {

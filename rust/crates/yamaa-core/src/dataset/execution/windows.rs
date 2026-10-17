@@ -236,11 +236,14 @@ impl Run {
                         }
                     }
                 }
-                WindowKind::PreviousNonMissing { column } | WindowKind::Locf { column } => {
+                WindowKind::Locf {
+                    column,
+                    include_current,
+                } => {
                     let mut previous = None;
                     for &member in &members {
                         let present = !matches!(candidates[member].values[column], Value::Missing);
-                        let donor = if present && matches!(window.kind, WindowKind::Locf { .. }) {
+                        let donor = if present && include_current {
                             Some(member)
                         } else {
                             previous

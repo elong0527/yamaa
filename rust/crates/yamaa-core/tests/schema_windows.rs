@@ -351,14 +351,7 @@ mod schema {
             use yamaa_core::json::Value as JsonValue;
             use yamaa_core::{diagnostic::ConditionCode, specification::PreflightFinding};
 
-            for operation in [
-                "row_number",
-                "rank",
-                "row_value",
-                "previous_non_missing",
-                "locf",
-                "baseline_flag",
-            ] {
+            for operation in ["row_number", "rank", "row_value", "locf", "baseline_flag"] {
                 for variable in ["SRC.ID", "ID"] {
                     let mut fields = vec![(
                         "window",
@@ -369,9 +362,7 @@ mod schema {
                             fields.push(("source", Tree::text(variable)));
                             fields.push(("offset", Tree::Scalar(N::Integer("-1".into()))));
                         }
-                        "previous_non_missing" | "locf" => {
-                            fields.push(("source", Tree::text(variable)))
-                        }
+                        "locf" => fields.push(("source", Tree::text(variable))),
                         "baseline_flag" => {
                             fields.push(("date", Tree::text(variable)));
                             fields.push(("reference_date", Tree::text(variable)));
@@ -408,13 +399,6 @@ mod schema {
                                 ]),
                             )]),
                             format!(".case[1].otherwise.{operation}"),
-                        ),
-                        (
-                            Tree::map(vec![(
-                                "str_concat",
-                                Tree::map(vec![("sources", Tree::List(vec![window.clone()]))]),
-                            )]),
-                            format!(".str_concat.sources[0].{operation}"),
                         ),
                     ] {
                         let document = operation_document(
@@ -1316,65 +1300,42 @@ mod schema {
                     ("keep", Tree::text("first")),
                 ],
             ] {
-                for concat in [false, true] {
-                    let mut fields = fields.clone();
-                    let absent_handler = fields.iter().any(|(name, _)| *name == "absent");
-                    fields.insert(0, ("variable", Tree::text("SRC.ID")));
-                    let value = Tree::map(vec![("source", Tree::map(fields))]);
-                    let (operation, payload, path) = if concat {
-                        (
-                            "str_concat",
-                            Tree::map(vec![("sources", Tree::List(vec![value]))]),
-                            "columns.VALUE.derivation.str_concat.sources[0].source",
-                        )
-                    } else {
-                        (
-                            "case",
-                            Tree::List(vec![
-                                Tree::map(vec![("when", Tree::text("ID = 1")), ("then", value)]),
-                                Tree::map(vec![(
-                                    "otherwise",
-                                    Tree::map(vec![(
-                                        "literal",
-                                        Tree::Scalar(N::Integer("0".into())),
-                                    )]),
-                                )]),
-                            ]),
-                            "columns.VALUE.derivation.case[0].then.source",
-                        )
-                    };
-                    let document = operation_document(operation, payload, "input.csv");
-                    let prepared = PreparedSpecification::prepare(&document).unwrap();
-                    let plan = prepared.bind(&source()).unwrap();
-                    let expression = if let Expression::StrConcat { operands, .. } =
-                        &plan.columns()[0].expression
-                    {
-                        &operands[0].expression
-                    } else if let Expression::Case(branches) = &plan.columns()[0].expression {
-                        &branches[0].assignment.expression
-                    } else {
-                        panic!("nested source operation")
-                    };
-                    let Expression::SourceBinding {
-                        source,
-                        absent,
-                        variable_absent,
-                        path: bound_path,
-                        ..
-                    } = expression
-                    else {
-                        panic!("source options lost")
-                    };
-                    assert_eq!(bound_path, path);
-                    assert!(!variable_absent);
-                    if absent_handler {
-                        assert_eq!(absent, &Some(Value::Int(7)));
-                    } else {
-                        assert_eq!(absent, &None);
-                        assert!(
-                            matches!(&source.expression, Expression::Collect { selection: Some(selection), .. } if selection.keep == yamaa_core::dataset::Keep::First && selection.order_by.len()==1)
-                        );
-                    }
+                let mut fields = fields.clone();
+                let absent_handler = fields.iter().any(|(name, _)| *name == "absent");
+                fields.insert(0, ("variable", Tree::text("SRC.ID")));
+                let value = Tree::map(vec![("source", Tree::map(fields))]);
+                let payload = Tree::List(vec![
+                    Tree::map(vec![("when", Tree::text("ID = 1")), ("then", value)]),
+                    Tree::map(vec![(
+                        "otherwise",
+                        Tree::map(vec![("literal", Tree::Scalar(N::Integer("0".into())))]),
+                    )]),
+                ]);
+                let document = operation_document("case", payload, "input.csv");
+                let prepared = PreparedSpecification::prepare(&document).unwrap();
+                let plan = prepared.bind(&source()).unwrap();
+                let Expression::Case(branches) = &plan.columns()[0].expression else {
+                    panic!("nested source operation")
+                };
+                let Expression::SourceBinding {
+                    source,
+                    absent,
+                    variable_absent,
+                    path: bound_path,
+                    ..
+                } = &branches[0].assignment.expression
+                else {
+                    panic!("source options lost")
+                };
+                assert_eq!(bound_path, "columns.VALUE.derivation.case[0].then.source");
+                assert!(!variable_absent);
+                if absent_handler {
+                    assert_eq!(absent, &Some(Value::Int(7)));
+                } else {
+                    assert_eq!(absent, &None);
+                    assert!(
+                        matches!(&source.expression, Expression::Collect { selection: Some(selection), .. } if selection.keep == yamaa_core::dataset::Keep::First && selection.order_by.len()==1)
+                    );
                 }
             }
         }

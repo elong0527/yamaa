@@ -43,19 +43,15 @@ expressions:
         - window:
             type: window_selection
             description: Partition, ordering and row selection for the window (WINDOW-7).
-    previous_non_missing: # See REQ-1126.
-        - source:
-            type: variable
-            required: true
-            description: Variable searched for the closest earlier non-missing value (WINDOW-8).
-        - window:
-            type: window_selection
-            description: Partition and ordering for the window (WINDOW-8).
     locf: # See REQ-1239.
         - source:
             type: variable
             required: true
             description: Completed observed variable to carry forward (WINDOW-8).
+        - include_current:
+            type: bool
+            default: true
+            description: Whether a present current source answers before earlier rows (WINDOW-8).
         - window:
             type: window_selection
             description: Partition, ordering and optional row selection (WINDOW-8).

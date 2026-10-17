@@ -27,8 +27,9 @@ severity:
 - name: SEVPREV
   type: int
   derivation:
-    previous_non_missing:
+    locf:
       source: VS.SEVAL
+      include_current: false
       window:
         group_by: [STUDYID, USUBJID]
         order_by: [VSSEQ]

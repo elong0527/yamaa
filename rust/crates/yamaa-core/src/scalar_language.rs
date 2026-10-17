@@ -1,4 +1,4 @@
-//! Raw scalar extremes and concatenation validation, before output conversion.
+//! Raw scalar extremes and their declared-type validation, before output conversion.
 use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode, Diagnostic},
@@ -25,50 +25,6 @@ pub fn replace_extreme(
             Ordering::Less
         })
 }
-pub fn concat_diagnostic(path: &str, index: usize, value: &Value) -> Option<Diagnostic> {
-    if matches!(value, Value::Str(_)) {
-        return None;
-    }
-    let source = format!("sources[{index}]");
-    let (code, site, context) = match value {
-        Value::Str(_) => return None,
-        Value::Missing => (
-            ConditionCode::StrCaseMissing,
-            String::from(path),
-            vec![("variable", JsonValue::String(source))],
-        ),
-        other => {
-            let actual = match other {
-                Value::Int(_) => "int",
-                Value::Float(_) => "float",
-                Value::Bool(_) => "bool",
-                Value::Date(_) => "date",
-                Value::DateTime(_) => "datetime",
-                _ => unreachable!(),
-            };
-            (
-                ConditionCode::StrCaseInput,
-                format!("{path}.{source}"),
-                vec![
-                    ("source", JsonValue::String(source)),
-                    ("expected", JsonValue::String("str".into())),
-                    ("actual", JsonValue::String(actual.into())),
-                ],
-            )
-        }
-    };
-    Some(Diagnostic {
-        code,
-        spec_paths: vec![site],
-        context: context
-            .into_iter()
-            .map(|(key, value)| (key.into(), value))
-            .collect(),
-        source_span: None,
-        operand_route: None,
-    })
-}
-
 fn kind_name(kind: ColumnType) -> &'static str {
     match kind {
         ColumnType::Str => "str",

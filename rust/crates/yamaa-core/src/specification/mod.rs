@@ -1179,14 +1179,11 @@ fn prepare_column_declarations(
                 )?;
                 Some(Operation::FirstAvailable(std::boxed::Box::new(selection)))
             }
-            "row_number"
-            | "rank"
-            | "row_value"
-            | "previous_non_missing"
-            | "locf"
-            | "baseline_flag" => Some(Operation::Window(std::boxed::Box::new(
-                windows::Declaration::prepare(d, payload, op, &path)?,
-            ))),
+            "row_number" | "rank" | "row_value" | "locf" | "baseline_flag" => {
+                Some(Operation::Window(std::boxed::Box::new(
+                    windows::Declaration::prepare(d, payload, op, &path)?,
+                )))
+            }
             _ => match derivations::prepare_value_with_driver(
                 d,
                 field(d, derivation, "value")?,
@@ -1964,12 +1961,10 @@ impl PreparedSpecification {
                     operation,
                     column,
                     catalog,
-                    source,
                     secondary,
                     intermediates,
                     &mut edges,
                     findings,
-                    declarations_reported,
                 )?,
                 Operation::StrExtract(operation) => str_extract::bind(
                     operation,
