@@ -139,6 +139,8 @@ def _load_definition():
     if node is None:
         raise ValueError("bindings.yaml is empty")
     definition = _plain(node)
+    if not isinstance(definition, dict):
+        raise ValueError("bindings.yaml top level must be a mapping")
     unknown = set(definition) - _TOP_LEVEL_KEYS
     if unknown:
         raise ValueError(f"unknown top-level keys in bindings.yaml: {sorted(unknown)}")
@@ -162,9 +164,14 @@ def _load_definition():
 
 
 def _resolve_records_import(definition):
-    records = definition["imports"].get("records")
+    imports = definition.get("imports")
+    if not isinstance(imports, dict):
+        raise ValueError("bindings.yaml imports must be a mapping")
+    records = imports.get("records")
     if records is None:
         raise ValueError("bindings.yaml is missing the records import")
+    if not isinstance(records, dict):
+        raise ValueError("the records import must be a mapping")
     if records.get("crate") != "yamaa-adapters":
         raise ValueError("the records import must name the yamaa-adapters crate")
     roles = records.get("roles")
@@ -182,18 +189,39 @@ def _resolve_records_import(definition):
                 f"records role {role} does not resolve to {symbol} "
                 "in yamaa_adapters::diagnostic_record"
             )
-    if definition["handshake"].get("version") != "records.boundary_version":
+    handshake = definition.get("handshake")
+    if not isinstance(handshake, dict):
+        raise ValueError("bindings.yaml handshake must be a mapping")
+    if handshake.get("version") != "records.boundary_version":
         raise ValueError("handshake version must be records.boundary_version")
 
 
+def _validate_args(owner, args):
+    if args is None:
+        return
+    if not isinstance(args, dict) or not all(
+        isinstance(spec, str) for spec in args.values()
+    ):
+        raise ValueError(f"args for {owner} must map argument names to type text")
+
+
 def _validate_python(definition):
-    python = definition["python"]
+    python = definition.get("python")
+    if not isinstance(python, dict):
+        raise ValueError("bindings.yaml python section must be a mapping")
     if python.get("module") != "yamaa._native":
         raise ValueError(f"unexpected Python module: {python.get('module')!r}")
     if python.get("registration") != "rust/crates/yamaa-python/src/lib.rs":
         raise ValueError("unexpected Python registration path")
+    if "issue_projection" in python and not isinstance(python["issue_projection"], str):
+        raise ValueError("bindings.yaml python.issue_projection must be type text")
+    exports = python.get("exports")
+    if not isinstance(exports, list):
+        raise ValueError("bindings.yaml python.exports must be a list")
     names = []
-    for export in python["exports"]:
+    for export in exports:
+        if not isinstance(export, dict):
+            raise ValueError(f"invalid Python export: {export!r}")
         kind = export.get("kind")
         if kind not in ("constant", "class", "exception", "function"):
             raise ValueError(f"unsupported Python export kind: {kind!r}")
@@ -206,9 +234,34 @@ def _validate_python(definition):
             _NAME.fullmatch(part) for part in rust.split("::")
         ):
             raise ValueError(f"invalid Rust path for {name}: {rust!r}")
+        if kind == "constant" and not isinstance(export.get("type"), str):
+            raise ValueError(f"Python constant {name} must declare type text")
+        if kind == "function":
+            if not isinstance(export.get("returns"), str):
+                raise ValueError(f"Python function {name} must declare return text")
+            _validate_args(f"Python function {name}", export.get("args"))
         if kind == "class":
-            methods = [method.get("name") for method in export.get("methods", [])]
-            if len(methods) != len(set(methods)):
+            methods = export.get("methods", [])
+            if not isinstance(methods, list):
+                raise ValueError(f"methods of Python class {name} must be a list")
+            method_names = []
+            for method in methods:
+                if not isinstance(method, dict):
+                    raise ValueError(
+                        f"invalid method on Python class {name}: {method!r}"
+                    )
+                method_name = method.get("name")
+                if not isinstance(method_name, str) or not _NAME.fullmatch(method_name):
+                    raise ValueError(
+                        f"invalid method name on Python class {name}: {method_name!r}"
+                    )
+                if not isinstance(method.get("returns"), str):
+                    raise ValueError(
+                        f"method {name}.{method_name} must declare return text"
+                    )
+                _validate_args(f"method {name}.{method_name}", method.get("args"))
+                method_names.append(method_name)
+            if len(method_names) != len(set(method_names)):
                 raise ValueError(f"duplicate methods on Python class {name}")
         if kind == "exception" and export.get("base") != "Exception":
             raise ValueError(f"Python exception {name} must derive from Exception")
@@ -224,12 +277,33 @@ def _validate_operations(definition):
         if export["kind"] == "class"
     }
     exports = {export["name"] for export in python["exports"]}
-    r_functions = {
-        function["name"]
-        for group in definition["r"]["groups"]
-        for function in group["functions"]
-    }
-    for operation, hosts in definition["operations"].items():
+    r_section = definition.get("r")
+    if not isinstance(r_section, dict) or not isinstance(r_section.get("groups"), list):
+        raise ValueError("bindings.yaml r.groups must be a list")
+    r_functions = set()
+    for group in r_section["groups"]:
+        if not isinstance(group, dict) or not isinstance(group.get("functions"), list):
+            raise ValueError("bindings.yaml r groups must list their functions")
+        for function in group["functions"]:
+            if not isinstance(function, dict) or not isinstance(
+                function.get("name"), str
+            ):
+                raise ValueError(f"invalid R function entry: {function!r}")
+            r_functions.add(function["name"])
+    operations = definition.get("operations")
+    if not isinstance(operations, dict):
+        raise ValueError("bindings.yaml operations must be a mapping")
+    for operation, hosts in operations.items():
+        if not isinstance(hosts, dict):
+            raise ValueError(f"operation {operation} must map hosts to references")
+        for host in ("python", "r"):
+            references = hosts.get(host, [])
+            if not isinstance(references, list) or not all(
+                isinstance(reference, str) for reference in references
+            ):
+                raise ValueError(
+                    f"operation {operation} {host} references must be text"
+                )
         for reference in hosts.get("python", []):
             if "." in reference:
                 owner, _, member = reference.partition(".")
