@@ -90,13 +90,10 @@ def test_every_sdtm_and_adam_benchmark_has_its_prompts_with_the_evaluation():
     positive = sorted(
         p.name for p in benchmarks.iterdir() if p.name.startswith(("sdtm-", "adam-"))
     )
-    # Every sdtm-/adam- benchmark has its prompts; prompt directories may
-    # also cover other benchmark prefixes (e.g. bimo-), but each must name
-    # a real benchmark. The allowed prefixes stay explicit so a future
-    # negative-* benchmark with a prompt directory fails loudly instead
-    # of slipping through.
-    prompted_prefixes = ("sdtm-", "adam-", "bimo-", "ars-")
-    assert all(name.startswith(prompted_prefixes) for name in PROMPTED)
+    # Every sdtm-/adam- benchmark has its prompts, and only those do, so a
+    # schema-* or negative-* benchmark with a prompt directory fails loudly
+    # instead of slipping through.
+    assert all(name.startswith(("sdtm-", "adam-")) for name in PROMPTED)
     assert set(positive) <= set(PROMPTED)
     assert set(PROMPTED) <= {p.name for p in benchmarks.iterdir() if p.is_dir()}
     assert not list(benchmarks.glob("*/prompt.md"))

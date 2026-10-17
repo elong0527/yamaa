@@ -1,4 +1,4 @@
-# Reference solution for the yamaa benchmark bimo-clinsite-site-level (Python track).
+# Reference solution for the yamaa benchmark adam-clinsite-site-level (Python track).
 #
 # Written from the benchmark's full prompt and its inputs alone, as an agent
 # would write it. Harbor's oracle agent runs it to check that the prompt can
