@@ -67,12 +67,17 @@ handles. `arrow_stream_capsule` is the named `arrow_array_stream` PyCapsule.
 
 The `python` and `r` sections inventory the complete current registration lists,
 including class methods, private qualification accessors, exceptions, version
-metadata, R scalar helpers and resolved-artifact readers. `issue_projection`
-describes the existing five-field tuple; `r_reply` describes the existing
-`{value, error}` list and `r_scalar_reply` its `{tag, payload, error}` variant.
-These are migration inputs, not the new public record schemas. R result payloads
-continue to be converted by their existing implementations. The definition does
-not treat a Rust `Result`, `Vec`, `String`, enum or trait as a C-layout type.
+metadata, R scalar helpers and resolved-artifact readers. `issue_record`
+describes the private native issue row both public Python views are projected
+from: the five frame fields (context as canonical JSON text), the structured
+context tree as a `context_object` (a `dict[str, object]` of owned values:
+text, booleans, exact integers, floats, `None`, lists and nested objects), then
+the optional source span and operand route, `None` when unrecorded and never a
+zero default. The stub declares it once as the `_IssueRecord` alias. The R
+frame and record builders convert the same facade report natively. `r_reply`
+describes the existing `{value, error}` list and `r_scalar_reply` its
+`{tag, payload, error}` variant. The definition does not treat a Rust
+`Result`, `Vec`, `String`, enum or trait as a C-layout type.
 
 `operations` maps equivalent semantic operations despite different calling
 conventions. Python's optional resolver corresponds to R's separate resolved
@@ -181,10 +186,11 @@ deduplicates, caps or reconstructs findings from message strings. Context and
 record values own their text, arrays, objects and exact numbers. Integers wider
 than a host's ordinary numeric type retain their numeric identity through the
 record owner's exact representation; R binary64 must never silently narrow
-them. Missing values remain distinct from zero and empty text. The old issue
-DataFrames are presentation projections until the record migration in
-[#2675](https://github.com/elong0527/yamaa/issues/2675) and
-[#2676](https://github.com/elong0527/yamaa/issues/2676).
+them (R carries such integers as character tokens, Python as `int`). Missing
+values remain distinct from zero and empty text. The host issue data frames
+are presentation projections of the named diagnostic records, built from the
+same record in each host ([#2675](https://github.com/elong0527/yamaa/issues/2675),
+[#2676](https://github.com/elong0527/yamaa/issues/2676)).
 
 Semantic failures are imported diagnostic/result records, including failed
 builds with retained evidence. Invalid arguments, expired/wrong-kind handles,

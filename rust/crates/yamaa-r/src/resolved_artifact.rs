@@ -39,12 +39,14 @@ fn resolve_specification_file(specification: Raw, environment: Robj) -> List {
         match engine.resolve_specification(&request) {
             Ok(artifact) => Ok(list!(
                 json = artifact.to_json().map_err(|error| error.to_string())?,
-                issues = NULL
+                issues = NULL,
+                diagnostics = NULL
             )
             .into_robj()),
             Err(yamaa::Error::Rejected(report)) => Ok(list!(
                 json = NULL,
-                issues = crate::issue_frame::frame(&report.diagnostics)?
+                issues = crate::issue_frame::frame(&report.diagnostics)?,
+                diagnostics = crate::diagnostic_records::records(&report.diagnostics)?
             )
             .into_robj()),
             Err(error) => Err(error.to_string()),

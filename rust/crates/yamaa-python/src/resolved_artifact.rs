@@ -2,7 +2,7 @@
 use pyo3::prelude::*;
 use yamaa::{Engine, EngineOptions, HostLanguage, Request};
 
-type Reply = (Option<String>, Vec<crate::report_fields::IssueRow>);
+type Reply<'py> = (Option<String>, Vec<crate::report_fields::IssueRow<'py>>);
 
 fn engine(py: Python<'_>) -> Engine {
     Engine::new(EngineOptions::new(
@@ -14,11 +14,11 @@ fn engine(py: Python<'_>) -> Engine {
 
 #[pyfunction]
 #[pyo3(signature=(specification, environment=None))]
-pub fn _resolve_specification_file(
-    py: Python<'_>,
+pub fn _resolve_specification_file<'py>(
+    py: Python<'py>,
     specification: &str,
     environment: Option<&str>,
-) -> PyResult<Reply> {
+) -> PyResult<Reply<'py>> {
     let mut request = Request::new(specification);
     if let Some(environment) = environment {
         request = request.with_environment(environment);
@@ -32,9 +32,10 @@ pub fn _resolve_specification_file(
             ),
             Vec::new(),
         )),
-        Err(yamaa::Error::Rejected(report)) => {
-            Ok((None, crate::report_fields::issue_rows(&report.diagnostics)))
-        }
+        Err(yamaa::Error::Rejected(report)) => Ok((
+            None,
+            crate::report_fields::issue_rows(py, &report.diagnostics)?,
+        )),
         Err(error) => Err(pyo3::exceptions::PyValueError::new_err(error.to_string())),
     }
 }

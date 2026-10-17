@@ -85,6 +85,17 @@ fn define_issues(handle: Robj) -> List {
         }
     })
 }
+/// Named records from the same retained report as `define_issues`.
+#[extendr]
+fn define_diagnostics(handle: Robj) -> List {
+    boundary(|| {
+        let state = resolve(&handle)?;
+        let state = state
+            .try_borrow()
+            .map_err(|_| "Define result already borrowed")?;
+        crate::diagnostic_records::records(&state.report().diagnostics)
+    })
+}
 #[extendr]
 fn define_artifacts(handle: Robj) -> List {
     boundary(|| {

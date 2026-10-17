@@ -118,15 +118,11 @@ impl Domain {
             .output()
             .map(crate::arrow_bridge::ArrowTable::from))
     }
-    fn issues(&self) -> PyResult<Vec<crate::report_fields::IssueRow>> {
-        Ok(crate::report_fields::issue_rows(
-            &self
-                .inner
-                .try_lock()
-                .map_err(|_| poisoned())?
-                .report()
-                .diagnostics,
-        ))
+    /// One native row per diagnostic; the facade projects the issues frame
+    /// and the named records from these same rows.
+    fn issues<'py>(&self, py: Python<'py>) -> PyResult<Vec<crate::report_fields::IssueRow<'py>>> {
+        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
+        crate::report_fields::issue_rows(py, &guard.report().diagnostics)
     }
     fn log(&self, warning: bool) -> PyResult<Option<crate::arrow_bridge::ArrowTable>> {
         Ok(self
@@ -248,17 +244,17 @@ pub fn _domain_file(
 }
 #[pyfunction]
 #[pyo3(signature=(specification,environment=None,resolver=None))]
-pub fn _check_file(
-    py: Python<'_>,
+pub fn _check_file<'py>(
+    py: Python<'py>,
     specification: &str,
     environment: Option<&str>,
     resolver: Option<Py<PyAny>>,
-) -> Vec<crate::report_fields::IssueRow> {
+) -> PyResult<Vec<crate::report_fields::IssueRow<'py>>> {
     let mut request = Request::new(specification);
     if let Some(environment) = environment {
         request = request.with_environment(environment);
     }
     let token = CancellationToken::new();
     let report = engine(py, resolver).check(&request, &token);
-    crate::report_fields::issue_rows(&report.diagnostics)
+    crate::report_fields::issue_rows(py, &report.diagnostics)
 }
