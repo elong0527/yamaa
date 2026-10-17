@@ -1,73 +1,81 @@
 # Dates and times
 
 These operations compute with the `date` and `datetime` values of
-[VALUE-13](values.md#value-13): calendar differences and study days,
-completion of partial dates and times, collected precision, and civil
-arithmetic with fixed-length durations.
+[VALUE-13](values.md#value-13): differences and study days, completion of
+collected dates and times, collected precision and imputation flags, and
+civil arithmetic with fixed-length durations.
 
 ## Operations
 
 <a id="time-1"></a>
 
-### TIME-1. Each temporal operation has fixed input and result types, and a date operation rejects a datetime
+### TIME-1. Each temporal operation has fixed input and result types, and a type-dispatched one declares its type
 
 The temporal operations take and return the types below, under the input
-contracts of these rules; [Expressions](expressions.md)
-registers, orders and nests them. A temporal value never enters `compute`
-arithmetic. A `datetime` given to a date operation other than `to_date`,
-including as a `date_precision` value source, fails rather than widening the
-operation, and so does any other violation of these input contracts or of the
-temporal values.
+contracts of these rules; [Expressions](expressions.md) registers, orders and
+nests them. `diff`, `shift`, `impute` and `precision` declare a `type`, `date`
+or `datetime`, that fixes their input and result types; it is never inferred
+from data. A field the declared type requires must be present, and one it does
+not take must be absent. An input of another type fails rather than
+converting, and a temporal value never enters `compute` arithmetic.
 
-Fails: `incompatible_input_type`.
-Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negative-epoch-day-non-date`.
+Fails: `incompatible_input_type`, `missing_required_field`, `unknown_field`.
+Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negative-epoch-day-non-date`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs::temporal_reached`.
 Replaces: REQ-0309, REQ-0337, REQ-0590, REQ-0591, REQ-0606, REQ-0611.
 
 | Operation | Inputs | Result |
 |---|---|---|
-| `date_diff` | `start` and `end` are `date` | `int` |
+| `diff`, `type: date` | `start` and `end` are `date`; a calendar `unit` | `int` |
+| `diff`, `type: datetime` | `start` and `end` are `datetime`; an elapsed `unit` | `int` seconds or `float` minutes, hours or days |
 | `study_day` | `date` and `reference` are `date` | `int`, never zero |
-| `date_impute` | inputs in [TIME-7](#time-7) to [TIME-10](#time-10) | `date` |
-| `date_precision` | `source` is `str` or `date` | `str` |
-| `datetime_impute` | `source` is date or datetime text in a [TIME-11](#time-11) form, or `datetime`; `time` is `first` or `last` | `datetime` |
-| `datetime_precision` | `source` is date or datetime text in a [TIME-11](#time-11) form, or `datetime` | `str` |
-| `to_date` | `source` is `datetime`, ISO 8601 date text, or ISO 8601 datetime text | `date` with collected precision `day` |
+| `impute`, `type: date` | `source` is collected date text or a `date`; `not_before`, `not_after` and `fallback` are `date` | `date` |
+| `impute`, `type: datetime` | `source` is collected date text or a `datetime`; `not_before`, `not_after` and `fallback` are `datetime` | `datetime` |
+| `precision` | `source` is collected date text or a value of the declared type | `str` |
+| `imputation_flag` | `source` is a `date` or a `datetime`, and a `datetime` with `part: time` | `str` |
+| `to_date` | `source` is a `datetime` or collected date text | `date` |
 | `to_epoch_day` | `source` is `date` | `int` days since 1970-01-01 |
-| `date_shift` | `source` is `date`; `days` is `int` | `date` |
-| `datetime_diff` | `start` and `end` are `datetime`; declared elapsed unit | `int` seconds or `float` minutes, hours or days |
-| `datetime_shift` | `source` is `datetime`; numeric `amount`; declared elapsed unit | `datetime` |
-| `duration_value` | `source` is duration text; declared elapsed unit | `int` whole seconds or `float` |
+| `shift`, `type: date` | `source` is `date`; `days` is `int` | `date` |
+| `shift`, `type: datetime` | `source` is `datetime`; a numeric `amount` and an elapsed `unit` | `datetime` |
+| `duration_value` | `source` is duration text; an elapsed `unit` | `int` whole seconds or `float` |
 
+Collected date text is defined by [TIME-7](#time-7), and
 [VALUE-13](values.md#value-13) to [VALUE-21](values.md#value-21) define the
-values themselves. `date_diff`, `study_day`, `date_impute` and
-`date_precision` are date operations; a `datetime` operand to one of them is an
-error rather than a widened operand. A temporal value used as an operand in a
-`compute` expression fails under
-[Formulas](formulas.md), which admits only numeric
-identifiers.
+values themselves. `shift` with `type: date` takes `days` and neither `amount`
+nor `unit`, and with `type: datetime` takes `amount` and `unit` and not
+`days`. `impute` takes `time` exactly when its type is `datetime`. Where the
+specification is read, a field the type requires and the operation omits fails
+with `missing_required_field`, and a field the type does not take fails with
+`unknown_field`, naming the field and the declared type. A temporal value used
+as an operand in a `compute` expression fails under
+[Formulas](formulas.md), which admits only numeric identifiers.
 
 <a id="time-2"></a>
 
-### TIME-2. to_date takes a datetime's calendar fields, or parses complete ISO date or datetime text
+### TIME-2. to_date returns the calendar date of a datetime or of text carrying a complete date, and partial text gives missing
 
-`to_date` returns a `date` with collected precision `day`. From a `datetime` it
-copies the calendar fields and drops the time fields; the truncation is never a
-timezone conversion. ISO 8601 date text parses directly, and ISO 8601 datetime
-text parses as a `datetime` first and is truncated by the same field copy. A
-missing source yields missing. Any other input fails as an incompatible input,
-and text that is neither a complete ISO date nor a complete ISO datetime fails
-as invalid date text.
+`to_date` returns a `date`. From a `datetime` it copies the calendar fields and
+keeps the collected precision, capped at `day`; the truncation is never a
+timezone conversion. From collected date text ([TIME-7](#time-7)) carrying a
+complete date it returns that date, collected precision `day`, whatever time
+follows. Year or year-month text is partial: the result is missing and counted
+as `partial`, and nothing fails. A missing source gives missing, and other text
+fails as invalid date text.
 
 Fails: `incompatible_input_type`, `invalid_date_text`.
-Evidence: `negative-date-conversion`, `adam-adae-post-dose-window`, `schema-birth-date`.
+Evidence: `negative-date-conversion`, `schema-to-date-partial`, `adam-adae-post-dose-window`, `schema-birth-date`.
 Replaces: REQ-0593, REQ-0607, REQ-1107.
 
-A `datetime` is produced by converting datetime text, by `datetime_impute`,
-which completes a date or a datetime collected to the hour or minute under its
-declared time rule ([TIME-12](#time-12)), and by `datetime_shift`
-([TIME-16](#time-16)). It is consumed by `datetime_diff`, `datetime_shift`,
-comparisons, `datetime_precision` and `to_date`. The `datetime` value space is
-zone-free ([VALUE-14](values.md#value-14)).
+`2025-03-04T08` gives `2025-03-04`, and `2025-03` gives missing. A `datetime`
+completed from `2025-03` keeps collected precision `month`, while one parsed
+from complete text gives `day`. A `date` source is an incompatible input. The
+partial count is reported at the operation's `partial` path, zero included,
+like a handler count under [COLUMN-14](columns.md#column-14).
+
+A `datetime` is produced by converting datetime text, by `impute` with
+`type: datetime` ([TIME-8](#time-8)) and by `shift` ([TIME-14](#time-14)). It
+is consumed by `diff`, `shift`, comparisons, `precision`, `imputation_flag` and
+`to_date`. The `datetime` value space is zone-free
+([VALUE-14](values.md#value-14)).
 
 <a id="time-3"></a>
 
@@ -78,7 +86,7 @@ on the proleptic Gregorian calendar: 1970-01-01 is `0` and earlier dates are
 negative. The result is ordinary arithmetic input. A missing source returns
 missing. A `datetime` source is an incompatible input, as with every other date
 operation, and text is not parsed: a text source first becomes a `date`
-through `to_date` or `date_impute`.
+through `to_date` or `impute`.
 
 Fails: `incompatible_input_type`.
 Evidence: `schema-derive-date-epoch`, `negative-epoch-day-non-date`.
@@ -87,22 +95,27 @@ Replaces: REQ-1187, REQ-1188.
 A per-record derivation converts dates once, and aggregates reduce the
 resulting integers; date logic never enters reduction.
 
-## Calendar differences
+## Differences
 
 <a id="time-4"></a>
 
-### TIME-4. date_diff counts whole calendar units from start to end, negative when end is earlier
+### TIME-4. diff returns end minus start in whole calendar units for dates, or in an elapsed unit for datetimes
 
-`date_diff` counts whole calendar units between two dates. With `unit: day` it
-is the calendar-date difference `end` minus `start` in days; with `unit: week`,
-the number of whole seven-day blocks in that difference, any remainder
-discarded. With `unit: month` it counts the monthly anniversaries of `start`
-that fall on or before `end`, the k-th carrying the year and month k months
-after `start` with its day clamped to that month's length; `unit: year` counts
-yearly anniversaries the same way.
+With `type: date`, `diff` counts whole calendar units from `start` to `end`:
+`day` is the calendar-date difference, `week` the whole seven-day blocks in
+it, and `month` or `year` the monthly or yearly anniversaries of `start` on or
+before `end`, each anniversary's day clamped to its month's length. With
+`type: datetime`, the exact signed difference in whole seconds is an `int` in
+`second`, and in `minute`, `hour` or `day` a `float`, divided by 60, 3600 or
+86400. An earlier `end` gives a negative result in every unit.
 
-Evidence: `adam-adsl-analysis-age`, `adam-adsl-duration`, `sdtm-dm-age`.
-Replaces: REQ-0594, REQ-0595, REQ-0596, REQ-0597, REQ-1104.
+Fails: `value_not_permitted`.
+Evidence: `adam-adsl-analysis-age`, `adam-adsl-duration`, `sdtm-dm-age`, `adam-adpc-relative-times`, `adam-adex-infusion-duration`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`.
+Replaces: REQ-0594, REQ-0595, REQ-0596, REQ-0597, REQ-1104, REQ-1299.
+
+A `unit` the declared type does not count in fails with `value_not_permitted`
+where the specification is read: `type: date` counts in `day`, `week`, `month`
+and `year`, and `type: datetime` in `second`, `minute`, `hour` and `day`.
 
 Three boundary cases pin the anniversary rule: `2025-01-31` to `2025-02-28` is
 one month, `2024-02-29` to `2025-02-28` is twelve months and one year, and
@@ -110,21 +123,26 @@ one month, `2024-02-29` to `2025-02-28` is twelve months and one year, and
 being March 31. A February 29 anniversary in a common year falls on February
 28.
 
-When `end` precedes `start`, the result is the negation of the count with the
-operands exchanged. An earlier `end` therefore produces a negative result in
-every unit, and no unit rounds toward negative infinity. A missing `start` or
-`end` yields a missing result, so no guarding predicate is needed. Which
-endpoints a day count includes is declared by `bounds` ([TIME-5](#time-5)).
+When the `end` date precedes `start`, the result is the negation of the count
+with the operands exchanged, so no calendar unit rounds toward negative
+infinity. A missing `start` or `end` yields a missing result, so no guarding
+predicate is needed. Which endpoints a day count of dates includes is declared
+by `bounds` ([TIME-5](#time-5)).
+
+Datetimes are zone-free civil values ([VALUE-14](values.md#value-14)): there
+is no timezone or daylight-saving adjustment, and a day is 86400 seconds. The
+division follows [Formulas](formulas.md), without rounding. A sample taken
+before the dose therefore has a negative relative time.
 
 <a id="time-5"></a>
 
-### TIME-5. date_diff bounds counts the endpoints of a day range and applies only with unit day
+### TIME-5. diff's bounds counts the endpoints of a day range and applies only to dates counted in days
 
-`bounds` counts the endpoints of a day range and is defined only with
-`unit: day`. `exclusive` counts from `start` to `end` excluding `start`;
-`inclusive` counts both endpoints and is one greater; `between` counts neither
-and is one smaller. With `unit: week`, `unit: month` or `unit: year`, `bounds`
-must be absent or `exclusive`; any other value fails validation with
+`bounds` counts the endpoints of a day range of dates. `exclusive` counts from
+`start` to `end` excluding `start`; `inclusive` counts both endpoints and is
+one greater; `between` counts neither and is one smaller. With `type:
+datetime`, or with `unit: week`, `unit: month` or `unit: year`, `bounds` must
+be absent or `exclusive`; any other value fails validation with
 `value_not_permitted`, where the specification is read, before any data is
 seen.
 
@@ -148,279 +166,204 @@ counts back from -1. A missing date or reference yields a missing result.
 Evidence: `sdtm-vs-study-day`, `schema-birth-date`, `adam-adsl-randomization`.
 Replaces: REQ-1108.
 
-## Partial dates
+## Collected dates and times
 
 <a id="time-7"></a>
 
-### TIME-7. A partial date stays text, and date_precision reports how much of a date its source carries
+### TIME-7. Collected date text is right-truncated ISO 8601, and precision reports how much of the declared type a source carries
 
-A study collects dates truncated to a year, or to a year and month; neither is
-a `date`, and such a value is a `str` until `date_impute` completes it. A known
-day in an unknown month has no representation. One precision ladder orders
-`year`, `month` and `day`, and `date_precision` returns its code, `Y`, `M` or
-`D`: given collected text, how much of a date the text carries; given a `date`,
-that value's collected precision.
+Collected date text is a year, `YYYY`, optionally followed in order by `-MM`,
+`-DD`, `Thh`, `:mm` and `:ss`, each field with the width and range of
+[VALUE-15](values.md#value-15); it stays `str` until an operation reads it.
+`precision` returns how much of its declared `type` a source carries, as a word
+of the collected-precision ladder of [VALUE-16](values.md#value-16): for text,
+the finest field it carries, at most `day` with `type: date`; for a value of
+the declared type, its collected precision.
 
-Evidence: `sdtm-ae-partial-dates`, `sdtm-dm-age`, `schema-birth-date`.
-Replaces: REQ-0578, REQ-0580, REQ-0581, REQ-0582, REQ-1106.
+Evidence: `sdtm-ae-partial-dates`, `sdtm-dm-age`, `schema-birth-date`, `adam-adpc-relative-times`, `rust/crates/yamaa-adapters/tests/fixtures/temporal_imputation_reference.json`.
+Replaces: REQ-0578, REQ-0580, REQ-0581, REQ-0582, REQ-1106, REQ-1183, REQ-1326, REQ-1327, REQ-1329.
 
-A policy names a ladder level: `minimum_source_precision` takes `year` or
-`month`. The levels and codes correspond in order and name the same ladder.
-`D` is a complete date, `M` a year and month, and `Y` a year alone. A study
-that records a known day in an unknown month keeps the collected text as `str`.
+```text
+collected := YYYY [ "-" MM [ "-" DD [ "T" hh [ ":" mm [ ":" ss ] ] ] ] ]
+```
 
-A specification records what `date_impute` supplied by reading either the same
-source text or the completed date itself. Invalid text and a missing source
-behave as they do for `date_impute` ([TIME-13](#time-13)); a `date` source is
-never invalid, and a `datetime` source is an error as in every date operation
-([TIME-1](#time-1)). [VALUE-16](values.md#value-16) governs both source kinds.
+`2025` is `year`, `2025-03` is `month`, `2025-03-04` is `day`,
+`2025-03-04T08` is `hour`, `2025-03-04T08:30` is `minute` and
+`2025-03-04T08:30:15` is `second`; with `type: date` the last three are `day`.
+Any other text is not collected date text, including a zone, an offset, a
+fractional second, hour 24, a leap second, a field of one digit, a space before
+the time, and a known day in an unknown month such as `2025---15`, which has no
+representation.
+
+Reading collected text is not converting it. Text converted to a temporal
+column, or ingested as one, follows [VALUE-15](values.md#value-15): there
+`2025-03-04T08:30` names second zero with collected precision `second`, and
+`2025-03` is not a `date`. A specification that must keep how much of a value
+was collected keeps the text as `str` and reads it with `impute` or
+`precision`. A `datetime` source to `precision` with `type: date`, and a `date`
+source with `type: datetime`, are incompatible inputs ([TIME-1](#time-1)). A
+missing source and invalid text follow [TIME-13](#time-13).
 
 <a id="time-8"></a>
 
-### TIME-8. date_impute completes a truncated date from its declared month and day, within a minimum precision
+### TIME-8. impute completes collected text into a value of its declared type from declared month, day and time rules
 
-`date_impute` returns a complete source date unchanged and completes a source
-carrying only a year, or a year and month, from its declared `month` and
-`day`, by a declared rule rather than string surgery; the `date` result carries
-the source text's collected precision. `minimum_source_precision`, default
-`year`, bounds what it may invent: with `month`, a year-month source receives
-the declared day and a valid year-only source produces missing. A `day` of
-`first` or `last` is resolved after `month` is fixed.
+`impute` returns a value of its declared `type`. A source value of that type is
+returned unchanged. Text carrying every field of the type stands as collected,
+and with `type: date` text carrying a complete date gives that date, whatever
+time follows. Otherwise `month` and `day` supply the missing date fields and,
+for a datetime, `time: first` or `last` the missing time fields.
+`minimum_source_precision`, default `year`, is the coarsest collected precision
+completed; a coarser source gives missing. The result keeps the source's
+collected precision.
 
-Evidence: `adam-adae-partial-dates`, `adam-adsl-alive-date`, `schema-birth-date`.
-Replaces: REQ-0579, REQ-0583, REQ-0584, REQ-0587, REQ-1105, REQ-1109.
+Evidence: `adam-adae-partial-dates`, `adam-adae-partial-times`, `adam-adsl-alive-date`, `schema-birth-date`, `schema-impute-text-with-time`, `schema-imputation-flags`.
+Replaces: REQ-0579, REQ-0583, REQ-0584, REQ-0587, REQ-1105, REQ-1109, REQ-0589, REQ-1182, REQ-1184, REQ-1328.
 
-A `day` may name a position in its month instead of a number. `first` and
-`last` are resolved against the month the completed date lands in, so `last`
-is 28 or 29 in a February according to the year and 30 or 31 elsewhere, and
-the completed value is a real calendar date by construction.
+`time: first` supplies hour `00`, minute `00` and second `00`, and `time: last`
+supplies `23`, `59` and `59`: the earliest or latest civil moment the collected
+fields admit. A `day` that names a position, `first` or `last`, is resolved
+against the month the completed date lands in, after `month` is fixed, so
+`last` is 28 or 29 in a February according to the year and 30 or 31
+elsewhere, and the completed value is a real calendar date by construction.
 
-The default `minimum_source_precision` allows year-only and year-month
-sources. Falling below the minimum is neither a missing source nor invalid
-text, so it invokes neither handler of [TIME-13](#time-13). A complete source
-date is always returned unchanged.
+`minimum_source_precision` takes `year`, `month` or `day`. With `year`, a year
+alone receives `month` and `day`; with `month`, a year and month receives
+`day` and a year alone gives missing; with `day`, only the time of a datetime
+is supplied, and any source coarser than a day gives missing. Falling below the
+minimum is neither a missing source nor invalid text, so it invokes neither
+answer of [TIME-13](#time-13). Which rules a policy declares is fixed by
+[TIME-10](#time-10).
 
-The parameters apply in this order: a missing or invalid source, then a source
-below the minimum precision, then completion from `month` and `day`, then the
-bounds of [TIME-9](#time-9). A source that is not an ISO 8601 date or an ISO
-8601 date prefix is an invalid value, distinct from a missing one
-([TIME-13](#time-13)). [VALUE-16](values.md#value-16) governs the resulting
-date.
+With `type: date`, `month: 6` and `day: first`, `1975` completes to
+`1975-06-01` with collected precision `year`, and `2025-03-04T08:30` gives
+`2025-03-04` with `day`. With `type: datetime`, `month: 1`, `day: first` and
+`time: first`, `2025` completes to `2025-01-01T00:00:00` with `year`,
+`2025-03` to `2025-03-01T00:00:00` with `month`, and `2025-03-04T08` to
+`2025-03-04T08:00:00` with `hour`; under `time: last` the last completes to
+`2025-03-04T08:59:59`. Text carrying seconds, and a value of the declared type,
+are returned unchanged.
+
+The parameters apply in this order: a missing source, then invalid text, then
+the minimum precision, then completion from `month`, `day` and `time`, then
+the bounds of [TIME-9](#time-9). [VALUE-16](values.md#value-16) governs the
+resulting value.
 
 <a id="time-9"></a>
 
-### TIME-9. Imputation bounds move only the supplied components, and an unsatisfiable bound gives missing
+### TIME-9. Imputation bounds move only supplied fields, a bound outside the collected interval is ignored, and crossed bounds give not_after
 
-`not_before` and `not_after` bound the completed date from below and above and
-move only what imputation supplied, within the day interval the collected
-components admit: `2025` admits its year and `2025-01` its month. A completed
-date that satisfies its bounds stands. Otherwise the result is the day in the
-interval and within the bounds nearest the completed date: the earliest when it
-precedes `not_before`, the latest when it follows `not_after`. When no such day
-exists, the result is missing, with no failure and no handler.
+`not_before` and `not_after`, values of the declared type, bound a completed
+value and move only the fields imputation supplied, within the interval the
+collected fields admit: `2025` admits its year, `2025-01` its month and
+`2025-01-15T08` its hour. A missing bound, or one outside that interval, is
+ignored. Otherwise the result is `min(max(completed, not_before), not_after)`,
+so crossed bounds give `not_after`, and each crossing is counted. A source that
+needed no completion is never moved, and bounds never make a result missing.
 
-Evidence: `adam-adae-partial-dates`, `adam-adcm-end-date-bound`.
+Evidence: `adam-adae-partial-dates`, `adam-adcm-end-date-bound`, `schema-impute-crossed-bounds`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::datetime_bounds_move_only_supplied_time_fields`.
 Replaces: REQ-0585, REQ-0586, REQ-0610, REQ-1323, REQ-1324, REQ-1325.
 
-A missing bound is no bound. The two bounds may be declared together, and then
-every candidate day must satisfy both; a missing value of either leaves only
-the other. When no day in the interval lies between the bounds, including a
-`not_after` earlier than `not_before`, the result is missing. For example,
-`2025-03` completed to `2025-03-31` under a `not_after` of `2025-03-12` gives
-`2025-03-12`; under a `not_after` of `2025-02-10` it gives missing, never a day
-in February.
+For example, `2025-03` completed to `2025-03-31` under a `not_after` of
+`2025-03-12` gives `2025-03-12`. Under a `not_after` of `2025-02-10`, a day
+the collected month does not admit, the bound is ignored and the result is
+`2025-03-31`, never a day in February. With `not_before` `2025-03-20` and
+`not_after` `2025-03-10`, both inside March, the bounds cross and the result is
+`2025-03-10`.
 
-An unsatisfiable bound, like a source below the minimum precision, is neither
-a missing source nor invalid text, so no [Column derivation](columns.md)
-handler answers it. A complete source date is returned unchanged whatever its
-bounds say; the bounds never move a collected date. A specification that
-constrains collected dates states a verification under
+A crossing is counted at the operation's `not_after` path, zero included, as
+`crossed_bounds`, like a handler count under
+[COLUMN-14](columns.md#column-14). A moved result keeps the source's collected
+precision, so [TIME-18](#time-18) still reports what imputation supplied. A
+fallback value ([TIME-13](#time-13)) is whole and the bounds do not move it.
+Bounds are read only when a source needs completion. A specification that
+constrains collected values states a verification under
 [Verification](verification.md).
 
 <a id="time-10"></a>
 
-### TIME-10. date_impute's month and day must fit the calendar and its precision policy
+### TIME-10. impute's month and day rules must fit its precision policy and the calendar
 
-`month` is required when `minimum_source_precision` is `year` and must be
-absent when it is `month`. A declared `month` must lie from 1 to 12 and a
-numeric `day` from 1 to 31, and the completed value must be a real calendar
-date. A `day` that names a position in its month is not a literal to
-range-check, and neither check can fail for it. Any other `day` token is
-neither a number nor a position and is rejected where the specification is
-read, before any data is seen.
+`month` is declared exactly when `minimum_source_precision` is `year`, and
+`day` exactly when it is `year` or `month`. A declared `month` must lie from 1
+to 12 and a numeric `day` from 1 to 31, and the completed value must be a real
+calendar date. A `day` that names a position in its month is not a literal to
+range-check. Any other `day` token is neither a number nor a position and is
+rejected where the specification is read, before any data is seen.
 
-Fails: `month_required`, `month_not_permitted`, `month_out_of_range`, `value_not_permitted`, `invalid_calendar_date`.
-Evidence: `negative-impute-missing-month`, `negative-impute-bad-month`, `negative-impute-bad-day`.
+Fails: `month_required`, `month_not_permitted`, `day_required`, `day_not_permitted`, `month_out_of_range`, `value_not_permitted`, `invalid_calendar_date`.
+Evidence: `negative-impute-missing-month`, `negative-impute-unreachable-month`, `negative-impute-bad-month`, `negative-impute-bad-day`, `negative-impute-day-rule`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_imputation.rs`.
 Replaces: REQ-0592, REQ-0608, REQ-0609.
 
-A specification carries no value the precision policy leaves unreachable: an
-absent required `month` fails with `month_required`, and a `month` beside
-`minimum_source_precision: month` fails with `month_not_permitted`. A `month`
-outside the calendar range fails with `month_out_of_range` and a numeric `day`
-outside it with `value_not_permitted`. A completed value that is not a real
-calendar date fails with `invalid_calendar_date`. A `day` token that is neither
-a number nor a declared position fails with `value_not_permitted`.
-
-## Partial times
-
-<a id="time-11"></a>
-
-### TIME-11. The datetime operations read a complete date whose time may stop after its hour or minute
-
-A study collects times truncated to the hour or to the minute, as ISO 8601
-reduced precision allows. `datetime_impute` and `datetime_precision` read
-source text in exactly the forms below, whose fields have the widths and ranges
-of [VALUE-15](values.md#value-15). One precision ladder orders `day`, `hour`,
-`minute` and `second`, each form carries the level of its last field, and
-`datetime_precision` returns its code, `D`, `H`, `M` or `S`, for such text or
-for a `datetime`'s collected precision.
-
-Evidence: `adam-adpc-relative-times`, `adam-adae-post-dose-window`, `rust/crates/yamaa-adapters/tests/fixtures/temporal_imputation_reference.json`.
-Replaces: REQ-1183, REQ-1326, REQ-1327, REQ-1329.
-
-```text
-source := date [ "T" hh [ ":" mm [ ":" ss ] ] ]
-```
-
-Any other text is invalid to both operations, including a zone, an offset, a
-fractional second, hour 24, a leap second and a field of one digit.
-`2025-03-04` is `day`, `2025-03-04T08` is `hour`, `2025-03-04T08:30` is
-`minute`, and `2025-03-04T08:30:15` is `second`. `D` is a date alone, whose
-whole time `datetime_impute` supplies.
-
-Reading a `datetime` value binds the answer to the completed value; reading its
-source text reports the same answer before completion. Invalid text and a
-missing source behave as they do for `datetime_impute`
-([TIME-13](#time-13)); a `datetime` value is never invalid.
-
-Reading source text is not converting it. Text converted to a `datetime`
-column, or ingested as one, follows [VALUE-15](values.md#value-15):
-`2025-03-04T08:30` names second zero there, with collected precision `second`,
-and `2025-03-04T08` is not a `datetime`. A specification that must record a
-minute or hour precision keeps the collected text as `str` and completes it
-with `datetime_impute`.
-
-<a id="time-12"></a>
-
-### TIME-12. datetime_impute keeps every collected field and supplies each missing time field from its rule
-
-`datetime_impute` keeps every field its source text carries and supplies each
-missing time field from its `time` rule: `first` supplies hour `00`, minute
-`00` and second `00`, and `last` supplies hour `23`, minute `59` and second
-`59`. The result carries the source form's collected precision. Text carrying
-seconds, and a `datetime` value, are returned unchanged. It supplies only time
-fields, never a missing day: a source truncated before its day stays `str` and
-is invalid to both datetime operations.
-
-Fails: `value_not_permitted`.
-Evidence: `adam-adae-partial-times`, `adam-adsl-treatment`, `sdtm-vs-epoch-from-subject-elements`.
-Replaces: REQ-0589, REQ-1182, REQ-1184, REQ-1328.
-
-`2025-03-04T08` completes to `2025-03-04T08:00:00` under `first` and to
-`2025-03-04T08:59:59` under `last`. Text collected to the hour or minute keeps
-its collected fields and carries collected precision `hour` or `minute`; a
-complete date receives the declared edge of its day and carries collected
-precision `day`; text carrying seconds keeps collected precision `second`.
-
-The `time` rule names the earliest or latest civil moment the collected source
-admits: each missing time field takes its first or last value. A `time` that is
-neither `first` nor `last` is rejected where the specification is read, as an
-unknown `day` token is under [TIME-10](#time-10), and fails with
-`value_not_permitted`.
-
-The date operations do not answer about a `datetime` ([TIME-1](#time-1)).
-`datetime_precision` reports how much of a time a complete date or datetime
-source carried ([TIME-11](#time-11)). Missing and invalid sources yield no
-datetime unless their local handlers are declared ([TIME-13](#time-13)).
+A specification carries no rule the precision policy leaves unreachable. An
+absent required `month` fails with `month_required`, and a `month` beside a
+minimum of `month` or `day` fails with `month_not_permitted`. An absent
+required `day` fails with `day_required`, and a `day` beside a minimum of `day`
+fails with `day_not_permitted`. A `month` outside the calendar range fails with
+`month_out_of_range` and a numeric `day` outside it with
+`value_not_permitted`. A completed value that is not a real calendar date, such
+as a numeric `day` of 31 in April, fails with `invalid_calendar_date` on the
+`impute` stage. A `day` token that is neither a number nor a declared position
+fails with `value_not_permitted`. The `time` rule follows the declared type
+([TIME-1](#time-1)).
 
 <a id="time-13"></a>
 
-### TIME-13. The imputation and precision operations answer a missing source and invalid text by their handlers
+### TIME-13. A missing source gives missing unless impute declares a fallback, and invalid text fails unless invalid answers it
 
-`date_impute`, `date_precision`, `datetime_impute` and `datetime_precision`
-answer the same two conditions about their source: a missing source, by
-`missing`, and a non-missing source that is not text the operation reads, by
-`invalid`. For the date operations that text is a complete date or a date
-prefix; for the datetime operations, a complete date or a datetime collected to
-the hour, minute or second. One handler stage serves all four. A source that is
-a temporal value is never invalid.
+`impute` and `precision` give a missing result for a missing source, counted as
+a default substitution at the operation's `missing` path. `impute`'s optional
+`fallback`, a column of the declared type, answers a missing source instead:
+the result is its value with collected precision `none`, counted at
+`fallback`, and missing when the fallback is missing. Text that is not
+collected date text ([TIME-7](#time-7)) fails with `invalid_date_text` unless
+`invalid` declares a literal substitute.
 
-Fails: `missing_input`, `invalid_date_text`, `invalid_datetime_text`.
-Evidence: `negative-impute-bad-source`, `negative-datetime-impute-bad-source`, `negative-datetime-precision-bad-source`.
+Fails: `invalid_date_text`.
+Evidence: `schema-impute-fallback`, `negative-impute-bad-source`, `negative-precision-bad-source`, `negative-impute-datetime-text`, `negative-precision-datetime-text`.
 Replaces: REQ-0588.
 
-The stage is `impute` under [Column derivation](columns.md), where the
-operations reading one source domain answer the same missing and invalid
-conditions. A `date_precision` or `datetime_precision` reading a value has only
-the missing source to answer. `invalid` fires only when the source is present
-([COLUMN-11](columns.md#column-11)). Omitting a handler makes its
-condition fatal ([COLUMN-10](columns.md#column-10)): a missing source
-fails with `missing_input`, and invalid text with `invalid_date_text` for the
-date operations or `invalid_datetime_text` for the datetime operations.
+Both counts are reported like handler counts under
+[COLUMN-14](columns.md#column-14), zero included. The fallback is read only
+when the source is missing, never for a source below the minimum precision or
+invalid text. A source that is a temporal value is never invalid. The stage of
+the invalid-text failure is `impute` under [Column derivation](columns.md),
+and one handler stage serves both operations; `invalid` fires only when the
+source is present ([COLUMN-11](columns.md#column-11)). A fallback value is
+whole: the bounds of [TIME-9](#time-9) do not move it, and
+[TIME-18](#time-18) reports it as wholly supplied.
 
 ## Civil arithmetic
 
 <a id="time-14"></a>
 
-### TIME-14. date_shift moves a complete date by a signed whole-day count, without clamping
+### TIME-14. shift moves a date by whole days, or a datetime by a signed elapsed amount rounded to a whole second
 
-`date_shift` adds a signed whole-day count to a complete date on the proleptic
-Gregorian calendar and returns a date, crossing month, year and leap-day
-boundaries without clamping. The result preserves the source's collected
-precision. A missing source or day count returns missing. A datetime or text
-source, or a non-integer day count, fails validation as
-`incompatible_input_type`. A result outside years 0001 through 9999 fails at
-build as `conversion_failed` on the `convert` stage.
+With `type: date`, `shift` adds `days`, a signed whole-day count, to a complete
+date on the proleptic Gregorian calendar, crossing month, year and leap-day
+boundaries without clamping. With `type: datetime`, it adds a signed `amount`
+in an elapsed `unit` to a civil datetime: `second` requires an integer, and a
+float amount is scaled to seconds as binary64 and rounded to whole seconds
+with the one rounding of [FORMULA-16](formulas.md#formula-16) before it is
+added exactly. The result keeps the source's collected precision.
 
 Fails: `incompatible_input_type`, `conversion_failed`.
-Evidence: `adam-adsl-period-dates`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`, `rust/tests/host-fixtures/cases.json`.
-Replaces: REQ-1298.
+Evidence: `adam-adsl-period-dates`, `adam-adae-post-dose-window`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`, `rust/tests/host-fixtures/cases.json`.
+Replaces: REQ-1298, REQ-1300.
 
 `days` is a signed integer literal or integer variable; a negative count moves
-backward. No local handler answers the arithmetic overflow.
+backward. `minute`, `hour` and `day` admit integer or float amounts; integer
+amounts are scaled exactly and float amounts are multiplied by 60, 3600 or
+86400 as binary64. The rounding applies to the amount, so the source second
+does not affect it: `0.025` minute is exactly `1.5` seconds and adds `2`
+seconds. A day is 86400 seconds, and no timezone or daylight-saving
+adjustment occurs.
 
-<a id="time-15"></a>
-
-### TIME-15. datetime_diff returns end minus start in a declared elapsed unit, with no zone adjustment
-
-`datetime_diff` returns `end` minus `start` in the declared elapsed unit. Both
-inputs must be datetimes; other input types, including dates, fail validation
-as `incompatible_input_type`, and missing either input returns missing. In
-`second` the exact signed whole-second difference is an `int`. In `minute`,
-`hour` or `day` it is a `float`, that difference divided by 60, 3600 or 86400
-under [Formulas](formulas.md), without rounding. There
-is no timezone or daylight-saving adjustment.
-
-Fails: `incompatible_input_type`.
-Evidence: `adam-adpc-relative-times`, `adam-adex-infusion-duration`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`.
-Replaces: REQ-1299.
-
-The datetimes are zone-free civil values ([VALUE-14](values.md#value-14)), and
-a day is 86400 seconds. A sample taken before the dose therefore has a negative
-relative time.
-
-<a id="time-16"></a>
-
-### TIME-16. datetime_shift moves a datetime by a signed elapsed amount, rounded to a whole second
-
-`datetime_shift` adds a signed elapsed amount to a complete civil datetime and
-returns a datetime. `second` requires an integer amount; `minute`, `hour` and
-`day` admit integer or float amounts. Integer amounts are scaled exactly. A
-float amount is multiplied by 60, 3600 or 86400 as binary64, rounded to whole
-seconds with the one rounding of [FORMULA-16](formulas.md#formula-16), and
-then added exactly. No timezone or daylight-saving adjustment occurs, and the
-source's collected precision is preserved.
-
-Fails: `incompatible_input_type`, `conversion_failed`.
-Evidence: `adam-adae-post-dose-window`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`, `rust/tests/host-fixtures/cases.json`.
-Replaces: REQ-1300.
-
-Other input types fail validation as `incompatible_input_type`, and a missing
-source or amount returns missing. The rounding applies to the amount, so the
-source second does not affect it: `0.025` minute is exactly `1.5` seconds and
-adds `2` seconds. A day is 86400 seconds. A rounded result outside years 0001 through 9999 fails at build as
-`conversion_failed` on the `convert` stage; no local handler answers the
-arithmetic overflow.
+A missing source, day count or amount returns missing. A source or count of
+another type, or a non-integer day count, fails validation as
+`incompatible_input_type`. A result outside years 0001 through 9999 fails at
+build as `conversion_failed` on the `convert` stage; no local handler answers
+the arithmetic overflow.
 
 <a id="time-17"></a>
 
@@ -453,3 +396,29 @@ signed integer range, and float results must be finite.
 Invalid text returns the literal `invalid` handler, and a null `invalid` gives
 missing; without the handler, the condition `invalid_duration_text` is fatal on
 the `impute` stage. A declared handler is counted only when reached.
+
+## Imputation flags
+
+<a id="time-18"></a>
+
+### TIME-18. imputation_flag returns the ADaM date or time imputation flag from an imputed value's collected precision
+
+`imputation_flag` reads a `date` or `datetime` and returns the first part
+imputation supplied, from its collected precision. With `part: date`, `none`
+gives `Y`, `year` gives `M`, `month` gives `D`, and `day` or finer gives
+missing. With `part: time`, which reads a `datetime`, `none` through `day` give
+`H`, `hour` gives `M`, `minute` gives `S` unless `seconds_collected` is false,
+and `second` gives missing. A missing source gives missing.
+
+Fails: `incompatible_input_type`.
+Evidence: `schema-imputation-flags`, `schema-impute-fallback`, `adam-adae-partial-times`, `adam-adcm-end-date-bound`, `negative-imputation-flag-text`.
+
+The codes are the ADaM `*DTF` and `*TMF` values. `seconds_collected`, default
+true, states whether the study collects seconds; when it is false, a time
+collected to the minute had nothing imputed and gives missing. A bound that
+moved an imputed day ([TIME-9](#time-9)) keeps the flag `D`, and a fallback
+value ([TIME-13](#time-13)) gives `Y` and `H`. Collected text is not a flag
+source: a `str` source fails as an incompatible input where the specification
+is read, and a specification flags the value `impute` completed. Collected
+precision does not survive an artifact ([VALUE-17](values.md#value-17)), so
+the flag reads a value derived in the same specification.

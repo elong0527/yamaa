@@ -240,8 +240,7 @@ otherwise.
 | extract | `missing` | Missing string input |
 | extract | `no_match` | Non-missing string does not match |
 | template | `missing` | Any placeholder value is missing |
-| impute | `date_impute.missing`, `date_precision.missing`, `datetime_impute.missing`, `datetime_precision.missing` | See [Values](values.md) |
-| impute | `date_impute.invalid`, `date_precision.invalid`, `datetime_impute.invalid`, `datetime_precision.invalid` | See [Values](values.md) |
+| impute | `impute.invalid`, `precision.invalid` | Text that is not collected date text ([TIME-13](temporal.md#time-13)) |
 | impute | `duration_value.invalid` | Invalid fixed-length duration text ([TIME-17](temporal.md#time-17)) |
 | convert | `unconvertible` | Failed output conversion |
 
@@ -272,11 +271,12 @@ entry; that is `unmapped`'s condition
 answers a missing match value ([LOOKUP-13](lookup.md#lookup-13)).
 
 The owning rule states which values an operation cannot use;
-[Values](values.md) states them for the temporal operations
-on the `impute` stage. One stage name can serve several operations with the
-same conditions. Date imputation and precision, and datetime imputation and
-precision, each read the same source domain and answer the same missing and
-invalid conditions, and all four use `impute` in structured errors.
+[Dates and times](temporal.md) states them for the temporal operations on the
+`impute` stage. One stage name can serve several operations with the same
+conditions. `impute` and `precision` read the same source domain, answer the
+same invalid condition, and both use `impute` in structured errors; a missing
+source to either gives missing without a handler
+([TIME-13](temporal.md#time-13)).
 
 An aggregate declares no handler at all. A variable it names that does not
 exist is [Name binding](names.md)'s unresolved reference. A

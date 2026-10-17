@@ -437,7 +437,7 @@ decimal point, sends a value exactly halfway between two candidates, or within
 positive zero. The `round_half_away_from_zero` verb, CSV display precision
 ([CSV-9](reference/csv.md#csv-9)), project-function result comparison
 ([FUNC-13](profiles/functions.md#func-13)) and second resolution in
-`datetime_shift` ([TIME-16](temporal.md#time-16)) all use it. No other
+`shift` of a datetime ([TIME-14](temporal.md#time-14)) all use it. No other
 rounding exists.
 
 Fails: `incompatible_input_type`.
