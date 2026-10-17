@@ -2651,9 +2651,8 @@ mod file {
                     false,
                 ),
             );
-            let plain = study.prepare().unwrap();
-            assert_eq!(plain.graph().nodes().len(), 1);
-            assert!(plain.graph().nodes()[0].producers.is_empty());
+            let plain = study.prepare();
+            assert!(plain.run().compiled().source_contract(0).is_none());
             let original = yaml(
                 "{RAW: {path: never-read.csv, schema: 7}}",
                 "RAW",
