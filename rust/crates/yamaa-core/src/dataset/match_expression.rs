@@ -132,7 +132,6 @@ fn normalize(expression: &mut Expression, reads: &[MatchRead]) -> Result<(), Pla
         | Expression::StrPad { source, .. }
         | Expression::Round { source, .. } => normalize(&mut source.expression, reads)?,
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Imputation { operands, .. }
         | Expression::Temporal { operands, .. } => {
@@ -177,7 +176,6 @@ fn contains_window(expression: &Expression, depth: usize) -> Result<bool, PlanEr
         | Expression::StrPad { source, .. }
         | Expression::Round { source, .. } => contains_window(&source.expression, depth + 1),
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Imputation { operands, .. }
         | Expression::Temporal { operands, .. } => {

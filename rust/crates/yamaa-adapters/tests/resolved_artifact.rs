@@ -473,10 +473,11 @@ fn named_window_descendants_keep_the_definition_origin_and_root_keeps_the_use_si
         origins[&format!("{prefix}/order_by/0/variable")].declaring_source,
         Some(study.path("base.yaml"))
     );
-    for field in ["direction", "nulls"] {
-        assert_eq!(
-            origins[&format!("{prefix}/order_by/0/{field}")].source_kind,
-            OriginKind::SchemaDefault
-        );
-    }
+    assert_eq!(
+        origins[&format!("{prefix}/order_by/0/direction")].source_kind,
+        OriginKind::SchemaDefault
+    );
+    // An omitted placement has no schema default: missing sorts lowest, so its
+    // position follows direction and the resolved term leaves it absent.
+    assert!(!origins.contains_key(&format!("{prefix}/order_by/0/nulls")));
 }

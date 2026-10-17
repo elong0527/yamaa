@@ -1,4 +1,4 @@
-//! Shared expression lowering for column, case, concatenation and row declarations.
+//! Shared expression lowering for column, case and row declarations.
 use super::*;
 use crate::{
     bound_expression::BoundPredicate,
@@ -99,20 +99,13 @@ pub(super) fn prepare_value_with_driver(
         "str_template" => Operation::StrTemplate(templates.get(payload)?),
         "str_extract" => Operation::StrExtract(extraction.get(payload)?),
         "str_replace" => Operation::StrReplace(extraction.replacement(payload)?),
-        "greatest" | "least" | "str_concat" => {
-            Operation::Scalar(std::boxed::Box::new(scalar::prepare(
-                d,
-                payload,
-                op,
-                &result_path,
-                project,
-                intermediates,
-                record,
-                depth + 1,
-                extraction,
-                templates,
-            )?))
-        }
+        "greatest" | "least" => Operation::Scalar(std::boxed::Box::new(scalar::prepare(
+            d,
+            payload,
+            op,
+            &result_path,
+            depth + 1,
+        )?)),
         "mapping" | "cut" => {
             let mut features = Vec::new();
             let declaration =
@@ -214,7 +207,7 @@ pub(super) fn prepare_value_with_driver(
             }
             Operation::FirstAvailable(std::boxed::Box::new(operation))
         }
-        "row_number" | "rank" | "row_value" | "previous_non_missing" | "locf" | "baseline_flag" => {
+        "row_number" | "rank" | "row_value" | "locf" | "baseline_flag" => {
             let operation = windows::Declaration::prepare(d, payload, op, &result_path)?;
             Operation::Window(std::boxed::Box::new(operation))
         }
@@ -581,9 +574,7 @@ pub(super) fn bind_row(
             available,
             edges,
             findings,
-            reported,
             output,
-            project,
             named,
             secondary,
             intermediates,
@@ -828,13 +819,6 @@ pub(super) fn declaration_findings(
                 declaration_findings(&branch.operation, &branch.path, findings)?;
             }
         }
-        Operation::Scalar(operation) => {
-            if let scalar::Declaration::Concat { sources, .. } = operation.as_ref() {
-                for branch in sources {
-                    declaration_findings(&branch.operation, &branch.path, findings)?;
-                }
-            }
-        }
         _ => (),
     }
     Ok(())
@@ -924,13 +908,6 @@ pub(super) fn calls(operation: &Operation, result: &mut Vec<usize>) {
         Operation::Case(branches) => {
             for branch in branches {
                 calls(&branch.operation, result);
-            }
-        }
-        Operation::Scalar(operation) => {
-            if let scalar::Declaration::Concat { sources, .. } = operation.as_ref() {
-                for branch in sources {
-                    calls(&branch.operation, result);
-                }
             }
         }
         _ => (),
@@ -1135,34 +1112,25 @@ fn references_mode(
             }
         }
     }
-    if let Some(payload) = d.field(value, "str_concat") {
-        for &child in sequence(d, field(d, payload, "sources")?)? {
-            references_mode(
-                d,
-                child,
-                project,
-                names,
-                depth + 1,
-                aggregate_relation,
-                window_references,
-            )?;
-        }
-    }
     if !window_references {
         return Ok(());
     }
-    for op in [
-        "row_number",
-        "rank",
-        "row_value",
-        "previous_non_missing",
-        "locf",
-        "baseline_flag",
-    ] {
+    for op in ["row_number", "rank", "row_value", "locf", "baseline_flag"] {
         if let Some(payload) = d.field(value, op) {
-            for field_name in ["source", "date", "reference_date"] {
+            for field_name in ["source", "date", "reference_date", "value"] {
                 if let Some(id) = d.field(payload, field_name) {
                     names.push(text(d, id)?.into());
+                }
+            }
+            if let Some(terms) = d
+                .field(payload, "tie_break")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+            {
+                for &id in sequence(d, terms)? {
+                    names.push(match &d.nodes()[id] {
+                        N::Text(name) => name.clone(),
+                        _ => text(d, field(d, id, "variable")?)?.into(),
+                    });
                 }
             }
             if let Some(window) = d

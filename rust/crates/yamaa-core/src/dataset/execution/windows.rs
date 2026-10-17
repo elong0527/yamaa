@@ -163,7 +163,10 @@ impl Run {
         context: &Context<'_>,
     ) -> Result<Value, Box<ExecutionError<T::Error>>> {
         if let Some(mut members) = self.groups[self.group_for_row[row]].take() {
-            if !window.order_by.is_empty() {
+            // A baseline's tie-break terms compare only eligible rows sharing the
+            // latest date; its partition keeps construction order.
+            let baseline = matches!(window.kind, WindowKind::BaselineFlag { .. });
+            if !baseline && !window.order_by.is_empty() {
                 sort(&mut members, window, candidates)?;
             }
             if let Some(filter) = &window.filter {
@@ -193,23 +196,38 @@ impl Run {
                 WindowKind::BaselineFlag {
                     date,
                     reference_date,
+                    value,
+                    inclusive,
                 } => {
+                    // The baseline is the last eligible row ordered by date and
+                    // then by the tie-break terms; rows equal on all of them tie.
                     let mut latest: Option<usize> = None;
                     let mut count = 0;
                     for &member in &members {
-                        let (candidate, reference) = (
-                            &candidates[member].values[date],
-                            &candidates[member].values[reference_date],
-                        );
+                        let values = &candidates[member].values;
+                        let (candidate, reference) = (&values[date], &values[reference_date]);
                         if matches!(candidate, Value::Missing)
                             || matches!(reference, Value::Missing)
-                            || temporal_order(candidate, reference) == Ordering::Greater
+                            || matches!(values[value], Value::Missing)
                         {
                             continue;
                         }
-                        let order = latest.map_or(Ordering::Greater, |row| {
-                            temporal_order(candidate, &candidates[row].values[date])
-                        });
+                        match temporal_order(candidate, reference) {
+                            Ordering::Greater => continue,
+                            Ordering::Equal if !inclusive => continue,
+                            _ => {}
+                        }
+                        let order = match latest {
+                            None => Ordering::Greater,
+                            Some(best) => {
+                                match temporal_order(candidate, &candidates[best].values[date]) {
+                                    Ordering::Equal => {
+                                        ordered(window, &candidates[member], &candidates[best])?
+                                    }
+                                    order => order,
+                                }
+                            }
+                        };
                         if order == Ordering::Greater {
                             latest = Some(member);
                             count = 1;
@@ -236,11 +254,14 @@ impl Run {
                         }
                     }
                 }
-                WindowKind::PreviousNonMissing { column } | WindowKind::Locf { column } => {
+                WindowKind::Locf {
+                    column,
+                    include_current,
+                } => {
                     let mut previous = None;
                     for &member in &members {
                         let present = !matches!(candidates[member].values[column], Value::Missing);
-                        let donor = if present && matches!(window.kind, WindowKind::Locf { .. }) {
+                        let donor = if present && include_current {
                             Some(member)
                         } else {
                             previous

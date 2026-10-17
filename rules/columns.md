@@ -135,12 +135,12 @@ Fails: `dependency_cycle`.
 Evidence: `negative-adlb-computed-param`, `negative-first-available-self`, `negative-row-value-self`.
 Replaces: REQ-0061, REQ-0072.
 
-`previous_non_missing` crosses any number of missing rows by searching a
-separate completed source column. `locf` returns the current source when
-present and otherwise performs that search; the equivalent composition
-coalesces the current source with `previous_non_missing`. Searching the column
-being derived remains a cycle rather than an instruction to iterate. A cycle
-fails as `dependency_cycle` and reports the cycle path.
+`locf` with `include_current: false` crosses any number of missing rows by
+searching a separate completed source column; with the default
+`include_current: true` it returns the current source when present and
+otherwise performs that search. Searching the column being derived remains a
+cycle rather than an instruction to iterate. A cycle fails as
+`dependency_cycle` and reports the cycle path.
 
 <a id="column-7"></a>
 
@@ -258,9 +258,10 @@ its result context fails, reporting both the handler and the original context.
 `absent` on a `source` binding applies when the variable or ODM item does not
 exist in context, never when it exists and holds a missing value. `missing`
 applies when the named input value is missing, on every expression that
-declares it; where an operation has several inputs, such as `str_concat`, it
-fires when any input is missing. `invalid`, `unmapped` and `str_extract`'s
-`no_match` fire only when every input is present.
+declares it; where an operation has several inputs, such as a `str_template`
+with several placeholders, it fires when any input is missing. `invalid`,
+`unmapped` and `str_extract`'s `no_match` fire only when every input is
+present.
 
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `schema-handlers`.
 Replaces: REQ-0345, REQ-0346, REQ-0347, REQ-0348, REQ-0349, REQ-0350, REQ-0357.

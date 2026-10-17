@@ -443,7 +443,7 @@ keep_policy:
 
 order_by_term:
     type: [variable, order_term_class]
-    description: Order term; a bare variable sorts ascending with missing values last (VALUE-22).
+    description: Order term; a bare variable sorts ascending with missing values first, as the lowest value (VALUE-22).
 
 order_term_class:
     - variable:
@@ -457,9 +457,8 @@ order_term_class:
         description: Sort direction for non-missing values (VALUE-22).
     - nulls:
         type: str
-        default: last
         values: [first, last]
-        description: Placement of missing values, independent of direction (VALUE-22).
+        description: Absolute placement of missing values, never flipped by direction; when omitted, missing sorts lowest (VALUE-22).
 
 case_item_class:
     type: [case_branch_class, case_otherwise_class]
@@ -806,14 +805,6 @@ expressions:
         - missing:
             type: literal_value
             description: Value returned when the source is missing (TEXT-11).
-    str_concat: # See REQ-1112.
-        - sources:
-            type: "list[expression]"
-            required: true
-            description: Expressions to concatenate in order (TEXT-1).
-        - missing:
-            type: literal_value
-            description: Value returned when any source is missing (TEXT-1).
     str_template: # See REQ-1113.
         type: [string_template, str_template_class]
         description: Portable string template, concise or with missing handling (TEXT-4).
@@ -889,19 +880,15 @@ expressions:
         - window:
             type: window_selection
             description: Partition, ordering and row selection for the window (WINDOW-7).
-    previous_non_missing: # See REQ-1126.
-        - source:
-            type: variable
-            required: true
-            description: Variable searched for the closest earlier non-missing value (WINDOW-8).
-        - window:
-            type: window_selection
-            description: Partition and ordering for the window (WINDOW-8).
     locf: # See REQ-1239.
         - source:
             type: variable
             required: true
             description: Completed observed variable to carry forward (WINDOW-8).
+        - include_current:
+            type: bool
+            default: true
+            description: Whether a present current source answers before earlier rows (WINDOW-8).
         - window:
             type: window_selection
             description: Partition, ordering and optional row selection (WINDOW-8).
@@ -909,14 +896,25 @@ expressions:
         - date:
             type: variable
             required: true
-            description: Candidate baseline date (WINDOW-9).
+            description: Candidate baseline date or datetime (WINDOW-9).
         - reference_date:
             type: variable
             required: true
-            description: Inclusive upper bound for the baseline date (WINDOW-9).
+            description: Upper bound for the baseline date, of the same temporal type (WINDOW-9).
+        - value:
+            type: variable
+            required: true
+            description: Analysis value the baseline is for; a row whose value is missing is not eligible (WINDOW-9).
+        - inclusive:
+            type: bool
+            default: true
+            description: Whether a date equal to the reference date is eligible; false admits only earlier dates (WINDOW-9).
+        - tie_break:
+            type: "list[order_by_term]"
+            description: Terms ordering eligible rows that share the latest date; the last row is the baseline (WINDOW-9).
         - window:
             type: window_selection
-            description: Baseline-selection partitions for the window (WINDOW-9).
+            description: Baseline-selection partitions and row filter; order_by is not allowed (WINDOW-5).
 "#),
     ("schema_function.yaml", r#"version: "1.0"
 

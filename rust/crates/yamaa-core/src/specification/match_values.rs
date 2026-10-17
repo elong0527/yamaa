@@ -92,7 +92,6 @@ impl Declaration {
             | "cut"
             | "greatest"
             | "least"
-            | "str_concat"
             | "str_extract"
             | "str_replace"
             | "str_template"
@@ -101,7 +100,6 @@ impl Declaration {
             | "rank"
             | "baseline_flag"
             | "row_value"
-            | "previous_non_missing"
             | "locf"
             | "date_shift"
             | "datetime_diff"
@@ -414,8 +412,8 @@ impl Declaration {
 }
 
 /// Conditional and callback relation contexts need a demand-aware key owner.
-/// Keep them outside this bounded scalar/window expansion, including nested
-/// concatenation operands, rather than pre-reading their unselected branches.
+/// Keep them outside this bounded scalar/window expansion rather than
+/// pre-reading their unselected branches.
 fn reject_deferred_owners(branch: &cases::Branch, extra: &mut Vec<UnsupportedFeature>) {
     let operation = match branch.operation.as_ref() {
         Operation::Case(_) => Some("case"),
@@ -427,14 +425,6 @@ fn reject_deferred_owners(branch: &cases::Branch, extra: &mut Vec<UnsupportedFea
         Operation::Imputation(operation) if operation.bounds().next().is_some() => {
             for (field, _) in operation.bounds() {
                 reject(extra, field, format!("{}.{field}", branch.path));
-            }
-            None
-        }
-        Operation::Scalar(declaration) => {
-            if let scalar::Declaration::Concat { sources, .. } = declaration.as_ref() {
-                for source in sources {
-                    reject_deferred_owners(source, extra);
-                }
             }
             None
         }
@@ -534,20 +524,6 @@ pub(super) fn visit_keys(
                         )?;
                     }
                 }
-            }
-        }
-        if let Some(payload) = d.field(value, "str_concat") {
-            for (index, &value) in sequence(d, field(d, payload, "sources")?)?
-                .iter()
-                .enumerate()
-            {
-                expression(
-                    d,
-                    value,
-                    &format!("{path}.str_concat.sources[{index}]"),
-                    depth + 1,
-                    visit,
-                )?;
             }
         }
         Ok(())

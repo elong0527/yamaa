@@ -39,7 +39,8 @@ columns:
   # latest DSSTDTC, then higher DSSEQ on the same day. Treatment records
   # (EPOCH = 'TREATMENT') belong to the end-of-treatment track below and
   # never count here. The date guard matters for the term and reason: an
-  # undated record would sort last and be kept.
+  # undated record sorts first, so without it a subject whose only record
+  # is undated would keep that record.
   - name: EOSDT
     type: date
     label: End of Study Date

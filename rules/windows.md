@@ -100,14 +100,15 @@ Replaces: REQ-0294, REQ-0327.
 
 ### WINDOW-5. Positional window operations require window.order_by, and baseline_flag forbids it
 
-`row_number`, `rank`, `row_value`, `previous_non_missing` and `locf` require
-`window.order_by`: without a declared order the window has no positions to
-number or to move along, and omitting it is a validation error.
-`baseline_flag` locates its baseline row by date, not by a declared order, and
-does not take `window.order_by`; declaring one is a validation error rather
-than silently ignored.
+`row_number`, `rank`, `row_value` and `locf` require `window.order_by`:
+without a declared order the window has no positions to number or to move
+along, and omitting it is a validation error.
+`baseline_flag` orders its eligible rows by `date` and then by its own
+`tie_break` terms, and does not take `window.order_by`; declaring one is a
+validation error rather than silently ignored.
 
-Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/fixtures/window_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/specs/window-failures.json`.
+Fails: `window_order_by_required`, `window_order_by_forbidden`.
+Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/fixtures/window_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/specs/window-failures.json`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::value_and_tie_break_bind_at_their_paths_and_window_order_stays_forbidden`.
 Replaces: REQ-0340, REQ-0341.
 
 ## Window operations
@@ -128,15 +129,15 @@ Evidence: `schema-window-functions`, `adam-adae-severity-rank`, `rust/crates/yam
 Replaces: REQ-0303, REQ-1123, REQ-1124.
 
 The tie-break settles positions, not equality. `row_number`, `row_value`,
-`previous_non_missing`, `locf` and right-side selection read the positions
-themselves, so a tie changes which row they reach. `rank` instead gives the
-records equal on all declared terms a single number rather than the distinct
-numbers their positions would give. The competition method leaves the
-positions occupied by a tie out of the subsequent numbers, so intervening
-numbers are skipped; the dense method numbers distinct values consecutively,
-and no number is skipped. Two missing values are equal for `rank` whatever
-`nulls` places them among. A specification that wants a tie broken declares
-the term that breaks it, whichever method it uses.
+`locf` and right-side selection read the positions themselves, so a tie
+changes which row they reach. `rank` instead gives the records equal on all
+declared terms a single number rather than the distinct numbers their
+positions would give. The competition method leaves the positions occupied by
+a tie out of the subsequent numbers, so intervening numbers are skipped; the
+dense method numbers distinct values consecutively, and no number is skipped.
+Two missing values are equal for `rank` whatever `nulls` places them among. A
+specification that wants a tie broken declares the term that breaks it,
+whichever method it uses.
 
 <a id="window-7"></a>
 
@@ -158,24 +159,24 @@ spelling of it.
 
 <a id="window-8"></a>
 
-### WINDOW-8. previous_non_missing and locf carry the closest strictly earlier non-missing source forward
+### WINDOW-8. locf carries the closest strictly earlier non-missing source forward unless include_current lets a present current source answer
 
-`previous_non_missing` returns `source` from the closest strictly earlier row
-of the ordered partition whose source is not missing. The current row is never
-a candidate, and missing source values are skipped, so one result can cross any
-number of consecutive gaps. `locf` returns the current source when it is
-present and otherwise that closest strictly earlier non-missing source. Either
-yields missing when its partition has no earlier non-missing source.
+`locf` returns `source` from the closest strictly earlier row of the ordered
+partition whose source is not missing; missing source values are skipped, so
+one result can cross any number of consecutive gaps. With
+`include_current: true`, the default, a present current source is returned
+instead. With `include_current: false` the current row is never a candidate.
+A row with no qualifying source yields missing.
 
-Evidence: `adam-advs-locf`, `adam-adqs-missed-visit-locf`, `rust/crates/yamaa-core/tests/dataset_windows.rs::previous_non_missing_crosses_long_gaps`.
+Evidence: `adam-advs-locf`, `adam-adqs-missed-visit-locf`, `adam-advs-carryforward`, `schema-window-functions`, `rust/crates/yamaa-core/tests/dataset_windows.rs::locf_excluding_current_crosses_long_gaps`.
 Replaces: REQ-1126, REQ-1239.
 
 `locf` preserves row count and the selected value's type and temporal
-precision. Zero and a present empty string are values, not gaps. A
-`window.filter` excludes both donor and recipient rows, and excluded recipients
-receive missing. The source is a separate completed column; reading the column
-being derived remains a dependency cycle. Consecutive gaps each select an
-original observed value, never an already-filled output value.
+precision. Zero and a present empty string are values, not gaps. In either
+mode a `window.filter` excludes both donor and recipient rows, and excluded
+recipients receive missing. The source is a separate completed column; reading
+the column being derived remains a dependency cycle. Consecutive gaps each
+select an original observed value, never an already-filled output value.
 
 ```yaml
 derivation:
@@ -186,26 +187,79 @@ derivation:
       order_by: [AVISITN, ASEQ]
 ```
 
+With `include_current: false` every row reads the closest earlier observed
+value even when its own value is present, as a prior-value column does:
+
+```yaml
+derivation:
+  locf:
+    source: AVALCOL
+    include_current: false
+    window:
+      group_by: [STUDYID, USUBJID, PARAMCD]
+      order_by: [ADT, ASEQ]
+```
+
 <a id="window-9"></a>
 
-### WINDOW-9. baseline_flag marks the unique latest row dated at or before its reference date
+### WINDOW-9. baseline_flag marks the last eligible row ordered by date and then by its tie_break terms
 
-`baseline_flag` returns `Y` for the unique latest eligible row of each
-partition and missing elsewhere. An eligible row has a non-missing `date` at or
-before its `reference_date`, which is an inclusive upper bound for the
-baseline date. A tie for the latest eligible date is an error.
+`baseline_flag` returns `Y` for at most one row of each partition and missing
+elsewhere. A row is eligible when its `value` is not missing and its `date` is
+not missing and falls at or before its `reference_date`, or strictly before it
+with `inclusive: false`. The baseline is the last eligible row when eligible
+rows are ordered by `date` and then by the `tie_break` terms, each term with
+its own direction and missing placement. Eligible rows tied for last on `date`
+and every term fail.
 
-Evidence: `negative-tied-baseline`, `schema-window-functions`, `rust/crates/yamaa-core/tests/dataset_windows.rs::baseline_filters_exclude_later_rows_and_ties_without_dropping_output`.
+Fails: `ambiguous_baseline`, `incompatible_input_type`.
+Evidence: `negative-tied-baseline`, `negative-baseline-unresolved-tie`, `schema-baseline-tie-break`, `schema-baseline-exclusive`, `schema-baseline-missing-value`, `schema-window-functions`, `adam-adae-worsening-emergence`, `rust/crates/yamaa-core/tests/dataset_windows.rs::baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied`, `rust/crates/yamaa-core/tests/dataset_windows.rs::baseline_requires_a_present_value_and_honors_an_exclusive_reference`, `rust/crates/yamaa-core/tests/dataset_windows.rs::baseline_filters_exclude_later_rows_and_ties_without_dropping_output`.
 Replaces: REQ-1127.
+
+`date` and `reference_date` are both `date` columns or both `datetime`
+columns; any other pairing fails validation as `incompatible_input_type` at
+the operand. With `datetime` columns the bound and the order use the time of
+day as well. `value` may hold any type and only its being missing matters: it
+names the analysis value the baseline is for, so the baseline is the last
+non-missing value. `inclusive` defaults to `true`. Each row is compared with
+its own `reference_date`, and a row whose reference is missing is not
+eligible. A partition with no eligible row has no baseline.
+
+`tie_break` is an optional list of order terms under
+[VALUE-22](values.md#value-22), compared only between eligible rows that share
+the latest date. The last row in that order is chosen, so `direction: desc` on
+a term prefers the term's smallest value. A missing tie-break value takes the
+term's placement: with `nulls` omitted under `asc` it sorts first, so a row
+with a collection time is chosen over a same-day row without one.
+
+`window.group_by` partitions the rows and `window.filter` removes rows before
+eligibility is judged ([WINDOW-4](#window-4)); it remains the place for a
+compound condition. When two or more eligible rows tie for last on `date` and
+every `tie_break` term, the run fails with `ambiguous_baseline`, reporting the
+shared date, the number of tied rows and the partition; ties among earlier
+rows do not matter.
+
+```yaml
+- name: ABLFL
+  type: str
+  derivation:
+    baseline_flag:
+      date: ADT
+      reference_date: TRTSDT
+      value: AVAL
+      tie_break: [ATM, LBSEQ]
+      window:
+        group_by: [STUDYID, USUBJID, PARAMCD]
+```
 
 <a id="window-10"></a>
 
 ### WINDOW-10. Window operations convert nothing: numbering returns int and selections keep their type
 
 `row_number` and `rank` return integers, and `baseline_flag` returns a string.
-`row_value`, `previous_non_missing` and `locf` accept any `source` type, perform
-no coercion, and return the selected value with its type and, for a temporal
-value, its collected precision. `row_value` requires an integer `offset`.
+`row_value` and `locf` accept any `source` type, perform no coercion, and
+return the selected value with its type and, for a temporal value, its
+collected precision. `row_value` requires an integer `offset`.
 
 Evidence: `schema-window-functions`, `rust/crates/yamaa-adapters/tests/fixtures/source_selection.json`.
 Replaces: REQ-0311, REQ-0316.

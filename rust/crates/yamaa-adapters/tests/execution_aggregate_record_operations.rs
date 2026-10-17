@@ -1979,11 +1979,19 @@ S1,002,2024-06
                                     column: 6,
                                     offset: -1
                                 },
-                                WindowKind::PreviousNonMissing { column: 6 },
-                                WindowKind::Locf { column: 6 },
+                                WindowKind::Locf {
+                                    column: 6,
+                                    include_current: false
+                                },
+                                WindowKind::Locf {
+                                    column: 6,
+                                    include_current: true
+                                },
                                 WindowKind::BaselineFlag {
                                     date: 4,
-                                    reference_date: 5
+                                    reference_date: 5,
+                                    value: 6,
+                                    inclusive: true
                                 }
                             ]
                         );
@@ -2823,7 +2831,7 @@ S1,002,2024-06
         }
     }
     mod declarative_case_intermediates {
-        //! Complete case/concat observations use the shared scalar source binder.
+        //! Complete case observations use the shared scalar source binder.
         use std::{
             fs,
             path::{Path, PathBuf},
@@ -2930,31 +2938,6 @@ columns:
                     {"spec_path":"columns.A.derivation.case[0].then.source.no_match","handler":"no_match","count":1},
                     {"spec_path":"columns.B.derivation.case[0].then.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"columns.B.derivation.case[0].then.source.no_match","handler":"no_match","count":1},
-                ])
-            );
-        }
-        #[test]
-        fn concat_nested_case_reuses_the_same_source_binding_and_authored_operand_path() {
-            let fixture = Fixture::new();
-            fixture.populate();
-            fs::write(fixture.0.join("src.csv"), "ID,SELECT\n1,Y\n2,N\n").unwrap();
-            let prefix = BODY
-                .split("  - name: A")
-                .next()
-                .unwrap()
-                .replace("[ID, A, B]", "[ID, C]");
-            let body=format!("{prefix}  - name: C\n    type: str\n    derivation:\n      str_concat:\n        sources:\n          - {{literal: '['}}\n          - case:\n              - when: \"SELECT = 'Y'\"\n                then: P.A\n              - otherwise: {{literal: none}}\n          - {{literal: ']'}}\n");
-            let mut result = fixture.run(&body).unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("result.csv")).unwrap(),
-                b"ID,C\n1,[first]\n2,[none]\n"
-            );
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.C.derivation.str_concat.sources[1].case[0].then.source.multiple_matches","handler":"multiple_matches","count":1}
                 ])
             );
         }

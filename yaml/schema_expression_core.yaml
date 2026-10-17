@@ -70,7 +70,7 @@ keep_policy:
 
 order_by_term:
     type: [variable, order_term_class]
-    description: Order term; a bare variable sorts ascending with missing values last (VALUE-22).
+    description: Order term; a bare variable sorts ascending with missing values first, as the lowest value (VALUE-22).
 
 order_term_class:
     - variable:
@@ -84,9 +84,8 @@ order_term_class:
         description: Sort direction for non-missing values (VALUE-22).
     - nulls:
         type: str
-        default: last
         values: [first, last]
-        description: Placement of missing values, independent of direction (VALUE-22).
+        description: Absolute placement of missing values, never flipped by direction; when omitted, missing sorts lowest (VALUE-22).
 
 case_item_class:
     type: [case_branch_class, case_otherwise_class]

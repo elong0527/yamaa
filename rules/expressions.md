@@ -55,22 +55,22 @@ Replaces: REQ-0046, REQ-0325.
 
 <a id="expr-3"></a>
 
-### EXPR-3. Only case results and str_concat sources nest expressions inside an operation
+### EXPR-3. Expressions nest only in case results and key match values
 
 `source` and `literal` are expression leaves. Every other expression names its
-input variables directly, except in two fields whose declared type contains
+input variables directly, except in fields whose declared type contains
 `expression`, which are evaluated recursively: each `case` `then` and trailing
-`otherwise`, and each item of `str_concat.sources`. A derivation's own
-top-level expression, in `derivation` or `handled_expression_class.value`, is
-not restricted by this rule. Fields typed `numeric_expression`,
+`otherwise`, and a `key` match value under [LOOKUP-6](lookup.md#lookup-6). A
+derivation's own top-level expression, in `derivation` or
+`handled_expression_class.value`, is not restricted by this rule. Fields typed `numeric_expression`,
 `string_template` and `aggregate_expression` are leaves whose identifiers
 their own rules resolve.
 
 Evidence: `schema-expressions`.
 Replaces: REQ-0290, REQ-0291, REQ-0292.
 
-`case` selects among expressions, and concatenation places literals beside
-sources. [FORMULA-10](formulas.md#formula-10),
+`case` selects among expressions, and a key match value computes the operand
+it matches. [FORMULA-10](formulas.md#formula-10),
 [Text](text.md) and
 [FORMULA-17](formulas.md#formula-17) resolve the identifiers of the three leaf
 types.

@@ -184,24 +184,7 @@ impl Declaration {
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
         {
             for &term in sequence(d, id)? {
-                let (name, descending, nulls_first) = if let N::Text(name) = &d.nodes()[term] {
-                    (name.as_str(), false, false)
-                } else {
-                    (
-                        text(d, field(d, term, "variable")?)?,
-                        d.field(term, "direction")
-                            .map(|id| text(d, id))
-                            .transpose()?
-                            .unwrap_or("asc")
-                            == "desc",
-                        d.field(term, "nulls")
-                            .map(|id| text(d, id))
-                            .transpose()?
-                            .unwrap_or("last")
-                            == "first",
-                    )
-                };
-                order.push((name.into(), descending, nulls_first));
+                order.push(order_term(d, term)?);
             }
         }
         let declaration_finding = (order.is_empty() != keep.is_none()).then(|| {

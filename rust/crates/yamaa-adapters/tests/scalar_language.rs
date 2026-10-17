@@ -181,89 +181,8 @@ mod scalar {
             }
         }
         #[test]
-        fn nested_concat_keeps_order_and_handler_counts_and_stops_at_missing() {
-            let derivation="{str_concat: {sources: [{literal: '['}, {str_case: {source: SRC.TEXT, to: upper, missing: absent}}, {str_concat: {sources: [{literal: ']'}, {source: SRC.PEER}], missing: fallback}}]}}";
-            let fixture = bespoke(
-        &spec(derivation, "str"),
-        b"ID,I,F,D,TEXT,PEER\na,1,1,2025-01-01,abc,z\nb,1,1,2025-01-01,,q\nc,1,1,2025-01-01,xyz,\n",
-    );
-            let mut result = fixture.run();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("output.csv")).unwrap(),
-                b"ID,RESULT\na,[ABC]z\nb,[absent]q\nc,[XYZfallback\n"
-            );
-            let observed = result.observations();
-            let counts = observed["handler_counts"].as_array().unwrap();
-            assert!(counts.iter().any(|row| row["spec_path"]
-                == "columns.RESULT.derivation.str_concat.sources[1].str_case.missing"
-                && row["count"] == 1));
-            assert!(counts.iter().any(|row| row["spec_path"]
-                == "columns.RESULT.derivation.str_concat.sources[2].str_concat.missing"
-                && row["count"] == 1));
-            let fixture = bespoke(
-        &spec(
-            "{str_concat: {sources: [{source: SRC.TEXT}, {literal: 42}], missing: fallback}}",
-            "str",
-        ),
-        b"ID,I,F,D,TEXT\na,1,1,2025-01-01,\n",
-    );
-            let mut result = fixture.run();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("output.csv")).unwrap(),
-                b"ID,RESULT\na,fallback\n"
-            );
-        }
-
-        #[test]
-        fn concat_missing_fallback_keeps_an_earlier_nested_absent_handler() {
-            // Preserve the distinct REQ-0361 case from the retired Python expression
-            // control: a later missing value must retain the earlier source's handler.
-            let fixture = bespoke(
-        &spec(
-            "{str_concat: {sources: [{source: {variable: SRC.ABSENT, absent: NA}}, {source: SRC.B}], missing: '?' }}",
-            "str",
-        ),
-        b"ID,I,F,D,B\na,1,1,2025-01-01,\n",
-    );
-            let mut result = fixture.run();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            let counts = yamaa_adapters::json!([
-                {"spec_path": "columns.RESULT.derivation.str_concat.missing", "handler": "missing", "count": 1},
-                {"spec_path": "columns.RESULT.derivation.str_concat.sources[0].source.absent", "handler": "absent", "count": 1},
-            ]);
-            assert_eq!(result.observations()["handler_counts"], counts);
-            assert_eq!(result.observations()["nodes"][0]["handler_counts"], counts);
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("output.csv")).unwrap(),
-                b"ID,RESULT\na,?\n"
-            );
-        }
-
-        #[test]
-        fn concat_input_diagnostic_preserves_operand_path_and_blocks_publication() {
-            let fixture = bespoke(
-                &spec(
-                    "{str_concat: {sources: [{literal: x}, {literal: 42}]}}",
-                    "str",
-                ),
-                b"ID,I,F,D\na,1,1,2025-01-01\n",
-            );
-            let result = fixture.run();
-            assert_eq!(result.issues().len(), 1);
-            assert_eq!(
-                issue_json(&result.issues()[0]),
-                yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0308","spec_paths":["columns.RESULT.derivation.str_concat.sources[1]"],"context":{"source":"sources[1]","expected":"str","actual":"int"}})
-            );
-            assert!(!fixture.0.join("output.csv").exists());
-        }
-        #[test]
         fn row_scalar_derivations_share_the_same_raw_contract() {
-            let source="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float}}}\noutput: {path: output.csv, columns: [ID, RESULT, MAXIMUM]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RESULT, type: str}\n  - {name: MAXIMUM, type: int}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {str_concat: {sources: [{literal: '['}, {source: SRC.TEXT}, {literal: ']'}]}}\n      MAXIMUM: {greatest: {sources: [SRC.I, SRC.F]}}\n";
+            let source="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float}}}\noutput: {path: output.csv, columns: [ID, RESULT, MAXIMUM]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RESULT, type: str}\n  - {name: MAXIMUM, type: int}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {str_template: '[{SRC.TEXT}]'}\n      MAXIMUM: {greatest: {sources: [SRC.I, SRC.F]}}\n";
             let fixture = bespoke(source, b"ID,I,F,TEXT\na,3,2,abc\n");
             let mut result = fixture.run();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -697,7 +616,7 @@ rows:
             }
             let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
             fs::write(fixture.0.join("spec.yaml"),original.replace("then: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: last}}",
-        "then: {str_concat: {sources: [{source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: first}}], missing: null}}" )).unwrap();
+        "then: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: first}}" )).unwrap();
             assert_eq!(
         fixture.saved(),
         b"ID,TEXT,FIRST,MAP,ABSENT\na,early,late,20,EDGE\nb,SKIP,SKIP,0,SKIP\nc,,fallback,0,EDGE\n"

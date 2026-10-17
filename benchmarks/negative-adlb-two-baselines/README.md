@@ -38,6 +38,7 @@ derive it and let a tie be reported where it arises:
         group_by: [STUDYID, USUBJID, PARAMCD]
       date: ADT
       reference_date: TRTSDT
+      value: AVAL
 ```
 
 Do not widen the count to accept two records; a second baseline is

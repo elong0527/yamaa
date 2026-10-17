@@ -2,5 +2,5 @@ lifecycle: reviewed
 standard: SDTM
 domain: DM
 covers:
-- str_concat
+- str_template
 - verify:max_length

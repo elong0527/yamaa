@@ -43,19 +43,15 @@ expressions:
         - window:
             type: window_selection
             description: Partition, ordering and row selection for the window (WINDOW-7).
-    previous_non_missing: # See REQ-1126.
-        - source:
-            type: variable
-            required: true
-            description: Variable searched for the closest earlier non-missing value (WINDOW-8).
-        - window:
-            type: window_selection
-            description: Partition and ordering for the window (WINDOW-8).
     locf: # See REQ-1239.
         - source:
             type: variable
             required: true
             description: Completed observed variable to carry forward (WINDOW-8).
+        - include_current:
+            type: bool
+            default: true
+            description: Whether a present current source answers before earlier rows (WINDOW-8).
         - window:
             type: window_selection
             description: Partition, ordering and optional row selection (WINDOW-8).
@@ -63,11 +59,22 @@ expressions:
         - date:
             type: variable
             required: true
-            description: Candidate baseline date (WINDOW-9).
+            description: Candidate baseline date or datetime (WINDOW-9).
         - reference_date:
             type: variable
             required: true
-            description: Inclusive upper bound for the baseline date (WINDOW-9).
+            description: Upper bound for the baseline date, of the same temporal type (WINDOW-9).
+        - value:
+            type: variable
+            required: true
+            description: Analysis value the baseline is for; a row whose value is missing is not eligible (WINDOW-9).
+        - inclusive:
+            type: bool
+            default: true
+            description: Whether a date equal to the reference date is eligible; false admits only earlier dates (WINDOW-9).
+        - tie_break:
+            type: "list[order_by_term]"
+            description: Terms ordering eligible rows that share the latest date; the last row is the baseline (WINDOW-9).
         - window:
             type: window_selection
-            description: Baseline-selection partitions for the window (WINDOW-9).
+            description: Baseline-selection partitions and row filter; order_by is not allowed (WINDOW-5).

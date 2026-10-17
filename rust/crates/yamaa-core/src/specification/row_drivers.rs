@@ -188,11 +188,6 @@ pub(super) fn admit_reads(
                 }
             }
         }
-        if let Some(payload) = d.field(value, "str_concat") {
-            for &child in sequence(d, field(d, payload, "sources")?)? {
-                template_names(d, child, templates, names, depth + 1)?;
-            }
-        }
         Ok(())
     }
     let value = field(d, declaration, "value")?;

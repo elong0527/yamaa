@@ -464,6 +464,7 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
             T::map(vec![
                 ("date", T::text("ID")),
                 ("reference_date", T::text("ID")),
+                ("value", T::text("ID")),
                 (
                     "window",
                     T::map(vec![("order_by", T::List(vec![T::text("ID")]))]),
@@ -504,6 +505,7 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
                 T::map(vec![
                     ("date", T::text("ID")),
                     ("reference_date", T::text("ID")),
+                    ("value", T::text("ID")),
                 ]),
             )]),
         )]),

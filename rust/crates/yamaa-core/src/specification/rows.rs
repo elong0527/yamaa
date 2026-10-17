@@ -228,17 +228,9 @@ fn default_reads(
                 None,
             ));
         }
-        if [
-            "row_number",
-            "rank",
-            "row_value",
-            "previous_non_missing",
-            "locf",
-            "baseline_flag",
-            "window",
-        ]
-        .iter()
-        .any(|operation| d.field(value, operation).is_some())
+        if ["row_number", "rank", "row_value", "locf", "baseline_flag"]
+            .iter()
+            .any(|operation| d.field(value, operation).is_some())
         {
             return Ok(true);
         }
@@ -250,13 +242,6 @@ fn default_reads(
                             return Ok(true);
                         }
                     }
-                }
-            }
-        }
-        if let Some(concat) = d.field(value, "str_concat") {
-            for &child in sequence(d, field(d, concat, "sources")?)? {
-                if contains_window(d, child, depth + 1)? {
-                    return Ok(true);
                 }
             }
         }
@@ -290,19 +275,8 @@ fn default_reads(
     };
     match operation {
         "literal" => {}
-        "greatest"
-        | "least"
-        | "str_concat"
-        | "case"
-        | "first_available"
-        | "mapping"
-        | "cut"
-        | "row_number"
-        | "rank"
-        | "row_value"
-        | "previous_non_missing"
-        | "locf"
-        | "baseline_flag" => {
+        "greatest" | "least" | "case" | "first_available" | "mapping" | "cut" | "row_number"
+        | "rank" | "row_value" | "locf" | "baseline_flag" => {
             let mut names = Vec::new();
             derivations::references(d, value, project, &mut names, 0)?;
             for name in names {
@@ -369,17 +343,7 @@ fn default_reads(
                 Err(error) => return Err(PrepareError::numeric_parse(error, None)),
             }
         }
-        "aggregate" | "lookup" | "window" => {
-            return Ok((
-                false,
-                reads,
-                Some(match operation {
-                    "aggregate" => "aggregate",
-                    "lookup" => "lookup",
-                    _ => "window",
-                }),
-            ));
-        }
+        "aggregate" => return Ok((false, reads, Some("aggregate"))),
         _ => {
             return Ok((
                 !self_default,
@@ -1483,13 +1447,7 @@ impl Rows {
             };
             if matches!(
                 text(d, operation)?,
-                "row_number"
-                    | "rank"
-                    | "row_value"
-                    | "previous_non_missing"
-                    | "locf"
-                    | "baseline_flag"
-                    | "window"
+                "row_number" | "rank" | "row_value" | "locf" | "baseline_flag"
             ) {
                 // An output-key window default spans the complete constructed
                 // dataset. Selection identity cannot make it template-local.
@@ -1560,12 +1518,9 @@ impl Rows {
                         "row_number"
                             | "rank"
                             | "row_value"
-                            | "previous_non_missing"
                             | "locf"
                             | "baseline_flag"
-                            | "window"
                             | "aggregate"
-                            | "lookup"
                             | "mapping"
                     ) {
                         continue;

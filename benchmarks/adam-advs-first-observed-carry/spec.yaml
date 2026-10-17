@@ -68,13 +68,15 @@ columns:
           then: AVAL
 
   # The first observed result, carried to every later visit of the
-  # subject and parameter.
+  # subject and parameter; with include_current false the current row is
+  # never a candidate.
   - name: _CARRIED
     type: float
     label: Prior First Observed Analysis Value
     derivation:
-      previous_non_missing:
+      locf:
         source: _SEL_AVAL
+        include_current: false
         window: VISIT_ORDER
 
   - name: BASEVAL

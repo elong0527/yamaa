@@ -116,21 +116,6 @@ fn walk(
                 )?;
             }
         }
-        if let Some(payload) = d.field(id, "str_concat") {
-            for (index, &child) in sequence(d, field(d, payload, "sources")?)?
-                .iter()
-                .enumerate()
-            {
-                expression(
-                    d,
-                    child,
-                    &format!("{path}.str_concat.sources[{index}]"),
-                    rows,
-                    depth + 1,
-                    visit,
-                )?;
-            }
-        }
         if let Some(branches) = d.field(id, "case") {
             for (index, &branch) in sequence(d, branches)?.iter().enumerate() {
                 for name in ["then", "otherwise"] {
