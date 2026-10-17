@@ -1,0 +1,36 @@
+schema_version: "1.0"
+domain: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  VS_RAW: input/vs_raw.csv
+
+output:
+  path: vs.csv
+  columns: [STUDYID, USUBJID, VSSEQ, EPOCH]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS_RAW.USUBJID
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: VS_RAW.VSSEQ
+
+  # The epoch list is extensible, and its declared items are still the
+  # whole set of accepted values.
+  - name: EPOCH
+    type: str
+    label: Epoch
+    derivation: VS_RAW.EPOCH
+    submission:
+      codelist: EPOCH
+      origin:
+        type: Assigned

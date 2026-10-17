@@ -76,8 +76,6 @@ columns:
         values: [Study Eye, Fellow Eye, Both Eyes]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, OESEQ]
   - row_count:
       min: 10
       max: 10

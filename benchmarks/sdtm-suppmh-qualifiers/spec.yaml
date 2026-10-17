@@ -36,8 +36,6 @@ columns:
     type: str
     label: Identifying Variable Value
     derivation: MH_RAW.MHSEQ
-    verifications:
-      not_missing: {}
 
   - name: QNAM
     type: str
@@ -86,8 +84,6 @@ rows:
       QVAL: MH_RAW.MHCONF
 
 verifications:
-  - unique:
-      columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
   - row_count:
       min: 7
       max: 7

@@ -80,8 +80,6 @@ columns:
         values: ["D", "M"]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, CMSEQ]
   - row_count:
       min: 11
       max: 11

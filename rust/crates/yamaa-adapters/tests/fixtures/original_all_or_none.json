@@ -1,7 +1,7 @@
 [
   {
     "case": "held",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"all_or_none\": {\"id\": \"together\", \"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"id\": \"together\", \"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\ne,0,0\n",
     "expected": {
       "artifacts": [
@@ -181,23 +181,12 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        },
-        {
           "check": "all_or_none",
           "evaluated_count": 3,
           "failure": null,
           "requirement": "REQ-0382",
           "severity": "error",
-          "spec_path": "verifications[1].all_or_none",
+          "spec_path": "verifications[0].all_or_none",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": "together"
@@ -208,7 +197,7 @@
           "failure": null,
           "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[2].row_count",
+          "spec_path": "verifications[1].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -219,7 +208,7 @@
   },
   {
     "case": "failed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"all_or_none\": {\"id\": \"together\", \"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"id\": \"together\", \"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -243,7 +232,7 @@
           "phase": "verification",
           "requirement": "REQ-0382",
           "spec_paths": [
-            "verifications[1].all_or_none"
+            "verifications[0].all_or_none"
           ]
         }
       ],
@@ -271,7 +260,7 @@
               "phase": "verification",
               "requirement": "REQ-0382",
               "spec_paths": [
-                "verifications[1].all_or_none"
+                "verifications[0].all_or_none"
               ]
             }
           ],
@@ -386,17 +375,6 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 5,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        },
-        {
           "check": "all_or_none",
           "evaluated_count": 5,
           "failure": {
@@ -437,12 +415,12 @@
             "requirement": "REQ-0382",
             "severity": "error",
             "spec_paths": [
-              "verifications[1].all_or_none"
+              "verifications[0].all_or_none"
             ]
           },
           "requirement": "REQ-0382",
           "severity": "error",
-          "spec_path": "verifications[1].all_or_none",
+          "spec_path": "verifications[0].all_or_none",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": "together"
@@ -453,7 +431,7 @@
           "failure": null,
           "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[2].row_count",
+          "spec_path": "verifications[1].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -464,7 +442,7 @@
   },
   {
     "case": "repeated_columns",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"all_or_none\": {\"columns\": [\"V\", \"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -487,7 +465,7 @@
           "phase": "verification",
           "requirement": "REQ-0382",
           "spec_paths": [
-            "verifications[1].all_or_none"
+            "verifications[0].all_or_none"
           ]
         }
       ],
@@ -514,7 +492,7 @@
               "phase": "verification",
               "requirement": "REQ-0382",
               "spec_paths": [
-                "verifications[1].all_or_none"
+                "verifications[0].all_or_none"
               ]
             }
           ],
@@ -629,17 +607,6 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 5,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        },
-        {
           "check": "all_or_none",
           "evaluated_count": 5,
           "failure": {
@@ -678,12 +645,12 @@
             "requirement": "REQ-0382",
             "severity": "error",
             "spec_paths": [
-              "verifications[1].all_or_none"
+              "verifications[0].all_or_none"
             ]
           },
           "requirement": "REQ-0382",
           "severity": "error",
-          "spec_path": "verifications[1].all_or_none",
+          "spec_path": "verifications[0].all_or_none",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -694,7 +661,7 @@
           "failure": null,
           "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[2].row_count",
+          "spec_path": "verifications[1].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -705,7 +672,7 @@
   },
   {
     "case": "many_offenders",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"all_or_none\": {\"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,\nb,10,\nc,10,\nd,10,\ne,10,\nf,10,\ng,10,\n",
     "expected": {
       "artifacts": [],
@@ -737,7 +704,7 @@
           "phase": "verification",
           "requirement": "REQ-0382",
           "spec_paths": [
-            "verifications[1].all_or_none"
+            "verifications[0].all_or_none"
           ]
         }
       ],
@@ -773,7 +740,7 @@
               "phase": "verification",
               "requirement": "REQ-0382",
               "spec_paths": [
-                "verifications[1].all_or_none"
+                "verifications[0].all_or_none"
               ]
             }
           ],
@@ -916,17 +883,6 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 7,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        },
-        {
           "check": "all_or_none",
           "evaluated_count": 7,
           "failure": {
@@ -1004,12 +960,12 @@
             "requirement": "REQ-0382",
             "severity": "error",
             "spec_paths": [
-              "verifications[1].all_or_none"
+              "verifications[0].all_or_none"
             ]
           },
           "requirement": "REQ-0382",
           "severity": "error",
-          "spec_path": "verifications[1].all_or_none",
+          "spec_path": "verifications[0].all_or_none",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -1020,7 +976,7 @@
           "failure": null,
           "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[2].row_count",
+          "spec_path": "verifications[1].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -1031,7 +987,7 @@
   },
   {
     "case": "empty",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"all_or_none\": {\"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\n",
     "expected": {
       "artifacts": [
@@ -1122,23 +1078,12 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 0,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        },
-        {
           "check": "all_or_none",
           "evaluated_count": 0,
           "failure": null,
           "requirement": "REQ-0382",
           "severity": "error",
-          "spec_path": "verifications[1].all_or_none",
+          "spec_path": "verifications[0].all_or_none",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -1149,7 +1094,7 @@
           "failure": null,
           "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[2].row_count",
+          "spec_path": "verifications[1].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -1160,7 +1105,7 @@
   },
   {
     "case": "all_missing",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"all_or_none\": {\"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\nb,,\n",
     "expected": {
       "artifacts": [
@@ -1282,23 +1227,12 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 1,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        },
-        {
           "check": "all_or_none",
           "evaluated_count": 1,
           "failure": null,
           "requirement": "REQ-0382",
           "severity": "error",
-          "spec_path": "verifications[1].all_or_none",
+          "spec_path": "verifications[0].all_or_none",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -1309,7 +1243,7 @@
           "failure": null,
           "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[2].row_count",
+          "spec_path": "verifications[1].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -1320,7 +1254,7 @@
   },
   {
     "case": "single",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"all_or_none\": {\"columns\": [\"V\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -1335,7 +1269,7 @@
           "phase": "validation",
           "requirement": "REQ-0401",
           "spec_paths": [
-            "verifications[1].all_or_none"
+            "verifications[0].all_or_none"
           ]
         }
       ],
@@ -1354,7 +1288,7 @@
               "phase": "validation",
               "requirement": "REQ-0401",
               "spec_paths": [
-                "verifications[1].all_or_none"
+                "verifications[0].all_or_none"
               ]
             }
           ],
@@ -1467,25 +1401,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 5,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "duplicate",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"all_or_none\": {\"columns\": [\"V\", \"V\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"V\", \"V\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -1500,7 +1422,7 @@
           "phase": "validation",
           "requirement": "REQ-0401",
           "spec_paths": [
-            "verifications[1].all_or_none"
+            "verifications[0].all_or_none"
           ]
         }
       ],
@@ -1519,7 +1441,7 @@
               "phase": "validation",
               "requirement": "REQ-0401",
               "spec_paths": [
-                "verifications[1].all_or_none"
+                "verifications[0].all_or_none"
               ]
             }
           ],
@@ -1632,25 +1554,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 5,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "empty_columns",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"all_or_none\": {\"columns\": []}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": []}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -1665,7 +1575,7 @@
           "phase": "validation",
           "requirement": "REQ-0397",
           "spec_paths": [
-            "verifications[1].all_or_none"
+            "verifications[0].all_or_none"
           ]
         }
       ],
@@ -1684,7 +1594,7 @@
               "phase": "validation",
               "requirement": "REQ-0397",
               "spec_paths": [
-                "verifications[1].all_or_none"
+                "verifications[0].all_or_none"
               ]
             }
           ],
@@ -1797,25 +1707,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 5,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "unknown_before_distinct",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"all_or_none\": {\"columns\": [\"NO\", \"NO\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"all_or_none\": {\"columns\": [\"NO\", \"NO\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -1830,7 +1728,7 @@
           "phase": "validation",
           "requirement": "REQ-0405",
           "spec_paths": [
-            "verifications[1].all_or_none.columns"
+            "verifications[0].all_or_none.columns"
           ]
         }
       ],
@@ -1849,7 +1747,7 @@
               "phase": "validation",
               "requirement": "REQ-0405",
               "spec_paths": [
-                "verifications[1].all_or_none.columns"
+                "verifications[0].all_or_none.columns"
               ]
             }
           ],
@@ -1962,25 +1860,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 5,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "duplicate_id",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"all_or_none\": {\"id\": \"prefix\", \"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, W]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\n  - {name: W, type: int, label: W, derivation: SRC.W}\nverifications: [{\"row_count\": {\"id\": \"prefix\", \"min\": 0}}, {\"all_or_none\": {\"id\": \"prefix\", \"columns\": [\"V\", \"W\"]}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V,W\na,10,11\nb,,\nc,10,\nd,,20\ne,0,0\n",
     "expected": {
       "artifacts": [],
@@ -1990,7 +1876,7 @@
         {
           "condition": "duplicate_identifier",
           "context": {
-            "reason": "verification id 'prefix' repeats verifications[0].unique"
+            "reason": "verification id 'prefix' repeats verifications[0].row_count"
           },
           "phase": "validation",
           "requirement": "REQ-0398",
@@ -2009,7 +1895,7 @@
             {
               "condition": "duplicate_identifier",
               "context": {
-                "reason": "verification id 'prefix' repeats verifications[0].unique"
+                "reason": "verification id 'prefix' repeats verifications[0].row_count"
               },
               "phase": "validation",
               "requirement": "REQ-0398",
@@ -2129,12 +2015,12 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 5,
+          "check": "row_count",
+          "evaluated_count": 1,
           "failure": null,
-          "requirement": "REQ-0381",
+          "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[0].unique",
+          "spec_path": "verifications[0].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": "prefix"

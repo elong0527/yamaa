@@ -353,6 +353,13 @@ mod diagnostics {
             reached.insert(diagnostic.code);
             for (check, values, offending, condition, requirement) in [
                 (
+                    yamaa_core::dataset::Check::Mandatory(None),
+                    vec![Value::Int(1), Value::Missing, Value::Str(String::new())],
+                    vec![1],
+                    "not_missing_failed",
+                    "REQ-0885",
+                ),
+                (
                     yamaa_core::dataset::Check::AllowedValues(vec![Value::Int(1)]),
                     vec![Value::Int(1), Value::Missing, Value::Int(2)],
                     vec![2],

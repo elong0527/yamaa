@@ -106,8 +106,6 @@ columns:
         reference: REFDT
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 5
       max: 5

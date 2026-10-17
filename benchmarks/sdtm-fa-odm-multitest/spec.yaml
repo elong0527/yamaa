@@ -223,11 +223,6 @@ rows:
           missing: 99
 
 verifications:
-  - unique:
-      columns:
-        - STUDYID
-        - USUBJID
-        - FASEQ
   - row_count:
       min: 9
       max: 9

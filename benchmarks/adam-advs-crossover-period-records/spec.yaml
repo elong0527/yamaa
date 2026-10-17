@@ -97,8 +97,6 @@ columns:
         values: [DRUG A, PLACEBO]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
       min: 8
       max: 8

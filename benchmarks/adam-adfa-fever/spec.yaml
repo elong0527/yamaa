@@ -106,8 +106,6 @@ columns:
     derivation: VS.VSSEQ
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, ASEQ]
   - row_count:
       min: 5
       max: 5

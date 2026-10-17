@@ -132,7 +132,8 @@ quoted remain text, including when stored in a `str` destination; only numeric
 parsing ([VALUE-6](#value-6)) gives such text a numeric meaning.
 
 Normalization does not bypass a constraint that prohibits missing: non-missing
-keys and `not_missing` still reject the value. A function binding that returns
+keys, a mandatory column ([SUB-11](profiles/submission.md#sub-11)) and
+`not_missing` still reject the value. A function binding that returns
 a non-finite float satisfies its result contract only when that contract
 allows missing through `may_return_missing: true`.
 

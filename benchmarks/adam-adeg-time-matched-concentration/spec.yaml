@@ -150,8 +150,6 @@ columns:
         values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, APERIOD, APERDAY, ATPTN]
   - row_count:
       min: 16
       max: 16

@@ -1000,23 +1000,12 @@
   "unsupported": [],
   "verifications": [
     {
-      "check": "unique",
-      "evaluated_count": 17,
-      "failure": null,
-      "requirement": "REQ-0381",
-      "severity": "error",
-      "spec_path": "verifications[0].unique",
-      "specification": "spec.yaml",
-      "target": null,
-      "verification_id": null
-    },
-    {
       "check": "row_count",
       "evaluated_count": 1,
       "failure": null,
       "requirement": "REQ-0385",
       "severity": "error",
-      "spec_path": "verifications[1].row_count",
+      "spec_path": "verifications[0].row_count",
       "specification": "spec.yaml",
       "target": null,
       "verification_id": null

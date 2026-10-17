@@ -120,8 +120,6 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by: [VSTPTNUM, ORD_TEST]
-    verifications:
-      not_missing: {}
 
   - name: VSORRES
     type: str
@@ -207,8 +205,6 @@ rows:
       VSORRESU: VS_MAP.UNIT
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
       min: 24
       max: 24

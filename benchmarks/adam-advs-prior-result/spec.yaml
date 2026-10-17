@@ -55,8 +55,6 @@ columns:
           order_by: [AVISITN, VSSEQ]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
       min: 14
       max: 14

@@ -132,11 +132,6 @@ rows:
     AEDECOD: {literal: HEADACHE}
 
 verifications:
-- unique:
-    columns:
-    - STUDYID
-    - USUBJID
-    - AEDECOD
 - assert:
     id: event-status-agrees-with-onset
     require: (EVENTN = 1 AND FIRSTDT IS NOT NULL)

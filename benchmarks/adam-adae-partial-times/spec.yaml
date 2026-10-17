@@ -114,8 +114,6 @@ columns:
         values: [H, M, S]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 9
       max: 9

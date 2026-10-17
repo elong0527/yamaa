@@ -56,8 +56,6 @@ columns:
           order_by: [ADT, RSSEQ]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, RSSEQ]
   - row_count:
       min: 6
       max: 6

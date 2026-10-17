@@ -40,8 +40,6 @@ columns:
     type: int
     label: Sequence Number
     derivation: ODM.ItemGroupRepeatKey
-    verifications:
-      not_missing: {}
 
   - name: LBTESTCD
     type: str
@@ -113,8 +111,6 @@ rows:
           expr: "ONLY(ODM.Value)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, LBSEQ]
   - row_count:
       min: 14
       max: 14

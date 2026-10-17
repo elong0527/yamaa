@@ -35,8 +35,6 @@ columns:
     type: str
     label: Domain Abbreviation
     derivation: {literal: VS}
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Identifier
@@ -73,8 +71,6 @@ columns:
     type: int
     label: Sequence Number
     derivation: VS_RAW.VSSEQ
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Identifier
@@ -87,8 +83,6 @@ columns:
     type: str
     label: Vital Signs Test Short Name
     derivation: VS_RAW.VSTESTCD
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Topic
@@ -152,8 +146,6 @@ columns:
         SE.SESTDTC, and no match yields blank.
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
       min: 10
       max: 10

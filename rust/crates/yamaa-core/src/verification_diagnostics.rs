@@ -44,6 +44,7 @@ fn code(record: &CheckRecord, phase: Phase) -> Result<ConditionCode, Error> {
             | VerificationAssertFailed
             | VerificationRowCountFailed
             | VerificationNotMissingFailed
+            | SubmissionMandatoryFailed
             | VerificationAllowedValuesFailed
             | VerificationCodelistFailed
             | SubmissionInventoryFailed
@@ -178,6 +179,7 @@ fn base_context<'a>(
             [("failure_count", failed)].into()
         }
         VerificationNotMissingFailed
+        | SubmissionMandatoryFailed
         | VerificationAllowedValuesFailed
         | VerificationCodelistFailed
         | SubmissionInventoryFailed

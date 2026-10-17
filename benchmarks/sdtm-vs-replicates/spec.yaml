@@ -111,8 +111,6 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by: [VISIT, VSTESTCD, ORD, VSREPNUM]
-    verifications:
-      not_missing: {}
 
 # One reading row per subject, visit, replicate and test. The aggregate
 # filter confines a template to its own test, so a group of the other test
@@ -161,8 +159,6 @@ rows:
       VSDRVFL: {literal: Y}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
       min: 31
       max: 31

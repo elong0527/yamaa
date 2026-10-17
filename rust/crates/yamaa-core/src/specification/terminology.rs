@@ -85,19 +85,17 @@ pub(super) fn apply(
             }
         }
     }
+    // A column-level list of items states the column's value set, so an
+    // `allowed_values` beside it is redundant. A value-level list governs only
+    // its own rows and leaves the column's verification standing.
     let allowed = groups
         .iter()
         .map(|group| {
             group
                 .checks
                 .iter()
-                .filter_map(|check| match &check.check {
-                    Check::AllowedValues(values) => Some(ct::AllowedValues {
-                        path: &check.path,
-                        values,
-                    }),
-                    _ => None,
-                })
+                .filter(|check| matches!(check.check, Check::AllowedValues(_)))
+                .map(|check| check.path.as_str())
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
@@ -109,7 +107,11 @@ pub(super) fn apply(
             kind: output.columns()[declaration.column].kind,
             path: ct::Path::Authored(&declaration.path),
             codelist: declaration.identifier,
-            allowed_values: &allowed[declaration.column],
+            allowed_values: if declaration.code.is_none() {
+                allowed[declaration.column].as_slice()
+            } else {
+                &[]
+            },
         })
         .collect::<Vec<_>>();
     let checks = ct::bind(catalogue, &bindings).map_err(|findings| {

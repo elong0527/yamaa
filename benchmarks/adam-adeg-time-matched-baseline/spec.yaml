@@ -113,8 +113,6 @@ columns:
       str_template: "Period {APERIODC} Baseline Day {ATPT}"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, APERIOD, APERDAY, ATPTN]
   - row_count:
       min: 17
       max: 17

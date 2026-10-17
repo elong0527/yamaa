@@ -68,8 +68,6 @@ columns:
         values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, CMSEQ]
   - row_count:
       min: 13
       max: 13

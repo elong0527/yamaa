@@ -217,8 +217,6 @@ rows:
           missing: null
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
   - row_count:
       min: 15
       max: 15

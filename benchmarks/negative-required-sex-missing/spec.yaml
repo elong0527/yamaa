@@ -1,0 +1,38 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  DM_RAW: input/dm_raw.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, SEX]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM_RAW.USUBJID
+
+  # A required variable of a tabulation dataset must carry a value on
+  # every record.
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM_RAW.SEX
+    submission:
+      core: Req
+      length: 1
+      origin:
+        type: Collected
+
+submission:
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false

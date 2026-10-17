@@ -255,6 +255,71 @@ fn admit_identity(
     }
 }
 
+/// A dataset `unique` over exactly the `keys` columns restates the unique,
+/// non-missing identity output-key validation already asserts.
+pub(super) fn redundant_unique(
+    d: &Document,
+    result: &mut Vec<PreflightFinding>,
+) -> Result<(), PrepareError> {
+    let root = d.root();
+    let keys = sequence(d, field(d, root, "keys")?)?
+        .iter()
+        .map(|&id| text(d, id))
+        .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
+    let Some(entries) = d
+        .field(root, "verifications")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    else {
+        return Ok(());
+    };
+    for (index, &id) in sequence(d, entries)?.iter().enumerate() {
+        let (op, payload) = operation(d, id)?;
+        if op != "unique" {
+            continue;
+        }
+        let columns = if matches!(d.nodes()[payload], N::Sequence(_)) {
+            sequence(d, payload)?
+        } else if let Some(columns) = d.field(payload, "columns") {
+            sequence(d, columns)?
+        } else {
+            continue;
+        };
+        let names = columns
+            .iter()
+            .map(|&id| text(d, id))
+            .collect::<Result<Vec<_>, _>>()?;
+        if names.is_empty()
+            || names
+                .iter()
+                .copied()
+                .collect::<std::collections::BTreeSet<_>>()
+                != keys
+        {
+            continue;
+        }
+        result.push(PreflightFinding::Scalar(Diagnostic {
+            code: ConditionCode::VerificationUniqueRedundant,
+            spec_paths: vec![format!("verifications[{index}].unique")],
+            context: [
+                (
+                    "columns".into(),
+                    JsonValue::Array(
+                        names
+                            .iter()
+                            .map(|name| JsonValue::String((*name).into()))
+                            .collect(),
+                    ),
+                ),
+                ("stated_by".into(), JsonValue::String("keys".into())),
+            ]
+            .into(),
+            source_span: None,
+            operand_route: None,
+        }));
+    }
+    Ok(())
+}
+
 fn push_deferred(result: &mut Verifications) {
     if let Some(finding) = &result.deferred {
         let (path, check) = match finding {

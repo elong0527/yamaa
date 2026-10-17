@@ -101,8 +101,6 @@ columns:
     derivation: CQ1.GRPNAME
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 10
       max: 10

@@ -203,8 +203,6 @@ rows:
       DTYPE: {literal: CALCULATION}
 
 verifications:
-  - unique:
-      columns: [USUBJID, VISIT, PARAMCD]
   - row_count:
       min: 29
       max: 29

@@ -1,0 +1,33 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRT01P]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # Every subject carries a planned treatment: the declared mandatory
+  # column is checked once its values are complete.
+  - name: TRT01P
+    type: str
+    label: Planned Treatment for Period 01
+    derivation: DM.ARM
+    submission:
+      core: Req
+      mandatory: true
+      origin:
+        type: Predecessor
+        description: DM.ARM

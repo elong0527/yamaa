@@ -123,6 +123,7 @@ fn validate_codelist(id: &str, values: &[Value], kind: ColumnType) -> Result<(),
 pub fn column_code(check: &Check) -> Option<ConditionCode> {
     Some(match check {
         Check::NotMissing => ConditionCode::VerificationNotMissingFailed,
+        Check::Mandatory(_) => ConditionCode::SubmissionMandatoryFailed,
         Check::AllowedValues(_) => ConditionCode::VerificationAllowedValuesFailed,
         Check::Codelist { .. } | Check::ValueCodelists { .. } => {
             ConditionCode::VerificationCodelistFailed
@@ -204,7 +205,7 @@ pub fn column_offenders<'a>(
         .enumerate()
         .filter_map(|(row, value)| {
             let failed = match check {
-                Check::NotMissing => matches!(value, Value::Missing),
+                Check::NotMissing | Check::Mandatory(_) => matches!(value, Value::Missing),
                 _ if matches!(value, Value::Missing) => false,
                 Check::AllowedValues(accepted)
                 | Check::Inventory {

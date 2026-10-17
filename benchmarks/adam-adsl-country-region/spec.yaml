@@ -49,8 +49,6 @@ columns:
         values: [North America, Europe, Rest of World]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 9
       max: 9

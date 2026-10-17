@@ -1872,7 +1872,7 @@ mod project {
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             dataset::Check,
-            project_codelist_binding::{bind, AllowedValues, Binding, Cause},
+            project_codelist_binding::{bind, Binding, Cause},
             project_terminology::{Catalogue, Codelist, DataType, External, Item, Source},
             value::{ColumnType, Value},
         };
@@ -1915,7 +1915,7 @@ mod project {
         fn binding<'a>(
             id: &'a str,
             kind: ColumnType,
-            allowed_values: &'a [AllowedValues<'a>],
+            allowed_values: &'a [&'a str],
         ) -> Binding<'a> {
             Binding {
                 column: 1,
@@ -1929,18 +1929,14 @@ mod project {
             }
         }
         #[test]
-        fn complete_static_findings_preserve_all_bindings_both_sets_and_original_paths() {
+        fn complete_static_findings_preserve_all_bindings_and_name_the_redundant_verification() {
             let cat = catalogue(
                 DataType::Text,
                 vec![Value::Str("F".into()), Value::Str("M\0🙂".into())],
                 false,
                 false,
             );
-            let values = [Value::Str("F".into())];
-            let allowed = [AllowedValues {
-                path: "columns.VALUE.verifications[0].allowed_values",
-                values: &values,
-            }];
+            let allowed = ["columns.VALUE.verifications[0].allowed_values"];
             let Err(findings) = bind(
                 &cat,
                 &[
@@ -1954,7 +1950,7 @@ mod project {
             for (finding, condition, requirement) in [
                 (&findings[0], "unknown_codelist", "REQ-0953"),
                 (&findings[1], "codelist_type_mismatch", "REQ-0954"),
-                (&findings[2], "codelist_values_conflict", "REQ-0955"),
+                (&findings[2], "redundant_declaration", "REQ-0955"),
             ] {
                 let d = finding.diagnostic();
                 assert_eq!(
@@ -1968,20 +1964,12 @@ mod project {
                 assert_eq!(d.context["column"], JsonValue::String("VALUE".into()));
             }
             let d = findings[2].diagnostic();
+            assert_eq!(d.spec_paths, allowed);
             assert_eq!(
-                d.spec_paths,
-                [
-                    "columns.VALUE.submission.codelist",
-                    "columns.VALUE.verifications[0].allowed_values"
-                ]
+                d.context["stated_by"],
+                JsonValue::String("columns.VALUE.submission.codelist".into())
             );
-            assert_eq!(
-                d.context["codelist_values"],
-                JsonValue::Array(vec![
-                    JsonValue::String("F".into()),
-                    JsonValue::String("M\0🙂".into())
-                ])
-            );
+            assert_eq!(d.context["codelist"], JsonValue::String("CODE".into()));
             assert!(matches!(
                 findings[1].cause(),
                 Cause::TypeMismatch {
@@ -1991,23 +1979,14 @@ mod project {
             ));
         }
         #[test]
-        fn fixed_binding_keeps_numeric_authorship_and_compares_sets_exactly() {
+        fn fixed_binding_keeps_numeric_authorship_and_rejects_every_restating_verification() {
             let cat = catalogue(
                 DataType::Float,
                 vec![Value::Int(9_007_199_254_740_993), Value::float(-0.0)],
                 false,
                 false,
             );
-            let matching = [
-                Value::Int(0),
-                Value::Int(9_007_199_254_740_993),
-                Value::float(0.0),
-            ];
-            let allowed = [AllowedValues {
-                path: "allowed",
-                values: &matching,
-            }];
-            let checks = bind(&cat, &[binding("CODE", ColumnType::Float, &allowed)]).unwrap();
+            let checks = bind(&cat, &[binding("CODE", ColumnType::Float, &[])]).unwrap();
             assert_eq!(checks.len(), 1);
             assert_eq!(checks[0].column, 1);
             let Check::Codelist { id, values } = &checks[0].verification.check else {
@@ -2019,36 +1998,40 @@ mod project {
                 panic!("authored float")
             };
             assert_eq!(zero.get().to_bits(), (-0.0f64).to_bits());
-            let rounded = [Value::float(9_007_199_254_740_992.0), Value::Int(0)];
-            let different = [AllowedValues {
-                path: "allowed",
-                values: &rounded,
-            }];
-            assert!(
-                matches!(bind(&cat, &[binding("CODE", ColumnType::Float, &different)]), Err(f) if f.len()==1)
+            // Equal or different, a second statement of the value set is redundant.
+            let allowed = ["first", "second"];
+            let Err(findings) = bind(&cat, &[binding("CODE", ColumnType::Float, &allowed)]) else {
+                panic!("redundant verifications")
+            };
+            assert_eq!(
+                findings
+                    .iter()
+                    .map(|finding| finding.diagnostic().spec_paths)
+                    .collect::<Vec<_>>(),
+                [["first"], ["second"]]
             );
         }
         #[test]
-        fn extensible_and_external_bindings_leave_explicit_verifications_independent() {
-            for external in [false, true] {
-                let cat = catalogue(
-                    DataType::Text,
-                    vec![Value::Str("F".into())],
-                    !external,
-                    external,
-                );
-                let values = [Value::Str("OTHER".into())];
-                let allowed = [AllowedValues {
-                    path: "allowed",
-                    values: &values,
-                }];
-                assert!(bind(&cat, &[binding("CODE", ColumnType::Str, &allowed)])
+        fn extensible_lists_are_enforced_and_external_dictionaries_leave_verifications_independent()
+        {
+            let extensible = catalogue(DataType::Text, vec![Value::Str("F".into())], true, false);
+            let checks = bind(&extensible, &[binding("CODE", ColumnType::Str, &[])]).unwrap();
+            assert!(matches!(
+                &checks[0].verification.check,
+                Check::Codelist { values, .. } if values == &[Value::Str("F".into())]
+            ));
+            assert!(
+                matches!(bind(&extensible, &[binding("CODE", ColumnType::Str, &["allowed"])]), Err(f) if f.len() == 1)
+            );
+            let external = catalogue(DataType::Text, vec![], false, true);
+            assert!(
+                bind(&external, &[binding("CODE", ColumnType::Str, &["allowed"])])
                     .unwrap()
-                    .is_empty());
-                assert!(
-                    matches!(bind(&cat, &[binding("CODE", ColumnType::Int, &allowed)]), Err(f) if f.len()==1)
-                );
-            }
+                    .is_empty()
+            );
+            assert!(
+                matches!(bind(&external, &[binding("CODE", ColumnType::Int, &["allowed"])]), Err(f) if f.len() == 1)
+            );
         }
     }
     mod project_codelist_checks {
@@ -2730,10 +2713,14 @@ mod project {
                 }],
             };
             let catalogue = Catalogue::admit(vec![source.clone()]).unwrap();
-            let values: Vec<_> = (0..10_000).rev().map(Value::Int).collect();
+            assert!(catalogue.bind("LARGE", ColumnType::Int, false).is_empty());
+            let values: Vec<_> = (0..10_000).map(Value::Int).collect();
             assert!(catalogue
-                .bind("LARGE", ColumnType::Int, Some(&values))
-                .is_empty());
+                .enforced_items("LARGE")
+                .unwrap()
+                .iter()
+                .map(|item| &item.value)
+                .eq(values.iter()));
         }
 
         #[test]

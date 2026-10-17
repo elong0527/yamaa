@@ -85,8 +85,6 @@ rows:
       DTYPE: {literal: CALCULATION}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VISIT, PARAMCD]
   - row_count:
       min: 12
       max: 12
