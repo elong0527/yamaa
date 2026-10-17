@@ -1,0 +1,107 @@
+schema_version: "1.0"
+domain: ADPP
+keys: [STUDYID, USUBJID, PARCAT1, PARAMCD, PPRFTDTC]
+input:
+  PP: {path: input/pp.csv, types: {PPSTRESN: float}}
+  EX: {path: input/ex.csv, types: {EXDOSE: float}}
+base: PP
+
+output:
+  path: adpp.csv
+  columns: [STUDYID, USUBJID, PARCAT1, PARAMCD, PARAM, PPRFTDTC, APERIOD, TRTA,
+            DOSEA, DOSEU, AVAL, AVALU]
+
+# The dose a parameter refers to: the same subject's exposure record that
+# starts at the parameter's reference date and time, compared in full as
+# written, so a dose earlier or later that day is not it. Each dose's period
+# is the number of its epoch (TREATMENT 1 or TREATMENT 2); a dose in any
+# other epoch stops the run, and so do two doses of one subject with one
+# start. A reference time at which no dose starts leaves the period,
+# treatment and dose empty.
+intermediates:
+  - id: DOSE
+    dataset: EX
+    key: {STUDYID: PP.STUDYID, USUBJID: PP.USUBJID, EXSTDTC: PP.PPRFTDTC}
+    no_match: null
+    derivations:
+      PERIODNO:
+        type: int
+        derivation:
+          str_extract:
+            source: EPOCH
+            pattern: '^TREATMENT ([0-9]+)$'
+            group: 1
+    verifications:
+      - unique: [STUDYID, USUBJID, EXSTDTC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: PP.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: PP.USUBJID
+
+  - name: PARCAT1
+    type: str
+    label: Parameter Category 1
+    derivation: PP.PPCAT
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: PP.PPTESTCD
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation: PP.PPTEST
+
+  - name: PPRFTDTC
+    type: str
+    label: Date/Time of Reference Point
+    derivation: PP.PPRFTDTC
+
+  - name: APERIOD
+    type: int
+    label: Period
+    derivation: DOSE.PERIODNO
+
+  - name: TRTA
+    type: str
+    label: Actual Treatment
+    derivation: DOSE.EXTRT
+
+  - name: DOSEA
+    type: float
+    label: Actual Treatment Dose
+    derivation: DOSE.EXDOSE
+
+  - name: DOSEU
+    type: str
+    label: Treatment Dose Units
+    derivation: DOSE.EXDOSU
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: PP.PPSTRESN
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+    derivation: PP.PPSTRESU
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARCAT1, PARAMCD, PPRFTDTC]
+  - row_count:
+      min: 18
+      max: 18
+  # A record either has its dose or has none of its values.
+  - all_or_none:
+      id: dose-values-come-together
+      columns: [APERIOD, TRTA, DOSEA, DOSEU]
