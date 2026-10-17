@@ -517,6 +517,34 @@ intermediates:
     no_match: null
 ```
 
+The `filter` drops every candidate whose distance is missing. When the
+current record's reference is missing, every distance is missing, no
+candidate survives, and the read takes `no_match`. To fall back to a
+candidate instead, leave the filter out: `order_by` places missing values
+last ([ordering](../execution/ordering.md)), so the candidates tie and the
+first in record order is kept ([REQ-0135](lookup.md#req-0135)). Record order
+is not a business key ([REQ-0515](../storage/ingestion.md#req-0515)), so
+name the tie-break, as in `order_by: [SRC.DIST, SRC.SEQ]`. A missing `DIST`
+on the selected record shows that the fallback chose it.
+
+For a reference datetime, complete each candidate's text with
+`datetime_impute`, then take the difference with `datetime_diff`, which reads
+only declared names, so the distance takes three derivations:
+
+```yaml
+    derivations:
+      ADTM: {datetime_impute: {source: DTC, time: first, missing: null, invalid: null}}
+      GAP: {datetime_diff: {start: ADTM, end: BASE.REFDTM, unit: hour}}
+      DIST: {compute: {expr: "ABS(GAP)"}}
+```
+
+With `missing: null` and `invalid: null`, a candidate whose `DTC` is missing
+or only a partial date, such as `2024-03`, has no distance, so the filter
+drops it; without the filter it sorts last. Without those handlers, one such
+record in `SRC` stops the run as `missing_input` or `invalid_datetime_text`
+([REQ-1182](temporal.md#req-1182),
+[REQ-0344](../execution/handlers.md#req-0344)).
+
 <a id="req-1263"></a>
 
 **REQ-1263.** An intermediate derivation may read a column of another named
