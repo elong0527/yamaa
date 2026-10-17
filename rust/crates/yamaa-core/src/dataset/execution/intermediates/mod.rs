@@ -17,7 +17,7 @@ enum Choice {
 #[derive(Default)]
 pub(super) struct Run {
     eligible: BTreeMap<usize, Vec<usize>>,
-    string_indexes: BTreeMap<usize, key_index::StringIndex>,
+    key_indexes: BTreeMap<usize, Option<key_index::KeyIndex>>,
     choices: BTreeMap<(SelectionIdentity, usize), Choice>,
     materialized: BTreeMap<(usize, Option<SelectionIdentity>), Rc<Dataset>>,
 }
@@ -52,6 +52,7 @@ impl Run {
             affected.push(windowed);
         }
         self.eligible.retain(|index, _| !affected[*index]);
+        self.key_indexes.retain(|index, _| !affected[*index]);
         self.choices.retain(|(_, index), _| !affected[*index]);
         self.materialized.retain(|(index, _), _| !affected[*index]);
         Ok(())
@@ -828,8 +829,13 @@ fn resolve_choice<T: TableAccess + ?Sized>(
         let mut scanned = Vec::new();
         // Small relations retain their existing scan and observation profile;
         // the index pays off only for repeated reads of a sizable relation.
-        let indexed_key = if eligible_len >= key_index::MINIMUM_ROWS
-            && item.keys.len() == 1
+        // Plain intermediates are indexed over the full key tuple, for any
+        // number of key columns and any scalar type. Expression keys,
+        // ranges, derivations and correlated filters stay on the scan path
+        // below, as do self sources and lookup keys whose type the donor
+        // column cannot compare with (the scan owns that diagnostic).
+        let use_index = eligible_len >= key_index::MINIMUM_ROWS
+            && !item.keys.is_empty()
             && !item.has_expression_keys()
             && !item.source.is_self()
             && item.range.is_none()
@@ -838,27 +844,39 @@ fn resolve_choice<T: TableAccess + ?Sized>(
                 .filter
                 .as_ref()
                 .is_none_or(|filter| !filter.correlated())
-        {
-            match &keys[0].1 {
-                Value::Str(key) => Some(key.as_str()),
-                _ => None,
+            && keys.iter().all(|(column, expected)| {
+                match (
+                    expected.value_type(),
+                    item.source_kind(plan.secondary(), *column),
+                ) {
+                    (Some(expected), Some(kind)) => {
+                        crate::value::comparable_types(expected, kind.into())
+                    }
+                    (Some(_), None) => true,
+                    _ => false,
+                }
+            });
+        let matching: &[usize] = 'matching: {
+            if use_index {
+                if !state.intermediates.key_indexes.contains_key(&index) {
+                    let indexed = key_index::KeyIndex::build(
+                        table,
+                        item,
+                        &state.intermediates.eligible[&index],
+                    )?;
+                    state.intermediates.key_indexes.insert(index, indexed);
+                }
+                if let Some(indexed) = state
+                    .intermediates
+                    .key_indexes
+                    .get(&index)
+                    .and_then(|indexed| indexed.as_ref())
+                {
+                    break 'matching indexed.matching(&keys)?;
+                }
+                // The donor relation is not indexable (a donor cell's type
+                // does not fit its column); the scan below owns its outcome.
             }
-        } else {
-            None
-        };
-        let matching = if let Some(key) = indexed_key {
-            if !state.intermediates.string_indexes.contains_key(&index) {
-                let indexed = key_index::StringIndex::build(
-                    table,
-                    item,
-                    &state.intermediates.eligible[&index],
-                    keys[0].0,
-                )?;
-
-                state.intermediates.string_indexes.insert(index, indexed);
-            }
-            state.intermediates.string_indexes[&index].matching(key)?
-        } else {
             // First count every matching record without reading order or donor fields.
             let matching = &mut scanned;
 
