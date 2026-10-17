@@ -104,44 +104,44 @@ intermediate_class:
     - id:
         type: intermediate_id
         required: true
-        description: See REQ-1048.
+        description: Name through which the looked-up record is read (LOOKUP-3).
     - dataset:
         type: identifier
         required: true
-        description: See REQ-1048.
+        description: Declared input dataset, or SELF for completed derived rows (LOOKUP-7).
     - fields_from: match_key_range_fields
     - fields_from: match_filter_fields
     - fields_from: match_selection_fields
     - columns:
         type: "list[identifier]"
         required: false
-        description: See REQ-1048.
+        description: Stored and derived columns the lookup may read; defaults to every available column (LOOKUP-11).
     - no_match:
         type: literal_value
         required: false
-        description: See REQ-1048.
+        description: Value returned when the lookup yields nothing; without it, yielding nothing fails (LOOKUP-13).
     - derivations:
         type: "dict[identifier, intermediate_derivation]"
         required: false
-        description: See REQ-1185.
+        description: Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15).
     - verifications:
         type: "list[intermediate_verification]"
         required: false
-        description: See REQ-1245.
+        description: Uniqueness checks over the filtered donor records (LOOKUP-17).
 
 record_between_class:
     - value:
         type: variable
         required: true
-        description: See REQ-1049.
+        description: Value read from the current row (LOOKUP-9).
     - lower:
         type: identifier
         required: false
-        description: See REQ-1049.
+        description: Donor-record field whose value is an inclusive lower bound; omit for no lower bound (LOOKUP-9).
     - upper:
         type: identifier
         required: false
-        description: See REQ-1049.
+        description: Donor-record field whose value is an inclusive upper bound; omit for no upper bound (LOOKUP-9).
 
 # See REQ-0251.
 match_key_range_fields:
@@ -270,7 +270,7 @@ dataset_class:
 intermediate_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: See REQ-1050.
+    description: Identifier of a lookup, unique among dataset identifiers, other lookups and the output domain (LOOKUP-3).
 
 row_id:
     type: str

@@ -12,31 +12,31 @@ aggregate_class:
     - fields_from: match_filter_fields
     - group_by:
         type: "list[variable]"
-        description: See REQ-1088.
+        description: Grouping keys of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the keys (LOOKUP-19).
     - derive:
         type: "list[derive_binding_class]"
         required: false
-        description: See REQ-1189.
+        description: Per-record intermediate variable bindings evaluated before reduction (LOOKUP-22).
     - expr:
         type: aggregate_expression
         required: true
-        description: See REQ-1088.
+        description: Closed reducer expression over the records of one relation (FORMULA-17).
 
 derive_binding_class:
     - name:
         type: identifier
         required: true
-        description: See REQ-1192.
+        description: Intermediate variable the aggregate's reducer expression names (LOOKUP-22).
     - type:
         type: column_type
         required: true
-        description: See REQ-1192.
+        description: Declared type the per-record value converts to (LOOKUP-22).
     - derivation:
         type: derivation
         required: true
-        description: See REQ-1192.
+        description: Per-record derivation over the relation's fields and earlier bindings (LOOKUP-22).
 
 aggregate_expression:
     type: str
     min_length: 1
-    description: See REQ-1089.
+    description: Reducer expression in the closed aggregate grammar (FORMULA-17).

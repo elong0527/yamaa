@@ -20,51 +20,52 @@ order and checks are written in the specification. Nothing is inferred from
 data, from file contents, from a same-named field or from a host default.
 Enforced by [REQ-0092](specification/binding.md#req-0092),
 [REQ-0198](specification/structure.md#req-0198),
-[INPUT-5](inputs.md#input-5),
+[REQ-0525](storage/ingestion.md#req-0525),
 [REQ-0716](storage/publication.md#req-0716) and
-[INPUT-1](inputs.md#input-1).
+[REQ-0832](storage/ingestion.md#req-0832).
 
 **P2. Values never convert silently.** An operation never converts its inputs.
 A value converts once, to its column's declared type, by one table, and a
 failed conversion is a named failure. Enforced by
-[VALUE-2](values.md#value-2), [VALUE-3](values.md#value-3) and
-[INPUT-7](inputs.md#input-7).
+[REQ-0004](values/types.md#req-0004), [REQ-0009](values/types.md#req-0009),
+[REQ-0013](values/types.md#req-0013) and
+[REQ-0527](storage/ingestion.md#req-0527).
 
 **P3. Missing is a value.** Missing is distinct from every string, number and
 the empty string; no text spells it, every type admits it, and every operation
 states what it does with it. Enforced by
-[REQ-0166](operations/predicates.md#req-0166),
+[FORMULA-4](formulas.md#formula-4),
 [REQ-0344](execution/handlers.md#req-0344),
-[REQ-0492](operations/aggregation.md#req-0492) and
-[INPUT-8](inputs.md#input-8).
+[FORMULA-24](formulas.md#formula-24) and
+[REQ-0530](storage/ingestion.md#req-0530).
 
 **P4. Ambiguity fails.** Two values for one key, several matching records
 without a declared selection, an unmapped value or text that does not parse
 fails with a named condition instead of choosing. Enforced by
 [REQ-0075](execution/lifecycle.md#req-0075),
-[REQ-0127](operations/lookup.md#req-0127),
-[REQ-0482](operations/aggregation.md#req-0482) and
+[LOOKUP-10](lookup.md#lookup-10),
+[FORMULA-20](formulas.md#formula-20) and
 [REQ-1272](specification/binding.md#req-1272).
 
 **P5. Order is data.** Stored record order, construction order and declared
 order terms decide every tie. No operation reorders records or chooses an
 order of its own. Enforced by [REQ-0039](execution/rows.md#req-0039),
-[VALUE-23](values.md#value-23),
-[REQ-0480](operations/aggregation.md#req-0480) and
-[INPUT-2](inputs.md#input-2).
+[REQ-0225](execution/ordering.md#req-0225),
+[FORMULA-19](formulas.md#formula-19) and
+[REQ-0514](storage/ingestion.md#req-0514).
 
 **P6. Values are exact.** Integers are exact 64-bit values and floats are
 binary64 computed exactly as written. Nothing is rounded except where a
-specification declares it. Enforced by [VALUE-7](values.md#value-7),
-[VALUE-9](values.md#value-9),
-[REQ-0438](operations/computation.md#req-0438) and
+specification declares it. Enforced by [REQ-0016](values/numbers.md#req-0016),
+[REQ-0019](values/numbers.md#req-0019),
+[FORMULA-26](formulas.md#formula-26) and
 [REQ-0746](storage/csv.md#req-0746).
 
 **P7. Vocabularies are closed.** Verbs, grammars, functions, column types,
 storage profiles and conditions are closed lists. Extending one is a rule
-change. Enforced by [VALUE-1](values.md#value-1),
-[REQ-0289](operations/expressions.md#req-0289),
-[REQ-0478](operations/aggregation.md#req-0478) and
+change. Enforced by [REQ-0002](values/types.md#req-0002),
+[EXPR-1](expressions.md#expr-1),
+[FORMULA-18](formulas.md#formula-18) and
 [REQ-1297](execution/lifecycle.md#req-1297).
 
 **P8. Inheritance is deterministic.** Layers compose in one fixed order, and
@@ -76,7 +77,7 @@ Enforced by [LAYER-3](inheritance.md#layer-3),
 fails during validation, before any input record is read. Enforced by
 [LAYER-12](inheritance.md#layer-12),
 [REQ-0792](storage/resources.md#req-0792) and
-[INPUT-1](inputs.md#input-1).
+[REQ-0852](storage/ingestion.md#req-0852).
 
 **P10. Artifacts are reproducible.** The same specification and inputs produce
 the same artifact bytes, and an artifact is published whole or not at all.
@@ -97,24 +98,24 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | [Specification structure](specification/structure.md) | REQ | Declare identifiers, columns, derivation coverage, and source notation. |
 | [Name binding](specification/binding.md) | REQ | Resolve input datasets, constructed output columns, and ODM item reads. |
 | [Specification style](specification/style.md) | REQ | Fix one written form of a specification and report departures without changing its meaning. |
-| [Values](values.md) | VALUE | Define column types, missing values, numbers, text, dates and datetimes, conversion, and order. |
+| [Types and conversion](values/types.md) | REQ | Define column types, missing normalization, compatibility, and conversion. |
+| [Numeric values](values/numbers.md) | REQ | Define numeric representation, promotion, conversion, and overflow. |
+| [Text values](values/text.md) | REQ | Define Unicode scalar identity, preservation, equality, and order. |
+| [Temporal values](values/temporal.md) | REQ | Define dates, local civil datetimes, precision, canonical text, and order. |
 | [Execution lifecycle](execution/lifecycle.md) | REQ | Sequence resolution, row construction, dependency evaluation, value completion, and output checks. |
 | [Row construction](execution/rows.md) | REQ | Construct output rows from declared input records or groups. |
-| [Ordering](execution/ordering.md) | REQ | Declare the artifact's final row order and when it is applied. |
+| [Ordering](execution/ordering.md) | REQ | Apply ordering terms, missing placement, stable ties, and final artifact order. |
 | [Local handlers](execution/handlers.md) | REQ | Handle conditions at their expression or conversion site and report substitutions. |
 | [Verification](execution/verification.md) | REQ | Apply assertions, severity, and grouped counts to completed values, and record what ran in the warning log and the verification log. |
-| [Expression evaluation](operations/expressions.md) | REQ | Register and dispatch expressions, restrict nesting, and define scalar selection. |
-| [Predicates](operations/predicates.md) | REQ | Evaluate the closed Boolean language using three-valued logic. |
-| [Numeric computation](operations/computation.md) | REQ | Evaluate written arithmetic formulas without reassociation or presentation rounding. |
-| [Aggregation](operations/aggregation.md) | REQ | Reduce eligible records in one of the three permitted key scopes. |
-| [Lookup and joins](operations/lookup.md) | REQ | Match declared keys, narrow records, select a result, and answer absence. |
-| [Windows](operations/windows.md) | REQ | Declare complete named windows and compute partitions, ranks, neighbors, and baseline selections. |
-| [Text](text.md) | TEXT | Pad, change case, interpolate templates, and extract and replace with portable regular expressions. |
-| [Text operations](operations/text.md) | REQ | Apply inline mapping and its case-insensitive folding. |
-| [Dates and times](temporal.md) | TIME | Compute calendar differences, study days, completed dates and times, precision, and civil arithmetic. |
+| [Expressions](expressions.md) | EXPR | Register and dispatch expressions, restrict nesting, and copy, select and classify values. |
+| [Formulas](formulas.md) | FORMULA | Evaluate the closed predicate, numeric and reducer languages exactly as written. |
+| [Lookup and joins](lookup.md) | LOOKUP | Match declared keys, narrow and select records, answer absence, and scope aggregates to one relation. |
+| [Windows](windows.md) | WINDOW | Declare complete named windows and compute partitions, ranks, neighbors, carried values, and baseline flags. |
+| [Text operations](operations/text.md) | REQ | Apply casing, inline mapping, templates, and portable regular expressions. |
+| [Temporal operations](operations/temporal.md) | REQ | Compute calendar differences, study days, date completion, and precision. |
 | [Project functions](operations/functions.md) | REQ | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
 | [Resource resolution](storage/resources.md) | REQ | Confine declared source paths and read one immutable snapshot per physical file. |
-| [Inputs](inputs.md) | INPUT | Select input profiles, keep stored record order, and type source fields without inferring values. |
+| [Source ingestion](storage/ingestion.md) | REQ | Select input profiles and assign source field types without inferring values. |
 | [CSV profile](storage/csv.md) | REQ | Read admitted CSV spellings and write canonical CSV bytes and display precision. |
 | [Parquet profile](storage/parquet.md) | REQ | Read and write the closed Parquet field and value mapping. |
 | [SAS source profiles](storage/sas.md) | REQ | Read SAS datasets and Transport v5/v8 through declared encoding and explicit numeric narrowing. |

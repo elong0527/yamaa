@@ -401,7 +401,7 @@ The three previously documented forms now have these statuses:
 | `STR_CONTAINS(ID, '(')` | REQ-1244, position 17; predicate/position context | Matches the new complete original report; standalone syntax retains regex byte/reason |
 | `ID = DATE '2026-02-30'` | REQ-0188, position 10; predicate/position context | Matches the new complete original report; standalone syntax retains temporal kind/error |
 
-REQ-0191 owns invalid ESCAPE literals in `rules/operations/predicates.md`, and the
+REQ-0191 owns invalid ESCAPE literals in `rules/formulas.md`, and the
 locked predicate syntax fixture already preserves that native mapping. The
 unchanged Python reference was rerun on 2026-10-11 and still reports REQ-0188.
 The delegated decision in #1973 item 6 selects REQ-0191 for new shared execution.

@@ -108,44 +108,44 @@ intermediate_class:
     - id:
         type: intermediate_id
         required: true
-        description: See REQ-1048.
+        description: Name through which the looked-up record is read (LOOKUP-3).
     - dataset:
         type: identifier
         required: true
-        description: See REQ-1048.
+        description: Declared input dataset, or SELF for completed derived rows (LOOKUP-7).
     - fields_from: match_key_range_fields
     - fields_from: match_filter_fields
     - fields_from: match_selection_fields
     - columns:
         type: "list[identifier]"
         required: false
-        description: See REQ-1048.
+        description: Stored and derived columns the lookup may read; defaults to every available column (LOOKUP-11).
     - no_match:
         type: literal_value
         required: false
-        description: See REQ-1048.
+        description: Value returned when the lookup yields nothing; without it, yielding nothing fails (LOOKUP-13).
     - derivations:
         type: "dict[identifier, intermediate_derivation]"
         required: false
-        description: See REQ-1185.
+        description: Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15).
     - verifications:
         type: "list[intermediate_verification]"
         required: false
-        description: See REQ-1245.
+        description: Uniqueness checks over the filtered donor records (LOOKUP-17).
 
 record_between_class:
     - value:
         type: variable
         required: true
-        description: See REQ-1049.
+        description: Value read from the current row (LOOKUP-9).
     - lower:
         type: identifier
         required: false
-        description: See REQ-1049.
+        description: Donor-record field whose value is an inclusive lower bound; omit for no lower bound (LOOKUP-9).
     - upper:
         type: identifier
         required: false
-        description: See REQ-1049.
+        description: Donor-record field whose value is an inclusive upper bound; omit for no upper bound (LOOKUP-9).
 
 # See REQ-0251.
 match_key_range_fields:
@@ -274,7 +274,7 @@ dataset_class:
 intermediate_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: See REQ-1050.
+    description: Identifier of a lookup, unique among dataset identifiers, other lookups and the output domain (LOOKUP-3).
 
 row_id:
     type: str
@@ -342,99 +342,99 @@ aggregate_class:
     - fields_from: match_filter_fields
     - group_by:
         type: "list[variable]"
-        description: See REQ-1088.
+        description: Grouping keys of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the keys (LOOKUP-19).
     - derive:
         type: "list[derive_binding_class]"
         required: false
-        description: See REQ-1189.
+        description: Per-record intermediate variable bindings evaluated before reduction (LOOKUP-22).
     - expr:
         type: aggregate_expression
         required: true
-        description: See REQ-1088.
+        description: Closed reducer expression over the records of one relation (FORMULA-17).
 
 derive_binding_class:
     - name:
         type: identifier
         required: true
-        description: See REQ-1192.
+        description: Intermediate variable the aggregate's reducer expression names (LOOKUP-22).
     - type:
         type: column_type
         required: true
-        description: See REQ-1192.
+        description: Declared type the per-record value converts to (LOOKUP-22).
     - derivation:
         type: derivation
         required: true
-        description: See REQ-1192.
+        description: Per-record derivation over the relation's fields and earlier bindings (LOOKUP-22).
 
 aggregate_expression:
     type: str
     min_length: 1
-    description: See REQ-1089.
+    description: Reducer expression in the closed aggregate grammar (FORMULA-17).
 "#),
     ("schema_expression_core.yaml", r#"version: "1.0"
 
 expressions:
     source: # See REQ-1093.
         type: [variable, source_binding_class]
-        description: See REQ-1093.
+        description: Copies a named source or derived variable (EXPR-4).
     literal: # See REQ-1094.
         type: literal_value
-        description: See REQ-1094.
+        description: Returns the declared scalar value unchanged (EXPR-4).
     first_available: # See REQ-1095.
         - sources:
             type: "list[filtered_source]"
             required: true
-            description: See REQ-1095.
+            description: Variables to test in order (EXPR-9).
         - missing:
             type: literal_value
-            description: See REQ-1095.
+            description: Value returned when every source is missing (EXPR-9).
     greatest: # See REQ-1096.
         - sources:
             type: "list[variable]"
             required: true
-            description: See REQ-1096.
+            description: Mutually comparable variables to inspect (EXPR-10).
     least: # See REQ-1097.
         - sources:
             type: "list[variable]"
             required: true
-            description: See REQ-1097.
+            description: Mutually comparable variables to inspect (EXPR-10).
     case: # See REQ-1098.
         type: "list[case_item_class]"
-        description: See REQ-1098.
+        description: Ordered when/then items with an optional trailing otherwise (EXPR-7).
     flag: # See REQ-1256.
         type: [predicate, flag_class]
-        description: See REQ-1256.
+        description: A one-predicate flag derivation; a bare predicate string is the condition with the default values (EXPR-8).
 
 source_binding_class:
     - variable:
         type: variable
         required: true
-        description: See REQ-1051.
+        description: Variable to copy (LOOKUP-1).
     - fields_from: match_filter_fields
     - fields_from: match_selection_fields
     - absent:
         type: literal_value
-        description: See REQ-1051.
+        description: Value used when the source variable or item is absent (LOOKUP-1).
 
 flag_class:
     - condition:
         type: predicate
         required: true
-        description: See REQ-1256.
+        description: Predicate selecting the true value (EXPR-8).
     - true_value:
         type: literal_value
         default: "Y"
-        description: See REQ-1256.
+        description: Value returned when the condition is true (EXPR-8).
     - false_value:
         type: literal_value
-        description: See REQ-1257.
+        description: Value returned when the condition is false; missing when absent (EXPR-8).
     - missing:
         type: literal_value
-        description: See REQ-1257.
+        description: Value returned when the condition is unknown; missing when absent, and required when false_value is declared (EXPR-8).
 
 filtered_source:
     type: [variable, source_binding_class]
-    description: See REQ-1052.
+    description: A variable, or the source_binding_class form carrying it with its filter, selection or absent value (LOOKUP-1).
 
 keep_policy:
     type: str
@@ -463,23 +463,23 @@ order_term_class:
 
 case_item_class:
     type: [case_branch_class, case_otherwise_class]
-    description: See REQ-1099.
+    description: A when/then branch, or the trailing otherwise item (EXPR-7).
 
 case_branch_class:
     - when:
         type: predicate
         required: true
-        description: See REQ-1100.
+        description: Condition that selects this branch when true (EXPR-7).
     - then:
         type: case_result
         required: true
-        description: See REQ-1100.
+        description: Result returned when the condition is true (EXPR-7).
 
 case_otherwise_class:
     - otherwise:
         type: case_result
         required: true
-        description: See REQ-1101.
+        description: Result used when no branch condition is true (EXPR-7).
 
 case_result:
     type: [str, expression]
@@ -660,42 +660,42 @@ expressions:
         - source:
             type: filtered_source
             required: true
-            description: See REQ-1110.
+            description: String variable used as the dictionary key, or a filtered source carrying it (EXPR-11).
         - dict:
             type: ["dict[str, literal_value]", project_path]
             required: true
-            description: See REQ-1110.
+            description: Source-value to result-value dictionary, written inline or as the path of a YAML file holding it (EXPR-11).
         - case_sensitive:
             type: bool
             default: true
-            description: See REQ-1110.
+            description: Compare exactly when true; fold ASCII letters when false (EXPR-12).
         - missing:
             type: literal_value
-            description: See REQ-1110.
+            description: Value returned when the source is missing; without it, a missing source fails (EXPR-11).
         - unmapped:
             type: literal_value
-            description: See REQ-1110.
+            description: Value returned when the source is present but has no dictionary entry; without it, such a source fails (EXPR-11).
     cut: # See REQ-1118.
 
         - source:
             type: filtered_source
             required: true
-            description: See REQ-1118.
+            description: Numeric variable to classify, or a filtered source carrying it (EXPR-13).
         - breaks:
             type: "list[float]"
             required: true
-            description: See REQ-1118.
+            description: Ascending interval boundaries (EXPR-13).
         - labels:
             type: "list[str]"
             required: true
-            description: See REQ-1118.
+            description: One label per interval; exactly one more than breaks (EXPR-13).
         - right:
             type: bool
             default: false
-            description: See REQ-1118.
+            description: Right-closed and left-open when true; left-closed and right-open when false (EXPR-13).
         - missing:
             type: literal_value
-            description: See REQ-1118.
+            description: Value returned when the source is missing (EXPR-13).
 "#),
     ("schema_expression_numeric.yaml", r#"version: "1.0"
 
@@ -706,21 +706,21 @@ expressions:
         - expr:
             type: numeric_expression
             required: true
-            description: See REQ-1119.
+            description: Closed numeric expression over named variables (FORMULA-10).
     round_half_away_from_zero: # See REQ-1172.
         - source:
             type: variable
             required: true
-            description: See REQ-1172.
+            description: Numeric variable to round (FORMULA-16).
         - digits:
             type: int
             required: true
-            description: See REQ-1172.
+            description: Integer decimal places; negative rounds left of the decimal point (FORMULA-16).
 
 numeric_expression:
     type: str
     min_length: 1
-    description: See REQ-1120.
+    description: Numeric formula in the closed numeric grammar (FORMULA-10).
 "#),
     ("schema_expression_odm.yaml", r#"version: "1.0"
 
@@ -855,68 +855,68 @@ window_selection:
 window_spec:
     - group_by:
         type: "list[variable]"
-        description: See REQ-1122.
+        description: Variables defining partitions; omission uses one partition (WINDOW-3).
     - order_by:
         type: "list[order_by_term]"
-        description: See REQ-1122.
+        description: Terms ordering rows within each partition (WINDOW-3).
     - filter:
         type: predicate
-        description: See REQ-1122.
+        description: Predicate selecting rows (WINDOW-4).
 
 expressions:
     row_number: # See REQ-1123.
         - window:
             type: window_selection
-            description: See REQ-1123.
+            description: Partition, ordering and row selection for the window (WINDOW-6).
     rank: # See REQ-1124.
         - method:
             type: str
             default: competition
             values: [competition, dense]
-            description: See REQ-1124.
+            description: Tie numbering; competition leaves position gaps and dense does not (WINDOW-6).
         - window:
             type: window_selection
-            description: See REQ-1124.
+            description: Partition, ordering and row selection for the window (WINDOW-6).
     row_value: # See REQ-1125.
         - source:
             type: variable
             required: true
-            description: See REQ-1125.
+            description: Variable read from the offset row (WINDOW-7).
         - offset:
             type: int
             required: true
-            description: See REQ-1125.
+            description: Rows to move along the declared order; nonzero (WINDOW-7).
         - window:
             type: window_selection
-            description: See REQ-1125.
+            description: Partition, ordering and row selection for the window (WINDOW-7).
     previous_non_missing: # See REQ-1126.
         - source:
             type: variable
             required: true
-            description: See REQ-1126.
+            description: Variable searched for the closest earlier non-missing value (WINDOW-8).
         - window:
             type: window_selection
-            description: See REQ-1126.
+            description: Partition and ordering for the window (WINDOW-8).
     locf: # See REQ-1239.
         - source:
             type: variable
             required: true
-            description: See REQ-1239.
+            description: Completed observed variable to carry forward (WINDOW-8).
         - window:
             type: window_selection
-            description: See REQ-1239.
+            description: Partition, ordering and optional row selection (WINDOW-8).
     baseline_flag: # See REQ-1127.
         - date:
             type: variable
             required: true
-            description: See REQ-1127.
+            description: Candidate baseline date (WINDOW-9).
         - reference_date:
             type: variable
             required: true
-            description: See REQ-1127.
+            description: Inclusive upper bound for the baseline date (WINDOW-9).
         - window:
             type: window_selection
-            description: See REQ-1127.
+            description: Baseline-selection partitions for the window (WINDOW-9).
 "#),
     ("schema_function.yaml", r#"version: "1.0"
 

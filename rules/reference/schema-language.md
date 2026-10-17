@@ -196,9 +196,9 @@ explicitly:
 - datasets and record lookups share one naming list
   ([NAME-3](../names.md#name-3));
 - a lookup `id` shares one naming list with dataset identifiers, other
-  lookup ids, and the output `domain` ([REQ-0113](../operations/lookup.md#req-0113));
+  lookup ids, and the output `domain` ([LOOKUP-3](../lookup.md#lookup-3));
 - window names belong to a separate window naming list
-  ([REQ-1251](../operations/windows.md#req-1251)).
+  ([WINDOW-1](../windows.md#window-1)).
 
 ### Type expressions
 

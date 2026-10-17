@@ -363,7 +363,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
             )
             self.assertEqual(
                 OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "predicate"),
-                "operations/predicates",
+                OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS["predicate"],
             )
             (root / "rules" / "copy.md").write_text(text)
             self.assertIsNone(OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "numeric"))

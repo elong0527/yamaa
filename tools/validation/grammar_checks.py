@@ -17,10 +17,10 @@ GRAMMAR_DIR = PurePosixPath("yaml/grammar")
 # grammar's marker. A card file renders a grammar as a ```text block directly
 # after the line `<!-- grammar: NAME -->`.
 GRAMMAR_CONTRACTS = {
-    "predicate": "operations/predicates",
-    "numeric": "operations/computation",
-    "string-template": "text",
-    "aggregate": "operations/aggregation",
+    "predicate": "formulas",
+    "numeric": "formulas",
+    "string-template": "operations/text",
+    "aggregate": "formulas",
 }
 GRAMMAR_MARKER = re.compile(
     r"<!-- grammar: ([a-z-]+) -->\n+```text\n(.*?)\n```", re.DOTALL

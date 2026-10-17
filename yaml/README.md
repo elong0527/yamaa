@@ -128,7 +128,7 @@ Use `window: RESPONSE_ORDER` in each expression that shares those settings.
 An inline mapping remains valid. References use the whole definition and
 accept no extra fields or overrides. Omitted settings keep their usual
 meaning, and each use operates on its caller's rows. See the
-[window contract](../rules/operations/windows.md#req-1251) and the
+[window contract](../rules/windows.md#window-1) and the
 [confirmed-response benchmark](../benchmarks/adam-adrs-confirmed-response/spec.yaml).
 
 ## Carry-forward and donor-record selection
@@ -144,8 +144,8 @@ input dataset or an eligible named intermediate), or root `base` without row
 templates; either defaults to the single declared input when omitted (see the
 [contract index](../rules/README.md#terminology)). `order_by` and `keep` select one donor
 from the surviving candidates. Use an explicit planning input for visits
-that do not yet have observed records. See the [window contract](../rules/operations/windows.md)
-and [lookup contract](../rules/operations/lookup.md).
+that do not yet have observed records. See the [window contract](../rules/windows.md)
+and [lookup contract](../rules/lookup.md).
 
 ## Explicit source record order
 
