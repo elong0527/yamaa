@@ -1,6 +1,6 @@
 //! Replacement scans the whole value under one step guard, then builds its result.
 use super::*;
-use crate::text_replace::{Error, Step};
+use crate::text_replace::{Error, RenderError, Step};
 
 pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
     match expression {
@@ -48,7 +48,15 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let source = evaluate_raw(table, source, candidate, plan, row, state)?;
     match operation.apply(ValueRef::from(&source)) {
-        Ok(Step::Matched { subject, spans }) => Ok(Value::Str(operation.render(subject, &spans))),
+        Ok(Step::Matched { subject, spans }) => operation
+            .render(subject, &spans)
+            .map(Value::Str)
+            .map_err(|error| {
+                Box::new(match error {
+                    RenderError::Size => ExecutionError::Capacity,
+                    RenderError::Allocation => ExecutionError::Allocation,
+                })
+            }),
         Ok(Step::Recovered) => {
             let value = operation.missing().expect("declared missing handler");
             state

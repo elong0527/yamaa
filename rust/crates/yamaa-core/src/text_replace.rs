@@ -32,6 +32,13 @@ pub enum Error {
     #[error("text replace regex: {0:?}")]
     Regex(regex::MatchError),
 }
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum RenderError {
+    #[error("text replace output exceeds addressable size")]
+    Size,
+    #[error("text replace output allocation failed")]
+    Allocation,
+}
 impl StringReplace {
     /// Own the declaration while retaining an invalid pattern for precedence.
     pub fn new(
@@ -99,8 +106,13 @@ impl StringReplace {
         Ok(Step::Matched { subject, spans })
     }
     /// The unmatched text, in order, with each match replaced by the literal text.
-    pub fn render(&self, subject: &str, spans: &[(usize, usize)]) -> String {
+    pub fn render(&self, subject: &str, spans: &[(usize, usize)]) -> Result<String, RenderError> {
+        let total =
+            output_bytes(subject.len(), spans, self.replacement.len()).ok_or(RenderError::Size)?;
         let mut output = String::new();
+        output
+            .try_reserve_exact(total)
+            .map_err(|_| RenderError::Allocation)?;
         let mut kept = 0;
         for &(start, end) in spans {
             output.push_str(&subject[kept..start]);
@@ -108,12 +120,25 @@ impl StringReplace {
             kept = end;
         }
         output.push_str(&subject[kept..]);
-        output
+        Ok(output)
     }
     /// The missing-source failure, with the same facts extraction reports.
     pub fn missing_diagnostic(&self) -> Option<Diagnostic> {
         self.search.failure_diagnostic(text_extract::Step::Missing)
     }
+}
+
+fn output_bytes(
+    subject_bytes: usize,
+    spans: &[(usize, usize)],
+    replacement_bytes: usize,
+) -> Option<usize> {
+    let kept = spans
+        .iter()
+        .try_fold(subject_bytes, |kept, &(start, end)| {
+            kept.checked_sub(end.checked_sub(start)?)
+        })?;
+    kept.checked_add(replacement_bytes.checked_mul(spans.len())?)
 }
 
 #[cfg(test)]
@@ -134,7 +159,7 @@ mod tests {
     fn replaced(pattern: &str, replacement: &str, subject: &str) -> String {
         let op = operation(pattern, replacement, None);
         match op.apply(ValueRef::Str(subject)) {
-            Ok(Step::Matched { subject, spans }) => op.render(subject, &spans),
+            Ok(Step::Matched { subject, spans }) => op.render(subject, &spans).unwrap(),
             other => panic!("{pattern} {subject:?}: {other:?}"),
         }
     }
@@ -183,6 +208,22 @@ mod tests {
         assert_eq!(replaced("(?<x>b)", "$<x>$&$$", "abc"), "a$<x>$&$$c");
         assert_eq!(replaced("b", r"\1{b}", "abc"), r"a\1{b}c");
         assert_eq!(replaced(".", "\u{1D400}", "ab"), "\u{1D400}\u{1D400}");
+    }
+
+    #[test]
+    fn complete_output_size_counts_utf8_and_empty_matches_before_allocation() {
+        let subject = "é𐐀";
+        let op = operation("x*", "𐐀", None);
+        let Step::Matched { spans, .. } = op.apply(ValueRef::Str(subject)).unwrap() else {
+            panic!("empty matches")
+        };
+        assert_eq!(output_bytes(subject.len(), &spans, 4), Some(18));
+        assert_eq!(op.render(subject, &spans).unwrap(), "𐐀é𐐀𐐀𐐀");
+        assert_eq!(output_bytes(6, &[(0, 2), (2, 6)], 0), Some(0));
+        assert_eq!(output_bytes(6, &[], usize::MAX), Some(6));
+        assert_eq!(output_bytes(0, &[(0, 0)], usize::MAX), Some(usize::MAX));
+        assert_eq!(output_bytes(0, &[(0, 0), (0, 0)], usize::MAX), None);
+        assert_eq!(output_bytes(1, &[(0, 0)], usize::MAX), None);
     }
 
     #[test]

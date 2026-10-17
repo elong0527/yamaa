@@ -551,7 +551,7 @@ mod declaration {
             )
             .unwrap();
             match operation.apply(ValueRef::Str(subject)) {
-                Ok(Step::Matched { subject, spans }) => operation.render(subject, &spans),
+                Ok(Step::Matched { subject, spans }) => operation.render(subject, &spans).unwrap(),
                 other => panic!("replacement truth exceeds policy: {other:?}"),
             }
         }
