@@ -197,10 +197,13 @@ impl Attempt {
     }
 }
 
-fn engine(py: Python<'_>, resolver: Option<Py<PyAny>>) -> Engine {
-    let mut options =
-        EngineOptions::new(HostLanguage::Python, "python".into(), py.version().into())
-            .with_functions(Arc::new(crate::project_activation::Port));
+fn engine(resolver: Option<Py<PyAny>>) -> Engine {
+    let mut options = EngineOptions::new(
+        HostLanguage::Python,
+        "python".into(),
+        Python::version_str().into(),
+    )
+    .with_functions(Arc::new(crate::project_activation::Port));
     if let Some(resolver) = resolver {
         options = options.with_resolver(crate::resource_resolver::Port::from_callback(resolver));
     }
@@ -220,7 +223,7 @@ pub fn _domain_file(
         request = request.with_environment(environment);
     }
     let token = CancellationToken::new();
-    let build = engine(py, resolver)
+    let build = engine(resolver)
         .build(&request, &token)
         .map_err(|error| match error {
             Error::Cancelled => pyo3::exceptions::PyRuntimeError::new_err("build cancelled"),
@@ -255,6 +258,6 @@ pub fn _check_file<'py>(
         request = request.with_environment(environment);
     }
     let token = CancellationToken::new();
-    let report = engine(py, resolver).check(&request, &token);
+    let report = engine(resolver).check(&request, &token);
     crate::report_fields::issue_rows(py, &report.diagnostics)
 }
