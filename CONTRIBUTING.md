@@ -4,7 +4,7 @@ Start with [AGENTS.md](AGENTS.md), the repository map and hard rules for people
 and coding agents. Language behavior belongs in [rules/](rules/README.md) and
 [yaml/](yaml/README.md). Independently authored benchmark expectations are the
 test oracle; reproduce a discrepancy independently before changing that truth.
-Breaking changes are allowed for 0.4.0. Remove obsolete interfaces and their
+Breaking changes are allowed for 1.0.0. Remove obsolete interfaces and their
 callers together instead of keeping compatibility aliases.
 
 ## Where changes belong
@@ -131,8 +131,9 @@ Neither lane updates the source checkout's locks. Release builds and source
 archives continue to use the canonical unchanged locks; these compatibility
 lanes supplement [native qualification](rust/qualification/README.md).
 
-Before every merge, run a fresh read-only review check with an authenticated
-GitHub CLI, supplying the exact final commit:
+Before every merge into `main` or a `release/X.Y.Z` branch, run a fresh
+read-only review check with an authenticated GitHub CLI, supplying the exact
+final commit:
 
 ```sh
 python -m tools.ci.review_gate --repository elong0527/yamaa --pr <number> --head <full-commit>

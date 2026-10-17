@@ -257,7 +257,7 @@ class Payloads:
             return self.next(self.timeline_versions[int(endpoint.split("/")[1])])
         if endpoint.startswith("issues/") and endpoint.endswith("/comments"):
             return self.next(self.comment_versions[int(endpoint.split("/")[1])])
-        if endpoint == "pulls?state=open&base=main":
+        if endpoint == "pulls?state=open":
             return [copy.deepcopy(self.pull_versions[NUMBER][0])]
         if endpoint.startswith("commits/") and endpoint.endswith("/pulls"):
             head = endpoint.split("/")[1]
@@ -491,7 +491,15 @@ class ExactTrees(unittest.TestCase):
     def test_self_reference_wrong_repository_main_base_closed_or_merged_chunks_refuse(
         self,
     ):
-        for mutation in ["self", "head-repo", "base-repo", "main", "closed", "merged"]:
+        for mutation in [
+            "self",
+            "head-repo",
+            "base-repo",
+            "main",
+            "release",
+            "closed",
+            "merged",
+        ]:
             api = Payloads()
             chunk = api.pull_versions[BATCHES[0]][0]
             if mutation == "self":
@@ -504,6 +512,8 @@ class ExactTrees(unittest.TestCase):
                 chunk["base"]["repo"]["full_name"] = "other/repository"
             elif mutation == "main":
                 chunk["base"]["ref"] = "main"
+            elif mutation == "release":
+                chunk["base"]["ref"] = "release/1.0.0"
             elif mutation == "closed":
                 chunk["state"] = "closed"
             else:
@@ -528,6 +538,13 @@ class CompletedBoundedReviews(unittest.TestCase):
         )
         final_reads = [row for row in api.history if row[0] == "pull"][-4:]
         self.assertEqual([row[1] for row in final_reads], [NUMBER, *BATCHES, NUMBER])
+
+    def test_a_release_branch_target_uses_the_same_bounded_coverage(self):
+        api = Payloads()
+        for version in api.pull_versions[NUMBER]:
+            version["base"]["ref"] = "release/1.0.0"
+        verdict = gate.verify(api, NUMBER, expected_head=HEAD)
+        self.assertEqual((verdict.head, verdict.state), (HEAD, "success"))
 
     def test_missing_pending_generic_skip_and_impersonated_target_never_use_metadata(
         self,
@@ -944,7 +961,7 @@ class BoundedRouting(unittest.TestCase):
             ),
             [NUMBER],
         )
-        self.assertIn(("pages", "pulls?state=open&base=main"), api.history)
+        self.assertIn(("pages", "pulls?state=open"), api.history)
 
     def test_chunk_discussion_refreshes_both_itself_and_linked_main_target(self):
         api = Payloads()

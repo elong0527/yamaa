@@ -27,8 +27,9 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 ## Hard rules
 
-- **0.4.0 is a fresh release.** Breaking changes are allowed. Remove obsolete
+- **1.0.0 is a fresh release.** Breaking changes are allowed. Remove obsolete
   interfaces and callers together instead of adding compatibility aliases.
+  Work for 1.0.0 merges into `release/1.0.0` through reviewed PRs.
 - **Complete review before merging.** On the exact final PR head, require
   CodeRabbit's explicit completed review, or complete bounded reviews proved
   by the review gate, and resolve every actionable finding. Pending, missing,
