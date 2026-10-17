@@ -334,5 +334,5 @@ writer's sources are the same without `expected/`. The reference test
 grades every solution in `evaluations/harbor/solutions/` against the
 benchmark's current data; an R one is skipped when R lacks a package its
 script loads. The Harbor workflow runs the same tests with R
-installed on main pushes, schedules and manual dispatch; there a missing
+installed every six hours on main and on manual dispatch; there a missing
 R package fails instead.
