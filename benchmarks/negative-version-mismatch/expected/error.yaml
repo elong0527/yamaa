@@ -1,7 +1,7 @@
 phase: validation
 condition: schema_version_mismatch
 spec_paths:
-  - parents
+  - parent
 requirement: REQ-0656
 context:
   entry_version: "1.0"

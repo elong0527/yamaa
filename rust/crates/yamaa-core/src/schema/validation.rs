@@ -56,6 +56,31 @@ pub enum ValidationError {
     InvalidDescriptor,
 }
 
+/// How YAML null reads in a decoded document (LAYER-9).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NullPolicy {
+    /// Null is an ordinary value, as in environments and held dictionaries.
+    #[default]
+    Value,
+    /// A specification: null written for a class field or a mapping entry leaves
+    /// it absent, and null for a required field is an invalid clear. Normalization
+    /// drops the field. A keyed member itself, a list item and a registry payload
+    /// such as `literal: null` are values, never clears.
+    Absent,
+    /// As `Absent`, except normalization keeps each null as the clear marker a
+    /// composed layer applies to the value it inherits.
+    Clear,
+}
+impl NullPolicy {
+    pub(super) fn clears(self) -> bool {
+        !matches!(self, Self::Value)
+    }
+}
+
+/// Root fields whose members compose by identifier from a mapping; each member
+/// value is a definition, never a clearing null.
+pub(super) const MAPPING_MEMBERS: [&str; 2] = ["input", "windows"];
+
 pub(super) fn diagnostic(
     path: &str,
     code: ConditionCode,
@@ -88,6 +113,7 @@ pub(super) fn matches_member(
     member: (&TypeExpression, usize),
     value: usize,
     fragment: bool,
+    nulls: NullPolicy,
     active: &[(usize, usize)],
 ) -> Result<bool, ValidationError> {
     Ok(Run {
@@ -95,6 +121,7 @@ pub(super) fn matches_member(
         input,
         active: active.to_vec(),
         resolved_output: false,
+        nulls,
     }
     .single(
         member.0,
@@ -104,6 +131,8 @@ pub(super) fn matches_member(
             path: "<normalization>",
             depth: 0,
             fragment,
+            root: false,
+            members: false,
         },
     )?
     .is_empty())
@@ -115,6 +144,10 @@ struct Site<'a> {
     path: &'a str,
     depth: usize,
     fragment: bool,
+    /// The specification root, whose mapping-keyed collections hold members.
+    root: bool,
+    /// A mapping whose entries are keyed members rather than clearable fields.
+    members: bool,
 }
 impl<'a> Site<'a> {
     fn child<'b>(self, value: usize, path: &'b str) -> Site<'b> {
@@ -123,6 +156,8 @@ impl<'a> Site<'a> {
             path,
             depth: self.depth + 1,
             fragment: self.fragment,
+            root: false,
+            members: false,
         }
     }
     fn deeper(self) -> Self {
@@ -200,6 +235,7 @@ struct Run<'a> {
     input: &'a Document,
     active: Vec<(usize, usize)>,
     resolved_output: bool,
+    nulls: NullPolicy,
 }
 
 impl Run<'_> {
@@ -310,8 +346,27 @@ impl Run<'_> {
         for field in fields {
             let path = self.joined(site.path, &field.name, false)?;
             match self.field(site.value, &field.name)? {
+                Some(value)
+                    if self.nulls.clears() && matches!(self.input.nodes()[value], N::Null) =>
+                {
+                    // A null field is absent; a required field cannot be cleared.
+                    if self.schema.descriptors()[field.descriptor]
+                        .descriptor
+                        .required()
+                    {
+                        diagnostics.push(self.diagnostic(
+                            site.child(value, &path),
+                            ConditionCode::SchemaLayerInvalidClear,
+                            vec![("field", Self::text(&field.name))],
+                        ));
+                    }
+                }
                 Some(value) => {
-                    diagnostics.extend(self.descriptor(field.descriptor, site.child(value, &path))?)
+                    let mut child = site.child(value, &path);
+                    child.members = site.root
+                        && self.nulls.clears()
+                        && MAPPING_MEMBERS.contains(&field.name.as_str());
+                    diagnostics.extend(self.descriptor(field.descriptor, child)?)
                 }
                 None if !site.fragment
                     && self.schema.descriptors()[field.descriptor]
@@ -725,6 +780,13 @@ impl Run<'_> {
                     let (name, index) = self.key(k)?;
                     let keypath = self.joined(site.path, &format!("key({name})"), false)?;
                     diagnostics.extend(self.single(expression, *key, site.child(k, &keypath))?);
+                    if self.nulls.clears()
+                        && !site.members
+                        && matches!(self.input.nodes()[v], N::Null)
+                    {
+                        // A null entry is absent.
+                        continue;
+                    }
                     let path = self.joined(site.path, &name, index)?;
                     diagnostics.extend(self.single(expression, *value, site.child(v, &path))?);
                 }
@@ -803,6 +865,7 @@ impl SchemaStructure {
             input,
             active: Vec::new(),
             resolved_output: false,
+            nulls: NullPolicy::Value,
         }
         .union(
             types,
@@ -811,6 +874,8 @@ impl SchemaStructure {
                 path,
                 depth: 0,
                 fragment,
+                root: false,
+                members: false,
             },
         )
     }
@@ -819,7 +884,14 @@ impl SchemaStructure {
         &self,
         input: &Document,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_document_mode(input, false)
+        self.validate_document_mode(input, false, NullPolicy::Value)
+    }
+    /// Validate a specification, in which a null field or mapping entry is absent.
+    pub fn validate_specification(
+        &self,
+        input: &Document,
+    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        self.validate_document_mode(input, false, NullPolicy::Absent)
     }
     /// Final inheritance validation assigns the resolved-output rule to an output
     /// to which no contribution survived. Other required fields retain schema ownership.
@@ -827,24 +899,28 @@ impl SchemaStructure {
         &self,
         input: &Document,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_document_mode(input, true)
+        self.validate_document_mode(input, true, NullPolicy::Absent)
     }
     fn validate_document_mode(
         &self,
         input: &Document,
         resolved_output: bool,
+        nulls: NullPolicy,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         let mut run = Run {
             schema: self,
             input,
             active: Vec::new(),
             resolved_output,
+            nulls,
         };
         let site = Site {
             value: input.root(),
             path: "$",
             depth: 0,
             fragment: false,
+            root: true,
+            members: false,
         };
         if !matches!(&input.nodes()[input.root()],N::Mapping(items) if !items.is_empty()) {
             return run.invalid(site, &self.root_class().name);
@@ -888,6 +964,18 @@ impl SchemaStructure {
         path: &str,
         fragment: bool,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        self.validate_descriptor_with(descriptor, input, value, path, fragment, NullPolicy::Value)
+    }
+    /// Interpret a descriptor under an explicit null policy, as a specification field.
+    pub fn validate_descriptor_with(
+        &self,
+        descriptor: usize,
+        input: &Document,
+        value: usize,
+        path: &str,
+        fragment: bool,
+        nulls: NullPolicy,
+    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         if descriptor >= self.descriptors().len() || value >= input.nodes().len() {
             return Err(ValidationError::InvalidDescriptor);
         }
@@ -896,6 +984,7 @@ impl SchemaStructure {
             input,
             active: Vec::new(),
             resolved_output: false,
+            nulls,
         }
         .descriptor(
             descriptor,
@@ -904,6 +993,8 @@ impl SchemaStructure {
                 path,
                 depth: 0,
                 fragment,
+                root: false,
+                members: false,
             },
         )
     }

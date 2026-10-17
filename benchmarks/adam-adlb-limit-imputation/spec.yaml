@@ -45,7 +45,7 @@ columns:
         source: AVALC
         pattern: '^(?:[<>]=?|=)?([0-9]+(?:\.[0-9]+)?)$'
         group: 1
-        missing: null
+        missing: {literal: null}
 
   # admiral v1.5.0 compute_qual_imputation, imputation_type=1, factor=1:
   # only a strict inequality receives the authored one-unit offset.

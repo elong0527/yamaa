@@ -34,7 +34,7 @@ intermediates:
     dataset: TA
     key: {STUDYID: DM.STUDYID, ARMCD: DM.ARMCD}
     filter: "TA.TRTNUM = 1"
-    no_match: null
+    no_match: {literal: null}
     derivations:
       TRTNUM:
         row_number:
@@ -47,7 +47,7 @@ intermediates:
     dataset: TA
     key: {STUDYID: DM.STUDYID, ARMCD: DM.ARMCD}
     filter: "TA.TRTNUM = 2"
-    no_match: null
+    no_match: {literal: null}
     derivations:
       TRTNUM:
         row_number:
@@ -90,7 +90,7 @@ columns:
     derivation:
       str_template:
         template: "{TRT01P}/{TRT02P}"
-        missing: null
+        missing: {literal: null}
 
 verifications:
   - row_count:

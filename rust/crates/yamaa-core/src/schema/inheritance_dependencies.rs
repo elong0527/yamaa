@@ -600,7 +600,7 @@ impl SchemaStructure {
 
     /// Prune unreachable declarations without ordering the survivors (REQ-0638–0641).
     ///
-    /// A specification that declares no `parents` is a composition of one layer and
+    /// A specification that declares no `parent` is a composition of one layer and
     /// is pruned on the same terms as a composed specification; its declaration
     /// order remains the resolved order (REQ-0060), so no ordering validation or
     /// reordering from `resolve_inheritance_dependencies` applies here.

@@ -52,7 +52,7 @@ columns:
         source: LSTCNTDC
         month: 1
         day: first
-        invalid: null
+        invalid: {literal: null}
 
   # The subject's latest adverse event end and vital signs date, matched on
   # STUDYID and USUBJID; empty with no records or only missing dates.

@@ -26,5 +26,5 @@ str_replace:
   source: AE.AESPID
   pattern: '[^0-9]'
   replacement: ""
-  missing: null
+  missing: {literal: null}
 ```

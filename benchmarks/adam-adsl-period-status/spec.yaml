@@ -19,12 +19,12 @@ intermediates:
   - id: P01DS
     dataset: DS
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT 1'"
-    no_match: null
+    no_match: {literal: null}
 
   - id: P02DS
     dataset: DS
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT 2'"
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID

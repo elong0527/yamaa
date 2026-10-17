@@ -29,7 +29,7 @@ intermediates:
     dataset: QS
     key: [STUDYID, USUBJID, PARAMCD, AVISITN]
     filter: "QS.AVAL IS NOT NULL"
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID

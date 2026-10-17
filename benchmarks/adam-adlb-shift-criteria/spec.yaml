@@ -116,7 +116,7 @@ columns:
     derivation:
       str_template:
         template: "{BNRIND} to {ANRIND}"
-        missing: null
+        missing: {literal: null}
 
   # NULLIF leaves the ratio empty when the baseline value is zero.
   - name: R2BASE

@@ -258,7 +258,7 @@ mod scalar {
                     .replace("source: VAL1", "source: SOURCE.VAL1"),
                 false,
             );
-            let source = POSITIVE.replace("SOURCE: input/adsl.csv", "SOURCE: input/adsl.csv\n  LOOKUP: {path: input/lookup.csv, types: {VAL1: float}}\nbase: SOURCE\nintermediates:\n  - id: SELECTED\n    dataset: LOOKUP\n    key: [STUDYID, USUBJID]\n    no_match: null").replace("source: VAL1", "source: SELECTED.VAL1");
+            let source = POSITIVE.replace("SOURCE: input/adsl.csv", "SOURCE: input/adsl.csv\n  LOOKUP: {path: input/lookup.csv, types: {VAL1: float}}\nbase: SOURCE\nintermediates:\n  - id: SELECTED\n    dataset: LOOKUP\n    key: [STUDYID, USUBJID]\n    no_match: {literal: null}").replace("source: VAL1", "source: SELECTED.VAL1");
             qualified(&source, true);
         }
         #[test]
@@ -961,7 +961,7 @@ rows:
     dataset: SRC
     derivations:
       ID: SRC.ID
-      DTM: {impute: {type: datetime, source: SRC.TEXT, minimum_source_precision: day, time: last, invalid: null}}
+      DTM: {impute: {type: datetime, source: SRC.TEXT, minimum_source_precision: day, time: last, invalid: {literal: null}}}
 "#,
             )
             .unwrap();
@@ -989,7 +989,7 @@ columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - name: DTM
     type: datetime
-    derivation: {impute: {type: datetime, source: SRC.TEXT, minimum_source_precision: day, time: last, invalid: null}}
+    derivation: {impute: {type: datetime, source: SRC.TEXT, minimum_source_precision: day, time: last, invalid: {literal: null}}}
   - name: PR
     type: str
     derivation: {precision: {type: datetime, source: DTM}}
@@ -1073,7 +1073,7 @@ columns:
         month: 12
         day: last
         not_after: SRC.HIGH
-        invalid: null
+        invalid: {literal: null}
   - name: BOTH
     type: date
     derivation:
@@ -1084,7 +1084,7 @@ columns:
         day: 15
         not_before: SRC.LOW
         not_after: SRC.HIGH
-        invalid: null
+        invalid: {literal: null}
 "#,
             )
             .unwrap();
@@ -1126,7 +1126,7 @@ columns:
         month: 12
         day: last
         not_after: SRC.HIGH
-        invalid: null
+        invalid: {literal: null}
 "#,
             )
             .unwrap();
@@ -1345,9 +1345,9 @@ output: {path: output.csv, columns: [ID, UP, LOW, SENT, TITLE]}
 columns:
   - {name: ID, type: str, derivation: SRC.ID}
   - {name: UP, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper, missing: MiXeD}}}
-  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower, missing: null}}}
-  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence, missing: null}}}
-  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title, missing: null}}}
+  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower, missing: {literal: null}}}}
+  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence, missing: {literal: null}}}}
+  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title, missing: {literal: null}}}}
 "#,
                 "ID,TEXT\n1,FOLLOW-UP\n2,\u{00df}\u{0130}\u{00e9}\u{1f642}AbC\n3,a\0BC\n4,\n"
                     .as_bytes(),
@@ -1389,13 +1389,13 @@ output: {path: output.csv, columns: [ID, TEXT, RESULT]}
 columns:
   - {name: ID, type: str}
   - {name: TEXT, type: str}
-  - {name: RESULT, type: str, derivation: {str_case: {source: TEXT, to: sentence, missing: null}}}
+  - {name: RESULT, type: str, derivation: {str_case: {source: TEXT, to: sentence, missing: {literal: null}}}}
 rows:
   - id: records
     dataset: SRC
     derivations:
       ID: SRC.ID
-      TEXT: {str_case: {source: SRC.TEXT, to: title, missing: null}}
+      TEXT: {str_case: {source: SRC.TEXT, to: title, missing: {literal: null}}}
 "#,
                 b"ID,TEXT\n1,FOLLOW-UP\n2,\n",
             );

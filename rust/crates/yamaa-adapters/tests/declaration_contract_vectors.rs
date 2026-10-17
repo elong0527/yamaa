@@ -973,11 +973,11 @@ mod declaration {
             let schema = shipped_schema::capture().unwrap();
             for width in [40, 64, 1024] {
                 let parent = case_parent(width);
-                let child = b"schema_version: '1.0'\nparents: [parent.yaml]\n";
-                let grandchild = b"schema_version: '1.0'\nparents: [child.yaml]\n";
+                let child = b"schema_version: '1.0'\nparent: parent.yaml\n";
+                let grandchild = b"schema_version: '1.0'\nparent: child.yaml\n";
                 for (name, bytes) in [
                     ("parent", parent.clone()),
-                    ("explicit", [parent.as_slice(), b"parents: []\n"].concat()),
+                    ("explicit", [parent.as_slice(), b"parent: null\n"].concat()),
                     ("child", child.to_vec()),
                     ("grandchild", grandchild.to_vec()),
                 ] {
@@ -1005,10 +1005,15 @@ mod declaration {
         }
 
         #[test]
-        fn repeated_parent_occurrences_cannot_bypass_the_traversal_request_bound() {
-            let parents = vec!["parent.yaml"; 8193].join(", ");
-            let entry = format!("schema_version: '1.0'\nparents: [{parents}]\n").into_bytes();
+        fn long_parent_chains_cannot_bypass_the_traversal_request_bound() {
+            let entry = b"schema_version: '1.0'\nparent: p1.yaml\n".to_vec();
             let mut host = new_host(VALID.as_bytes());
+            for index in 1..=8193 {
+                host.bytes.insert(
+                    format!("p{index}.yaml"),
+                    format!("schema_version: '1.0'\nparent: p{}.yaml\n", index + 1).into_bytes(),
+                );
+            }
             let result = shipped_schema::prepare(source(entry), "entry.yaml".into(), &mut host);
             let Err(InheritanceError::Preparation { error, .. }) = result else {
                 panic!("pathological parent occurrences must be refused");
@@ -1028,7 +1033,7 @@ mod declaration {
                     .iter()
                     .filter(|call| call.starts_with("capture:"))
                     .count(),
-                1
+                8192
             );
             assert_eq!(
                 host.calls
@@ -1154,7 +1159,7 @@ mod declaration {
         }
         #[test]
         fn actual_entry_and_parent_snapshots_are_moved_once_with_raw_positions_and_defaults() {
-            let root = format!("{VALID}parents: [parent.yaml, parent.yaml]\n").into_bytes();
+            let root = format!("{VALID}parent: parent.yaml\n").into_bytes();
             let root_pointer = root.as_ptr();
             let mut host = new_host(b"schema_version: '1.0'\n");
             let parent_pointer = host.bytes["parent.yaml"].as_ptr();
@@ -1181,7 +1186,7 @@ mod declaration {
                     .iter()
                     .filter(|s| s.starts_with("resolve:"))
                     .count(),
-                2
+                1
             );
             assert_eq!(
                 host.calls
@@ -1215,7 +1220,7 @@ mod declaration {
                     allocation,
                 });
                 host.fail_at = fail_at;
-                let root = format!("{VALID}parents: parent.yaml\n");
+                let root = format!("{VALID}parent: parent.yaml\n");
                 let Err(InheritanceError::Preparation {
                     error,
                     captured_parents,
@@ -1241,7 +1246,7 @@ mod declaration {
         }
         #[test]
         fn raw_parent_overruns_refuse_before_codec_and_keep_existing_capture_category() {
-            let root = format!("{VALID}parents: parent.yaml\n");
+            let root = format!("{VALID}parent: parent.yaml\n");
             let parent = b"schema_version: '1.0'\n";
             let mut host = new_host(&vec![b' '; yamaa_core::limits::Limits::SPEC_BYTES + 1]);
             let error = match shipped_schema::prepare(
@@ -1446,12 +1451,13 @@ mod declaration {
                 assert!(prepared
                     .model()
                     .document()
-                    .field(prepared.model().document().root(), "parents")
+                    .field(prepared.model().document().root(), "parent")
                     .is_none());
+                // Each chain from the entry upward, which is also the capture order.
                 let parent_names: &[&str] = if name == "schema-inherited-output" {
                     &["spec_shared.yaml"]
                 } else {
-                    &["spec_organization.yaml", "spec_compound.yaml"]
+                    &["spec_compound.yaml", "spec_organization.yaml"]
                 };
                 let expected_parents: Vec<_> = parent_names
                     .iter()
@@ -1465,7 +1471,7 @@ mod declaration {
                         .collect::<Vec<_>>(),
                     expected_parents.iter().collect::<Vec<_>>()
                 );
-                let mut expected_layers = expected_parents.clone();
+                let mut expected_layers: Vec<_> = expected_parents.iter().rev().cloned().collect();
                 expected_layers.push(entry.to_str().unwrap().into());
                 assert_eq!(
                     prepared
@@ -1478,12 +1484,14 @@ mod declaration {
                     expected_layers.iter().collect::<Vec<_>>()
                 );
                 let mut tape = Vec::new();
+                let mut declaring = entry.clone();
                 for (index, parent) in prepared.parents().iter().enumerate() {
                     let parent_name = parent_names[index];
                     tape.push(Event::Resolve(
-                        entry.to_str().unwrap().into(),
+                        declaring.to_str().unwrap().into(),
                         parent_name.into(),
                     ));
+                    declaring = root.join(parent_name);
                     tape.push(Event::Capture(
                         parent.source().identity.clone(),
                         parent.source().identity.clone(),
@@ -1501,12 +1509,6 @@ mod declaration {
                         parent.raw().locations.len(),
                         parent.raw().document.nodes().len()
                     );
-                }
-                if name != "schema-inherited-output" {
-                    tape.push(Event::Resolve(
-                        root.join("spec_compound.yaml").to_str().unwrap().into(),
-                        "spec_organization.yaml".into(),
-                    ));
                 }
                 let rebases: &[(&str, &str)] = match name {
                     "schema-inheritance" => &[
@@ -1571,7 +1573,7 @@ mod declaration {
                 let report = specification_diagnostics::inheritance_failure(error).unwrap();
                 assert_eq!(
                     yamaa_adapters::json_wire::decode(&report).unwrap(),
-                    json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":parent_names[0],"source":entry.to_str().unwrap()}}]}})
+                    json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":parent_names[0],"source":entry.to_str().unwrap()}}]}})
                 );
                 assert_eq!(
                     missing.events,
@@ -1584,10 +1586,10 @@ mod declaration {
         }
 
         #[test]
-        fn complete_window_model_keeps_parent_definition_child_override_and_schema_defaults() {
+        fn complete_window_model_merges_parent_definition_with_child_fields_and_schema_defaults() {
             let mut parent = window();
             parent["windows"]["UNUSED"] = json!({"group_by":["NOT_A_COLUMN"]});
-            let child = json!({"schema_version":"1.0","parents":"parent.yaml","windows":{"VISITS":{"order_by":[{"variable":"SEQ","nulls":"first"}]}}});
+            let child = json!({"schema_version":"1.0","parent":"parent.yaml","windows":{"VISITS":{"order_by":[{"variable":"SEQ","nulls":"first"}]}}});
             let mut host = new_host(yamaa_adapters::json_wire::encode(&parent).as_bytes());
             let prepared = shipped_schema::prepare(
                 source(yamaa_adapters::json_wire::encode(&child).into_bytes()),
@@ -1601,9 +1603,10 @@ mod declaration {
                 "output":{"path":"out.csv","relative_to":"declaring","columns":["ID","PREV"]},
                 "columns":[
                     {"name":"ID","type":"str","label":"ID","derivation":{"value":{"source":{"variable":"SRC.ID"}}}},
+                    {"name":"G","type":"str","label":"G","derivation":{"value":{"source":{"variable":"SRC.G"}}}},
                     {"name":"SEQ","type":"int","label":"SEQ","derivation":{"value":{"source":{"variable":"SRC.SEQ"}}}},
                     {"name":"VAL","type":"int","label":"VAL","derivation":{"value":{"source":{"variable":"SRC.VAL"}}}},
-                    {"name":"PREV","type":"int","label":"Previous value","derivation":{"value":{"row_value":{"source":"VAL","offset":-1,"window":{"order_by":[{"variable":"SEQ","direction":"asc","nulls":"first"}]}}}}}
+                    {"name":"PREV","type":"int","label":"Previous value","derivation":{"value":{"row_value":{"source":"VAL","offset":-1,"window":{"group_by":["G"],"order_by":[{"variable":"SEQ","direction":"asc","nulls":"first"}]}}}}}
                 ]
             });
             let document = prepared.model().document();
@@ -1624,6 +1627,10 @@ mod declaration {
                 .provenance()
                 .iter()
                 .any(|origin| origin.path == "windows.VISITS.order_by" && origin.layer == 1));
+            assert!(inherited
+                .provenance()
+                .iter()
+                .any(|origin| origin.path == "windows.VISITS.group_by" && origin.layer == 0));
             let previous = *sequence(document, path(document, &["columns"]))
                 .last()
                 .unwrap();
@@ -1658,7 +1665,7 @@ mod declaration {
         #[test]
         fn count_dependency_pruning_keeps_complete_normalized_application_model() {
             let authored = json!({
-                "schema_version":"1.0","parents":[],"domain":"OUT","keys":["ID"],
+                "schema_version":"1.0","domain":"OUT","keys":["ID"],
                 "input":{"DM":"dm.csv","EX":"ex.csv","DEAD":"never-read.csv"}, "base":"DM",
                 "output":{"path":"out.csv","columns":["ID","N"]},
                 "columns":[
@@ -1667,9 +1674,9 @@ mod declaration {
                     {"name":"UNUSED","type":"int","derivation":{"aggregate":{"expr":"COUNT(DEAD.*)"}}}
                 ]
             });
-            let mut host = new_host(b"unused");
+            let mut host = new_host(yamaa_adapters::json_wire::encode(&authored).as_bytes());
             let prepared = shipped_schema::prepare(
-                source(yamaa_adapters::json_wire::encode(&authored).into_bytes()),
+                source(b"schema_version: '1.0'\nparent: parent.yaml\n".to_vec()),
                 "entry.yaml".into(),
                 &mut host,
             )
@@ -1689,10 +1696,12 @@ mod declaration {
             assert_eq!(
                 host.calls,
                 [
-                    "rebase:entry.yaml:entry.yaml:never-read.csv",
-                    "rebase:entry.yaml:entry.yaml:dm.csv",
-                    "rebase:entry.yaml:entry.yaml:ex.csv",
-                    "rebase:entry.yaml:entry.yaml:out.csv"
+                    "resolve:entry.yaml:parent.yaml",
+                    "capture:parent.yaml",
+                    "rebase:parent.yaml:entry.yaml:never-read.csv",
+                    "rebase:parent.yaml:entry.yaml:dm.csv",
+                    "rebase:parent.yaml:entry.yaml:ex.csv",
+                    "rebase:parent.yaml:entry.yaml:out.csv"
                 ]
             );
             assert_eq!(prepared.written_source_path("DM"), Some("dm.csv"));
@@ -1700,10 +1709,10 @@ mod declaration {
         }
 
         #[test]
-        fn explicit_null_handler_and_raw_origin_remain_distinct_from_inherited_clear() {
+        fn explicit_missing_handler_and_raw_origin_remain_distinct_from_inherited_clear() {
             let mut authored = window();
             authored["intermediates"] =
-                json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":null}]);
+                json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":{"literal":null}}]);
             // Pruning (REQ-0638) keeps only declarations a resolved column
             // reads: LK reads LOOK and is itself an output column, so the
             // intermediate under test survives standalone preparation.
@@ -1716,7 +1725,7 @@ mod declaration {
             let raw_pointer = source.bytes.as_ptr();
             let mut host = new_host(b"unused");
             let prepared = shipped_schema::prepare(source, "entry.yaml".into(), &mut host)
-                .unwrap_or_else(|_| panic!("standalone literal null"));
+                .unwrap_or_else(|_| panic!("standalone missing literal"));
             assert_eq!(prepared.source().bytes.as_ptr(), raw_pointer);
             assert!(host.calls.is_empty());
             let document = prepared.model().document();
@@ -1734,12 +1743,12 @@ mod declaration {
                         {"name":"LK","type":"int","label":"Lookup value","derivation":{"value":{"source":{"variable":"LOOK.VAL"}}}},
                         {"name":"PREV","type":"int","label":"Previous value","derivation":{"value":{"row_value":{"source":"VAL","offset":-1,"window":{"group_by":["G"],"order_by":[{"variable":"SEQ","direction":"asc"}]}}}}}
                     ],
-                    "intermediates":[{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":null}]
+                    "intermediates":[{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":{"literal":null}}]
                 })
             );
             let intermediate = sequence(document, path(document, &["intermediates"]))[0];
             let null = document.field(intermediate, "no_match").unwrap();
-            assert_eq!(document.nodes()[null], N::Null);
+            assert!(matches!(&document.nodes()[null], N::Mapping(items) if items.len() == 1));
             let raw = &prepared.raw().document;
             let raw_intermediate = sequence(raw, path(raw, &["intermediates"]))[0];
             assert_eq!(prepared.origins()[null].source, SchemaSource::Input);
@@ -1797,18 +1806,19 @@ mod declaration {
         }
 
         #[test]
-        fn introducing_null_handler_survives_explicit_composition_and_empty_child() {
+        fn introducing_missing_handler_survives_composition_and_empty_child() {
             let mut parent = window();
             parent["intermediates"] =
-                json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":null}]);
+                json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":{"literal":null}}]);
             parent["columns"][4]["derivation"] = json!("LOOK.VAL");
             for empty_child in [false, true] {
                 let mut host = new_host(yamaa_adapters::json_wire::encode(&parent).as_bytes());
                 let authored = if empty_child {
-                    json!({"schema_version":"1.0","parents":"parent.yaml"})
+                    json!({"schema_version":"1.0","parent":"parent.yaml"})
                 } else {
+                    // A null parent is absent: the same document standalone.
                     let mut authored = parent.clone();
-                    authored["parents"] = json!([]);
+                    authored["parent"] = json!(null);
                     authored
                 };
                 let prepared = shipped_schema::prepare(
@@ -1816,12 +1826,12 @@ mod declaration {
                     "entry.yaml".into(),
                     &mut host,
                 )
-                .unwrap_or_else(|_| panic!("introducing null is a value"));
+                .unwrap_or_else(|_| panic!("a missing literal is a value"));
                 let document = prepared.model().document();
                 let intermediate = sequence(document, path(document, &["intermediates"]))[0];
                 assert_eq!(
-                    document.nodes()[document.field(intermediate, "no_match").unwrap()],
-                    N::Null
+                    tree(document, document.field(intermediate, "no_match").unwrap()),
+                    json!({"literal": null})
                 );
                 assert_eq!(
                     prepared.declaring_source("intermediates.LOOK.no_match"),
@@ -1835,14 +1845,14 @@ mod declaration {
         }
 
         #[test]
-        fn inherited_null_or_literal_handler_is_still_cleared() {
-            for inherited in [json!(null), json!("UNKNOWN")] {
+        fn inherited_missing_or_literal_handler_is_cleared() {
+            for inherited in [json!({"literal": null}), json!("UNKNOWN")] {
                 let mut parent = window();
                 parent["intermediates"] =
                     json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":inherited}]);
                 parent["columns"][4]["derivation"] = json!("LOOK.VAL");
                 let mut host = new_host(yamaa_adapters::json_wire::encode(&parent).as_bytes());
-                let child = json!({"schema_version":"1.0","parents":"parent.yaml","intermediates":[{"id":"LOOK","no_match":null}]});
+                let child = json!({"schema_version":"1.0","parent":"parent.yaml","intermediates":[{"id":"LOOK","no_match":null}]});
                 let prepared = shipped_schema::prepare(
                     source(yamaa_adapters::json_wire::encode(&child).into_bytes()),
                     "entry.yaml".into(),
@@ -1856,29 +1866,47 @@ mod declaration {
         }
 
         #[test]
-        fn introduced_invalid_nulls_keep_their_schema_constraints() {
-            for (field, condition) in [("label", "invalid_field_type"), ("type", "invalid_clear")] {
-                let mut authored = window();
-                authored["parents"] = json!([]);
-                authored["columns"][0][field] = json!(null);
-                let mut host = new_host(b"unused");
-                let error = shipped_schema::prepare(
-                    source(yamaa_adapters::json_wire::encode(&authored).into_bytes()),
-                    "entry.yaml".into(),
-                    &mut host,
-                )
-                .expect_err("invalid column field");
-                let report = outcome(error);
-                assert_eq!(report["outcome"]["diagnostics"][0]["condition"], condition);
-                assert_eq!(
-                    report["outcome"]["diagnostics"][0]["spec_paths"][0],
-                    format!("columns.ID.{field}")
-                );
+        fn nulls_are_absent_but_a_required_field_cannot_be_cleared() {
+            for inherited in [false, true] {
+                for field in ["label", "type"] {
+                    let mut authored = window();
+                    if inherited {
+                        authored["parent"] = json!("parent.yaml");
+                    }
+                    authored["columns"][0][field] = json!(null);
+                    let mut host = new_host(b"schema_version: '1.0'\n");
+                    let result = shipped_schema::prepare(
+                        source(yamaa_adapters::json_wire::encode(&authored).into_bytes()),
+                        "entry.yaml".into(),
+                        &mut host,
+                    );
+                    if field == "label" {
+                        let Ok(prepared) = result else {
+                            panic!("a null optional field is absent")
+                        };
+                        let document = prepared.model().document();
+                        let column = sequence(document, path(document, &["columns"]))[0];
+                        assert!(document.field(column, "label").is_none());
+                        continue;
+                    }
+                    let Err(error) = result else {
+                        panic!("a required field cannot be cleared")
+                    };
+                    let report = outcome(error);
+                    assert_eq!(
+                        report["outcome"]["diagnostics"][0]["condition"],
+                        "invalid_clear"
+                    );
+                    assert_eq!(
+                        report["outcome"]["diagnostics"][0]["spec_paths"][0],
+                        "columns.ID.type"
+                    );
+                }
             }
         }
 
         #[test]
-        fn distinct_written_aliases_keep_first_canonical_arena_and_complete_authored_model() {
+        fn a_written_alias_keeps_its_canonical_arena_and_complete_authored_model() {
             struct Aliases(Host);
             impl InheritancePort for Aliases {
                 type Error = Payload;
@@ -1911,7 +1939,7 @@ mod declaration {
             }
             let original = yamaa_adapters::json_wire::encode(&json!({"schema_version":"1.0","domain":"OUT","keys":["ID"],"input":{"DM":"data.csv"},"base":"DM","output":{"path":"out.csv","columns":["ID"]},"columns":[{"name":"ID","type":"str","derivation":"DM.ID"}]})).into_bytes();
             let pointer = original.as_ptr();
-            let entry = b"schema_version: '1.0'\nparents: [base.yaml, alias.yaml]\n".to_vec();
+            let entry = b"schema_version: '1.0'\nparent: alias.yaml\n".to_vec();
             let mut host = Aliases(Host {
                 bytes: [("canonical/base.yaml".into(), original)]
                     .into_iter()
@@ -1929,9 +1957,8 @@ mod declaration {
             assert_eq!(
                 host.0.calls,
                 [
-                    "resolve:entry.yaml:base.yaml".to_owned(),
-                    "capture:canonical/base.yaml".to_owned(),
                     "resolve:entry.yaml:alias.yaml".to_owned(),
+                    "capture:canonical/base.yaml".to_owned(),
                     "rebase:canonical/base.yaml:entry.yaml:data.csv".to_owned(),
                     "rebase:canonical/base.yaml:entry.yaml:out.csv".to_owned()
                 ]
@@ -1949,7 +1976,7 @@ mod declaration {
             );
             assert_eq!(
                 inherited.layers()[0].source.display_path,
-                "written/base.yaml"
+                "written/alias.yaml"
             );
             let origin = prepared.written_input_origin("DM", "path").unwrap();
             assert_eq!(
@@ -2002,7 +2029,7 @@ mod declaration {
                 }
                 let mut host = new_host(&parent);
                 let error = shipped_schema::prepare(
-                    source(b"schema_version: '1.0'\nparents: parent.yaml\n".to_vec()),
+                    source(b"schema_version: '1.0'\nparent: parent.yaml\n".to_vec()),
                     "entry.yaml".into(),
                     &mut host,
                 )
@@ -2256,7 +2283,9 @@ mod declaration {
                 "id":"DS_EOS", "dataset":"DS",
                 "verifications":[
                     {"unique":["STUDYID","USUBJID"]},
-                    {"unique":{"id":"one-row-per-subject","columns":["USUBJID"]}}
+                    {"unique":{"id":"one-row-per-subject","columns":["USUBJID"]}},
+                    // A null id is absent, never a value (LAYER-9).
+                    {"unique":{"id":null,"columns":["STUDYID"]}}
                 ]
             });
             assert!(study.check(intermediate).is_empty());
@@ -2269,7 +2298,6 @@ mod declaration {
                 json!({"unique":[]}),
                 json!({"unique":{"columns":[]}}),
                 json!({"unique":{"columns":["STUDYID"],"severity":"warning"}}),
-                json!({"unique":{"id":null,"columns":["STUDYID"]}}),
                 json!({"assert":{"require":"TRUE"}}),
             ] {
                 let issues = study.check(json!({
@@ -2517,7 +2545,7 @@ mod declaration {
         fn physical_decode_and_source_boundary_precede_lifecycle() {
             let schema = schema();
             assert!(matches!(
-                schema.dispatch(source("parents: null\n[unterminated")),
+                schema.dispatch(source("parent: null\n[unterminated")),
                 Err(Error::Decode {
                     error: DecodeFailure::InvalidYaml { .. },
                     ..
@@ -2636,18 +2664,18 @@ mod declaration {
             fn native_raw_absent_null_empty_and_scalar_routes_preserve_independent_complete_reports(
             ) {
                 let study = Study::new();
-                let standalone = study.prepare(VALID).unwrap();
-                assert!(standalone.run().document().inheritance().is_none());
-                assert_eq!(standalone.capture_reads(), 1);
-                let inherited = study.prepare(&format!("{VALID}parents: []\n")).unwrap();
-                assert!(inherited.run().document().inheritance().is_some());
-                assert_eq!(inherited.capture_reads(), 1);
-                for parents in ["null", "7"] {
+                for text in [VALID.to_string(), format!("{VALID}parent: null\n")] {
+                    // An absent or null parent is a composition of one layer.
+                    let standalone = study.prepare(&text).unwrap();
+                    assert!(standalone.run().document().inheritance().is_none());
+                    assert_eq!(standalone.capture_reads(), 1);
+                }
+                for (parent, actual) in [("7", "int"), ("[]", "sequence")] {
                     assert_eq!(
-                        study.report(&format!("{VALID}parents: {parents}\n")),
+                        study.report(&format!("{VALID}parent: {parent}\n")),
                         invalid(json!([{
-                            "phase":"validation","condition":"invalid_field_type","requirement":"REQ-0287","spec_paths":["parents"],
-                            "context":{"expected":"path","actual":if parents=="null" {json!("null")} else {json!("int")},"source":study.identity("entry/root.yaml"),"entry":study.identity("entry/root.yaml")}
+                            "phase":"validation","condition":"invalid_field_type","requirement":"REQ-0287","spec_paths":["parent"],
+                            "context":{"expected":"path","actual":actual,"source":study.identity("entry/root.yaml"),"entry":study.identity("entry/root.yaml")}
                         }]))
                     );
                 }
@@ -2658,7 +2686,7 @@ mod declaration {
                 let root = study.identity("entry/root.yaml");
                 assert_eq!(
                     study.report(&format!(
-                        "{}parents: absent.yaml\n",
+                        "{}parent: absent.yaml\n",
                         VALID.replace("'1.0'", "'99.0'")
                     )),
                     invalid(json!([{
@@ -2666,9 +2694,9 @@ mod declaration {
                     }]))
                 );
                 assert_eq!(
-                    study.report(&format!("{VALID}parents: absent.yaml\n")),
+                    study.report(&format!("{VALID}parent: absent.yaml\n")),
                     invalid(json!([{
-                        "phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"absent.yaml","source":root}
+                        "phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":"absent.yaml","source":root}
                     }]))
                 );
                 fs::write(
@@ -2677,28 +2705,30 @@ mod declaration {
                 )
                 .unwrap();
                 assert_eq!(
-                    study.report(&format!("{VALID}parents: ../parent/base.yaml\n")),
+                    study.report(&format!("{VALID}parent: ../parent/base.yaml\n")),
                     invalid(json!([{
                         "phase":"validation","condition":"pattern_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":study.identity("parent/base.yaml"),"entry":root}
                     }]))
                 );
             }
             #[test]
-            fn native_diamond_retains_first_capture_order_postorder_and_one_snapshot_per_physical_input(
+            fn native_chain_retains_capture_order_contribution_order_and_one_snapshot_per_physical_input(
             ) {
                 let study = Study::new();
                 fs::write(study.0.join("parent/common.yaml"), VALID).unwrap();
                 fs::write(
                     study.0.join("parent/a.yaml"),
-                    "schema_version: '1.0'\nparents: [common.yaml]\n",
+                    "schema_version: '1.0'\nparent: ./common.yaml\n",
                 )
                 .unwrap();
                 fs::write(
                     study.0.join("parent/b.yaml"),
-                    "schema_version: '1.0'\nparents: [./common.yaml,common.yaml]\n",
+                    "schema_version: '1.0'\nparent: ../parent/./a.yaml\n",
                 )
                 .unwrap();
-                let prepared=study.prepare("schema_version: '1.0'\nparents: [../parent/a.yaml, ../parent/b.yaml, ../parent/./a.yaml]\n").unwrap();
+                let prepared = study
+                    .prepare("schema_version: '1.0'\nparent: ../parent/b.yaml\n")
+                    .unwrap();
                 let document = prepared.run().document();
                 assert_eq!(
                     document
@@ -2707,9 +2737,9 @@ mod declaration {
                         .map(|p| p.source().identity.as_str())
                         .collect::<Vec<_>>(),
                     [
+                        study.identity("parent/b.yaml"),
                         study.identity("parent/a.yaml"),
-                        study.identity("parent/common.yaml"),
-                        study.identity("parent/b.yaml")
+                        study.identity("parent/common.yaml")
                     ]
                 );
                 assert_eq!(

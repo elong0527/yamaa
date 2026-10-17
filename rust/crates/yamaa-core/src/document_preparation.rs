@@ -51,9 +51,10 @@ pub enum Error<E, X, R> {
 }
 pub type PreparationResult<E, X, R, L> = Result<Prepared<R, L>, Error<E, X, R>>;
 
-/// Decode once, then test raw parent presence without a preceding normalization
-/// or version/default gate. Both routes retain their own existing checkpoint and
-/// source authority. Null/scalar/empty parents still select inheritance.
+/// Decode once, then test for a raw non-null parent without a preceding
+/// normalization or version/default gate. Both routes retain their own existing
+/// checkpoint and source authority. A null parent is absent and selects the
+/// standalone route; any other written parent, valid or not, selects inheritance.
 pub fn prepare<E, D, P>(
     schema: &SchemaStructure,
     source: Source,
@@ -68,10 +69,7 @@ where
     P: inheritance_capture::InheritanceCapturePort,
 {
     let raw = entry.decode(&source).map_err(Error::Entry)?;
-    let content = if E::document(&raw)
-        .field(E::document(&raw).root(), "parents")
-        .is_some()
-    {
+    let content = if crate::inheritance::declares_parent(E::document(&raw)) {
         let prepared =
             inheritance_capture::prepare(schema, &source, display_path, &raw, capture, parents)
                 .map_err(Error::Inherited)?;

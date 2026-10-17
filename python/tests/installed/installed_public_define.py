@@ -640,7 +640,7 @@ class PublicDefine(unittest.TestCase):
         )
         (directory / "parents/base.yaml").write_text(spec)
         (directory / "children/spec.yaml").write_text(
-            "schema_version: '1.0'\nparents: ../parents/base.yaml\n"
+            "schema_version: '1.0'\nparent: ../parents/base.yaml\n"
         )
         environment = directory / "environment.yaml"
         environment.write_text(
@@ -793,7 +793,7 @@ class PublicDefine(unittest.TestCase):
                 if case["inherit_specification"]:
                     (directory / "spec.yaml").rename(directory / "base.yaml")
                     (directory / "spec.yaml").write_text(
-                        "schema_version: '1.0'\nparents: base.yaml\n"
+                        "schema_version: '1.0'\nparent: base.yaml\n"
                     )
                 result = self.call(directory)
                 actual = [

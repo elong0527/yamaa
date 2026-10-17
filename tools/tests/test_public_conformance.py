@@ -144,7 +144,7 @@ class PublicConformance(unittest.TestCase):
             self.assertFalse((tree / "run.R").exists())
             self.assertEqual(
                 (tree / "__child_spec.yaml").read_text(),
-                'schema_version: "1.0"\nparents: spec.yaml\n',
+                'schema_version: "1.0"\nparent: spec.yaml\n',
             )
         (staged / "result.csv").write_bytes(b"original\n")
         (variants / "result.csv").write_bytes(b"variant\n")
@@ -689,9 +689,11 @@ class PublicConformance(unittest.TestCase):
             [c["name"] for c in judge.json.loads(permuted)["columns"]],
             ["VALUE", "ID", "OTHER"],
         )
+        # A null parent names no parent, so the document stays standalone.
+        self.assertIsNotNone(judge.key_order_texts({**document, "parent": None}))
         for ineligible in (
             {**document, "rows": []},
-            {**document, "parents": ["base.yaml"]},
+            {**document, "parent": "base.yaml"},
             {**document, "keys": ["ID"]},
             {
                 **document,
@@ -702,6 +704,25 @@ class PublicConformance(unittest.TestCase):
             },
         ):
             self.assertIsNone(judge.key_order_texts(ineligible))
+
+    def test_declarations_follow_the_single_parent_chain(self):
+        (self.case / "layers").mkdir()
+        (self.case / "layers/base.yaml").write_text(SPEC)
+        (self.case / "middle.yaml").write_text(
+            'schema_version: "1.0"\nparent: layers/base.yaml\n'
+            "columns:\n  - {name: VALUE, type: int}\n"
+        )
+        (self.case / "entry.yaml").write_text(
+            'schema_version: "1.0"\nparent: middle.yaml\noutput: {decimals: 2}\n'
+        )
+        types, output = judge.declarations(self.case / "entry.yaml")
+        self.assertEqual(types, {"ID": "int", "VALUE": "int"})
+        self.assertEqual((output["path"], output["decimals"]), ("result.csv", 2))
+        (self.case / "layers/base.yaml").write_text(
+            'schema_version: "1.0"\nparent: ../entry.yaml\n'
+        )
+        with self.assertRaisesRegex(ValueError, "cyclic declarations"):
+            judge.declarations(self.case / "entry.yaml")
 
     def test_metamorphic_key_order_permutation_compares_against_control(self):
         fixtures = self.root / "fixtures2"

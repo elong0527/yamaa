@@ -115,11 +115,16 @@ pub fn decode(document: &Document, root: usize, path: &str) -> Result<Call, Vec<
                         let value = document
                             .field(node, "literal")
                             .expect("checked literal wrapper");
-                        if !matches!(document.nodes().get(value), Some(N::Text(_))) {
-                            reader.fault(&argument_path, value, Kind::NormalizedShape);
-                            Input::Literal(Value::Missing)
-                        } else {
-                            Input::Literal(reader.scalar(value, &argument_path))
+                        match document.nodes().get(value) {
+                            // `{literal: null}` passes the missing value explicitly.
+                            Some(N::Null) => Input::Literal(Value::Missing),
+                            Some(N::Text(_)) => {
+                                Input::Literal(reader.scalar(value, &argument_path))
+                            }
+                            _ => {
+                                reader.fault(&argument_path, value, Kind::NormalizedShape);
+                                Input::Literal(Value::Missing)
+                            }
                         }
                     }
                     _ => Input::Literal(reader.scalar(node, &argument_path)),

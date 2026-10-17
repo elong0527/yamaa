@@ -84,8 +84,21 @@ def context(ctx):
 
 
 def literal_text(value):
-    """A declared literal as a reviewer reads it; a null handler is a blank cell."""
+    """A declared literal as a reviewer reads it; the missing value is a blank cell.
+
+    `{literal: null}` is the one spelling of a missing substitute (COLUMN-10).
+    """
+    if isinstance(value, dict) and set(value) == {"literal"}:
+        value = value["literal"]
     return "blank" if value is None else '"' + str(value) + '"'
+
+
+def declared(node, field):
+    """Whether a handler or substitute field is declared.
+
+    A YAML null leaves the field absent (LAYER-9), exactly as an omitted field.
+    """
+    return isinstance(node, dict) and node.get(field) is not None
 
 
 def join_and(parts):
@@ -230,7 +243,7 @@ def no_match_phrase(lookup, depth=0):
     lookup answers in the shorter form, so its clause cannot be mistaken for
     the outer lookup's own answer at the end of the sentence.
     """
-    if "no_match" not in lookup:
+    if not declared(lookup, "no_match"):
         return (
             ", an error when unmatched"
             if depth
@@ -384,7 +397,7 @@ def with_window(text, node, ctx=None, depth=0):
 
 def handler_phrase(node, field, label):
     """'; missing input -> "X"' for one declared handler, or nothing."""
-    if field not in node:
+    if not declared(node, field):
         return ""
     return "; " + label + " " + ARROW + " " + literal_text(node[field])
 
@@ -449,9 +462,11 @@ def describe_mapping(mapping, ctx=None, depth=0):
         # A dictionary kept in a project file is named rather than inlined.
         rule = " using the dictionary in " + dictionary
     else:
+        # A null entry is absent (LAYER-9); `{literal: null}` recodes to missing.
         rule = ": " + ", ".join(
-            '"' + str(k) + '" ' + ARROW + ' "' + str(v) + '"'
+            '"' + str(k) + '" ' + ARROW + " " + literal_text(v)
             for k, v in dictionary.items()
+            if v is not None
         )
     absent = describe_mapping_handler(mapping, "missing")
     unlisted = describe_mapping_handler(mapping, "unmapped")
@@ -470,9 +485,11 @@ def describe_mapping_handler(mapping, handler):
     Each event has its own handler, and an omitted handler makes the event
     fatal (REQ-0344).
     """
-    if handler not in mapping:
+    if not declared(mapping, handler):
         return "are errors"
     value = mapping[handler]
+    if isinstance(value, dict) and set(value) == {"literal"}:
+        value = value["literal"]
     return "stay missing" if value is None else ARROW + ' "' + str(value) + '"'
 
 
@@ -518,14 +535,14 @@ def describe_flag(node, ctx=None, depth=0):
             + "; blank otherwise."
         )
     condition = describe_expression_text(node.get("condition"), ctx, depth)
-    true_value = literal_text(node.get("true_value", "Y"))
+    # A null value leaves the field absent, so `true_value` keeps its default.
+    true_value = literal_text(
+        node["true_value"] if declared(node, "true_value") else "Y"
+    )
     false_value = literal_text(node.get("false_value"))
     text = true_value + " when " + condition + "; " + false_value + " otherwise"
     # An unknown condition never falls through to false_value (REQ-1257).
-    if "missing" in node:
-        text += "; " + literal_text(node["missing"]) + " when the condition is unknown"
-    else:
-        text += "; blank when the condition is unknown"
+    text += "; " + literal_text(node.get("missing")) + " when the condition is unknown"
     return sentence(text)
 
 
@@ -1068,7 +1085,7 @@ def describe_derivation(derivation, ctx=None, depth=0):
     # conversion yields (REQ-1148).
     if "value" in derivation:
         text = clause(describe_derivation(derivation["value"], ctx, depth))
-        if "unconvertible" in derivation:
+        if declared(derivation, "unconvertible"):
             text += (
                 "; a value that cannot be converted "
                 + ARROW

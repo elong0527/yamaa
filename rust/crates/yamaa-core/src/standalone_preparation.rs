@@ -127,25 +127,25 @@ fn expand(
     Ok((expanded, origins))
 }
 
-/// Parent presence (including null) precedes normalization. Normalization,
-/// pruning and strict window expansion preserve the source provenance.
-/// No study data is read during preparation.
+/// A non-null parent precedes normalization. Normalization, pruning and strict
+/// window expansion preserve the source provenance. No study data is read
+/// during preparation. Every null field is absent (LAYER-9).
 ///
-/// A specification without `parents` is a composition of one layer (REQ-0614):
+/// A specification without a `parent` is a composition of one layer (REQ-0614):
 /// after normalization it is pruned on the same terms as a composed
 /// specification (REQ-0638–REQ-0641), so a dead declaration's unresolved
 /// reference is discarded with it and semantic validation runs on the pruned
 /// document. Declaration order remains the resolved order (REQ-0060); the
 /// pruning pass does not reorder columns.
 pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStandalone, Error> {
-    if raw.field(raw.root(), "parents").is_some() {
+    if crate::inheritance::declares_parent(&raw) {
         return Err(Error::InheritanceRequired);
     }
-    let normalized = match schema.normalize_document(&raw) {
+    let normalized = match schema.normalize_specification(&raw) {
         Ok(normalized) => normalized,
         Err(error) => return Err(normalization_failure(error, raw)),
     };
-    // A specification without `parents` is a composition of one layer
+    // A specification without a `parent` is a composition of one layer
     // (REQ-0614), so it admits the same repeated-identifier findings as any
     // other layer (REQ-0659) before pruning can discard a duplicated
     // declaration and hide the repetition.

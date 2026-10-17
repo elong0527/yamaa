@@ -25,7 +25,7 @@ intermediates:
       AND ADRS.ANL01FL = 'Y' AND ADRS.ADT IS NOT NULL"
     order_by: [ADRS.ADT, ADRS.ASEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID

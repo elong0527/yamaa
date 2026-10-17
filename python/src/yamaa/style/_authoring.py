@@ -305,7 +305,7 @@ def missing_labels(document: Document, value: Mapping) -> Iterator[Departure]:
     """`missing_label`: every output column declares `label:`."""
     if not isinstance(value.get("output"), Mapping):
         return
-    if "parents" in value:
+    if value.get("parent") is not None:
         # A child layer inherits labels; only a standalone file owns them.
         return
     output_columns = value["output"].get("columns")
@@ -453,7 +453,7 @@ def redundant_intermediates(document: Document, value: Mapping) -> Iterator[Depa
     A simple intermediate with no filter, selection, custom key, or handler
     that changes behavior reads what `DATASET.COLUMN` already reads. The
     check reports only explicit keys that restate the output keys; an
-    omitted key with `no_match: null` fails validation as
+    omitted key with `no_match: {literal: null}` fails validation as
     `rename_only_intermediate` instead, and an intermediate without
     `no_match` requires a match the implicit join cannot state.
     """
@@ -490,9 +490,10 @@ def redundant_intermediates(document: Document, value: Mapping) -> Iterator[Depa
             else {}
         )
         assert isinstance(raw, Mapping)
-        if "no_match" not in raw or raw["no_match"] is not None:
-            # Absent requires a match; a literal answers where the join
-            # yields missing. Only `no_match: null` matches the join.
+        if raw.get("no_match") != {"literal": None}:
+            # Absent (or cleared by a bare null) requires a match; another
+            # literal answers where the join yields missing. Only
+            # `no_match: {literal: null}` matches the join.
             continue
         key = entry.get("key")
         if key is None:

@@ -323,7 +323,7 @@ mod diagnostics {
                 .diagnostic()
                 .unwrap();
                 assert_eq!(diagnostic.code, ConditionCode::InheritanceCycle);
-                assert_eq!(diagnostic.spec_paths, ["parents"]);
+                assert_eq!(diagnostic.spec_paths, ["parent"]);
                 assert_eq!(
                     diagnostic.context,
                     [

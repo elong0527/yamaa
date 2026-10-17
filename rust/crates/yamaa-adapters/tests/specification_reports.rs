@@ -221,14 +221,10 @@ mod execution {
                 &mut host,
             )
             .unwrap();
-            assert_eq!(host.reads, ["spec_organization.yaml", "spec_compound.yaml"]);
+            assert_eq!(host.reads, ["spec_compound.yaml", "spec_organization.yaml"]);
             assert_eq!(
                 host.resolutions,
-                [
-                    "spec_organization.yaml",
-                    "spec_compound.yaml",
-                    "spec_organization.yaml"
-                ]
+                ["spec_compound.yaml", "spec_organization.yaml"]
             );
             assert_eq!(
                 prepared
@@ -348,7 +344,7 @@ mod execution {
                     &mut host,
                 )
                 .unwrap();
-            assert_eq!(host.reads, ["spec_organization.yaml", "spec_compound.yaml"]);
+            assert_eq!(host.reads, ["spec_compound.yaml", "spec_organization.yaml"]);
             assert_eq!(captured.parents().len(), 2);
             for parent in captured.parents() {
                 assert_eq!(
@@ -704,7 +700,7 @@ mod execution {
                 "SRC: {path: nested/data.csv, types: {ID: int}}",
             ] {
                 for child_path in [None, Some("child.csv")] {
-                    let mut entry = String::from("schema_version: '1.0'\nparents: parent.yaml\ndomain: TEST\nkeys: [ID]\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: {source: SRC.ID}}]\n");
+                    let mut entry = String::from("schema_version: '1.0'\nparent: parent.yaml\ndomain: TEST\nkeys: [ID]\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: {source: SRC.ID}}]\n");
                     if let Some(path) = child_path {
                         entry.push_str(&format!("input: {{SRC: {{path: {path}}}}}\n"));
                     }

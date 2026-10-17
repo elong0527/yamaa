@@ -701,8 +701,12 @@
               "source": "TEXT",
               "pattern": "(a)",
               "group": 1,
-              "missing": null,
-              "no_match": null
+              "missing": {
+                "literal": null
+              },
+              "no_match": {
+                "literal": null
+              }
             }
           }
         }
@@ -1193,7 +1197,9 @@
                           "source": "TEXT",
                           "pattern": "(.)",
                           "group": 1,
-                          "missing": null,
+                          "missing": {
+                            "literal": null
+                          },
                           "no_match": "wrong"
                         }
                       }
@@ -1212,7 +1218,9 @@
                     "source": "TEXT",
                     "pattern": "()",
                     "group": 0,
-                    "missing": null,
+                    "missing": {
+                      "literal": null
+                    },
                     "no_match": "wrong"
                   }
                 }
@@ -1282,7 +1290,9 @@
               "source": "TEXT",
               "pattern": "(.)",
               "group": 1,
-              "missing": null,
+              "missing": {
+                "literal": null
+              },
               "no_match": "wrong"
             }
           }
@@ -1300,7 +1310,9 @@
                 "pattern": "(.)",
                 "group": 1,
                 "missing": "MiXeD",
-                "no_match": null
+                "no_match": {
+                  "literal": null
+                }
               }
             }
           }

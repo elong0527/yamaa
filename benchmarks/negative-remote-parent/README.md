@@ -18,4 +18,4 @@ and cannot provide a reproducible local build.
 ## How to fix
 
 Review and store the parent file locally, then reference it with a relative or
-absolute filesystem `parents` path. Do not use a URL or URI.
+absolute filesystem `parent` path. Do not use a URL or URI.

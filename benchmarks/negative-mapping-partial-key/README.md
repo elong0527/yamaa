@@ -30,7 +30,7 @@ intermediates:
   - id: LBREF_LOOKUP
     dataset: LBREF
     key: {LBTESTCD: PARAMCD, SEX: SEX}
-    no_match: null
+    no_match: {literal: null}
 ```
 
 That one answer also covers a complete test and sex that the reference table

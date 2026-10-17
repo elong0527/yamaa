@@ -17,8 +17,8 @@ function_arg:
         - int
         - float
         - bool
-        - "null"
+        - missing_value
         - function_string_literal_class
         - function_date_literal_class
         - function_datetime_literal_class
-    description: Named variable or scalar literal leaf; arbitrary nesting is not allowed.
+    description: "Named variable or scalar literal leaf, with `{literal: null}` for the missing value; arbitrary nesting is not allowed."

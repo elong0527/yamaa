@@ -1324,7 +1324,7 @@
   },
   {
     "case": "explicit_null",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: {variable: DONOR.UNKNOWN, absent: null}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: {variable: DONOR.UNKNOWN, absent: {literal: null}}\n",
     "inputs": {
       "DONOR": "ID,V,O,F\na,10,2,Y\na,11,1,Y\nb,20,1,N\nc,30,1,Y\n",
       "SRC": "ID\na\nb\nc\n"

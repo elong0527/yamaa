@@ -15,11 +15,11 @@ mod file {
                 study.write(&format!("{name}/input/raw.csv"), bytes);
                 study.write(
                     &format!("{name}/spec.yaml"),
-                    "schema_version: '1.0'\nparents: ../shared/consumer.yaml\n",
+                    "schema_version: '1.0'\nparent: ../shared/consumer.yaml\n",
                 );
                 study.write(
                     &format!("{name}/producer.yaml"),
-                    "schema_version: '1.0'\nparents: ../shared/producer.yaml\n",
+                    "schema_version: '1.0'\nparent: ../shared/producer.yaml\n",
                 );
                 fs::create_dir(study.0.join(name).join("output")).unwrap();
                 let path = study.path(&format!("{name}/spec.yaml"));
@@ -65,7 +65,7 @@ mod file {
             }
             // A direct link to the shared producer is its own entry. It cannot borrow
             // an unrelated outer study's directory to repair an artifact mismatch.
-            study.write("third/spec.yaml", "schema_version: '1.0'\nparents: ../shared/consumer.yaml\ninput: {P: {schema: ../shared/producer.yaml}}\n");
+            study.write("third/spec.yaml", "schema_version: '1.0'\nparent: ../shared/consumer.yaml\ninput: {P: {schema: ../shared/producer.yaml}}\n");
             let path = study.path("third/spec.yaml");
             let issues = yamaa_adapters::file_application::check(
                 yamaa_core::domain_entry::Request {
@@ -169,7 +169,7 @@ mod file {
                 self.write("producer/layers/base.yaml", PRODUCER);
                 self.write(
                     "producer/p.yaml",
-                    "schema_version: '1.0'\nparents: [layers/base.yaml]\ndomain: PRODUCER\n",
+                    "schema_version: '1.0'\nparent: layers/base.yaml\ndomain: PRODUCER\n",
                 );
                 self.write("consumer/root.yaml", CONSUMER);
                 self.write("raw/raw.csv", b"ID,VALUE\n1,1.234\n2,2.345\n");
@@ -183,7 +183,7 @@ mod file {
             }
         }
         const PRODUCER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [ID]\ninput: {RAW: {path: ../../raw/raw.csv, types: {ID: int, VALUE: float}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: float, label: Reported value, derivation: {function: {name: id_float, args: {x: RAW.VALUE}}}}\noutput: {path: ../../generated/producer.csv, columns: [ID, VALUE], decimals: 2}\n";
-        const CONSUMER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\nintermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n  - {name: VALUE, type: float, label: Reported value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\noutput: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}\n";
+        const CONSUMER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\nintermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: {literal: null}}]\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n  - {name: VALUE, type: float, label: Reported value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\noutput: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}\n";
 
         #[test]
         fn native_uneven_csv_and_parquet_graphs_keep_each_tables_actual_rows() {
@@ -1100,7 +1100,7 @@ columns:
                 assert_eq!(artifact(&attempt, 1), b"ID,VALUE\n1,2.46\n2,4.70\n");
                 assert_eq!(
                     attempt.provenance.documents()[1].source().bytes,
-                    b"schema_version: '1.0'\nparents: [layers/base.yaml]\ndomain: PRODUCER\n"
+                    b"schema_version: '1.0'\nparent: layers/base.yaml\ndomain: PRODUCER\n"
                 );
                 assert!(attempt
                     .resources
@@ -1453,12 +1453,12 @@ columns:
                 let study = Study::new();
                 // This filter is genuinely invalid independently of inferred choice types:
                 // EXSTDT is produced by to_date, while the right operand is a string.
-                study.write("producer/p.yaml", "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {EX: {path: ../raw/ex.csv}}\nbase: EX\nintermediates:\n  - id: EXP\n    dataset: EX\n    derivations: {EXSTDT: {to_date: {source: EXSTDTC}}}\n    filter: \"EX.EXSTDT >= 'not-a-date'\"\n    no_match: null\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: EX.USUBJID}\n  - {name: TRTSDT, type: date, label: First Dose Date, derivation: EXP.EXSTDT}\noutput: {path: ../generated/adsl.csv, columns: [USUBJID, TRTSDT]}\n");
+                study.write("producer/p.yaml", "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {EX: {path: ../raw/ex.csv}}\nbase: EX\nintermediates:\n  - id: EXP\n    dataset: EX\n    derivations: {EXSTDT: {to_date: {source: EXSTDTC}}}\n    filter: \"EX.EXSTDT >= 'not-a-date'\"\n    no_match: {literal: null}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: EX.USUBJID}\n  - {name: TRTSDT, type: date, label: First Dose Date, derivation: EXP.EXSTDT}\noutput: {path: ../generated/adsl.csv, columns: [USUBJID, TRTSDT]}\n");
                 if filter_count == 2 {
                     let path = study.0.join("producer/p.yaml");
                     let source = fs::read_to_string(&path).unwrap().replace(
                         "\ncolumns:\n",
-                        "\n  - id: SECOND\n    dataset: EX\n    derivations: {EXSTDT: {to_date: {source: EXSTDTC}}}\n    filter: \"EX.EXSTDT >= 'also-not-a-date'\"\n    no_match: null\ncolumns:\n",
+                        "\n  - id: SECOND\n    dataset: EX\n    derivations: {EXSTDT: {to_date: {source: EXSTDTC}}}\n    filter: \"EX.EXSTDT >= 'also-not-a-date'\"\n    no_match: {literal: null}\ncolumns:\n",
                     );
                     // SECOND must stay live under pruning (REQ-0638) for its
                     // filter finding to be reported: TRTSDT2 reads it and is

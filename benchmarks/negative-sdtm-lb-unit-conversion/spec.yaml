@@ -20,7 +20,7 @@ intermediates:
   - id: CONV_LOOKUP
     dataset: CONV
     key: {TESTCD: LBTESTCD, UNIT: LBORRESU}
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: DOMAIN

@@ -1,32 +1,47 @@
 //! Admission of one inheritance contribution, before parent traversal or composition.
 
 use super::{
-    scalar_diagnostic_label, Document, DocumentKind, DocumentNode as N, NormalizationError,
-    NormalizationResource, NormalizedDocument, SchemaContext as C, SchemaDiagnostic, SchemaField,
-    SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
+    scalar_diagnostic_label, validation::NullPolicy, Document, DocumentKind, DocumentNode as N,
+    NormalizationError, NormalizationResource, NormalizedDocument, SchemaClass, SchemaContext as C,
+    SchemaDiagnostic, SchemaField, SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
 };
 use crate::diagnostic::ConditionCode;
 use std::{collections::BTreeMap, vec};
 
+/// A keyed root collection. Every member is a fragment whose requiredness is
+/// deferred at every depth, and whose nulls are clear markers (LAYER-4).
 #[derive(Clone, Copy)]
-struct Collection {
-    class: &'static str,
+struct Collection<'s> {
+    /// The member class, when the collection's type names one.
+    class: Option<&'s SchemaClass>,
+    name: &'s str,
     identity: Option<&'static str>,
-    fragment: bool,
+    /// `input`: a bare path is the dataset shorthand.
+    path_shorthand: bool,
+}
+impl<'s> Collection<'s> {
+    fn fields(&self) -> Result<&'s [SchemaField], NormalizationError> {
+        self.class
+            .map(|class| class.fields.as_slice())
+            .ok_or_else(|| ValidationError::InvalidDescriptor.into())
+    }
 }
 
-fn collection(name: &str) -> Option<Collection> {
-    let (class, identity, fragment) = match name {
-        "input" => ("dataset_class", None, false),
-        "columns" => ("column_class", Some("name"), true),
+fn collection<'s>(schema: &'s SchemaStructure, field: &SchemaField) -> Option<Collection<'s>> {
+    let (fallback, identity, path_shorthand) = match field.name.as_str() {
+        "input" => ("dataset_class", None, true),
+        "windows" => ("window_spec", None, false),
+        "columns" => ("column_class", Some("name"), false),
         "rows" => ("row_class", Some("id"), false),
         "intermediates" => ("intermediate_class", Some("id"), false),
         _ => return None,
     };
+    let class = schema.member_class(field.descriptor);
     Some(Collection {
         class,
+        name: class.map_or(fallback, |class| class.name.as_str()),
         identity,
-        fragment,
+        path_shorthand,
     })
 }
 
@@ -154,9 +169,16 @@ impl Run<'_> {
         path: &str,
         fragment: bool,
     ) -> Result<(), NormalizationError> {
+        // A member value keeps its nulls as clear markers; a whole root value
+        // replaces what it inherits, so its nested nulls are simply absent.
+        let nulls = if fragment {
+            NullPolicy::Clear
+        } else {
+            NullPolicy::Absent
+        };
         self.findings.extend(
             self.schema
-                .validate_descriptor(descriptor, self.input, value, path, fragment)?,
+                .validate_descriptor_with(descriptor, self.input, value, path, fragment, nulls)?,
         );
         Ok(())
     }
@@ -183,13 +205,9 @@ impl Run<'_> {
     ) -> Result<(), NormalizationError> {
         self.depth(2)?;
         if !matches!(self.input.nodes()[node], N::Mapping(_)) {
-            return self.bad_type(node, C::Text(kind.class.into()), path);
+            return self.bad_type(node, C::Text(kind.name.into()), path);
         }
-        let fields = &self
-            .schema
-            .class_named(kind.class)
-            .ok_or(ValidationError::InvalidDescriptor)?
-            .fields;
+        let fields = kind.fields()?;
         if let Some(identity) = kind.identity {
             if self.field(node, identity)?.is_none() {
                 let logical = self.join(path, identity)?;
@@ -198,12 +216,12 @@ impl Run<'_> {
                     ConditionCode::SchemaLayerMissingRequiredField,
                     vec![
                         ("field", C::Text(identity.into())),
-                        ("class", C::Text(kind.class.into())),
+                        ("class", C::Text(kind.name.into())),
                     ],
                 )?;
             }
         }
-        self.unknown_fields(node, fields, kind.class, path)?;
+        self.unknown_fields(node, fields, kind.name, path)?;
         for field in fields {
             let Some((_, value)) = self.field(node, &field.name)? else {
                 continue;
@@ -222,7 +240,7 @@ impl Run<'_> {
                     )?;
                 }
             } else {
-                self.validate_value(field.descriptor, value, &logical, kind.fragment)?;
+                self.validate_value(field.descriptor, value, &logical, true)?;
             }
         }
         Ok(())
@@ -286,7 +304,7 @@ impl Run<'_> {
                 let logical = self.member_path(path, key, &label)?;
                 let key_path = self.join(path, &format!("key({label})"))?;
                 self.validate_type("identifier", key, &key_path)?;
-                if matches!(self.input.nodes()[member], N::Text(_)) {
+                if kind.path_shorthand && matches!(self.input.nodes()[member], N::Text(_)) {
                     self.validate_type("project_path", member, &logical)?;
                 } else {
                     self.member(member, kind, &logical)?;
@@ -318,9 +336,7 @@ impl Run<'_> {
             let Some((_, value)) = self.field(root, &field.name)? else {
                 continue;
             };
-            if field.name == "parents" {
-                self.validate_value(field.descriptor, value, &field.name, false)?;
-            } else if matches!(self.input.nodes()[value], N::Null) {
+            if matches!(self.input.nodes()[value], N::Null) {
                 if self.schema.descriptors()[field.descriptor]
                     .descriptor
                     .required()
@@ -331,7 +347,7 @@ impl Run<'_> {
                         vec![("field", C::Text(field.name.clone()))],
                     )?;
                 }
-            } else if let Some(kind) = collection(&field.name) {
+            } else if let Some(kind) = collection(self.schema, field) {
                 self.members(value, kind, &field.name)?;
             } else {
                 self.validate_value(field.descriptor, value, &field.name, false)?;
@@ -396,14 +412,24 @@ impl Run<'_> {
             let key = self.scalar(key)?;
             let result = if matches!(self.input.nodes()[value], N::Null) {
                 self.scalar(value)?
-            } else if let Some(collection) = collection(&field.name).filter(|_| kind.is_none()) {
+            } else if let Some(collection) =
+                collection(self.schema, field).filter(|_| kind.is_none())
+            {
                 self.normalize_members(value, collection)?
             } else {
-                let normalized = self.schema.normalize_descriptor(
+                // Members keep clear markers at every depth; a whole root value
+                // replaces what it inherits, so its nested nulls are absent.
+                let (fragment, nulls) = if kind.is_some() {
+                    (true, NullPolicy::Clear)
+                } else {
+                    (false, NullPolicy::Absent)
+                };
+                let normalized = self.schema.normalize_descriptor_with(
                     field.descriptor,
                     self.input,
                     value,
-                    kind.is_some_and(|k| k.fragment),
+                    fragment,
+                    nulls,
                 )?;
                 self.import(normalized)?
             };
@@ -418,10 +444,7 @@ impl Run<'_> {
         kind: Collection,
     ) -> Result<usize, NormalizationError> {
         self.depth(1)?;
-        let fields = self
-            .schema
-            .class_named(kind.class)
-            .map(|class| class.fields.as_slice());
+        let fields = kind.class.map(|class| class.fields.as_slice());
         if kind.identity.is_some() {
             let N::Sequence(items) = &self.input.nodes()[node] else {
                 unreachable!()
@@ -463,17 +486,18 @@ impl Run<'_> {
                     let label = self.label(key)?;
                     self.push(N::Text(label), self.origin(key, true))
                 };
-                let value = if matches!(self.input.nodes()[member], N::Text(_)) {
-                    let path = self.push(N::Text("path".into()), self.origin(member, true));
-                    let value = self.scalar(member)?;
-                    self.push(N::Mapping(vec![(path, value)]), self.origin(member, true))
-                } else {
-                    self.normalize_fields(
-                        member,
-                        fields.ok_or(ValidationError::InvalidDescriptor)?,
-                        Some(kind),
-                    )?
-                };
+                let value =
+                    if kind.path_shorthand && matches!(self.input.nodes()[member], N::Text(_)) {
+                        let path = self.push(N::Text("path".into()), self.origin(member, true));
+                        let value = self.scalar(member)?;
+                        self.push(N::Mapping(vec![(path, value)]), self.origin(member, true))
+                    } else {
+                        self.normalize_fields(
+                            member,
+                            fields.ok_or(ValidationError::InvalidDescriptor)?,
+                            Some(kind),
+                        )?
+                    };
                 output.push((key, value));
             }
             Ok(self.push(N::Mapping(output), self.origin(node, false)))
@@ -482,10 +506,11 @@ impl Run<'_> {
 }
 
 impl SchemaStructure {
-    /// Admit and normalize one schema-shaped inheritance contribution (REQ-0622-0626).
+    /// Admit and normalize one schema-shaped inheritance contribution (LAYER-4).
     /// All ordered field findings precede normalization; invalid input publishes no
     /// partial document. Parent traversal and role-specific version consistency remain
-    /// caller responsibilities. Clear markers survive until composition.
+    /// caller responsibilities. Clear markers in root fields and keyed members, at
+    /// every depth, survive until composition.
     pub fn normalize_layer(
         &self,
         input: &Document,

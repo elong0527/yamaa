@@ -683,7 +683,7 @@ mod log_tests {
             // by the ID field it would form a dependency cycle with the ID
             // column that reads it.
             let root = yaml("{A: {path: generated/producer.csv, schema: producer.yaml}, B: {path: generated/producer.csv, schema: ./producer.yaml}}", "A", "root", fatal_root)
-                .replace("columns:\n", "intermediates: [{id: SHARED, dataset: B, key: {ID: {literal: 1}}, no_match: null}]\ncolumns:\n")
+                .replace("columns:\n", "intermediates: [{id: SHARED, dataset: B, key: {ID: {literal: 1}}, no_match: {literal: null}}]\ncolumns:\n")
                 .replace(
                     "derivation: A.ID",
                     "derivation: {first_available: {sources: [A.ID, SHARED.ID]}}",
@@ -1452,7 +1452,7 @@ mod log_tests {
             (columns, format!("ID, VALUE, {}", names.join(", ")))
         };
         study.write("root.yaml", format!(
-            "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {{path: generated/producer.csv, schema: producer.yaml}}\n  SECOND: {{path: generated/producer.csv, schema: ./producer.yaml}}\nintermediates: [{{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}}]\ncolumns:\n  - {{name: ID, type: {id_type}, label: Identifier, derivation: FIRST.ID}}\n  - {{name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}}\n  - {{name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}}\n  - {{name: VALUE, type: float, label: Value, derivation: {{compute: {{expr: 'FIRST_VALUE + SECOND_VALUE'}}}}}}\n{extra}output: {{path: generated/root.csv, columns: [{projection}], decimals: 2}}\n"
+            "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {{path: generated/producer.csv, schema: producer.yaml}}\n  SECOND: {{path: generated/producer.csv, schema: ./producer.yaml}}\nintermediates: [{{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: {{literal: null}}}}]\ncolumns:\n  - {{name: ID, type: {id_type}, label: Identifier, derivation: FIRST.ID}}\n  - {{name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}}\n  - {{name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}}\n  - {{name: VALUE, type: float, label: Value, derivation: {{compute: {{expr: 'FIRST_VALUE + SECOND_VALUE'}}}}}}\n{extra}output: {{path: generated/root.csv, columns: [{projection}], decimals: 2}}\n"
         ));
     }
 

@@ -923,7 +923,7 @@ mod schema {
                             "root_class",
                             V::List(vec![
                                 field("schema_version", "str", true),
-                                field("parents", "list[str]", false),
+                                field("parent", "str", false),
                                 field("input", "dict[str, dataset_class]", false),
                                 field("columns", "list[column_class]", false),
                                 field("rows", "list[row_class]", false),
@@ -1227,7 +1227,7 @@ mod schema {
         }
 
         #[test]
-        fn column_fragments_defer_nested_requiredness_but_other_supplied_values_do_not() {
+        fn keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not() {
             let findings = diagnostics(layer(vec![
                 (
                     "input",
@@ -1258,24 +1258,56 @@ mod schema {
             ]));
             assert_eq!(
                 paths(&findings),
+                [("settings.needed", "missing_required_field")]
+            );
+        }
+
+        #[test]
+        fn nested_required_nulls_are_invalid_clears_in_members_and_root_values() {
+            let findings = diagnostics(layer(vec![
+                (
+                    "rows",
+                    V::List(vec![V::map(vec![
+                        ("id", V::text("R")),
+                        ("options", V::map(vec![("needed", V::Scalar(N::Null))])),
+                    ])]),
+                ),
+                ("settings", V::map(vec![("needed", V::Scalar(N::Null))])),
+            ]));
+            assert_eq!(
+                findings,
                 [
-                    ("input.SRC.options.needed", "missing_required_field"),
-                    ("rows.R.options.needed", "missing_required_field"),
-                    ("intermediates.I.options.needed", "missing_required_field"),
-                    ("settings.needed", "missing_required_field"),
+                    finding(
+                        "rows.R.options.needed",
+                        "invalid_clear",
+                        "REQ-0660",
+                        vec![("field", text("needed"))]
+                    ),
+                    finding(
+                        "settings.needed",
+                        "invalid_clear",
+                        "REQ-0660",
+                        vec![("field", text("needed"))]
+                    ),
                 ]
             );
         }
 
         #[test]
-        fn normalization_preserves_clears_defers_column_defaults_and_owns_shorthand() {
+        fn normalization_preserves_clears_at_every_depth_defers_defaults_and_owns_shorthand() {
             let normalized = {
                 let input = layer(vec![
                     (
                         "rows",
                         V::List(vec![V::map(vec![
                             ("id", V::text("R")),
-                            ("options", V::map(vec![("needed", V::text("yes"))])),
+                            (
+                                "options",
+                                V::map(vec![
+                                    ("needed", V::text("yes")),
+                                    ("defaulted", V::Scalar(N::Null)),
+                                ]),
+                            ),
                         ])]),
                     ),
                     (
@@ -1320,7 +1352,7 @@ mod schema {
                             "options",
                             V::map(vec![
                                 ("needed", V::text("yes")),
-                                ("defaulted", V::text("DEFAULT")),
+                                ("defaulted", V::Scalar(N::Null)),
                             ]),
                         ),
                     ])]),
@@ -1328,7 +1360,7 @@ mod schema {
             ]);
             assert_document(&normalized.document, &expected);
             assert_eq!(normalized.origins.len(), expected.nodes().len());
-            assert!(normalized
+            assert!(!normalized
                 .origins
                 .iter()
                 .any(|o| matches!(o.source, SchemaSource::Default { .. })));

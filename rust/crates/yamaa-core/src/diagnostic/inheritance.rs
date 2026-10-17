@@ -40,12 +40,12 @@ impl InheritanceFinding<'_> {
                 context.insert("reason".into(), text("remote_reference"));
                 context.insert("source".into(), text(declaring));
                 context.insert("parent".into(), text(path));
-                (C::InheritanceInvalidParent, "parents")
+                (C::InheritanceInvalidParent, "parent")
             }
             Self::ParentUnavailable { declaring, path } => {
                 context.insert("path".into(), text(path));
                 context.insert("source".into(), text(declaring));
-                (C::InheritanceParentUnavailable, "parents")
+                (C::InheritanceParentUnavailable, "parent")
             }
             Self::Cycle {
                 path,
@@ -67,7 +67,7 @@ impl InheritanceFinding<'_> {
                     JsonValue::Array(path.iter().map(|s| text(s)).collect()),
                 );
                 context.insert("source".into(), text(&path[path.len() - 2]));
-                (C::InheritanceCycle, "parents")
+                (C::InheritanceCycle, "parent")
             }
             Self::Version {
                 source,
@@ -85,7 +85,7 @@ impl InheritanceFinding<'_> {
                 } else {
                     context.insert("entry_version".into(), text(expected));
                     context.insert("parent_version".into(), text(actual));
-                    (C::InheritanceParentVersion, "parents")
+                    (C::InheritanceParentVersion, "parent")
                 }
             }
         };

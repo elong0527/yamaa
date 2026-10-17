@@ -10,6 +10,18 @@ literal_value:
     type: [str, int, float, bool, "null"]
     description: Scalar literal; a non-finite float becomes missing (VALUE-4).
 
+substitute_value:
+    type: [str, int, float, bool, missing_value]
+    description: "Literal a handler, flag or mapping returns, with `{literal: null}` for the missing value (COLUMN-10)."
+
+missing_value:
+    registry: missing_values
+
+missing_values:
+    literal:
+        type: "null"
+        description: The missing value, spelled as the literal expression; a bare YAML null instead leaves a field absent (LAYER-9).
+
 path:
     type: str
     min_length: 1

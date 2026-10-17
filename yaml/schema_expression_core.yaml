@@ -13,7 +13,7 @@ expressions:
             required: true
             description: Variables to test in order (EXPR-9).
         - missing:
-            type: literal_value
+            type: substitute_value
             description: Value returned when every source is missing (EXPR-9).
     greatest: # See REQ-1096.
         - sources:
@@ -40,7 +40,7 @@ source_binding_class:
     - fields_from: match_filter_fields
     - fields_from: match_selection_fields
     - absent:
-        type: literal_value
+        type: substitute_value
         description: Value used when the source variable or item is absent (LOOKUP-1).
 
 flag_class:
@@ -49,14 +49,14 @@ flag_class:
         required: true
         description: Predicate selecting the true value (EXPR-8).
     - true_value:
-        type: literal_value
+        type: substitute_value
         default: "Y"
         description: Value returned when the condition is true (EXPR-8).
     - false_value:
-        type: literal_value
+        type: substitute_value
         description: Value returned when the condition is false; missing when absent (EXPR-8).
     - missing:
-        type: literal_value
+        type: substitute_value
         description: Value returned when the condition is unknown; missing when absent, and required when false_value is declared (EXPR-8).
 
 filtered_source:

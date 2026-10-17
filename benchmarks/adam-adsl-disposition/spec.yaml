@@ -22,7 +22,7 @@ intermediates:
       AND DS.DSSTDTC IS NOT NULL"
     order_by: [DS.DSSTDTC, DS.DSSEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID

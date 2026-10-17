@@ -28,7 +28,7 @@ intermediates:
       upper: SEENDTC
     order_by: [SE.SESTDTC]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
@@ -128,7 +128,7 @@ columns:
         source: VSDTC
         minimum_source_precision: day
         time: first
-        invalid: null
+        invalid: {literal: null}
 
   - name: EPOCH
     type: str

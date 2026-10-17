@@ -141,6 +141,7 @@ impl Run<'_> {
             (expression, node),
             value,
             false,
+            super::validation::NullPolicy::Absent,
             &self.active,
         )?)
     }

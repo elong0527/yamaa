@@ -450,19 +450,12 @@ fn normalize(declaring: &str, written: &str) -> String {
     parts.join("/")
 }
 
-fn parents_of(doc: &Json) -> Vec<String> {
-    match doc.get("parents") {
-        Some(Json::String(parent)) => vec![parent.clone()],
-        Some(Json::Array(items)) => items
-            .iter()
-            .filter_map(|item| item.as_str().map(str::to_owned))
-            .collect(),
-        _ => Vec::new(),
-    }
+fn parent_of(doc: &Json) -> Option<String> {
+    doc.get("parent").and_then(Json::as_str).map(str::to_owned)
 }
 
 /// Collect the source declarations reachable from one specification,
-/// walking parents and schema-linked specifications (declarations only,
+/// walking its parent chain and schema-linked specifications (declarations only,
 /// never derivations — the same walk the conformance reader performs).
 /// A later declaration refines an earlier one field by field, so a child
 /// may add `types:` to a parent's path-only declaration.
@@ -480,7 +473,7 @@ fn collect_sources(
         return out;
     };
     let doc = yaml_json(&bytes);
-    for parent in parents_of(&doc) {
+    if let Some(parent) = parent_of(&doc) {
         let parent = normalize(spec, &parent);
         merge_sources(&mut out, collect_sources(case, &parent, seen));
     }
@@ -1040,7 +1033,7 @@ struct OutputDecl {
 }
 
 /// Independent declared types and output declarations of one entry
-/// specification, composed over `parents` exactly like the conformance
+/// specification, composed over its `parent` chain exactly like the conformance
 /// runner's `declarations` (types and output paths, never derivations).
 fn declarations_for(
     case: &Path,
@@ -1066,15 +1059,7 @@ fn declarations_for(
             warning_log: None,
             decimals: None,
         };
-        let parents: Vec<String> = match doc.get("parents") {
-            Some(Sj::String(one)) => vec![one.clone()],
-            Some(Sj::Array(list)) => list
-                .iter()
-                .filter_map(|parent| parent.as_str().map(str::to_owned))
-                .collect(),
-            _ => Vec::new(),
-        };
-        for parent in parents {
+        if let Some(parent) = doc.get("parent").and_then(Sj::as_str) {
             let parent_path = path
                 .parent()
                 .expect("specification has a directory")

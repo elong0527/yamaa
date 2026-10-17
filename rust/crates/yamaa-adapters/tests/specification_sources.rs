@@ -244,11 +244,8 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::specification_source::Error;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
-            for raw in [
-                b"parents: null".as_slice(),
-                b"parents: []",
-                b"parents: [parent.yaml]",
-            ] {
+            // Any written non-null parent, valid or not, selects inheritance.
+            for raw in [b"parent: parent.yaml".as_slice(), b"parent: [parent.yaml]"] {
                 assert!(matches!(
                     schema.prepare_standalone(Source {
                         identity: "child.yaml".into(),
@@ -257,6 +254,11 @@ output: {{path: output.csv, columns: [I, S]}}
                     Err(Error::InheritanceRequired)
                 ));
             }
+            // A null parent is absent, so the entry takes the standalone route.
+            let standalone =
+                std::fs::read_to_string(root.join("benchmarks/negative-zero-division/spec.yaml"))
+                    .unwrap();
+            prepare(&schema, format!("{standalone}\nparent: null\n").as_bytes());
         }
 
         #[test]

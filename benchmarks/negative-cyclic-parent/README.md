@@ -14,6 +14,6 @@ is rejected before any data is read.
 
 ## How to fix
 
-Remove the backward `parents` reference so that every path
-through the chain terminates. Keep genuinely shared definitions
-in one common ancestor.
+Remove the backward `parent` reference so that the chain ends at
+a root layer that names no parent. Keep genuinely shared
+definitions in that common ancestor.

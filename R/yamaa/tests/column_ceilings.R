@@ -71,10 +71,11 @@ assert_layered_cases <- function(root, width) {
     unlist(lapply(seq_len(width - 1L), case_column), use.names = FALSE),
     sprintf("output: {path: out.csv, columns: [%s]}", paste(names, collapse = ", ")))
   writeLines(document, file.path(root, "parent.yaml"))
-  writeLines(c(document, "parents: []"), file.path(root, "explicit.yaml"))
-  writeLines(c("schema_version: '1.0'", "parents: [parent.yaml]"),
+  # A null parent names no parent: the entry stays standalone.
+  writeLines(c(document, "parent: null"), file.path(root, "explicit.yaml"))
+  writeLines(c("schema_version: '1.0'", "parent: parent.yaml"),
              file.path(root, "child.yaml"))
-  writeLines(c("schema_version: '1.0'", "parents: [child.yaml]"),
+  writeLines(c("schema_version: '1.0'", "parent: child.yaml"),
              file.path(root, "grandchild.yaml"))
   rows <- list(
     c("S-001", ifelse(seq_len(width - 1L) %% 3L == 1L, "P", "x")),
@@ -104,16 +105,21 @@ run_column_ceilings <- function() {
   for (width in c(40L, 64L, 1024L)) {
     assert_layered_cases(path(paste0("layered-", width)), width)
   }
-  parent <- write_case(path("repeated-parents"))
-  child <- file.path(dirname(parent), "child.yaml")
-  writeLines(c("schema_version: '1.0'",
-               paste0("parents: [", paste(rep("spec.yaml", 8193L), collapse = ", "), "]")), child)
+  # Each layer names one parent, so only a chain of 8,193 distinct layers
+  # reaches the occurrence bound. Serve that chain from memory rather than
+  # writing thousands of files; without the bound it would reach the base.
+  base <- write_case(path("long-parent-chain"))
+  layers <- lapply(sprintf("schema_version: '1.0'\nparent: layer-%d.yaml\n", 1:8193), charToRaw)
+  layers[[8194L]] <- readBin(base, "raw", n = file.info(base)$size)
+  names(layers) <- sprintf("layer-%d.yaml", 0:8193)
+  resolver <- yamaa_memory_resolver(layers)
   for (operation in list(yamaa_check, yamaa_domain)) {
-    result <- operation(child)
+    result <- operation("layer-0.yaml", resolver = resolver)
     assert_refusal(result)
     stopifnot(nrow(result$issues) == 1L, identical(result$issues$context,
       '{"actual":8193,"code":"resource_limit","limit":8192,"phase":"inheritance","resource":"parent_occurrences","stage":"prepare"}'))
   }
+  stopifnot(length(resolver$backend$outputs) == 0L)
 
   # A fixed refusal does not certify that later semantic checks passed. Once
   # capacity is repaired, both operations and routes expose the remaining error.
@@ -198,10 +204,10 @@ run_column_ceilings <- function() {
   file.copy(spec, file.path(case_root, "base.yaml"))
   for (index in 0:64) {
     parent <- if (index < 64L) sprintf("layer-%s.yaml", index + 1L) else "base.yaml"
-    writeLines(c("schema_version: '1.0'", sprintf("parents: [%s]", parent)),
+    writeLines(c("schema_version: '1.0'", sprintf("parent: %s", parent)),
                file.path(case_root, sprintf("layer-%s.yaml", index)))
   }
-  writeLines(c("schema_version: '1.0'", "parents: [layer-0.yaml]"), spec)
+  writeLines(c("schema_version: '1.0'", "parent: layer-0.yaml"), spec)
   env <- file.path(case_root, "environment.yaml")
   writeLines(c("schema_version: '1.0'", "language: r"), env)
   for (environment in list(NULL, env)) assert_build(spec, environment = environment)

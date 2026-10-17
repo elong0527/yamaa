@@ -61,8 +61,9 @@ fn value_kind(value: &N) -> Option<ColumnType> {
         _ => None,
     }
 }
-fn literal_kind(value: &N) -> Kind {
-    if matches!(value, N::Null) {
+fn literal_kind(d: &Document, id: usize) -> Kind {
+    let value = &d.nodes()[id];
+    if matches!(value, N::Null) || missing_literal(d, id) {
         Kind::Literal(None)
     } else {
         value_kind(value).map_or(Kind::Unavailable, |kind| Kind::Literal(Some(kind)))
@@ -90,7 +91,7 @@ fn prepare_kind(
         "function" => project
             .and_then(|project| project.returns.get(&payload).copied())
             .map_or(Kind::Unavailable, |kind| Kind::Literal(Some(kind))),
-        "literal" => literal_kind(&d.nodes()[payload]),
+        "literal" => literal_kind(d, payload),
         "source" => Kind::Reference(match &d.nodes()[payload] {
             N::Text(name) => name.clone(),
             _ => text(d, field(d, payload, "variable")?)?.into(),
@@ -107,7 +108,7 @@ fn prepare_kind(
                 .collect::<Result<Vec<_>, PrepareError>>()?;
             if op == "first_available" {
                 if let Some(missing) = d.field(payload, "missing") {
-                    kinds.push(literal_kind(&d.nodes()[missing]));
+                    kinds.push(literal_kind(d, missing));
                 }
             }
             Kind::Choice(kinds)
@@ -121,13 +122,13 @@ fn prepare_kind(
         "mapping" => Kind::Choice(
             mapping(d, field(d, payload, "dict")?)?
                 .iter()
-                .map(|&(_, value)| literal_kind(&d.nodes()[value]))
+                .map(|&(_, value)| literal_kind(d, value))
                 .collect(),
         ),
         "cut" => Kind::Choice(
             sequence(d, field(d, payload, "labels")?)?
                 .iter()
-                .map(|&value| literal_kind(&d.nodes()[value]))
+                .map(|&value| literal_kind(d, value))
                 .collect(),
         ),
         "case" => Kind::Choice(
@@ -152,7 +153,7 @@ fn prepare_kind(
         | "imputation_flag" | "baseline_flag" => Kind::Literal(Some(ColumnType::Str)),
         "flag" => d
             .field(payload, "true_value")
-            .map(|id| literal_kind(&d.nodes()[id]))
+            .map(|id| literal_kind(d, id))
             .unwrap_or(Kind::Literal(Some(ColumnType::Str))),
         "to_date" => Kind::Literal(Some(ColumnType::Date)),
         "impute" | "shift" => Kind::Literal(Some(match text(d, field(d, payload, "type")?)? {

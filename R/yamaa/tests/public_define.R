@@ -232,7 +232,7 @@ for (name in c("parents", "children", "artifacts")) dir.create(file.path(root, n
 spec <- readLines(file.path(root, "spec.yaml"))
 spec <- gsub("path: dm.csv", "path: ../artifacts/dm.csv", spec, fixed = TRUE)
 writeLines(spec, file.path(root, "parents/base.yaml"))
-writeLines(c("schema_version: '1.0'", "parents: ../parents/base.yaml"), file.path(root, "children/spec.yaml"))
+writeLines(c("schema_version: '1.0'", "parent: ../parents/base.yaml"), file.path(root, "children/spec.yaml"))
 environment <- file.path(root, "environment.yaml")
 writeLines(gsub("define: define.xml", "define: artifacts/define.xml", gsub("  - spec.yaml", "  - children/spec.yaml", readLines(environment), fixed = TRUE), fixed = TRUE), environment)
 stopifnot(file.copy(file.path(fixtures, "sdtm-dm-metadata/expected/dm.csv"), file.path(root, "artifacts/dm.csv")))
@@ -318,7 +318,7 @@ for (case in host_truth[["xml_text_cases"]]) {
   }
   if (case[["inherit_specification"]]) {
     stopifnot(file.rename(file.path(root, "spec.yaml"), file.path(root, "base.yaml")))
-    writeLines(c("schema_version: '1.0'", "parents: base.yaml"), file.path(root, "spec.yaml"))
+    writeLines(c("schema_version: '1.0'", "parent: base.yaml"), file.path(root, "spec.yaml"))
   }
   result <- yamaa_define(file.path(root, "environment.yaml"), "sdtm", created = host_truth[["created"]])
   check_issues(result, empty = !length(case[["issues"]]))

@@ -20,7 +20,7 @@ intermediates:
     key: {STUDYID: STUDYID, USUBJID: USUBJID, EXTRT: DRUG}
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 
   # The latest dose starting at or before the sample, the sample's own dose
   # time included.
@@ -30,7 +30,7 @@ intermediates:
     between: {value: ADTM, lower: EXSTDTC}
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID

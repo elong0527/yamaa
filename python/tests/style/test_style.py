@@ -138,13 +138,13 @@ def test_root_fields_follow_the_schema_order(tmp_path: Path) -> None:
     assert remaining == []
 
 
-def test_parents_and_filter_belong_to_the_header(tmp_path: Path) -> None:
+def test_parent_and_filter_belong_to_the_header(tmp_path: Path) -> None:
     path = _spec(
         tmp_path,
         """\
         schema_version: "1.0"
         domain: ADSL
-        parents: base.yaml
+        parent: base.yaml
         keys: [USUBJID]
         input:
           DM: input/dm.csv
@@ -167,7 +167,7 @@ def test_parents_and_filter_belong_to_the_header(tmp_path: Path) -> None:
     after, remaining = _fix(path)
     assert remaining == []
     assert after.startswith(
-        'schema_version: "1.0"\nparents: base.yaml\ndomain: ADSL\n'
+        'schema_version: "1.0"\nparent: base.yaml\ndomain: ADSL\n'
         "keys: [USUBJID]\ninput:\n  DM: input/dm.csv\n"
         'filter: "DM.ARMCD IS NOT NULL"\n\noutput:\n'
     )
@@ -494,7 +494,7 @@ def test_long_predicates_continue_after_a_comma_or_before_a_connective(
 def test_long_flow_mappings_become_blocks_but_literals_stay(tmp_path: Path) -> None:
     derivation = (
         "{impute: {type: date, source: FIRSTDOSE.EXSTDTC, month: 1, day: last, "
-        "invalid: null}}"
+        "invalid: {literal: null}}}"
     )
     path = _spec(
         tmp_path,
@@ -905,7 +905,7 @@ def test_repeated_row_derivation_skips_row_phase_work(tmp_path: Path) -> None:
     intermediate = REPEATED.replace(
         "output:\n  path: dm.csv",
         "intermediates:\n  - id: PICK\n    dataset: DM\n"
-        '    filter: "DM.X = 1"\n    no_match: null\n\noutput:\n  path: dm.csv',
+        '    filter: "DM.X = 1"\n    no_match: {literal: null}\n\noutput:\n  path: dm.csv',
     ).replace("DOMAIN: {literal: DM}", "DOMAIN: PICK.X")
     assert ("repeated_row_derivation", "rows[0].derivations.DOMAIN") not in [
         (item.name, item.spec_path)
@@ -1062,7 +1062,7 @@ intermediates:
   - id: ADSL1
     dataset: ADSL
     key: [STUDYID, USUBJID]
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -1118,9 +1118,9 @@ def test_redundant_intermediate_keeps_narrowing_lookups(
     tmp_path: Path,
 ) -> None:
     filtered = REDUNDANT.replace(
-        "    key: [STUDYID, USUBJID]\n    no_match: null",
+        "    key: [STUDYID, USUBJID]\n    no_match: {literal: null}",
         "    key: [STUDYID, USUBJID]\n"
-        "    filter: \"ADSL.EFFFL = 'Y'\"\n    no_match: null",
+        "    filter: \"ADSL.EFFFL = 'Y'\"\n    no_match: {literal: null}",
     )
     assert _names(_spec(tmp_path, filtered)) == []
     custom = REDUNDANT.replace(
@@ -1128,10 +1128,14 @@ def test_redundant_intermediate_keeps_narrowing_lookups(
         "    key: [USUBJID]",
     )
     assert _names(_spec(tmp_path, custom)) == []
-    required = REDUNDANT.replace("\n    no_match: null", "")
+    required = REDUNDANT.replace("\n    no_match: {literal: null}", "")
     assert "redundant_intermediate" not in _names(_spec(tmp_path, required))
+    # A bare null clears the handler, so the lookup still requires a match.
+    cleared = REDUNDANT.replace("no_match: {literal: null}", "no_match: null")
+    assert "redundant_intermediate" not in _names(_spec(tmp_path, cleared))
     rename_only = REDUNDANT.replace(
-        "    key: [STUDYID, USUBJID]\n    no_match: null", "    no_match: null"
+        "    key: [STUDYID, USUBJID]\n    no_match: {literal: null}",
+        "    no_match: {literal: null}",
     )
     # REQ-1248 owns the omitted-key rename; style stays silent.
     assert "redundant_intermediate" not in _names(_spec(tmp_path, rename_only))
@@ -1166,7 +1170,7 @@ def test_repeated_row_derivation_rejects_suffix_intermediate_match(
             "  - id: DSL\n"
             "    dataset: DM\n"
             "    key: [STUDYID, USUBJID]\n"
-            "    no_match: null\n\n"
+            "    no_match: {literal: null}\n\n"
             "output:\n  path: dm.csv",
         )
         .replace("DOMAIN: {literal: DM}", "DOMAIN: ADSL.AGE")
@@ -1260,9 +1264,15 @@ def test_missing_label_skips_internal_and_inherited_columns(
     assert _names(_spec(tmp_path, internal)) == []
     inherited = MISSING_LABEL.replace(
         'schema_version: "1.0"\ndomain: ADSL',
-        'schema_version: "1.0"\nparents: base.yaml\ndomain: ADSL',
+        'schema_version: "1.0"\nparent: base.yaml\ndomain: ADSL',
     )
     assert "missing_label" not in _names(_spec(tmp_path, inherited))
+    # A null parent names no parent: the standalone file owns its labels.
+    standalone = MISSING_LABEL.replace(
+        'schema_version: "1.0"\ndomain: ADSL',
+        'schema_version: "1.0"\nparent: null\ndomain: ADSL',
+    )
+    assert "missing_label" in _names(_spec(tmp_path, standalone))
 
 
 def test_authoring_suppression_with_a_reason_covers_its_entry(

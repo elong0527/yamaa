@@ -214,27 +214,12 @@ fn entry(
             .iter()
             .map(|parent| (parent.source(), &parent.raw().document)),
     ) {
-        if let Some(parents) = raw.field(raw.root(), "parents") {
-            let paths = match &raw.nodes()[parents] {
-                N::Text(written) => vec![("parents".into(), written.as_str())],
-                N::Sequence(items) => items
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, &item)| {
-                        if let N::Text(written) = &raw.nodes()[item] {
-                            Some((format!("parents[{index}]"), written.as_str()))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect(),
-                _ => Vec::new(),
-            };
-            for (path, written) in paths {
+        if let Some(parent) = raw.field(raw.root(), "parent") {
+            if let N::Text(written) = &raw.nodes()[parent] {
                 result.resources.push(resource(
                     document,
                     resources,
-                    path,
+                    "parent".into(),
                     ResourceRole::ParentSpecification,
                     RelativeTo::Declaring,
                     yamaa_core::producer_admission::WrittenPath {

@@ -232,7 +232,7 @@ fn nested_case_branches_and_row_templates_bind_the_same_operation() {
         "str",
         json!({"case": [
             {"when": "ID = 'row1'", "then": {"str_replace": {"source": "TEXT", "pattern": "\\s+", "replacement": " "}}},
-            {"otherwise": {"str_replace": {"source": "TEXT", "pattern": "^\\s+|\\s+$", "replacement": "", "missing": null}}}
+            {"otherwise": {"str_replace": {"source": "TEXT", "pattern": "^\\s+|\\s+$", "replacement": "", "missing": {"literal": null}}}}
         ]}),
     );
     let fixture = Fixture::bespoke(&nested, "ID,TEXT\nrow1,\"a  b\"\nrow2,\" c \"\nrow3,\n");

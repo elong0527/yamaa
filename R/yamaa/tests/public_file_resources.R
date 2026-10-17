@@ -25,7 +25,7 @@ qualify_entry_relative_programs <- function(producer) {
     writeBin(charToRaw(truth$studies[[name]]),file.path(study,"input/data.csv"))
     entry <- file.path(study,"spec.yaml")
     program <- if(producer) "consumer" else "ordinary"
-    writeLines(c("schema_version: '1.0'",paste0("parents: ../shared/",program,".yaml")),entry)
+    writeLines(c("schema_version: '1.0'",paste0("parent: ../shared/",program,".yaml")),entry)
     writeBin(charToRaw(truth$producer_entry),file.path(study,"producer.yaml"))
     stopifnot(nrow(yamaa_check(entry)$issues)==0L)
     result <- yamaa_domain(entry)

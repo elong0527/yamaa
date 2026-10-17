@@ -883,11 +883,8 @@ rows:
                     fs::write(&owner, text).unwrap();
                     fs::write(owner.parent().unwrap().join("input.csv"), "ID\na\n").unwrap();
                     if inherited {
-                        fs::write(
-                            &entry,
-                            "schema_version: '1.0'\nparents: [parent/base.yaml]\n",
-                        )
-                        .unwrap();
+                        fs::write(&entry, "schema_version: '1.0'\nparent: parent/base.yaml\n")
+                            .unwrap();
                     }
                     // Frozen pre-static row-filter grammar truth carries these two public
                     // context fields. Human declaring-file attribution uses held provenance.

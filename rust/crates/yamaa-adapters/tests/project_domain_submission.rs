@@ -479,7 +479,7 @@ mod project {
                 fs::write(study.0.join("environment.yaml"), INVENTORY_ENV).unwrap();
                 fs::write(
                     study.0.join("catalog/renamed.yaml"),
-                    "schema_version: '1.0'\nparents: [parent.yaml]\n",
+                    "schema_version: '1.0'\nparent: parent.yaml\n",
                 )
                 .unwrap();
                 fs::write(
@@ -1106,14 +1106,14 @@ mod project {
         }
         #[test]
         fn inherited_schema_artifact_and_output_paths_keep_independent_authored_layers() {
-            let entry="schema_version: '1.0'\nparents: parent.yaml\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './child.csv'}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
+            let entry="schema_version: '1.0'\nparent: parent.yaml\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './child.csv'}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
             let parent =
         "schema_version: '1.0'\ninput: {SRC: {path: parent.csv, schema: '../producer.yaml'}}\n";
             let (consumer, consumer_port) = inherited("/consumer.yaml", entry, parent);
             let producer_entry = PRODUCER
                 .replace(
                     "schema_version: '1.0'",
-                    "schema_version: '1.0'\nparents: parent.yaml",
+                    "schema_version: '1.0'\nparent: parent.yaml",
                 )
                 .replace("output: {path: './produced.csv', columns: [ID, VALUE]}", "");
             let producer_parent =
@@ -1251,6 +1251,11 @@ mod project {
                     CONSUMER.replace(", schema: nested/producer.yaml", ""),
                     "SRC",
                 ),
+                // An explicit-null schema is absent, so the input is schema-less.
+                (
+                    CONSUMER.replace("schema: nested/producer.yaml", "schema: null"),
+                    "SRC",
+                ),
                 (
                     CONSUMER.replace(
                         "{path: './produced.csv', schema: nested/producer.yaml}",
@@ -1274,24 +1279,6 @@ mod project {
                     yamaa_core::json::Value::String("undeclared_metadata".into())
                 );
             }
-            // The shipped structural root rejects explicit-null schema before this
-            // metadata boundary; retain that original finding rather than bypassing it.
-            let null = CONSUMER.replace("schema: nested/producer.yaml", "schema: null");
-            let Err(yamaa_adapters::specification_source::Error::Findings(findings)) =
-                shipped_schema::capture()
-                    .unwrap()
-                    .prepare_standalone(Source {
-                        identity: "/consumer.yaml".into(),
-                        bytes: null.into_bytes(),
-                    })
-            else {
-                panic!("original structural null refusal")
-            };
-            assert_eq!(findings.findings()[0].path, "input.SRC.schema");
-            assert_eq!(
-                findings.findings()[0].definition().requirement,
-                Some("REQ-0287")
-            );
         }
     }
     mod producer_graph {
@@ -1535,7 +1522,7 @@ mod project {
                 bytes: parent.into(),
                 calls: 0,
             };
-            let bytes = text.replace("domain: TEST", "parents: parent.yaml\ndomain: TEST");
+            let bytes = text.replace("domain: TEST", "parent: parent.yaml\ndomain: TEST");
             let prepared = shipped_schema::prepare(
                 Source {
                     identity: identity.into(),
@@ -2562,7 +2549,7 @@ mod project {
                 wide: false,
                 shape: false,
             };
-            let body = "schema_version: '1.0'\nparents: []\nruntime: {}\nversion: '1'\n";
+            let body = "schema_version: '1.0'\nparent: base.yaml\nruntime: {}\nversion: '1'\n";
             let Failure::Root(SourceError::Findings(captured)) = project_source::prepare(
                 schema(),
                 source("held/environment.yaml", body),
@@ -2574,7 +2561,7 @@ mod project {
             };
             let issues = schema_root(&captured).unwrap();
             assert_eq!(issues.len(), 3);
-            for (issue, field) in issues.iter().zip(["parents", "runtime", "version"]) {
+            for (issue, field) in issues.iter().zip(["parent", "runtime", "version"]) {
                 assert_eq!(issue.spec_paths, [field]);
                 assert_eq!(issue.condition, "unknown_field");
                 assert_eq!(issue.requirement, Some("REQ-0285".into()));

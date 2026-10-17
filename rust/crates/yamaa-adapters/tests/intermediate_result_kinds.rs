@@ -67,7 +67,7 @@ intermediates:
       EXENDT0: {to_date: {source: EXENDTC}}
       EXENDT: DERIVATION
     filter: 'EX.EXENDT >= EX.EXSTDT'
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: USUBJID, type: str, derivation: EX.USUBJID}
   - {name: TRTSDT, type: date, derivation: EXP.EXSTDT}
@@ -149,7 +149,7 @@ fn selector_kind_flows_to_later_derivations_and_qualified_source_objects() {
                 "EXENDT: DERIVATION",
                 &format!(
                     "EXCHOICE: {{{operation}: {{sources: [EX.EXENDT0, EX.EXSTDT]}}}}\n      \
-                     EXENDT: {{first_available: {{sources: [{{variable: EX.EXCHOICE, filter: 'EX.EXSTDT IS NOT NULL'}}, EX.EXSTDT], missing: null}}}}"
+                     EXENDT: {{first_available: {{sources: [{{variable: EX.EXCHOICE, filter: 'EX.EXSTDT IS NOT NULL'}}, EX.EXSTDT], missing: {{literal: null}}}}}}"
                 ),
             ),
             expected,
@@ -393,7 +393,7 @@ fn unknown_kind_survives_later_aliases_and_choices() {
 fn unknown_kind_flows_through_an_earlier_selector_in_dependency_order() {
     let specification = heterogeneous_specification(HETEROGENEOUS_CHOICES[0])
         .replace("    filter: 'EX.EXENDT >= EX.ANCHOR'\n", "")
-        .replace("intermediates:\n", "intermediates:\n  - id: EXP2\n    dataset: EX\n    derivations:\n      COPY: {source: EXP.EXENDT}\n      ANCHOR2: {source: EXP.ANCHOR}\n    filter: 'EX.COPY >= EX.ANCHOR2'\n    no_match: null\n")
+        .replace("intermediates:\n", "intermediates:\n  - id: EXP2\n    dataset: EX\n    derivations:\n      COPY: {source: EXP.EXENDT}\n      ANCHOR2: {source: EXP.ANCHOR}\n    filter: 'EX.COPY >= EX.ANCHOR2'\n    no_match: {literal: null}\n")
         .replace("derivation: EXP.EXENDT", "derivation: EXP2.COPY");
     let study = Study::new(&specification);
     let path = study.specification();
@@ -490,14 +490,14 @@ intermediates:
     derivations:
       DATE: {to_date: {source: EXENDTC}}
     key: {DATE: {source: EX.CHOICE}}
-    no_match: null
+    no_match: {literal: null}
   - id: RESULT
     dataset: EX
     derivations:
       DATE: {to_date: {source: EXSTDTC}}
       CHOICE: {first_available: {sources: [DATE], missing: 17}}
       SELECTED: {source: DATES.DATE}
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: USUBJID, type: str, derivation: EX.USUBJID}
   - {name: SELECTED, type: date, derivation: RESULT.SELECTED}

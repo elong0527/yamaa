@@ -97,11 +97,15 @@ def json_round_trippable(value):
 def key_order_texts(document):
     """JSON control/permuted texts for the key-order check, or None.
 
-    Eligible documents have no `rows` and no `parents`, at least two keys,
+    Eligible documents have no `rows` and no `parent`, at least two keys,
     and every key column reading one input field or a literal, so key columns
     may be declared in any order (REQ-0060, REQ-0062, REQ-0220).
     """
-    if not isinstance(document, dict) or "rows" in document or "parents" in document:
+    if (
+        not isinstance(document, dict)
+        or "rows" in document
+        or document.get("parent") is not None
+    ):
         return None
     keys = document.get("keys") or []
     columns = document.get("columns") or []
@@ -155,7 +159,7 @@ def example_variants(fixtures, example):
             descriptors[runtime].append(
                 {"kind": "empty_child", "entry": index, "specification": child}
             )
-            contents[child] = f'schema_version: "1.0"\nparents: {spec.name}\n'
+            contents[child] = f'schema_version: "1.0"\nparent: {spec.name}\n'
             if negative:
                 continue
             try:
@@ -284,10 +288,8 @@ def declarations(path, active=()):
     if not isinstance(data, dict):
         raise TypeError("specification declarations are not a mapping")
     types, output = {}, {}
-    parents = data.get("parents", [])
-    if isinstance(parents, str):
-        parents = [parents]
-    for parent in parents:
+    parent = data.get("parent")
+    if parent is not None:
         inherited_types, inherited_output = declarations(
             path.parent / parent, (*active, path.resolve())
         )

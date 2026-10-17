@@ -95,7 +95,7 @@ columns:
       str_case:
         source: TU_RAW.LATERALITY
         to: upper
-        missing:
+        missing: {literal: null}
 
   - name: TUMETHOD
     type: str

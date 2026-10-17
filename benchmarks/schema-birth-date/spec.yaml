@@ -51,7 +51,7 @@ columns:
         month: 6
         day: first
         minimum_source_precision: year
-        invalid: null
+        invalid: {literal: null}
 
   # The same completion, to the last day of the month the date lands in
   # (28 or 29 in a February, by year).
@@ -65,7 +65,7 @@ columns:
         month: 6
         day: last
         minimum_source_precision: year
-        invalid: null
+        invalid: {literal: null}
 
   # year, month or day: how much of a date the collected text carries.
   - name: DOB_PREC_TX
@@ -75,7 +75,7 @@ columns:
       precision:
         type: date
         source: DOBTC
-        invalid: null
+        invalid: {literal: null}
 
   # The completed date keeps the precision of the text it came from, so
   # this reads the same word as DOB_PREC_TX. A date value is never invalid

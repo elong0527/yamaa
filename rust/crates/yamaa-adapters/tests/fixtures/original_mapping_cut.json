@@ -1,7 +1,7 @@
 [
   {
     "case": "exact_typed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1, y: 2.0, Z: null}, missing: null, unmapped: 7}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 1, y: 2.0, Z: {literal: null}}, missing: {literal: null}, unmapped: 7}\n",
     "inputs": {
       "SRC": "ID,X\na,Y\nb,y\nc,Z\nd,\ne,Q\n"
     },
@@ -454,7 +454,7 @@
   },
   {
     "case": "missing_separate",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'present'}, missing: 'missing', unmapped: null}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      mapping: {source: SRC.X, dict: {Y: 'present'}, missing: 'missing', unmapped: {literal: null}}\n",
     "inputs": {
       "SRC": "ID,X\na,\nb,Q\nc,Y\n"
     },
@@ -1240,7 +1240,7 @@
   },
   {
     "case": "lazy_case",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      case:\n        - when: \"ID = 'a'\"\n          then: {mapping: {source: SRC.X, dict: {Y: 1}, missing: 'bad', unmapped: null}}\n        - otherwise: {literal: 9}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: int\n    label: V\n    derivation:\n      case:\n        - when: \"ID = 'a'\"\n          then: {mapping: {source: SRC.X, dict: {Y: 1}, missing: 'bad', unmapped: {literal: null}}}\n        - otherwise: {literal: 9}\n",
     "inputs": {
       "SRC": "ID,X\na,Y\nb,\n"
     },
@@ -1577,7 +1577,7 @@
   },
   {
     "case": "left_closed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: float}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18, 65], labels: [child, adult, older], right: false, missing: null}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: float}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18, 65], labels: [child, adult, older], right: false, missing: {literal: null}}\n",
     "inputs": {
       "SRC": "ID,N\na,17.5\nb,18.0\nc,65.0\nd,65.5\ne,\n"
     },
@@ -1788,7 +1788,7 @@
   },
   {
     "case": "right_closed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: float}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18, 65], labels: [child, adult, older], right: true, missing: null}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: float}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation: SRC.ID\n  - name: V\n    type: str\n    label: V\n    derivation:\n      cut: {source: SRC.N, breaks: [18, 65], labels: [child, adult, older], right: true, missing: {literal: null}}\n",
     "inputs": {
       "SRC": "ID,N\na,17.5\nb,18.0\nc,65.0\nd,65.5\ne,\n"
     },

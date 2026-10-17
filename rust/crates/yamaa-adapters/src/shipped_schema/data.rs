@@ -17,10 +17,10 @@ root_class:
         type: str
         required: true
         description: Schema bundle this specification is written against, which must match exactly (SPEC-1).
-    - parents:
-        type: [path, "list[path]"]
+    - parent:
+        type: path
         required: false
-        description: Ordered local specification layers resolved before validation and execution (LAYER-2).
+        description: Local specification layer this one inherits from, resolved before validation and execution (LAYER-2).
     - domain:
         type: identifier
         required: true
@@ -121,7 +121,7 @@ intermediate_class:
         required: false
         description: Stored and derived columns the lookup may read; defaults to every available column (LOOKUP-11).
     - no_match:
-        type: literal_value
+        type: substitute_value
         required: false
         description: Value returned when the lookup yields nothing; without it, yielding nothing fails (LOOKUP-13).
     - derivations:
@@ -308,7 +308,7 @@ derivation:
 
 handled_expression_class:
     - value: {type: expression, required: true}
-    - unconvertible: {type: literal_value, required: false}
+    - unconvertible: {type: substitute_value, required: false}
 
 # See REQ-1185.
 intermediate_derivation:
@@ -323,7 +323,7 @@ intermediate_expression_class:
 intermediate_binding_class:
     - type: {type: column_type, required: true}
     - derivation: {type: untyped_intermediate_derivation, required: true}
-    - unconvertible: {type: literal_value, required: false}
+    - unconvertible: {type: substitute_value, required: false}
 
 expression:
     registry: expressions
@@ -386,7 +386,7 @@ expressions:
             required: true
             description: Variables to test in order (EXPR-9).
         - missing:
-            type: literal_value
+            type: substitute_value
             description: Value returned when every source is missing (EXPR-9).
     greatest: # See REQ-1096.
         - sources:
@@ -413,7 +413,7 @@ source_binding_class:
     - fields_from: match_filter_fields
     - fields_from: match_selection_fields
     - absent:
-        type: literal_value
+        type: substitute_value
         description: Value used when the source variable or item is absent (LOOKUP-1).
 
 flag_class:
@@ -422,14 +422,14 @@ flag_class:
         required: true
         description: Predicate selecting the true value (EXPR-8).
     - true_value:
-        type: literal_value
+        type: substitute_value
         default: "Y"
         description: Value returned when the condition is true (EXPR-8).
     - false_value:
-        type: literal_value
+        type: substitute_value
         description: Value returned when the condition is false; missing when absent (EXPR-8).
     - missing:
-        type: literal_value
+        type: substitute_value
         description: Value returned when the condition is unknown; missing when absent, and required when false_value is declared (EXPR-8).
 
 filtered_source:
@@ -542,7 +542,7 @@ expressions:
             type: variable
             description: Value of the declared type returned, with collected precision none, when the source is missing (TIME-13).
         - invalid:
-            type: literal_value
+            type: substitute_value
             description: Result when the source is text that is not a right-truncated ISO 8601 date or datetime (TIME-13).
     precision: # See REQ-1106.
         - type:
@@ -554,7 +554,7 @@ expressions:
             required: true
             description: Right-truncated ISO 8601 date or datetime text, or a value of the declared type (TIME-7).
         - invalid:
-            type: literal_value
+            type: substitute_value
             description: Result when the source is text that is not a right-truncated ISO 8601 date or datetime (TIME-13).
     imputation_flag:
         - source:
@@ -620,8 +620,8 @@ expressions:
             values: [second, minute, hour, day]
             description: Numeric result unit of second, minute, hour or day (TIME-17).
         - invalid:
-            type: literal_value
-            description: Literal result for invalid or out-of-range duration text; null gives missing (TIME-17).
+            type: substitute_value
+            description: Literal result for invalid or out-of-range duration text (TIME-17).
 
 temporal_type:
     type: str
@@ -647,7 +647,7 @@ expressions:
             required: true
             description: String variable used as the dictionary key, or a filtered source carrying it (EXPR-11).
         - dict:
-            type: ["dict[str, literal_value]", project_path]
+            type: ["dict[str, substitute_value]", project_path]
             required: true
             description: Source-value to result-value dictionary, written inline or as the path of a YAML file holding it (EXPR-11).
         - case_sensitive:
@@ -655,10 +655,10 @@ expressions:
             default: true
             description: Compare exactly when true; fold ASCII letters when false (EXPR-12).
         - missing:
-            type: literal_value
+            type: substitute_value
             description: Value returned when the source is missing; without it, a missing source fails (EXPR-11).
         - unmapped:
-            type: literal_value
+            type: substitute_value
             description: Value returned when the source is present but has no dictionary entry; without it, such a source fails (EXPR-11).
     cut: # See REQ-1118.
 
@@ -679,7 +679,7 @@ expressions:
             default: false
             description: Right-closed and left-open when true; left-closed and right-open when false (EXPR-13).
         - missing:
-            type: literal_value
+            type: substitute_value
             description: Value returned when the source is missing (EXPR-13).
 "#),
     ("schema_expression_numeric.yaml", r#"version: "1.0"
@@ -770,10 +770,10 @@ expressions:
             default: 0
             description: Match group to return; 0 is the full match (TEXT-10).
         - missing:
-            type: literal_value
+            type: substitute_value
             description: Value returned when the source is missing (TEXT-10).
         - no_match:
-            type: literal_value
+            type: substitute_value
             description: Value returned when the pattern does not match the source (TEXT-10).
     str_replace: # See REQ-1322.
         - source:
@@ -789,7 +789,7 @@ expressions:
             required: true
             description: Literal text that replaces each match (TEXT-11).
         - missing:
-            type: literal_value
+            type: substitute_value
             description: Value returned when the source is missing (TEXT-11).
     str_template: # See REQ-1113.
         type: [string_template, str_template_class]
@@ -805,7 +805,7 @@ expressions:
             values: [upper, lower, sentence, title]
             description: Case to produce, one of upper, lower, sentence or title (TEXT-5).
         - missing:
-            type: literal_value
+            type: substitute_value
             description: Value returned when the source is missing (TEXT-5).
 
 string_template:
@@ -818,7 +818,7 @@ str_template_class:
         required: true
         description: Text containing literal content and braced variables (TEXT-3).
     - missing:
-        type: literal_value
+        type: substitute_value
         description: Value returned when any placeholder value is missing (TEXT-4).
 "#),
     ("schema_expression_window.yaml", r#"version: "1.0"
@@ -921,11 +921,11 @@ function_arg:
         - int
         - float
         - bool
-        - "null"
+        - missing_value
         - function_string_literal_class
         - function_date_literal_class
         - function_datetime_literal_class
-    description: Named variable or scalar literal leaf; arbitrary nesting is not allowed.
+    description: "Named variable or scalar literal leaf, with `{literal: null}` for the missing value; arbitrary nesting is not allowed."
 "#),
     ("schema_metadata.yaml", r#"version: "1.0"
 
@@ -1186,6 +1186,18 @@ column_type:
 literal_value:
     type: [str, int, float, bool, "null"]
     description: Scalar literal; a non-finite float becomes missing (VALUE-4).
+
+substitute_value:
+    type: [str, int, float, bool, missing_value]
+    description: "Literal a handler, flag or mapping returns, with `{literal: null}` for the missing value (COLUMN-10)."
+
+missing_value:
+    registry: missing_values
+
+missing_values:
+    literal:
+        type: "null"
+        description: The missing value, spelled as the literal expression; a bare YAML null instead leaves a field absent (LAYER-9).
 
 path:
     type: str
@@ -1704,6 +1716,18 @@ column_type:
 literal_value:
     type: [str, int, float, bool, "null"]
     description: Scalar literal; a non-finite float becomes missing (VALUE-4).
+
+substitute_value:
+    type: [str, int, float, bool, missing_value]
+    description: "Literal a handler, flag or mapping returns, with `{literal: null}` for the missing value (COLUMN-10)."
+
+missing_value:
+    registry: missing_values
+
+missing_values:
+    literal:
+        type: "null"
+        description: The missing value, spelled as the literal expression; a bare YAML null instead leaves a field absent (LAYER-9).
 
 path:
     type: str

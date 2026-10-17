@@ -142,7 +142,7 @@ columns:
       precision:
         type: date
         source: AESTDTC
-        invalid: null
+        invalid: {literal: null}
 
   - name: AEENPR
     type: str
@@ -151,7 +151,7 @@ columns:
       precision:
         type: date
         source: AEENDTC
-        invalid: null
+        invalid: {literal: null}
 
   # Only a complete date (precision day) becomes a date, so a partial date
   # gets no study day.

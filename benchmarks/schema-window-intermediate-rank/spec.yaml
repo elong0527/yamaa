@@ -26,7 +26,7 @@ intermediates:
       SEVN:
         mapping:
           source: AE.AESEV
-          missing: null
+          missing: {literal: null}
           dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
       # Competition rank of the event within its subject: worst numeric
       # severity first, later onset date first. Events tied on both

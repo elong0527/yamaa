@@ -689,7 +689,7 @@ class ResolvedSpecificationContract(unittest.TestCase):
                 encoding="utf-8",
             )
             child.write_text(
-                "schema_version: '1.0'\nparents: base.yaml\n", encoding="utf-8"
+                "schema_version: '1.0'\nparent: base.yaml\n", encoding="utf-8"
             )
             direct = yamaa.resolve_specification(base).to_dict()["entries"][0][
                 "origins"
@@ -709,7 +709,7 @@ class ResolvedSpecificationContract(unittest.TestCase):
                 encoding="utf-8",
             )
             child.write_text(
-                "schema_version: '1.0'\nparents: base.yaml\n"
+                "schema_version: '1.0'\nparent: base.yaml\n"
                 "columns: [{name: N, type: int, derivation: {row_number: {window: W}}}]\n"
                 "output: {path: result.csv, columns: [ID, N]}\n",
                 encoding="utf-8",
@@ -798,11 +798,11 @@ class ResolvedSpecificationContract(unittest.TestCase):
                     f"ID\n{identifier}\n", encoding="utf-8"
                 )
                 (study / "spec.yaml").write_text(
-                    "schema_version: '1.0'\nparents: ../shared/consumer.yaml\n",
+                    "schema_version: '1.0'\nparent: ../shared/consumer.yaml\n",
                     encoding="utf-8",
                 )
                 (study / "producer.yaml").write_text(
-                    "schema_version: '1.0'\nparents: ../shared/producer.yaml\n",
+                    "schema_version: '1.0'\nparent: ../shared/producer.yaml\n",
                     encoding="utf-8",
                 )
                 artifact = yamaa.resolve_specification(study / "spec.yaml")

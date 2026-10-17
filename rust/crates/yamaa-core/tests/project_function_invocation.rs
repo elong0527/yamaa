@@ -684,7 +684,7 @@ mod project {
                 true,
             );
             assert!(
-                matches!(prepare("/consumer.yaml",&consumer,&[candidate(&source)],None),Err(Error::Compilation(PrepareError::Unsupported(features))) if features.iter().any(|f| f.path=="parents" && f.operation == "parents"))
+                matches!(prepare("/consumer.yaml",&consumer,&[candidate(&source)],None),Err(Error::Compilation(PrepareError::Unsupported(features))) if features.iter().any(|f| f.path=="parent" && f.operation == "parent"))
             );
         }
         #[test]

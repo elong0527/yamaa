@@ -232,7 +232,7 @@ intermediates:
       EXENDT0: {to_date: {source: EXENDTC}}
       EXENDT: {first_available: {sources: [EXENDT0, EXSTDT]}}
     filter: EX.EXENDT >= EX.EXSTDT
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: USUBJID, type: str, label: Subject, derivation: EX.USUBJID}
   - {name: TRTSDT, type: date, label: First Dose Date, derivation: EXP.EXSTDT}
@@ -416,7 +416,7 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             ).replace("generated/left.csv", "generated/right.csv"),
         )
         inherited = (
-            CONSUMER.replace(", no_match: null", "")
+            CONSUMER.replace(", no_match: {literal: null}", "")
             .replace(
                 "../generated/producer.csv, schema: ../producer/p.yaml",
                 TRUTH["nested_left_reference"],
@@ -919,7 +919,9 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
         self.assertEqual(dict(result._native.preparation_sources()), before)
         self.assertIn(PRODUCER.encode(), before.values())
 
-    def test_early_environment_and_schema_null_failures_retain_original_bytes(self):
+    def test_early_environment_and_invalid_schema_failures_retain_original_bytes(
+        self,
+    ):
         self.write("env/environment.yaml", b"schema_version: [\n")
         with patch.object(host, "verify_versions") as verify:
             result = self.build()
@@ -933,9 +935,11 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             "env/environment.yaml",
             "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {id_float: float.yaml}\n",
         )
+        # A null schema now clears the producer link, so a wrongly typed
+        # value carries the early raw rejection.
         self.write(
             "consumer/root.yaml",
-            CONSUMER.replace("schema: ../producer/p.yaml", "schema: null"),
+            CONSUMER.replace("schema: ../producer/p.yaml", "schema: false"),
         )
         rejected = self.build()
         self.assertIsNone(self.entered(rejected))

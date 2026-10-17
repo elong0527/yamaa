@@ -242,7 +242,7 @@ impl CapturedSchema {
     }
 
     /// Structural preparation only: no source data, executable plan or effects.
-    /// Presence of `parents`, including null, must use the inheritance lifecycle.
+    /// A non-null `parent` must use the inheritance lifecycle.
     pub fn prepare_standalone(self: &Arc<Self>, source: Source) -> Result<PreparedDocument, Error> {
         let raw = self.decode_entry(&source)?;
         self.prepare_standalone_decoded(source, raw)
@@ -499,21 +499,9 @@ impl yamaa_core::file_preparation::PreparedView for PreparedDocument {
             if source.identity != declaring {
                 continue;
             }
-            if let Some(parents) = raw.field(raw.root(), "parents") {
-                match &raw.nodes()[parents] {
-                    N::Text(path) if path == written => {
-                        return Some(failure.field_diagnostic("parents", written));
-                    }
-                    N::Sequence(paths) => {
-                        for (index, &path) in paths.iter().enumerate() {
-                            if matches!(&raw.nodes()[path], N::Text(path) if path == written) {
-                                return Some(
-                                    failure.field_diagnostic(&format!("parents[{index}]"), written),
-                                );
-                            }
-                        }
-                    }
-                    _ => {}
+            if let Some(parent) = raw.field(raw.root(), "parent") {
+                if matches!(&raw.nodes()[parent], N::Text(path) if path == written) {
+                    return Some(failure.field_diagnostic("parent", written));
                 }
             }
         }

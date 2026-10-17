@@ -17,6 +17,7 @@ pytest.importorskip(
 )
 
 import yamaa
+from yamaa.resources import MemoryResolver
 
 
 def write_case(tmp_path, *, columns, typed_fields=0, source_format="csv"):
@@ -189,9 +190,9 @@ def test_inheritance_depth_admits_original_chain_and_parent_occurrences_keep_fix
     for index in range(65):
         parent = f"layer-{index + 1}.yaml" if index < 64 else "base.yaml"
         (tmp_path / f"layer-{index}.yaml").write_text(
-            f"schema_version: '1.0'\nparents: [{parent}]\n"
+            f"schema_version: '1.0'\nparent: {parent}\n"
         )
-    spec.write_text("schema_version: '1.0'\nparents: [layer-0.yaml]\n")
+    spec.write_text("schema_version: '1.0'\nparent: layer-0.yaml\n")
     kwargs = {}
     if environment:
         env = tmp_path / "environment.yaml"
@@ -204,11 +205,23 @@ def test_inheritance_depth_admits_original_chain_and_parent_occurrences_keep_fix
     assert built.save()
     assert (tmp_path / "out.csv").read_bytes() == b"ID\nS-001\n"
 
-    spec.write_text(
-        json.dumps({"schema_version": "1.0", "parents": ["base.yaml"] * 8193})
-    )
+    # Each layer names one parent, so only a chain of 8,193 distinct layers
+    # reaches the occurrence bound. Serve that chain from memory rather than
+    # writing thousands of files; without the bound it would reach the base.
+    objects = {
+        f"layer-{index}.yaml": (
+            f"schema_version: '1.0'\nparent: layer-{index + 1}.yaml\n"
+        ).encode("ascii")
+        for index in range(8193)
+    }
+    objects["layer-8193.yaml"] = (tmp_path / "base.yaml").read_bytes()
+    memory = {}
+    if environment:
+        objects["environment.yaml"] = env.read_bytes()
+        memory["environment"] = "environment.yaml"
+    resolver = MemoryResolver(objects)
     for operation in (yamaa.check, yamaa.domain):
-        result = operation(spec, **kwargs)
+        result = operation("layer-0.yaml", resolver=resolver, **memory)
         assert result.issues.height == 1
         issue = result.issues.row(0, named=True)
         assert issue["phase"] == "engine"
@@ -223,6 +236,7 @@ def test_inheritance_depth_admits_original_chain_and_parent_occurrences_keep_fix
             "limit": 8192,
             "actual": 8193,
         }
+    assert resolver.outputs == {}
     assert (tmp_path / "out.csv").read_bytes() == b"ID\nS-001\n"
 
 

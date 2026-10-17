@@ -156,7 +156,7 @@ work <- study()
 bridge <- host_truth[["retained_bridge_yaml"]]
 write(work,"bridge/left.yaml",bridge)
 write(work,"bridge/right.yaml",sub("generated/left.csv","generated/right.csv",sub("schema: ../producer/p.yaml","schema: ../producer/./p.yaml",bridge,fixed=TRUE),fixed=TRUE))
-text <- sub("../generated/producer.csv, schema: ../producer/p.yaml",host_truth[["nested_left_reference"]],sub(", no_match: null","",consumer,fixed=TRUE),fixed=TRUE)
+text <- sub("../generated/producer.csv, schema: ../producer/p.yaml",host_truth[["nested_left_reference"]],sub(", no_match: {literal: null}","",consumer,fixed=TRUE),fixed=TRUE)
 text <- sub("../generated/producer.csv, schema: ../producer/./p.yaml",host_truth[["nested_right_reference"]],text,fixed=TRUE)
 text <- sub("path: ../generated/root.csv","path: ../../generated/root.csv",text,fixed=TRUE)
 write(work,"consumer/layers/base.yaml",text)
@@ -281,7 +281,8 @@ failed <- build(work)
 stopifnot(is.null(evidence(failed)),is.null(failed$output),
   any(vapply(preparation(failed),function(item) identical(item$bytes,charToRaw("schema_version: [\n")),logical(1))))
 write(work,"env/environment.yaml","schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions: {id_float: float.yaml}\n")
-write(work,"consumer/root.yaml",sub("schema: ../producer/p.yaml","schema: null",consumer,fixed=TRUE))
+# A null schema now clears the producer link, so a wrongly typed value carries the early raw rejection.
+write(work,"consumer/root.yaml",sub("schema: ../producer/p.yaml","schema: false",consumer,fixed=TRUE))
 rejected <- build(work)
 stopifnot(is.null(evidence(rejected)),"REQ-0287" %in% rejected$issues$requirement)
 unlink(work,recursive=TRUE)
@@ -499,7 +500,7 @@ intermediates:
       EXENDT0: {to_date: {source: EXENDTC}}
       EXENDT: {first_available: {sources: [EXENDT0, EXSTDT]}}
     filter: EX.EXENDT >= EX.EXSTDT
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: USUBJID, type: str, label: Subject, derivation: EX.USUBJID}
   - {name: TRTSDT, type: date, label: First Dose Date, derivation: EXP.EXSTDT}

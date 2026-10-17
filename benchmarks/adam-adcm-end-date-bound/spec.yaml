@@ -55,7 +55,8 @@ columns:
         month: 12
         day: last
         not_after: DTHDT
-        invalid: null   # handlers are explicit: an omitted one is fatal
+        # handlers are explicit: an omitted one is fatal
+        invalid: {literal: null}
 
   # The first day the collected end allows; a supplied end can follow
   # death only when this does too.
@@ -68,7 +69,7 @@ columns:
         source: CMENDTC
         month: 1
         day: first
-        invalid: null
+        invalid: {literal: null}
 
   # D: a year and month were collected, so the day was supplied; M: only
   # the year was, so the month and day were supplied.
