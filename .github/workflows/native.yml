@@ -313,8 +313,8 @@ jobs:
           python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz project-dist/*.whl
       - name: Install the minimum supported Python saved artifact readers
         working-directory: ${{ runner.temp }}
-        # The minimum readers do not work on CPython 3.15 (docs/release.md), so
-        # 3.15 takes the oldest releases that do.
+        # CPython 3.15 has its own floors in python/pyproject.toml, the oldest
+        # releases that work there.
         run: |
           if [ "${{ matrix.python }}" = 3.15 ]; then
             python -m pip install polars==2.0.0 pyarrow==26.0.0 lxml==6.1.2

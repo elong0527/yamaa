@@ -2,7 +2,8 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
-    "python_full_version >= '3.14'",
+    "python_full_version >= '3.15'",
+    "python_full_version == '3.14.*'",
     "python_full_version < '3.14'",
 ]
 
@@ -2819,12 +2820,16 @@ tooling = [
 [package.metadata]
 requires-dist = [
     { name = "jsonschema", marker = "extra == 'test'", specifier = ">=4.25" },
-    { name = "lxml", specifier = ">=6.1.0" },
+    { name = "lxml", marker = "python_full_version < '3.15'", specifier = ">=6.1.0" },
+    { name = "lxml", marker = "python_full_version >= '3.15'", specifier = ">=6.1.2" },
     { name = "packaging", specifier = ">=25" },
-    { name = "polars", specifier = ">=1.35.2" },
+    { name = "polars", marker = "python_full_version < '3.15'", specifier = ">=1.35.2" },
+    { name = "polars", marker = "python_full_version >= '3.15'", specifier = ">=2.0.0" },
     { name = "py-yaml12", specifier = ">=0.2" },
-    { name = "pyarrow", specifier = ">=23.0.1" },
-    { name = "pydantic", specifier = ">=2.12.4" },
+    { name = "pyarrow", marker = "python_full_version < '3.15'", specifier = ">=23.0.1" },
+    { name = "pyarrow", marker = "python_full_version >= '3.15'", specifier = ">=26.0.0" },
+    { name = "pydantic", marker = "python_full_version < '3.15'", specifier = ">=2.12.4" },
+    { name = "pydantic", marker = "python_full_version >= '3.15'", specifier = ">=2.14.0" },
     { name = "pyrefly", marker = "extra == 'test'", specifier = ">=1.4.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=9.1.1" },
     { name = "pyyaml", specifier = ">=6.0.3" },

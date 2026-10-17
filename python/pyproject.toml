@@ -27,13 +27,24 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
 ]
 dependencies = [
-  "lxml>=6.1.0",
+  # CPython 3.12 to 3.14 keep the floors that embedders hold. Four of those do
+  # not work on 3.15, which takes the oldest releases that do: lxml 6.1.0,
+  # PyArrow 23.0.1 and the pydantic-core that Pydantic 2.12.4 requires publish
+  # no 3.15 wheels, and their source builds need the libxml2 and libxslt
+  # headers, Arrow C++ or a PyO3 that accepts 3.15; Polars before 2.0.0 returns
+  # None from Series methods that it forwards to expressions. PyYAML has no
+  # 3.15 wheels either, but its source archive builds.
+  "lxml>=6.1.0; python_version < '3.15'",
+  "lxml>=6.1.2; python_version >= '3.15'",
   # The locked Parquet 57.3.0 writer records only type-defined column orders,
   # which Polars 1.35.2 reads; the IEEE 754 total-order form needs 1.43.2.
-  "polars>=1.35.2",
+  "polars>=1.35.2; python_version < '3.15'",
+  "polars>=2.0.0; python_version >= '3.15'",
   "py-yaml12>=0.2",
-  "pyarrow>=23.0.1",
-  "pydantic>=2.12.4",
+  "pyarrow>=23.0.1; python_version < '3.15'",
+  "pyarrow>=26.0.0; python_version >= '3.15'",
+  "pydantic>=2.12.4; python_version < '3.15'",
+  "pydantic>=2.14.0; python_version >= '3.15'",
   "packaging>=25",
   "pyyaml>=6.0.3",
 ]

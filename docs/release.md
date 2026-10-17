@@ -28,12 +28,12 @@ The minimum supported independent readers are:
 
 | Reader | Minimum | Saved formats qualified |
 | --- | --- | --- |
-| Python Polars | 1.35.2 | CSV text and Parquet |
-| Python PyArrow | 23.0.1 | CSV text and Parquet |
+| Python Polars | 1.35.2 (2.0.0 on CPython 3.15) | CSV text and Parquet |
+| Python PyArrow | 23.0.1 (26.0.0 on CPython 3.15) | CSV text and Parquet |
 | R arrow | 23.0.1 | CSV text and Parquet |
 | Python standard library | Supported CPython above | Dataset-JSON 1.1 |
 | R jsonlite | 2.0.0 | Dataset-JSON 1.1, with `bigint_as_char = TRUE` |
-| Python lxml | 6.1.0 | Define-XML 2.1 |
+| Python lxml | 6.1.0 (6.1.2 on CPython 3.15) | Define-XML 2.1 |
 
 Python package dependencies and R package `Suggests` declare these floors.
 The R readers are optional: public Build and Save use the shared native codecs.
@@ -62,11 +62,10 @@ held Save bytes. The Python readers decode the same captured byte buffer;
 R arrow reads its installed host's corresponding captured buffer. Repeated
 domain saves must retain identical bytes. Ordinary CI tests the minimum
 readers; every native wheel/source and R source lane also runs these controls
-with the minimum versions. The CPython 3.15 lanes use Polars 2.0.0, PyArrow
-26.0.0 and lxml 6.1.2 instead, because the minimum versions do not work on
-3.15 (see below). SAS datasets and Transport are input formats;
-the published dataset profiles remain CSV and Parquet. Dataset-JSON and
-Define-XML are generated through the public study-document API.
+with the minimum versions for its interpreter. SAS datasets and Transport are
+input formats; the published dataset profiles remain CSV and Parquet.
+Dataset-JSON and Define-XML are generated through the public study-document
+API.
 
 ## Supported dependency combinations
 
@@ -84,28 +83,32 @@ binding builds with PyO3 0.27.2 through 0.30; the lock selects 0.30.1, and the
 minimum dependency graph tests 0.27.2.
 
 Python supports CPython 3.12 through 3.15 with the runtime ranges in
-`python/pyproject.toml`. Their declared floors are lxml 6.1.0, Polars 1.35.2,
-py-yaml12 0.2, PyArrow 23.0.1, Pydantic 2.12.4, packaging 25 and PyYAML 6.0.3.
+`python/pyproject.toml`. On CPython 3.12 to 3.14, their declared floors are
+lxml 6.1.0, Polars 1.35.2, py-yaml12 0.2, PyArrow 23.0.1, Pydantic 2.12.4,
+packaging 25 and PyYAML 6.0.3.
 The Parquet 57.3.0 writer records only type-defined column orders, which
 Polars 1.35.2 reads; the IEEE 754 total-order form that later writers record
 for floating-point columns needs Polars 1.43.2. R uses R 4.6.1 and the shared
 Rust graph; its host qualification readers are the `Suggests` dependencies in
 `R/yamaa/DESCRIPTION`.
 
-Four of these floors do not work on CPython 3.15. Polars before 2.0.0
-installs, but its Series methods that forward to expressions, such as
-`implode`, return `None`: 3.15 no longer stores a function's implicit `None`
-return in `co_consts`, which those releases use to find the methods. PyArrow
-23.0.1, lxml 6.1.0 and pydantic-core 2.41.5, which Pydantic 2.12.4 requires,
-publish no 3.15 wheels, and their source builds need Arrow C++, the libxml2
-and libxslt headers, or a PyO3 release that accepts 3.15. The oldest releases
-that work on 3.15 are Polars 2.0.0, PyArrow 26.0.0, lxml 6.1.2 and Pydantic
-2.14.0. PyYAML publishes no 3.15 wheels and builds from its source archive.
+Four of these floors do not work on CPython 3.15, so on 3.15 the declared
+floors are the oldest releases that do: Polars 2.0.0, PyArrow 26.0.0, lxml
+6.1.2 and Pydantic 2.14.0. Environment markers split these four requirements by
+interpreter, and CPython 3.12 to 3.14 keep the floors that embedders hold.
+Polars before 2.0.0 installs, but its Series methods that forward to
+expressions, such as `implode`, return `None`: 3.15 no longer stores a
+function's implicit `None` return in `co_consts`, which those releases use to
+find the methods. PyArrow 23.0.1, lxml 6.1.0 and pydantic-core 2.41.5, which
+Pydantic 2.12.4 requires, publish no 3.15 wheels, and their source builds need
+Arrow C++, the libxml2 and libxslt headers, or a PyO3 release that accepts
+3.15. PyYAML publishes no 3.15 wheels either, but builds from its source
+archive, so its floor is the same on every interpreter.
 
 The continuous [dependency graph lanes](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#ci-and-release-qualification)
-test declared direct minima on Linux with CPython 3.12 and 3.14, and newest
-compatible selections with CPython 3.12, 3.14 and 3.15, all with R 4.6.1; the
-minima do not work on 3.15. Cargo transitive dependencies use the newest
+test declared direct minima and newest compatible selections on Linux with
+CPython 3.12, 3.14 and 3.15, all with R 4.6.1; on 3.15 the minima are its own
+floors. Cargo transitive dependencies use the newest
 MSRV-compatible resolution in both lanes; local patches and exact pins are
 preserved. Python runtime/test floors are exact in the minimum lane, while
 Python transitives are resolved compatibly. These isolated graphs do not change
