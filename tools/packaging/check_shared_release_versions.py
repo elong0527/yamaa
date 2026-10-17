@@ -24,15 +24,35 @@ COLLECTIVE_HOLDER = "yamaa contributors"
 
 
 def _people(entries):
-    """Normalize author entries to (name, email-or-None) pairs."""
+    """Normalize author entries to (name, email-or-None) pairs.
+
+    Returns None when an entry cannot be accounted for (a non-list
+    collection, a non-mapping/non-string entry, or a string the name
+    pattern cannot read) so the caller reports a violation instead of
+    crashing on malformed metadata."""
+    if not isinstance(entries, (list, tuple)):
+        return None
     people = []
     for entry in entries:
         if isinstance(entry, dict):
             people.append((entry.get("name"), entry.get("email")))
-        else:
+        elif isinstance(entry, str):
             match = re.fullmatch(r"(.+?)(?: <([^>]+)>)?", entry.strip())
+            if match is None:
+                return None
             people.append((match.group(1), match.group(2)))
+        else:
+            return None
     return people
+
+
+def _load_toml(root, relative, errors, label):
+    """Load one TOML file, recording a violation instead of raising."""
+    try:
+        return tomllib.loads((root / relative).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        errors.append(f"{label}: unreadable or invalid metadata: {error}")
+        return None
 
 
 def _split_r_arguments(text):
@@ -189,7 +209,16 @@ def author_violations(root):
 
     python_text = read("python/pyproject.toml")
     if python_text is not None:
-        authors = tomllib.loads(python_text)["project"].get("authors", [])
+        try:
+            python_document = tomllib.loads(python_text)
+        except tomllib.TOMLDecodeError:
+            python_document = None
+        project = (
+            python_document.get("project")
+            if isinstance(python_document, dict)
+            else None
+        )
+        authors = project.get("authors", []) if isinstance(project, dict) else None
         if _people(authors) != SELECTED_PEOPLE:
             errors.append(
                 "python/pyproject.toml: author list differs from the selected"
@@ -207,17 +236,47 @@ def author_violations(root):
             )
     cargo_text = read("rust/Cargo.toml")
     if cargo_text is not None:
-        workspace = tomllib.loads(cargo_text)["workspace"]
-        if _people(workspace["package"].get("authors", [])) != SELECTED_PEOPLE:
+        try:
+            cargo_document = tomllib.loads(cargo_text)
+        except tomllib.TOMLDecodeError:
+            cargo_document = None
+        workspace = (
+            cargo_document.get("workspace")
+            if isinstance(cargo_document, dict)
+            else None
+        )
+        workspace = workspace if isinstance(workspace, dict) else {}
+        package_table = workspace.get("package")
+        workspace_authors = (
+            package_table.get("authors", [])
+            if isinstance(package_table, dict)
+            else None
+        )
+        if _people(workspace_authors) != SELECTED_PEOPLE:
             errors.append(
                 "rust/Cargo.toml: author list differs from the selected author list"
             )
-        for member in workspace["members"]:
+        members = workspace.get("members")
+        if not isinstance(members, list):
+            members = []
+        for member in members:
+            if not isinstance(member, str):
+                continue
             member_text = read(f"rust/{member}/Cargo.toml")
             if member_text is None:
                 continue
-            package = tomllib.loads(member_text)["package"]
-            if package.get("authors") != {"workspace": True}:
+            try:
+                member_document = tomllib.loads(member_text)
+            except tomllib.TOMLDecodeError:
+                member_document = None
+            package = (
+                member_document.get("package")
+                if isinstance(member_document, dict)
+                else None
+            )
+            if not isinstance(package, dict) or package.get("authors") != {
+                "workspace": True
+            }:
                 errors.append(
                     f"{member}: authors do not inherit the workspace author list"
                 )
@@ -235,38 +294,78 @@ def author_violations(root):
 
 def violations(root):
     errors = sdk_violations(root)
-    python = tomllib.loads((root / "python/pyproject.toml").read_text())
-    expected = python["project"]["version"]
-    workspace = tomllib.loads((root / "rust/Cargo.toml").read_text())["workspace"]
-    if workspace["package"]["version"] != expected:
+    python = _load_toml(root, "python/pyproject.toml", errors, "python/pyproject.toml")
+    project = python.get("project") if isinstance(python, dict) else None
+    expected = project.get("version") if isinstance(project, dict) else None
+    if not isinstance(expected, str):
+        errors.append("python/pyproject.toml: no selected release version declared")
+        errors += author_violations(root)
+        return errors
+    cargo = _load_toml(root, "rust/Cargo.toml", errors, "rust/Cargo.toml")
+    workspace = cargo.get("workspace") if isinstance(cargo, dict) else None
+    workspace = workspace if isinstance(workspace, dict) else {}
+    workspace_package = workspace.get("package")
+    workspace_version = (
+        workspace_package.get("version")
+        if isinstance(workspace_package, dict)
+        else None
+    )
+    if workspace_version != expected:
         errors.append("Cargo workspace version differs from selected Python/R release")
     member_names = []
-    for member in workspace["members"]:
-        package = tomllib.loads((root / "rust" / member / "Cargo.toml").read_text())[
-            "package"
-        ]
+    members = workspace.get("members")
+    if not isinstance(members, list) or not all(
+        isinstance(member, str) for member in members
+    ):
+        errors.append("rust/Cargo.toml: workspace members are missing or malformed")
+        members = []
+    for member in members:
+        relative = f"rust/{member}/Cargo.toml"
+        document = _load_toml(root, relative, errors, relative)
+        package = document.get("package") if isinstance(document, dict) else None
+        if not isinstance(package, dict) or not isinstance(package.get("name"), str):
+            errors.append(f"{member}: package metadata is missing or malformed")
+            continue
         member_names.append(package["name"])
-        version = package["version"]
-        actual = (
-            workspace["package"]["version"]
-            if version == {"workspace": True}
-            else version
-        )
+        version = package.get("version")
+        actual = workspace_version if version == {"workspace": True} else version
         if actual != expected:
             errors.append(
                 f"{member}: package version differs from selected shared release"
             )
-    locked = tomllib.loads((root / "rust/Cargo.lock").read_text())["package"]
+    locked_document = _load_toml(root, "rust/Cargo.lock", errors, "rust/Cargo.lock")
+    locked = (
+        locked_document.get("package") if isinstance(locked_document, dict) else None
+    )
+    if not isinstance(locked, list):
+        locked = []
     for name in member_names:
-        versions = [package["version"] for package in locked if package["name"] == name]
+        versions = [
+            package.get("version")
+            for package in locked
+            if isinstance(package, dict) and package.get("name") == name
+        ]
         if versions != [expected]:
             errors.append(f"Cargo.lock: {name} version identity is stale or ambiguous")
-    python_locked = tomllib.loads((root / "python/uv.lock").read_text())["package"]
-    owners = [package for package in python_locked if package["name"] == "yamaa"]
+    python_locked_document = _load_toml(
+        root, "python/uv.lock", errors, "python/uv.lock"
+    )
+    python_locked = (
+        python_locked_document.get("package")
+        if isinstance(python_locked_document, dict)
+        else None
+    )
+    if not isinstance(python_locked, list):
+        python_locked = []
+    owners = [
+        package
+        for package in python_locked
+        if isinstance(package, dict) and package.get("name") == "yamaa"
+    ]
     if (
         len(owners) != 1
-        or owners[0]["version"] != expected
-        or owners[0]["source"] != {"editable": "."}
+        or owners[0].get("version") != expected
+        or owners[0].get("source") != {"editable": "."}
     ):
         errors.append("uv.lock: selected yamaa project/version ownership differs")
     errors += author_violations(root)
