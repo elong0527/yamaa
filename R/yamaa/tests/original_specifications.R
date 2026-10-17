@@ -258,7 +258,7 @@ local({
   directory <- tempfile("public-parquet-refusals-"); dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
   entry <- file.path(directory,"spec.yaml")
-  source <- '{"schema_version":"1.0","domain":"TEST","input":{"SRC":{"path":"input.parquet"}},"keys":["ID"],"columns":[{"name":"ID","type":"int","derivation":{"compute":{"expr":"1"}}}],"output":{"path":"output.csv","columns":["ID"]}}'
+  source <- '{"schema_version":"1.0","domain":"TEST","base":"SRC","input":{"SRC":{"path":"input.parquet"}},"keys":["ID"],"columns":[{"name":"ID","type":"int","derivation":{"compute":{"expr":"1"}}}],"output":{"path":"output.csv","columns":["ID"]}}'
   writeBin(charToRaw(source),entry)
   entry <- normalizePath(entry,winslash="/",mustWork=TRUE)
 cases <- list(

@@ -153,9 +153,7 @@ def test_compiler_refusal_details_on_check_and_domain(
         # keep all 17 inputs live through a single row-phase default so the
         # inputs capacity is still exercised instead of being pruned away.
         document["columns"][0]["derivation"] = {
-            "first_available": {
-                "sources": [f"S{index}.ID" for index in range(actual)]
-            }
+            "first_available": {"sources": [f"S{index}.ID" for index in range(actual)]}
         }
     if resource == "projected_columns":
         document["output"]["columns"] = ["ID"] * actual
