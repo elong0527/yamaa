@@ -29,6 +29,7 @@ mod project {
                 let path = self.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -80,6 +81,7 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let mut run = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -156,6 +158,7 @@ mod project {
             let path = study.0.join("spec.yaml");
             let path = path.to_str().unwrap();
             let mut run = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: path,
                     environment: None,
@@ -404,6 +407,7 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let run = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -510,6 +514,7 @@ mod project {
             let path = study.0.join("spec.yaml");
             let path = path.to_str().unwrap();
             let run = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: path,
                     environment: None,
@@ -588,6 +593,7 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let mut run = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -629,6 +635,7 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let mut run = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,

@@ -12,6 +12,7 @@ use std::{
 use yamaa_core::application_observer::Scope;
 use yamaa_core::domain_entry::{self, Request};
 use yamaa_core::json::Value;
+use yamaa_core::project_function::Language;
 
 pub type Failure = Vec<Issue>;
 
@@ -550,7 +551,7 @@ pub enum ApplicationError<E> {
     Runtime(E),
 }
 pub struct Application<R> {
-    pub host: yamaa_core::project_function::Language,
+    pub host: Language,
     pub runtime: R,
 }
 impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
@@ -688,28 +689,27 @@ pub fn plain(
     }
     .plain(prepared, scope)
 }
-fn native(identity: Identity<'_>) -> Application<Native<'_>> {
+/// The host language is configured by the caller, never derived from the
+/// runtime name: an embedder may name its runtime anything.
+fn native(host: Language, identity: Identity<'_>) -> Application<Native<'_>> {
     Application {
-        host: if identity.runtime == "r" {
-            yamaa_core::project_function::Language::R
-        } else {
-            yamaa_core::project_function::Language::Python
-        },
+        host,
         runtime: Native {
             identity,
             resolver: None,
         },
     }
 }
-pub fn check(request: Request<'_>, identity: Identity<'_>) -> Failure {
-    check_with_resolver(request, identity, None)
+pub fn check(host: Language, request: Request<'_>, identity: Identity<'_>) -> Failure {
+    check_with_resolver(host, request, identity, None)
 }
 pub fn check_with_resolver(
+    host: Language,
     request: Request<'_>,
     identity: Identity<'_>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Failure {
-    let mut application = native(identity);
+    let mut application = native(host, identity);
     application.runtime.resolver = resolver;
     crate::issue_rows::collect(
         domain_entry::check(request, &mut application).unwrap_or_else(|error| match error {
@@ -720,8 +720,12 @@ pub fn check_with_resolver(
         }),
     )
 }
-pub fn domain(request: Request<'_>, identity: Identity<'_>) -> Result<Domain, Failure> {
-    let mut application = native(identity);
+pub fn domain(
+    host: Language,
+    request: Request<'_>,
+    identity: Identity<'_>,
+) -> Result<Domain, Failure> {
+    let mut application = native(host, identity);
     domain_entry::domain(request, &mut application, Scope::default())
         .map_err(|error| match error {
             ApplicationError::Preparation(error) => {
@@ -867,9 +871,9 @@ mod tests {
             specification: &entry,
             environment: None,
         };
-        let ordinary = domain(request(), identity()).unwrap();
+        let ordinary = domain(Language::Python, request(), identity()).unwrap();
         let result = if let Some(measurements) = measurements {
-            let mut application = native(identity());
+            let mut application = native(Language::Python, identity());
             let observed =
                 domain_entry::domain(request(), &mut application, Scope::new(measurements))
                     .unwrap_or_else(|_| panic!("observed fixture failed"));

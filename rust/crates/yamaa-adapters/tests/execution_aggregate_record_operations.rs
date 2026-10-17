@@ -1,5 +1,15 @@
 #![cfg(feature = "yaml")]
 //! Execution contracts.
+
+/// The host that each runtime name in these tests stands for.
+fn host(runtime: &str) -> yamaa_core::project_function::Language {
+    match runtime {
+        "python" => yamaa_core::project_function::Language::Python,
+        "r" => yamaa_core::project_function::Language::R,
+        other => panic!("no host for test runtime {other}"),
+    }
+}
+
 #[allow(dead_code)]
 mod support;
 mod execution {
@@ -30,6 +40,7 @@ mod execution {
             {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -97,7 +108,7 @@ mod execution {
         )
         .unwrap();
         let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-        let issues = file_application::check(
+        let issues = file_application::check(yamaa_core::project_function::Language::Python,
             Request {
                 specification: &specification,
                 environment: None,
@@ -737,12 +748,20 @@ S1,002,2024-06
                     base_directory: ".",
                 };
                 assert_eq!(
-                    issues(&file_application::check(request(), identity())),
+                    issues(&file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity()
+                    )),
                     case["check_issues"],
                     "{}",
                     yamaa_adapters::json_wire::encode(&case["name"])
                 );
-                let mut result = match file_application::domain(request(), identity()) {
+                let mut result = match file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(),
+                ) {
                     Ok(result) => result,
                     Err(rows) => {
                         assert_eq!(
@@ -849,12 +868,19 @@ S1,002,2024-06
                     specification: &specification,
                     environment: None,
                 };
-                let checked = file_application::check(request(), identity(runtime, &specification));
-                let built =
-                    match file_application::domain(request(), identity(runtime, &specification)) {
-                        Ok(domain) => domain.issues(),
-                        Err(issues) => issues,
-                    };
+                let checked = file_application::check(
+                    crate::host(runtime),
+                    request(),
+                    identity(runtime, &specification),
+                );
+                let built = match file_application::domain(
+                    crate::host(runtime),
+                    request(),
+                    identity(runtime, &specification),
+                ) {
+                    Ok(domain) => domain.issues(),
+                    Err(issues) => issues,
+                };
                 result.push((format!("{runtime}/check"), rows(&checked)));
                 result.push((format!("{runtime}/domain"), rows(&built)));
             }
@@ -1053,11 +1079,17 @@ S1,002,2024-06
                 specification,
                 environment: None,
             };
-            let checked =
-                file_application::check(request(), identity(runtime, example, specification));
+            let checked = file_application::check(
+                crate::host(runtime),
+                request(),
+                identity(runtime, example, specification),
+            );
             assert!(!checked.is_empty(), "{example}: check reported no issues");
-            let built =
-                file_application::domain(request(), identity(runtime, example, specification));
+            let built = file_application::domain(
+                crate::host(runtime),
+                request(),
+                identity(runtime, example, specification),
+            );
             let built = match built {
                 Ok(result) => {
                     let issues = result.issues().to_vec();
@@ -1351,6 +1383,7 @@ S1,002,2024-06
                 for runtime in ["python", "r"] {
                     if let Some((_, reason)) = missed {
                         let checked = file_application::check(
+                            crate::host(runtime),
                             Request {
                                 specification: &spec,
                                 environment: None,
@@ -1443,13 +1476,19 @@ S1,002,2024-06
                     environment: None,
                 };
                 for runtime in ["python", "r"] {
-                    let checked =
-                        file_application::check(request(), identity(runtime, name, &spec));
-                    let built =
-                        match file_application::domain(request(), identity(runtime, name, &spec)) {
-                            Ok(result) => result.issues().to_vec(),
-                            Err(failure) => failure,
-                        };
+                    let checked = file_application::check(
+                        crate::host(runtime),
+                        request(),
+                        identity(runtime, name, &spec),
+                    );
+                    let built = match file_application::domain(
+                        crate::host(runtime),
+                        request(),
+                        identity(runtime, name, &spec),
+                    ) {
+                        Ok(result) => result.issues().to_vec(),
+                        Err(failure) => failure,
+                    };
                     let checked = checked.iter().map(issue).collect::<Vec<_>>();
                     let built = built.iter().map(issue).collect::<Vec<_>>();
                     assert_eq!(checked, oracle, "{name} ({runtime}): check");
@@ -1510,6 +1549,7 @@ S1,002,2024-06
                     fs::remove_file(fixture.0.join("input.csv")).unwrap();
                     for runtime in ["python", "r"] {
                         let issues = file_application::check(
+                            crate::host(runtime),
                             Request {
                                 specification: &specification,
                                 environment: None,
@@ -1551,11 +1591,13 @@ S1,002,2024-06
                         environment: None,
                     };
                     assert!(file_application::check(
+                        crate::host(runtime),
                         request(),
                         identity(runtime, "precision-endpoints", &specification)
                     )
                     .is_empty());
                     let mut domain = file_application::domain(
+                        crate::host(runtime),
                         request(),
                         identity(runtime, "precision-endpoints", &specification),
                     )
@@ -2190,6 +2232,7 @@ S1,002,2024-06
                 base_directory: ".",
             };
             let outcome = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &spec,
                     environment: None,
@@ -2282,6 +2325,7 @@ S1,002,2024-06
                 base_directory: ".",
             };
             let result = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -2603,6 +2647,7 @@ S1,002,2024-06
         fn between_run(fixture: &Fixture) -> file_application::Domain {
             let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
             file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -2779,12 +2824,20 @@ S1,002,2024-06
                         environment: None,
                     };
                     assert_eq!(
-                        issues(&file_application::check(request(), identity())),
+                        issues(&file_application::check(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity()
+                        )),
                         case["check_issues"],
                         "{name}: check"
                     );
-                    let mut result = file_application::domain(request(), identity())
-                        .unwrap_or_else(|issues| panic!("{name}: {issues:?}"));
+                    let mut result = file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    )
+                    .unwrap_or_else(|issues| panic!("{name}: {issues:?}"));
                     assert_eq!(
                         issues(&result.issues()),
                         case["issues"],
@@ -2852,6 +2905,7 @@ S1,002,2024-06
                 fs::write(&specification, body).unwrap();
                 let specification = specification.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification,
                         environment: None,
