@@ -104,8 +104,12 @@ static repository validation does not establish engine release qualification.
 ## CI and release qualification
 
 The ordinary CI workflow runs the same check targets listed above for each PR,
-and every two hours on main. Merges to main do not start workflows other than
-the documentation site deployment; main is checked on those schedules instead.
+every two hours on main, and on each push to a `release/**` branch. Merges to
+main do not start workflows other than the documentation site deployment; main
+is checked on those schedules instead. While a workflow's latest main run
+fails, the `Main health` workflow keeps a `main-red` issue open for it and
+closes the issue when a later main run succeeds. A PR that changes `.github/`
+also runs actionlint over every workflow.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
