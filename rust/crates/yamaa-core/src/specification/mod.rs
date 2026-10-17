@@ -2260,16 +2260,12 @@ impl PreparedSpecification {
             };
             // The reference emits expression-local qualification findings first,
             // then validates bare references, preserving written occurrence order.
-            for identifier in compiled
-                .identifiers()
-                .filter(|name| name.contains('.') && self.intermediates.reference(name).is_none())
-            {
-                findings.push(BindFinding::QualifiedNumericReference {
-                    path: reference_path.clone(),
-                    expression: compiled.expression().into(),
-                    identifier: identifier.into(),
-                });
-            }
+            static_checks::qualified_numeric_findings(
+                compiled,
+                &reference_path,
+                &self.intermediates,
+                findings,
+            );
             let mut bindings = Vec::new();
             for name in compiled
                 .identifiers()

@@ -47,6 +47,26 @@ pub(super) fn scoped_branch(
     filters(&branch.operation, &branch.path, scope, None, findings)
 }
 
+/// REQ-0442: a qualified formula name must name a declared record lookup.
+/// The test reads declarations alone, so binding and check share it.
+pub(super) fn qualified_numeric_findings(
+    compiled: &CompiledNumeric,
+    path: &str,
+    intermediates: &intermediates::Declarations,
+    findings: &mut Vec<BindFinding>,
+) {
+    for identifier in compiled
+        .identifiers()
+        .filter(|name| name.contains('.') && intermediates.reference(name).is_none())
+    {
+        findings.push(BindFinding::QualifiedNumericReference {
+            path: path.into(),
+            expression: compiled.expression().into(),
+            identifier: identifier.into(),
+        });
+    }
+}
+
 fn operation(
     op: &Operation,
     path: &str,
@@ -124,6 +144,15 @@ impl PreparedSpecification {
             }
             self.intermediates
                 .check_findings(&self.sources, &self.output, findings)?;
+            let outputs = self.rows.is_none().then(|| {
+                self.output
+                    .columns()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, column)| (column.name.as_str(), index))
+                    .collect::<BTreeMap<_, _>>()
+            });
+            let mut dependencies = Vec::new();
             for declaration in &self.declarations {
                 operation(
                     &declaration.operation,
@@ -131,6 +160,12 @@ impl PreparedSpecification {
                     self.rows.is_none().then_some(&self.output),
                     findings,
                 )?;
+                if let Some(outputs) = &outputs {
+                    dependencies.push(Some(self.formula_reads(declaration, outputs, findings)));
+                }
+            }
+            if outputs.is_some() {
+                self.formula_dependencies(&dependencies, findings)?;
             }
             if let Some(rows) = &self.rows {
                 rows.check_findings(findings)?;
@@ -150,6 +185,57 @@ impl PreparedSpecification {
             }
         }
         Ok(self)
+    }
+
+    /// A formula binds without a source schema: a qualified name is a declared
+    /// record lookup or refused, and a bare name reads an output column. Return
+    /// the output columns it reads, after its qualification findings, as
+    /// binding does. Other derivation kinds contribute no columns here.
+    fn formula_reads(
+        &self,
+        declaration: &Declaration,
+        outputs: &BTreeMap<&str, usize>,
+        findings: &mut Vec<BindFinding>,
+    ) -> Vec<usize> {
+        let Operation::Compute(compiled) = &declaration.operation else {
+            return Vec::new();
+        };
+        let path = format!("{}.expr", declaration.path);
+        qualified_numeric_findings(compiled, &path, &self.intermediates, findings);
+        compiled
+            .identifiers()
+            .filter(|name| !name.contains('.'))
+            .filter_map(|name| outputs.get(name).copied())
+            .collect()
+    }
+
+    /// Column-order findings over formula reads alone (REQ-0071, REQ-0072,
+    /// REQ-0074), projected with binding's names and paths. Build analyzes
+    /// every derivation kind, so it can also report what passes here.
+    fn formula_dependencies(
+        &self,
+        dependencies: &[Option<Vec<usize>>],
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        let analysis = column_dependencies::analyze(dependencies, &self.keys, false)
+            .map_err(BindError::DependencyPolicy)?;
+        if !analysis.diagnostics.is_empty() {
+            findings.push(BindFinding::Dependencies {
+                columns: self
+                    .output
+                    .columns()
+                    .iter()
+                    .map(|column| column.name.clone())
+                    .collect(),
+                paths: self
+                    .declarations
+                    .iter()
+                    .map(|declaration| declaration.path.clone())
+                    .collect(),
+                diagnostics: analysis.diagnostics,
+            });
+        }
+        Ok(())
     }
 
     /// All intrinsically known declaration findings, without study binding.
