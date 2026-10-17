@@ -588,6 +588,91 @@ class PublicContract(unittest.TestCase):
                 self.assertIsNotNone(record.operand_route)
                 self.assertEqual(result.diagnostics, [record])
 
+    def test_records_equal_the_shared_parity_truth_field_for_field(self):
+        # R reads the same cases; both hosts equal one truth, so they equal
+        # each other. Numbers are tagged in the truth, because a JSON reader
+        # would otherwise choose each host's number types.
+        for case in PARITY["cases"]:
+            with self.subTest(case=case["name"]):
+                spec = self.root / case["name"] / "spec.yaml"
+                spec.parent.mkdir()
+                if case["specification_yaml"] is not None:
+                    spec.write_text(case["specification_yaml"], encoding="utf-8")
+                    (spec.parent / "input.csv").write_bytes(
+                        fixture_bytes(case["input_csv"])
+                    )
+                entry = {"check": yamaa.check, "domain": yamaa.domain}[case["entry"]]
+                result = entry(spec)
+                self.issues(result)
+                self.assertEqual(len(result.diagnostics), len(case["records"]))
+                for record, truth in zip(
+                    result.diagnostics, case["records"], strict=True
+                ):
+                    span = truth["source_span"]
+                    self.assertEqual(
+                        (
+                            record.phase,
+                            record.condition,
+                            record.requirement,
+                            record.spec_paths,
+                            record.source_span,
+                            record.operand_route,
+                        ),
+                        (
+                            truth["phase"],
+                            truth["condition"],
+                            truth["requirement"],
+                            truth["spec_paths"],
+                            None if span is None else yamaa.SourceSpan(*span),
+                            truth["operand_route"],
+                        ),
+                    )
+                    self.assertTrue(
+                        same_value(record.context, parity_value(truth["context"])),
+                        (record.context, truth["context"]),
+                    )
+
+
+PARITY = load_truth(__file__, "diagnostic-parity")
+
+
+def fixture_bytes(value):
+    if isinstance(value, dict):
+        return bytes.fromhex(value["hex"])
+    return value.encode("utf-8")
+
+
+def parity_value(value):
+    """Build the Python value a tagged truth value names."""
+    if isinstance(value, dict) and len(value) == 1:
+        (tag, text), *_ = value.items()
+        if tag == "integer":
+            return int(text)
+        if tag == "float":
+            return float(text)
+        if tag == "hex":
+            return bytes.fromhex(text).decode("utf-8")
+    if isinstance(value, dict):
+        return {key: parity_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [parity_value(item) for item in value]
+    if isinstance(value, (int, float)):
+        raise TypeError("parity truth tags every number")
+    return value
+
+
+def same_value(actual, expected):
+    """Equal values of the same type, with object keys in the same order."""
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return list(actual) == list(expected) and all(
+            same_value(actual[key], expected[key]) for key in expected
+        )
+    if isinstance(expected, list):
+        return len(actual) == len(expected) and all(map(same_value, actual, expected))
+    return actual == expected
+
 
 class ResolvedSpecificationContract(unittest.TestCase):
     def test_original_origins_survive_inheritance_materialization_and_window_expansion(

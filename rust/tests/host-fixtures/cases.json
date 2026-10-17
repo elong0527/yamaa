@@ -4275,6 +4275,218 @@
           "invalid_string_template"
         ]
       }
+    },
+    "diagnostic-parity": {
+      "cases": [
+        {
+          "name": "literal_wider_than_i64",
+          "entry": "check",
+          "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: {literal: 18446744073709551616}}\noutput: {path: output.csv, columns: [ID, N]}\n",
+          "input_csv": "ID\na\n",
+          "records": [
+            {
+              "phase": "validation",
+              "condition": "integer_overflow",
+              "requirement": "REQ-0014",
+              "spec_paths": [
+                "columns.N.derivation.literal"
+              ],
+              "context": {
+                "actual": {
+                  "integer": "18446744073709551616"
+                },
+                "maximum": {
+                  "integer": "9223372036854775807"
+                },
+                "minimum": {
+                  "integer": "-9223372036854775808"
+                }
+              },
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "division_at_the_root_over_every_key_scalar",
+          "entry": "domain",
+          "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, TAG, EXACT, WIDE, LOW, RATE, WHOLE, GAP]\ninput: {SRC: {path: input.csv, types: {ID: str, TAG: str, EXACT: int, WIDE: int, LOW: int, RATE: float, WHOLE: float, GAP: str, VALUE: float, ZERO: float}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TAG, type: str, derivation: SRC.TAG}\n  - {name: EXACT, type: int, derivation: SRC.EXACT}\n  - {name: WIDE, type: int, derivation: SRC.WIDE}\n  - {name: LOW, type: int, derivation: SRC.LOW}\n  - {name: RATE, type: float, derivation: SRC.RATE}\n  - {name: WHOLE, type: float, derivation: SRC.WHOLE}\n  - {name: GAP, type: str, derivation: SRC.GAP}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: ZERO, type: float, derivation: SRC.ZERO}\n  - {name: RATIO, type: float, derivation: {compute: {expr: 'VALUE / ZERO'}}}\noutput: {path: output.csv, columns: [ID, TAG, EXACT, WIDE, LOW, RATE, WHOLE, GAP, VALUE, ZERO, RATIO]}\n",
+          "input_csv": {
+            "hex": "49442c5441472c45584143542c574944452c4c4f572c524154452c57484f4c452c4741502c56414c55452c5a45524f0a5a6fc3ab2c6100622c393030373139393235343734303939322c393030373139393235343734303939332c2d393232333337323033363835343737353830382c322e352c332e302c2c312c300a"
+          },
+          "records": [
+            {
+              "phase": "derivation",
+              "condition": "division_by_zero",
+              "requirement": "REQ-0430",
+              "spec_paths": [
+                "columns.RATIO.derivation.compute"
+              ],
+              "context": {
+                "expr": "VALUE / ZERO",
+                "keys": [
+                  {
+                    "EXACT": {
+                      "integer": "9007199254740992"
+                    },
+                    "GAP": null,
+                    "ID": "Zo\u00eb",
+                    "LOW": {
+                      "integer": "-9223372036854775808"
+                    },
+                    "RATE": {
+                      "float": "2.5"
+                    },
+                    "TAG": {
+                      "hex": "610062"
+                    },
+                    "WHOLE": {
+                      "float": "3.0"
+                    },
+                    "WIDE": {
+                      "integer": "9007199254740993"
+                    }
+                  }
+                ]
+              },
+              "source_span": [
+                0,
+                12
+              ],
+              "operand_route": []
+            }
+          ]
+        },
+        {
+          "name": "division_in_a_right_operand",
+          "entry": "domain",
+          "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: str, VALUE: float, ZERO: float}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: ZERO, type: float, derivation: SRC.ZERO}\n  - {name: RATIO, type: float, derivation: {compute: {expr: '1 + VALUE / ZERO'}}}\noutput: {path: output.csv, columns: [ID, VALUE, ZERO, RATIO]}\n",
+          "input_csv": "ID,VALUE,ZERO\na,2.5,0\n",
+          "records": [
+            {
+              "phase": "derivation",
+              "condition": "division_by_zero",
+              "requirement": "REQ-0430",
+              "spec_paths": [
+                "columns.RATIO.derivation.compute"
+              ],
+              "context": {
+                "expr": "1 + VALUE / ZERO",
+                "keys": [
+                  {
+                    "ID": "a"
+                  }
+                ]
+              },
+              "source_span": [
+                4,
+                16
+              ],
+              "operand_route": [
+                "right"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "aggregate_empty_key_mapping",
+          "entry": "domain",
+          "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: G, type: str, derivation: SRC.G}\n  - {name: V, type: int, derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {}}}}\noutput: {path: output.csv, columns: [ID, G, V]}\n",
+          "input_csv": "ID,G,V\na,g,2\na,g,3\n",
+          "records": [
+            {
+              "phase": "validation",
+              "condition": "missing_aggregate_keys",
+              "requirement": "REQ-0140",
+              "spec_paths": [
+                "columns.V.derivation.aggregate"
+              ],
+              "context": {
+                "dataset": "SRC",
+                "key": {}
+              },
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "aggregate_empty_key_list",
+          "entry": "domain",
+          "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: G, type: str, derivation: SRC.G}\n  - {name: V, type: int, derivation: {aggregate: {expr: 'SUM(SRC.V)', key: []}}}\noutput: {path: output.csv, columns: [ID, G, V]}\n",
+          "input_csv": "ID,G,V\na,g,2\na,g,3\n",
+          "records": [
+            {
+              "phase": "validation",
+              "condition": "missing_aggregate_keys",
+              "requirement": "REQ-0140",
+              "spec_paths": [
+                "columns.V.derivation.aggregate"
+              ],
+              "context": {
+                "dataset": "SRC",
+                "key": []
+              },
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "two_undeclared_output_columns",
+          "entry": "check",
+          "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\noutput: {path: output.csv, columns: [ID, X, Y]}\n",
+          "input_csv": "ID\na\n",
+          "records": [
+            {
+              "phase": "validation",
+              "condition": "undeclared_column",
+              "requirement": "REQ-0234",
+              "spec_paths": [
+                "output.columns[1]"
+              ],
+              "context": {
+                "column": "X"
+              },
+              "source_span": null,
+              "operand_route": null
+            },
+            {
+              "phase": "validation",
+              "condition": "undeclared_column",
+              "requirement": "REQ-0234",
+              "spec_paths": [
+                "output.columns[2]"
+              ],
+              "context": {
+                "column": "Y"
+              },
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "absent_specification",
+          "entry": "check",
+          "specification_yaml": null,
+          "input_csv": null,
+          "records": [
+            {
+              "phase": "engine",
+              "condition": "engine_rejected",
+              "requirement": null,
+              "spec_paths": [],
+              "context": {
+                "code": "resource_missing",
+                "stage": "prepare"
+              },
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        }
+      ]
     }
   }
 }
