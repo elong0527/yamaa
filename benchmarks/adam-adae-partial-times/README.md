@@ -17,10 +17,11 @@ or nothing at all.
   its earliest value, so a start collected at hour `14` becomes `14:00:00`
   and a date alone starts at `00:00:00`. A start collected without its day,
   or not collected at all, gives no analysis start.
-- `ASTTMF` names the coarsest part of the time that was supplied: `H` when
-  the hour was supplied (a date alone), `M` when the minutes were, and `S`
-  when only the seconds were. It is empty when the time was collected to
-  the second and when there is no analysis start.
+- `ASTTMF` names the first part of the time that was not collected and
+  had to be imputed: `H` when the hour was imputed (a date alone), `M`
+  when the minute was, and `S` when only the second was. It is empty
+  when the time was collected to the second and when there is no
+  analysis start.
 - `AENDTM` is the analysis end date/time, completed the same way but with
   the latest value of each missing part: an end collected at hour `16`
   becomes `16:59:59` and a date alone ends at `23:59:59`.

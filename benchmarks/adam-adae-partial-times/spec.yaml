@@ -61,9 +61,9 @@ columns:
         source: ASTDTM
         missing: null
 
-  # The flag names the coarsest supplied part, one level finer than the last
-  # collected one: a date alone supplied the hour, an hour supplied the
-  # minutes, a minute supplied only the seconds.
+  # The flag names the first imputed part: a date alone imputes the hour
+  # first (H), a time collected to the hour imputes the minutes first
+  # (M), a time collected to the minute imputes only the seconds (S).
   - name: ASTTMF
     type: str
     label: Analysis Start Time Imputation Flag

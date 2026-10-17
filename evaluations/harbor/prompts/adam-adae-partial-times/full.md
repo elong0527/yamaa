@@ -14,10 +14,11 @@ at 00:00:00. A start collected without its day, or not collected at all,
 gives no ASTDTM. AENDTM is the analysis end date and time from AEENDTC,
 completed the same way but with the latest value of each missing part:
 second 59, minute 59, and a date alone ends at 23:59:59. ASTTMF and
-AENTMF name the coarsest part of the time that was supplied for ASTDTM
-and AENDTM: H when the hour was supplied (a date alone was collected), M
-when the minutes were supplied (a time collected to the hour), and S when
-only the seconds were supplied (a time collected to the minute). A flag
+AENTMF name the first part of the time that was not collected and had
+to be imputed: H when the hour was imputed (a date alone was
+collected), M when the minute was imputed (a time collected to the
+hour), and S when the second was imputed (a time collected to the
+minute). A flag
 has no value when the time was collected to the second and when there is
 no analysis date and time. A flag records what was collected: a start
 collected as 08:30 is flagged S although it completes to the same moment
