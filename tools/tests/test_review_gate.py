@@ -351,15 +351,23 @@ class ExactCoverage(unittest.TestCase):
             gate.verify(api, NUMBER, publish=True)
         self.assertEqual([v.state for v in api.published], ["pending", "failure"])
 
-    def test_closed_wrong_repository_and_non_main_pulls_do_not_publish(self):
+    def test_closed_wrong_repository_and_non_target_pulls_do_not_publish(self):
         for value in [
             pull(state="closed"),
             pull(branch="release"),
+            pull(branch="release/next"),
+            pull(branch="release/1.0.0/extra"),
+            pull(branch="review/1-base"),
             pull(repository_id=123),
         ]:
             api = Evidence(pulls=[value])
             self.assertIsNone(gate.verify(api, NUMBER, publish=True))
             self.assertEqual(api.published, [])
+
+    def test_release_branch_pulls_are_verified_like_main_pulls(self):
+        api = Evidence(pulls=[pull(branch="release/1.0.0")])
+        self.assertEqual(gate.verify(api, NUMBER).state, "success")
+        self.assertEqual(api.published, [])
 
 
 class CompletePagination(unittest.TestCase):
@@ -836,21 +844,23 @@ class TrustedRouting(unittest.TestCase):
         )
         self.assertEqual(
             [call.args[0] for call in api.pages.call_args_list],
-            [f"commits/{HEAD}/pulls", "pulls?state=open&base=main"],
+            [f"commits/{HEAD}/pulls", "pulls?state=open"],
         )
 
-    def test_periodic_refresh_handles_review_and_thread_changes_for_all_current_main_prs(
+    def test_periodic_refresh_handles_review_and_thread_changes_for_all_target_prs(
         self,
     ):
         for event_name in ["schedule", "workflow_dispatch"]:
             api = Evidence()
             second = pull()
             second["number"] = 99
-            api.pages.return_value = [pull(), second, pull(branch="release")]
+            release = pull(branch="release/1.0.0")
+            release["number"] = 100
+            api.pages.return_value = [pull(), second, release, pull(branch="release")]
             self.assertEqual(
-                gate.candidates(api, event_name, self.event()), [NUMBER, 99]
+                gate.candidates(api, event_name, self.event()), [NUMBER, 99, 100]
             )
-            api.pages.assert_called_once_with("pulls?state=open&base=main")
+            api.pages.assert_called_once_with("pulls?state=open")
 
     def test_pr_and_discussion_bodies_and_refs_are_never_instructions(self):
         api = Evidence()

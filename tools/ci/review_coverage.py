@@ -13,6 +13,9 @@ from datetime import datetime
 
 MAX_PATHS = 300
 SHA = re.compile(r"[0-9a-f]{40}\Z")
+# A reviewed PR merges into main or into one release branch such as
+# release/1.0.0. Synthetic review-batch bases are never one of these.
+TARGET_BASE = re.compile(r"(?:main|release/[0-9]+\.[0-9]+\.[0-9]+)\Z")
 MARKER = "yamaa-review-batches"
 METADATA = re.compile(r"<!-- yamaa-review-batches:\s*(.*?)\s*-->", re.DOTALL)
 LARGE_SKIP = re.compile(
@@ -58,6 +61,11 @@ class CoverageError(ValueError):
 def require(condition, message):
     if not condition:
         raise CoverageError(message)
+
+
+def target_base(ref):
+    """Whether a PR base is main or a release branch that PRs merge into."""
+    return isinstance(ref, str) and TARGET_BASE.match(ref) is not None
 
 
 def object_id(value):
@@ -152,9 +160,9 @@ def snapshot(api, number, *, target):
         "invalid review-coverage PR refs",
     )
     require(
-        (base["ref"] == "main")
+        target_base(base["ref"])
         if target
-        else (base["ref"] != "main" and same_repository(api, head.get("repo"))),
+        else (not target_base(base["ref"]) and same_repository(api, head.get("repo"))),
         "review batches must use synthetic bases and heads in this repository",
     )
     count = data.get("changed_files")
