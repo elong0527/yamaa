@@ -1,7 +1,9 @@
 name: Optional format features
 
 on:
+  # PRs into a release integration branch run only the CI workflow.
   pull_request:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:

@@ -107,9 +107,17 @@ The ordinary CI workflow runs the same check targets listed above for each PR.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
+A PR into a release integration branch (`release/X.Y.Z`) runs the CI workflow
+alone, without its second Python pass at the minimum saved-artifact readers.
+Dependency graphs, Optional format features and R-CMD-check run on PRs into
+main, including the release branch's own PR, so every change still passes them
+before it reaches main. To check a release branch sooner, dispatch one with
+`gh workflow run <workflow> --ref release/X.Y.Z`.
+
 `.github/workflows/dependency-graphs.yml` also resolves minimum and newest
-compatible graphs on each PR, main push, weekly schedule and dispatch. Run a
-lane locally with R and the normal development prerequisites installed:
+compatible graphs on each PR into main, main push, weekly schedule and
+dispatch. Run a lane locally with R and the normal development prerequisites
+installed:
 
 ```sh
 uv run --project python --no-sync python -m tools.ci.dependency_graphs \
