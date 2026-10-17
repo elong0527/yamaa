@@ -179,7 +179,12 @@ fn check_request(
             request = request.with_environment(environment);
         }
         let report = Engine::new(options).check(&request, &CancellationToken::new());
-        crate::issue_frame::frame(&report.diagnostics)
+        // Both public views come from this one report, so they cannot disagree.
+        Ok(list!(
+            issues = crate::issue_frame::frame(&report.diagnostics)?,
+            diagnostics = crate::diagnostic_records::records(&report.diagnostics)?
+        )
+        .into_robj())
     })
 }
 #[extendr]
@@ -190,6 +195,17 @@ fn domain_issues(handle: Robj) -> List {
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
         crate::issue_frame::frame(&state.build.report().diagnostics)
+    })
+}
+/// Named records from the same retained report as `domain_issues`.
+#[extendr]
+fn domain_diagnostics(handle: Robj) -> List {
+    boundary(|| {
+        let state = resolve(&handle)?;
+        let state = state
+            .try_borrow()
+            .map_err(|_| "domain result already borrowed")?;
+        crate::diagnostic_records::records(&state.build.report().diagnostics)
     })
 }
 #[extendr]

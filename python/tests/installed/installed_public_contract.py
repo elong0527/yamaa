@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import gc
 import inspect
 import json
@@ -46,10 +47,40 @@ class PublicContract(unittest.TestCase):
             frame.dtypes,
             [pl.String, pl.String, pl.String, pl.List(pl.String), pl.String],
         )
-        for row in frame.to_dicts():
+        records = result.diagnostics
+        self.assertIsInstance(records, list)
+        self.assertEqual(len(records), frame.height)
+        for row, record in zip(frame.to_dicts(), records, strict=True):
             self.assertIsInstance(json.loads(row["context"]), dict)
             self.assertTrue(row["condition"])
+            self.assert_projection(row, record)
         return frame
+
+    def assert_projection(self, row, record):
+        """One frame row and one named record describe the same finding."""
+        self.assertIsInstance(record, yamaa.Diagnostic)
+        self.assertEqual(
+            [field.name for field in dataclasses.fields(record)],
+            TRUTH["diagnostic_record_names"],
+        )
+        self.assertEqual(
+            (record.phase, record.condition, record.requirement, record.spec_paths),
+            (row["phase"], row["condition"], row["requirement"], row["spec_paths"]),
+        )
+        self.assertIsInstance(record.context, dict)
+        # The frame context is the canonical JSON text of the record context;
+        # Python's JSON reader keeps integer tokens exact, so the two agree
+        # value for value.
+        self.assertEqual(record.context, json.loads(row["context"]))
+        if record.source_span is not None:
+            self.assertIsInstance(record.source_span, yamaa.SourceSpan)
+            self.assertLessEqual(0, record.source_span.start)
+            self.assertLessEqual(record.source_span.start, record.source_span.end)
+        if record.operand_route is not None:
+            self.assertIsInstance(record.operand_route, list)
+            self.assertTrue(all(isinstance(step, str) for step in record.operand_route))
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            record.phase = "changed"
 
     def test_component_endpoints_are_absent_from_the_installed_binding(self):
         from yamaa import _native
@@ -145,13 +176,19 @@ class PublicContract(unittest.TestCase):
             self.assertGreater(self.issues(result).height, 0)
             for name in ("spec", "specification", "resolved", "resolved_specification"):
                 self.assertFalse(hasattr(result, name))
+            self.assertEqual(
+                [record.condition for record in result.diagnostics],
+                result.issues["condition"].to_list(),
+            )
             if function is yamaa.domain:
                 self.assertIsNone(result.output)
                 before = result.issues.to_dicts()
+                records = result.diagnostics
                 for _ in range(2):
                     with self.assertRaises(yamaa.DomainError):
                         result.save()
                     self.assertEqual(result.issues.to_dicts(), before)
+                    self.assertEqual(result.diagnostics, records)
         self.assertFalse((self.root / "output.csv").exists())
 
     def test_read_only_views_repeated_builds_and_owned_publication(self):
@@ -228,6 +265,13 @@ class PublicContract(unittest.TestCase):
         issues = self.issues(result).to_dicts()
         self.assertEqual(len(issues), 1)
         self.assertEqual(issues[0]["condition"], "range_failed")
+        # The same failure through the named record.
+        (record,) = result.diagnostics
+        self.assertEqual(record.condition, "range_failed")
+        self.assertEqual(record.phase, issues[0]["phase"])
+        self.assertEqual(record.requirement, issues[0]["requirement"])
+        self.assertEqual(record.spec_paths, issues[0]["spec_paths"])
+        self.assertEqual(record.context, json.loads(issues[0]["context"]))
         self.assertIsNone(result.output)
         # REQ-0396 builds the warning artifact only for successful runs;
         # REQ-1177 retains the evaluated diagnostic prefix on failure.
@@ -247,6 +291,7 @@ class PublicContract(unittest.TestCase):
             with self.assertRaises(yamaa.DomainError):
                 result.save()
             self.assertEqual(result.issues.to_dicts(), issues)
+            self.assertEqual(result.diagnostics, [record])
             self.assertEqual(result.verification_log.to_dicts(), truth)
             self.assertEqual((self.root / "output.csv").read_bytes(), b"sentinel")
             self.assertEqual((self.root / "warnings.csv").read_bytes(), b"sentinel")
@@ -415,6 +460,12 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(context["host_error"], "RuntimeError")
         self.assertEqual(context["host_message"], message)
         self.assertNotIn("host_details_truncated", context)
+        # The structured record keeps the complete NUL-bearing text as str.
+        (record,) = result.diagnostics
+        self.assertEqual(record.condition, "function_call_failed")
+        self.assertEqual(record.context["host_error"], "RuntimeError")
+        self.assertEqual(record.context["host_message"], message)
+        self.assertNotIn("host_details_truncated", record.context)
         self.assertIs(result._native.project_failures()[0][1], original)
         with self.assertRaises(yamaa.DomainError):
             result.save()
@@ -464,10 +515,78 @@ class PublicContract(unittest.TestCase):
             self.root / "absent-environment.yaml", "sdtm", created="2026-09-11T00:00:00"
         )
         self.assertGreater(self.issues(result).height, 0)
-        with self.assertRaises(yamaa.DefineError):
+        with self.assertRaises(yamaa.DefineError) as caught:
             result.save()
+        self.assertTrue(caught.exception.issues.equals(result.issues))
+        self.assertEqual(caught.exception.diagnostics, result.diagnostics)
         with self.assertRaises(TypeError):
             yamaa.define(None, "sdtm")
+
+    def test_records_keep_exact_wide_integers_and_recorded_geometry(self):
+        # A literal beyond every 64-bit range is refused before study access;
+        # its context carries the signed 64-bit bounds and the exact literal.
+        self.spec.write_text(
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\n"
+            "columns:\n  - {name: ID, type: str, derivation: SRC.ID}\n"
+            "  - {name: N, type: int, derivation: {literal: 18446744073709551616}}\n"
+            "output: {path: output.csv, columns: [ID, N]}\n",
+            encoding="utf-8",
+        )
+        checked = yamaa.check(self.spec)
+        frame = self.issues(checked)
+        (record,) = checked.diagnostics
+        self.assertEqual(record.phase, "validation")
+        self.assertEqual(record.condition, "integer_overflow")
+        self.assertEqual(record.requirement, "REQ-0014")
+        self.assertEqual(record.spec_paths, ["columns.N.derivation.literal"])
+        self.assertEqual(
+            record.context,
+            {"minimum": -(2**63), "maximum": 2**63 - 1, "actual": 2**64},
+        )
+        self.assertTrue(all(type(value) is int for value in record.context.values()))
+        self.assertIn('"actual":18446744073709551616', frame["context"][0])
+        # A definition finding records no geometry: None, not zero.
+        self.assertIsNone(record.source_span)
+        self.assertIsNone(record.operand_route)
+
+        # A division by zero fails at one node of the compute expression: the
+        # record spans that node's bytes and routes to it from the root, so a
+        # failure at the root has a present empty route, not an absent one.
+        (self.root / "input.csv").write_bytes(b"ID,VALUE,ZERO\na,2.5,0\n")
+        for expression, route in (
+            ("1 + VALUE / ZERO", ["right"]),
+            ("VALUE / ZERO", []),
+        ):
+            with self.subTest(expression=expression):
+                self.spec.write_text(
+                    "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+                    "input: {SRC: {path: input.csv, types: {ID: str, VALUE: float, ZERO: float}}}\n"
+                    "columns:\n  - {name: ID, type: str, derivation: SRC.ID}\n"
+                    "  - {name: VALUE, type: float, derivation: SRC.VALUE}\n"
+                    "  - {name: ZERO, type: float, derivation: SRC.ZERO}\n"
+                    f"  - {{name: RATIO, type: float, derivation: {{compute: {{expr: '{expression}'}}}}}}\n"
+                    "output: {path: output.csv, columns: [ID, VALUE, ZERO, RATIO]}\n",
+                    encoding="utf-8",
+                )
+                result = yamaa.domain(self.spec)
+                frame = self.issues(result)
+                (record,) = result.diagnostics
+                self.assertIsNone(result.output)
+                self.assertEqual(record.phase, "derivation")
+                self.assertEqual(record.condition, "division_by_zero")
+                self.assertEqual(record.requirement, "REQ-0430")
+                self.assertEqual(
+                    record.spec_paths, ["columns.RATIO.derivation.compute"]
+                )
+                self.assertEqual(record.context["expr"], expression)
+                self.assertEqual(record.context["keys"], [{"ID": "a"}])
+                self.assertEqual(record.context, json.loads(frame["context"][0]))
+                self.assertIsInstance(record.source_span, yamaa.SourceSpan)
+                span = record.source_span
+                self.assertEqual(expression[span.start : span.end], "VALUE / ZERO")
+                self.assertEqual(record.operand_route, route)
+                self.assertIsNotNone(record.operand_route)
+                self.assertEqual(result.diagnostics, [record])
 
 
 class ResolvedSpecificationContract(unittest.TestCase):
@@ -676,6 +795,16 @@ class ResolvedSpecificationContract(unittest.TestCase):
             with self.assertRaises(yamaa.ResolvedSpecificationError) as error:
                 yamaa.resolve_specification(spec)
             self.assertGreater(error.exception.issues.height, 0)
+            self.assertEqual(
+                [record.condition for record in error.exception.diagnostics],
+                error.exception.issues["condition"].to_list(),
+            )
+            self.assertTrue(
+                all(
+                    isinstance(record, yamaa.Diagnostic)
+                    for record in error.exception.diagnostics
+                )
+            )
             invalid = json.loads(serialized)
             invalid["artifact_version"] = 2
             with self.assertRaises(ValueError):

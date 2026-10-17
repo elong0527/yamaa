@@ -2,6 +2,7 @@
 use extendr_api::prelude::*;
 mod arrow_bridge;
 mod define_entry;
+mod diagnostic_records;
 mod domain_entry;
 mod function_callback;
 mod handle;

@@ -20,8 +20,19 @@ yamaa_check(specification, environment = NULL, resolver = NULL)
 \item{x}{A lossless signed 64-bit integer or UTF-8 output vector.}
 \item{...}{Unused arguments.}
 }
-\value{A build result containing output, issues, optional logs and a save method,
-or a check result containing issues. Integer columns use canonical decimal text
+\value{A build result containing output, issues, diagnostics, optional logs and
+a save method, or a check result containing issues and diagnostics. \code{issues}
+is a data frame with character \code{phase}, \code{condition}, \code{requirement}
+(NA when absent), a list \code{spec_paths} column and JSON-text \code{context};
+\code{diagnostics} is a list of records built natively from the same findings,
+each with \code{phase}, \code{condition}, \code{requirement} (NULL when absent),
+\code{spec_paths}, a structured \code{context} (objects as named lists, arrays as
+unnamed lists, integer tokens of magnitude at most 2^53 as doubles, wider integer
+tokens as character decimal tokens, other numbers as doubles, text containing NUL
+as \code{yamaa_utf8}), \code{source_span} (\code{list(start, end)} byte offsets or
+NULL when unrecorded) and \code{operand_route} (character steps from the expression
+root, \code{character(0)} for a failure at the root, or NULL when unrecorded).
+Integer columns use canonical decimal text
 with the \code{yamaa_int64_vector} class and preserve the full signed 64-bit range.
 Text containing NUL uses raw values in a \code{yamaa_utf8_vector}; NULL is missing.}
 \details{\code{as.character} converts a UTF-8 vector or subset to exact Unicode

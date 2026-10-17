@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from yamaa._define import DefineError, define
     from yamaa._domain import DomainError, check, domain
+    from yamaa._native_results import Diagnostic, SourceSpan
     from yamaa._odm.parquet import write_odm_parquet
     from yamaa._odm.readers import read_odm
     from yamaa._resolved_specification import (
@@ -24,6 +25,8 @@ _EXPORTS = {
     "domain": ("yamaa._domain", "domain"),
     "check": ("yamaa._domain", "check"),
     "DomainError": ("yamaa._domain", "DomainError"),
+    "Diagnostic": ("yamaa._native_results", "Diagnostic"),
+    "SourceSpan": ("yamaa._native_results", "SourceSpan"),
     "resolve_specification": ("yamaa._resolved_specification", "resolve_specification"),
     "ResolvedSpecification": ("yamaa._resolved_specification", "ResolvedSpecification"),
     "ResolvedSpecificationError": (
@@ -57,9 +60,11 @@ except _PackageNotFoundError:
 
 __all__ = [
     "DefineError",
+    "Diagnostic",
     "DomainError",
     "ResolvedSpecification",
     "ResolvedSpecificationError",
+    "SourceSpan",
     "__version__",
     "check",
     "define",

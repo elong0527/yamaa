@@ -4,6 +4,7 @@ extendr_module! {
     mod define_entry;
     fn define_file;
     fn define_issues;
+    fn define_diagnostics;
     fn define_artifacts;
     fn define_save;
 }

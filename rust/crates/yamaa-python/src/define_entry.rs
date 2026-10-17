@@ -10,14 +10,12 @@ pub struct Define {
 }
 #[pymethods]
 impl Define {
-    fn issues(&self) -> PyResult<Vec<crate::report_fields::IssueRow>> {
+    fn issues<'py>(&self, py: Python<'py>) -> PyResult<Vec<crate::report_fields::IssueRow<'py>>> {
         {
-            self.inner
-                .try_lock()
-                .map(|result| crate::report_fields::issue_rows(&result.report().diagnostics))
-                .map_err(|_| {
-                    pyo3::exceptions::PyRuntimeError::new_err("Define result already borrowed")
-                })
+            let result = self.inner.try_lock().map_err(|_| {
+                pyo3::exceptions::PyRuntimeError::new_err("Define result already borrowed")
+            })?;
+            crate::report_fields::issue_rows(py, &result.report().diagnostics)
         }
     }
     fn artifacts<'py>(

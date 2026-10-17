@@ -10,12 +10,73 @@ stopifnot(identical(sort(getNamespaceExports("yamaa")), c("yamaa_check", "yamaa_
   "yamaa_memory_resolver", "yamaa_read_resolved_specification", "yamaa_resolve_specification",
   "yamaa_resource_failure", "yamaa_resource_resolver", "yamaa_resource_result",
   "yamaa_synthetic_remote_resolver")))
+# A record context value against the decoded frame context: objects are named
+# lists (an empty object keeps empty names), arrays unnamed lists, integers of
+# magnitude at most 2^53 doubles, wider integer tokens the exact decimal text
+# that also appears verbatim in the frame's JSON, other numbers doubles.
+record_value_matches <- function(actual, expected, text) {
+  if (is.null(expected)) return(is.null(actual))
+  if (is.list(expected)) {
+    if (!is.list(actual) || length(actual) != length(expected)) return(FALSE)
+    if (is.null(names(expected))) {
+      if (!is.null(names(actual))) return(FALSE)
+      return(all(vapply(seq_along(expected), function(index)
+        record_value_matches(actual[[index]], expected[[index]], text), logical(1))))
+    }
+    if (is.null(names(actual)) || !setequal(names(actual), names(expected))) return(FALSE)
+    return(all(vapply(names(expected), function(key)
+      record_value_matches(actual[[key]], expected[[key]], text), logical(1))))
+  }
+  if (is.character(expected) || is.logical(expected)) return(identical(actual, expected))
+  if (is.integer(expected)) return(identical(actual, as.double(expected)))
+  if (!is.double(expected)) return(FALSE)
+  if (abs(expected) <= 2^53) return(identical(actual, expected))
+  if (is.double(actual)) return(identical(actual, expected))
+  is.character(actual) && length(actual) == 1L && grepl("^-?[0-9]+$", actual) &&
+    isTRUE(as.numeric(actual) == expected) && grepl(actual, text, fixed = TRUE)
+}
+check_projection <- function(frame, index, record) {
+  debug_expected <- jsonlite::fromJSON(frame$context[[index]], simplifyVector = FALSE)
+  if (!isTRUE(record_value_matches(record$context, debug_expected, frame$context[[index]]))) {
+    cat("DEBUG2813 mismatch condition=", frame$condition[[index]], " index=", index, "\n", sep = "")
+    cat("DEBUG2813 text=", frame$context[[index]], "\n", sep = "")
+    cat("DEBUG2813 record context:\n"); str(record$context); dput(record$context)
+    cat("DEBUG2813 expected parsed:\n"); str(debug_expected); dput(debug_expected)
+    for (key in names(debug_expected)) {
+      cat("DEBUG2813 key=", key,
+        " match=", record_value_matches(record$context[[key]], debug_expected[[key]], frame$context[[index]]),
+        " actual=", paste(deparse(record$context[[key]]), collapse = " "),
+        " actual_class=", paste(class(record$context[[key]]), collapse = ","),
+        " expected=", paste(deparse(debug_expected[[key]]), collapse = " "),
+        " expected_class=", paste(class(debug_expected[[key]]), collapse = ","),
+        " expected_typeof=", typeof(debug_expected[[key]]), "\n", sep = "")
+    }
+  }
+  stopifnot(is.list(record),
+    identical(names(record), fixture_strings(host_truth[["diagnostic_record_names"]])),
+    identical(record$phase, frame$phase[[index]]),
+    identical(record$condition, frame$condition[[index]]),
+    identical(record$requirement,
+      if (is.na(frame$requirement[[index]])) NULL else frame$requirement[[index]]),
+    identical(record$spec_paths, frame$spec_paths[[index]]),
+    is.list(record$context), !is.null(names(record$context)),
+    record_value_matches(record$context,
+      jsonlite::fromJSON(frame$context[[index]], simplifyVector = FALSE), frame$context[[index]]),
+    is.null(record$source_span) || (is.list(record$source_span) &&
+      identical(names(record$source_span), c("start", "end")) &&
+      is.double(record$source_span$start) && is.double(record$source_span$end) &&
+      record$source_span$start >= 0 && record$source_span$start <= record$source_span$end),
+    is.null(record$operand_route) || is.character(record$operand_route))
+}
 check_issues <- function(result) {
   value <- result$issues
   stopifnot(is.data.frame(value),
     identical(names(value), fixture_strings(host_truth[["issue_columns"]])),
     all(vapply(value[c("phase", "condition", "requirement", "context")], is.character, logical(1))),
     is.list(value$spec_paths), all(startsWith(value$context, "{")))
+  records <- result$diagnostics
+  stopifnot(is.list(records), is.null(names(records)), length(records) == nrow(value))
+  for (index in seq_along(records)) check_projection(value, index, records[[index]])
   value
 }
 argument_failure <- function(code) {
@@ -99,13 +160,15 @@ run_contract <- function() {
   stopifnot(identical(as.character(second$output$VALUE), truth), identical(second$save(), TRUE))
 
   for (result in list(yamaa_check(path("absent.yaml")), yamaa_domain(path("absent.yaml")))) {
-    stopifnot(nrow(check_issues(result)) > 0L, is.null(result$spec), is.null(result$resolved_specification))
+    stopifnot(nrow(check_issues(result)) > 0L, is.null(result$spec), is.null(result$resolved_specification),
+      identical(vapply(result$diagnostics, `[[`, character(1), "condition"), result$issues$condition))
     if (is.environment(result)) {
       before <- result$issues
+      records <- result$diagnostics
       stopifnot(is.null(result$output))
       for (attempt in 1:2) stopifnot(
         inherits(tryCatch(result$save(), error = identity), "yamaa_domain_error"),
-        identical(result$issues, before))
+        identical(result$issues, before), identical(result$diagnostics, records))
     }
   }
 
@@ -153,6 +216,11 @@ run_contract <- function() {
   write("spec.yaml", failed_spec); write("input.csv", "ID,VALUE\na,-3\nb,7\nc,\n")
   for (name in c("output.csv", "warnings.csv")) write(name, "sentinel")
   failed <- yamaa_domain(path("spec.yaml")); issues <- check_issues(failed)
+  # The same failure through the named record.
+  records <- failed$diagnostics
+  stopifnot(length(records) == 1L, identical(records[[1L]]$condition, "range_failed"),
+    identical(records[[1L]]$phase, issues$phase), identical(records[[1L]]$requirement, issues$requirement),
+    identical(records[[1L]]$spec_paths, issues$spec_paths[[1L]]), is.list(records[[1L]]$context))
   stopifnot(identical(issues$condition, "range_failed"), is.null(failed$output),
     is.null(failed$warning_log),
     identical(failed$verification_log$VERIFICATION_ID, c("warn", "fatal")),
@@ -165,7 +233,8 @@ run_contract <- function() {
   unlink(path(c("spec.yaml", "input.csv"))); gc()
   for (attempt in 1:2) stopifnot(
     inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"),
-    identical(failed$issues, issues), identical(failed$verification_log, log),
+    identical(failed$issues, issues), identical(failed$diagnostics, records),
+    identical(failed$verification_log, log),
     identical(rawfile("output.csv"), charToRaw("sentinel")),
     identical(rawfile("warnings.csv"), charToRaw("sentinel")),
     length(readLines(path("checks.csv"))) == 3L)
@@ -268,11 +337,62 @@ run_contract <- function() {
   stopifnot(identical(as.character(calls[[1L]]$output$VALUE), truth))
 
   defined <- yamaa_define(path("absent-environment.yaml"), "sdtm", created = "2026-09-11T00:00:00")
-  stopifnot(nrow(check_issues(defined)) > 0L,
-    inherits(tryCatch(defined$save(), error = identity), "yamaa_define_error"))
+  stopifnot(nrow(check_issues(defined)) > 0L)
+  define_error <- tryCatch(defined$save(), error = identity)
+  stopifnot(inherits(define_error, "yamaa_define_error"), identical(define_error$issues, defined$issues),
+    identical(define_error$diagnostics, defined$diagnostics))
   invisible(NULL)
 }
 run_contract()
+
+qualify_diagnostic_records <- function() {
+  root <- tempfile("yamaa-diagnostic-records-"); dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  path <- function(name) file.path(root, name)
+  # A literal beyond every 64-bit range is refused before study access; its
+  # context carries the signed 64-bit bounds and the exact literal, which R
+  # keeps as decimal text because binary64 cannot hold them.
+  writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]", "input: {SRC: input.csv}",
+    "columns:", "  - {name: ID, type: str, derivation: SRC.ID}",
+    "  - {name: N, type: int, derivation: {literal: 18446744073709551616}}",
+    "output: {path: output.csv, columns: [ID, N]}"), path("spec.yaml"))
+  checked <- yamaa_check(path("spec.yaml")); frame <- check_issues(checked)
+  stopifnot(length(checked$diagnostics) == 1L)
+  record <- checked$diagnostics[[1L]]
+  stopifnot(identical(record$phase, "validation"), identical(record$condition, "integer_overflow"),
+    identical(record$requirement, "REQ-0014"), identical(record$spec_paths, "columns.N.derivation.literal"),
+    identical(record$context[order(names(record$context))],
+      list(actual = "18446744073709551616", maximum = "9223372036854775807", minimum = "-9223372036854775808")),
+    grepl('"actual":18446744073709551616', frame$context[[1L]], fixed = TRUE),
+    is.null(record$source_span), is.null(record$operand_route))
+  # A division by zero fails at one node of the compute expression: the
+  # record spans that node's bytes and routes to it from the root, so a
+  # failure at the root has a present empty route, never NULL.
+  writeBin(charToRaw("ID,VALUE,ZERO\na,2.5,0\n"), path("input.csv"))
+  for (case in list(list(expression = "1 + VALUE / ZERO", route = "right"),
+                    list(expression = "VALUE / ZERO", route = character(0)))) {
+    writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+      "input: {SRC: {path: input.csv, types: {ID: str, VALUE: float, ZERO: float}}}",
+      "columns:", "  - {name: ID, type: str, derivation: SRC.ID}",
+      "  - {name: VALUE, type: float, derivation: SRC.VALUE}",
+      "  - {name: ZERO, type: float, derivation: SRC.ZERO}",
+      paste0("  - {name: RATIO, type: float, derivation: {compute: {expr: '", case$expression, "'}}}"),
+      "output: {path: output.csv, columns: [ID, VALUE, ZERO, RATIO]}"), path("spec.yaml"))
+    result <- yamaa_domain(path("spec.yaml")); check_issues(result)
+    stopifnot(is.null(result$output), length(result$diagnostics) == 1L)
+    record <- result$diagnostics[[1L]]
+    span <- record$source_span
+    stopifnot(identical(record$phase, "derivation"), identical(record$condition, "division_by_zero"),
+      identical(record$requirement, "REQ-0430"), identical(record$spec_paths, "columns.RATIO.derivation.compute"),
+      identical(record$context$expr, case$expression), identical(record$context$keys, list(list(ID = "a"))),
+      is.list(span), identical(names(span), c("start", "end")), is.double(span$start), is.double(span$end),
+      identical(substr(case$expression, span$start + 1, span$end), "VALUE / ZERO"),
+      identical(record$operand_route, case$route), !is.null(record$operand_route),
+      identical(result$diagnostics, list(record)))
+  }
+  cat("diagnostic records keep exact wide integers and distinguish recorded from absent geometry\n")
+}
+qualify_diagnostic_records()
 cat("public signatures, argument errors, owned results and logs, exact values, interrupts and reentrancy passed\n")
 
 qualify_public_integer_callback <- function() {
@@ -369,7 +489,8 @@ qualify_resolved_specification <- function() {
   restored <- yamaa_read_resolved_specification(serialized)
   stopifnot(identical(as.character(restored), serialized))
   error <- tryCatch(yamaa_resolve_specification(entry), error = identity)
-  stopifnot(inherits(error, "yamaa_resolved_specification_error"), nrow(error$issues) > 0L)
+  stopifnot(inherits(error, "yamaa_resolved_specification_error"), nrow(error$issues) > 0L,
+    identical(vapply(error$diagnostics, `[[`, character(1), "condition"), error$issues$condition))
   invalid <- sub('"artifact_version":1', '"artifact_version":2', serialized, fixed = TRUE)
   stopifnot(inherits(tryCatch(yamaa_read_resolved_specification(invalid), error = identity), "error"))
   cat("resolved specification survives source deletion and working-directory changes\n")

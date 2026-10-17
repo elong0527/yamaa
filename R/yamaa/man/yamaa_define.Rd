@@ -7,6 +7,9 @@
 \item{standard}{One of sdtm, adam or send.}
 \item{created}{Optional whole-second civil datetime; omission uses current UTC.}
 }
-\value{An owned result with issues and a save method.}
+\value{An owned result with issues, diagnostics and a save method. The issues
+data frame and the diagnostics record list are built natively from the same
+findings, with the record shape described in \code{\link{yamaa_domain}}. A failed
+save signals \code{yamaa_define_error} carrying both views.}
 \description{Composes submission metadata and holds deterministic Define-XML and,
 when requested, Dataset-JSON bytes until Save. No specification is executed.}

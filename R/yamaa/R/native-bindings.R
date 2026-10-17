@@ -25,6 +25,10 @@
   .Call(wrap__domain_issues, handle)
 }
 
+.native_domain_diagnostics <- function(handle) {
+  .Call(wrap__domain_diagnostics, handle)
+}
+
 .native_domain_output <- function(handle) {
   .Call(wrap__domain_output, handle)
 }
@@ -67,6 +71,10 @@
 
 .native_define_issues <- function(handle) {
   .Call(wrap__define_issues, handle)
+}
+
+.native_define_diagnostics <- function(handle) {
+  .Call(wrap__define_diagnostics, handle)
 }
 
 .native_define_artifacts <- function(handle) {

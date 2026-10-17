@@ -155,7 +155,9 @@ owns decoding behavior.
   all enabled by default; the Python and R packages enable all three.
 - Preserve full signed-i64 values and separate missingness, lossless R
   `yamaa_int64_vector`/`yamaa_utf8_vector`, preserve-or-error conversions and
-  JSON-text diagnostic context.
+  JSON-text diagnostic context in the issue frames, with the same findings as
+  named `diagnostics` records carrying structured context and optional
+  geometry in both hosts.
 - Resolve resources from their original declaring file by default; explicit
   input/output `relative_to: entry` selects each specification entry. Admit
   absolute and parent-relative local paths without project-root fallback. Preserve snapshots,

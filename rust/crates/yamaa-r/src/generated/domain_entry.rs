@@ -7,6 +7,7 @@ extendr_module! {
     fn check_file;
     fn check_resolved;
     fn domain_issues;
+    fn domain_diagnostics;
     fn domain_output;
     fn domain_arrow;
     fn domain_log;

@@ -32,6 +32,22 @@ class BindingsTests(unittest.TestCase):
         self.assertGreater(len(wrapped), 1)
         self.assertTrue(all(len(line) <= 88 for line in wrapped[:-1]))
 
+    def test_issue_record_is_declared_once_and_shared_by_every_issue_view(self):
+        definition = generator._load_definition()
+        stub = generator._render_pyi(definition)
+        self.assertEqual(stub.count("_IssueRecord = tuple["), 1)
+        self.assertIn("dict[str, object],", stub)
+        self.assertIn("tuple[int, int] | None,", stub)
+        self.assertEqual(stub.count("list[_IssueRecord]"), 4)
+        self.assertNotIn("issue_projection", stub)
+        candidate = copy.deepcopy(definition)
+        candidate["python"]["issue_record"] = "list<text>"
+        with self.assertRaisesRegex(ValueError, "tuple"):
+            generator._render_pyi(candidate)
+        del candidate["python"]["issue_record"]
+        with self.assertRaisesRegex(ValueError, "issue_record"):
+            generator._validate_python(candidate)
+
     def test_r_definition_refuses_malformed_or_ambiguous_surface(self):
         definition = generator._load_definition()
         mutations = [

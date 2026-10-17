@@ -338,16 +338,23 @@ pub struct Diagnostic {           // #[non_exhaustive]
     pub requirement: Option<String>,
     pub spec_path: Vec<String>,   // ordered path segments
     pub context: DiagnosticContext,
+    pub source_span: Option<SourceSpan>,     // byte span in the expression
+    pub operand_route: Option<Vec<String>>,  // root-to-node operand steps
 }
+pub struct SourceSpan { pub start: usize, pub end: usize }  // #[non_exhaustive]
 pub struct Report { pub diagnostics: Vec<Diagnostic> }  // #[non_exhaustive]
 ```
 
-This is the public form of today's `issue_rows::Issue` (phase, condition,
-requirement, spec paths, context). `DiagnosticContext` is a structured value
-map, not a formatted string; the structured context and geometry work in
-#2674-#2677 enriches its contents without changing this shape. The boundary
-version and record definition in #2674 must conform to this struct; the
-cross-host parity tests are #2677.
+This is the public form of `issue_rows::Issue` (phase, condition, requirement,
+spec paths, structured context and optional geometry). `DiagnosticContext` is
+a structured value map, not a formatted string: `ContextValue` keeps integer
+tokens exact (`Int`, `Uint`, or `Wide` with the decimal spelling of a token
+outside both 64-bit ranges), fraction/exponent tokens as `Float`, and nested
+lists and maps; `to_json()` returns the canonical text the host frames show.
+Geometry is optional and absent means unrecorded: a present zero-width span or
+empty route is a fact, never a default. The boundary version and record
+definition in #2674 conform to this struct; the cross-host parity tests are
+#2677.
 
 ### Errors
 

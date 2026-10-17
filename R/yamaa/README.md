@@ -9,10 +9,12 @@ library(yamaa)
 result <- yamaa_domain("spec.yaml")
 result$output
 result$issues
+result$diagnostics
 result$verification_log
 result$warning_log
 result$save()
 yamaa_check("spec.yaml")$issues
+yamaa_check("spec.yaml")$diagnostics
 
 define <- yamaa_define("environment.yaml", "sdtm", created = "2026-09-11T00:00:00")
 define$issues
@@ -56,10 +58,38 @@ Credentials remain private to the callback, independently from retained
 
 `yamaa_domain` computes without publishing files. Explicit Save publishes retained
 producer bytes before consumers and reuses those bytes on repeated calls. A failed
-build raises `yamaa_domain_error` on Save. Owned result attributes are read only;
-issue context is JSON text. Capacity refusals retain the shared condition and
-authored paths; [release guidance](../../docs/release.md#resource-refusals)
-describes their context. `yamaa_check` reads no study data or project code.
+build raises `yamaa_domain_error` on Save. Owned result attributes are read only.
+Capacity refusals retain the shared condition and authored paths;
+[release guidance](../../docs/release.md#resource-refusals) describes their
+context.
+
+## Diagnostics
+
+`diagnostics` is an unnamed list of records, one per finding in the engine's
+authored order, and `issues` is the data-frame projection of the same
+findings: character `phase`, `condition`, `requirement` (`NA` when absent), a
+list column `spec_paths` and `context` as the engine's canonical JSON text.
+Both views are built natively from one record, so they cannot disagree, and
+no JSON is parsed in R. `yamaa_domain`, `yamaa_check` and `yamaa_define`
+results, `yamaa_define_error` after a failed save and
+`yamaa_resolved_specification_error` all carry both.
+
+Each record is a named list with `phase`, `condition`, `requirement` (`NULL`
+when the cause cites none), `spec_paths` (character), `context`,
+`source_span` and `operand_route`. `context` is structured: objects are named
+lists (an empty object keeps its empty `names`), arrays are unnamed lists,
+text is character, logicals are logical and `null` is `NULL`. An integer token
+whose magnitude is at most 2^53 becomes a double; every other integer token
+is carried as its exact decimal spelling in a character scalar, because
+binary64 cannot hold it, so compare such values as text or through `int64()`.
+Fraction and exponent tokens become doubles. Text containing NUL is a
+`yamaa_utf8` scalar, as in output columns. `source_span` is
+`list(start, end)` with half-open byte offsets into the original expression
+and `operand_route` is the character vector of operand steps from the
+expression root to the failing node; both are `NULL` when the failure site
+recorded no geometry. Absent geometry is distinct from recorded zero
+geometry: `list(start = 0, end = 0)` is a zero-width span and `character(0)`
+is a failure at the root. `yamaa_check` reads no study data or project code.
 Resource paths resolve from their original declaring YAML layer by default.
 Set `relative_to: entry` on an input dataset or `output` declaration to select
 the study entry's directory under the

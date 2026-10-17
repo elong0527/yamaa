@@ -12,7 +12,8 @@ yamaa_resolve_specification <- function(specification, environment = NULL) {
   reply <- .domain_reply(.native_resolve_specification_file(args[[1L]], args[[2L]]))
   if (is.null(reply$json)) {
     stop(structure(list(message = "cannot resolve specification; inspect issues", call = NULL,
-      issues = reply$issues), class = c("yamaa_resolved_specification_error", "error", "condition")))
+      issues = reply$issues, diagnostics = reply$diagnostics),
+      class = c("yamaa_resolved_specification_error", "error", "condition")))
   }
   structure(reply$json, class = "yamaa_resolved_specification")
 }

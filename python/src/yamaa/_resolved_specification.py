@@ -9,7 +9,7 @@ from yamaa._native import (
     _read_resolved_specification,
     _resolve_specification_file,
 )
-from yamaa._native_results import issues_frame
+from yamaa._native_results import Diagnostic, diagnostic_records, issues_frame
 
 
 class ResolvedSpecificationError(ValueError):
@@ -22,6 +22,10 @@ class ResolvedSpecificationError(ValueError):
     @property
     def issues(self) -> pl.DataFrame:
         return issues_frame(self._rows)
+
+    @property
+    def diagnostics(self) -> list[Diagnostic]:
+        return diagnostic_records(self._rows)
 
 
 class ResolvedSpecification:

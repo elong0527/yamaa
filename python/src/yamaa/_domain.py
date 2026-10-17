@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     import pyarrow as pa
 
 from yamaa._native import DomainError, _check_file, _domain_file
-from yamaa._native_results import issues_frame
+from yamaa._native_results import Diagnostic, diagnostic_records, issues_frame
 
 
 def _arrow_view(data) -> pa.Table | None:
@@ -41,7 +41,13 @@ class Domain:
 
     @property
     def issues(self) -> pl.DataFrame:
+        """The five-column frame projected from the same records as ``diagnostics``."""
         return issues_frame(self._native.issues())
+
+    @property
+    def diagnostics(self) -> list[Diagnostic]:
+        """Named records with structured context and optional geometry."""
+        return diagnostic_records(self._native.issues())
 
     @property
     def resource_provenance(self):
@@ -98,12 +104,18 @@ def domain(
 
 
 class Check:
+    """Owned static findings: a frame and named records of the same rows."""
+
     def __init__(self, rows):
         self._rows = rows
 
     @property
     def issues(self) -> pl.DataFrame:
         return issues_frame(self._rows)
+
+    @property
+    def diagnostics(self) -> list[Diagnostic]:
+        return diagnostic_records(self._rows)
 
 
 def check(

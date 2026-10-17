@@ -519,6 +519,7 @@ class PublicDefine(unittest.TestCase):
         with self.assertRaises(DefineError) as caught:
             result.save()
         self.assertTrue(caught.exception.issues.equals(result.issues))
+        self.assertEqual(caught.exception.diagnostics, result.diagnostics)
         self.assertFalse((directory / "define.xml").exists())
         self.assertFalse((directory / "dm.json").exists())
 

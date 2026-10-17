@@ -18,7 +18,8 @@ yamaa_read_resolved_specification(json)
 \value{An owned JSON character scalar of class \code{yamaa_resolved_specification}.
 Use \code{as.character()} to export its exact JSON or an optional JSON reader to
 inspect fields. Resolution failures signal \code{yamaa_resolved_specification_error}
-with an \code{issues} data frame. Invalid serialized artifacts signal an error.}
+with an \code{issues} data frame and the same findings as \code{diagnostics}
+records (see \code{\link{yamaa_domain}}). Invalid serialized artifacts signal an error.}
 \description{Prepares original specifications through the shared engine and retains
 the composed normalized model, original field provenance, resource locations and
 producer-specific entry identities. It reads metadata without invoking project code.}
