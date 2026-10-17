@@ -405,7 +405,10 @@ uv run --project python --no-sync pytest evaluations/harbor/tests
    `reviewed`, write its full prompt,
    `../evaluations/harbor/prompts/<name>/full.md`, to the
    [benchmark prompt recipe](../evaluations/harbor/prompts/recipe.md), and its
-   `conventions.md`. The harness derives the brief prompt.
+   `conventions.md`. The prompt is written from the README, specification
+   and inputs, never `expected/`; the recipe's writing flow runs the writer
+   where the expected data does not exist. The harness derives the brief
+   prompt.
 4. Record any finding it exposes as a gap on the matching work item in the
    issue tracker, or add the benchmark's name to the gap that already states it.
 

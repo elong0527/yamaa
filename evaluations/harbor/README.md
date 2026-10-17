@@ -12,6 +12,8 @@ live on Harbor Hub or in the chosen output directory.
 |---|---|
 | `prompts/<benchmark>/full.md` and `conventions.md` | authored requests; the brief tier is derived from the full prompt when used |
 | `solutions/<benchmark>/result.R`, `result.py`, `result.sas` | independent reference programs written from the prompt and inputs |
+| `scaffold.py`, `check.py` | the full prompt's parts the benchmark fixes, and the prompt checks shared by writers, verifiers and tests |
+| `packet.py`, `author.py`, `author-*.md` | prompt writing without the expected data: the writer's sources, writing and candidate solver tasks, and redacted feedback |
 | `system-*.md` | language policy and packages available to the agent |
 | `Dockerfile`, `install-r-packages.R`, `images.py` | language images and their runtime checks |
 | `build.py` | tasks, dataset pages, and model job configurations |
@@ -27,6 +29,10 @@ case's `benchmarks/<name>/benchmark.yaml`. Adding a benchmark needs its
 metadata, authored prompts and independent reference programs; it needs no
 committed brief prompt or per-language leaderboard definition. Follow the
 [prompt recipe](prompts/recipe.md) and [tier contract](prompts/README.md).
+Prompts are written without the expected data: `author.py` runs the writer
+in a Harbor sandbox that holds only the benchmark's sources, and tries each
+candidate with solvers that see only the prompt and inputs (recipe section
+7). Those jobs run locally and are never uploaded.
 The [opensas guide](solutions/opensas.md) covers its runtime and supported
 inputs. An explicit request for an excluded track fails with the reason
 from that case's metadata.
