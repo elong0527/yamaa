@@ -60,14 +60,6 @@ pub(super) fn prepare(
                 | Err(crate::predicate_compiler::Error::Parse(
                     crate::predicate_parser::ParseError::Grammar { .. },
                 )) => (),
-                Err(crate::predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-                )) => {
-                    return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                        operation: "predicate_regex".into(),
-                        path: format!("{path}.filter"),
-                    }]))
-                }
                 Err(crate::predicate_compiler::Error::Internal) => {
                     return Err(PrepareError::Internal)
                 }

@@ -509,14 +509,14 @@ mod declaration {
         }
 
         fn regex_observation(pattern: &str, subject: &str) -> Json {
-            use yamaa_core::regex::{CompileError, Pattern};
+            use yamaa_core::portable_regex::{CompileError, Pattern};
             match Pattern::compile(pattern) {
                 Err(CompileError::Invalid { .. }) => json!({"accepted":false}),
                 Err(error) => panic!("regex truth exceeds compile policy: {error:?}"),
                 Ok(pattern) => {
-                    let found = pattern.search(subject).unwrap();
-                    let full = pattern.full_match(subject).unwrap();
-                    json!({"accepted":true, "group_count":pattern.group_count(), "full_match":full.is_some(), "match":found.map(|found|found.groups)})
+                    let found = pattern.search(subject);
+                    assert_eq!(found.is_some(), pattern.is_match(subject), "{subject:?}");
+                    json!({"accepted":true, "group_count":pattern.group_count(), "full_match":pattern.is_full_match(subject), "match":found.map(|found|found.groups)})
                 }
             }
         }
@@ -545,7 +545,7 @@ mod declaration {
         fn unchanged_regex_documents_and_authored_capture_controls_run_directly() {
             let document = yaml("yaml/conformance/regex.yaml");
             assert_eq!(document["contract"], "regex");
-            assert_eq!(document["contract_version"], "2.0.0");
+            assert_eq!(document["contract_version"], "3.0.0");
             assert!(document.get("engine").is_none());
             let mut ids = BTreeSet::new();
             let mut covered = BTreeSet::new();

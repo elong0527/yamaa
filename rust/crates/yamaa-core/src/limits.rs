@@ -18,7 +18,8 @@ impl Limits {
     pub const OUTPUT_BYTES: usize = 10 * 1024 * 1024 * 1024;
     pub const TABLE_ROWS: usize = 10_000_000;
     pub const TABLE_CELLS: usize = 640_000_000;
-    pub const REGEX_STEPS: usize = 1_000_000;
+    /// The compiled size, in bytes, of one regular expression's program.
+    pub const REGEX_SIZE: usize = 10 * 1024 * 1024;
     pub const FINDINGS: usize = 10_000;
 
     pub const COLUMNS: usize = 1024;

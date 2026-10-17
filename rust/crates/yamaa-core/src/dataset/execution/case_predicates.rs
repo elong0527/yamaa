@@ -36,7 +36,6 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             } = error;
             match kind {
                 predicate::ErrorKind::Resolution { error, .. } => error,
-                predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
                 predicate::ErrorKind::Condition(condition) => Box::new(ExecutionError::Predicate {
                     source_row: candidate.members[0],
                     error: predicate::EvaluationError {

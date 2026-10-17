@@ -1,9 +1,8 @@
 //! Ordered decoded-value validation and post-resolution default validation.
 
 use super::{
-    ConstraintError, ConstraintViolation, Document, DocumentKind, DocumentNode as N,
-    SchemaAliasKind, SchemaField, SchemaShape, SchemaStructure, TypeError, TypeExpression,
-    TypeNode,
+    ConstraintViolation, Document, DocumentKind, DocumentNode as N, SchemaAliasKind, SchemaField,
+    SchemaShape, SchemaStructure, TypeError, TypeExpression, TypeNode,
 };
 use crate::diagnostic::{ConditionCode, Definition};
 use std::vec;
@@ -51,8 +50,6 @@ pub struct DefaultDiagnostics {
 pub enum ValidationError {
     #[error("schema validation type: {0:?}")]
     Type(TypeError),
-    #[error("schema validation constraint: {0:?}")]
-    Constraint(ConstraintError),
     #[error("schema validation depth: limit={limit:?}")]
     Depth { limit: usize },
     #[error("schema validation invalid descriptor")]
@@ -263,9 +260,7 @@ impl Run<'_> {
         owner: ConstraintOwner,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         let descriptor_ref = &self.schema.descriptors()[descriptor].descriptor;
-        let violations = descriptor_ref
-            .check_constraints(&self.input.nodes()[site.value])
-            .map_err(ValidationError::Constraint)?;
+        let violations = descriptor_ref.check_constraints(&self.input.nodes()[site.value]);
         let mut result = Vec::new();
         for violation in violations {
             let context = match violation {

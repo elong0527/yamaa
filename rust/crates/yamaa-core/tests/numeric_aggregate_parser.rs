@@ -1456,19 +1456,14 @@ mod numeric {
             }
         }
         #[test]
-        fn fixed_regex_steps_preserve_the_actual_resolution_prefix_and_fresh_retry() {
+        fn long_subject_searches_complete_and_keep_eager_resolution() {
             let plan =
                 predicate_compiler::compile("str_contains(a, 'z') AND b = 1", "flag.condition")
                     .unwrap();
+            // Half a million scalars, which the retired step budget refused.
             let mut port = owned(&[("a", Value::Str("a".repeat(500_000))), ("b", Value::Int(1))]);
-            assert!(matches!(
-                plan.evaluate(&mut port).unwrap_err().kind,
-                ErrorKind::Regex(yamaa_core::regex::MatchError {
-                    resource: yamaa_core::regex::Resource::Work,
-                    limit: 1_000_000
-                })
-            ));
-            assert_eq!(port.trace, ["a"]);
+            assert_eq!(plan.evaluate(&mut port).unwrap(), Truth::False);
+            assert_eq!(port.trace, ["a", "b"]);
             port.values.insert("a".into(), Value::Str("z".into()));
             port.trace.clear();
             assert_eq!(plan.evaluate(&mut port).unwrap(), Truth::True);
@@ -1932,16 +1927,7 @@ mod numeric {
         /// Regex admission uses portable grammar, including features rejected by the reference host.
         #[test]
         fn portable_regex_literals_are_checked_before_closing_token() {
-            for pattern in [
-                r"[]",
-                r"[^]",
-                r"\1(a)",
-                r"(a)(?<=\1)",
-                r"(?<\u0061>a)\k<a>",
-                r"[\S]",
-                r"(?<=a|b)c",
-                r"(?<name>a)\k<name>",
-            ] {
+            for pattern in [r"[]", r"[^]", r"(?<name>a)\w", r"[\S]", r"a|b(c)*?"] {
                 let text = format!("str_contains(A, '{pattern}')");
                 let p = parse_predicate(&text).unwrap();
                 assert!(matches!(
@@ -1949,7 +1935,18 @@ mod numeric {
                     ParsedKind::Contains { .. }
                 ));
             }
-            for pattern in [r"(?P<name>a)", r"(?i)a", r"\p{Letter}", r"\a", r"(?<=a+)b"] {
+            for pattern in [
+                r"(?P<name>a)",
+                r"(?i)a",
+                r"\p{Letter}",
+                r"\a",
+                r"(?<=a+)b",
+                r"(?<=a|b)c",
+                r"a(?=b)",
+                r"\1(a)",
+                r"(?<name>a)\k<name>",
+                r"(?<\u0061>a)",
+            ] {
                 let expression = format!("str_contains(A, '{pattern}')");
                 let Err(ParseError::Grammar {
                     failure: GrammarFailure::InvalidRegex { .. },
@@ -1981,7 +1978,17 @@ mod numeric {
                     ..
                 })
             ));
-            parse_predicate("str_contains(A, 'a{1000001}')").unwrap();
+            // A million copies exceed the compiled size limit, which is a resource
+            // refusal at the pattern literal rather than a grammar finding.
+            let Err(ParseError::RegexLimit {
+                position,
+                resource: yamaa_core::portable_regex::Resource::Size,
+                limit: yamaa_core::limits::Limits::REGEX_SIZE,
+            }) = parse_predicate("str_contains(A, 'a{1000001}')")
+            else {
+                panic!("an oversized pattern must be refused")
+            };
+            assert_eq!(position.byte, 16);
         }
 
         /// Static ESCAPE defects have their owning requirement and original literal site.
@@ -2038,7 +2045,7 @@ mod numeric {
         /// Repeated admitted regex literals do not share an invented request quota.
         #[test]
         fn repeated_regex_compilation_retains_each_admitted_pattern() {
-            let pattern = format!("(a){}(?<=\\1)", "(a|aa)".repeat(8));
+            let pattern = format!("(a){}b", "(a|aa)".repeat(8));
             let call = format!("str_contains(A, '{pattern}')");
             parse_predicate(&call).unwrap();
             let mut expression = call.clone();
@@ -2103,17 +2110,17 @@ mod numeric {
         }
     }
     mod regex {
-        use yamaa_core::regex::{CompileError, MatchError, Pattern, Resource};
+        use yamaa_core::{
+            limits::Limits,
+            portable_regex::{CompileError, Pattern, Resource},
+        };
 
-        /// Each match owns its fixed step guard; successful earlier matches do not consume it.
+        /// A compiled pattern serves every later match unchanged.
         #[test]
-        fn each_match_has_one_fresh_step_scope() {
+        fn repeated_matches_reuse_the_compiled_pattern() {
             let compiled = pattern("a+");
             for _ in 0..3 {
-                assert_eq!(
-                    compiled.search("aaaa").unwrap().unwrap().groups,
-                    [Some("aaaa")]
-                );
+                assert_eq!(compiled.search("aaaa").unwrap().groups, [Some("aaaa")]);
             }
         }
 
@@ -2121,12 +2128,10 @@ mod numeric {
         #[test]
         fn unicode_subjects_keep_exact_scalar_captures() {
             let compiled = pattern(".");
-            assert_eq!(compiled.search("😀").unwrap().unwrap().groups, [Some("😀")]);
-            assert_eq!(
-                compiled.full_match("😀").unwrap().unwrap().groups,
-                [Some("😀")]
-            );
-            assert!(pattern("a").search("b").unwrap().is_none());
+            assert_eq!(compiled.search("😀").unwrap().groups, [Some("😀")]);
+            assert!(compiled.is_full_match("😀"));
+            assert!(!pattern("..").is_full_match("😀"));
+            assert!(pattern("a").search("b").is_none());
         }
 
         /// Compile a test pattern under production defaults.
@@ -2135,303 +2140,51 @@ mod numeric {
         }
         /// Observe borrowed capture text without converting missing groups to empty strings.
         fn captures<'a>(text: &str, subject: &'a str) -> Option<Vec<Option<&'a str>>> {
-            pattern(text).search(subject).unwrap().map(|m| m.groups)
+            pattern(text).search(subject).map(|m| m.groups)
         }
 
-        /// Written truth covers leftmost order, greedy/lazy branching and full-match continuation.
+        /// Leftmost-first: earlier alternatives first, greedy (lazy) quantifiers
+        /// prefer more (fewer) iterations; a full match continues past an
+        /// alternative that stops early.
         #[test]
-        fn backtracking_order_and_empty_matches() {
+        fn leftmost_first_order_and_empty_matches() {
             assert_eq!(captures("a|ab", "ab"), Some(vec![Some("a")]));
-            assert_eq!(
-                pattern("a|ab").full_match("ab").unwrap().unwrap().groups,
-                vec![Some("ab")]
-            );
+            assert!(pattern("a|ab").is_full_match("ab"));
             assert_eq!(captures("a+?", "aaa"), Some(vec![Some("a")]));
             assert_eq!(captures("a+", "aaa"), Some(vec![Some("aaa")]));
             assert_eq!(captures("a*", "bbb"), Some(vec![Some("")]));
-            assert_eq!(captures("(a?)*", ""), Some(vec![Some(""), None]));
-            assert_eq!(captures("(a?)+", ""), Some(vec![Some(""), Some("")]));
+            assert_eq!(captures("b|a*", "aab"), Some(vec![Some("aa")]));
             assert_eq!(captures("a{2,3}?a", "aaaa"), Some(vec![Some("aaa")]));
             assert_eq!(captures("a{2,3}a", "aaaa"), Some(vec![Some("aaaa")]));
+            // An iteration that matches empty ends a repetition, and it entered
+            // its group: the capture is empty rather than unset.
+            assert_eq!(captures("(a?)*", ""), Some(vec![Some(""), Some("")]));
+            assert_eq!(captures("(a?)+", ""), Some(vec![Some(""), Some("")]));
+            assert_eq!(captures("(|a)*", "aa"), Some(vec![Some(""), Some("")]));
+            assert_eq!(
+                captures("(a|){1,3}b", "ab"),
+                Some(vec![Some("ab"), Some("")])
+            );
         }
 
-        /// Repetition clears descendant capture registers; unset and empty remain distinct.
+        /// A capture inside a repetition keeps the last iteration that entered it;
+        /// unentered and empty captures stay distinct.
         #[test]
-        fn backreferences_and_capture_lifecycle() {
+        fn repeated_captures_keep_their_last_entered_iteration() {
             assert_eq!(
                 captures(r"(a|(b))+", "aba"),
-                Some(vec![Some("aba"), Some("a"), None])
+                Some(vec![Some("aba"), Some("a"), Some("b")])
             );
             assert_eq!(
-                captures(r"^(a|(b))\2c$", "ac"),
-                Some(vec![Some("ac"), Some("a"), None])
-            );
-            assert_eq!(captures(r"^\1(a)$", "a"), Some(vec![Some("a"), Some("a")]));
-            assert_eq!(captures(r"^(a\1)$", "a"), Some(vec![Some("a"), Some("a")]));
-            assert_eq!(
-                captures(r"^(?<x>a)\k<x>$", "aa"),
-                Some(vec![Some("aa"), Some("a")])
-            );
-            assert_eq!(captures(r"^(a)?\1$", ""), Some(vec![Some(""), None]));
-            assert_eq!(captures(r"^(a*)\1$", ""), Some(vec![Some(""), Some("")]));
-        }
-
-        /// Positive assertions are atomic; lookbehind traverses a fixed-width sequence backwards.
-        #[test]
-        fn lookaround_order_and_isolation() {
-            assert_eq!(
-                captures(r"(?=(a+))a*b\1", "baaabac"),
-                Some(vec![Some("aba"), Some("a")])
+                captures(r"(?:(a)|b){2,3}", "abb"),
+                Some(vec![Some("abb"), Some("a")])
             );
             assert_eq!(
-                captures(r"(?<=(a)(b))c", "abc"),
-                Some(vec![Some("c"), Some("a"), Some("b")])
+                captures(r"^(?:(a)|(b))$", "b"),
+                Some(vec![Some("b"), None, Some("b")])
             );
-            assert_eq!(captures(r"(?<=a|b)c", "ac"), Some(vec![Some("c")]));
-            assert_eq!(captures(r"(?<!a)b", "ab"), None);
-            assert_eq!(captures(r"(?<!a)b", "cb"), Some(vec![Some("b")]));
-            assert_eq!(captures(r"(?!(a))\1b", "b"), Some(vec![Some("b"), None]));
-            assert_eq!(
-                captures(r"(?<=((a)|(b)){2})c", "abc"),
-                Some(vec![Some("c"), Some("a"), Some("a"), None])
-            );
-        }
-
-        /// Width admission follows capture participation and reverse evaluation order.
-        #[test]
-        fn lookbehind_backreference_width_uses_capture_state() {
-            for (source, subject, expected) in [
-                (r"^(a)(?<=\1)b$", "ab", vec![Some("ab"), Some("a")]),
-                (r"^(?<x>a)(?<=\k<x>)b$", "ab", vec![Some("ab"), Some("a")]),
-                (r"(?<=\1(a))b", "aab", vec![Some("b"), Some("a")]),
-                (r"(?<=(a)\1)b", "ab", vec![Some("b"), Some("a")]),
-                (r"^(?<=\1)(a*)$", "aaa", vec![Some("aaa"), Some("aaa")]),
-                (r"^()(?:a)(?<=\1+)b$", "ab", vec![Some("ab"), Some("")]),
-                (r"^(?=(a))a(?<=\1)b$", "ab", vec![Some("ab"), Some("a")]),
-                (r"^(?!(a))(?<=\1)b$", "b", vec![Some("b"), None]),
-            ] {
-                assert_eq!(captures(source, subject), Some(expected), "{source}");
-            }
-            // Alternative capture states must stay correlated: either pair totals three.
-            assert_eq!(
-                captures(r"^(?:(a)(bc)|(ab)(c))(?<=\1\2\3\4)d$", "abcd"),
-                Some(vec![Some("abcd"), Some("a"), Some("bc"), None, None])
-            );
-        }
-
-        /// Prior variable/optional captures can make an otherwise plain reference vary.
-        #[test]
-        fn lookbehind_backreference_width_rejects_proven_variation() {
-            for source in [
-                r"(a+)(?<=\1)b",
-                r"(a)?(?<=\1)b",
-                r"(?:a|(b))(?<=\1)c",
-                r"(a)(?<=\1+)b",
-            ] {
-                assert!(
-                    matches!(
-                        Pattern::compile(source),
-                        Err(CompileError::Invalid {
-                            reason: "variable-length lookbehind",
-                            ..
-                        })
-                    ),
-                    "{source}"
-                );
-            }
-        }
-
-        /// Final repeat captures belong to one cleared iteration, in either direction.
-        #[test]
-        fn lookbehind_width_preserves_repeat_capture_lifecycle() {
-            for (source, subject, expected) in [
-                (
-                    r"^(?:(a)|(b)){2}(?<=\1\2)c$",
-                    "abc",
-                    vec![Some("abc"), None, Some("b")],
-                ),
-                (r"^(?:(a)(?<=\1)){2}b$", "aab", vec![Some("aab"), Some("a")]),
-                (r"(?<=(?:\1(a)){2})b", "aaaab", vec![Some("b"), Some("a")]),
-                (r"(?<=(?:(a)\1){2})b", "aab", vec![Some("b"), Some("a")]),
-                (
-                    r"^((?:a|b){2})(?<=\1)c$",
-                    "abc",
-                    vec![Some("abc"), Some("ab")],
-                ),
-                (r"^(a){1,3}(?<=\1)b$", "aaab", vec![Some("aaab"), Some("a")]),
-                (r"^(){0,3}(?<=\1)b$", "b", vec![Some("b"), None]),
-                (r"^(){2,3}(?<=\1)b$", "b", vec![Some("b"), Some("")]),
-                (r"^(a){0}(?<=\1)b$", "b", vec![Some("b"), None]),
-            ] {
-                assert_eq!(captures(source, subject), Some(expected), "{source}");
-            }
-            for source in [
-                r"(a|bb){2}(?<=\1)c",
-                r"((?:a|bb){2})(?<=\1)c",
-                r"(a){0,2}(?<=\1)b",
-                r"(a?){1,2}(?<=\1)b",
-                r"(?<=(?:\1(a)){1,2})b",
-            ] {
-                assert!(
-                    matches!(
-                        Pattern::compile(source),
-                        Err(CompileError::Invalid {
-                            reason: "variable-length lookbehind",
-                            ..
-                        })
-                    ),
-                    "{source}"
-                );
-            }
-        }
-
-        /// References can compensate unequal literal alternatives in reverse traversal.
-        #[test]
-        fn lookbehind_width_preserves_reverse_alternative_correlation() {
-            let source = r"(?<=\1\2(?:(a)bb|(aa)))c";
-            assert_eq!(
-                captures(source, "aabbc"),
-                Some(vec![Some("c"), Some("a"), None])
-            );
-            assert_eq!(
-                captures(source, "aaaac"),
-                Some(vec![Some("c"), None, Some("aa")])
-            );
-            assert_eq!(captures(source, "aaac"), None);
-            // A reference outside its own open capture is unset until that capture closes.
-            assert_eq!(
-                captures(r"^(\1a)(?<=\1)b$", "ab"),
-                Some(vec![Some("ab"), Some("a")])
-            );
-            assert_eq!(
-                captures(r"^(\2a)(\1b)(?<=\1\2)c$", "aabc"),
-                Some(vec![Some("aabc"), Some("a"), Some("ab")])
-            );
-        }
-
-        /// Assertion state commits only on positive assertions; syntax checks remain structural.
-        #[test]
-        fn lookbehind_width_validates_nested_and_unexecuted_assertions() {
-            assert_eq!(
-                captures(r"^(a)(?<!(?<=\1)b)c$", "ac"),
-                Some(vec![Some("ac"), Some("a")])
-            );
-            assert_eq!(
-                captures(r"^(?!(a+))(?<=\1)b$", "b"),
-                Some(vec![Some("b"), None])
-            );
-            assert_eq!(
-                captures(r"^(?=(a))(?<=(?=\1))a$", "a"),
-                Some(vec![Some("a"), Some("a")])
-            );
-            for source in [
-                r"(?:(?<=a+)){0}(a)\1",
-                r"(?!(?<=a+))(a)\1",
-                r"(?<=(?=a+)(?<=b+))(a)\1",
-                r"(?=(a+))(?<=\1)b",
-                r"(?:(a+)(?<=\1)){0}",
-            ] {
-                assert!(
-                    matches!(
-                        Pattern::compile(source),
-                        Err(CompileError::Invalid {
-                            reason: "variable-length lookbehind",
-                            ..
-                        })
-                    ),
-                    "{source}"
-                );
-            }
-            assert_eq!(
-                Pattern::compile("\u{e9}(a+)(?<=\\1)b").unwrap_err(),
-                CompileError::Invalid {
-                    byte: 6,
-                    reason: "variable-length lookbehind"
-                }
-            );
-        }
-
-        /// Fixed repetition widths are calculated symbolically.
-        #[test]
-        fn fixed_lookbehind_counts_are_symbolic_without_artificial_width_ceilings() {
-            for source in [
-                r"(a)(?<=\1)b",
-                r"(a){1000000}(?<=\1)",
-                r"(a)(?<=\1{1000000})",
-                r"(aa)(?<=\1{1000000})",
-            ] {
-                assert!(Pattern::compile(source).is_ok(), "{source}");
-            }
-            let flat = "a".repeat(3000) + r"(a)(?<=\1)";
-            assert!(Pattern::compile(&flat).is_ok());
-        }
-
-        /// An unrelated reference must not make a statically fixed assertion need analysis.
-        #[test]
-        fn fixed_lookbehind_does_not_analyze_unrelated_capture_paths() {
-            let choices = "(?:(a)|b)".repeat(16) + r"(?<=c)\1";
-            for source in [&choices, r"(a{1000})\1{2000}(?<=b)", r"(a)(?<=(?=\1))a"] {
-                assert!(Pattern::compile(source).is_ok(), "{source}");
-            }
-            // A fixed outer assertion must not hide a dependent nested assertion.
-            assert!(matches!(
-                Pattern::compile(r"(a+)(?<=(?<=\1))b"),
-                Err(CompileError::Invalid {
-                    reason: "variable-length lookbehind",
-                    ..
-                })
-            ));
-        }
-
-        /// Integer count truth distinguishes a final capture from a whole repeated group.
-        #[test]
-        fn lookbehind_width_agrees_with_independent_count_truth() {
-            let assert_fixed = |source: &str, fixed: bool| {
-                let compiled = Pattern::compile(source);
-                if fixed {
-                    assert!(compiled.is_ok(), "{source}: {compiled:?}");
-                } else {
-                    assert!(
-                        matches!(
-                            compiled,
-                            Err(CompileError::Invalid {
-                                reason: "variable-length lookbehind",
-                                ..
-                            })
-                        ),
-                        "{source}: {compiled:?}"
-                    );
-                }
-            };
-            for width in 0..5 {
-                for min in 0..5 {
-                    for max in min..5 {
-                        assert_fixed(
-                            &format!(r"(a{{{width}}}){{{min},{max}}}(?<=\1)"),
-                            width == 0 || min > 0 || max == 0,
-                        );
-                        assert_fixed(
-                            &format!(r"((?:a{{{width}}}){{{min},{max}}})(?<=\1)"),
-                            width == 0 || min == max,
-                        );
-                    }
-                }
-            }
-            for left in 0..5 {
-                for right in 0..5 {
-                    for count in 0..4 {
-                        let fixed = count == 0 || left == right;
-                        assert_fixed(
-                            &format!(r"(?:(a{{{left}}})|(a{{{right}}})){{{count}}}(?<=\1\2)"),
-                            fixed,
-                        );
-                        assert_fixed(
-                            &format!(r"(?<=(?:\1\2(?:(a{{{left}}})|(a{{{right}}}))){{{count}}})x"),
-                            fixed,
-                        );
-                    }
-                }
-            }
+            assert_eq!(captures(r"^a(b)?$", "a"), Some(vec![Some("a"), None]));
+            assert_eq!(captures(r"^(a*)$", ""), Some(vec![Some(""), Some("")]));
         }
 
         /// Scalar classes have the repository's exact whitespace/ASCII rules in both polarities.
@@ -2450,23 +2203,29 @@ mod numeric {
             assert!(captures(r"^[\S]$", "\u{85}").is_some());
             assert!(captures(r"^\d$", "\u{665}").is_none());
             assert!(captures(r"^\w$", "\u{e9}").is_none());
+            // \b is an ASCII word boundary: é is not a word character.
+            assert!(captures(r"\bé", "é").is_none());
+            assert!(captures(r"a\b", "aé").is_some());
             assert_eq!(
                 captures(r"^\u{1D400}$", "\u{1d400}"),
                 Some(vec![Some("\u{1d400}")])
             );
-            assert_eq!(
-                captures(r"^\uD835\uDC00$", "\u{1d400}"),
-                Some(vec![Some("\u{1d400}")])
-            );
+            assert_eq!(captures(r"^𝐀$", "\u{1d400}"), Some(vec![Some("\u{1d400}")]));
             assert_eq!(captures(r"^\cA$", "\u{1}"), Some(vec![Some("\u{1}")]));
             assert_eq!(captures(r"^\0$", "\0"), Some(vec![Some("\0")]));
             assert_eq!(captures(r"[]", "x"), None);
             assert_eq!(captures(r"[^]", "\n"), Some(vec![Some("\n")]));
             assert_eq!(captures(r"\B", ""), Some(vec![Some("")]));
             assert_eq!(captures(r"a$", "a\n"), None);
+            // An unpaired surrogate escape names no scalar and matches nothing.
+            assert_eq!(captures(r"\uD800", "\u{d7ff}\u{e000}"), None);
+            assert_eq!(
+                captures(r"[\uD800-]", "\u{e000}"),
+                Some(vec![Some("\u{e000}")])
+            );
         }
 
-        /// Invalid grammar never becomes ordinary no-match or a silently selected host dialect.
+        /// Syntax outside the subset is a finding, never a no-match or a host dialect.
         #[test]
         fn invalid_patterns() {
             for text in [
@@ -2480,17 +2239,15 @@ mod numeric {
                 r"(?P<x>a)",
                 r"(?i)a",
                 r"\p{L}",
-                r"(?<=a+)b",
-                r"(?<=a|bc)d",
                 r"a++",
                 r"a???",
-                r"(?=a)*",
                 r"(?<x>a)(?<x>b)",
-                r"\2(a)",
-                r"\k<absent>",
                 "(",
                 "[",
                 r"\",
+                "a{",
+                "{1}",
+                "]",
             ] {
                 assert!(
                     matches!(Pattern::compile(text), Err(CompileError::Invalid { .. })),
@@ -2499,165 +2256,148 @@ mod numeric {
             }
         }
 
-        /// Names use decoded ID properties, not host identifiers, XID or normalization.
+        /// Lookaround and backreferences are outside the subset, at their own byte.
         #[test]
-        fn unicode_group_names_preserve_decoded_identity() {
-            for name in [
-                "x",
-                "$",
-                "_",
-                "\u{e9}",
-                "\u{37a}",
-                "\u{1d400}",
-                "a\u{301}",
-                "a\u{200c}\u{200d}",
-                "a\u{30fb}\u{ff65}",
-                "a0",
-            ] {
-                let escaped: String = name
-                    .chars()
-                    .map(|c| format!(r"\u{{{:X}}}", c as u32))
-                    .collect();
-                for (definition, reference) in [(name, escaped.as_str()), (escaped.as_str(), name)]
-                {
-                    assert_eq!(
-                        captures(&format!(r"^(?<{definition}>a)\k<{reference}>$"), "aa"),
-                        Some(vec![Some("aa"), Some("a")])
-                    );
-                    assert_eq!(
-                        captures(&format!(r"^\k<{reference}>(?<{definition}>a)$"), "a"),
-                        Some(vec![Some("a"), Some("a")])
-                    );
-                }
-            }
-            assert_eq!(
-                captures(r"^(?<\uD835\uDC00>a)\k<\u{1D400}>$", "aa"),
-                Some(vec![Some("aa"), Some("a")])
-            );
-            assert_eq!(
-                captures(
-                    "^(?<\u{e9}>a)(?<e\u{301}>b)\\k<\u{e9}>\\k<e\u{301}>$",
-                    "abab"
+        fn lookaround_and_backreferences_are_rejected_where_written() {
+            for (text, byte, reason) in [
+                ("a(?=b)", 1, "lookahead outside the portable subset"),
+                ("a(?!b)", 1, "lookahead outside the portable subset"),
+                ("(?=a)*", 0, "lookahead outside the portable subset"),
+                ("é(?<=a)b", 2, "lookbehind outside the portable subset"),
+                ("(?<!a)b", 0, "lookbehind outside the portable subset"),
+                ("(?<=a+)b", 0, "lookbehind outside the portable subset"),
+                (r"(a)\1", 3, "backreference outside the portable subset"),
+                (r"\2(a)(b)", 0, "backreference outside the portable subset"),
+                (
+                    r"(?<x>a)\k<x>",
+                    7,
+                    "backreference outside the portable subset",
                 ),
-                Some(vec![Some("abab"), Some("a"), Some("b")])
-            );
-        }
-
-        /// Invalid name scalars and escapes own syntax errors at their source positions.
-        #[test]
-        fn unicode_group_names_reject_invalid_positions_and_aliases() {
-            for name in [
-                "",
-                "0x",
-                "\u{301}a",
-                "\u{200c}",
-                "\u{1f600}",
-                "a-",
-                r"\x61",
-                r"\cA",
-                r"\uD800",
-                r"\uDC00",
-                r"\u{D800}",
-                r"\u{110000}",
-                r"\u{}",
-                r"\u12",
-                r"\u0030x",
+                (
+                    r"\k<absent>",
+                    0,
+                    "backreference outside the portable subset",
+                ),
             ] {
-                for source in [format!("(?<{name}>a)"), format!(r"\k<{name}>(?<x>a)")] {
-                    assert!(
-                        matches!(Pattern::compile(&source), Err(CompileError::Invalid { .. })),
-                        "{source}"
-                    );
-                }
+                assert_eq!(
+                    Pattern::compile(text),
+                    Err(CompileError::Invalid { byte, reason }),
+                    "{text}"
+                );
             }
-            for source in [r"(?<x>a)(?<\u0078>b)", "(?<\u{e9}>a)(?<\\u00E9>b)"] {
-                assert!(matches!(
-                    Pattern::compile(source),
+        }
+
+        /// Group names are ASCII identifiers: a letter or underscore, then
+        /// letters, digits or underscores. Names only label numbered groups.
+        #[test]
+        fn group_names_are_ascii_identifiers() {
+            for name in ["x", "_", "a0", "_9", "Serial_No"] {
+                assert_eq!(
+                    captures(&format!(r"^(?<{name}>a)(b)$"), "ab"),
+                    Some(vec![Some("ab"), Some("a"), Some("b")]),
+                    "{name}"
+                );
+            }
+            for (name, offset) in [
+                ("$", 0),
+                ("\u{e9}", 0),
+                ("\u{1d400}", 0),
+                ("a\u{301}", 1),
+                ("a-", 1),
+                ("0x", 0),
+                (r"\x61", 0),
+                (r"\u0061", 0),
+            ] {
+                assert_eq!(
+                    Pattern::compile(&format!("(?<{name}>a)")),
                     Err(CompileError::Invalid {
-                        reason: "duplicate group name",
-                        ..
-                    })
-                ));
+                        byte: 3 + offset,
+                        reason: "invalid group name"
+                    }),
+                    "{name}"
+                );
             }
             assert_eq!(
-                Pattern::compile("(?<\u{e9}\\u0030->a)").unwrap_err(),
-                CompileError::Invalid {
-                    byte: 11,
-                    reason: "invalid group name"
-                }
+                Pattern::compile("(?<>a)"),
+                Err(CompileError::Invalid {
+                    byte: 3,
+                    reason: "empty group name"
+                })
             );
-        }
-
-        /// Compilation and matching enforce independent budgets; failure cannot poison the next run.
-        #[test]
-        fn fixed_depth_and_per_match_steps_refuse_only_their_real_boundaries() {
-            for depth in [127, 128] {
-                let source = "(".repeat(depth) + "a" + &")".repeat(depth);
-                assert!(Pattern::compile(&source).is_ok());
-            }
-            let source = "(".repeat(129) + "a" + &")".repeat(129);
             assert!(matches!(
-                Pattern::compile(&source),
-                Err(CompileError::Limit {
-                    resource: Resource::Depth,
-                    limit: 128
-                })
-            ));
-            // Each literal candidate consumes one start and one interpretation step.
-            let literal = pattern("z");
-            assert_eq!(literal.search(&"a".repeat(499_998)), Ok(None));
-            assert_eq!(literal.search(&"a".repeat(499_999)), Ok(None));
-            assert_eq!(
-                literal.search(&"a".repeat(500_000)),
-                Err(MatchError {
-                    resource: Resource::Work,
-                    limit: 1_000_000
-                })
-            );
-            let compiled = pattern("(a+)+$");
-            assert_eq!(
-                compiled.search(&("a".repeat(30) + "!")),
-                Err(MatchError {
-                    resource: Resource::Work,
-                    limit: 1_000_000
-                })
-            );
-            assert_eq!(
-                compiled.search("a").unwrap().unwrap().groups,
-                vec![Some("a"), Some("a")]
-            );
-        }
-
-        /// Machine-width overflow is a capability refusal rather than a grammar finding.
-        #[test]
-        fn fixed_width_zero_repetition_and_addressable_range() {
-            assert_eq!(captures(r"(?<=(?:a|bc){0})x", "x"), Some(vec![Some("x")]));
-            assert!(Pattern::compile(r"(?:a{3}){3}").is_ok());
-            let large = format!("(?:a{{{}}}){{2}}", usize::MAX);
-            assert!(matches!(
-                Pattern::compile(&large),
-                Err(CompileError::Unsupported {
-                    feature: "pattern width exceeds addressable range",
+                Pattern::compile("(?<x>a)|(?<x>b)"),
+                Err(CompileError::Invalid {
+                    reason: "duplicate group name",
                     ..
                 })
             ));
         }
 
-        /// Flat patterns and nested assertions retain matching order without quota plumbing.
+        /// Compilation refuses only group nesting beyond the semantic depth and
+        /// programs beyond the compiled size; matching has no step budget.
         #[test]
-        fn large_flat_patterns_and_nested_assertions_keep_their_match_results() {
-            let source = "a".repeat(3000);
-            assert!(pattern(&source).full_match(&source).unwrap().is_some());
-            let nested = "(?=".repeat(60) + "a" + &")".repeat(60) + "a";
-            assert_eq!(captures(&nested, "a"), Some(vec![Some("a")]));
+        fn fixed_depth_and_compiled_size_refuse_only_their_real_boundaries() {
+            for depth in [127, 128] {
+                let source = "(".repeat(depth) + "a" + &")".repeat(depth);
+                assert!(Pattern::compile(&source).is_ok());
+            }
+            // Nesting counts the lowered syntax, not groups alone: each level here
+            // nests a group, an alternation, a sequence and a repetition, so 32
+            // levels reach the semantic depth and a 33rd is refused.
+            let mut quantified = "a".to_owned();
+            for _ in 0..32 {
+                quantified = format!("(?:a|b{quantified}*c)");
+            }
+            assert!(Pattern::compile(&quantified).is_ok());
+            assert_eq!(
+                Pattern::compile(&format!("(?:a|b{quantified}*c)")),
+                Err(CompileError::Limit {
+                    resource: Resource::Depth,
+                    limit: 128
+                })
+            );
+            let source = "(".repeat(129) + "a" + &")".repeat(129);
+            assert_eq!(
+                Pattern::compile(&source),
+                Err(CompileError::Limit {
+                    resource: Resource::Depth,
+                    limit: 128
+                })
+            );
+            for source in [
+                "(?:a{1000}){1000}".to_owned(),
+                "a{4294967295}".to_owned(),
+                format!("(?:ab){{{}}}", usize::MAX),
+                format!("a{{0,{}}}", u64::MAX),
+            ] {
+                assert_eq!(
+                    Pattern::compile(&source),
+                    Err(CompileError::Limit {
+                        resource: Resource::Size,
+                        limit: Limits::REGEX_SIZE
+                    }),
+                    "{source}"
+                );
+            }
+            assert!(Pattern::compile("(?:a{3}){3}").is_ok());
+            let literal = pattern("z");
+            assert_eq!(literal.search(&"a".repeat(500_000)), None);
+            let compiled = pattern("(a+)+$");
+            assert_eq!(compiled.search(&("a".repeat(100_000) + "!")), None);
+            assert_eq!(
+                compiled.search("a").unwrap().groups,
+                vec![Some("a"), Some("a")]
+            );
         }
 
-        /// Matching steps count interpretation rather than the allocation of subject indexes.
+        /// Flat patterns and long subjects keep their match results.
         #[test]
-        fn long_subjects_are_not_charged_as_matching_steps() {
+        fn large_flat_patterns_and_long_subjects_match() {
+            let source = "a".repeat(3000);
+            assert!(pattern(&source).is_full_match(&source));
             let subject = "a".repeat(1_048_577);
             assert_eq!(
-                pattern("a").search(&subject).unwrap().unwrap().groups,
+                pattern("a").search(&subject).unwrap().groups,
                 vec![Some("a")]
             );
         }
@@ -2684,41 +2424,27 @@ mod numeric {
             }
         }
 
-        /// Known variable consumption stays invalid even when a backreference is also present.
+        /// Every short pattern over the syntax alphabet either compiles or is
+        /// refused with a finding: the lowering never hands the crate syntax it
+        /// rejects.
         #[test]
-        fn lookbehind_width_distinguishes_variable_from_backreference_dependent() {
-            for source in [
-                r"(a)(?<=a+\1)b",
-                r"(a)(?<=\1a+)b",
-                r"(a)(?<=a+|\1)b",
-                r"(a)(?<=\1|a+)b",
-                r"(a)(?<=a|\1|bb)b",
-                r"(a)(?<=(?=\1)a+)b",
-                r"(a)(?<=(?:a+\1){2})b",
-                r"(a)(?<=(?:b\1)+)c",
-            ] {
-                assert!(
-                    matches!(Pattern::compile(source), Err(CompileError::Invalid { .. })),
-                    "{source}"
-                );
+        fn every_short_pattern_compiles_or_is_refused() {
+            let alphabet = [
+                "(", ")", "[", "]", "{", "}", "*", "+", "?", "|", "^", "$", ".", "-", ",", "\\",
+                "a", "0", "1", "d", "w", "s", "b", "B", "k", "<", ">", "=", "!", ":", "u", "x",
+                "c", "é", " ",
+            ];
+            let mut count = 0;
+            for first in alphabet {
+                for second in alphabet {
+                    for third in alphabet {
+                        let source = format!("{first}{second}{third}");
+                        let _ = Pattern::compile(&source);
+                        count += 1;
+                    }
+                }
             }
-            // A backreference can be empty, so repetition alone does not prove variability.
-            for source in [r"(a)(?<=\1)b", r"()(?<=\1+)b", r"()(?<=\1{1,2})b"] {
-                assert!(Pattern::compile(source).is_ok(), "{source}");
-            }
-            // Zero repetitions and zero-width assertions do not consume their descendants.
-            assert_eq!(
-                captures(r"(a)(?<=(?:a+\1){0})b", "ab"),
-                Some(vec![Some("ab"), Some("a")])
-            );
-            assert_eq!(
-                captures(r"(?<=((?=a))*?)a", "a"),
-                Some(vec![Some("a"), None])
-            );
-            assert_eq!(
-                captures(r"(a)(?<=(?=\1))a", "aa"),
-                Some(vec![Some("aa"), Some("a")])
-            );
+            assert_eq!(count, alphabet.len().pow(3));
         }
     }
 }

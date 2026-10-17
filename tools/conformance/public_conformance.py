@@ -415,10 +415,11 @@ def expected_table(path, types):
 
 
 def reported_table(table, decimals):
-    """Independently project binary64 using REQ-0747, with no tolerance.
+    """Independently project binary64 using REQ-0747 and REQ-0418's interval.
 
     Committed precision CSVs contain reported values. Use integer ratios so
-    ties round away from zero exactly, rather than a host round() builtin.
+    ties, and near ties within 2^-26 below a scaled tie, round away from zero
+    exactly, rather than a host round() builtin.
     """
     if table is None:
         return None
@@ -432,7 +433,8 @@ def reported_table(table, decimals):
             number = struct.unpack(">d", bytes.fromhex(value))[0]
             numerator, denominator = number.as_integer_ratio()
             rounded, remainder = divmod(abs(numerator) * 10**decimals, denominator)
-            rounded += 2 * remainder >= denominator
+            # remainder / denominator >= 1/2 - 2^-26
+            rounded += remainder * 2**26 >= denominator * (2**25 - 1)
             digits = str(rounded).zfill(decimals + 1)
             text = (
                 digits

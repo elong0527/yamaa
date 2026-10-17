@@ -1599,8 +1599,8 @@ mod schema {
         }
     }
     mod schema_descriptor {
-        use yamaa_core::regex::{CompileError, Resource};
-        use yamaa_core::schema::{ConstraintError, ConstraintViolation as C};
+        use yamaa_core::portable_regex::{CompileError, Resource};
+        use yamaa_core::schema::ConstraintViolation as C;
         use yamaa_core::schema::{
             Descriptor, DescriptorError, DescriptorIssue as I, Document, DocumentNode as N,
         };
@@ -1750,7 +1750,7 @@ mod schema {
             let (text, pattern) = descriptor.pattern().unwrap();
             assert_eq!(text, "a|bc");
             for (value, expected) in [("a", true), ("bc", true), ("abc", false), ("bc\n", false)] {
-                assert_eq!(pattern.full_match(value).unwrap().is_some(), expected);
+                assert_eq!(pattern.is_full_match(value), expected);
             }
             let descriptor = admit(
                 V::map(vec![
@@ -1823,8 +1823,8 @@ mod schema {
         }
 
         #[test]
-        fn independent_descriptor_pattern_admissions_keep_exact_lookbehind_metadata() {
-            let pattern = format!("(a){}(?<=\\1)", "(a|aa)".repeat(8));
+        fn independent_descriptor_pattern_admissions_keep_exact_pattern_metadata() {
+            let pattern = format!("(a){}b", "(a|aa)".repeat(8));
             let d = document(V::map(vec![
                 ("type", V::text("str")),
                 ("pattern", V::text(pattern.clone())),
@@ -1880,12 +1880,11 @@ mod schema {
             .into_descriptor()
             .unwrap();
             assert_eq!(
-                descriptor.check_constraints(&N::Text("é".into())).unwrap(),
+                descriptor.check_constraints(&N::Text("é".into())),
                 [C::ValueNotPermitted, C::PatternMismatch, C::MinimumLength]
             );
             assert!(descriptor
                 .check_constraints(&N::Text("aa".into()))
-                .unwrap()
                 .is_empty());
             let descriptor = admit(
                 V::map(vec![
@@ -1898,10 +1897,9 @@ mod schema {
             .unwrap();
             assert!(descriptor
                 .check_constraints(&N::Text("e\u{301}".into()))
-                .unwrap()
                 .is_empty());
             assert_eq!(
-                descriptor.check_constraints(&N::Text("😀".into())).unwrap(),
+                descriptor.check_constraints(&N::Text("😀".into())),
                 [C::MinimumLength]
             );
             let descriptor = admit(
@@ -1912,16 +1910,15 @@ mod schema {
             .unwrap();
             assert!(descriptor
                 .check_constraints(&N::Sequence(vec![]))
-                .unwrap()
                 .is_empty());
             assert_eq!(
-                descriptor.check_constraints(&N::Sequence(vec![0])).unwrap(),
+                descriptor.check_constraints(&N::Sequence(vec![0])),
                 [C::InvalidSize]
             );
         }
 
         #[test]
-        fn fixed_regex_work_refusal_remains_distinct_from_constraint_mismatches() {
+        fn long_values_are_checked_against_the_pattern_without_a_work_budget() {
             let descriptor = admit(
                 V::map(vec![
                     ("type", V::text("str")),
@@ -1933,7 +1930,6 @@ mod schema {
             .unwrap();
             assert!(descriptor
                 .check_constraints(&N::Text("a".into()))
-                .unwrap()
                 .is_empty());
             let descriptor = admit(
                 V::map(vec![("type", V::text("str")), ("pattern", V::text("a+"))]),
@@ -1943,19 +1939,17 @@ mod schema {
             .unwrap();
             assert!(descriptor
                 .check_constraints(&N::Text("a".into()))
-                .unwrap()
                 .is_empty());
-            let long = N::Text("a".repeat(1_000_000));
-            assert!(matches!(
-                descriptor.check_constraints(&long),
-                Err(ConstraintError::Regex(yamaa_core::regex::MatchError {
-                    resource: Resource::Work,
-                    limit: 1_000_000
-                }))
-            ));
+            // A million scalars, which the retired step budget refused.
+            assert!(descriptor
+                .check_constraints(&N::Text("a".repeat(1_000_000)))
+                .is_empty());
+            assert_eq!(
+                descriptor.check_constraints(&N::Text("a".repeat(1_000_000) + "b")),
+                [C::PatternMismatch]
+            );
             assert!(descriptor
                 .check_constraints(&N::Text("a".into()))
-                .unwrap()
                 .is_empty());
         }
     }

@@ -208,12 +208,7 @@ pub(super) fn prepare_value_with_driver(
             Operation::FirstAvailable(std::boxed::Box::new(operation))
         }
         "row_number" | "rank" | "row_value" | "locf" | "baseline_flag" => {
-            let mut features = Vec::new();
-            let operation =
-                windows::Declaration::prepare(d, payload, op, &result_path, &mut features)?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
+            let operation = windows::Declaration::prepare(d, payload, op, &result_path)?;
             Operation::Window(std::boxed::Box::new(operation))
         }
         "compute" => {

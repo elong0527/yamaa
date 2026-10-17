@@ -231,16 +231,18 @@ fn datetime_from_seconds(seconds: i64, precision: DateTimePrecision) -> Option<D
     )
     .ok()
 }
+/// Resolve the binary64 amount in seconds to whole seconds with the language's
+/// one rounding (REQ-0418) at zero places, then add it to the exact source.
+/// The source second never affects the rounding. Bound before converting: an
+/// admitted magnitude has at most twelve integer digits.
 fn rounded_target(base: i64, delta: f64) -> Option<i64> {
-    // Bound before casting and add the small fraction after the exact integer,
-    // preserving ties even at year 9999. Parity belongs to the resulting second.
     if !delta.is_finite() || !(-315_537_897_601.0..=315_537_897_601.0).contains(&delta) {
         return None;
     }
-    let lower = libm::floor(delta);
-    let target = base.checked_add(lower as i64)?;
-    let fraction = delta - lower;
-    target.checked_add(i64::from(
-        fraction > 0.5 || fraction == 0.5 && target % 2 != 0,
-    ))
+    let seconds = i64::try_from(&crate::decimal_rounding::rounded_magnitude(delta, 0)).ok()?;
+    base.checked_add(if delta.is_sign_negative() {
+        -seconds
+    } else {
+        seconds
+    })
 }

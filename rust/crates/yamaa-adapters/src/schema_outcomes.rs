@@ -9,16 +9,16 @@ pub(crate) enum Error {
 
 use crate::json;
 use yamaa_core::json::Value;
-use yamaa_core::{regex, schema::*};
+use yamaa_core::{portable_regex, schema::*};
 
 pub(crate) fn limit(phase: &str, resource: &str, limit: usize) -> Value {
     json!({"status":"resource_limit","phase":phase,"resource":resource,"limit":limit})
 }
-fn regex_resource(resource: regex::Resource) -> &'static str {
-    use regex::Resource::*;
+fn regex_resource(resource: portable_regex::Resource) -> &'static str {
+    use portable_regex::Resource::*;
     match resource {
         Depth => "semantic_depth",
-        Work => "regex_steps",
+        Size => "regex_size",
     }
 }
 fn document_resource(resource: DocumentResource) -> &'static str {
@@ -54,9 +54,6 @@ pub(crate) fn validation(error: ValidationError) -> Result<Value, Error> {
         ),
         ValidationError::InvalidDescriptor => return Err(Error::InvalidQuery),
         ValidationError::Depth { limit: maximum } => limit("validation", "semantic_depth", maximum),
-        ValidationError::Constraint(ConstraintError::Regex(error)) => {
-            limit("regex_match", regex_resource(error.resource), error.limit)
-        }
     })
 }
 pub(crate) fn normalization(error: NormalizationError) -> Result<Value, Error> {
@@ -129,13 +126,6 @@ pub(crate) fn inheritance_dependencies(error: InheritanceDependencyError) -> Res
             regex_resource(resource),
             maximum,
         ),
-        E::Reference(R::Predicate(p::ParseError::UnsupportedRegex {
-            feature,
-            byte,
-            position,
-        })) => {
-            json!({"status":"unsupported","phase":"inheritance_predicate_regex","feature":feature,"pattern_byte":byte,"position":{"byte":position.byte,"character":position.character}})
-        }
         // Grammar failures deliberately contribute no edges, then survive for final validation.
         E::Reference(_) => return Err(Error::Internal),
     })

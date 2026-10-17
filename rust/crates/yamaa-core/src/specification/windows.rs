@@ -96,7 +96,6 @@ impl Declaration {
         payload: usize,
         op: &str,
         path: &str,
-        extra: &mut Vec<UnsupportedFeature>,
     ) -> Result<Self, PrepareError> {
         let name = |field_name| text(d, field(d, payload, field_name)?).map(String::from);
         let kind = match op {
@@ -229,9 +228,6 @@ impl Declaration {
                     | Err(predicate_compiler::Error::Parse(
                         crate::predicate_parser::ParseError::Grammar { .. },
                     )) => {}
-                    Err(predicate_compiler::Error::Parse(
-                        crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-                    )) => reject(extra, "predicate_regex", filter_path),
                     Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
                     Err(error) => {
                         return Err(PrepareError::predicate(error.clone(), Some(&filter_path)))

@@ -2,11 +2,11 @@
 use yamaa_adapters::json;
 use yamaa_core::json::Value;
 use yamaa_core::{
+    portable_regex::Resource,
     predicate::Comparison,
     predicate_parser::{
         parse_predicate, ParseError, ParseResource, ParsedKind, ParsedPredicate, TemporalKind,
     },
-    regex::Resource,
 };
 pub fn observe(expression: &str) -> Value {
     let outcome = match parse_predicate(expression) {
@@ -37,13 +37,6 @@ pub fn observe(expression: &str) -> Value {
         }) => {
             json!({"status":"resource_limit","phase":"regex_compile","resource":regex_resource(resource),"limit":limit,"position":{"byte":position.byte,"character":position.character}})
         }
-        Err(ParseError::UnsupportedRegex {
-            position,
-            byte,
-            feature,
-        }) => {
-            json!({"status":"unsupported","feature":feature,"pattern_byte":byte,"position":{"byte":position.byte,"character":position.character}})
-        }
     };
     json!({"outcome":outcome})
 }
@@ -52,7 +45,7 @@ pub fn observe(expression: &str) -> Value {
 fn regex_resource(resource: Resource) -> &'static str {
     match resource {
         Resource::Depth => "depth",
-        Resource::Work => "work",
+        Resource::Size => "size",
     }
 }
 /// Temporal spelling is syntax metadata, not a conversion or precision policy.

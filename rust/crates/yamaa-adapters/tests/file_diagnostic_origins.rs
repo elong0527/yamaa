@@ -1094,7 +1094,7 @@ mod file {
         }
 
         #[test]
-        fn matching_budget_refusal_retains_pattern_path_and_applied_bound() {
+        fn catastrophic_pattern_is_an_ordinary_verification_failure() {
             let study = Study::new();
             fs::write(study.0.join("spec.yaml"), "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n  - name: TERM\n    type: str\n    derivation: {source: SRC.TERM}\n    verifications: {matches: {pattern: '(a+)+b'}}\n").unwrap();
             fs::write(
@@ -1102,19 +1102,23 @@ mod file {
                 format!("ID,TERM\n1,{}\n", "a".repeat(32)),
             )
             .unwrap();
+            // (a+)+b cannot match a run of a's. Matching is linear, so the value
+            // simply fails the check rather than exhausting a step budget.
             let result = study.build();
             assert!(result.output().is_none());
             let findings = result.issues();
             assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].condition, "engine_rejected");
+            assert_eq!(findings[0].phase, "verification");
+            assert_eq!(findings[0].condition, "matches_failed");
+            assert_eq!(findings[0].requirement.as_deref(), Some("REQ-0379"));
             assert_eq!(
                 findings[0].spec_paths,
-                ["columns.TERM.verifications[0].matches.pattern"]
+                ["columns.TERM.verifications[0].matches"]
             );
             let context: yamaa_core::json::Value = findings[0].context.clone();
             assert_eq!(
                 context,
-                yamaa_adapters::json!({"code":"execution_limit","stage":"execute","resource":"regex_steps","limit":1_000_000})
+                yamaa_adapters::json!({"column":"TERM","failure_count":1,"keys":[{"ID":1}]})
             );
             assert!(!study.0.join("output.csv").exists());
         }

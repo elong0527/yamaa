@@ -224,8 +224,8 @@ its metadata-only authority. Reduce the refused size and rerun the operation.
 
 The shared Rust engine behind Python and R `domain`, `check` and `define` calls
 uses one fixed policy in `yamaa_core::limits::Limits`.
-Admission checks the physical file, table geometry, declaration shape or actual
-regex match at its owning boundary. There are no caller-selected profiles or
+Admission checks the physical file, table geometry, declaration shape or compiled
+regex at its owning boundary. There are no caller-selected profiles or
 cumulative byte, copy, traversal or work pools.
 
 The standalone Python `read_odm` and `write_odm_parquet` helpers retain their
@@ -244,7 +244,7 @@ refusals as `ValueError`.
 | Inputs to one specification | 16 |
 | Operands in one source selection | 64 |
 | Parent occurrences in one inheritance traversal, including aliases | 8,192 |
-| Steps in one regex match | 1,000,000 |
+| Compiled program of one regular expression | 10 MiB |
 | Findings in the final public issue collection | 10,000 |
 | YAML nesting depth | 64 |
 | Semantic expression and context nesting depth | 128 |
@@ -253,7 +253,8 @@ A MiB is 1,048,576 bytes; a GiB is 1,073,741,824 bytes. File readers check the
 encoded size before retaining bytes and check growth during reading. Writers
 check the saved file size before extending it. Table admission checks rows,
 columns and their product before constructing or growing the corresponding
-geometry. The regex step counter is fresh for each match.
+geometry. A regular expression is refused when it compiles, never while it
+matches: matching takes time linear in the subject, so there is no step budget.
 
 Semantic admission and retained observations stay complete. The final public
 issue collection keeps its first 10,000 findings in their existing order. Source

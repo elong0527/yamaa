@@ -285,7 +285,9 @@ mod scalar {
         }
 
         #[test]
-        fn datetime_shift_scales_exact_integers_and_rounds_result_ties_even() {
+        fn datetime_shift_scales_exact_integers_and_rounds_amount_ties_away_from_zero() {
+            // 0.025 minute is exactly 1.5 seconds after binary64 scaling, a tie
+            // that rounds to 2 seconds away from zero whatever the source second.
             for (source, amount, unit, expected) in [
                 (
                     "2024-02-28T23:59:59",
@@ -321,7 +323,7 @@ mod scalar {
                     "2030-01-01T00:00:01",
                     Value::float(0.025),
                     U::Minute,
-                    "2030-01-01T00:00:02",
+                    "2030-01-01T00:00:03",
                 ),
                 (
                     "2030-01-01T00:00:00",
@@ -330,10 +332,37 @@ mod scalar {
                     "2029-12-31T23:59:58",
                 ),
                 (
+                    "2030-01-01T00:00:01",
+                    Value::float(-0.025),
+                    U::Minute,
+                    "2029-12-31T23:59:59",
+                ),
+                // 0.0249999999 minute is 1.499999994 seconds, 6.0e-9 below the
+                // tie and inside REQ-0418's 2^-26 interval; 0.024999999 minute is
+                // 1.49999994 seconds, 6.0e-8 below and outside it.
+                (
+                    "2030-01-01T00:00:00",
+                    Value::float(0.0249999999),
+                    U::Minute,
+                    "2030-01-01T00:00:02",
+                ),
+                (
+                    "2030-01-01T00:00:00",
+                    Value::float(-0.0249999999),
+                    U::Minute,
+                    "2029-12-31T23:59:58",
+                ),
+                (
+                    "2030-01-01T00:00:00",
+                    Value::float(0.024999999),
+                    U::Minute,
+                    "2030-01-01T00:00:01",
+                ),
+                (
                     "9999-12-31T00:00:01",
                     Value::float(0.025),
                     U::Minute,
-                    "9999-12-31T00:00:02",
+                    "9999-12-31T00:00:03",
                 ),
                 (
                     "0001-01-01T00:00:00",
@@ -662,9 +691,8 @@ mod scalar {
     }
     mod text_extract {
         use yamaa_core::{
-            regex,
             table::ValueRef,
-            text_extract::{AdmissionError, Error, Step, StringExtract},
+            text_extract::{AdmissionError, Step, StringExtract},
             value::Value,
         };
         fn operation(
@@ -726,15 +754,13 @@ mod scalar {
             );
         }
         #[test]
-        fn per_match_step_refusal_never_becomes_no_match_or_a_recovered_value() {
+        fn long_subjects_are_searched_to_completion_before_no_match() {
+            // Half a million scalars, which the retired step budget refused.
             let op = operation("z", "0", None, Some(Value::Missing));
-            assert!(matches!(
+            assert_eq!(
                 op.apply(ValueRef::Str(&"a".repeat(500_000))),
-                Err(Error::Regex(regex::MatchError {
-                    resource: regex::Resource::Work,
-                    limit: 1_000_000
-                }))
-            ));
+                Ok(Step::Recovered("no_match"))
+            );
             assert_eq!(op.apply(ValueRef::Str("z")), Ok(Step::Capture(Some("z"))));
             assert_eq!(
                 op.apply(ValueRef::Str("x")),

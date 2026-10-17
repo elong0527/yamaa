@@ -79,14 +79,6 @@ pub(super) fn prepare(
             }
             Err(diagnostic)
         }
-        Err(predicate_compiler::Error::Parse(
-            crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-        )) => {
-            return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                operation: "predicate_regex".into(),
-                path: format!("{path}.condition"),
-            }]))
-        }
         Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
         Err(error) => {
             return Err(PrepareError::predicate(

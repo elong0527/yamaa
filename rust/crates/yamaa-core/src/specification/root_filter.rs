@@ -13,10 +13,7 @@ pub(super) struct RootFilter {
     compiled: Result<crate::predicate::Plan, predicate_compiler::Error>,
 }
 impl RootFilter {
-    pub(super) fn prepare(
-        d: &Document,
-        extra: &mut Vec<UnsupportedFeature>,
-    ) -> Result<Option<Self>, PrepareError> {
+    pub(super) fn prepare(d: &Document) -> Result<Option<Self>, PrepareError> {
         let Some(id) = d
             .field(d.root(), "filter")
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -30,9 +27,6 @@ impl RootFilter {
             | Err(predicate_compiler::Error::Parse(
                 crate::predicate_parser::ParseError::Grammar { .. },
             )) => (),
-            Err(predicate_compiler::Error::Parse(
-                crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-            )) => reject(extra, "predicate_regex", "filter".into()),
             Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
             Err(error) => return Err(PrepareError::predicate(error.clone(), Some("filter"))),
         }
