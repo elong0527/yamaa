@@ -1700,10 +1700,16 @@ fn parquet_signature(bytes: &[u8]) -> Result<ParquetSignature, String> {
         .columns()
         .iter()
         .map(|column| {
+            // 57 returns a column's logical type by value; the current
+            // release lends it by reference.
+            #[cfg(yamaa_parquet_57)]
+            let logical = format!("{:?}", column.logical_type());
+            #[cfg(not(yamaa_parquet_57))]
+            let logical = format!("{:?}", column.logical_type_ref());
             (
                 column.name().to_string(),
                 format!("{:?}", column.physical_type()),
-                format!("{:?}", column.logical_type_ref()),
+                logical,
                 column.max_def_level(),
                 column.max_rep_level(),
             )

@@ -92,6 +92,12 @@ struct Reader<'a> {
     bytes: &'a [u8],
     position: usize,
     native_metadata: Option<Cow<'a, [u8]>>,
+    /// Byte ranges of fields whose validated value contains a set or map,
+    /// recorded innermost-first while building the native copy (see
+    /// `native_metadata`); empty outside that walk.
+    native_omit: Vec<(usize, usize)>,
+    /// Set/map nodes seen since the innermost field snapshot.
+    native_containers: usize,
 }
 
 impl<'a> Reader<'a> {
@@ -100,6 +106,8 @@ impl<'a> Reader<'a> {
             bytes,
             position: 0,
             native_metadata: None,
+            native_omit: Vec::new(),
+            native_containers: 0,
         }
     }
 
@@ -184,6 +192,7 @@ impl<'a> Reader<'a> {
     }
 
     fn field(&mut self, previous: i16, depth: usize) -> Result<Option<(i16, Value<'a>)>, Error> {
+        let start = self.position;
         let header = self.byte()?;
         let kind = header & 15;
         if kind == 0 {
@@ -196,7 +205,18 @@ impl<'a> Reader<'a> {
                 .checked_add(i16::from(header >> 4))
                 .ok_or(Error::Malformed)?
         };
-        Ok(Some((id, self.value(kind, depth)?)))
+        let containers = self.native_containers;
+        let value = self.value(kind, depth)?;
+        if self.native_metadata.is_some() && self.native_containers > containers {
+            // A set or map appeared inside this field and no nested field
+            // absorbed it: this is the innermost field the 57 native
+            // decoder cannot skip, so the native copy omits it whole.
+            // Absorb the count so ancestors containing this field (a
+            // known list or struct) are kept.
+            self.native_omit.push((start, self.position));
+            self.native_containers = containers;
+        }
+        Ok(Some((id, value)))
     }
 
     fn value(&mut self, kind: u8, depth: usize) -> Result<Value<'a>, Error> {
@@ -218,6 +238,9 @@ impl<'a> Reader<'a> {
                 Value::Binary(self.take(length)?)
             }
             9 | 10 => {
+                if kind == 10 {
+                    self.native_containers += 1;
+                }
                 let position = self.position;
                 let header = self.byte()?;
                 let count = if header >> 4 == 15 {
@@ -245,6 +268,7 @@ impl<'a> Reader<'a> {
                 })
             }
             11 => {
+                self.native_containers += 1;
                 let start = self.position;
                 let count = self.length()?;
                 if count != 0 {
@@ -284,18 +308,41 @@ pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
     Ok((value, reader.position))
 }
 
-/// Work around parquet 60.0.0's unknown-field collection skip: it treats a
-/// boolean element like an inline struct-field boolean and consumes no byte.
+/// Work around the native decoder's unknown-field collection skip: it treats
+/// a boolean element like an inline struct-field boolean and consumes no byte.
 /// The current Parquet footer schema has no known boolean collections. Present
 /// their validated one-byte elements as bytes only to the native decoder; keep
 /// the original metadata for admission and the original data pages for reads.
 /// This independently authored correction copies the footer only when needed,
 /// changes no extents or values, and never turns invalid booleans into bytes.
+///
+/// On the 57 graph the native skip cannot skip a set or map field at all.
+/// The footer schema likewise has no known set or map fields, so a field
+/// whose validated value contains one is unknown to the native decoder and
+/// the 57 native copy omits it whole (see `Reader::field`); admission and
+/// reads still use the original metadata, exactly as for boolean elements.
 pub(super) fn native_metadata(bytes: &[u8]) -> Result<Cow<'_, [u8]>, Error> {
     let mut reader = Reader::new(bytes);
     reader.native_metadata = Some(Cow::Borrowed(bytes));
     reader.value(12, 0)?;
-    Ok(reader.native_metadata.unwrap())
+    let native = reader.native_metadata.unwrap();
+    #[cfg(yamaa_parquet_57)]
+    if !reader.native_omit.is_empty() {
+        let mut ranges = reader.native_omit;
+        ranges.sort_unstable();
+        let mut output = Vec::with_capacity(native.len());
+        let mut cursor = 0;
+        for (start, end) in ranges {
+            if start < cursor {
+                continue;
+            }
+            output.extend_from_slice(&native[cursor..start]);
+            cursor = end;
+        }
+        output.extend_from_slice(&native[cursor..]);
+        return Ok(Cow::Owned(output));
+    }
+    Ok(native)
 }
 
 #[cfg(test)]
@@ -315,12 +362,32 @@ mod tests {
             expected[position] = header;
         }
         let native = native_metadata(&bytes).unwrap();
+        #[cfg(not(yamaa_parquet_57))]
         assert_eq!(native.as_ref(), expected);
+        #[cfg(yamaa_parquet_57)]
+        {
+            // The map field (bytes 12..19) is omitted whole on 57; the
+            // boolean-list header edit at byte 9 is retained.
+            let mut expected = expected[..12].to_vec();
+            expected.extend([0, 0]);
+            assert_eq!(native.as_ref(), expected);
+        }
         assert!(matches!(native, Cow::Owned(_)));
         // Ordinary metadata and empty collections keep borrowing the source.
-        for bytes in [&[0x11, 0x12, 0][..], &[0x19, 0x01, 0x1b, 0, 0]] {
-            assert!(matches!(native_metadata(bytes).unwrap(), Cow::Borrowed(_)));
-        }
+        assert!(matches!(
+            native_metadata(&[0x11, 0x12, 0]).unwrap(),
+            Cow::Borrowed(_)
+        ));
+        #[cfg(not(yamaa_parquet_57))]
+        assert!(matches!(
+            native_metadata(&[0x19, 0x01, 0x1b, 0, 0]).unwrap(),
+            Cow::Borrowed(_)
+        ));
+        #[cfg(yamaa_parquet_57)]
+        assert_eq!(
+            native_metadata(&[0x19, 0x01, 0x1b, 0, 0]).unwrap().as_ref(),
+            &[0x19, 0x01, 0]
+        );
         assert_eq!(
             native_metadata(&[0x19, 0x21, 1, 3, 0]),
             Err(Error::Malformed)

@@ -1791,22 +1791,28 @@ mod table {
                 "message expected { OPTIONAL INT64 at (TIMESTAMP(MICROS,false)); }",
             )
             .unwrap();
+            // 57 returns a logical type by value; the current release
+            // lends it by reference.
+            #[cfg(yamaa_parquet_57)]
+            let timestamp_logical = timestamp.get_fields()[0].get_basic_info().logical_type();
+            #[cfg(not(yamaa_parquet_57))]
+            let timestamp_logical = timestamp.get_fields()[0]
+                .get_basic_info()
+                .logical_type_ref()
+                .cloned();
             let expected = [
                 (Type::BYTE_ARRAY, Some(LogicalType::String)),
                 (Type::INT64, None),
                 (Type::DOUBLE, None),
                 (Type::INT32, Some(LogicalType::Date)),
-                (
-                    Type::INT64,
-                    timestamp.get_fields()[0]
-                        .get_basic_info()
-                        .logical_type_ref()
-                        .cloned(),
-                ),
+                (Type::INT64, timestamp_logical),
             ];
             for (i, (physical, logical)) in expected.into_iter().enumerate() {
                 let field = schema.column(i);
                 assert_eq!(field.physical_type(), physical);
+                #[cfg(yamaa_parquet_57)]
+                assert_eq!(field.logical_type(), logical);
+                #[cfg(not(yamaa_parquet_57))]
                 assert_eq!(field.logical_type_ref(), logical.as_ref());
                 assert_eq!(
                     field.self_type().get_basic_info().repetition(),
@@ -1823,7 +1829,7 @@ mod table {
                 .map(Result::unwrap)
                 .collect::<Vec<_>>();
             assert_eq!(rows[0].get_string(0).unwrap(), "");
-            assert!(rows[1].is_null(0).unwrap());
+            assert_eq!(rows[1].get_column_iter().next().unwrap().1, &Field::Null);
             assert_eq!(rows[2].get_string(0).unwrap(), "a\u{e9}\n");
             assert_eq!(rows[0].get_long(1).unwrap(), i64::MIN);
             assert_eq!(rows[1].get_long(1).unwrap(), i64::MAX);
@@ -1850,7 +1856,8 @@ mod table {
                 rows[1].get_timestamp_micros(4).unwrap(),
                 253_402_300_799_000_000
             );
-            assert!(rows[2].is_null(3).unwrap() && rows[2].is_null(4).unwrap());
+            assert_eq!(rows[2].get_column_iter().nth(3).unwrap().1, &Field::Null);
+            assert_eq!(rows[2].get_column_iter().nth(4).unwrap().1, &Field::Null);
         }
 
         #[test]

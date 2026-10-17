@@ -119,6 +119,27 @@ pub(crate) fn logical_type(logical: Option<&LogicalType>) -> Logical {
     }
 }
 
+/// Writer properties capping a row group at `rows` rows: the current
+/// release sets an optional row count, 57 sets its row-group size, which
+/// its Arrow writer likewise counts in rows.
+#[cfg(all(test, feature = "parquet", not(yamaa_parquet_57)))]
+pub(crate) fn writer_properties_max_rows(
+    rows: usize,
+) -> parquet::file::properties::WriterProperties {
+    parquet::file::properties::WriterProperties::builder()
+        .set_max_row_group_row_count(Some(rows))
+        .build()
+}
+
+#[cfg(all(test, feature = "parquet", yamaa_parquet_57))]
+pub(crate) fn writer_properties_max_rows(
+    rows: usize,
+) -> parquet::file::properties::WriterProperties {
+    parquet::file::properties::WriterProperties::builder()
+        .set_max_row_group_size(rows)
+        .build()
+}
+
 /// A column's logical type as an owned value: the current release lends
 /// it by reference, 57 returns it by value.
 #[cfg(all(feature = "parquet", not(yamaa_parquet_57)))]

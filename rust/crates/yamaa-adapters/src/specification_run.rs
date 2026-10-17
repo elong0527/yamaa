@@ -611,7 +611,7 @@ mod width_tests {
     fn parquet_decode_admits_small_groups_beyond_prior_group_and_metadata_frontiers() {
         use arrow_array::{Int64Array, RecordBatch};
         use arrow_schema::{DataType, Field, Schema};
-        use parquet::{arrow::ArrowWriter, file::properties::WriterProperties};
+        use parquet::arrow::ArrowWriter;
         use std::sync::Arc;
 
         let source = SourceDeclaration {
@@ -629,12 +629,15 @@ mod width_tests {
             vec![Arc::new(Int64Array::from_iter_values(0..5000))],
         )
         .unwrap();
-        let properties = WriterProperties::builder()
-            .set_max_row_group_row_count(Some(1))
-            .build();
+        let properties = crate::storage_api::writer_properties_max_rows(1);
         let mut bytes = Vec::new();
         let mut writer = ArrowWriter::try_new(&mut bytes, schema, Some(properties)).unwrap();
-        writer.write(&batch).unwrap();
+        // Write one row at a time: the file gains one row group per row on
+        // either release, while a single 5,000-row write makes the 57
+        // writer recurse once per group it splits out.
+        for row in 0..batch.num_rows() {
+            writer.write(&batch.slice(row, 1)).unwrap();
+        }
         writer.close().unwrap();
         let table = decode_parquet(&source, &bytes, false).unwrap();
         assert_eq!(table.row_count(), 5000);
