@@ -398,6 +398,22 @@ class SupplementalEvidence(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "stale suite level"):
             module.load_catalog(self.root, self.catalog_path)
 
+    def test_unhashable_contract_path_is_rejected(self):
+        for value in (["x"], {"path": "x"}):
+            with self.subTest(value=value):
+                self.catalog_file["contracts"][0]["path"] = value
+                self.save_catalog_file()
+                with self.assertRaisesRegex(ValueError, "invalid relative path"):
+                    module.load_catalog(self.root, self.catalog_path)
+
+    def test_unhashable_contract_consumer_is_rejected(self):
+        for value in (["x"], {"path": "x"}):
+            with self.subTest(value=value):
+                self.catalog_file["contracts"][0]["consumers"] = [value]
+                self.save_catalog_file()
+                with self.assertRaisesRegex(ValueError, "invalid relative path"):
+                    module.load_catalog(self.root, self.catalog_path)
+
     def test_inventory_paths_cannot_escape_the_checkout(self):
         self.catalog_file["contracts"][0]["consumers"] = ["../catalog.json"]
         self.save_catalog_file()
