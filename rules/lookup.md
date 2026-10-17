@@ -530,12 +530,10 @@ Each entry is either an untyped expression, including its
 `{type: <column_type>, derivation: <expression>, unconvertible: <literal>?}`.
 An untyped entry cannot declare `unconvertible`, and an untyped handler
 wrapper fails schema validation. A typed entry converts each result under
-[VALUE-3](values.md#value-3) and
 [VALUE-3](values.md#value-3) before any later derivation, filter,
 match, ordering or verification reads it. Missing stays missing. A conversion
 failure is fatal without `unconvertible`; a declared literal replacement
 converts to the same type and is counted under
-[COLUMN-13](columns.md#column-13) and
 [COLUMN-13](columns.md#column-13). The conversion boundary is the
 binding's result; expressions still never convert implicitly
 ([VALUE-2](values.md#value-2)). For example:
@@ -703,9 +701,9 @@ Replaces: REQ-1245.
 
 The mapping form `unique: {columns: [STUDYID, USUBJID], id: donor-key}` names a
 check when an explicit ID is useful, and both forms test the same donor
-records. Each check may declare an optional `id`, governed by CHECK-3 and
-CHECK-3. [LOOKUP-10](#lookup-10) already rejects multiple surviving matches
-without a selection rule.
+records. Each check may declare an optional `id`, governed by
+[CHECK-3](verification.md#check-3). [LOOKUP-10](#lookup-10) already rejects
+multiple surviving matches without a selection rule.
 
 A repeated combination fails as `duplicate_intermediate_records` at the
 `intermediates[i].verifications[j].unique` path. Each `unique` column must name
@@ -851,7 +849,6 @@ through the binding's declared `type`, and a date becomes an integer only
 through an operation such as `to_epoch_day` in the binding's own derivation;
 the aggregate and numeric grammars never parse text or dates themselves. Each
 binding's evaluated value converts to its declared `type` under
-[VALUE-3](values.md#value-3) and
 [VALUE-3](values.md#value-3). Text that is not convertible to the
 declared numeric type fails as a conversion failure under
 [VALUE-3](values.md#value-3), answered by a declared `unconvertible`
