@@ -1,9 +1,8 @@
 """Public argument and issues conversion for shared native Define generation."""
 
-from importlib.metadata import version
 from os import PathLike, fspath
 
-from yamaa._native import DefineError, _define_file
+from yamaa._native import _CORE_VERSION, DefineError, _define_file
 from yamaa._native_results import issues_frame
 
 
@@ -30,9 +29,7 @@ def define(
     environment: str | PathLike[str], standard: str, *, created: str | None = None
 ) -> Define:
     """Compose submission metadata without running a specification."""
-    return Define(
-        _define_file(fspath(environment), standard, created, version("yamaa"))
-    )
+    return Define(_define_file(fspath(environment), standard, created, _CORE_VERSION))
 
 
 __all__ = ["DefineError", "define"]
