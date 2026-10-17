@@ -657,8 +657,8 @@ mod execution {
             }
         }
         #[test]
-        fn expression_composite_and_correlated_selectors_keep_the_existing_scan() {
-            for mode in [Mode::Expression, Mode::Composite, Mode::Correlated] {
+        fn expression_and_correlated_selectors_keep_the_existing_scan() {
+            for mode in [Mode::Expression, Mode::Correlated] {
                 for _ in 0..2 {
                     let (primary, donors, plan, trace) = fixture(Keep::First, mode, true);
                     assert_eq!(
@@ -688,6 +688,41 @@ mod execution {
                         }
                     );
                 }
+            }
+        }
+        #[test]
+        fn composite_selector_is_indexed_over_the_full_key_tuple() {
+            for _ in 0..2 {
+                let (primary, donors, plan, trace) = fixture(Keep::First, Mode::Composite, true);
+                assert_eq!(
+                    plan.execute(
+                        &primary,
+                        &[&donors],
+                        &mut yamaa_core::function_invocation::NoFunctions::new(),
+                        None
+                    )
+                    .result
+                    .unwrap()
+                    .dataset
+                    .rows(),
+                    expected(Keep::First)
+                );
+                // The index is built once over the eligible donors: every
+                // eligible donor key cell is read exactly once, in donor
+                // order, instead of once per output row on the scan path.
+                let key_reads = trace
+                    .borrow()
+                    .iter()
+                    .filter(|(name, _, col)| *name == "DONOR" && *col == 0)
+                    .copied()
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    key_reads,
+                    (0..256)
+                        .filter(|r| r % 4 != 0)
+                        .map(|r| ("DONOR", r, 0))
+                        .collect::<Vec<_>>()
+                );
             }
         }
         #[test]

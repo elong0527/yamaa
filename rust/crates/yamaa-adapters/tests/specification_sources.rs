@@ -1524,8 +1524,8 @@ output: {{path: output.csv, columns: [I, S]}}
                 (
                     raw.replace("derivation: LB.VISIT", "derivation: LB.LBTEST"),
                     "columns.AVISIT.derivation.source",
-                    "REQ-0107",
-                    json!({"identifier":"LB.LBTEST","dataset":"LB"}),
+                    "REQ-0067",
+                    json!({"identifier":"LB.LBTEST","row":"total","dataset":"LB"}),
                 ),
             ] {
                 let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();

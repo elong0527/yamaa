@@ -27,7 +27,7 @@
 # This is transport of Rust observations, with no host semantic preparation.
 .domain_observations <- function(result, include_measurements = FALSE) {
   handle <- get("h", envir = environment(result$save), inherits = FALSE)
-  .domain_reply(.Call(wrap__domain_observations, handle, include_measurements))
+  .domain_reply(.native_domain_observations(handle, include_measurements))
 }
 
 #' Build a domain through the shared Rust engine
@@ -42,19 +42,19 @@ yamaa_domain <- function(specification, environment = NULL, resolver = NULL) {
   if (!is.null(resolver)) resolver <- resolver$session()
   host <- list(capabilities$verify, capabilities$resolve, .project_condition_details)
   handle <- if (is.null(resolver)) {
-    .domain_reply(.Call(wrap__domain_file, args[[1L]], args[[2L]], args[[3L]], host))
+    .domain_reply(.native_domain_file(args[[1L]], args[[2L]], args[[3L]], host))
   } else {
-    value <- .domain_reply(.Call(wrap__domain_resolved, args[[1L]], args[[2L]], args[[3L]], host, resolver$dispatch))
+    value <- .domain_reply(.native_domain_resolved(args[[1L]], args[[2L]], args[[3L]], host, resolver$dispatch))
     resolver$raise_pending()
     value
   }
-  interrupted <- .domain_reply(.Call(wrap__domain_interrupt, handle))
+  interrupted <- .domain_reply(.native_domain_interrupt(handle))
   if (!is.null(interrupted)) stop(interrupted)
   result <- new.env(parent = emptyenv())
   result$resource_provenance <- if (is.null(resolver)) list() else resolver$provenance
   makeActiveBinding("output", local({ h <- handle; function(value) {
     if (!missing(value)) stop("output is read only", call. = FALSE)
-    .domain_reply(.Call(wrap__domain_output, h))
+    .domain_reply(.native_domain_output(h))
   }}), result)
   makeActiveBinding("output_arrow", local({ h <- handle; function(value) {
     if (!missing(value)) stop("output_arrow is read only", call. = FALSE)
@@ -70,19 +70,19 @@ yamaa_domain <- function(specification, environment = NULL, resolver = NULL) {
   }}), result)
   makeActiveBinding("issues", local({ h <- handle; function(value) {
     if (!missing(value)) stop("issues are read only", call. = FALSE)
-    .domain_reply(.Call(wrap__domain_issues, h))
+    .domain_reply(.native_domain_issues(h))
   }}), result)
   makeActiveBinding("verification_log", local({ h <- handle; function(value) {
     if (!missing(value)) stop("verification_log is read only", call. = FALSE)
-    .domain_reply(.Call(wrap__domain_log, h, FALSE))
+    .domain_reply(.native_domain_log(h, FALSE))
   }}), result)
   makeActiveBinding("warning_log", local({ h <- handle; function(value) {
     if (!missing(value)) stop("warning_log is read only", call. = FALSE)
-    .domain_reply(.Call(wrap__domain_log, h, TRUE))
+    .domain_reply(.native_domain_log(h, TRUE))
   }}), result)
   result$save <- local({ h <- handle; function() {
     if (!is.null(resolver)) on.exit(resolver$raise_pending())
-    reply <- .domain_reply(.Call(wrap__domain_save, h))
+    reply <- .domain_reply(.native_domain_save(h))
     if (reply$failed) stop(structure(list(message = "cannot save a failed build", call = NULL),
       class = c("yamaa_domain_error", "error", "condition")))
     reply$saved
@@ -98,10 +98,10 @@ yamaa_domain <- function(specification, environment = NULL, resolver = NULL) {
 yamaa_check <- function(specification, environment = NULL, resolver = NULL) {
   args <- .domain_arguments(specification, environment)
   if (is.null(resolver)) {
-    return(list(issues = .domain_reply(.Call(wrap__check_file, args[[1L]], args[[2L]], args[[3L]]))))
+    return(list(issues = .domain_reply(.native_check_file(args[[1L]], args[[2L]], args[[3L]]))))
   }
   resolver <- resolver$session()
-  value <- .domain_reply(.Call(wrap__check_resolved, args[[1L]], args[[2L]], args[[3L]], resolver$dispatch))
+  value <- .domain_reply(.native_check_resolved(args[[1L]], args[[2L]], args[[3L]], resolver$dispatch))
   resolver$raise_pending()
   list(issues = value)
 }

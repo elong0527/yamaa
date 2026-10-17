@@ -75,10 +75,4 @@ fn scalar_operator(
     })
 }
 
-extendr_module! {
-    mod scalars;
-    fn scalar_bytes;
-    fn scalar_exact_double;
-    fn scalar_operator_code;
-    fn scalar_operator;
-}
+include!("generated/scalars.rs");

@@ -1,5 +1,5 @@
 # Authoritative declaration input for the Python/R generators specified in README.md.
-# Design only: this file does not yet replace the handwritten registrations.
+# Both hosts' registrations and native declarations are generated from this file.
 format: yamaa.host-interface
 format_version: 1
 boundary: rust_generated_host_glue
