@@ -72,7 +72,7 @@ requirement unmet under `Submission` fails, reporting the requirement and the
 position.
 
 Fails: `missing_required_field`.
-Evidence: `sdtm-dm-metadata`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCdiscAliasMissing`.
+Evidence: `sdtm-dm-metadata`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCdiscAliasMissing`, `rust/crates/yamaa-adapters/tests/file_resources.rs::collected_origins_name_their_form_page_under_submission`.
 Replaces: REQ-0963, REQ-1003, REQ-1004, REQ-1024.
 
 Nothing in this profile is relaxed by `Other`; that context only omits the
@@ -89,14 +89,18 @@ requirements a regulator imposes. Under `Submission`:
   [OUTPUT-2](../output.md#output-2) already requires, and
   every key column carries a `KeySequence`;
 - every column carries a `def:Origin`, which [SUB-14](submission.md#sub-14)
-  already requires; and
+  already requires;
+- every `Collected` origin from `Investigator` or `Subject` declares
+  `documents` with at least one `pages` reference into the annotated case
+  report form, which [SUB-17](submission.md#sub-17) requires; and
 - every codelist that declares `items` and is drawn from a standard whose name
   is `CDISC/NCI` declares `alias`, and so does every one of its items. An
   external codelist is excluded: it represents its dictionary rather than CDISC
   controlled terminology, and has no items to identify.
 
 A codelist or item `alias` missing under `Submission` fails with
-`missing_required_field`.
+`missing_required_field`. A collected origin without a page reference fails as
+[SUB-17](submission.md#sub-17) states.
 
 ## Composition
 
@@ -363,8 +367,9 @@ Fails: `origin_document_missing`, `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAnnotatedCrfMultiplicity`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAnnotatedCrfMissing`.
 Replaces: REQ-0984, REQ-1019.
 
-[SUB-17](submission.md#sub-17) names that document and derives the reference to
-it, and neither is possible unless exactly one exists. More than one
+[SUB-17](submission.md#sub-17) names that document and, under `context: Other`,
+derives the reference to it, and neither is possible unless exactly one exists.
+More than one
 `annotated_crf` document fails with `value_not_permitted`; none where a
 collected origin requires one fails with `origin_document_missing`.
 
@@ -506,8 +511,9 @@ Replaces: REQ-0992, REQ-0993, REQ-0994.
 [SUB-15](submission.md#sub-15) derives the origin `Source` for the `adam`
 family. The `def:Origin` `Description` child carries `origin.description` when
 declared, and one `def:DocumentRef` child follows per document reference in
-declaration order, including the annotated case report form
-[SUB-17](submission.md#sub-17) derives when a collected origin declares none.
+declaration order, including the page-less annotated case report form
+reference [SUB-17](submission.md#sub-17) derives under `context: Other` when a
+collected origin declares none.
 Rows with different provenance use the separate per-value definitions of
 [DEFINE-27](#define-27).
 

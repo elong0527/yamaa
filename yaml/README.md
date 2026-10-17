@@ -80,9 +80,9 @@ rule, grammar, or fixture:
   become a second place a governed fact lives.
 - Declare nothing a rule derives. For `sdtm` and `send`, `Mandatory` comes
   from `core`; for `adam` the two are independently declared. A submission
-  length comes from `max_length`, an ADaM origin source from its type, and a
-  collected value's annotated-CRF reference from the document that declares
-  it.
+  length comes from `max_length`, an ADaM origin source from its type, and,
+  under the `Other` context, a collected value's page-less annotated-CRF
+  reference from the document that declares it.
 - Declare a codelist once in the study environment and bind columns to its
   identifier, as required by the
   [terminology contract](../rules/profiles/terminology.md).
