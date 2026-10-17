@@ -967,13 +967,13 @@ rows:
             .unwrap();
             fs::write(
                 fixture.0.join("input.csv"),
-                b"ID,TEXT\n1,2024-02-29\n2,2024-02-29T12:13\n3,\n",
+                b"ID,TEXT\n1,2024-02-29\n2,2024-02-29T12:13\n3,\n4,2024-02-29T12\n5,2024-02-29T12:13:14\n",
             )
             .unwrap();
             let mut result = fixture.run();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
-            assert_eq!(fs::read(fixture.0.join("output.csv")).unwrap(),b"ID,DTM,PR,DATE\n1,2024-02-29T23:59:59,D,2024-02-29\n2,2024-02-29T12:13:00,S,2024-02-29\n3,,,\n");
+            assert_eq!(fs::read(fixture.0.join("output.csv")).unwrap(),b"ID,DTM,PR,DATE\n1,2024-02-29T23:59:59,D,2024-02-29\n2,2024-02-29T12:13:59,M,2024-02-29\n3,,,\n4,2024-02-29T12:59:59,H,2024-02-29\n5,2024-02-29T12:13:14,S,2024-02-29\n");
         }
         #[test]
         fn nested_case_conversion_reads_only_its_selected_completed_datetime() {
@@ -1013,7 +1013,7 @@ columns:
             assert!(result.save().unwrap());
             assert_eq!(
         fs::read(fixture.0.join("output.csv")).unwrap(),
-        b"ID,DTM,PR,DATE\n1,2024-02-29T23:59:59,D,2024-02-29\n2,2024-02-29T12:13:00,S,\n3,,,\n"
+        b"ID,DTM,PR,DATE\n1,2024-02-29T23:59:59,D,2024-02-29\n2,2024-02-29T12:13:59,M,\n3,,,\n"
     );
         }
         fn issue_rows(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -1047,7 +1047,7 @@ columns:
                         "condition": issue.condition,
                         "requirement": issue.requirement,
                         "spec_paths": issue.spec_paths,
-                        "context": yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                        "context": issue.context.clone(),
                     })
                 })
                 .collect()

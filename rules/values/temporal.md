@@ -55,10 +55,12 @@ text until `date_impute` or `datetime_impute` completes it. Each value has a
 <a id="req-0545"></a>
 
 **REQ-0545.** For a `date` that property is `year`, `month`, or `day`. For a
-`datetime` it is `day` or `second`. A parsed datetime is collected through the
-second: an omitted `ss` names second zero rather than claiming a coarser value.
-`datetime_impute` may instead complete a collected date with a declared time
-of day, producing a complete datetime whose collected precision remains `day`.
+`datetime` it is `day`, `hour`, `minute`, or `second`. A parsed datetime is
+collected through the second: an omitted `ss` names second zero rather than
+claiming a coarser value. `datetime_impute` may instead complete collected text
+that stops after its day, hour, or minute under a declared time rule, producing
+a complete datetime whose collected precision is the last field that text
+carried.
 
 <a id="req-0546"></a>
 
@@ -69,7 +71,7 @@ value came from. Their origins are:
 |---|---|
 | parsed text | `day`; `datetime`: `second` |
 | `date_impute` | the precision its source carried |
-| `datetime_impute` | `day` for a date source; `second` for a datetime source |
+| `datetime_impute` | last field its source text carried; a `datetime` source unchanged |
 | `to_date` | `day` |
 | selecting an existing value | unchanged; property follows selected value |
 | `date_shift` or `datetime_shift` | unchanged from the source temporal value |
@@ -85,9 +87,10 @@ expressions that return an operand rather than computing one.
 
 **REQ-0548.** Provenance is read off collected precision rather than recorded
 beside it. A component finer than the collected precision was supplied by an
-imputation operation. A date whose precision is `day` was collected in full;
-a datetime whose precision is `day` had its time supplied, while `second`
-means the source carried a time.
+imputation operation. A date whose precision is `day` was collected in full.
+A datetime whose precision is `day` had its whole time supplied, `hour` had its
+minute and second supplied, `minute` had its second supplied, and `second`
+means the source carried every time field.
 
 ### Lexical form
 
