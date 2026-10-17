@@ -251,7 +251,7 @@ them are checked before matching.
 | `datetime` | `datetime_impute` |
 | `int` | `date_diff`, `rank`, `row_number`, `study_day`, `to_epoch_day` |
 | `float` | `round_half_away_from_zero` |
-| `str` | `baseline_flag`, `cut`, `date_precision`, `datetime_precision`, `str_case`, `str_concat`, `str_extract`, `str_pad`, `str_replace`, `str_template` |
+| `str` | `baseline_flag`, `cut`, `date_precision`, `datetime_precision`, `str_case`, `str_extract`, `str_pad`, `str_replace`, `str_template` |
 | Numeric (`int` or `float`) | `compute` |
 
 For `compute`, either possible result type compares with `int` and `float`
@@ -858,9 +858,9 @@ declared numeric type fails as a conversion failure under
 handler and fatal otherwise. A missing value stays missing without attempting
 conversion.
 
-The window operations are `row_number`, `rank`, `row_value`,
-`previous_non_missing`, `locf` and `baseline_flag`, including inside `case` or
-`str_concat`; validation reports `invalid_derive_step` at the window's path.
+The window operations are `row_number`, `rank`, `row_value`, `locf` and
+`baseline_flag`, including inside `case`; validation reports
+`invalid_derive_step` at the window's path.
 
 The relation a derived aggregate reduces is the one relation its derive
 bindings and filter name, and naming two relations is an error. A reducer

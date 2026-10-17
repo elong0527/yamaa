@@ -10,22 +10,16 @@ specification.
 
 <a id="text-1"></a>
 
-### TEXT-1. Text verbs take string sources, and str_concat joins string results in order
+### TEXT-1. Text verbs take string sources and fail rather than convert another type
 
-`str_extract`, `str_replace`, `str_concat`, `str_template` and `str_case`
-require string sources; a source of another runtime type fails rather than
-being converted. `str_concat` concatenates the string results of its `sources`
-expressions in order. When any source is missing, it returns its declared
-`missing` value.
+`str_extract`, `str_replace`, `str_template` and `str_case` require string
+sources; a source of another runtime type fails rather than being converted.
 
 Fails: `incompatible_input_type`.
-Evidence: `negative-str-case-number`, `schema-expressions`, `rust/crates/yamaa-core/tests/support/diagnostic/text_case.rs`.
-Replaces: REQ-0308, REQ-1112.
+Evidence: `negative-str-case-number`, `rust/crates/yamaa-core/tests/support/diagnostic/text_case.rs`.
+Replaces: REQ-0308.
 
 A source of another type fails under [VALUE-2](values.md#value-2).
-`str_concat`'s `missing` fires when any input is missing
-([COLUMN-11](columns.md#column-11)); without it, the missing input is
-fatal under [COLUMN-10](columns.md#column-10).
 
 <a id="text-2"></a>
 
@@ -93,8 +87,8 @@ the result is the exact concatenation of literal text and values, the empty
 string when the template is empty.
 
 Fails: `incompatible_input_type`.
-Evidence: `schema-shorthand`, `sdtm-dm-race-ethnicity`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`.
-Replaces: REQ-0446, REQ-0447, REQ-0448, REQ-0455, REQ-0456, REQ-0457, REQ-0458, REQ-0459, REQ-0460, REQ-0462, REQ-1113, REQ-1116, REQ-1117.
+Evidence: `schema-shorthand`, `sdtm-dm-race-ethnicity`, `schema-expressions`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`.
+Replaces: REQ-0446, REQ-0447, REQ-0448, REQ-0455, REQ-0456, REQ-0457, REQ-0458, REQ-0459, REQ-0460, REQ-0462, REQ-1112, REQ-1113, REQ-1116, REQ-1117.
 
 `str_template` accepts a bare template as
 [Schema language](reference/schema-language.md) shorthand. The shorthand
@@ -122,6 +116,11 @@ under [VALUE-2](values.md#value-2). `missing` answers when any placeholder
 value is missing; without it, the missing value is fatal under
 [Column derivation](columns.md). The concatenation is exact under
 [VALUE-12](values.md#value-12).
+
+Text joined from several parts is written as one template: literal text, with
+braces written `{{` and `}}`, sits beside the placeholders, and a value that
+another expression computes is bound to a column first and then named as a
+placeholder.
 
 ## Case
 
