@@ -1267,12 +1267,6 @@ impl BigUint {
         }
     }
 
-    fn bit(&self, index: u32) -> bool {
-        self.0
-            .get((index / 64) as usize)
-            .is_some_and(|limb| (limb >> (index % 64)) & 1 == 1)
-    }
-
     fn shr(&mut self, bits: u32) {
         let limbs = (bits / 64) as usize;
         if limbs >= self.0.len() {
@@ -1296,9 +1290,14 @@ impl BigUint {
         }
     }
 
-    fn add_one(&mut self) {
-        let mut carry: u128 = 1;
-        for limb in &mut self.0 {
+    /// Add 2^index, extending the limbs as needed.
+    fn add_power_of_two(&mut self, index: u32) {
+        let start = (index / 64) as usize;
+        if self.0.len() <= start {
+            self.0.resize(start + 1, 0);
+        }
+        let mut carry = u128::from(1u64 << (index % 64));
+        for limb in &mut self.0[start..] {
             let total = u128::from(*limb) + carry;
             *limb = total as u64;
             carry = total >> 64;
@@ -1343,8 +1342,9 @@ impl BigUint {
 
 /// REQ-0747 reported-precision projection of one binary64 value,
 /// mirroring the runner's `reported_table`: the exact integer ratio is
-/// rounded to `decimals` places with ties away from zero, then read
-/// back as a float. No tolerance anywhere.
+/// rounded to `decimals` places under REQ-0418's interval (ties, and near
+/// ties within 2^-26 below a scaled tie, away from zero), then read back
+/// as a float.
 fn project_reported(value: f64, decimals: u32) -> f64 {
     if !value.is_finite() {
         return value;
@@ -1373,14 +1373,15 @@ fn project_reported(value: f64, decimals: u32) -> f64 {
         scaled
     } else {
         let k = (-shift) as u32;
-        // remainder * 2 >= denominator  <=>  bit (k-1) of the scaled
-        // numerator is set (the denominator is 2^k).
-        let tie_up = scaled.bit(k - 1);
+        // With denominator 2^k, remainder / 2^k >= 1/2 - 2^-26 holds exactly
+        // when remainder + 2^(k-1) + 2^(k-26) reaches 2^k. Below k = 26 the
+        // integer remainder makes the 2^(k-26) term vanish.
         let mut quotient = scaled;
-        quotient.shr(k);
-        if tie_up {
-            quotient.add_one();
+        quotient.add_power_of_two(k - 1);
+        if k >= 26 {
+            quotient.add_power_of_two(k - 26);
         }
+        quotient.shr(k);
         quotient
     };
     let digits = rounded.to_decimal();

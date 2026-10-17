@@ -797,7 +797,7 @@ mod table {
                     vec![Value::Int(4), Value::float(-0.004), Value::Str("z".into())],
                 ],
             };
-            let expected = b"S,F,I\n\"\",0.13,1\n\"a,b\",2.67,2\n,,3\nz,0.00,4\n";
+            let expected = b"S,F,I\n\"\",0.13,1\n\"a,b\",2.68,2\n,,3\nz,0.00,4\n";
             assert_eq!(
                 csv_artifact::render(&table, &[2, 1, 0], Some("2")).unwrap(),
                 expected

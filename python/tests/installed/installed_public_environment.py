@@ -551,7 +551,7 @@ class PublicEnvironment(unittest.TestCase):
     def test_csv_precision_changes_saved_bytes_only_and_preserves_derived_values(self):
         expected = (
             b'ID,VALUE,DOUBLE,EMPTY,INT\n1,0.13,0.25,"",7\n2,-0.13,-0.25,"",-7\n'
-            b'3,2.67,5.35,"",0\n4,0.00,-0.01,"",9\n5,1.23,2.47,"",1\n'
+            b'3,2.68,5.35,"",0\n4,0.00,-0.01,"",9\n5,1.23,2.47,"",1\n'
             b'6,2.35,4.69,"",2\n7,,,"",3\n8,25.00,50.00,"",4\n'
         )
         self.precision_study()

@@ -531,6 +531,22 @@ class PublicConformance(unittest.TestCase):
             ),
             {"columns": [["N", "float"]], "rows": [["0000000000000000"]]},
         )
+        # 2.675 is stored 1.8e-14 below the scaled tie, inside the 2^-26
+        # interval, so it reports 2.68; 1.004999999 is 1.0e-7 below and
+        # reports 1.00.
+        self.assertEqual(
+            judge.reported_table(
+                {
+                    "columns": [["N", "float"]],
+                    "rows": [["4005666666666666"], ["3ff0147ae102f5e5"]],
+                },
+                2,
+            ),
+            {
+                "columns": [["N", "float"]],
+                "rows": [["400570a3d70a3d71"], ["3ff0000000000000"]],
+            },
+        )
 
     def test_metadata_entries_and_host_environments_are_preserved(self):
         for name in ("spec_one.yaml", "spec_two.yaml"):
