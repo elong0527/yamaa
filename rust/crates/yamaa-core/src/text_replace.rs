@@ -4,7 +4,6 @@
 //! literal replacement text are owned here.
 use crate::{
     diagnostic::Diagnostic,
-    regex,
     table::ValueRef,
     text_extract::{self, AdmissionError, StringExtract},
     value::Value,
@@ -29,8 +28,6 @@ pub enum Step<'a> {
 pub enum Error {
     #[error("text replace diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
-    #[error("text replace regex: {0:?}")]
-    Regex(regex::MatchError),
 }
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RenderError {
@@ -69,8 +66,7 @@ impl StringReplace {
     pub fn missing(&self) -> Option<&Value> {
         self.search.handler("missing")
     }
-    /// Scan the whole subject before anything is copied. A step refusal cannot
-    /// be mistaken for a subject without matches.
+    /// Scan the whole subject before anything is copied.
     pub fn apply<'a>(&self, value: ValueRef<'a>) -> Result<Step<'a>, Error> {
         if let Some(diagnostic) = self.search.declaration_diagnostic() {
             return Err(Error::Diagnostic(diagnostic.clone()));
@@ -101,8 +97,7 @@ impl StringReplace {
             .search
             .admitted()
             .expect("admitted pattern")
-            .search_all(subject)
-            .map_err(Error::Regex)?;
+            .search_all(subject);
         Ok(Step::Matched { subject, spans })
     }
     /// The unmatched text, in order, with each match replaced by the literal text.
@@ -176,7 +171,8 @@ mod tests {
             ("x", "-", "abc", "abc"),
             ("^a", "", "aaa", "aa"),
             ("a$", "", "aaa", "aa"),
-            ("(?<=a)a", "-", "aaa", "a--"),
+            // An assertion at the resumed position still sees the scalar before it.
+            (r"\Ba", "-", "aaa", "a--"),
             (r"\bAE\b", "X", "AE AEX AE", "X AEX X"),
         ] {
             assert_eq!(
@@ -267,15 +263,10 @@ mod tests {
     }
 
     #[test]
-    fn the_whole_scan_shares_one_step_guard() {
-        // Each empty match costs at least one start and one step, so a scan
-        // longer than the guard is refused rather than returned partly replaced.
-        let subject = "a".repeat(crate::limits::Limits::REGEX_STEPS);
-        assert!(matches!(
-            operation("x*", "-", None).apply(ValueRef::Str(&subject)),
-            Err(Error::Regex(_))
-        ));
-        assert_eq!(replaced("x*", "-", &"a".repeat(1000)).len(), 1000 + 1001);
+    fn a_long_scan_completes_without_a_step_budget() {
+        // A million and one empty matches, which the retired step guard refused.
+        let subject = "a".repeat(1_000_000);
+        assert_eq!(replaced("x*", "-", &subject).len(), 2 * subject.len() + 1);
     }
 
     #[test]

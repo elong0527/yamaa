@@ -35,27 +35,21 @@ pub(super) fn prepare(
             if kind != ColumnType::Str {
                 return Ok(wrong_type());
             }
-            match crate::regex::Pattern::compile(pattern) {
+            match crate::portable_regex::Pattern::compile(pattern) {
                 Ok(pattern) => Ok(Check::Matches(pattern)),
-                Err(crate::regex::CompileError::Invalid { .. }) => Ok(Check::InvalidDiagnostic(
-                    crate::dataset_checks::invalid_pattern_diagnostic(
+                Err(crate::portable_regex::CompileError::Invalid { .. }) => Ok(
+                    Check::InvalidDiagnostic(crate::dataset_checks::invalid_pattern_diagnostic(
                         format!("{path}.pattern"),
                         pattern.into(),
-                    ),
-                )),
-                Err(crate::regex::CompileError::Limit {
-                    resource, limit, ..
-                }) => Err(PrepareError::limit(
-                    compiler_limits::regex_resource(resource),
-                    limit,
-                    None,
-                    Some(&format!("{path}.pattern")),
-                )),
-                Err(crate::regex::CompileError::Unsupported { .. }) => {
-                    Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                        operation: "verification_pattern".into(),
-                        path: format!("{path}.pattern"),
-                    }]))
+                    )),
+                ),
+                Err(crate::portable_regex::CompileError::Limit { resource, limit }) => {
+                    Err(PrepareError::limit(
+                        compiler_limits::regex_resource(resource),
+                        limit,
+                        None,
+                        Some(&format!("{path}.pattern")),
+                    ))
                 }
             }
         }

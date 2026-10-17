@@ -476,11 +476,13 @@ class PublicEnvironment(unittest.TestCase):
         self.assertIsNone(failed._native.observations())
         self.assertFalse(Path("outputs/ids.csv").exists())
 
-    def test_matching_budget_has_the_same_owner_and_bound_with_and_without_environment(
+    def test_catastrophic_pattern_fails_the_same_check_with_and_without_environment(
         self,
     ):
+        # Matching is linear: a nested repetition that cannot match is an
+        # ordinary verification failure, not an exhausted step budget.
         os.chdir(self.directory)
-        truth = TRUTH["regex_budget"]
+        truth = TRUTH["catastrophic_pattern"]
         Path("spec.yaml").write_text(truth["specification"])
         Path("input.csv").write_text(truth["source"])
         Path("environment.yaml").write_text("schema_version: '1.0'\nlanguage: python\n")
@@ -551,7 +553,7 @@ class PublicEnvironment(unittest.TestCase):
     def test_csv_precision_changes_saved_bytes_only_and_preserves_derived_values(self):
         expected = (
             b'ID,VALUE,DOUBLE,EMPTY,INT\n1,0.13,0.25,"",7\n2,-0.13,-0.25,"",-7\n'
-            b'3,2.67,5.35,"",0\n4,0.00,-0.01,"",9\n5,1.23,2.47,"",1\n'
+            b'3,2.68,5.35,"",0\n4,0.00,-0.01,"",9\n5,1.23,2.47,"",1\n'
             b'6,2.35,4.69,"",2\n7,,,"",3\n8,25.00,50.00,"",4\n'
         )
         self.precision_study()

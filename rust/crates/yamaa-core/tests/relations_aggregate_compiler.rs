@@ -1084,7 +1084,7 @@ mod relations {
             )
             .is_ok());
             assert!(make(ColumnType::Str, Check::MaxLength(1)).is_ok());
-            let pattern = yamaa_core::regex::Pattern::compile("b").unwrap();
+            let pattern = yamaa_core::portable_regex::Pattern::compile("b").unwrap();
             assert_eq!(
                 make(ColumnType::Int, Check::Matches(pattern.clone())),
                 Err(PlanError::InvalidColumns)

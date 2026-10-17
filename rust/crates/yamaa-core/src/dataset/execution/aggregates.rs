@@ -136,10 +136,7 @@ fn filter<T: TableAccess + ?Sized>(
     if let Some(filter) = bound.filter() {
         return crate::dataset::execution::predicates::evaluate(filter, table, source_row, &[])
             .map(|truth| truth == crate::predicate::Truth::True)
-            .map_err(|error| match error.kind {
-                crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
-                _ => Box::new(ExecutionError::Predicate { source_row, error }),
-            });
+            .map_err(|error| Box::new(ExecutionError::Predicate { source_row, error }));
     }
     Ok(true)
 }

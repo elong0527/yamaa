@@ -66,14 +66,6 @@ fn predicate(
                 position.character,
             )));
         }
-        Err(predicate_compiler::Error::Parse(
-            crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-        )) => {
-            return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                operation: "predicate_regex".into(),
-                path,
-            }]));
-        }
         Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
         Err(error) => return Err(PrepareError::predicate(error.clone(), Some(&path))),
     };

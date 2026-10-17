@@ -59,12 +59,9 @@ fn validate_predicate<E>(
         .expect("admitted verification names");
     crate::dataset::execution::predicates::evaluate(&sample_predicate, dataset, 0, &samples)
         .map_err(|error| {
-            Box::new(match error.kind {
-                ErrorKind::Regex(limit) => dataset::regex_limit(limit),
-                _ => ExecutionError::VerificationPredicate {
-                    error,
-                    records: std::mem::take(records),
-                },
+            Box::new(ExecutionError::VerificationPredicate {
+                error,
+                records: std::mem::take(records),
             })
         })?;
     Ok(())
@@ -94,12 +91,9 @@ fn evaluate_predicate<T: TableAccess + ?Sized>(
             &candidate.values,
         )
         .map_err(|error| {
-            Box::new(match error.kind {
-                ErrorKind::Regex(limit) => dataset::regex_limit(limit),
-                _ => ExecutionError::VerificationPredicate {
-                    error,
-                    records: std::mem::take(records),
-                },
+            Box::new(ExecutionError::VerificationPredicate {
+                error,
+                records: std::mem::take(records),
             })
         });
     }

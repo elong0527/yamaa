@@ -419,7 +419,7 @@ mod diagnostics {
                 .is_none());
                 reached.insert(diagnostic.code);
             }
-            let pattern = yamaa_core::regex::Pattern::compile("b").unwrap();
+            let pattern = yamaa_core::portable_regex::Pattern::compile("b").unwrap();
             let rows = yamaa_core::dataset_checks::matches_offenders(
                 &pattern,
                 &[
@@ -427,8 +427,7 @@ mod diagnostics {
                     Value::Missing,
                     Value::Str("xxx".into()),
                 ],
-            )
-            .unwrap();
+            );
             assert_eq!(rows, [2]);
             let diagnostic = yamaa_core::dataset_checks::column_diagnostic(
                 &yamaa_core::dataset::Check::Matches(pattern),
@@ -452,8 +451,8 @@ mod diagnostics {
             );
             reached.insert(diagnostic.code);
             assert!(matches!(
-                yamaa_core::regex::Pattern::compile("("),
-                Err(yamaa_core::regex::CompileError::Invalid { .. })
+                yamaa_core::portable_regex::Pattern::compile("("),
+                Err(yamaa_core::portable_regex::CompileError::Invalid { .. })
             ));
             let diagnostic = yamaa_core::dataset_checks::invalid_pattern_diagnostic(
                 "columns.V.verifications[0].matches.pattern".into(),
@@ -569,22 +568,23 @@ mod diagnostics {
         }
 
         #[test]
-        fn column_pattern_searches_reuse_the_plan_after_a_fixed_work_refusal() {
-            use yamaa_core::{dataset_checks::matches_offenders, regex};
-            let pattern = regex::Pattern::compile("z").unwrap();
+        fn column_pattern_searches_reuse_the_plan_without_a_work_budget() {
+            use yamaa_core::{dataset_checks::matches_offenders, portable_regex::Pattern};
+            let pattern = Pattern::compile("z").unwrap();
             let values = [Value::Str("é".into()), Value::Missing];
             for _ in 0..3 {
-                assert_eq!(matches_offenders(&pattern, &values).unwrap(), [0]);
+                assert_eq!(matches_offenders(&pattern, &values), [0]);
             }
+            // A million-scalar subject, which the retired step budget refused,
+            // is searched to completion and simply has no match.
             let long = [Value::Str("é".repeat(1_000_000))];
+            assert_eq!(matches_offenders(&pattern, &long), [0]);
+            let catastrophic = Pattern::compile("(a+)+b").unwrap();
             assert_eq!(
-                matches_offenders(&pattern, &long),
-                Err(regex::MatchError {
-                    resource: regex::Resource::Work,
-                    limit: 1_000_000,
-                })
+                matches_offenders(&catastrophic, &[Value::Str("a".repeat(100_000))]),
+                [0]
             );
-            assert_eq!(matches_offenders(&pattern, &values).unwrap(), [0]);
+            assert_eq!(matches_offenders(&pattern, &values), [0]);
         }
 
         /// A later nested error keeps its own span/route and full integer diagnostic,

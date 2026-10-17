@@ -89,7 +89,6 @@ jobs:
             (cd rust && cargo clippy --locked --workspace --all-targets --all-features -- -D warnings)
             python -m tools.commands.rust_tests
             (cd rust && cargo test --locked --workspace --profile release-test)
-            python -m tools.numeric.generate_regex_identifiers
             python -m tools.packaging.generate_schema_printable
             python -m tools.packaging.generate_shipped_schema
             python -m tools.packaging.generate_bindings

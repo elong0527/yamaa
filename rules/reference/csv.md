@@ -136,7 +136,7 @@ digits after the decimal point, and with a decimal point only when `n` is
 greater than zero. A value keeps its declared width whether or not its digits
 require it: at `n` of 4, an integral 25 is written `25.0000`.
 
-Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::genuine_binary64_ties_and_adjacent_values_match_independent_text`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::large_precision_uses_the_exact_fraction_and_retains_all_declared_zeros`.
+Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::ties_and_near_ties_round_away_from_zero_with_independent_text`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::large_precision_uses_the_exact_fraction_and_retains_all_declared_zeros`.
 Replaces: REQ-0745.
 
 <a id="csv-8"></a>
@@ -156,16 +156,16 @@ Replaces: REQ-0746.
 
 <a id="csv-9"></a>
 
-### CSV-9. Display rounding scales the exact binary64 value and rounds a tie away from zero
+### CSV-9. Display rounding applies the one rounding to the exact binary64 value
 
-Each binary64 value is an exact decimal fraction. To round it to `n` digits,
-multiply the exact value by ten raised to `n`, round the product to an integer
-with a tie away from zero, then divide by ten raised to `n`. A value that
-rounds to zero is written without a sign. The tie is decided on the exact
-value, never on a shortened representation of it, and no host rounding or
-formatting routine may be assumed to do this.
+Each binary64 value is an exact decimal fraction. Writing it with `n` digits
+rounds that exact value with the one rounding of
+[FORMULA-16](../formulas.md#formula-16): a tie, or a value within
+`2^-26 * 10^-n` below a tie, goes away from zero. The rounded decimal is
+written directly, and a value that rounds to zero is written without a sign.
+No host rounding or formatting routine may be assumed to do this.
 
-Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::genuine_binary64_ties_and_adjacent_values_match_independent_text`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::precision_serializes_float_projection_only_and_preserves_missing_and_empty_text`.
+Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::ties_and_near_ties_round_away_from_zero_with_independent_text`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::precision_serializes_float_projection_only_and_preserves_missing_and_empty_text`.
 Replaces: REQ-0747, REQ-0748, REQ-0749, REQ-0750, REQ-0766.
 
 The difference is observable:
@@ -174,17 +174,15 @@ The difference is observable:
 |---|---|---|
 | `0.125` | 0.125 | `0.13` |
 | `-0.125` | -0.125 | `-0.13` |
-| `2.675` | 2.674999999999999822364316059974953532218933105468750 | `2.67` |
+| `2.675` | 2.674999999999999822364316059974953532218933105468750 | `2.68` |
+| `1.004999999` | 1.0049999990000000327228235619259066879749298095703125 | `1.00` |
 
-`0.125` is representable, so it is a genuine tie and rounds away from zero.
-`2.675` is not representable; its nearest binary64 is below it, so there is no
-tie to break and it rounds down. An implementation that first shortens the
-value to `2.675` and then rounds reports `2.68` and does not conform. A routine
-that sends an exact tie to the even digit reports `0.12` for `0.125` and does
-not conform either, so an implementation performs the exact scaling above
-rather than delegating. Rounding with a routine whose ties do not go away from
-zero, or rounding a value another stage can observe ([CSV-8](#csv-8)), is not
-an implementation option.
+`0.125` is a genuine tie and rounds away from zero. `2.675` is `1.8e-14` below
+its tie, inside the window, so it rounds up as a decimal reader expects;
+`1.004999999` is `1e-7` below its tie, outside the window, so it rounds down.
+A routine that sends an exact tie to the even digit reports `0.12` for
+`0.125` and does not conform. Rounding a value another stage can observe
+([CSV-8](#csv-8)) is not an implementation option.
 
 ## Reading
 

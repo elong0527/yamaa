@@ -31,11 +31,11 @@ pub(super) fn parse_resource(resource: crate::numeric_parser::ParseResource) -> 
         ParseResource::Depth => "semantic_depth",
     }
 }
-pub(super) fn regex_resource(resource: crate::regex::Resource) -> &'static str {
-    use crate::regex::Resource;
+pub(super) fn regex_resource(resource: crate::portable_regex::Resource) -> &'static str {
+    use crate::portable_regex::Resource;
     match resource {
         Resource::Depth => "semantic_depth",
-        Resource::Work => "regex_steps",
+        Resource::Size => "regex_size",
     }
 }
 impl PrepareError {
@@ -73,10 +73,6 @@ impl PrepareError {
             ParseError::RegexLimit {
                 resource, limit, ..
             } => Self::limit(regex_resource(resource), limit, None, path),
-            ParseError::UnsupportedRegex { .. } => Self::Unsupported(vec![UnsupportedFeature {
-                operation: "predicate_regex".into(),
-                path: path.unwrap_or("").into(),
-            }]),
             _ => Self::Internal,
         }
     }
@@ -88,10 +84,7 @@ impl PrepareError {
                 Self::limit(error.resource, error.limit, error.actual, path)
             }
             Error::Plan(PlanError::Regex {
-                error:
-                    crate::regex::CompileError::Limit {
-                        resource, limit, ..
-                    },
+                error: crate::portable_regex::CompileError::Limit { resource, limit },
                 ..
             }) => Self::limit(regex_resource(resource), limit, None, path),
             _ => Self::Internal,

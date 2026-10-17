@@ -236,7 +236,7 @@ define_id:
   description: See REQ-1068.
 relative_href:
   type: str
-  pattern: ^(?!/)(?!.*(^|/)\.\.(/|$))[^\\]+$
+  pattern: ^(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)(?:/(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)?)*$
   description: See REQ-1070.
 language_tag:
   type: str

@@ -75,6 +75,5 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         Err(Error::Diagnostic(diagnostic)) => {
             Err(retained_diagnostic(diagnostic, false, candidate, plan, row))
         }
-        Err(Error::Regex(limit)) => Err(Box::new(regex_limit(limit))),
     }
 }

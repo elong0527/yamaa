@@ -3,10 +3,10 @@ pub(crate) use std::{collections::BTreeSet, convert::Infallible};
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
     diagnostic::{ConditionCode, PredicateDiagnosticError as P},
+    portable_regex as regex,
     predicate::{
         Comparison, Condition, ErrorKind, EvaluationError, Node, Plan, Resolver, Route, Scalar,
     },
-    regex,
     value::{Selection, Value},
 };
 pub(crate) fn text(s: &str) -> V {

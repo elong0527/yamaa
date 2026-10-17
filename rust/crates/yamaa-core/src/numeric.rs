@@ -3,7 +3,7 @@
 //! Parsing, operand evaluation order, callbacks and handler application belong
 //! to later layers. These functions do not skip evaluating an expression tree.
 
-use crate::value::{FiniteFloat, Value, ValueType};
+use crate::value::{compare_present, FiniteFloat, Value, ValueType};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Number {
@@ -196,29 +196,22 @@ pub fn unary(
     }
 }
 
-/// Return missing for equal arguments, comparing mixed types after promotion.
-/// Unlike extreme selection, the reference NULLIF compares a mixed pair as two
-/// binary64 values. A present unmatched left operand has the promoted pair type.
+/// Return missing for equal arguments. A mixed pair compares by exact value,
+/// like every other comparison; zero signs are equal. A present unmatched left
+/// operand has the promoted pair type.
 pub fn null_if(left: Number, right: Number) -> Number {
+    if left == Number::Missing {
+        return Number::Missing;
+    }
+    if right == Number::Missing {
+        return left;
+    }
+    if compare_present(&left.into(), &right.into()) == Ok(std::cmp::Ordering::Equal) {
+        return Number::Missing;
+    }
     match (left, right) {
-        (Number::Missing, _) => Number::Missing,
-        (_, Number::Missing) => left,
-        (Number::Int(a), Number::Int(b)) => {
-            if a == b {
-                Number::Missing
-            } else {
-                left
-            }
-        }
-        _ => {
-            let a = left.as_float().expect("present numeric left operand");
-            let b = right.as_float().expect("present numeric right operand");
-            if a == b {
-                Number::Missing
-            } else {
-                Number::float(a)
-            }
-        }
+        (Number::Int(_), Number::Int(_)) => left,
+        _ => Number::float(left.as_float().expect("present numeric left operand")),
     }
 }
 

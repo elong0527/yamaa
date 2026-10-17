@@ -4,6 +4,7 @@ Python-style representation prints L/M/N/P/S categories and ASCII space. The
 union of Grapheme_Base and Grapheme_Extend contains those categories; category
 annotations exclude controls, separators, private-use and unassigned scalars.
 Host Unicode classifiers are deliberately not an oracle for these intervals.
+The distributed Unicode notice copies are kept byte for byte with the source's.
 """
 
 import argparse
@@ -13,6 +14,12 @@ from tools.paths import WORKSPACE
 CORE = WORKSPACE / "crates/yamaa-core"
 SOURCE = CORE / "unicode/18.0.0/DerivedCoreProperties.txt"
 TARGET = CORE / "src/schema/printable_data.rs"
+LICENSE = CORE / "unicode/LICENSE.txt"
+LICENSE_COPIES = [
+    CORE.parent / "yamaa-python/LICENSE-UNICODE.txt",
+    CORE.parents[2] / "R/yamaa/inst/LICENSE-UNICODE.txt",
+    CORE.parents[2] / "python/LICENSE-UNICODE.txt",
+]
 
 
 def render():
@@ -66,10 +73,17 @@ def main():
     expected = render()
     if args.write:
         TARGET.write_text(expected, encoding="ascii", newline="\n")
+        for path in LICENSE_COPIES:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(LICENSE.read_bytes())
     else:
         assert TARGET.read_bytes() == expected.encode("ascii"), (
             "schema printable tables differ"
         )
+        for path in LICENSE_COPIES:
+            assert path.read_bytes() == LICENSE.read_bytes(), (
+                f"Unicode notice differs: {path}"
+            )
         print(
             "Unicode 18.0.0 schema printable table reproduces pinned authoritative data"
         )

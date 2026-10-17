@@ -1181,7 +1181,7 @@ fn prepare_column_declarations(
             }
             "row_number" | "rank" | "row_value" | "locf" | "baseline_flag" => {
                 Some(Operation::Window(std::boxed::Box::new(
-                    windows::Declaration::prepare(d, payload, op, &path, extra)?,
+                    windows::Declaration::prepare(d, payload, op, &path)?,
                 )))
             }
             _ => match derivations::prepare_value_with_driver(
@@ -1356,7 +1356,7 @@ impl PreparedSpecification {
             .transpose()?
             .is_some_and(|rows| !rows.is_empty());
         optional_features(d, root, &["parents"], "", &mut extra);
-        let root_filter = root_filter::RootFilter::prepare(d, &mut extra)?;
+        let root_filter = root_filter::RootFilter::prepare(d)?;
         let inputs = mapping(d, field(d, root, "input")?)?;
         let odm_inputs = odm::inputs(d)?;
         let driver = if has_rows {

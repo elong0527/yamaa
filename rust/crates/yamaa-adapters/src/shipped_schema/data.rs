@@ -1590,7 +1590,7 @@ define_id:
   description: Identifier a generated OID is built from.
 relative_href:
   type: str
-  pattern: ^(?!/)(?!.*(^|/)\.\.(/|$))[^\\]+$
+  pattern: ^(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)(?:/(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)?)*$
   description: Location referenced from the generated document, relative to the directory holding it and never leaving that directory, which need not exist when the document is generated.
 language_tag:
   type: str

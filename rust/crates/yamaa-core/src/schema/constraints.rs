@@ -3,7 +3,6 @@
 //! multiplying copies of large permitted lists for every invalid document value.
 
 use super::{Descriptor, DocumentNode};
-use crate::regex::MatchError;
 
 /// Constraint order is values, pattern, minimum length, then exact size.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,20 +13,9 @@ pub enum ConstraintViolation {
     InvalidSize,
 }
 
-/// A fixed per-match regex refusal remains distinct from a constraint mismatch.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum ConstraintError {
-    #[error("schema constraints regex: {0:?}")]
-    Regex(MatchError),
-}
-
 impl Descriptor {
     /// Check all declared constraints in order, without substituting for type validation.
-    /// Resource refusals stop the attempt and never become a mismatch finding.
-    pub fn check_constraints(
-        &self,
-        value: &DocumentNode,
-    ) -> Result<Vec<ConstraintViolation>, ConstraintError> {
+    pub fn check_constraints(&self, value: &DocumentNode) -> Vec<ConstraintViolation> {
         let mut findings = Vec::new();
         if let Some(permitted) = self.permitted() {
             let mut found = false;
@@ -44,11 +32,7 @@ impl Descriptor {
             }
         }
         if let (Some((_, pattern)), DocumentNode::Text(text)) = (self.pattern(), value) {
-            if pattern
-                .full_match(text)
-                .map_err(ConstraintError::Regex)?
-                .is_none()
-            {
+            if !pattern.is_full_match(text) {
                 findings.push(ConstraintViolation::PatternMismatch);
             }
         }
@@ -61,6 +45,6 @@ impl Descriptor {
                 findings.push(ConstraintViolation::InvalidSize);
             }
         }
-        Ok(findings)
+        findings
     }
 }

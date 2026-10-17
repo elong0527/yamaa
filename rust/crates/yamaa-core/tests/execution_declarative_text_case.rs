@@ -284,16 +284,13 @@ mod execution {
         use crate::support::text_schema as schema;
         use std::{cell::RefCell, rc::Rc};
         use yamaa_core::json::Value as JsonValue;
+        use yamaa_core::{dataset::ExecutionError, numeric_lifecycle::HandlerKind};
         use yamaa_core::{
             dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
             diagnostic::ConditionCode,
             table::{CellError, TableAccess, TableSchema, ValueRef},
             text_extract::StringExtract,
             value::Value,
-        };
-        use yamaa_core::{
-            dataset::{ExecutionError, Resource},
-            numeric_lifecycle::HandlerKind,
         };
         #[derive(Debug)]
         struct Failure(Box<u8>, Rc<()>);
@@ -593,7 +590,9 @@ mod execution {
             assert_eq!(identity.unwrap().values, [Value::Str("row1".into())]);
         }
         #[test]
-        fn fixed_regex_refusal_is_not_recovered_and_small_matches_start_fresh() {
+        fn catastrophic_pattern_reaches_no_match_and_small_matches_start_fresh() {
+            // (a+)+$ cannot match before the final "!". The linear-time search
+            // says so, and the declared no_match handler answers the row.
             let table = make_table(Value::Str("a".repeat(30) + "!"));
             let attempt = plan("(a+)+$", "1", Some(Value::Missing)).execute(
                 &table,
@@ -601,15 +600,24 @@ mod execution {
                 &mut yamaa_core::function_invocation::NoFunctions::new(),
                 None,
             );
-            assert!(matches!(
-                *attempt.result.unwrap_err(),
-                ExecutionError::Limit {
-                    resource: Resource::RegexWork,
-                    limit: 1_000_000,
-                    ..
-                }
-            ));
-            assert!(attempt.handler_counts.iter().all(|count| count.count == 0));
+            assert_eq!(
+                attempt.result.unwrap().dataset.rows(),
+                [vec![
+                    Value::Str("row1".into()),
+                    Value::Str("fallback".into())
+                ]]
+            );
+            let reached = attempt
+                .handler_counts
+                .iter()
+                .filter(|count| count.count > 0)
+                .collect::<Vec<_>>();
+            assert_eq!(reached.len(), 1);
+            assert_eq!(reached[0].handler, HandlerKind::NoMatch);
+            assert_eq!(
+                reached[0].spec_path,
+                "columns.TEXT.derivation.str_extract.no_match"
+            );
             assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1)]);
             let table = Table {
                 schema: schema(),
@@ -1761,7 +1769,7 @@ mod execution {
             use yamaa_core::dataset::{Check, ColumnVerifications, Verification};
             let (table, _) = fixture(Expression::Literal(Value::Int(1)));
             let text = literal_rows(&table, 1, ColumnType::Str, true);
-            let pattern = yamaa_core::regex::Pattern::compile("abcdef").unwrap();
+            let pattern = yamaa_core::portable_regex::Pattern::compile("abcdef").unwrap();
             let checked = text
                 .with_column_verifications(vec![ColumnVerifications {
                     column: 0,

@@ -1,5 +1,8 @@
 # id	expression	postfix typed tree	bindings	outcome	resolution trace
-mixed-promotion	a = b	$a $b eq	a=i:9007199254740993;b=f:9007199254740992	TRUE	a,b
+mixed-exact	a = b	$a $b eq	a=i:9007199254740993;b=f:9007199254740992	FALSE	a,b
+mixed-exact-equal	a = b	$a $b eq	a=i:9007199254740992;b=f:9007199254740992	TRUE	a,b
+mixed-exact-in	a IN (b, c)	$a $b $c in:2	a=i:9007199254740993;b=f:9007199254740992;c=f:9007199254740994	FALSE	a,b,c
+mixed-exact-between	a BETWEEN b AND c	$a $b $c between	a=i:9007199254740993;b=f:9007199254740992;c=f:9007199254740992	FALSE	a,b,a,c
 integer-exact	a = b	$a $b eq	a=i:9007199254740993;b=i:9007199254740992	FALSE	a,b
 false-and-eager	FALSE AND a = 1	false $a i:1 eq and	-	unknown_field	a
 true-or-eager	TRUE OR a = 1	true $a i:1 eq or	-	unknown_field	a

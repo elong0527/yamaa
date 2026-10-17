@@ -125,7 +125,6 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             }
             match error.kind {
                 predicate::ErrorKind::Resolution { error, .. } => error,
-                predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
                 predicate::ErrorKind::Condition(_) => unreachable!("condition was projected above"),
             }
         })
