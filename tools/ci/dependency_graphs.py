@@ -32,6 +32,8 @@ IGNORED = {
 
 def minimum_cargo(requirement):
     """Accept the repository's explicit lower bounds; fail on unknown syntax."""
+    if not isinstance(requirement, str):
+        raise ValueError(f"Cargo requirement needs an explicit minimum: {requirement}")
     match = re.fullmatch(
         r"(?:\^|=|>=)?\s*(\d+\.\d+\.\d+)(?:\s*,\s*<\s*[\d.]+)?", requirement
     )
@@ -44,20 +46,36 @@ def pin_manifest(path, patched):
     """Pin registry dependencies, retaining local paths and reviewed patches."""
     document = tomllib.loads(path.read_text())
     replacements = {}
-    sections = [document]
-    sections.extend(document.get("target", {}).values())
+    target = document.get("target", {})
+    if not isinstance(target, dict):
+        raise ValueError(f"Cargo target in {path} must be a table")
+    sections = [document, *target.values()]
     for section in sections:
+        if not isinstance(section, dict):
+            raise ValueError(f"Cargo target section in {path} must be a table")
         for key in ("dependencies", "build-dependencies", "dev-dependencies"):
-            for name, dependency in section.get(key, {}).items():
+            dependencies = section.get(key, {})
+            if not isinstance(dependencies, dict):
+                raise ValueError(f"Cargo {key} in {path} must be a table")
+            for name, dependency in dependencies.items():
                 if (
                     name in patched
                     or isinstance(dependency, dict)
                     and "path" in dependency
                 ):
                     continue
-                version = (
-                    dependency if isinstance(dependency, str) else dependency["version"]
-                )
+                if isinstance(dependency, str):
+                    version = dependency
+                elif isinstance(dependency, dict):
+                    version = dependency.get("version")
+                    if not isinstance(version, str):
+                        raise ValueError(
+                            f"Cargo dependency {name} in {path} has no version string"
+                        )
+                else:
+                    raise ValueError(
+                        f"Cargo dependency {name} in {path} must be a string or table"
+                    )
                 replacements[(name, version)] = minimum_cargo(version)
     text = path.read_text()
     for (name, version), minimum in replacements.items():
@@ -72,6 +90,10 @@ def pin_manifest(path, patched):
 
 
 def minimum_python(requirement):
+    if not isinstance(requirement, str):
+        raise ValueError(
+            f"Python requirement needs one explicit minimum: {requirement}"
+        )
     parsed = Requirement(requirement)
     bounds = [
         item.version for item in parsed.specifier if item.operator in (">=", "==")
