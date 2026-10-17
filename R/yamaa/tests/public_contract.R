@@ -13,7 +13,12 @@ stopifnot(identical(sort(getNamespaceExports("yamaa")), c("yamaa_check", "yamaa_
 # A record context value against the decoded frame context: objects are named
 # lists (an empty object keeps empty names), arrays unnamed lists, integers of
 # magnitude at most 2^53 doubles, wider integer tokens the exact decimal text
-# that also appears verbatim in the frame's JSON, other numbers doubles.
+# that also appears verbatim in the frame's JSON, other numbers doubles. A
+# wider token is matched through the same decoder that produced the expected
+# value, never through as.numeric: a host string-to-double conversion can
+# mis-round a 19-20 digit token (observed on macOS, where the exact token
+# -9223372036854775808 parses one ulp past -2^63), while the decoder parses
+# the same token to the value it produced from the frame text.
 record_value_matches <- function(actual, expected, text) {
   if (is.null(expected)) return(is.null(actual))
   if (is.list(expected)) {
@@ -33,39 +38,9 @@ record_value_matches <- function(actual, expected, text) {
   if (abs(expected) <= 2^53) return(identical(actual, expected))
   if (is.double(actual)) return(identical(actual, expected))
   is.character(actual) && length(actual) == 1L && grepl("^-?[0-9]+$", actual) &&
-    isTRUE(as.numeric(actual) == expected) && grepl(actual, text, fixed = TRUE)
+    isTRUE(identical(jsonlite::fromJSON(actual), expected)) && grepl(actual, text, fixed = TRUE)
 }
 check_projection <- function(frame, index, record) {
-  debug_expected <- jsonlite::fromJSON(frame$context[[index]], simplifyVector = FALSE)
-  if (!isTRUE(record_value_matches(record$context, debug_expected, frame$context[[index]]))) {
-    cat("DEBUG2813 mismatch condition=", frame$condition[[index]], " index=", index, "\n", sep = "")
-    cat("DEBUG2813 text=", frame$context[[index]], "\n", sep = "")
-    cat("DEBUG2813 record context:\n"); str(record$context); dput(record$context)
-    cat("DEBUG2813 expected parsed:\n"); str(debug_expected); dput(debug_expected)
-    for (key in names(debug_expected)) {
-      cat("DEBUG2813 key=", key,
-        " match=", record_value_matches(record$context[[key]], debug_expected[[key]], frame$context[[index]]),
-        " actual=", paste(deparse(record$context[[key]]), collapse = " "),
-        " actual_class=", paste(class(record$context[[key]]), collapse = ","),
-        " expected=", paste(deparse(debug_expected[[key]]), collapse = " "),
-        " expected_class=", paste(class(debug_expected[[key]]), collapse = ","),
-        " expected_typeof=", typeof(debug_expected[[key]]), "\n", sep = "")
-      actual_value <- record$context[[key]]; expected_value <- debug_expected[[key]]
-      if (is.character(actual_value) && is.double(expected_value)) {
-        parsed <- suppressWarnings(as.numeric(actual_value))
-        cat("DEBUG2813 sub key=", key,
-          " is_char=", is.character(actual_value),
-          " len1=", length(actual_value) == 1L,
-          " regex=", grepl("^-?[0-9]+$", actual_value),
-          " parsed_hex=", sprintf("%a", parsed),
-          " expected_hex=", sprintf("%a", expected_value),
-          " parsed_eq=", isTRUE(parsed == expected_value),
-          " parsed_print=", format(parsed, digits = 22),
-          " expected_print=", format(expected_value, digits = 22),
-          " in_text=", grepl(actual_value, frame$context[[index]], fixed = TRUE), "\n", sep = "")
-      }
-    }
-  }
   stopifnot(is.list(record),
     identical(names(record), fixture_strings(host_truth[["diagnostic_record_names"]])),
     identical(record$phase, frame$phase[[index]]),
