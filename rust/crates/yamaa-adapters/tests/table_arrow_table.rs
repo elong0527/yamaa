@@ -2127,6 +2127,39 @@ mod table {
                 assert_eq!(row.get_double(1).unwrap().to_bits(), expected.to_bits());
             }
         }
+
+        #[test]
+        fn footer_omits_column_orders_without_statistics_or_offset_index() {
+            // The vendored writer omits the footer's total-order column_orders
+            // so Polars from 1.35.2 reads the saved Parquet; statistics and
+            // the offset index are disabled, so the field carries no
+            // information in these files.
+            let table = table(
+                &[("S", ColumnType::Str), ("F", ColumnType::Float)],
+                vec![
+                    vec![Value::Str("a".into()), Value::float(70.5)],
+                    vec![Value::Missing, Value::float(-0.0)],
+                ],
+            );
+            let source = Source::new(&render(&table, &[0, 1]).unwrap());
+            let reader = source.reader();
+            assert!(reader.metadata().file_metadata().column_orders().is_none());
+            for column in reader.metadata().row_group(0).columns() {
+                assert!(column.statistics().is_none());
+                assert_eq!(column.offset_index_offset(), None);
+            }
+            let rows = reader
+                .get_row_iter(None)
+                .unwrap()
+                .map(Result::unwrap)
+                .collect::<Vec<_>>();
+            assert_eq!(rows.len(), 2);
+            assert_eq!(rows[0].get_double(1).unwrap().to_bits(), 70.5f64.to_bits());
+            assert_eq!(
+                rows[1].get_double(1).unwrap().to_bits(),
+                (-0.0f64).to_bits()
+            );
+        }
     }
     #[cfg(feature = "parquet")]
     mod parquet_source {
