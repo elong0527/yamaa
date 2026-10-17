@@ -211,6 +211,7 @@ mod file {
             fn build(&self) -> file_application::Domain {
                 let path = self.text("spec.yaml");
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -298,6 +299,7 @@ mod file {
             let path = study.text("absent.yaml");
             let environment = study.text("absent-environment.yaml");
             let issues = file_application::check(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: Some(&environment),
@@ -325,6 +327,7 @@ mod file {
             .unwrap();
             let path = study.text("spec.yaml");
             let issues = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -351,6 +354,7 @@ mod file {
             fs::write(study.0.join("spec.yaml"), VALID).unwrap();
             let path = study.text("spec.yaml");
             assert!(file_application::check(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None
@@ -376,6 +380,7 @@ mod file {
             .unwrap();
             let path = study.text("spec.yaml");
             let issues = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -395,6 +400,7 @@ mod file {
             fs::remove_dir(study.0.join("input.unknown")).unwrap();
             fs::write(study.0.join("input.unknown"), b"ID\n1\n").unwrap();
             let issues = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -509,6 +515,7 @@ mod file {
                 .unwrap();
                 let path = study.text("entry/spec.yaml");
                 let mut result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -538,6 +545,7 @@ mod file {
             .unwrap();
             let path = study.text("entry/spec.yaml");
             let mut result = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -656,6 +664,7 @@ mod file {
             let path = root.join("spec.yaml");
             let path = path.to_str().unwrap();
             let mut result = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: path,
                     environment: None,
@@ -781,10 +790,18 @@ mod file {
                         environment,
                     };
                     for issues in [
-                        file_application::check(request(), identity(&spec)),
-                        file_application::domain(request(), identity(&spec))
-                            .err()
-                            .expect("refused before execution"),
+                        file_application::check(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity(&spec),
+                        ),
+                        file_application::domain(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity(&spec),
+                        )
+                        .err()
+                        .expect("refused before execution"),
                     ] {
                         assert_eq!(issues.len(), 1, "{resource}, {environment:?}");
                         let issue = &issues[0];
@@ -809,6 +826,7 @@ mod file {
                     fs::write(study.0.join("input.csv"), "ID\n1\n").unwrap();
                     for environment in [None, Some(environment.as_str())] {
                         assert!(file_application::check(
+                            yamaa_core::project_function::Language::Python,
                             Request {
                                 specification: &spec,
                                 environment,
@@ -818,6 +836,7 @@ mod file {
                         .is_empty());
                     }
                     let mut domain = file_application::domain(
+                        yamaa_core::project_function::Language::Python,
                         Request {
                             specification: &spec,
                             environment: None,
@@ -864,10 +883,18 @@ mod file {
                     environment,
                 };
                 for issues in [
-                    file_application::check(request(), identity(&spec)),
-                    file_application::domain(request(), identity(&spec))
-                        .err()
-                        .unwrap(),
+                    file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(&spec),
+                    ),
+                    file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(&spec),
+                    )
+                    .err()
+                    .unwrap(),
                 ] {
                     assert_eq!(issues.len(), 1);
                     assert_eq!(issues[0].phase, "validation");
@@ -916,9 +943,15 @@ mod file {
                     specification: &spec,
                     environment,
                 };
-                assert!(file_application::check(request(), identity(&spec)).is_empty());
+                assert!(file_application::check(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(&spec)
+                )
+                .is_empty());
             }
             let mut domain = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &spec,
                     environment: None,
@@ -1030,6 +1063,7 @@ mod file {
             let environment = study.text("environment.yaml");
             for environment in [None, Some(environment.as_str())] {
                 assert!(file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &spec,
                         environment
@@ -1039,6 +1073,7 @@ mod file {
                 .is_empty());
             }
             let mut result = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &spec,
                     environment: None,
@@ -1074,10 +1109,18 @@ mod file {
                     environment,
                 };
                 for issues in [
-                    file_application::check(request(), identity(&spec)),
-                    file_application::domain(request(), identity(&spec))
-                        .err()
-                        .unwrap(),
+                    file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(&spec),
+                    ),
+                    file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(&spec),
+                    )
+                    .err()
+                    .unwrap(),
                 ] {
                     assert_eq!(issues.len(), 1);
                     let issue = &issues[0];

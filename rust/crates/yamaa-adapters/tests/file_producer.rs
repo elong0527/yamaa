@@ -68,6 +68,7 @@ mod file {
             study.write("third/spec.yaml", "schema_version: '1.0'\nparents: ../shared/consumer.yaml\ninput: {P: {schema: ../shared/producer.yaml}}\n");
             let path = study.path("third/spec.yaml");
             let issues = yamaa_adapters::file_application::check(
+                yamaa_core::project_function::Language::Python,
                 yamaa_core::domain_entry::Request {
                     specification: &path,
                     environment: None,
@@ -1778,6 +1779,7 @@ columns:
             );
             // The static-check facade surfaces the same row as an issue.
             let issues = yamaa_adapters::file_application::check(
+                yamaa_core::project_function::Language::Python,
                 yamaa_core::domain_entry::Request {
                     specification: &study.path("consumer/root.yaml"),
                     environment: None,
