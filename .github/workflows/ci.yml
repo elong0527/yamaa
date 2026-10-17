@@ -64,14 +64,13 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           r: runtime
+          package: 'false'
       # The other jobs build with the pinned toolchain. Embedders build with
       # their own, so the workspace rust-version must keep building.
       - name: Activate the workspace rust-version toolchain
         run: python -m tools.ci.toolchain --minimum --install
       - name: Check and lint the workspace with the minimum toolchain
         env:
-          # Keeps this toolchain's build output out of the shared Rust cache.
-          CARGO_TARGET_DIR: ${{ runner.temp }}/minimum-target
           RUSTFLAGS: -D warnings
         run: |
           cargo check --locked --manifest-path rust/Cargo.toml --workspace --all-targets --all-features
