@@ -357,7 +357,8 @@ class PublicDefine(unittest.TestCase):
                         overlay["rows"][1]["submission"],
                     )
                 elif case == "origin":
-                    effective["LBORRESU"]["origin"]["type"] = "Collected"
+                    # A literal unit reads no input, so it refutes Derived.
+                    effective["LBORRESU"]["origin"]["type"] = "Derived"
                 if case != "valid":
                     (directory / "spec.yaml").write_text(
                         yaml.safe_dump(spec, sort_keys=False)

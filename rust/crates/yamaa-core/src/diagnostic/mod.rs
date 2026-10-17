@@ -414,6 +414,7 @@ conditions! {
     SubmissionValueColumnNotOutput => ("validation", "value_metadata_not_output_column", Some("REQ-1166")),
     SubmissionValueMetadataConflict => ("validation", "conflicting_value_metadata", Some("REQ-1167")),
     SubmissionValueOriginRefuted => ("validation", "refuted_value_origin", Some("REQ-1168")),
+    SubmissionPredecessorLabel => ("validation", "predecessor_label_mismatch", Some("SUB-20")),
     SubmissionStandardFamily => ("validation", "unknown_standard_family", Some("REQ-0924")),
     SubmissionDefineExtension => ("validation", "value_not_permitted", Some("REQ-1014")),
     SubmissionSourceVersion => ("validation", "source_system_incomplete", Some("REQ-0979")),

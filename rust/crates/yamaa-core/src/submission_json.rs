@@ -251,8 +251,10 @@ fn validate_artifact<T: TableAccess>(
             let outside_list = list
                 .and_then(|list| list.items.as_ref())
                 .is_some_and(|items| !items.iter().any(|item| equal_value(value, &item.value)));
-            let outside_inventory = inventory
-                && !matches!(value, ValueRef::Str(id) if study.datasets.iter().any(|dataset| dataset.id == id));
+            // CT-11: the inventory is every dataset any submission section of
+            // the study declares, not only the datasets this document represents.
+            let outside_inventory =
+                inventory && !matches!(value, ValueRef::Str(id) if study.inventory.contains(id));
             if outside_list || outside_inventory {
                 let mut finding = Finding::cause(
                     ConditionCode::VerificationCodelistFailed,
