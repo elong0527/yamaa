@@ -38,11 +38,12 @@ carried through unchanged.
   closest strictly earlier non-missing result. It differs from `LASTRES`
   only where the current visit has a result: a first visit with a result
   keeps it instead of reading missing.
-- `BLFL` marks the latest visit dated on or before treatment start; two
-  visits sharing that latest date stop the run rather than one being
-  picked. The baseline visit can carry a missing result (subject `02`
-  visit 2); a subject with no visit on or before treatment start
-  (subject `04`) has no baseline.
+- `BLFL` marks the latest visit with a result dated on or before
+  treatment start; two such visits sharing that latest date stop the
+  run rather than one being picked. A visit whose result is missing is
+  passed over, so subject `02`'s baseline is visit 1, not visit 2; a
+  subject with no visit on or before treatment start (subject `04`) has
+  no baseline.
 
 **Note:** only `VSSEQ` and `EVALPREV` leave out the visits that are not
 evaluable. Every other measure sees every visit, so a visit that is not

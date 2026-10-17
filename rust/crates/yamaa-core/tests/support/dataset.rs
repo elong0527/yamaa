@@ -398,17 +398,50 @@ pub(crate) fn value_window_plan(
 }
 
 /// Admit temporal baseline selection over completed dates and partition keys.
+/// Columns 2 and 3 are the date and reference; the key column is the value.
 pub(crate) fn baseline_plan(
     source: &Table,
     groups: Vec<usize>,
     filter: Option<Filter>,
 ) -> DatasetPlan {
+    baseline_options_plan(source, groups, filter, 0, true, vec![])
+}
+
+/// Admit a baseline over every source column with an explicit value, bound and
+/// tie-break terms. Columns 2 and 3 are the date and reference, and the flag
+/// is the last output column.
+pub(crate) fn baseline_options_plan(
+    source: &Table,
+    groups: Vec<usize>,
+    filter: Option<Filter>,
+    value: usize,
+    inclusive: bool,
+    tie_break: Vec<yamaa_core::dataset::OrderTerm>,
+) -> DatasetPlan {
     pub(crate) use yamaa_core::dataset::{Window, WindowKind};
     let mut fields = source.schema.columns().to_vec();
+    let flag = fields.len();
     fields.push(Column {
         name: "BLFL".into(),
         kind: ColumnType::Str,
     });
+    let mut assignments = (1..flag)
+        .map(|column| assign(column, collect(column)))
+        .collect::<Vec<_>>();
+    assignments.push(assign(
+        flag,
+        Expression::Window(Window {
+            kind: WindowKind::BaselineFlag {
+                date: 2,
+                reference_date: 3,
+                value,
+                inclusive,
+            },
+            group_by: groups,
+            order_by: tie_break,
+            filter,
+        }),
+    ));
     DatasetPlan::new(
         source.schema.clone(),
         TableSchema::new(fields).unwrap(),
@@ -417,23 +450,7 @@ pub(crate) fn baseline_plan(
             assignments: vec![assign(0, Expression::Source(0))],
             filter: None,
         }],
-        vec![
-            assign(1, collect(1)),
-            assign(2, collect(2)),
-            assign(3, collect(3)),
-            assign(
-                4,
-                Expression::Window(Window {
-                    kind: WindowKind::BaselineFlag {
-                        date: 2,
-                        reference_date: 3,
-                    },
-                    group_by: groups,
-                    order_by: vec![],
-                    filter,
-                }),
-            ),
-        ],
+        assignments,
         vec![0],
         vec![],
     )

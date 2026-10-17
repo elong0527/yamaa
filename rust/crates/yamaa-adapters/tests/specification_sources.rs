@@ -2183,7 +2183,9 @@ output: {{path: output.csv, columns: [I, S]}}
                 let plan = prepared.bind_sources(&schemas).unwrap();
                 let order = &plan.intermediates()[0].selection.as_ref().unwrap().order_by[0];
                 assert_eq!(order.descending, !omit_direction);
-                assert_eq!(order.nulls_first, !omit_nulls);
+                // An omitted placement sorts missing lowest: first ascending and
+                // last descending. The declared `nulls: first` never flips.
+                assert_eq!(order.nulls_first, !omit_nulls || omit_direction);
             }
         }
 

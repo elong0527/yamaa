@@ -32,30 +32,23 @@ source data system should carry the result the study reports, or a collection
 time that separates the draws. Correcting it there leaves the rule saying what
 it means: the latest result on or before treatment start.
 
-When both draws are reportable and the study states a tie-break, choose the
-record explicitly instead of by date alone. Order the eligible results and mark
-the first:
+When both draws are reportable and the study states a tie-break, declare it.
+The baseline is then the last of the same-day results in that order:
 
 ```yaml
-- name: ABLRANK
-  type: int
-  derivation:
-    row_number:
-      window:
-        group_by: [STUDYID, USUBJID, PARAMCD]
-        order_by:
-          - {variable: ADT, direction: desc}
-          - {variable: LBSEQ, direction: desc}
-        filter: "ADT <= TRTSDT"
-
 - name: ABLFL
   type: str
   derivation:
-    flag: "ABLRANK = 1"
+    baseline_flag:
+      window:
+        group_by: [STUDYID, USUBJID, PARAMCD]
+      date: ADT
+      reference_date: TRTSDT
+      value: AVAL
+      tie_break: [LBSEQ]
 ```
 
-Keep `ABLRANK` internal by omitting it from `output.columns`.
-
-Order by the term the study names; the sequence number above stands in for it
-and is not itself a clinical rule. Do not average the two results into one
-baseline value, which reports a measurement nobody took.
+Order by the term the study names, such as a collection time; the sequence
+number above stands in for it and is not itself a clinical rule. Results still
+equal on every declared term fail the same way. Do not average the two results
+into one baseline value, which reports a measurement nobody took.

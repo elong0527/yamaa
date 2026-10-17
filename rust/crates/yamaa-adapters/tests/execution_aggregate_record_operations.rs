@@ -1989,7 +1989,9 @@ S1,002,2024-06
                                 },
                                 WindowKind::BaselineFlag {
                                     date: 4,
-                                    reference_date: 5
+                                    reference_date: 5,
+                                    value: 6,
+                                    inclusive: true
                                 }
                             ]
                         );

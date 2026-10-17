@@ -161,10 +161,11 @@ columns:
         source: VSSTRESN
         window: VISIT_ORDER
 
-  # Marks the unique latest visit dated on or before treatment start; a
-  # tie on that date stops the run. The baseline visit can carry a missing
-  # result (subject 02 visit 2), and a subject with no visit on or before
-  # treatment start (subject 04) has no baseline at all.
+  # Marks the unique latest visit with a result dated on or before
+  # treatment start; a tie on that date stops the run. A visit whose result
+  # is missing is passed over (subject 02 visit 2, so visit 1 is the
+  # baseline), and a subject with no visit on or before treatment start
+  # (subject 04) has no baseline at all.
   - name: BLFL
     type: str
     label: Baseline Visit Flag
@@ -172,5 +173,6 @@ columns:
       baseline_flag:
         date: VSDTC
         reference_date: TRTSDT
+        value: VSSTRESN
         window:
           group_by: [USUBJID]

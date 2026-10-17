@@ -19,7 +19,7 @@ output:
     - TEXTSEQ
     - MINTXT
     - MAXTXT
-  order_by: [RAWTXT, USUBJID]
+  order_by: [{variable: RAWTXT, nulls: last}, USUBJID]
 
 columns:
   - name: STUDYID
@@ -117,7 +117,7 @@ columns:
     derivation:
       row_number:
         window:
-          order_by: [RAWTXT, USUBJID]
+          order_by: [{variable: RAWTXT, nulls: last}, USUBJID]
 
   - name: MINTXT
     type: str

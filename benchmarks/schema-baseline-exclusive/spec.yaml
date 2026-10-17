@@ -1,0 +1,59 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [USUBJID, VSSEQ]
+input:
+  VS:
+    path: input/vs.csv
+    types: {VSSEQ: int, ADT: date, AVAL: float, TRTSDT: date}
+
+output:
+  path: advs.csv
+  columns: [USUBJID, VSSEQ, ADT, AVAL, TRTSDT, ABLFL]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: VS.VSSEQ
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: VS.ADT
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: VS.AVAL
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: VS.TRTSDT
+
+  # The latest result strictly before the day treatment starts: without a
+  # collection time a result on that day cannot be placed before the dose,
+  # so the reference date itself is not eligible.
+  - name: ABLFL
+    type: str
+    label: Baseline Record Flag
+    derivation:
+      baseline_flag:
+        date: ADT
+        reference_date: TRTSDT
+        value: AVAL
+        inclusive: false
+        window:
+          group_by: [USUBJID]
+
+verifications:
+  - row_count:
+      id: at-most-one-baseline-per-subject
+      group_by: [USUBJID]
+      filter: "ABLFL = 'Y'"
+      max: 1
