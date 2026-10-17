@@ -598,30 +598,43 @@ month therefore:
 Both types are comparable wherever a rule requires mutually comparable values.
 `greatest` and `least` reduce them across a row, an `order_by` term orders by
 one, and [Formulas](formulas.md)'s `MIN` and `MAX` reduce one.
-[VALUE-22](#value-22) places missing values by the term's `nulls`, as it does
-for every other type. Every pair of non-missing values of one type stays
+[VALUE-22](#value-22) sorts missing values lowest unless the term's `nulls`
+places them, as it does for every other type. Every pair of non-missing values of one type stays
 ordered, which keeps an `order_by` term total and keeps the comparability of
 [VALUE-19](#value-19) intact.
 
 <a id="value-22"></a>
 
-### VALUE-22. An order term sorts by its type's order, with its own direction and missing placement
+### VALUE-22. An order term sorts by its type's order and direction, and missing sorts lowest unless nulls places it
 
 Every field typed `list[order_by_term]` is a list of order terms, applied in
 order. A term is a bare variable or a mapping declaring `variable`,
-`direction` and `nulls`; a bare variable means
-`{variable: X, direction: asc, nulls: last}`. `direction` is `asc` or `desc`
-and orders the non-missing values. `nulls` is `last` or `first` and places
-missing values among them; it does not flip with `direction`, and the declared
-placement applies rather than an engine's default.
+`direction` and `nulls`; a bare variable means `{variable: X, direction: asc}`.
+`direction` is `asc` or `desc` and orders the non-missing values. Without
+`nulls`, a missing value sorts lowest: first under `asc` and last under
+`desc`. A declared `nulls: first` or `nulls: last` places missing values there
+under either direction.
 
-Evidence: `schema-ordering`, `adam-adae-review-order`, `rust/crates/yamaa-core/tests/dataset_ordering.rs::presentation_order_preserves_all_types_ties_and_direction_independent_nulls`.
+Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequence`, `schema-baseline-tie-break`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::windows_and_presentation_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-core/tests/dataset_ordering.rs::presentation_order_preserves_all_types_ties_and_direction_independent_nulls`.
 Replaces: REQ-0297, REQ-0298, REQ-0299, REQ-0300, REQ-0301, REQ-0302, REQ-0312, REQ-1102, REQ-1103.
 
 The bare form is a [Schema language](reference/schema-language.md) shorthand
-union, whichever operation declares the list. `direction` defaults to `asc`
-and `nulls` to `last`; `last` means last under `asc` and last under `desc`.
-Each term has its own direction and placement.
+union, whichever operation declares the list. `direction` defaults to `asc`.
+`nulls` has no schema default: a resolved specification leaves an omitted
+`nulls` omitted, and the placement it then means follows `direction`. Each
+term has its own direction and placement:
+
+| `direction` | `nulls` omitted | `nulls: first` | `nulls: last` |
+| --- | --- | --- | --- |
+| `asc` | missing first | missing first | missing last |
+| `desc` | missing last | missing first | missing last |
+
+The same reading applies to every order term: a window's `order_by`, the
+`order_by` beside `keep` in a named lookup or a source selection,
+`output.order_by` and the `tie_break` of `baseline_flag`
+([WINDOW-9](windows.md#window-9)). In `[{variable: A, direction: desc}, B]` a
+missing `A` sorts after every present `A` and a missing `B` before every
+present `B`.
 
 Non-missing values use the order their type owns: exact numeric comparison
 under [VALUE-19](#value-19), including a mixed `int` and `float` pair without
