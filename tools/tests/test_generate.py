@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 from urllib.parse import unquote
 
+import yaml
 from tools.benchmark_docs import generate
 
 HERE = Path(__file__).resolve().parent
@@ -749,6 +750,35 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('<span class="panel-caption">2 spec files</span>', page)
         # RACE is a DM column: only the producer's columns can label it.
         self.assertIn('<th scope="col" class="derived" title="Race">RACE</th>', page)
+
+    def test_linked_specs_ignores_non_list_parents(self):
+        # A malformed spec whose parents is a scalar, null or a mapping
+        # names no parents. Iterating it raised TypeError, which escapes
+        # main's per-benchmark (OSError, ValueError, YAMLError) handler
+        # and aborts the whole dashboard build.
+        for parents in (42, None, 1.5, {"spec.yaml": True}):
+            with self.subTest(parents=parents):
+                self.assertEqual(generate.linked_specs({"parents": parents}), [])
+        self.assertEqual(generate.linked_specs({"parents": "a.yaml"}), ["a.yaml"])
+        self.assertEqual(
+            generate.linked_specs({"parents": ["a.yaml", 42, ""]}), ["a.yaml"]
+        )
+
+    def test_scalar_parents_and_columns_do_not_abort_rendering(self):
+        source = generate.BENCHMARKS / "sdtm-dm-race-ethnicity"
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark = (Path(directory) / source.name).resolve()
+            shutil.copytree(source, benchmark)
+            for name, key in (
+                ("spec_dm.yaml", "parents"),
+                ("spec_suppdm.yaml", "columns"),
+            ):
+                path = benchmark / name
+                document = yaml.safe_load(path.read_text(encoding="utf-8"))
+                document[key] = 42
+                path.write_text(yaml.safe_dump(document), encoding="utf-8")
+            page = generate.render_benchmark(benchmark).decode("ascii")
+            self.assertIn('<span class="panel-caption">2 spec files</span>', page)
 
     def test_example_building_two_domains_files_under_its_readme_domain(self):
         benchmark = generate.BENCHMARKS / "sdtm-dm-race-ethnicity"
