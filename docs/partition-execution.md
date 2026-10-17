@@ -53,7 +53,7 @@ artifact bytes under the same writer configuration. A failed attempt exposes no
 accepted output. Cancellation is a distinct control-flow outcome; partitioning
 must not convert it into a semantic diagnostic or publish provisional output.
 The checkpoint and cleanup implementations follow in
-[#2684–#2688](https://github.com/elong0527/yamaa/issues/2684); this document
+[#2684-#2688](https://github.com/elong0527/yamaa/issues/2684); this document
 does not supply them. Comparing successful rows alone does not prove equivalence.
 
 ## Classification
@@ -150,7 +150,7 @@ past later derivations.
 
 These are implementation seams for subsequent work, not new callable APIs.
 
-1. **Admission → derivation:** `DatasetPlan::execute_inner` admits function
+1. **Admission to derivation:** `DatasetPlan::execute_inner` admits function
    bindings, schemas and complete source geometry before entering derivation.
    Capture stable source coordinates here; never bind schemas independently
    from incomplete batches.
@@ -172,7 +172,7 @@ These are implementation seams for subsequent work, not new callable APIs.
    prefix. Local scalar evaluation can be divided inside a column, but its
    ordered effects and checks must finish before dependent/later work. Preserve
    the final unobserved-intermediate filter-type check, including empty output.
-6. **Output keys → verification → ordering:** `verify_output` checks all key
+6. **Output keys to verification to ordering:** `verify_output` checks all key
    presence/uniqueness before dataset checks. `verification.rs` owns predicate
    and scoped-count evaluation; `CheckRecord` retains global observations.
    `ordering::apply` runs last. This is the final reconciliation barrier before
