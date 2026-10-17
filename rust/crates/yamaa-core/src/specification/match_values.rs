@@ -95,6 +95,7 @@ impl Declaration {
             | "str_concat"
             | "str_contains"
             | "str_extract"
+            | "str_replace"
             | "str_template"
             | "compute"
             | "row_number"

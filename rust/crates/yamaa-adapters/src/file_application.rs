@@ -258,10 +258,7 @@ pub(crate) fn preparation_failure(message: String) -> Failure {
             let mut issues = resource_rejected(stage, code, resource, limit, actual, paths);
             if let Some(phase) = outcome["phase"].as_str() {
                 for issue in &mut issues {
-                    let mut context: Value =
-                        crate::json_wire::decode(&issue.context).expect("resource context");
-                    context["phase"] = crate::json!(phase);
-                    issue.context = crate::json_wire::encode(&context);
+                    issue.context["phase"] = crate::json!(phase);
                 }
             }
 
@@ -293,12 +290,9 @@ fn publication_at(
 ) -> Failure {
     for issue in &mut issues {
         issue.spec_paths = vec![format!("output.{field}")];
-        let mut context: Value =
-            crate::json_wire::decode(&issue.context).expect("native issue context");
-        context["path"] = crate::json!(path);
-        context["entered"] = crate::json!(attempt.entered);
-        context["completed"] = crate::json!(attempt.completed);
-        issue.context = crate::json_wire::encode(&context);
+        issue.context["path"] = crate::json!(path);
+        issue.context["entered"] = crate::json!(attempt.entered);
+        issue.context["completed"] = crate::json!(attempt.completed);
     }
     issues
 }
@@ -1058,7 +1052,7 @@ mod tests {
                     ["verification_log", "warning_log", "path"][fail_at]
                 )]
             );
-            let context: Value = crate::json_wire::decode(&issue.context).unwrap();
+            let context: Value = issue.context.clone();
             assert_eq!(context["entered"], fail_at + 1);
             assert_eq!(context["completed"], fail_at);
             assert!(result.save().unwrap());

@@ -339,15 +339,13 @@ impl RootResult {
                         "output.{}",
                         actual.map_or(request.field, |entry| entry.field)
                     )];
-                    let mut context: Value =
-                        crate::json_wire::decode(&issue.context).expect("native issue context");
-                    context["node"] = crate::json!(actual.map_or(request.node, |entry| entry.node));
-                    context["path"] = crate::json!(
+                    issue.context["node"] =
+                        crate::json!(actual.map_or(request.node, |entry| entry.node));
+                    issue.context["path"] = crate::json!(
                         actual.map_or(request.path.as_str(), |entry| entry.path.as_str())
                     );
-                    context["entered"] = crate::json!(entered);
-                    context["completed"] = crate::json!(completed);
-                    issue.context = crate::json_wire::encode(&context);
+                    issue.context["entered"] = crate::json!(entered);
+                    issue.context["completed"] = crate::json!(completed);
                 }
             }
         }
@@ -858,7 +856,7 @@ mod log_tests {
             );
             assert_eq!(issues[0].requirement, None);
             assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
-            let context: Value = crate::json_wire::decode(&issues[0].context).unwrap();
+            let context: Value = issues[0].context.clone();
             assert_eq!(
                 context,
                 crate::json!({"stage":"capture", "code":"resource_limit", "resource":"source_bytes",
@@ -1124,7 +1122,7 @@ mod log_tests {
                     "actual publication failure must report REQ-0764"
                 );
                 assert_eq!(normative[0].spec_paths, ["output.warning_log"]);
-                let context: Value = crate::json_wire::decode(&normative[0].context).unwrap();
+                let context: Value = normative[0].context.clone();
                 assert_eq!(context["node"], 0);
                 assert_eq!(context["path"], "generated/root-warnings.csv");
                 assert_eq!(context["entered"], 5);

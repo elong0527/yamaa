@@ -5,7 +5,9 @@
     "expected": [
       {
         "condition": "invalid_declaration",
-        "context": "{\"reason\":\"allowed_values requires values\"}",
+        "context": {
+          "reason": "allowed_values requires values"
+        },
         "phase": "validation",
         "requirement": "REQ-0397",
         "spec_paths": [
@@ -20,7 +22,9 @@
     "expected": [
       {
         "condition": "invalid_declaration",
-        "context": "{\"reason\":\"listed value None is not a int value\"}",
+        "context": {
+          "reason": "listed value None is not a int value"
+        },
         "phase": "validation",
         "requirement": "REQ-0404",
         "spec_paths": [
@@ -35,7 +39,9 @@
     "expected": [
       {
         "condition": "invalid_declaration",
-        "context": "{\"reason\":\"listed value 'bad' is not a int value\"}",
+        "context": {
+          "reason": "listed value 'bad' is not a int value"
+        },
         "phase": "validation",
         "requirement": "REQ-0404",
         "spec_paths": [
@@ -50,7 +56,9 @@
     "expected": [
       {
         "condition": "invalid_declaration",
-        "context": "{\"reason\":\"range requires one bound\"}",
+        "context": {
+          "reason": "range requires one bound"
+        },
         "phase": "validation",
         "requirement": "REQ-0399",
         "spec_paths": [
@@ -65,7 +73,9 @@
     "expected": [
       {
         "condition": "invalid_declaration",
-        "context": "{\"reason\":\"range min exceeds max\"}",
+        "context": {
+          "reason": "range min exceeds max"
+        },
         "phase": "validation",
         "requirement": "REQ-0399",
         "spec_paths": [
@@ -80,7 +90,9 @@
     "expected": [
       {
         "condition": "invalid_declaration",
-        "context": "{\"reason\":\"a str column does not admit this verification\"}",
+        "context": {
+          "reason": "a str column does not admit this verification"
+        },
         "phase": "validation",
         "requirement": "REQ-0404",
         "spec_paths": [
@@ -95,7 +107,9 @@
     "expected": [
       {
         "condition": "invalid_declaration",
-        "context": "{\"reason\":\"max_length max is at least one\"}",
+        "context": {
+          "reason": "max_length max is at least one"
+        },
         "phase": "validation",
         "requirement": "REQ-0400",
         "spec_paths": [
@@ -110,7 +124,9 @@
     "expected": [
       {
         "condition": "invalid_declaration",
-        "context": "{\"reason\":\"a int column does not admit this verification\"}",
+        "context": {
+          "reason": "a int column does not admit this verification"
+        },
         "phase": "validation",
         "requirement": "REQ-0404",
         "spec_paths": [
@@ -125,7 +141,9 @@
     "expected": [
       {
         "condition": "invalid_declaration",
-        "context": "{\"reason\":\"allowed_values requires values\"}",
+        "context": {
+          "reason": "allowed_values requires values"
+        },
         "phase": "validation",
         "requirement": "REQ-0397",
         "spec_paths": [
@@ -150,7 +168,9 @@
     "expected": [
       {
         "condition": "invalid_regex",
-        "context": "{\"pattern\":\"é(\"}",
+        "context": {
+          "pattern": "é("
+        },
         "phase": "validation",
         "requirement": "REQ-0827",
         "spec_paths": [
@@ -165,7 +185,9 @@
     "expected": [
       {
         "condition": "duplicate_identifier",
-        "context": "{\"reason\":\"verification id 'same' repeats columns.V.verifications[0].not_missing\"}",
+        "context": {
+          "reason": "verification id 'same' repeats columns.V.verifications[0].not_missing"
+        },
         "phase": "validation",
         "requirement": "REQ-0398",
         "spec_paths": [
@@ -180,7 +202,9 @@
     "expected": [
       {
         "condition": "invalid_declaration",
-        "context": "{\"reason\":\"range requires one bound\"}",
+        "context": {
+          "reason": "range requires one bound"
+        },
         "phase": "validation",
         "requirement": "REQ-0399",
         "spec_paths": [
@@ -189,7 +213,9 @@
       },
       {
         "condition": "invalid_declaration",
-        "context": "{\"reason\":\"row_count requires one bound\"}",
+        "context": {
+          "reason": "row_count requires one bound"
+        },
         "phase": "validation",
         "requirement": "REQ-0399",
         "spec_paths": [
@@ -204,7 +230,9 @@
     "expected": [
       {
         "condition": "invalid_regex",
-        "context": "{\"pattern\":\"(\"}",
+        "context": {
+          "pattern": "("
+        },
         "phase": "validation",
         "requirement": "REQ-0827",
         "spec_paths": [

@@ -102,7 +102,7 @@ mod scalar {
                 ["columns.RNDVAL.derivation.round_half_away_from_zero.source"]
             );
             assert_eq!(
-                yamaa_adapters::json_wire::decode(&finding.context).unwrap(),
+                finding.context.clone(),
                 json!({"source":"SEX", "expected":"numeric", "actual":"str"})
             );
             assert_eq!(
@@ -167,7 +167,10 @@ mod scalar {
                 findings[0].spec_paths,
                 ["columns.RND1.derivation.round_half_away_from_zero.source"]
             );
-            assert_eq!(findings[0].context, "{\"identifier\":\"OTHER.VAL1\"}");
+            assert_eq!(
+                yamaa_adapters::json_wire::encode(&findings[0].context),
+                "{\"identifier\":\"OTHER.VAL1\"}"
+            );
             assert!(!study.0.join("adsl.csv").exists());
         }
 
@@ -284,7 +287,7 @@ mod scalar {
                 ["columns.RNDVAL.derivation.case[0].then.round_half_away_from_zero.source"]
             );
             assert_eq!(
-                yamaa_adapters::json_wire::decode(&findings[0].context).unwrap(),
+                findings[0].context.clone(),
                 json!({"source":"SEX","expected":"numeric","actual":"str"})
             );
             assert!(!study.0.join("input").exists());
@@ -416,7 +419,7 @@ mod scalar {
                 );
                 assert_eq!(findings.len(), 1, "{name}: {findings:?}");
                 let finding = &findings[0];
-                let actual = yamaa_adapters::json!({"phase":finding.phase, "condition":finding.condition, "requirement":finding.requirement, "spec_paths":finding.spec_paths, "context":yamaa_adapters::json_wire::decode(&finding.context).unwrap()});
+                let actual = yamaa_adapters::json!({"phase":finding.phase, "condition":finding.condition, "requirement":finding.requirement, "spec_paths":finding.spec_paths, "context":finding.context.clone()});
                 assert_eq!(actual, expected, "{name}");
                 let failed = file_application::domain(
                     Request {
@@ -713,7 +716,7 @@ mod scalar {
                         yamaa_adapters::json!({
                             "phase": finding.phase, "condition": finding.condition,
                             "requirement": finding.requirement, "spec_paths": finding.spec_paths,
-                            "context": yamaa_adapters::json_wire::decode(&finding.context).unwrap()
+                            "context": finding.context.clone()
                         })
                     })
                     .collect();
@@ -893,11 +896,7 @@ mod scalar {
                     expected["spec_paths"],
                     "{name}"
                 );
-                assert_eq!(
-                    yamaa_adapters::json_wire::decode(&actual.context).unwrap(),
-                    expected["context"],
-                    "{name}"
-                );
+                assert_eq!(actual.context.clone(), expected["context"], "{name}");
             }
         }
 
@@ -921,7 +920,7 @@ mod scalar {
                 assert!(result.output().is_none());
                 assert_eq!(result.issues().len(), 1);
                 let issue = &result.issues()[0];
-                let actual = yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()});
+                let actual = yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()});
                 assert_eq!(actual, reference[name][0], "{name}");
                 let expected = golden(&fixture);
                 for field in ["phase", "condition", "requirement", "spec_paths"] {
@@ -1109,7 +1108,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         #[test]
         fn original_sentence_fixture_matches_its_ordered_artifact() {
@@ -1406,7 +1405,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adae-text-cleanup");
@@ -1684,7 +1683,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         #[test]
         fn independent_reference_captures_match_full_output_and_reached_findings() {
@@ -1875,7 +1874,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adsl-site-parse");

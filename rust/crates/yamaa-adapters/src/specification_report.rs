@@ -152,7 +152,7 @@ pub(crate) fn condition(run: &dyn RunView, value: &Value) -> Result<Value, Error
     let mut diagnostic = diagnostic.clone();
     diagnostic["context"] = context.into();
     crate::issue_rows::Issue::from_diagnostic(diagnostic)
-        .and_then(|issue| issue.report_value())
+        .map(|issue| issue.as_value())
         .map_err(|_| Error::InvalidObservation)
 }
 /// A classified capture failure terminates the request sequence. Reject malformed

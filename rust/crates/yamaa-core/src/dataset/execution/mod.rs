@@ -28,6 +28,7 @@ mod self_relations;
 mod str_case;
 mod str_extract;
 mod str_pad;
+mod str_replace;
 mod str_template;
 mod windows;
 
@@ -550,6 +551,9 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     if let Expression::StrExtract { source, operation } = &assignment.expression {
         return str_extract::evaluate(source, operation, table, candidate, plan, row, state);
     }
+    if let Expression::StrReplace { source, operation } = &assignment.expression {
+        return str_replace::evaluate(source, operation, table, candidate, plan, row, state);
+    }
     if let Expression::StrCase { source, operation } = &assignment.expression {
         return str_case::evaluate(source, operation, table, candidate, plan, row, state);
     }
@@ -696,6 +700,7 @@ impl DatasetPlan {
             imputation::register(&assignment.expression, &mut observations.handlers);
             str_case::register(&assignment.expression, &mut observations.handlers);
             str_extract::register(&assignment.expression, &mut observations.handlers);
+            str_replace::register(&assignment.expression, &mut observations.handlers);
             str_template::register(&assignment.expression, &mut observations.handlers);
         }
         let result = self.execute_inner(
@@ -2064,6 +2069,7 @@ fn evaluate_leaf<T: TableAccess + ?Sized>(
         | Expression::StrCase { .. }
         | Expression::StrPad { .. }
         | Expression::StrExtract { .. }
+        | Expression::StrReplace { .. }
         | Expression::StrTemplate { .. } => {
             unreachable!("recursive evaluation handled above")
         }

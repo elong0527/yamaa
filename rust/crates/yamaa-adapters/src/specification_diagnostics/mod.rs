@@ -10,15 +10,6 @@ use yamaa_core::specification::{
     BindError, BindFinding, PreflightFinding, PrepareError, SourceDeclaration,
 };
 
-fn diagnostic(
-    phase: &str,
-    condition: &str,
-    requirement: Option<&str>,
-    paths: Vec<String>,
-    context: Value,
-) -> Value {
-    crate::issue_rows::report(phase, condition, requirement, paths, context)
-}
 pub(crate) fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> {
     let BindError::Invalid(findings) = error else {
         return None;
@@ -44,25 +35,41 @@ fn preparing(error: &PreflightFinding) -> Value {
 }
 
 /// The original-document report shape retains ordinary JSON context values.
-/// Geometry is retained by the core diagnostic and projected by the report contract.
+/// Geometry recorded on the core diagnostic (source span and operand route)
+/// is carried through this projection onto the S1 record shape instead of
+/// being discarded; diagnostics without geometry keep the previous bytes.
 pub(crate) fn portable_diagnostic(finding: yamaa_core::diagnostic::Diagnostic) -> Value {
-    portable_definition(finding.definition(), finding.spec_paths, finding.context)
+    let definition = finding.definition();
+    let yamaa_core::diagnostic::Diagnostic {
+        spec_paths,
+        context,
+        source_span,
+        operand_route,
+        ..
+    } = finding;
+    portable_definition(definition, spec_paths, context, source_span, operand_route)
 }
-/// Submission findings retain their core-owned definition until their causes
-/// join the closed cause registry; serialization assigns no semantic vocabulary.
+/// Findings projected from a definition alone (for example submission
+/// findings, whose causes have not joined the closed cause registry) record
+/// no geometry of their own; callers that have geometry pass it through
+/// instead of discarding it. Serialization assigns no semantic vocabulary.
 pub(crate) fn portable_definition(
     definition: yamaa_core::diagnostic::Definition,
     paths: Vec<String>,
     context: yamaa_core::diagnostic::Context,
+    source_span: Option<yamaa_core::numeric_parser::SourceSpan>,
+    operand_route: Option<Vec<String>>,
 ) -> Value {
-    let context: yamaa_core::json::Map<_, _> = context.into_iter().collect();
-    diagnostic(
-        definition.phase,
-        definition.condition,
-        definition.requirement,
-        paths,
-        context.into(),
-    )
+    crate::issue_rows::Issue {
+        phase: definition.phase.into(),
+        condition: definition.condition.into(),
+        requirement: definition.requirement.map(str::to_owned),
+        spec_paths: paths,
+        context: context.into(),
+        source_span,
+        operand_route,
+    }
+    .as_value()
 }
 /// Project complete retained compiler and codec findings without repeating source reads.
 pub fn findings(

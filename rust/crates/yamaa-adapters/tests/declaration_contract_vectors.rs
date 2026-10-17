@@ -536,6 +536,26 @@ mod declaration {
             }
         }
 
+        /// The replacement consumer itself, not a second scan written for the test.
+        fn replace_observation(pattern: &str, subject: &str, replacement: &str) -> String {
+            use yamaa_core::{
+                table::ValueRef,
+                text_replace::{Step, StringReplace},
+            };
+            let operation = StringReplace::new(
+                "SRC.TEXT".into(),
+                "columns.TEXT.derivation.str_replace".into(),
+                pattern.into(),
+                replacement.into(),
+                None,
+            )
+            .unwrap();
+            match operation.apply(ValueRef::Str(subject)) {
+                Ok(Step::Matched { subject, spans }) => operation.render(subject, &spans).unwrap(),
+                other => panic!("replacement truth exceeds policy: {other:?}"),
+            }
+        }
+
         #[test]
         fn unchanged_regex_documents_and_authored_capture_controls_run_directly() {
             let document = yaml("yaml/conformance/regex.yaml");
@@ -544,6 +564,7 @@ mod declaration {
             assert!(document.get("engine").is_none());
             let mut ids = BTreeSet::new();
             let mut covered = BTreeSet::new();
+            let mut replaced = 0;
             for case in document["cases"].as_array().unwrap() {
                 let id = case["id"].as_str().unwrap();
                 assert!(
@@ -616,7 +637,22 @@ mod declaration {
                         yamaa_adapters::json_wire::encode(&case["id"])
                     );
                 }
+                let replacement = &case["str_replace"];
+                if !replacement.is_null() {
+                    assert_eq!(
+                        replace_observation(
+                            case["pattern"].as_str().unwrap(),
+                            case["subject"].as_str().unwrap(),
+                            replacement["replacement"].as_str().unwrap(),
+                        ),
+                        replacement["value"].as_str().unwrap(),
+                        "{}",
+                        yamaa_adapters::json_wire::encode(&case["id"])
+                    );
+                    replaced += 1;
+                }
             }
+            assert!(replaced > 0, "no regex case records a replacement");
             // Retain the original fixture-integrity coverage requirement alongside
             // actual parser/matcher assertions, without a Python replay executable.
             for required in [

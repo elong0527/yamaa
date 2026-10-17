@@ -26,8 +26,8 @@ reports its existing condition. A width below one fails as
 
 <a id="req-0308"></a>
 
-**REQ-0308.** `str_extract`, `str_concat`, `str_template`, and `str_case`
-require string sources.
+**REQ-0308.** `str_extract`, `str_replace`, `str_concat`, `str_template`,
+and `str_case` require string sources.
 
 ### Templates: Written forms
 
@@ -198,7 +198,7 @@ in that sequence.
 **REQ-0711.** Identifier and keyword case behavior comes from the closed
 ASCII grammars that own them and is unaffected by data casing. Predicate
 `LIKE` remains case-sensitive and compares literal scalar values under
-[Predicates](predicates.md). Schema patterns, `str_extract`, and `matches` match under [Text operations](text.md) and
+[Predicates](predicates.md). Schema patterns, `str_extract`, `str_replace`, and `matches` match under [Text operations](text.md) and
 do not select a Unicode casing mode through this contract.
 
 <a id="req-0712"></a>
@@ -217,6 +217,7 @@ broader casing from a host or environment default.
 
 - the `pattern` descriptor keyword [Schema language](../reference/schema-language.md) declares on a schema `str`;
 - `str_extract.pattern`;
+- `str_replace.pattern` ([REQ-1318](text.md#req-1318));
 - the `pattern` of [Verification](../execution/verification.md)'s `matches` column verification;
 - `str_contains.pattern` ([REQ-1243](text.md#req-1243));
 - the pattern literal in the predicate call `str_contains(source, pattern)`
@@ -224,8 +225,9 @@ broader casing from a host or environment default.
 
 <a id="req-0797"></a>
 
-**REQ-0797.** `regex` is the named schema type for `str_extract.pattern` and
-`str_contains.pattern`, and for [Verification](../execution/verification.md)'s
+**REQ-0797.** `regex` is the named schema type for `str_extract.pattern`,
+`str_contains.pattern`, and `str_replace.pattern`, and for
+[Verification](../execution/verification.md)'s
 `matches` pattern. The schema descriptor and predicate pattern literal use
 the same portable pattern contract. All requirements below apply to every
 consumer except where a section names one.
@@ -390,6 +392,44 @@ distinct, and no consumer converts one into the other.
 string admits only the empty value. `min_length`, not the pattern, prohibits
 the empty value.
 
+### Regular expressions: Replacement
+
+<a id="req-1318"></a>
+
+**REQ-1318.** `str_replace` is a **search** that replaces every match. The
+scan starts before the first scalar of the source. At each step it keeps the
+match [REQ-0813](text.md#req-0813) would keep among the matches that start at
+or after the scan position, and the next step starts where that match ends.
+Matches therefore never overlap. Every step matches against the whole source,
+so `^` still matches only before its first scalar and a lookbehind reads the
+scalars before the scan position. The scan of one source value is one match
+call: one step counter, described under Error conditions below, covers all of
+its steps.
+
+<a id="req-1319"></a>
+
+**REQ-1319.** An empty match is replaced like any other
+([REQ-0818](text.md#req-0818)). After an empty match the next step starts one
+scalar later, and the scalar it steps over is copied unchanged. With pattern
+`x*` and replacement `-`, `ab` becomes `-a-b-`; with pattern `a*`, `baa`
+becomes `-b--`.
+
+<a id="req-1320"></a>
+
+**REQ-1320.** `replacement` is literal text. Each match is replaced by exactly
+that text: `$`, the backslash, and braces have no special meaning, and no
+capture group is referenced. This field retains its literal meaning if group
+references are added; those references require a separate field.
+The scalars outside the matches are kept in
+order. A source the pattern matches nowhere is returned unchanged. A result
+with no scalars is the empty string, never missing.
+
+<a id="req-1321"></a>
+
+**REQ-1321.** A missing source returns declared `missing`. Without that
+handler, the missing source is fatal under
+[Local handlers](../execution/handlers.md).
+
 ### Regular expressions: Determinism and parity
 
 <a id="req-0820"></a>
@@ -401,7 +441,8 @@ outcome for the same pattern and subject.
 <a id="req-0821"></a>
 
 **REQ-0821.** `conformance/regex.yaml` holds shared fixtures. Each case names
-the pattern, subject, and full-match, search, and extraction outcomes, or
+the pattern, subject, and full-match, search, and extraction outcomes, and
+optionally a replacement and its outcome, or
 records a rejected pattern. The search outcome also governs both
 `str_contains` consumers. Repository validation replays the fixtures against
 the shared portable matcher. Installed-host qualification establishes that
@@ -476,6 +517,18 @@ whose length can vary. Fixed length lookbehind stays allowed, and
 | `expressions.str_extract.missing` | Value returned when source is missing. |
 | `expressions.str_extract.no_match` | Value returned when pattern does not match source. |
 | `Result` | Extracts one regular-expression match group from a string. |
+
+<a id="req-1322"></a>
+
+**REQ-1322.** The `expressions.str_replace` fields have these meanings:
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.str_replace.source` | String variable to search. |
+| `expressions.str_replace.pattern` | Regular expression whose every match in source is replaced under [Text operations](text.md). |
+| `expressions.str_replace.replacement` | Literal text that replaces each match ([REQ-1320](text.md#req-1320)). |
+| `expressions.str_replace.missing` | Value returned when source is missing. |
+| `Result` | Returns source with every non-overlapping match replaced, left to right ([REQ-1318](text.md#req-1318)). |
 
 <a id="req-1243"></a>
 
@@ -579,7 +632,7 @@ compilation/resource refusal and declaring path.
 <a id="req-0827"></a>
 
 **REQ-0827.** A pattern the grammar or the normalization rejects, in any of
-  the schema descriptor, `str_extract`, `str_contains` expression, or
+  the schema descriptor, `str_extract`, `str_replace`, `str_contains` expression, or
   `matches` verification: fail validation with `invalid_regex` and report
   the declaring path and the rejection. The `str_contains` predicate call
   instead fails with `invalid_predicate` at parse time under

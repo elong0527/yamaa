@@ -360,7 +360,7 @@ columns:
                 );
                 assert_eq!(issue.spec_paths, ["input.FIRST.ordinal"]);
                 assert_eq!(
-                    yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                    issue.context.clone(),
                     yamaa_adapters::json!({"dataset":"FIRST", "field":"ID"})
                 );
             }
@@ -1486,6 +1486,7 @@ columns:
                     "phase": "validation", "condition": "incompatible_input_type",
                     "requirement": "REQ-0190", "spec_paths": [format!("intermediates[{index}].filter")],
                     "context": {"left_type": "date", "right_type": "str"},
+                    "operand_route": [],
                 })).collect());
                 let prepared = FileSpecification::prepare(
                     Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
@@ -1533,6 +1534,7 @@ columns:
                     "phase": "validation", "condition": "incompatible_input_type",
                     "requirement": "REQ-0190", "spec_paths": [format!("input.ADSL.schema.intermediates[{index}].filter")],
                     "context": {"left_type": "date", "right_type": "str"},
+                    "operand_route": [],
                 })).collect());
                 assert_eq!(result.observations()["diagnostics"], merged);
                 assert_eq!(result.observations()["nodes"][0]["diagnostics"], expected);
@@ -1627,6 +1629,7 @@ columns:
                     "phase": "validation", "condition": "incompatible_input_type",
                     "requirement": "REQ-0190", "spec_paths": paths,
                     "context": {"left_type": "float", "right_type": "str"},
+                    "operand_route": [],
                 })
             };
 
@@ -1684,7 +1687,10 @@ columns:
                 consumer.issues()[0].spec_paths,
                 ["input.BASE.schema.columns.WTFL.derivation.case[0].when"]
             );
-            assert_eq!(consumer.issues()[0].context, "{\"identifier\":\"HEIGHT\"}");
+            assert_eq!(
+                consumer.issues()[0].context,
+                yamaa_adapters::json!({"identifier": "HEIGHT"})
+            );
 
             // A three-level chain accumulates one link segment per hop, and
             // the middle specification as entry carries exactly one.
@@ -1790,8 +1796,7 @@ columns:
                 contract.spec_paths,
                 ["input.BASE.schema.columns.WTFL.label"]
             );
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&contract.context).unwrap();
+            let context: yamaa_core::json::Value = contract.context.clone();
             assert_eq!(context["dataset"], "BASE");
             assert_eq!(context["field"], "WTFL");
             assert_eq!(context["reason"], "label");

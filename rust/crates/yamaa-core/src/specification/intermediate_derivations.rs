@@ -148,7 +148,7 @@ fn prepare_kind(
         "row_number" | "rank" | "date_diff" | "study_day" | "to_epoch_day" => {
             Kind::Literal(Some(ColumnType::Int))
         }
-        "str_pad" | "str_case" | "str_concat" | "str_template" | "str_extract"
+        "str_pad" | "str_case" | "str_concat" | "str_template" | "str_extract" | "str_replace"
         | "date_precision" | "datetime_precision" | "baseline_flag" => {
             Kind::Literal(Some(ColumnType::Str))
         }

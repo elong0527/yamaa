@@ -115,13 +115,16 @@ mod project {
                 )
             );
             assert_eq!(issues[0].spec_paths, ["metadata.label"]);
-            assert_eq!(issues[0].context, "{\"key\":\"label\",\"level\":\"root\"}");
+            assert_eq!(
+                yamaa_adapters::json_wire::encode(&issues[0].context),
+                "{\"key\":\"label\",\"level\":\"root\"}"
+            );
             let issues =
                 study.check(&VALID.replace("length: 3", "length: -99999999999999999999999999999"));
             assert_eq!(issues[0].condition, "submission_length_invalid");
             assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0911"));
             assert_eq!(
-                issues[0].context,
+                yamaa_adapters::json_wire::encode(&issues[0].context),
                 "{\"column\":\"VALUE\",\"length\":-99999999999999999999999999999}"
             );
             let issues =
@@ -140,7 +143,7 @@ mod project {
             let issues = study.check(&raw);
             assert_eq!(issues[0].condition, "declared_length_conflict");
             assert_eq!(
-                issues[0].context,
+                yamaa_adapters::json_wire::encode(&issues[0].context),
                 "{\"column\":\"VALUE\",\"length\":3,\"max_length\":4}"
             );
             assert!(!study.0.join("output.csv").exists());
@@ -165,7 +168,7 @@ mod project {
             assert_eq!(issues[0].condition, "length_failed");
             assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0378"));
             assert_eq!(
-                issues[0].context,
+                yamaa_adapters::json_wire::encode(&issues[0].context),
                 "{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}],\"max\":3}"
             );
             assert!(run.save().is_err());
@@ -199,7 +202,7 @@ mod project {
             let contexts = run
                 .issues()
                 .iter()
-                .map(|issue| yamaa_adapters::json_wire::decode(&issue.context).unwrap())
+                .map(|issue| issue.context.clone())
                 .collect::<Vec<_>>();
             assert_eq!(
                 contexts[0],
@@ -422,7 +425,7 @@ mod project {
                         run.issues()[0].spec_paths,
                         ["columns.VALUE.submission.inventory_vocabulary"]
                     );
-                    assert_eq!(run.issues()[0].context,"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":1}],\"values\":[\"DM\"]}");
+                    assert_eq!(yamaa_adapters::json_wire::encode(&run.issues()[0].context),"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":1}],\"values\":[\"DM\"]}");
                 } else {
                     assert!(run.issues().is_empty(), "{:?}", run.issues());
                 }
@@ -492,7 +495,7 @@ mod project {
                 let run = file_application::Domain::from_project(result, &project).unwrap();
                 assert_eq!(run.issues().len(), 1);
                 assert_eq!(run.issues()[0].requirement.as_deref(), Some("REQ-1156"));
-                assert_eq!(run.issues()[0].context,"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}],\"values\":[\"renamed\"]}");
+                assert_eq!(yamaa_adapters::json_wire::encode(&run.issues()[0].context),"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}],\"values\":[\"renamed\"]}");
                 assert!(!study.0.join("define.xml").exists());
             }
         }
@@ -515,7 +518,7 @@ mod project {
             )
             .unwrap();
             assert_eq!(run.issues().len(), 1);
-            assert_eq!(run.issues()[0].context,"{\"column\":\"RESULT\",\"failure_count\":1,\"keys\":[{\"ID\":1,\"LBTESTCD\":\"CREAT\"}],\"values\":[\"DM\"]}");
+            assert_eq!(yamaa_adapters::json_wire::encode(&run.issues()[0].context),"{\"column\":\"RESULT\",\"failure_count\":1,\"keys\":[{\"ID\":1,\"LBTESTCD\":\"CREAT\"}],\"values\":[\"DM\"]}");
         }
 
         #[test]
@@ -604,7 +607,7 @@ mod project {
                 );
                 assert_eq!(issue.spec_paths, [expected_path]);
                 assert_eq!(
-                    yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                    issue.context.clone(),
                     yamaa_adapters::json!({"column":"RESULT","failure_count":1,"keys":[{"ID":1,"LBTESTCD":expected_key}],"max":maximum})
                 );
                 assert!(run.save().is_err());
@@ -701,7 +704,7 @@ mod project {
             );
             assert_eq!(issues[0].spec_paths, ["rows.glucose.submission.RESULT"]);
             assert_eq!(
-                issues[0].context,
+                yamaa_adapters::json_wire::encode(&issues[0].context),
                 "{\"column\":\"RESULT\",\"length\":4,\"max_length\":3}"
             );
         }
@@ -738,7 +741,7 @@ mod project {
                     ("submission_length_not_applicable", Some("REQ-0912"))
                 );
                 assert_eq!(issues[0].spec_paths, ["rows.glucose.submission.RESULT"]);
-                let context = yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
+                let context = issues[0].context.clone();
                 assert_eq!(context["column"], "RESULT");
                 assert_eq!(
                     context[field],
@@ -1602,8 +1605,7 @@ mod project {
                     issue.spec_paths,
                     [format!("{}.tests[0]", sources(&functions)[index].path)]
                 );
-                let context: yamaa_core::json::Value =
-                    yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+                let context: yamaa_core::json::Value = issue.context.clone();
                 assert_eq!(context["function"], functions[index].definition().name);
                 assert_eq!(context["case"], "normal");
                 assert_eq!(context["args"]["x"], 7);
@@ -1661,8 +1663,7 @@ mod project {
             assert!(Rc::ptr_eq(held, &port.payload));
             let issues =
                 test_issues(&sources(&functions), &failures, &[host, host, host, host]).unwrap();
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value = issues[0].context.clone();
             assert_eq!(context["failure"]["condition"], "function_call_failed");
             assert_eq!(context["failure"]["requirement"], "REQ-0701");
             assert_eq!(context["failure"]["context"]["host_message"], "é\0🙂");
@@ -1770,8 +1771,7 @@ mod project {
                 })],
             )
             .unwrap();
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value = issues[0].context.clone();
             assert_eq!(context["host_error"], "ValueError");
             assert_eq!(context["host_message"], text);
             assert!(context.get("host_details_truncated").is_none());
@@ -1824,8 +1824,7 @@ mod project {
                 expected: float(0.0),
             }];
             let issues = test_issues(&selected, &correct, &[None]).unwrap();
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value = issues[0].context.clone();
             assert_eq!(
                 context["expected"].as_f64().unwrap().to_bits(),
                 0.0_f64.to_bits()
@@ -1844,8 +1843,7 @@ mod project {
                 expected: Value::Int(i64::MIN),
             }];
             let issues = test_issues(&selected, &failures, &[None]).unwrap();
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value = issues[0].context.clone();
             assert_eq!(context["expected"].as_i64(), Some(i64::MIN));
             assert_eq!(context["args"]["x"].as_i64(), Some(i64::MIN));
             assert_eq!(context["actual"].as_i64(), Some(i64::MAX));
@@ -1880,8 +1878,7 @@ mod project {
                 expected: Value::Str("authored é\0🙂".into()),
             }];
             let issues = test_issues(&selected, &failures, &[None]).unwrap();
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value = issues[0].context.clone();
             assert_eq!(context["expected"], "authored é\0🙂");
             assert_eq!(context["actual"], "actual é\0🙂");
         }
@@ -1981,8 +1978,7 @@ mod project {
                 ("verification", "allowed_values_failed", Some("REQ-0957"))
             );
             assert_eq!(issue.spec_paths, ["columns.CODE.submission.codelist"]);
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+            let context: yamaa_core::json::Value = issue.context.clone();
             assert_eq!(context["column"], "CODE");
             assert_eq!(context["codelist"], "SEX");
             assert_eq!(context["keys"][0]["ID"].as_i64(), Some(i64::MAX));
@@ -2028,8 +2024,7 @@ mod project {
             let text = "\0".repeat(1_500_000);
             let records = vec![record(Value::Str(text.clone()))];
             let issues = codelist_issues(&compiled, &records).unwrap();
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value = issues[0].context.clone();
             assert_eq!(context["values"], yamaa_adapters::json!([text]));
             let mut many = record(Value::Str("bad".into()));
             many.failed_count = 65_537;
@@ -2044,8 +2039,7 @@ mod project {
                 .collect();
             let issues = codelist_issues(&compiled, &[many]).unwrap();
             assert_eq!(issues.len(), 1);
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value = issues[0].context.clone();
             assert_eq!(context["failure_count"], 65_537);
             assert_eq!(context["values"].as_array().unwrap().len(), 65_537);
             assert_eq!(context["keys"].as_array().unwrap().len(), 65_537);
@@ -2132,7 +2126,7 @@ mod project {
             (rejected, payload)
         }
         fn context(issue: &yamaa_adapters::issue_rows::Issue) -> Value {
-            yamaa_adapters::json_wire::decode(&issue.context).unwrap()
+            issue.context.clone()
         }
         #[test]
         fn static_admission_restores_external_and_inline_origins_after_an_earlier_capture_failure()

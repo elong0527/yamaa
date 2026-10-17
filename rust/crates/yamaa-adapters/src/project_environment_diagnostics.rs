@@ -290,16 +290,16 @@ fn decode_issues(
     let message = crate::specification_diagnostics::capture_failure(error);
     let mut rows = crate::file_application::preparation_failure(message);
     for row in &mut rows {
-        let mut context: yamaa_core::json::Value =
-            crate::json_wire::decode(&row.context).map_err(|_| Error::Projection)?;
+        if !row.context.is_object() {
+            return Err(Error::Projection);
+        }
         for (key, value) in [
             ("entry", entry),
             ("path", written),
             ("environment_path", declaration),
         ] {
-            context[key] = value.into();
+            row.context[key] = value.into();
         }
-        row.context = crate::json_wire::encode(&context);
     }
     Ok(rows)
 }

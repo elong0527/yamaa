@@ -157,24 +157,60 @@ impl Pattern {
     pub fn full_match<'s>(&self, subject: &'s str) -> Result<Option<Match<'s>>, MatchError> {
         self.execute(subject, true)
     }
+    /// Every match of a left-to-right scan that resumes where the previous
+    /// match ended, or one scalar later after an empty match (ECMA-262 global
+    /// replacement with the Unicode flag). Spans are subject byte offsets. The
+    /// whole scan is one match call under one fixed step guard.
+    pub fn search_all(&self, subject: &str) -> Result<Vec<(usize, usize)>, MatchError> {
+        let mut machine = self.machine();
+        let (chars, offsets) = scalars(subject);
+        let mut spans = Vec::new();
+        let mut next = 0;
+        while next <= chars.len() {
+            let Some((start, found)) = self.first(&chars, next, false, &mut machine)? else {
+                break;
+            };
+            spans.push((offsets[start], offsets[found.at]));
+            next = if found.at == start {
+                start + 1
+            } else {
+                found.at
+            };
+        }
+        Ok(spans)
+    }
     fn execute<'s>(&self, subject: &'s str, full: bool) -> Result<Option<Match<'s>>, MatchError> {
-        let mut machine = Machine {
+        let mut machine = self.machine();
+        let (chars, offsets) = scalars(subject);
+        if let Some((start, found)) = self.first(&chars, 0, full, &mut machine)? {
+            let mut groups = machine
+                .captures
+                .materialize(found.captures, |a, b| &subject[offsets[a]..offsets[b]]);
+            groups[0] = Some(&subject[offsets[start]..offsets[found.at]]);
+            return Ok(Some(Match { groups }));
+        }
+        Ok(None)
+    }
+    fn machine(&self) -> Machine {
+        Machine {
             steps: Steps(crate::limits::Limits::REGEX_STEPS),
             tasks: Vec::new(),
             captures: Captures {
                 groups: self.groups + 1,
                 nodes: Vec::new(),
             },
-        };
-        // Retain exact Unicode-scalar and UTF-8 byte coordinates.
-
-        let chars: Vec<_> = subject.chars().collect();
-        let offsets: Vec<_> = subject
-            .char_indices()
-            .map(|(i, _)| i)
-            .chain(std::iter::once(subject.len()))
-            .collect();
-        for start in 0..=if full { 0 } else { chars.len() } {
+        }
+    }
+    /// The leftmost successful attempt starting at or after `from`; a full
+    /// match tries the start of the subject only.
+    fn first(
+        &self,
+        chars: &[char],
+        from: usize,
+        full: bool,
+        machine: &mut Machine,
+    ) -> Result<Option<(usize, State)>, MatchError> {
+        for start in from..=if full { 0 } else { chars.len() } {
             machine.steps.work(1)?;
             machine.tasks.clear();
             machine.captures.nodes.clear();
@@ -184,12 +220,8 @@ impl Pattern {
                 captures: None,
             };
             machine.push(&mut state, Task::Node(self.root));
-            if let Some(found) = self.run(&chars, state, false, full, &mut machine)? {
-                let mut groups = machine
-                    .captures
-                    .materialize(found.captures, |a, b| &subject[offsets[a]..offsets[b]]);
-                groups[0] = Some(&subject[offsets[start]..offsets[found.at]]);
-                return Ok(Some(Match { groups }));
+            if let Some(found) = self.run(chars, state, false, full, machine)? {
+                return Ok(Some((start, found)));
             }
         }
         Ok(None)
@@ -436,6 +468,16 @@ enum Task {
         count: usize,
         before: usize,
     },
+}
+/// Exact Unicode-scalar and UTF-8 byte coordinates of one subject.
+fn scalars(subject: &str) -> (Vec<char>, Vec<usize>) {
+    let chars = subject.chars().collect();
+    let offsets = subject
+        .char_indices()
+        .map(|(i, _)| i)
+        .chain(std::iter::once(subject.len()))
+        .collect();
+    (chars, offsets)
 }
 #[derive(Clone, Copy, Debug)]
 struct State {

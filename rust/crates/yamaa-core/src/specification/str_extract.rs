@@ -1,32 +1,63 @@
 //! Whole-request text declaration admission, then reference-owned extraction binding.
+//! `str_contains` and `str_replace` share the extraction declaration and its
+//! source binding; only the bound expression differs.
 use super::*;
 use crate::text_extract::{AdmissionError, StringExtract};
+use crate::text_replace::StringReplace;
 
-pub(super) struct Prepared(BTreeMap<usize, StringExtract>);
+pub(super) struct Prepared {
+    searches: BTreeMap<usize, StringExtract>,
+    replacements: BTreeMap<usize, StringReplace>,
+}
 impl Prepared {
     pub(super) fn get(&self, payload: usize) -> Result<StringExtract, PrepareError> {
-        self.0.get(&payload).cloned().ok_or(PrepareError::Internal)
+        self.searches
+            .get(&payload)
+            .cloned()
+            .ok_or(PrepareError::Internal)
+    }
+    pub(super) fn replacement(&self, payload: usize) -> Result<StringReplace, PrepareError> {
+        self.replacements
+            .get(&payload)
+            .cloned()
+            .ok_or(PrepareError::Internal)
     }
     pub(super) fn new(
         d: &Document,
         output: &TableSchema,
         findings: &mut Vec<PreflightFinding>,
     ) -> Result<Self, PrepareError> {
-        let mut operations = BTreeMap::new();
+        let mut searches = BTreeMap::new();
+        let mut replacements = BTreeMap::new();
         walk(d, &mut |payload, path, rows| {
             let source = text(d, field(d, payload, "source")?)?;
-            let operation = StringExtract::new(
-                source.into(),
-                path.into(),
-                text(d, field(d, payload, "pattern")?)?.into(),
-                group(d, payload)?.into(),
-                d.field(payload, "missing")
-                    .map(|id| literal(d, id, &format!("{path}.missing")))
-                    .transpose()?,
-                d.field(payload, "no_match")
-                    .map(|id| literal(d, id, &format!("{path}.no_match")))
-                    .transpose()?,
-            )
+            let pattern = text(d, field(d, payload, "pattern")?)?;
+            let missing = d
+                .field(payload, "missing")
+                .map(|id| literal(d, id, &format!("{path}.missing")))
+                .transpose()?;
+            let replacement = d.field(payload, "replacement");
+            let admitted = match replacement {
+                Some(replacement) => StringReplace::new(
+                    source.into(),
+                    path.into(),
+                    pattern.into(),
+                    text(d, replacement)?.into(),
+                    missing,
+                )
+                .map(Admitted::Replace),
+                None => StringExtract::new(
+                    source.into(),
+                    path.into(),
+                    pattern.into(),
+                    group(d, payload)?.into(),
+                    missing,
+                    d.field(payload, "no_match")
+                        .map(|id| literal(d, id, &format!("{path}.no_match")))
+                        .transpose()?,
+                )
+                .map(Admitted::Search),
+            }
             .map_err(|error| match error {
                 AdmissionError::Shape => PrepareError::Internal,
                 AdmissionError::Regex(crate::regex::CompileError::Limit {
@@ -40,10 +71,19 @@ impl Prepared {
                     Some(&format!("{path}.pattern")),
                 ),
                 AdmissionError::Regex(_) => PrepareError::Unsupported(vec![UnsupportedFeature {
-                    operation: "str_extract_pattern".into(),
+                    operation: if replacement.is_some() {
+                        "str_replace_pattern"
+                    } else {
+                        "str_extract_pattern"
+                    }
+                    .into(),
                     path: format!("{path}.pattern"),
                 }]),
             })?;
+            let operation = match &admitted {
+                Admitted::Search(operation) => operation,
+                Admitted::Replace(operation) => operation.search(),
+            };
             // Row availability/group scope belongs to binding. Declared columns
             // and CSV fields have complete static types in the no-rows model.
             let known_output = if rows {
@@ -67,11 +107,25 @@ impl Prepared {
                     findings.push(PreflightFinding::TextExtract(diagnostic.clone()));
                 }
             }
-            operations.insert(payload, operation);
+            match admitted {
+                Admitted::Search(operation) => {
+                    searches.insert(payload, operation);
+                }
+                Admitted::Replace(operation) => {
+                    replacements.insert(payload, operation);
+                }
+            }
             Ok(())
         })?;
-        Ok(Self(operations))
+        Ok(Self {
+            searches,
+            replacements,
+        })
     }
+}
+enum Admitted {
+    Search(StringExtract),
+    Replace(StringReplace),
 }
 fn group(d: &Document, payload: usize) -> Result<&str, PrepareError> {
     match d.field(payload, "group").map(|id| &d.nodes()[id]) {
@@ -101,7 +155,7 @@ fn walk(
             ));
         }
 
-        for name in ["str_extract", "str_contains"] {
+        for name in ["str_extract", "str_contains", "str_replace"] {
             if let Some(payload) = d.field(id, name) {
                 visit(payload, &format!("{path}.{name}"), rows)?;
             }
@@ -360,4 +414,71 @@ pub(super) fn bind_row(
         intermediates,
     )?;
     finish(operation, source, start, catalog, findings, column)
+}
+fn replaced(expression: Expression, operation: &StringReplace) -> Expression {
+    match expression {
+        Expression::StrExtract { source, .. } => Expression::StrReplace {
+            source,
+            operation: operation.clone(),
+        },
+        _ => unreachable!("extraction binding"),
+    }
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) fn bind_replace(
+    operation: &StringReplace,
+    column: usize,
+    keys: &[usize],
+    catalog: &Catalog,
+    declarations: &intermediates::Declarations,
+    secondary: &[crate::dataset::SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<Expression>, BindError> {
+    Ok(bind(
+        operation.search(),
+        column,
+        keys,
+        catalog,
+        declarations,
+        secondary,
+        intermediates,
+        edges,
+        findings,
+    )?
+    .map(|expression| replaced(expression, operation)))
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) fn bind_row_replace(
+    operation: &StringReplace,
+    column: usize,
+    catalog: &Catalog,
+    driver: &str,
+    row: Option<&str>,
+    phase: crate::reference_scope::Phase<'_>,
+    available: Option<&[usize]>,
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+    output: &TableSchema,
+    named: &intermediates::Declarations,
+    secondary: &[crate::dataset::SecondarySource],
+    intermediates: &[Option<crate::dataset::Intermediate>],
+) -> Result<Option<Expression>, BindError> {
+    Ok(bind_row(
+        operation.search(),
+        column,
+        catalog,
+        driver,
+        row,
+        phase,
+        available,
+        edges,
+        findings,
+        output,
+        named,
+        secondary,
+        intermediates,
+    )?
+    .map(|expression| replaced(expression, operation)))
 }

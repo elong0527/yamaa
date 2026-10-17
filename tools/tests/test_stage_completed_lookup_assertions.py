@@ -1,4 +1,4 @@
-"""Preserve independently authored assertion bytes through portable host staging."""
+"""Project independently authored assertion truth onto the installed-host issue shape."""
 
 import json
 import tempfile
@@ -20,9 +20,11 @@ class CompletedAssertionStage(unittest.TestCase):
             root = Path(temporary)
             stage.stage_completed_lookup_assertion_truth(root)
             label = "completed-lookup-assertions"
-            self.assertEqual(
-                (root / (label + "-truth.json")).read_bytes(), fixture.read_bytes()
-            )
+            staged = json.loads((root / (label + "-truth.json")).read_text())
+            self.assertEqual(staged, stage.host_truth(fixture))
+            for case in staged["cases"].values():
+                for row in case["issues"] + case["check_issues"]:
+                    self.assertEqual(set(row), set(stage.HOST_ISSUE_FIELDS))
             paths = json.loads((root / (label + "-case-paths.json")).read_text())
             self.assertEqual(list(paths), list(truth["cases"]))
             self.assertEqual(
@@ -59,6 +61,24 @@ class CompletedAssertionStage(unittest.TestCase):
                         + file.relative_to(root).as_posix()
                     )
                     self.assertLessEqual(len(archived.encode("ascii")), 100, archived)
+
+    def test_host_projection_drops_adapter_geometry_and_refuses_other_fields(self):
+        row = {
+            "condition": "finding",
+            "context": {"left_type": "int", "right_type": "str"},
+            "phase": "validation",
+            "requirement": "REQ-0190",
+            "spec_paths": ["verifications[1].assert.when"],
+        }
+        geometry = {"source_span": {"start": 0, "end": 4}, "operand_route": []}
+        projected = stage.host_issue_rows([{**row, **geometry}, row])
+        self.assertEqual(projected, [row, row])
+        # Authored key order survives so geometry-free truth keeps its bytes.
+        self.assertEqual(list(projected[0]), list(row))
+        with self.assertRaises(ValueError):
+            stage.host_issue_rows([{**row, "severity": "error"}])
+        with self.assertRaises(ValueError):
+            stage.host_issue_rows([{key: row[key] for key in row if key != "context"}])
 
 
 if __name__ == "__main__":

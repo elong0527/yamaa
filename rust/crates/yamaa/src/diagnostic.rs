@@ -71,9 +71,7 @@ pub struct DiagnosticContext {
 
 impl DiagnosticContext {
     pub(crate) fn from_issue(issue: &yamaa_adapters::issue_rows::Issue) -> Self {
-        let decoded: yamaa_core::json::Value =
-            yamaa_adapters::json_wire::decode(&issue.context).unwrap_or_default();
-        let values = match decoded {
+        let values = match &issue.context {
             yamaa_core::json::Value::Object(values) => values
                 .iter()
                 .map(|(key, value)| (key.clone(), context_value_from_core(value)))
@@ -82,7 +80,7 @@ impl DiagnosticContext {
         };
         Self {
             values,
-            text: issue.context.clone(),
+            text: yamaa_adapters::json_wire::encode(&issue.context),
         }
     }
 
@@ -106,8 +104,9 @@ impl DiagnosticContext {
         self.values.is_empty()
     }
 
-    /// Return the original context JSON text, byte-identical to the issue row.
-    /// Host data-frame conversion uses this text; embedders use the value map.
+    /// Return the context JSON text, the canonical encoding of the issue
+    /// context tree. Host data-frame conversion uses this text; embedders
+    /// use the value map.
     pub fn to_json(&self) -> &str {
         &self.text
     }
@@ -180,7 +179,12 @@ mod tests {
             condition: "conversion_probe".into(),
             requirement: None,
             spec_paths: vec!["columns.A".into()],
-            context: r#"{"maximum":9223372036854775807,"minimum":-9223372036854775808,"values":[null,"é🙂",true]}"#.into(),
+            context: yamaa_adapters::json_wire::decode(
+                r#"{"maximum":9223372036854775807,"minimum":-9223372036854775808,"values":[null,"é🙂",true]}"#,
+            )
+            .unwrap(),
+            source_span: None,
+            operand_route: None,
         }
     }
 
@@ -221,13 +225,13 @@ mod tests {
     }
 
     #[test]
-    fn malformed_context_yields_an_empty_map_with_original_text() {
+    fn non_object_context_yields_an_empty_map_with_encoded_text() {
         let mut bad = issue();
-        bad.context = "not json".into();
+        bad.context = yamaa_core::json::Value::Null;
         let report = Report::from_issues(&[bad]);
         let context = &report.diagnostics[0].context;
         assert!(context.is_empty());
-        assert_eq!(context.to_json(), "not json");
+        assert_eq!(context.to_json(), "null");
         assert_eq!(context.iter().count(), 0);
     }
 

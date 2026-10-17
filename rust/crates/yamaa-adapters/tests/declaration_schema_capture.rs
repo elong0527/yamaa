@@ -1157,7 +1157,7 @@ mod declaration {
         assert_eq!(rows[0].condition, "invalid_predicate", "{path}");
         assert_eq!(rows[0].requirement.as_deref(), Some("REQ-0188"), "{path}");
         assert_eq!(rows[0].spec_paths, [path], "{path}");
-        let context: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(&rows[0].context).unwrap();
+        let context: yamaa_core::json::Value = rows[0].context.clone();
         assert_eq!(
             context,
             yamaa_adapters::json!({"position": position, "predicate": predicate, "suggestion": suggestion}),
@@ -1215,8 +1215,7 @@ mod declaration {
                 assert_eq!(rows[0].condition, "missing_value_required");
                 assert_eq!(rows[0].requirement.as_deref(), Some("REQ-1258"));
                 assert_eq!(rows[0].spec_paths, ["columns.F.derivation.flag.missing"]);
-                let context: yamaa_core::json::Value =
-                    yamaa_adapters::json_wire::decode(&rows[0].context).unwrap();
+                let context: yamaa_core::json::Value = rows[0].context.clone();
                 assert_eq!(context, yamaa_adapters::json!({"false_value": false_value}));
             }
         }
@@ -2016,7 +2015,7 @@ mod declaration {
             }
         }
         fn issues(rows: Vec<Issue>) -> Value {
-            Value::Array(rows.into_iter().map(|row|json!({"phase":row.phase,"condition":row.condition,"requirement":row.requirement,"spec_paths":row.spec_paths,"context":yamaa_adapters::json_wire::decode(&row.context).unwrap()})).collect())
+            Value::Array(rows.into_iter().map(|row|json!({"phase":row.phase,"condition":row.condition,"requirement":row.requirement,"spec_paths":row.spec_paths,"context":row.context.clone()})).collect())
         }
         fn original_locations(
             actual: &yamaa_adapters::specification_source::CapturedDocument,
@@ -2480,7 +2479,7 @@ mod declaration {
                     assert_eq!(issue.requirement.as_deref(), Some(requirement));
                     assert_eq!(issue.spec_paths, [path]);
                     assert_eq!(
-                        yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                        issue.context.clone(),
                         yamaa_adapters::json!({"argument":"x", "cause":"missing_required_argument", "function":"project_value"})
                     );
                 }

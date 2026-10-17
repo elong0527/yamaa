@@ -20,8 +20,7 @@ pub fn observe(expression: &str) -> Value {
         }) => {
             let issue = yamaa_adapters::issue_rows::Issue::from_core(failure.syntax_diagnostic())
                 .expect("typed syntax diagnostic");
-            let context: Value =
-                yamaa_adapters::json_wire::decode(&issue.context).expect("encoded context");
+            let context: Value = issue.context.clone();
             json!({"status":"invalid","message":message,"condition":failure.condition(),"requirement":failure.requirement(),"position":{"byte":position.byte,"character":position.character},"context":context})
         }
         Err(ParseError::Limit {
