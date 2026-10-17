@@ -24,7 +24,7 @@ is null. Absence inherits; presence replaces or clears under
 of every contributed value, down to the leaf a layer wrote, while it works.
 Provenance is diagnostic state, not a field of the resolved specification; for
 a relative path it also records the declaring layer and that layer's spelling,
-which [Resource resolution](storage/resources.md#req-0780) resolves once.
+which [Resource resolution](reference/files.md#file-2) resolves once.
 
 <a id="layer-2"></a>
 
@@ -227,7 +227,7 @@ If the platform cannot express that location relative to the entry file, the
 canonical absolute local path is written. An absolute contributed path is
 materialized exactly as written. `parents` paths are not materialized.
 Rebasing states where a file is, not whether a run may read it:
-[Resource resolution](storage/resources.md) accepts or rejects the rebased
+[File resolution](reference/files.md) accepts or rejects the rebased
 path at the location it names, and a missing file fails there without retrying
 another spelling.
 

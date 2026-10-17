@@ -82,7 +82,7 @@ output_class:
     - relative_to:
         type: path_base
         default: declaring
-        description: See REQ-0780.
+        description: Base for the primary artifact and its warning and verification logs (FILE-2).
     - decimals:
         type: int
         required: false
@@ -246,7 +246,7 @@ dataset_class:
     - relative_to:
         type: path_base
         default: declaring
-        description: See REQ-0780.
+        description: Base for the input dataset's path and schema (FILE-2).
     - types:
         type: "dict[identifier, column_type]"
         required: false
@@ -255,7 +255,7 @@ dataset_class:
         type: str
         required: false
         values: [utf-8, windows-1252, iso-8859-1, ascii]
-        description: See REQ-1311.
+        description: Declared text encoding of a SAS or Transport input, absent on every other input (SAS-2).
     - schema:
         type: project_path
         required: false
@@ -925,11 +925,11 @@ expressions:
         - name:
             type: identifier
             required: true
-            description: See REQ-1085.
+            description: Logical function selected from the supplied environment (FUNC-4).
         - args:
             type: "dict[identifier, function_arg]"
             default: {}
-            description: See REQ-1085.
+            description: Named argument leaves of the call (FUNC-6).
 
 function_arg:
     type:
@@ -941,7 +941,7 @@ function_arg:
         - function_string_literal_class
         - function_date_literal_class
         - function_datetime_literal_class
-    description: See REQ-1086.
+    description: Named variable or scalar literal leaf; arbitrary nesting is not allowed.
 "#),
     ("schema_metadata.yaml", r#"version: "1.0"
 
@@ -951,93 +951,93 @@ submission_dataset_class:
     - has_no_data:
         type: bool
         default: false
-        description: See REQ-1296.
+        description: Whether the submitted dataset has no data, carried for submission composition only (SUB-4).
     - label:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1130.
+        description: Description of the dataset as a whole, distinct from the domain it derives.
     - class:
         type: dataset_class_name
         required: true
-        description: See REQ-1130.
+        description: General observation class of the dataset.
     - subclass:
         type: dataset_subclass_name
         required: false
-        description: See REQ-1130.
+        description: Observation subclass, declared when the standard defines one for the dataset.
     - structure:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1130.
+        description: Level of detail one record represents, stated in prose.
     - repeating:
         type: bool
         required: true
-        description: See REQ-1130.
+        description: Whether the dataset may carry more than one record per subject or pool.
     - reference_data:
         type: bool
         default: false
-        description: See REQ-1130.
+        description: Whether the dataset carries reference data rather than subject data.
     - domain:
         type: identifier
         required: false
-        description: See REQ-1130.
+        description: Domain the dataset belongs to; defaults to the specification's domain.
     - comment:
         type: submission_comment
         required: false
-        description: See REQ-1130.
+        description: Sponsor comment carried with the dataset definition.
 
 submission_column_class:
     - core:
         type: core_designation
         required: false
-        description: See REQ-1131.
+        description: Standard core designation, declared and derived by family (SUB-10).
     - mandatory:
         type: bool
         required: false
-        description: See REQ-1131.
+        description: Whether the column must carry a value, derived or declared by family (SUB-10).
     - role:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1131.
+        description: Role the column plays in its dataset, in the vocabulary its standard publishes.
     - data_type:
         type: define_data_type
         required: false
-        description: See REQ-1131.
+        description: Submission data type, defaulted from the declared column type (SUB-6).
     - length:
         type: int
         required: false
-        description: See REQ-1131.
+        description: Maximum expected value length, derived from a max_length verification and bound to the constraint that enforces it (SUB-8).
     - significant_digits:
         type: int
         required: false
-        description: See REQ-1131.
+        description: Digits after the decimal point; required with a float submission data type.
     - display_format:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1131.
+        description: Presentation format carried for a reader; it never changes a computed value.
     - codelist:
         type: identifier
         required: false
-        description: See REQ-1131.
+        description: Codelist whose values this column carries (CT-1).
     - inventory_vocabulary:
         type: bool
         required: false
-        description: See REQ-1156.
+        description: Whether every non-missing value must name a dataset the study document declares (CT-11).
     - origin:
         type: submission_origin_class
         required: false
-        description: See REQ-1131.
+        description: Declared provenance of the value, which the derivation may refute (SUB-19).
     - method:
         type: submission_method
         required: false
-        description: See REQ-1131.
+        description: Algorithm producing the value, required for a derived origin (SUB-18).
     - comment:
         type: submission_comment
         required: false
-        description: See REQ-1131.
+        description: Sponsor comment carried with the column definition.
 
 # See REQ-1157.
 
@@ -1045,134 +1045,134 @@ submission_origin_class:
     - type:
         type: origin_type
         required: true
-        description: See REQ-1132.
+        description: How the value originated.
     - source:
         type: origin_source
         required: false
-        description: See REQ-1132.
+        description: Party responsible for the value, admitted and derived by family (SUB-15).
     - description:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1132.
+        description: Explanatory text, required where the origin is incomplete without it (SUB-16).
     - documents:
         type: "list[document_reference]"
         required: false
-        description: See REQ-1132.
+        description: Supporting documents evidencing the origin, derived for a collected origin that omits them (SUB-17).
 
 submission_method_class:
     - name:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1133.
+        description: Name of the algorithm; Define-XML derives one when it is omitted (DEFINE-21).
     - type:
         type: method_type
         default: Computation
-        description: See REQ-1133.
+        description: Kind of algorithm the method describes.
     - description:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1133.
+        description: Statement of the algorithm in prose.
     - expression:
         type: formal_expression_class
         required: false
-        description: See REQ-1133.
+        description: Machine-readable code the method is also stated in.
     - documents:
         type: "list[document_reference]"
         required: false
-        description: See REQ-1133.
+        description: Supporting documents carrying the full algorithm.
 
 submission_comment_class:
     - text:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1134.
+        description: Text of the comment.
     - documents:
         type: "list[document_reference]"
         required: false
-        description: See REQ-1134.
+        description: Supporting documents the comment refers to.
 
 formal_expression_class:
     - context:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1135.
+        description: Language the code is written in, named for a reader that evaluates it.
     - code:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1135.
+        description: The code itself; nothing in this language parses or executes it.
 
 document_reference_class:
     - document:
         type: identifier
         required: true
-        description: See REQ-1136.
+        description: Supporting document this reference names.
     - pages:
         type: page_reference_class
         required: false
-        description: See REQ-1136.
+        description: Place within the document the reference points at.
 
 page_reference_class:
     - type:
         type: str
         required: true
         values: [PhysicalRef, NamedDestination]
-        description: See REQ-1137.
+        description: Whether refs are physical page numbers or named destinations.
     - refs:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1137.
+        description: Space-separated page numbers or destination names.
     - title:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1137.
+        description: Label a reader sees in place of the raw reference.
 
 submission_comment:
     type: [str, submission_comment_class]
-    description: See REQ-1138.
+    description: Comment text, or text with the documents it refers to.
 
 submission_method:
     type: [str, submission_method_class]
-    description: See REQ-1139.
+    description: Algorithm stated in prose, or with its name, code, and documents.
 
 document_reference:
     type: [identifier, document_reference_class]
-    description: See REQ-1140.
+    description: Document identifier, or an identifier with the place it points at.
 
 core_designation:
     type: str
     values: [Req, Exp, Perm, Cond]
-    description: See REQ-1141.
+    description: Required, expected, conditionally required, or permissible in the dataset's standard, admitted by family (SUB-10).
 
 origin_type:
     type: str
     values: [Assigned, Collected, Derived, Not Available, Other, Predecessor,
         Protocol]
-    description: See REQ-1142.
+    description: Define-XML 2.1 origin type.
 
 origin_source:
     type: str
     values: [Investigator, Sponsor, Subject, Vendor]
-    description: See REQ-1143.
+    description: Define-XML 2.1 origin source.
 
 method_type:
     type: str
     values: [Computation, Imputation]
-    description: See REQ-1144.
+    description: Kind of algorithm a method describes.
 
 define_data_type:
     type: str
     values: [text, integer, float, date, datetime, time, partialDate,
         partialTime, partialDatetime, incompleteDate, incompleteTime,
         incompleteDatetime, durationDatetime, intervalDatetime, URI]
-    description: See REQ-1145.
+    description: Submission data type a column is represented by, within the closed set its declared column type admits (SUB-6).
 
 dataset_class_name:
     type: str
@@ -1182,14 +1182,14 @@ dataset_class_name:
         MEDICAL DEVICE OCCURRENCE DATA STRUCTURE, OCCURRENCE DATA STRUCTURE,
         REFERENCE DATA STRUCTURE, RELATIONSHIP, SPECIAL PURPOSE,
         STUDY REFERENCE, SUBJECT LEVEL ANALYSIS DATASET, TRIAL DESIGN]
-    description: See REQ-1146.
+    description: General observation class, in the exact case Define-XML 2.1 publishes.
 
 dataset_subclass_name:
     type: str
     values: [ADVERSE EVENT, MEDICAL DEVICE TIME-TO-EVENT,
         NON-COMPARTMENTAL ANALYSIS, POPULATION PHARMACOKINETIC ANALYSIS,
         TIME-TO-EVENT]
-    description: See REQ-1147.
+    description: Observation subclass, in the exact case Define-XML 2.1 publishes.
 "#),
     ("schema_shared.yaml", r#"version: "1.0"
 
@@ -1210,12 +1210,12 @@ path:
 project_path:
     type: str
     min_length: 1
-    description: See REQ-1151.
+    description: Local resource a run reads or publishes; a relative spelling uses the base its declaration selects and an absolute spelling names its local location (FILE-2).
 
 path_base:
     type: str
     values: [declaring, entry]
-    description: See REQ-0780.
+    description: Base directory of a relative path, the declaring file's or the entry file's directory (FILE-2).
 
 identifier:
     type: str
@@ -1336,137 +1336,137 @@ environment_class:
 - schema_version:
     type: str
     required: true
-    description: See REQ-1080.
+    description: Schema bundle version this environment is admitted against (FUNC-2).
 - language:
     type: str
     values:
     - python
     - r
-    description: See REQ-1080.
+    description: Host language of every project function definition (FUNC-3).
 - lock:
     type: project_path
-    description: See REQ-1080.
+    description: Optional packaging lock the installed called packages are verified against (FUNC-3).
 - functions:
     type: dict[identifier, function_definition]
-    description: See REQ-1080.
+    description: Project function definitions keyed by logical name (FUNC-4).
 - codelists:
     type: list[codelist_source]
-    description: See REQ-1080.
+    description: Codelist sources supplying study terminology (CT-1).
 - study:
     type: study_class
-    description: See REQ-1080.
+    description: Study a submission section composes its Define-XML document for (DEFINE-1).
 - sdtm:
     type: submission_section_class
-    description: See REQ-1080.
+    description: Submission section composing sdtm specifications into one Define-XML document (DEFINE-1).
 - adam:
     type: submission_section_class
-    description: See REQ-1080.
+    description: Submission section composing adam specifications into one Define-XML document (DEFINE-1).
 - send:
     type: submission_section_class
-    description: See REQ-1080.
+    description: Submission section composing send specifications into one Define-XML document (DEFINE-1).
 function_definition:
   type:
   - project_path
   - function_definition_class
-  description: See REQ-1083.
+  description: Inline project function definition, or the path of a file holding one (FUNC-4).
 function_definition_class:
 - function:
     type: qualified_callable
     required: true
-    description: See REQ-1083.
+    description: Statically written fully qualified callable the definition binds (FUNC-8).
 - description:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1083.
+    description: Description of what the function computes (FUNC-4).
 - params:
     type: list[function_parameter_class]
     required: true
-    description: See REQ-1083.
+    description: Closed, ordered named parameters of the function (FUNC-5).
 - returns:
     type: column_type
     required: true
-    description: See REQ-1083.
+    description: Column type of the one scalar the function returns (FUNC-9).
 - may_return_missing:
     type: bool
     default: false
-    description: See REQ-1083.
+    description: Whether an invoked binding may return the missing value (FUNC-9).
 - comparison_decimals:
     type: int
     default: 4
-    description: See REQ-1083.
+    description: Decimal places at which numeric test results are compared (FUNC-13).
 - tests:
     type: list[function_test_class]
     required: true
-    description: See REQ-1083.
+    description: Inline test cases activation runs before any study data is read (FUNC-11).
 function_parameter_class:
 - name:
     type: identifier
     required: true
-    description: See REQ-1083.
+    description: Parameter name, matching the callable's parameter exactly (FUNC-5).
 - type:
     type: function_param_type
     required: true
-    description: See REQ-1083.
+    description: Exact type every argument and default of this parameter has (FUNC-5).
 - required:
     type: bool
     default: true
-    description: See REQ-1083.
+    description: Whether a call must supply this argument (FUNC-5).
 - default:
     type: function_value
-    description: See REQ-1083.
+    description: Value an omitted optional argument takes (FUNC-7).
 - accepts_missing:
     type: bool
     default: false
-    description: See REQ-1083.
+    description: Whether a missing argument is passed to the binding instead of short-circuiting the call (FUNC-7).
 qualified_callable:
   type: str
   min_length: 1
-  description: See REQ-0669.
+  description: Fully qualified callable name, such as projectbmi.bmi or projectbmi::bmi (FUNC-8).
 function_case_id:
   type: str
   pattern: ^[a-z][a-z0-9-]*$
-  description: See REQ-1083.
+  description: Name of one function test case (FUNC-11).
 function_coverage:
   type: str
   pattern: ^(normal|boundary|nullable-output|numeric-comparison|(default|accepted-missing|short-circuit-missing|boolean-true|boolean-false):[A-Za-z_][A-Za-z0-9_]*)$
-  description: See REQ-1083.
+  description: Obligation a function test case demonstrates (FUNC-11).
 function_test_class:
 - id:
     type: function_case_id
     required: true
-    description: See REQ-1083.
+    description: Unique name of the test case (FUNC-11).
 - covers:
     type: list[function_coverage]
     required: true
-    description: See REQ-1083.
+    description: Obligations this case demonstrates (FUNC-11).
 - args:
     type: dict[identifier, function_value]
     required: true
-    description: See REQ-1083.
+    description: Logical arguments the case passes, by parameter name (FUNC-11).
 - result:
     type: function_value
     required: true
-    description: See REQ-1083.
+    description: Result the call is expected to return (FUNC-11).
 codelist_source:
   type:
   - project_path
   - codelist_source_class
-  description: See REQ-0928.
+  description: Inline codelist source, or the path of a file holding one (CT-1).
 codelist_source_class:
 - standard:
     type: terminology_standard_class
-    description: See REQ-0928.
+    description: Published terminology the source's codelists are drawn from; a source without one is sponsor-defined (CT-2).
 - codelists:
     type: list[codelist_class]
     required: true
-    description: See REQ-0928.
+    description: Codelists this source declares (CT-1).
 terminology_standard_class:
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-0928.
+    description: Name of the published terminology (CT-2).
 - publishing_set:
     type: str
     required: true
@@ -1476,57 +1476,57 @@ terminology_standard_class:
     - DEFINE-XML
     - SDTM
     - SEND
-    description: See REQ-0928.
+    description: Publishing set of the published terminology (CT-2).
 - version:
     type: str
     required: true
     min_length: 1
-    description: See REQ-0928.
+    description: Version of the published terminology (CT-2).
 study_class:
 - id:
     type: define_id
     required: true
-    description: See REQ-1062.
+    description: Identifier the study's generated identity is built from (DEFINE-9).
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1062.
+    description: Name of the study.
 - description:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1062.
+    description: Description of the study.
 - protocol_name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1062.
+    description: Protocol the study runs under.
 metadata_version_class:
 - id:
     type: define_id
     required: true
-    description: See REQ-1063.
+    description: Identifier this metadata version's generated identity is built from (DEFINE-9).
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1063.
+    description: Name of this metadata version.
 - description:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1063.
+    description: Description of what this metadata version covers.
 codelist_class:
 - id:
     type: identifier
     required: true
-    description: See REQ-1077.
+    description: Name column bindings refer to this codelist by (CT-1).
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1077.
+    description: Name of the codelist, unique within the document.
 - data_type:
     type: str
     default: text
@@ -1534,80 +1534,80 @@ codelist_class:
     - text
     - integer
     - float
-    description: See REQ-1077.
+    description: Type of the coded values.
 - extensible:
     type: bool
     default: false
-    description: See REQ-1077.
+    description: Whether a value outside the list is admitted (CT-7).
 - alias:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1077.
+    description: Published concept identifier of the codelist itself.
 - format_name:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1077.
+    description: Transport format name carried for a reader.
 - items:
     type: list[codelist_item_class]
     required: false
-    description: See REQ-1077.
+    description: Coded values this codelist admits, in the order the document presents them.
 - external:
     type: external_codelist_class
     required: false
-    description: See REQ-1077.
+    description: Dictionary this codelist defers to instead of listing values.
 codelist_item_class:
 - value:
     type: literal_value
     required: true
-    description: See REQ-1078.
+    description: The coded value itself.
 - decode:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1078.
+    description: Text the coded value stands for.
 - rank:
     type: int
     required: false
-    description: See REQ-1078.
+    description: Ordering significance of this value relative to the others.
 - alias:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1078.
+    description: Published concept identifier of this value.
 - extended:
     type: bool
     default: false
-    description: See REQ-1078.
+    description: Whether the sponsor added this value to a published list.
 external_codelist_class:
 - dictionary:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1079.
+    description: Name of the external dictionary.
 - version:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1079.
+    description: Version of that dictionary.
 - href:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1079.
+    description: Location the dictionary is published at.
 define_id:
   type: str
   pattern: ^[A-Za-z_][A-Za-z0-9_.-]*$
-  description: See REQ-1068.
+  description: Identifier a generated OID is built from.
 relative_href:
   type: str
   pattern: ^(?!/)(?!.*(^|/)\.\.(/|$))[^\\]+$
-  description: See REQ-1070.
+  description: Location referenced from the generated document, relative to the directory holding it and never leaving that directory, which need not exist when the document is generated.
 language_tag:
   type: str
   pattern: ^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$
-  description: See REQ-1073.
+  description: Language tag carried by every generated translated text.
 standard_name:
   type: str
   values:
@@ -1622,44 +1622,56 @@ standard_name:
   - SENDIG-AR
   - SENDIG-DART
   - SENDIG-GENETOX
-  description: See REQ-1074.
+  description: Standard name, in the exact case Define-XML 2.1 publishes.
 submission_section_class:
 - standard:
     type: implementation_guide_class
     required: true
+    description: Implementation guide shared by the selected datasets (DEFINE-6).
 - specs:
     type: list[path]
     required: true
+    description: Ordered specifications resolved with their parent layers (DEFINE-5).
 - define:
     type: path
     required: true
+    description: Define-XML publication target, relative to its declaring environment (DEFINE-2).
 - documents:
     type: list[document_class]
+    description: Supporting document IDs, kinds, literal links and titles (DEFINE-13).
 - dataset_json:
     type: bool
     default: false
+    description: Whether to read already published datasets and render adjacent JSON files (JSON-1).
 - context:
     type: str
     default: Submission
     values:
     - Submission
     - Other
+    description: Submission or Other; defaults to Submission (DEFINE-4).
 - xml_lang:
     type: language_tag
     default: en
+    description: Language of generated translated text; defaults to en (DEFINE-21).
 - file_oid:
     type: str
     min_length: 1
+    description: Optional nonempty file-identity text that admits the existing URL-style spellings; generated object and leaf identifiers are validated separately (DEFINE-3).
 - metadata_version:
     type: metadata_version_class
+    description: Optional metadata-version ID, name and description overrides (DEFINE-3).
 - originator:
     type: str
     min_length: 1
+    description: Optional submitting party (DEFINE-12).
 - stylesheet:
     type: relative_href
+    description: Optional relative stylesheet link (DEFINE-23).
 - source_system_version:
     type: str
     min_length: 1
+    description: Optional nonempty XML and JSON source-system version; omission selects the installed package version (FUNC-2).
 implementation_guide_class:
 - name:
     type: standard_name
@@ -1678,7 +1690,7 @@ document_class:
 - id:
     type: identifier
     required: true
-    description: See REQ-1065.
+    description: Name references to this document use.
 - kind:
     type: str
     required: true
@@ -1686,16 +1698,16 @@ document_class:
     - annotated_crf
     - supplemental
     - other
-    description: See REQ-1065.
+    description: Where the document is listed; an other document is listed only where it is referenced.
 - link:
     type: relative_href
     required: true
-    description: See REQ-1065.
+    description: File the document is, relative to the directory holding the generated document.
 - title:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1065.
+    description: Label a reader sees for the document.
 "#),
     ("schema_shared.yaml", r#"version: "1.0"
 
@@ -1716,12 +1728,12 @@ path:
 project_path:
     type: str
     min_length: 1
-    description: See REQ-1151.
+    description: Local resource a run reads or publishes; a relative spelling uses the base its declaration selects and an absolute spelling names its local location (FILE-2).
 
 path_base:
     type: str
     values: [declaring, entry]
-    description: See REQ-0780.
+    description: Base directory of a relative path, the declaring file's or the entry file's directory (FILE-2).
 
 identifier:
     type: str

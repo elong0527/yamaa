@@ -109,16 +109,16 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | [Dates and times](temporal.md) | TIME | Compute calendar differences, study days, completed dates and times, precision, and civil arithmetic. |
 | [Verification](verification.md) | CHECK | Apply assertions, severity, and grouped counts to completed values, and record what ran in the warning log and the verification log. |
 | [Output](output.md) | OUTPUT | Select artifact columns, keys, profiles, and row order, and publish complete files atomically. |
-| [Project functions](operations/functions.md) | REQ | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
-| [Resource resolution](storage/resources.md) | REQ | Confine declared source paths and read one immutable snapshot per physical file. |
-| [CSV profile](storage/csv.md) | REQ | Read admitted CSV spellings and write canonical CSV bytes and display precision. |
-| [Parquet profile](storage/parquet.md) | REQ | Read and write the closed Parquet field and value mapping. |
-| [SAS source profiles](storage/sas.md) | REQ | Read SAS datasets and Transport v5/v8 through declared encoding and explicit numeric narrowing. |
-| [Submission metadata](submission/metadata.md) | REQ | Govern dataset and column metadata, origin, methods, and document references. |
-| [Controlled terminology](submission/terminology.md) | REQ | Declare codelists once and validate their bindings and allowed values. |
-| [Define-XML](submission/define-xml.md) | REQ | Compose study metadata into deterministic Define-XML 2.1 documents. |
-| [Dataset-JSON](submission/dataset-json.md) | REQ | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
-| [Schema language](reference/schema-language.md) | REQ | Define schema notation, registries, constraints, and canonical shorthand expansion. |
+| [Project functions](profiles/functions.md) | FUNC | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
+| [File resolution](reference/files.md) | FILE | Resolve declared local paths from their base, reach one regular file, and read one immutable snapshot per physical file. |
+| [CSV profile](reference/csv.md) | CSV | Read admitted CSV spellings and write canonical CSV bytes and display precision. |
+| [Parquet profile](reference/parquet.md) | PARQUET | Read and write the closed Parquet field and value mapping. |
+| [SAS source profiles](reference/sas.md) | SAS | Read SAS datasets and Transport v5/v8 through declared encoding and explicit numeric narrowing. |
+| [Submission metadata](profiles/submission.md) | SUB | Govern dataset and column metadata, origin, methods, and document references. |
+| [Controlled terminology](profiles/terminology.md) | CT | Declare codelists once and validate their bindings and allowed values. |
+| [Define-XML](profiles/define-xml.md) | DEFINE | Compose study metadata into deterministic Define-XML 2.1 documents. |
+| [Dataset-JSON](profiles/dataset-json.md) | JSON | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
+| [Schema language](reference/schema-language.md) | SCHEMA | Define schema notation, registries, constraints, and canonical shorthand expansion. |
 
 The [requirement index](https://elong0527.github.io/yamaa/reference/requirements/),
 [rules at a glance](https://elong0527.github.io/yamaa/reference/rules-summary/)

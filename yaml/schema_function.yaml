@@ -5,11 +5,11 @@ expressions:
         - name:
             type: identifier
             required: true
-            description: See REQ-1085.
+            description: Logical function selected from the supplied environment (FUNC-4).
         - args:
             type: "dict[identifier, function_arg]"
             default: {}
-            description: See REQ-1085.
+            description: Named argument leaves of the call (FUNC-6).
 
 function_arg:
     type:
@@ -21,4 +21,4 @@ function_arg:
         - function_string_literal_class
         - function_date_literal_class
         - function_datetime_literal_class
-    description: See REQ-1086.
+    description: Named variable or scalar literal leaf; arbitrary nesting is not allowed.

@@ -78,7 +78,7 @@ output_class:
     - relative_to:
         type: path_base
         default: declaring
-        description: See REQ-0780.
+        description: Base for the primary artifact and its warning and verification logs (FILE-2).
     - decimals:
         type: int
         required: false
@@ -242,7 +242,7 @@ dataset_class:
     - relative_to:
         type: path_base
         default: declaring
-        description: See REQ-0780.
+        description: Base for the input dataset's path and schema (FILE-2).
     - types:
         type: "dict[identifier, column_type]"
         required: false
@@ -251,7 +251,7 @@ dataset_class:
         type: str
         required: false
         values: [utf-8, windows-1252, iso-8859-1, ascii]
-        description: See REQ-1311.
+        description: Declared text encoding of a SAS or Transport input, absent on every other input (SAS-2).
     - schema:
         type: project_path
         required: false

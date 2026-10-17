@@ -25,7 +25,7 @@ checked.diagnostics
 study uses project functions or terminology. Paths resolve relative to their
 original declaring YAML layer by default. Set `relative_to: entry` on an input
 dataset or `output` declaration to select the study entry's directory under the
-[local path policy](../rules/storage/resources.md). An input setting applies to
+[local path policy](../rules/reference/files.md). An input setting applies to
 both its data path and producer `schema` link; output settings cover all logs
 and the primary artifact.
 There is no upward project-root discovery.
@@ -116,7 +116,7 @@ Inputs can use CSV, Parquet, SAS datasets (`.sas7bdat`), or SAS Transport v5/v8
 `{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int, VISITDT: date}}`.
 Character fields default to `str`, numeric fields to `float`; numeric `types`
 narrowing requires exact integral values. See the
-[SAS source contract](../rules/storage/sas.md) for missing values, character
+[SAS source contract](../rules/reference/sas.md) for missing values, character
 padding, supported encodings and 1960 date/datetime epochs. Outputs remain CSV
 or Parquet.
 

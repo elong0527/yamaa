@@ -39,7 +39,7 @@ Python package dependencies and R package `Suggests` declare these floors.
 The R readers are optional: public Build and Save use the shared native codecs.
 CSV carries text rather than an embedded schema; controls supply an explicit
 text schema and check exact authored CSV bytes. Its empty-field ingestion
-semantics are described in the [CSV profile](https://github.com/elong0527/yamaa/blob/main/rules/storage/csv.md).
+semantics are described in the [CSV profile](https://github.com/elong0527/yamaa/blob/main/rules/reference/csv.md).
 Parquet checks every logical type, nullable field, zone-free microsecond
 timestamp, field and row order, full signed-i64 values, exact finite double
 bits and empty-table schema. Read R integer columns through Arrow arrays, or
@@ -127,7 +127,7 @@ notices remain in the distributed `LICENSE-YAML.txt`.
 
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary
-fixtures and exact saved bytes. The [SAS source contract](https://github.com/elong0527/yamaa/blob/main/rules/storage/sas.md)
+fixtures and exact saved bytes. The [SAS source contract](https://github.com/elong0527/yamaa/blob/main/rules/reference/sas.md)
 owns decoding behavior.
 
 ## Approved decisions
@@ -312,5 +312,5 @@ The 0.4.0 upgrade also includes language and environment changes made before
 | Symbolic link below the entry directory | Copy or hard-link the input; the resource policy refuses symbolic links. |
 
 The normative contracts are [verification](https://github.com/elong0527/yamaa/blob/main/rules/verification.md),
-[functions and project environments](https://github.com/elong0527/yamaa/blob/main/rules/operations/functions.md) and
-[resources](https://github.com/elong0527/yamaa/blob/main/rules/storage/resources.md).
+[functions and project environments](https://github.com/elong0527/yamaa/blob/main/rules/profiles/functions.md) and
+[resources](https://github.com/elong0527/yamaa/blob/main/rules/reference/files.md).

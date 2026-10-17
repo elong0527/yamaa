@@ -75,7 +75,7 @@ List `id` and `name` must each be unique across all sources. A column binds
 the `id`, while `name` is the human-readable description. `alias` records a
 published concept identifier and is independent of the binding ID. Define-XML
 composition has additional alias requirements described in the
-[Define-XML rule](https://github.com/elong0527/yamaa/blob/main/rules/submission/define-xml.md).
+[Define-XML rule](https://github.com/elong0527/yamaa/blob/main/rules/profiles/define-xml.md).
 
 Sources may also live in local files: an environment entry such as
 `codelists: [sdtm-ct.yaml, adam-ct.yaml, sponsor-codelists.yaml]` reads each file's
@@ -154,7 +154,7 @@ float list to `float`. For a non-extensible list with `items`, a binding and
 list, an explicit `allowed_values` verification stands alone.
 
 See the [environment schema](https://github.com/elong0527/yamaa/blob/main/yaml/schema_environment.yaml)
-for the accepted fields and the [controlled terminology rule](https://github.com/elong0527/yamaa/blob/main/rules/submission/terminology.md)
+for the accepted fields and the [controlled terminology rule](https://github.com/elong0527/yamaa/blob/main/rules/profiles/terminology.md)
 for binding, extension, and verification requirements. The
 [DM metadata example](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata)
 shows versioned terminology sources in a complete Define-XML environment.

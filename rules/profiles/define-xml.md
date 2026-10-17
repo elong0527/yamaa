@@ -1,0 +1,736 @@
+# Define-XML
+
+This file is a profile: it is optional, and it applies only to a build that
+selects an `sdtm`, `adam` or `send` submission section of a study environment.
+Such a build composes the section, the study and the submission metadata of the
+specifications the section lists into one deterministic Define-XML 2.1
+document. A domain build never generates a Define-XML document.
+
+## The study document
+
+<a id="define-1"></a>
+
+### DEFINE-1. A Define-XML document is composed from one selected submission section of the study environment
+
+A study document is composed from one selected `sdtm`, `adam` or `send` section
+of an admitted `environment.yaml`. The environment supplies `study` and shared
+`codelists`; the selected section supplies one implementation guide, supporting
+documents, an ordered `specs` list and one `define` target. Each section
+produces exactly one Define-XML document. The selected environment section is
+the only place the composition is declared.
+
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::explicit_section_selector_datetime_and_missing_published_artifact_are_refused`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
+Replaces: REQ-0959, REQ-0960, REQ-1061, REQ-1062, REQ-1063.
+
+An implementation must not assemble a document from whatever specifications a
+directory holds: which datasets one submission represents is a study decision,
+and a directory listing is not one.
+
+<a id="define-2"></a>
+
+### DEFINE-2. The section's `define` target names the document's file and must end in `.xml`
+
+The selected section's `define` names the file the document produces, and its
+extension must be `.xml`. The extension mapping of
+[Artifact publication](../storage/publication.md) is not consulted: that
+mapping selects a profile for a dataset artifact, and this artifact has one
+form. A `define` target whose extension is not `.xml` fails validation.
+
+Fails: `value_not_permitted`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDefineExtension`.
+Replaces: REQ-0961, REQ-1014.
+
+<a id="define-3"></a>
+
+### DEFINE-3. Two generations with the same captured inputs and creation time produce the same bytes
+
+Two generations with the same captured inputs and `created` produce the same
+bytes. An explicit `created` is a whole-second civil datetime; omission selects
+the current UTC time during preparation, and Save retains that time. An omitted
+`file_oid` is `study.id`, the selected lower-case section key and
+`Define-XML_2.1`, joined by dots. An omitted metadata-version ID is
+`study.id.section`, and an omitted name is `study.name section metadata`.
+
+Fails: `value_not_permitted`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/service_build_metadata.rs::clock_is_observed_once_and_calendar_admission_is_owned_by_the_engine`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
+Replaces: REQ-0962.
+
+Explicit overrides retain their admitted text, independently of these
+defaults. An explicit `created` that is not a whole-second civil datetime fails
+with `value_not_permitted`.
+
+<a id="define-4"></a>
+
+### DEFINE-4. A `Submission` context adds the requirements a regulator imposes, and `Other` relaxes nothing else
+
+`context` states whether the document is used in a submission. Under
+`context: Other`, a document is generated from whatever the declarations supply
+and is valid against the Define-XML 2.1 schema. Under `context: Submission`,
+each requirement listed below additionally holds; each is a conditional
+requirement the Define-XML specification places on a regulatory submission. A
+requirement unmet under `Submission` fails, reporting the requirement and the
+position.
+
+Fails: `missing_required_field`.
+Evidence: `sdtm-dm-metadata`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCdiscAliasMissing`.
+Replaces: REQ-0963, REQ-1003, REQ-1004, REQ-1024.
+
+Nothing in this profile is relaxed by `Other`; that context only omits the
+requirements a regulator imposes. Under `Submission`:
+
+- every dataset declares `submission.domain` or inherits one, for the `sdtm`
+  and `send` families;
+- every dataset's `SASDatasetName` and every column's `SASFieldName` is
+  written, so [DEFINE-22](#define-22) must admit every name;
+- every dataset carries a `def:ArchiveLocationID`, unless it declares
+  `has_no_data`;
+- every dataset carries a `Description` and a `def:Class`;
+- every dataset declares at least one key, which
+  [Artifact publication](../storage/publication.md) already requires, and
+  every key column carries a `KeySequence`;
+- every column carries a `def:Origin`, which [SUB-14](submission.md#sub-14)
+  already requires; and
+- every codelist that declares `items` and is drawn from a standard whose name
+  is `CDISC/NCI` declares `alias`, and so does every one of its items. An
+  external codelist is excluded: it represents its dictionary rather than CDISC
+  controlled terminology, and has no items to identify.
+
+A codelist or item `alias` missing under `Submission` fails with
+`missing_required_field`.
+
+## Composition
+
+<a id="define-5"></a>
+
+### DEFINE-5. Each `specs` entry contributes one dataset, identified by its domain and placed in entry order
+
+Each `specs` entry names one specification resolved with its parent layers.
+That specification's `domain` supplies the dataset ID and name; the ID is
+unique within the document and supplies every generated identifier for that
+dataset. The entry order is the document's dataset order. Two entries must not
+name the same specification, and two entries must not resolve to the same
+artifact path.
+
+Fails: `duplicate_dataset_entry`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateDataset`, `rust/crates/yamaa-core/tests/schema_submission.rs::thirty_domains_with_fifteen_hundred_nodes_admit_complete_column_and_row_scans`.
+Replaces: REQ-0964, REQ-0966, REQ-0969, REQ-1018.
+
+Written resource and output paths retain their original declaring layer under
+[File resolution](../reference/files.md). This profile imposes no other order:
+the recommended order of a submission's datasets is a property of the standard
+a study follows rather than of this language, and a study that follows one
+writes its entries in it. A document that described one artifact twice would
+carry two definitions a reader cannot reconcile; two entries naming the same
+specification or resolving to the same artifact path fail with
+`duplicate_dataset_entry`.
+
+<a id="define-6"></a>
+
+### DEFINE-6. The section's implementation guide binds every dataset and belongs to the section's family
+
+The selected section's `standard` binds every represented dataset to the same
+implementation guide of type `IG`, and its name must belong to the selected
+section's family. The `sdtm`, `adam` and `send` sections produce separate
+documents, and each document carries the controlled-terminology standards cited
+by its bound codelists' sources.
+
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
+Replaces: REQ-0965, REQ-1074.
+
+[SUB-3](submission.md#sub-3) reads each dataset's family from the bound
+standard's name.
+
+<a id="define-7"></a>
+
+### DEFINE-7. Every composed specification declares dataset and column submission metadata and column labels
+
+Every specification a document names must declare `root.submission`, and every
+column in its `output.columns` must declare both `label` and
+`column.submission`. A specification named by an entry that declares no
+`root.submission`, or an output column with no `label` or no
+`column.submission`, fails.
+
+Fails: `submission_metadata_missing`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMetadataMissing`, `rust/crates/yamaa-core/tests/service_build_metadata.rs::missing_study_is_the_real_typed_owner_before_any_metadata_verification`.
+Replaces: REQ-0967, REQ-1015.
+
+A document reports on the whole artifact, so a column with nothing to report is
+a gap in the document, not an omitted row. The failure reports
+`submission_metadata_missing` with the dataset and the column.
+
+<a id="define-8"></a>
+
+### DEFINE-8. Composition resolves the codelist, standard and document names a specification leaves unresolved
+
+Composition resolves the names [Submission metadata](submission.md) and
+[Controlled terminology](terminology.md) leave unresolved: a column's
+`codelist` and every document reference. A name matching no declaration fails.
+Resolution also determines each dataset's family from the standard
+[DEFINE-6](#define-6) binds and the table of [SUB-3](submission.md#sub-3), and
+every family-dependent rule of [Submission metadata](submission.md) is applied
+here.
+
+Fails: `unknown_standard`, `unknown_codelist`, `unknown_document`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionUnknownDocument`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_codelist_unknown_and_type_failures_retain_the_authored_row_path`.
+Replaces: REQ-0968, REQ-1016.
+
+A `standard`, `codelist` or document reference naming no declaration fails with
+`unknown_standard`, `unknown_codelist` or `unknown_document`, reporting the
+referencing position.
+
+## Identifiers
+
+<a id="define-9"></a>
+
+### DEFINE-9. Every generated identifier is a fixed prefix and the declared identifiers of the object's position
+
+Every generated identifier is a prefix, a period, and the declared identifiers
+of the object's position, as the table below fixes; the construction is total.
+An implementation must not mint an identifier from a counter, a hash or a
+random value. One base `ItemDef` is generated per dataset and column, and
+neither base nor per-value `ItemDef` elements are shared between datasets.
+
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::value_identifiers_survive_unrelated_insertion_and_row_reordering`, `rust/crates/yamaa-core/tests/schema_submission.rs::value_identifier_retains_the_literal_with_xml_attribute_escaping`.
+Replaces: REQ-0970, REQ-0972, REQ-0973, REQ-1068.
+
+| Object | Identifier |
+|---|---|
+| `Study` | `STDY.<study.id>` |
+| `MetaDataVersion` | `MDV.<metadata_version.id>` |
+| `def:Standard` | `STD.<standard.id>` |
+| `ItemGroupDef` | `IG.<dataset.id>` |
+| `ItemDef` | `IT.<dataset.id>.<column>` |
+| `ItemDef`, per value | `IT.<dataset.id>.<column>.<test code>` |
+| `def:ValueListDef` | `VL.<dataset.id>.<column>` |
+| `def:WhereClauseDef` | `WC.<dataset.id>.<column>.<test code>` |
+| `CodeList` | `CL.<codelist.id>` |
+| `MethodDef` | `MT.<dataset.id>.<column>` |
+| `MethodDef`, per value | `MT.<dataset.id>.<column>.<test code>` |
+| `def:CommentDef`, dataset | `COM.<dataset.id>` |
+| `def:CommentDef`, column | `COM.<dataset.id>.<column>` |
+| `def:CommentDef`, per value | `COM.<dataset.id>.<column>.<test code>` |
+| `def:leaf`, document | `LF.<document.id>` |
+| `def:leaf`, dataset archive | `LF.<dataset.id>` |
+
+A per-value test code is the declared string literal of `<DOMAIN>TESTCD`,
+retained verbatim in the identifier before XML escaping. It identifies the
+value independently of row order; `ItemRef.OrderNumber` remains the value's
+position in the list. OIDs admit string values, while a `def:leaf` ID
+separately requires an XML NCName. Generated text remains subject to
+[DEFINE-24](#define-24).
+
+A generated identifier is a function of declarations a reviewer can read, so a
+document regenerated after an unrelated edit keeps every identifier it had.
+Per-value definitions follow [DEFINE-27](#define-27).
+
+<a id="define-10"></a>
+
+### DEFINE-10. Declared identifiers are unique in their space, so generated identifiers cannot collide
+
+Collisions are impossible rather than resolved. Dataset, codelist, standard and
+document identifiers are each unique within the study document; a column name
+is unique within its specification; a column's distinct test codes identify its
+per-value definitions; and the prefixes are disjoint. Two kinds of object share
+one identifier space, `def:leaf`, so a document identifier must not equal a
+dataset identifier.
+
+Fails: `duplicate_define_identifier`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateIdentifier`, `rust/crates/yamaa-core/tests/project_rows.rs::independent_complete_seventeen_record_environment_report_preserves_every_field_and_order`.
+Replaces: REQ-0971, REQ-1017.
+
+The shared `def:leaf` space is checked, not disambiguated. A duplicate dataset
+`id`, standard `id`, codelist `id` or document `id`, or a document `id` equal
+to a dataset `id`, fails with `duplicate_define_identifier`.
+
+## Document structure
+
+<a id="define-11"></a>
+
+### DEFINE-11. The document has one fixed element structure in a fixed order, and omits an element without content
+
+The generated document is exactly the structure below, and every list appears
+in the order stated; an element whose content is absent is omitted rather than
+written empty. The element order is the order the Define-XML 2.1 schema
+requires, and within each repeated element the order below is fixed. `ODM`
+declares the ODM 1.3 namespace as the default, `def` for
+`http://www.cdisc.org/ns/def/v2.1` and `xlink` for
+`http://www.w3.org/1999/xlink`, and no other namespace.
+
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`.
+Replaces: REQ-0974, REQ-0975, REQ-0976, REQ-0977, REQ-0978.
+
+```text
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet ...?>            when stylesheet is declared
+<ODM>
+  <Study>
+    <GlobalVariables>
+      <StudyName/> <StudyDescription/> <ProtocolName/>
+    </GlobalVariables>
+    <MetaDataVersion>
+      <def:Standards>              standards, in declaration order
+      <def:AnnotatedCRF>           annotated_crf documents, declaration order
+      <def:SupplementalDoc>        supplemental documents, declaration order
+      <def:ValueListDef>*          dataset order, then output.columns order
+      <def:WhereClauseDef>*        value-list order, then value order
+      <ItemGroupDef>*              datasets, in entry order
+      <ItemDef>*                   dataset order, then output.columns order; per-value definitions follow their base column
+      <CodeList>*                  codelists, in declaration order
+      <MethodDef>*                 ItemDef order, including per-value methods
+      <def:CommentDef>*            comment order, below
+      <def:leaf>*                  documents, in declaration order
+    </MetaDataVersion>
+  </Study>
+</ODM>
+```
+
+Comment definitions are emitted per dataset in entry order: the dataset's own
+comment first, its columns' comments in `output.columns` order, with each
+column's per-value comments following its base comment in value order.
+
+A dataset's `def:leaf` is a child of its `ItemGroupDef`. A supporting
+document's `def:leaf` is a child of `MetaDataVersion`, as the schema requires.
+No extension element is generated.
+
+## Element mapping
+
+<a id="define-12"></a>
+
+### DEFINE-12. `ODM`, `Study` and `MetaDataVersion` carry fixed attributes from the study and the selected section
+
+`ODM` carries its namespace declarations, then the attributes the table below
+lists, in that order. `Study` carries `OID` alone, and its `GlobalVariables`
+child carries `StudyName`, `StudyDescription` and `ProtocolName`, in that
+order, from `study.name`, `study.description` and `study.protocol_name`.
+`MetaDataVersion` carries `OID`, `Name` from `metadata_version.name`,
+`Description` when declared, and `def:DefineVersion` from `define_version`, in
+that order.
+
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionSourceVersion`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
+Replaces: REQ-0979, REQ-0980, REQ-0981.
+
+| Attribute | Source |
+|---|---|
+| `ODMVersion` | fixed `1.3.2` |
+| `FileType` | fixed `Snapshot` |
+| `FileOID` | `file_oid` |
+| `CreationDateTime` | selected `created`, or preparation-time UTC |
+| `Originator` | `originator`, when declared |
+| `SourceSystem` | fixed `yamaa` |
+| `SourceSystemVersion` | section override or actual installed version |
+| `def:Context` | `context` |
+
+The source-system version selection applies to both XML and Dataset-JSON under
+[FUNC-2](functions.md#func-2). The generated Define-XML release is `2.1.11`,
+and `SourceSystem` is `yamaa`.
+
+<a id="define-13"></a>
+
+### DEFINE-13. Each standard and supporting document produces its definition and its leaf
+
+Each `def:Standard` carries `OID`, `Name`, `Type`, `PublishingSet`, `Version`
+and `Status`, in that order. `PublishingSet` must be declared for a `CT`
+standard and must not be declared for an `IG` standard. Each document produces
+one `def:leaf` whose `ID` is its generated identifier, whose `xlink:href` is
+the document's literal `link`, and whose `def:title` is its `title`. A
+document's kind decides where else it is listed.
+
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `rust/crates/yamaa-core/tests/schema_submission.rs::structural_findings_are_complete_ordered_and_only_supported_causes_are_portable`.
+Replaces: REQ-0982, REQ-0983, REQ-1020, REQ-1065, REQ-1070.
+
+- a document of kind `annotated_crf` is also listed in `def:AnnotatedCRF`;
+- one of kind `supplemental` is also listed in `def:SupplementalDoc`; and
+- one of kind `other` is listed in neither.
+
+Every kind may be referenced from an origin, a method or a comment. `link`
+names a file the submission package carries. This profile does not require the
+file to exist when the document is generated: supporting documents are
+assembled outside this language, and a document generated before its annotated
+case report form is finished is still the correct document. A `PublishingSet`
+declared on an `IG` standard or absent from a `CT` standard fails validation.
+
+<a id="define-14"></a>
+
+### DEFINE-14. At most one annotated case report form is declared, and a value collected from a person requires one
+
+At most one document may declare kind `annotated_crf`, and one must be declared
+whenever any column's origin is `Collected` from an `Investigator` or a
+`Subject`. A document reference on such an origin that names any other document
+fails. More than one document of kind `annotated_crf`, or none where this rule
+requires one, fails validation.
+
+Fails: `origin_document_missing`, `value_not_permitted`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAnnotatedCrfMultiplicity`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAnnotatedCrfMissing`.
+Replaces: REQ-0984, REQ-1019.
+
+[SUB-17](submission.md#sub-17) names that document and derives the reference to
+it, and neither is possible unless exactly one exists. More than one
+`annotated_crf` document fails with `value_not_permitted`; none where a
+collected origin requires one fails with `origin_document_missing`.
+
+<a id="define-15"></a>
+
+### DEFINE-15. Each dataset produces one `ItemGroupDef`, whose `Purpose` follows from its family
+
+Each dataset produces one `ItemGroupDef` with the attributes and children the
+table below lists. `Purpose` is derived from the family alone, not declared:
+`Tabulation` for `sdtm` and `send`, and `Analysis` for `adam`. `Domain` is
+`submission.domain`, defaulting to the specification's `domain`, and is omitted
+for `adam`.
+
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::ae_and_vs_metadata_only_fixed_time_projection_has_independent_structure`.
+Replaces: REQ-0985, REQ-0986.
+
+| Attribute or child | Source |
+|---|---|
+| `OID` | generated |
+| `Name` | the specification's `domain`, per [DEFINE-5](#define-5) |
+| `Domain` | `submission.domain`, default `domain`; omit for `adam` |
+| `Purpose` | `Tabulation` for `sdtm` and `send`, `Analysis` for `adam` |
+| `SASDatasetName` | the specification's `domain`, when [DEFINE-22](#define-22) admits it |
+| `Repeating` | `Yes` when `submission.repeating`, else `No` |
+| `IsReferenceData` | `Yes` when `submission.reference_data`, else `No` |
+| `def:Structure` | `submission.structure` |
+| `def:ArchiveLocationID` | the dataset's generated leaf identifier |
+| `def:StandardOID` | the generated identifier of the standard [DEFINE-6](#define-6) binds |
+| `def:CommentOID` | generated, when `submission.comment` is declared |
+| `def:HasNoData` | `Yes` when `submission.has_no_data`, else omitted |
+| `Description` | `submission.label` |
+| `ItemRef` | one per `output.columns` entry, in that order |
+| `def:Class` | `submission.class`, with `def:SubClass` when declared |
+| `def:leaf` | the artifact, per [DEFINE-16](#define-16) |
+
+A declared `Purpose` could only agree with or contradict the derivation.
+
+<a id="define-16"></a>
+
+### DEFINE-16. A dataset's leaf names the file the package carries, relative to the document and inside its directory
+
+The dataset's `def:leaf` names the file the package carries for that dataset:
+the JSON target derived from its specification's output path when the selected
+section requests `dataset_json` ([JSON-12](dataset-json.md#json-12)), and
+otherwise the artifact its specification produces. `xlink:href` is that path
+relative to the directory holding the generated document, written with `/`
+separators, and `def:title` is the path's final component. The href must not
+begin with a parent traversal.
+
+Fails: `artifact_outside_document`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineArtifactOutsidePackage`.
+Replaces: REQ-0987, REQ-0988, REQ-1021.
+
+A document that pointed outside its own directory would describe a file that is
+not in the package it belongs to. An artifact path that cannot be expressed
+relative to the document's directory without a parent traversal fails with
+`artifact_outside_document`, reporting the dataset and both paths.
+
+The leaf names a file this language produced, and the two it produces are the
+artifact [Artifact publication](../storage/publication.md) publishes and the
+Dataset-JSON file [Dataset-JSON](dataset-json.md) writes beside this document.
+A document that named any other container would assert a file no run wrote. A
+package that converts its artifacts to a container neither profile writes
+regenerates the document against the converted paths, and that conversion is
+outside this language.
+
+<a id="define-17"></a>
+
+### DEFINE-17. A dataset declared to have no data carries a comment that says why
+
+A `def:HasNoData` dataset must declare `submission.comment`, which states why a
+planned dataset holds no records. A `has_no_data` dataset with no
+`submission.comment` fails validation, reporting the dataset.
+
+Fails: `submission_metadata_missing`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionNoDataComment`, `rust/crates/yamaa-core/tests/schema_submission.rs::dataset_defaults_and_comment_survive_original_document_drop`.
+Replaces: REQ-0989, REQ-1022.
+
+<a id="define-18"></a>
+
+### DEFINE-18. Each output column produces one numbered `ItemRef`, keyed by its position in `keys`
+
+Each `output.columns` entry produces one `ItemRef` inside its `ItemGroupDef`,
+with the attributes the table below lists, and `OrderNumber` is written for
+every `ItemRef`. `KeySequence` describes the non-missing row identity `keys`
+asserts ([REQ-0221](../storage/publication.md#req-0221)) and is not
+independently declarable: membership in `keys` determines it, and using a
+sponsor variable in `output.order_by` or a `unique` verification does not
+independently assign it.
+
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
+Replaces: REQ-0990, REQ-0991.
+
+| Attribute | Source |
+|---|---|
+| `ItemOID` | the column's generated identifier |
+| `OrderNumber` | the column's one-based position in `output.columns` |
+| `Mandatory` | `Yes` when the mandatory resolution of [SUB-10](submission.md#sub-10) is true, else `No` |
+| `KeySequence` | one-based position in `keys`; omit when not a key |
+| `Role` | `submission.role`, when declared |
+| `MethodOID` | generated method identifier; omit without `submission.method` |
+
+The [output identity example](../storage/publication.md#req-0221) shows how to
+use those variables when some values may be missing.
+
+`OrderNumber` is written for every `ItemRef` of a container or for none of
+them, and this profile writes it for every one. Define-XML makes the attribute
+optional and falls back to document order; writing it always means the
+presented order survives any later reordering of the document.
+
+<a id="define-19"></a>
+
+### DEFINE-19. Each column produces one base `ItemDef` carrying exactly one `def:Origin`
+
+Each column produces one base `ItemDef` with the attributes and children the
+table below lists; per-value definitions use the same mapping with the
+effective metadata of [DEFINE-27](#define-27). `def:Origin` carries `Type` and,
+when [Submission metadata](submission.md) admits one, `Source`. Exactly one
+`def:Origin` is generated per base or per-value `ItemDef`. A `def:DocumentRef`
+carries `leafID`, the referenced document's generated leaf identifier.
+
+Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
+Replaces: REQ-0992, REQ-0993, REQ-0994.
+
+| Attribute or child | Source |
+|---|---|
+| `OID` | generated |
+| `Name` | the column name |
+| `DataType` | the resolved submission data type of [SUB-6](submission.md#sub-6) |
+| `Length` | `submission.length`, when [Submission metadata](submission.md) admits it |
+| `SignificantDigits` | `submission.significant_digits`, when [Submission metadata](submission.md) admits it |
+| `SASFieldName` | the column name, when [DEFINE-22](#define-22) admits it |
+| `def:DisplayFormat` | `submission.display_format`, when declared |
+| `def:CommentOID` | generated, when `submission.comment` is declared |
+| `Description` | the column's `label` |
+| `CodeListRef` | the bound codelist's generated identifier, when declared |
+| `def:Origin` | per the origin mapping below |
+
+[SUB-15](submission.md#sub-15) derives the origin `Source` for the `adam`
+family. The `def:Origin` `Description` child carries `origin.description` when
+declared, and one `def:DocumentRef` child follows per document reference in
+declaration order, including the annotated case report form
+[SUB-17](submission.md#sub-17) derives when a collected origin declares none.
+Rows with different provenance use the separate per-value definitions of
+[DEFINE-27](#define-27).
+
+A `def:DocumentRef` carries one `def:PDFPageRef` child when `pages` is
+declared, carrying `PageRefs`, `Type`, and `Title` when declared.
+
+<a id="define-20"></a>
+
+### DEFINE-20. Each codelist produces one `CodeList`, whose item elements follow from whether its items declare decodes
+
+Each codelist produces one `CodeList` carrying `OID`, `Name`, `DataType`, then
+`def:StandardOID` when `standard` is declared, then `def:IsNonStandard="Yes"`
+when `standard` is not declared and the codelist declares `items`, then
+`SASFormatName` from `format_name` when declared. A codelist declaring `items`
+produces `CodeListItem` children when its items declare `decode` and
+`EnumeratedItem` children when they do not. A codelist declaring `external`
+carries one `ExternalCodeList` child and no items.
+
+Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
+Replaces: REQ-0995, REQ-0996, REQ-0997, REQ-0998.
+
+A codelist declaring `items` therefore always carries exactly one of
+`def:StandardOID` and `def:IsNonStandard`, the choice Define-XML requires of
+it. An external codelist naming no standard carries neither:
+`def:IsNonStandard` marks items a sponsor defined, and an external codelist has
+none. [CT-5](terminology.md#ct-5) requires the `decode` choice to be uniform
+within a codelist, so the element is determined rather than chosen per item.
+
+Each item carries `CodedValue` from `value`, `Rank` when declared, and
+`def:ExtendedValue="Yes"` when `extended`. A `CodeListItem` carries a `Decode`
+child holding the decode text, and either element carries an `Alias` child with
+`Context="nci:ExtCodeID"` when the item declares `alias`. Items keep the
+codelist's declaration order, and `OrderNumber` is not written: the document
+order already presents them in it, and a second ordering could disagree.
+
+A codelist declaring `alias` carries an `Alias` child with
+`Context="nci:ExtCodeID"` after its items. The `ExternalCodeList` child carries
+`Dictionary`, `Version`, and `href` when declared.
+
+<a id="define-21"></a>
+
+### DEFINE-21. Methods and comments produce `MethodDef` and `def:CommentDef` elements, and all translated text carries one language
+
+Each declared method produces one `MethodDef` carrying `OID`, `Name` from
+`method.name` or, when omitted, `<dataset.id>.<column>`, and `Type` from
+`method.type`, in that order. Each declared comment produces one
+`def:CommentDef` carrying its generated identifier. Every `Description` and
+`Decode` holds exactly one `TranslatedText` whose `xml:lang` is the document's
+`language`, and one document carries one language.
+
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-core/tests/schema_submission.rs::structural_findings_are_complete_ordered_and_only_supported_causes_are_portable`.
+Replaces: REQ-0999, REQ-1000, REQ-1001, REQ-1073.
+
+A `MethodDef`'s `Description` child carries the method's `description`, one
+`FormalExpression` child follows when `expression` is declared, carrying
+`Context` and the code as its text, and one `def:DocumentRef` child follows per
+declared document reference. A `def:CommentDef` carries a `Description` child
+holding the comment text, and one `def:DocumentRef` child per declared document
+reference.
+
+<a id="define-22"></a>
+
+### DEFINE-22. Transport names are written only when they have at most eight characters
+
+`SASDatasetName` and `SASFieldName` are written only for names of at most eight
+characters matching `^[A-Za-z_][A-Za-z0-9_]*$`. A longer name is omitted, and
+fails under `Submission` instead. Define-XML carries a long `Alias` element,
+which [DEFINE-26](#define-26) defers.
+
+Fails: `sas_name_too_long`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionSasName`.
+Replaces: REQ-1002, REQ-1023.
+
+A transport name this rule does not admit fails under `Submission` with
+`sas_name_too_long`, reporting the name.
+
+## Serialization
+
+<a id="define-23"></a>
+
+### DEFINE-23. The document's bytes are fixed: UTF-8, one element per line, two-space indentation and fixed escapes
+
+The document is encoded UTF-8 and carries no byte-order mark; `U+000A`
+terminates every line, including the last, and `U+000D` is never written. The
+remaining byte-level decisions are fixed exactly as the list below states. The
+bytes are fixed rather than the information: the same inputs produce
+byte-identical files, and a golden document is compared byte for byte.
+
+Evidence: `sdtm-dm-metadata`, `rust/tests/host-fixtures/cases.json::newlines-in-text`, `rust/crates/yamaa-core/tests/schema_submission.rs::value_identifier_retains_the_literal_with_xml_attribute_escaping`.
+Replaces: REQ-1005, REQ-1006, REQ-1008.
+
+- the first line is `<?xml version="1.0" encoding="UTF-8"?>`;
+- a declared `stylesheet` produces a second line,
+  `<?xml-stylesheet type="text/xsl" href="..."?>`, and no stylesheet produces
+  no line;
+- each element begins on its own line, indented by two spaces per level of
+  nesting below `ODM`, which is unindented;
+- an element whose content is text carries that text between its tags on one
+  line, opening tag, text, and closing tag together. Text that holds a
+  `U+000A` therefore spans lines, and the following element still begins at
+  its own indentation;
+- an element with no content is written as a self-closing tag with no space
+  before `/>`;
+- attributes are written on the element's opening line, separated by one
+  space, each as `Name="value"`, in the order this profile's mapping tables
+  list them, with namespace declarations first on `ODM`;
+- in an attribute value, `&` is written `&amp;`, `<` is written `&lt;`, `>` is
+  written `&gt;`, and `"` is written `&quot;`;
+- in text content, `&` is written `&amp;`, `<` is written `&lt;`, and `>` is
+  written `&gt;`; and
+- no comment, processing instruction other than the stylesheet, CDATA section,
+  or blank line is written.
+
+<a id="define-24"></a>
+
+### DEFINE-24. Generated text never carries a carriage return or tab, nor a line feed in an attribute value
+
+`U+000D` and `U+0009` must not appear in any generated attribute value or text,
+and `U+000A` must not appear in an attribute value. A `U+000D`, a `U+0009` or
+an attribute-value `U+000A` in generated text fails.
+
+Fails: `untransportable_text`.
+Evidence: `rust/tests/host-fixtures/cases.json::column-label`, `rust/crates/yamaa-adapters/tests/file_resources.rs::xml_text_findings_keep_field_owners_inheritance_and_render_order_in_both_hosts`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionXmlWhitespace`.
+Replaces: REQ-1007, REQ-1025.
+
+The failure reports `untransportable_text` with the declaration that carries
+the character.
+
+<a id="define-25"></a>
+
+### DEFINE-25. A complete document, valid against the Define-XML 2.1 schema, is published atomically or not at all
+
+The generated document must be valid against the Define-XML 2.1 schema; a
+document that is not fails, reporting the schema violation, and the run
+publishes nothing. Publication follows the procedure of
+[Artifact publication](../storage/publication.md) exactly: the complete
+document is written to a temporary regular file in the target's directory,
+flushed and closed, and atomically moved onto the target. A failure leaves the
+previous file and no residue.
+
+Fails: `value_not_permitted`, `publication_failed`.
+Evidence: `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionXmlInvalid`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
+Replaces: REQ-1009, REQ-1010, REQ-1026, REQ-1027.
+
+Conformance to this profile is not a substitute for schema validation: an
+implementation that produces a schema-invalid document has a defect regardless
+of which rule it satisfied. A schema-invalid document fails with
+`value_not_permitted`. Generation completes before publication begins, so a
+failure at any point publishes nothing. A failed publication fails under
+[REQ-0764](../storage/publication.md#req-0764) with `publication_failed`.
+
+## Scope
+
+<a id="define-26"></a>
+
+### DEFINE-26. Constructs outside the profile have no schema field and are never generated
+
+The constructs listed below are outside this profile. None has a field in the
+schema that [Submission metadata](submission.md),
+[Controlled terminology](terminology.md) and `schema_environment.yaml` close,
+so a specification that tries to declare one is rejected as an unknown field.
+An `Alias` carrying a transport name longer than eight characters is not
+generated, and a `FormalExpression` is generated only from a declared
+`method.expression`, never from a derivation.
+
+Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::unknown_and_non_text_fields_preserve_exact_occurrences_without_fabricated_causes`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`.
+Replaces: REQ-1011, REQ-1012.
+
+- `arm:AnalysisResultDisplays`: an analysis-results metadata design
+- Split datasets and their `Alias` domain description: a specification that
+  produces one dataset in several files
+- `def:IsNonStandard` on a dataset or column: a conformance-profile rule
+  defining non-standard
+- A comment on a standard, codelist, or metadata version: a shared comment
+  identifier space
+
+The long transport-name `Alias` and `FormalExpression` have a declaration but
+no generation, and each is stated rather than silently dropped. For a name
+longer than eight characters [DEFINE-22](#define-22) omits the attribute and
+fails under `Submission` instead.
+
+<a id="define-27"></a>
+
+### DEFINE-27. A row template's `submission` map generates a value list, where clauses and per-value definitions
+
+For each column carrying value-level metadata ([SUB-12](submission.md#sub-12)),
+the document generates one `def:ValueListDef` with one ordered `ItemRef` per
+distinct test code, and one per-value `ItemDef` per value carrying the
+column-level declaration merged with the row-level overrides. Each value-list
+`ItemRef` carries a `def:WhereClauseRef` to a generated `def:WhereClauseDef`.
+Every admitted row-level `submission` map must have its complete generated
+form.
+
+Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
+Replaces: REQ-1013, REQ-1169.
+
+A row template's `submission` map declares per-value metadata against
+statically enumerated `--TESTCD` literals. The mapping to Define-XML is fixed:
+
+- for each column carrying value-level metadata, the document generates one
+  `def:ValueListDef` containing one ordered `ItemRef` per distinct test code
+  value, in row declaration order with each code's first occurrence retained.
+  The column's `ItemDef` carries its single `def:ValueListRef` after its
+  `def:Origin`;
+- each value's entry becomes a per-value `ItemDef` carrying the column-level
+  declaration merged with the row-level overrides;
+- each value list `ItemRef` carries a `def:WhereClauseRef` to a generated
+  `def:WhereClauseDef`. Its `RangeCheck` has `Comparator="EQ"`,
+  `SoftHard="Soft"`, `def:ItemOID` referring to the `<DOMAIN>TESTCD` `ItemDef`,
+  and a `CheckValue` containing the literal code; and
+- each per-value `ItemDef` carries its effective inherited or overridden
+  `def:Origin`, codelist and other submission metadata. Associated methods,
+  comments and document references remain resolvable.
+
+This linkage follows the bundled authoritative Define-XML 2.1 XSDs:
+`define-extension.xsd` places `ValueListRef` only in the `ItemDef` extension
+(at most one), places `WhereClauseRef` in the `ItemRef` extension, and orders
+all `ValueListDef` elements before all `WhereClauseDef` elements ahead of the
+ordinary metadata definitions. `define-ns.xsd` requires a nonempty value list
+with unique item references and order numbers. A value list for every code
+linked from the column's `ItemRef` would violate these constraints.
+
+A generator that cannot consume an entry fails loudly under the `Submission`
+context, naming its row and column; it never quietly omits per-value
+definitions. The generator consumes the bounded typed map and the semantics of
+this rule.
