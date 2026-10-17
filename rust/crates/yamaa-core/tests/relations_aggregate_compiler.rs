@@ -1165,19 +1165,19 @@ mod relations {
                 ),
                 Err(PlanError::IncompleteRow)
             );
-            assert_eq!(
-                make(
-                    vec![
-                        records(vec![]),
-                        grouped(vec![assign(0, Expression::Source(0))])
-                    ],
-                    vec![
-                        assign(0, Expression::Source(0)),
-                        assign(1, Expression::Literal(Value::Missing))
-                    ]
-                ),
-                Err(PlanError::InconsistentRowColumns)
-            );
+            // Row-phase columns are per template: one template may derive a
+            // column up front while another completes it column-phase.
+            assert!(make(
+                vec![
+                    records(vec![]),
+                    grouped(vec![assign(0, Expression::Source(0))])
+                ],
+                vec![
+                    assign(0, Expression::Source(0)),
+                    assign(1, Expression::Literal(Value::Missing))
+                ]
+            )
+            .is_ok());
             // A non-group field in the later column phase is invalid too.
             assert_eq!(
                 make(
