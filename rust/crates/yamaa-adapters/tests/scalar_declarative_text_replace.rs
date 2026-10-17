@@ -1,3 +1,4 @@
+#![cfg(feature = "yaml")]
 //! `str_replace` through file application: the authored benchmarks, then
 //! bespoke specifications for each binding, handler and failure route.
 use std::{

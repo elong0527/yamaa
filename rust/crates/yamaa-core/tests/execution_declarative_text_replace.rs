@@ -154,3 +154,62 @@ fn a_step_refusal_is_not_an_unchanged_value() {
     ));
     assert!(attempt.handler_counts.iter().all(|count| count.count == 0));
 }
+
+#[test]
+fn unsupported_patterns_report_the_declaring_operation() {
+    use support::document::Tree as T;
+    use yamaa_core::{
+        schema::SpecificationDocument,
+        specification::{PrepareError, PreparedSpecification, UnsupportedFeature},
+    };
+
+    // A valid repetition count whose two-scalar body exceeds addressable width.
+    let pattern = format!("(?:ab){{{}}}", usize::MAX);
+    for operation in ["str_extract", "str_replace"] {
+        let mut fields = vec![
+            ("source", T::text("SRC.TEXT")),
+            ("pattern", T::text(&pattern)),
+        ];
+        if operation == "str_replace" {
+            fields.push(("replacement", T::text("-")));
+        }
+        let document = T::map(vec![
+            ("schema_version", T::text("1.0")),
+            ("domain", T::text("TEST")),
+            ("base", T::text("SRC")),
+            (
+                "input",
+                T::map(vec![("SRC", T::map(vec![("path", T::text("input.csv"))]))]),
+            ),
+            ("keys", T::list(vec![T::text("TEXT")])),
+            (
+                "columns",
+                T::list(vec![T::map(vec![
+                    ("name", T::text("TEXT")),
+                    ("type", T::text("str")),
+                    ("derivation", T::map(vec![(operation, T::map(fields))])),
+                ])]),
+            ),
+            (
+                "output",
+                T::map(vec![
+                    ("path", T::text("output.csv")),
+                    ("columns", T::list(vec![T::text("TEXT")])),
+                ]),
+            ),
+        ])
+        .document();
+        let model = SpecificationDocument::admit(document).unwrap().unwrap();
+        let Err(PrepareError::Unsupported(features)) = PreparedSpecification::prepare(&model)
+        else {
+            panic!("unrepresentable pattern must be refused for {operation}");
+        };
+        assert_eq!(
+            features,
+            [UnsupportedFeature {
+                operation: format!("{operation}_pattern"),
+                path: format!("columns.TEXT.derivation.{operation}.pattern"),
+            }]
+        );
+    }
+}

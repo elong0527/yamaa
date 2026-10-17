@@ -36,7 +36,8 @@ impl Prepared {
                 .field(payload, "missing")
                 .map(|id| literal(d, id, &format!("{path}.missing")))
                 .transpose()?;
-            let admitted = match d.field(payload, "replacement") {
+            let replacement = d.field(payload, "replacement");
+            let admitted = match replacement {
                 Some(replacement) => StringReplace::new(
                     source.into(),
                     path.into(),
@@ -70,7 +71,12 @@ impl Prepared {
                     Some(&format!("{path}.pattern")),
                 ),
                 AdmissionError::Regex(_) => PrepareError::Unsupported(vec![UnsupportedFeature {
-                    operation: "str_extract_pattern".into(),
+                    operation: if replacement.is_some() {
+                        "str_replace_pattern"
+                    } else {
+                        "str_extract_pattern"
+                    }
+                    .into(),
                     path: format!("{path}.pattern"),
                 }]),
             })?;
