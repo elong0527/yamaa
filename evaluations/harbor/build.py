@@ -222,6 +222,12 @@ def system_prompt(language: str) -> str:
     return (HERE / LANGUAGES[language]["system"]).read_text(encoding="utf-8").strip()
 
 
+def instruction(language: str, prompt: str) -> str:
+    """What the evaluated agent reads: its language's system prompt, then the
+    benchmark's prompt verbatim."""
+    return system_prompt(language) + "\n\n---\n\n" + prompt.strip() + "\n"
+
+
 def output_specs(benchmark: Path) -> list[dict]:
     """Each specification that writes a golden dataset, in the order the
     prompt lists them (`scaffold.output_specs`): domains built together (DM
@@ -783,9 +789,7 @@ def build_task(
         candidate=trial,
     )
     (task / "task.toml").write_text(task_text)
-    (task / "instruction.md").write_text(
-        system_prompt(language) + "\n\n---\n\n" + prompt + "\n"
-    )
+    (task / "instruction.md").write_text(instruction(language, prompt))
 
     # Data files only: an input schema (`*.schema.yaml`) is yamaa's own
     # description of how a producer builds the input, not source data.
