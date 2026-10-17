@@ -21,3 +21,6 @@ pyo3 = { version = "0.27.2", features = ["abi3-py312"] }
 
 [build-dependencies]
 pyo3-build-config = "0.27.2"
+
+[lints]
+workspace = true
