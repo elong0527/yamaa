@@ -1,13 +1,13 @@
 """Authoring lints that read the specification value, not only its layout.
 
-REQ-1288, REQ-1289, and REQ-1290 name departures that leave the parsed
-value unchanged only when the author rewrites them: a uniform row-template
-derivation that belongs at column level, a named intermediate equivalent
-to the implicit join, and an output column without a label. A finding is
-not a validation diagnostic; the specification stays valid and runs the
-same way. No fix is offered: moving a derivation, removing an
-intermediate, or writing a label changes the written text of a value, so
-its author corrects it.
+`repeated_row_derivation`, `redundant_intermediate`, and `missing_label`
+name departures that leave the parsed value unchanged only when the author
+rewrites them: a uniform row-template derivation that belongs at column
+level, a named intermediate equivalent to the implicit join, and an output
+column without a label. A finding is not a validation diagnostic; the
+specification stays valid and runs the same way. No fix is offered: moving
+a derivation, removing an intermediate, or writing a label changes the
+written text of a value, so its author corrects it.
 """
 
 from __future__ import annotations
@@ -303,7 +303,7 @@ def _intermediate_id_key(
 
 
 def missing_labels(document: Document, value: Mapping) -> Iterator[Departure]:
-    """REQ-1290: every output column declares `label:`."""
+    """`missing_label`: every output column declares `label:`."""
     if not isinstance(value.get("output"), Mapping):
         return
     if "parents" in value:
@@ -347,7 +347,7 @@ def missing_labels(document: Document, value: Mapping) -> Iterator[Departure]:
 
 
 def repeated_row_derivations(document: Document, value: Mapping) -> Iterator[Departure]:
-    """REQ-1288: a derivation identical in every row template belongs up top.
+    """`repeated_row_derivation`: a uniform row-template derivation belongs up top.
 
     Only row-local derivations are reported: dataset-level operations,
     named-intermediate reads, and reads of non-row-local columns stay in
@@ -449,7 +449,7 @@ def _intermediate_is_read(value: Mapping, identifier: str) -> bool:
 
 
 def redundant_intermediates(document: Document, value: Mapping) -> Iterator[Departure]:
-    """REQ-1289: a named intermediate equivalent to the implicit join.
+    """`redundant_intermediate`: a named intermediate equal to the implicit join.
 
     A simple intermediate with no filter, selection, custom key, or handler
     that changes behavior reads what `DATASET.COLUMN` already reads. The
@@ -518,7 +518,7 @@ def redundant_intermediates(document: Document, value: Mapping) -> Iterator[Depa
 
 
 def check_authoring(document: Document) -> list[Departure]:
-    """Every REQ-1288 to REQ-1290 departure in `document`."""
+    """Every authoring lint departure in `document`."""
     value = spec_value(document)
     if value is None:
         return []

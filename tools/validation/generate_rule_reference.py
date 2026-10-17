@@ -213,9 +213,10 @@ def rules_summary(rules):
         "",
         GENERATED_MARK,
         "",
-        "The principles and each rule's title and statement, generated from the",
-        f"[rule files]({page_link('README.md')}). A rule's detail, conditions and",
-        "evidence are in its file.",
+        "The principles and every rule's title, generated from the",
+        f"[rule files]({page_link('README.md')}). Each title states its rule; the",
+        "statement a reviewer approves, the detail, conditions and evidence are in",
+        "the rule's file.",
         "",
     ]
     if rules.principles:
@@ -232,11 +233,16 @@ def rules_summary(rules):
         lines += [f"## {rule_file.title or rule_file.path}", ""]
         if rule_file.path in listing:
             lines += [listing[rule_file.path].covers, ""]
+        topic = None
         for card in rule_file.cards:
+            if getattr(card, "topic", None) and card.topic != topic:
+                if topic is not None:
+                    lines.append("")
+                topic = card.topic
+                lines += [f"### {topic}", ""]
             target = page_link(card.file, card.id.lower())
-            lines += [f"### [{card.id}]({target}). {card.title}", ""]
-            if card.statement:
-                lines += [rebase(card.statement, card.file), ""]
+            lines.append(f"- [{card.id}]({target}). {card.title}")
+        lines.append("")
     if legacy:
         lines += [
             "## Not yet converted",

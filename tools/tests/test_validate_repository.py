@@ -363,7 +363,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
             )
             self.assertEqual(
                 OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "predicate"),
-                "operations/predicates",
+                OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS["predicate"],
             )
             (root / "rules" / "copy.md").write_text(text)
             self.assertIsNone(OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "numeric"))
@@ -385,7 +385,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
             root = self.contract_root(
                 temp_dir,
                 **{
-                    "rules/operations/text.md": (
+                    "rules/text.md": (
                         'placeholder := "{" variable "}"',
                         'placeholder := "{" variable "}" | variable',
                     )
@@ -395,7 +395,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                 root, "string-template"
             )
         self.assertEqual(len(errors), 1)
-        self.assertIn("operations/text.md", errors[0])
+        self.assertIn("rules/text.md", errors[0])
         self.assertIn("the grammar block is not the one", errors[0])
 
     # -- the vocabulary is one source --------------------------------------

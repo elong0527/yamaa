@@ -5,164 +5,164 @@ expressions:
         - start:
             type: variable
             required: true
-            description: See REQ-1104.
+            description: Starting date (TIME-4).
         - end:
             type: variable
             required: true
-            description: See REQ-1104.
+            description: Ending date; an earlier date produces a negative result (TIME-4).
         - unit:
             type: str
             required: true
             values: [day, week, month, year]
-            description: See REQ-1104.
+            description: Calendar unit counted between the dates (TIME-4).
         - bounds:
             type: str
             default: exclusive
             values: [exclusive, inclusive, between]
-            description: See REQ-1104.
+            description: Which endpoints the day count includes, defined only with unit day (TIME-5).
     date_impute: # See REQ-1105.
         - source:
             type: variable
             required: true
-            description: See REQ-1105.
+            description: ISO 8601 date text, complete or truncated to year or month (TIME-8).
         - month:
             type: int
-            description: See REQ-1105.
+            description: Month used when the source carries only a year, 1 to 12; required when minimum_source_precision is year and absent when it is month (TIME-10).
         - day:
             type: [int, day_rule]
             required: true
-            description: See REQ-1105.
+            description: Day used when the source carries no day, an integer from 1 to 31 or first or last resolved against the month the date lands in (TIME-8).
         - minimum_source_precision:
             type: str
             default: year
             values: [year, month]
-            description: See REQ-1105.
+            description: Least precision the collected source must carry before imputation; month leaves a year-only source missing instead of supplying both month and day (TIME-8).
         - not_before:
             type: variable
-            description: See REQ-1105.
+            description: Date the completed value must not precede; it moves only the components imputation supplied, never a collected date (TIME-9).
         - not_after:
             type: variable
-            description: See REQ-1105.
+            description: Date the completed value must not follow; it moves only the components imputation supplied, never a collected date (TIME-9).
         - missing:
             type: literal_value
-            description: See REQ-1105.
+            description: Result when the source value is missing (TIME-13).
         - invalid:
             type: literal_value
-            description: See REQ-1105.
+            description: Result when the source is not an ISO 8601 date or date prefix (TIME-13).
     date_precision: # See REQ-1106.
         - source:
             type: variable
             required: true
-            description: See REQ-1106.
+            description: ISO 8601 date text, complete or truncated to year or month, or a date whose collected precision is reported (TIME-7).
         - missing:
             type: literal_value
-            description: See REQ-1106.
+            description: Result when the source value is missing (TIME-13).
         - invalid:
             type: literal_value
-            description: See REQ-1106.
+            description: Result when the source is not an ISO 8601 date or date prefix (TIME-13).
     datetime_impute: # See REQ-1182.
         - source:
             type: variable
             required: true
-            description: See REQ-1182.
+            description: ISO 8601 complete date text, or datetime text collected to the hour, minute or second (TIME-11).
         - time:
             type: time_rule
             required: true
-            description: See REQ-1182.
+            description: Time fields supplied when the source does not carry them; first supplies 00 to each, and last supplies 23, 59 and 59 (TIME-12).
         - missing:
             type: literal_value
-            description: See REQ-1182.
+            description: Result when the source value is missing (TIME-13).
         - invalid:
             type: literal_value
-            description: See REQ-1182.
+            description: Result when the source is neither a complete date nor a datetime collected to the hour, minute or second (TIME-13).
     datetime_precision: # See REQ-1183.
         - source:
             type: variable
             required: true
-            description: See REQ-1183.
+            description: ISO 8601 complete date text or datetime text collected to the hour, minute or second, or a datetime whose collected precision is reported (TIME-11).
         - missing:
             type: literal_value
-            description: See REQ-1183.
+            description: Result when the source value is missing (TIME-13).
         - invalid:
             type: literal_value
-            description: See REQ-1183.
+            description: Result when the source is neither a complete date nor a datetime collected to the hour, minute or second (TIME-13).
     to_date: # See REQ-1107.
         - source:
             type: variable
             required: true
-            description: See REQ-1107.
+            description: Datetime whose calendar date is returned, or ISO 8601 date or datetime text to parse (TIME-2).
     study_day: # See REQ-1108.
         - date:
             type: variable
             required: true
-            description: See REQ-1108.
+            description: Date whose study day is returned (TIME-6).
         - reference:
             type: variable
             required: true
-            description: See REQ-1108.
+            description: Reference start date, which is study day 1 (TIME-6).
     to_epoch_day: # See REQ-1188.
         - source:
             type: variable
             required: true
-            description: See REQ-1188.
+            description: Date converted to days since 1970-01-01 (TIME-3).
 
     date_shift: # See REQ-1298.
         - source:
             type: variable
             required: true
-            description: See REQ-1298.
+            description: Complete date to move (TIME-14).
         - days:
             type: [variable, int]
             required: true
-            description: See REQ-1298.
+            description: Signed integer literal or integer variable; a negative count moves backward (TIME-14).
     datetime_diff: # See REQ-1299.
         - start:
             type: variable
             required: true
-            description: See REQ-1299.
+            description: Starting civil datetime (TIME-15).
         - end:
             type: variable
             required: true
-            description: See REQ-1299.
+            description: Ending civil datetime (TIME-15).
         - unit:
             type: str
             required: true
             values: [second, minute, hour, day]
-            description: See REQ-1299.
+            description: Elapsed unit of second, minute, hour or day, where a day is 86400 seconds (TIME-15).
     datetime_shift: # See REQ-1300.
         - source:
             type: variable
             required: true
-            description: See REQ-1300.
+            description: Complete civil datetime to move (TIME-16).
         - amount:
             type: [variable, int, float]
             required: true
-            description: See REQ-1300.
+            description: Signed numeric literal or variable; an integer is required with unit second (TIME-16).
         - unit:
             type: str
             required: true
             values: [second, minute, hour, day]
-            description: See REQ-1300.
+            description: Elapsed unit of second, minute, hour or day, where a day is 86400 seconds (TIME-16).
     duration_value: # See REQ-1301.
         - source:
             type: variable
             required: true
-            description: See REQ-1301.
+            description: ISO 8601 fixed-length duration text (TIME-17).
         - unit:
             type: str
             required: true
             values: [second, minute, hour, day]
-            description: See REQ-1301.
+            description: Numeric result unit of second, minute, hour or day (TIME-17).
         - invalid:
             type: literal_value
-            description: See REQ-1301.
+            description: Literal result for invalid or out-of-range duration text; null gives missing (TIME-17).
 
 day_rule:
     type: str
     values: [first, last]
-    description: See REQ-1109.
+    description: Day resolved against the month the completed date lands in (TIME-8).
 
 time_rule:
     type: str
     values: [first, last]
-    description: See REQ-1184.
+    description: Earliest or latest civil moment the collected source admits, each missing time field taking its first or last value (TIME-12).

@@ -23,7 +23,7 @@ input record: one row of a declared source dataset.
 A row is a constructed output record: one output record produced by a
 row template or another output-building step. The input-side term is
 "record"; the output-side term is "row".
-(execution/rows.md)
+(rows.md)
 
 ## observation
 

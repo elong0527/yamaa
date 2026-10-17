@@ -16,7 +16,7 @@
 schema_version: "1.0"
 contract: predicate
 contract_version: "1.1.0"
-rule: operations/predicates
+rule: formulas
 start: predicate
 productions:
   - name: predicate

@@ -17,10 +17,10 @@ from tools.paths import ROOT
 
 REPOSITORY = ROOT
 CONTRACTS = {
-    "aggregate": "operations/aggregation",
-    "numeric": "operations/computation",
-    "predicate": "operations/predicates",
-    "string-template": "operations/text",
+    "aggregate": "formulas",
+    "numeric": "formulas",
+    "predicate": "formulas",
+    "string-template": "text",
 }
 
 

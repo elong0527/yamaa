@@ -31,7 +31,7 @@ SHIPPED_SCHEMA = Path("rust/crates/yamaa-adapters/src/shipped_schema/data.rs")
 PRIVATE_TEST_MODULE = Path(
     "rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs"
 )
-NULL_POLICY = Path("rules/execution/lifecycle.md")
+NULL_POLICY = Path("rules/columns.md")
 NULL_START = "<!-- normative-null-conditions:start -->"
 NULL_END = "<!-- normative-null-conditions:end -->"
 NULL_ENTRY = re.compile(r"- `([a-z][a-z0-9_]*)` \(`([a-z_]+)`\)")

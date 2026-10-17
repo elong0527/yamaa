@@ -1,10 +1,10 @@
 """Layout fixes that move and insert whole lines, kept only when proved.
 
-REQ-1286: a fix rearranges the lines of a file and never rewrites what a
-value says. Each candidate edit is applied to the text, the text is read
-again by the engine's specification reader, and the edit is kept only when
-the value read, compared with its types, and the comment lines are
-unchanged. A refused edit leaves its finding reported.
+A fix rearranges the lines of a file and never rewrites what a value says.
+Each candidate edit is applied to the text, the text is read again by the
+engine's specification reader, and the edit is kept only when the value
+read, compared with its types, and the comment lines are unchanged. A
+refused edit leaves its finding reported.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def fix_text(
     """Apply every proved layout fix to `text` and return the result."""
     result = _fix_once(text, orders, selected)
     if result != text and _fix_once(result, orders, selected) != result:
-        # REQ-1286: a fix that a second pass would change again is refused.
+        # A fix that a second pass would change again is refused.
         return text
     return result
 
@@ -363,7 +363,7 @@ def _block_mapping(
     if not node.value:
         return None
     if len(node.value) == 1 and node.value[0][0].value in ("literal", "source"):
-        # REQ-1250 keeps `{literal: X}` in flow form; REQ-1255 wants
+        # `literal_form` keeps `{literal: X}` in flow form; `source_form` wants
         # `{source: X}` rewritten by its author, not moved to block form.
         return None
     text = document.lines[line]

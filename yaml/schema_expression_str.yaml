@@ -14,71 +14,71 @@ expressions:
         - source:
             type: variable
             required: true
-            description: See REQ-1111.
+            description: String variable to search (TEXT-10).
         - pattern:
             type: regex
             required: true
-            description: See REQ-1111.
+            description: Regular expression searched for in the source (TEXT-9).
         - group:
             type: int
             default: 0
-            description: See REQ-1111.
+            description: Match group to return; 0 is the full match (TEXT-10).
         - missing:
             type: literal_value
-            description: See REQ-1111.
+            description: Value returned when the source is missing (TEXT-10).
         - no_match:
             type: literal_value
-            description: See REQ-1111.
+            description: Value returned when the pattern does not match the source (TEXT-10).
     str_replace: # See REQ-1322.
         - source:
             type: variable
             required: true
-            description: See REQ-1322.
+            description: String variable to search (TEXT-11).
         - pattern:
             type: regex
             required: true
-            description: See REQ-1322.
+            description: Regular expression whose every match in the source is replaced (TEXT-11).
         - replacement:
             type: str
             required: true
-            description: See REQ-1322.
+            description: Literal text that replaces each match (TEXT-11).
         - missing:
             type: literal_value
-            description: See REQ-1322.
+            description: Value returned when the source is missing (TEXT-11).
     str_concat: # See REQ-1112.
         - sources:
             type: "list[expression]"
             required: true
-            description: See REQ-1112.
+            description: Expressions to concatenate in order (TEXT-1).
         - missing:
             type: literal_value
-            description: See REQ-1112.
+            description: Value returned when any source is missing (TEXT-1).
     str_template: # See REQ-1113.
         type: [string_template, str_template_class]
-        description: See REQ-1113.
+        description: Portable string template, concise or with missing handling (TEXT-4).
     str_case: # See REQ-1114.
         - source:
             type: variable
             required: true
-            description: See REQ-1114.
+            description: String variable whose ASCII letters change case (TEXT-5).
         - to:
             type: str
             required: true
             values: [upper, lower, sentence, title]
-            description: See REQ-1114.
+            description: Case to produce, one of upper, lower, sentence or title (TEXT-5).
         - missing:
             type: literal_value
-            description: See REQ-1114.
+            description: Value returned when the source is missing (TEXT-5).
 
 string_template:
     type: str
-    description: See REQ-1116.
+    description: Template string of literal text, braced placeholders and doubled braces (TEXT-3).
 
 str_template_class:
     - template:
         type: string_template
         required: true
-        description: See REQ-1117.
+        description: Text containing literal content and braced variables (TEXT-3).
     - missing:
         type: literal_value
-        description: See REQ-1117.
+        description: Value returned when any placeholder value is missing (TEXT-4).

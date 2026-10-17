@@ -8,7 +8,7 @@ column_type:
 
 literal_value:
     type: [str, int, float, bool, "null"]
-    description: See REQ-1149.
+    description: Scalar literal; a non-finite float becomes missing (VALUE-4).
 
 path:
     type: str
@@ -17,17 +17,17 @@ path:
 project_path:
     type: str
     min_length: 1
-    description: See REQ-1151.
+    description: Local resource a run reads or publishes; a relative spelling uses the base its declaration selects and an absolute spelling names its local location (FILE-2).
 
 path_base:
     type: str
     values: [declaring, entry]
-    description: See REQ-0780.
+    description: Base directory of a relative path, the declaring file's or the entry file's directory (FILE-2).
 
 identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: See REQ-1046.
+    description: Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a standard, a document or a function (SPEC-2).
 
 
 function_param_type:

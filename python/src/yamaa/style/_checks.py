@@ -1,4 +1,4 @@
-"""The departures the specification style contract names.
+"""The departures the specification style guide names.
 
 Each check reads one parsed file and returns findings with zero-based
 positions. None of them reads data, resolves inheritance, or validates the
@@ -16,24 +16,25 @@ from yamaa.style._document import Document, last_line, member, walk
 
 LINE_WIDTH = 79
 
-FINDINGS: Mapping[str, str] = {
-    "field_order": "REQ-1281",
-    "root_spacing": "REQ-1282",
-    "entry_spacing": "REQ-1283",
-    "blank_lines": "REQ-1284",
-    "line_width": "REQ-1285",
-    "literal_form": "REQ-1250",
-    "source_form": "REQ-1255",
-    "invalid_suppression": "REQ-1287",
-    "repeated_row_derivation": "REQ-1288",
-    "redundant_intermediate": "REQ-1289",
-    "missing_label": "REQ-1290",
-}
+# Every finding the style guide (docs/articles/style.md) names.
+FINDINGS: tuple[str, ...] = (
+    "field_order",
+    "root_spacing",
+    "entry_spacing",
+    "blank_lines",
+    "line_width",
+    "literal_form",
+    "source_form",
+    "invalid_suppression",
+    "repeated_row_derivation",
+    "redundant_intermediate",
+    "missing_label",
+)
 
-# REQ-1283 separates the entries of these root lists.
+# `entry_spacing` separates the entries of these root lists.
 SPACED_LISTS = ("intermediates", "columns", "rows")
 
-# REQ-1281 orders these mappings by their schema class.
+# `field_order` orders these mappings by their schema class.
 _MEMBER_CLASSES = {
     "output": "output_class",
     "intermediates": "intermediate_class",
@@ -56,7 +57,7 @@ class Departure:
 def ordered_mappings(
     document: Document,
 ) -> Iterator[tuple[str, str, yaml.MappingNode]]:
-    """Yield (spec path, schema class, mapping) for every REQ-1281 mapping."""
+    """Yield (spec path, schema class, mapping) for every `field_order` mapping."""
     root = document.root
     if not isinstance(root, yaml.MappingNode):
         return
@@ -94,7 +95,7 @@ def order_violation(
 
 
 def header_fields(order: Sequence[str]) -> frozenset[str]:
-    """Root fields written before `output`, which REQ-1282 lets stay together."""
+    """Root fields written before `output`, which `root_spacing` lets stay together."""
     return frozenset(order[: order.index("output")])
 
 
@@ -111,7 +112,7 @@ def check(document: Document, orders: Mapping[str, Sequence[str]]) -> list[Depar
     found.extend(_line_width(document, paths))
     found.extend(_literal_form(document))
     found.extend(_source_form(document))
-    # REQ-1288 to REQ-1290 read the specification value; they stay silent
+    # The authoring lints read the specification value; they stay silent
     # when the file has no value (invalid YAML) and never change it.
     # Imported lazily so the layout checks remain usable on their own.
     from yamaa.style._authoring import check_authoring
@@ -256,7 +257,7 @@ def _line_width(document: Document, paths: Mapping[int, str]) -> Iterator[Depart
 
 
 def _mapping_nodes(document: Document) -> Iterator[yaml.MappingNode]:
-    """Mappings REQ-1250 and REQ-1255 visit: mapping values and list items."""
+    """Mappings `literal_form` and `source_form` visit: values and list items."""
 
     def visit(node: yaml.Node) -> Iterator[yaml.MappingNode]:
         yield node
@@ -278,7 +279,7 @@ def _mapping_nodes(document: Document) -> Iterator[yaml.MappingNode]:
 
 
 def _literal_form(document: Document) -> Iterator[Departure]:
-    """REQ-1250: a literal written in block form under its parent key."""
+    """`literal_form`: a literal written in block form under its parent key."""
     paths = {id(node): path for path, node in walk(document.root)}
     for mapping in _mapping_nodes(document):
         for key, value in mapping.value:
@@ -292,7 +293,7 @@ def _literal_form(document: Document) -> Iterator[Departure]:
             ):
                 continue
             literal_key, _literal_value = value.value[0]
-            # REQ-1250 names the block form itself, whatever the literal
+            # `literal_form` names the block form itself, whatever the literal
             # holds: a collection value, or a scalar written on the line
             # below `literal:`, parses to the same value as the flow
             # spelling and is reported the same way.
@@ -321,7 +322,7 @@ def _is_plain_source(value: yaml.Node) -> bool:
 
 
 def _source_form(document: Document) -> Iterator[Departure]:
-    """REQ-1255: a plain source written `{source: X}` where shorthand applies.
+    """`source_form`: a plain source written `{source: X}` where shorthand applies.
 
     The shorthand positions are a `derivation` value, a `derivations` entry,
     and a `case` branch `then` or `otherwise`. A filtered source, a nested
@@ -379,7 +380,7 @@ def _source_form(document: Document) -> Iterator[Departure]:
 def suppressed(
     document: Document, found: Sequence[Departure]
 ) -> tuple[list[Departure], list[Departure]]:
-    """Split `found` into (kept, suppressed) and add REQ-1287 findings."""
+    """Split `found` into (kept, suppressed) and add `invalid_suppression` findings."""
     kept: list[Departure] = []
     hidden: list[Departure] = []
     valid = []

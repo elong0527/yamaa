@@ -386,10 +386,10 @@ mod declaration {
         #[test]
         fn unchanged_shared_grammars_have_exact_shapes_dependencies_decisions_and_vocabularies() {
             let documents = [
-                ("numeric", "operations/computation"),
-                ("aggregate", "operations/aggregation"),
-                ("predicate", "operations/predicates"),
-                ("string-template", "operations/text"),
+                ("numeric", "formulas"),
+                ("aggregate", "formulas"),
+                ("predicate", "formulas"),
+                ("string-template", "text"),
             ]
             .map(|(contract, rule)| {
                 let document = yaml(&format!("yaml/grammar/{contract}.yaml"));

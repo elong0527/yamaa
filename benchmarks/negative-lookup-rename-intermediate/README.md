@@ -40,4 +40,4 @@ columns:
 ```
 
 A named intermediate must narrow, derive, or reshape its dataset
-([REQ-1248](../../rules/operations/lookup.md#req-1248)).
+([LOOKUP-4](../../rules/lookup.md#lookup-4)).

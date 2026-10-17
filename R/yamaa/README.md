@@ -65,7 +65,7 @@ context. `yamaa_check` reads no study data or project code.
 Resource paths resolve from their original declaring YAML layer by default.
 Set `relative_to: entry` on an input dataset or `output` declaration to select
 the study entry's directory under the
-[local-path policy](../../rules/storage/resources.md). Input settings cover
+[local-path policy](../../rules/reference/files.md). Input settings cover
 both data paths and producer `schema` links; output settings cover the primary
 artifact and both logs. A producer uses its own linked entry file, which may
 inherit shared code. `result$save()` publishes the held bytes to those selected
@@ -76,7 +76,7 @@ Inputs can use CSV, Parquet, SAS datasets (`.sas7bdat`), or SAS Transport v5/v8
 `{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int, VISITDT: date}}`.
 Character fields default to `str`, numeric fields to `float`; numeric `types`
 narrowing requires exact integral values. See the
-[SAS source contract](../../rules/storage/sas.md) for missing values, character
+[SAS source contract](../../rules/reference/sas.md) for missing values, character
 padding, supported encodings and 1960 date/datetime epochs. Outputs remain CSV
 or Parquet.
 

@@ -42,9 +42,9 @@ replay the same parser vectors.
 
 ## Execution overview
 
-The [lifecycle](../rules/execution/lifecycle.md) owns execution order. Read it
+The [lifecycle](../rules/columns.md) owns execution order. Read it
 first when implementing a runner, then follow the contract for each stage.
-[Define-XML generation](../rules/submission/define-xml.md) is a separate workflow
+[Define-XML generation](../rules/profiles/define-xml.md) is a separate workflow
 that composes specifications and metadata without running their derivations.
 
 ## Review workflow
@@ -75,7 +75,7 @@ rule, grammar, or fixture:
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.
 - Declare governed submission metadata in `submission`, never in the free-form
-  `metadata` map. The [submission contract](../rules/submission/metadata.md)
+  `metadata` map. The [submission contract](../rules/profiles/submission.md)
   reserves its governed key names, so the map cannot
   become a second place a governed fact lives.
 - Declare nothing a rule derives. For `sdtm` and `send`, `Mandatory` comes
@@ -85,7 +85,7 @@ rule, grammar, or fixture:
   it.
 - Declare a codelist once in the study environment and bind columns to its
   identifier, as required by the
-  [terminology contract](../rules/submission/terminology.md).
+  [terminology contract](../rules/profiles/terminology.md).
 - Change a closed grammar in its `grammar/` file first. The rule's grammar
   block is rendered from that file, each parser's closed vocabulary is
   compared with it, and both implementations replay its vectors, so a change
@@ -102,11 +102,11 @@ rule, grammar, or fixture:
   non-regular resources and missing files remain negative cases. A
   `yamaa-project.yaml` does not change document resource locations.
 - Write every fixture under the source profile its extension selects. CSV
-  fixtures follow the [CSV profile](../rules/storage/csv.md): UTF-8 without a
+  fixtures follow the [CSV profile](../rules/reference/csv.md): UTF-8 without a
   byte-order mark, comma-separated
   fields, a named non-empty field per column, and the same field count in
   every record. Parquet fixtures follow the closed
-  [Parquet profile](../rules/storage/parquet.md).
+  [Parquet profile](../rules/reference/parquet.md).
   A file that departs from its profile belongs only in a negative example that
   declares the condition it provokes.
 - Do not duplicate normative behavior across schema definitions, rules, or
@@ -128,7 +128,7 @@ Use `window: RESPONSE_ORDER` in each expression that shares those settings.
 An inline mapping remains valid. References use the whole definition and
 accept no extra fields or overrides. Omitted settings keep their usual
 meaning, and each use operates on its caller's rows. See the
-[window contract](../rules/operations/windows.md#req-1251) and the
+[window contract](../rules/windows.md#window-1) and the
 [confirmed-response benchmark](../benchmarks/adam-adrs-confirmed-response/spec.yaml).
 
 ## Carry-forward and donor-record selection
@@ -144,8 +144,8 @@ input dataset or an eligible named intermediate), or root `base` without row
 templates; either defaults to the single declared input when omitted (see the
 [contract index](../rules/README.md#terminology)). `order_by` and `keep` select one donor
 from the surviving candidates. Use an explicit planning input for visits
-that do not yet have observed records. See the [window contract](../rules/operations/windows.md)
-and [lookup contract](../rules/operations/lookup.md).
+that do not yet have observed records. See the [window contract](../rules/windows.md)
+and [lookup contract](../rules/lookup.md).
 
 ## Explicit source record order
 
@@ -173,5 +173,5 @@ Filters retain the original positions, while `row_number` assigns consecutive
 numbers within each group. The generated name must be absent from the stored
 fields. It is typed automatically and is emitted only through a selected
 output column that derives it. Fixed-schema ODM inputs do not accept `ordinal`.
-See the [source ingestion contract](../rules/storage/ingestion.md#req-1291)
+See the [source ingestion contract](../rules/inputs.md#input-3)
 and [source ordinal benchmark](../benchmarks/schema-source-ordinal/spec.yaml).

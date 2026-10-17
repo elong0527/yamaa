@@ -9,65 +9,65 @@ window_selection:
 window_spec:
     - group_by:
         type: "list[variable]"
-        description: See REQ-1122.
+        description: Variables defining partitions; omission uses one partition (WINDOW-3).
     - order_by:
         type: "list[order_by_term]"
-        description: See REQ-1122.
+        description: Terms ordering rows within each partition (WINDOW-3).
     - filter:
         type: predicate
-        description: See REQ-1122.
+        description: Predicate selecting rows (WINDOW-4).
 
 expressions:
     row_number: # See REQ-1123.
         - window:
             type: window_selection
-            description: See REQ-1123.
+            description: Partition, ordering and row selection for the window (WINDOW-6).
     rank: # See REQ-1124.
         - method:
             type: str
             default: competition
             values: [competition, dense]
-            description: See REQ-1124.
+            description: Tie numbering; competition leaves position gaps and dense does not (WINDOW-6).
         - window:
             type: window_selection
-            description: See REQ-1124.
+            description: Partition, ordering and row selection for the window (WINDOW-6).
     row_value: # See REQ-1125.
         - source:
             type: variable
             required: true
-            description: See REQ-1125.
+            description: Variable read from the offset row (WINDOW-7).
         - offset:
             type: int
             required: true
-            description: See REQ-1125.
+            description: Rows to move along the declared order; nonzero (WINDOW-7).
         - window:
             type: window_selection
-            description: See REQ-1125.
+            description: Partition, ordering and row selection for the window (WINDOW-7).
     previous_non_missing: # See REQ-1126.
         - source:
             type: variable
             required: true
-            description: See REQ-1126.
+            description: Variable searched for the closest earlier non-missing value (WINDOW-8).
         - window:
             type: window_selection
-            description: See REQ-1126.
+            description: Partition and ordering for the window (WINDOW-8).
     locf: # See REQ-1239.
         - source:
             type: variable
             required: true
-            description: See REQ-1239.
+            description: Completed observed variable to carry forward (WINDOW-8).
         - window:
             type: window_selection
-            description: See REQ-1239.
+            description: Partition, ordering and optional row selection (WINDOW-8).
     baseline_flag: # See REQ-1127.
         - date:
             type: variable
             required: true
-            description: See REQ-1127.
+            description: Candidate baseline date (WINDOW-9).
         - reference_date:
             type: variable
             required: true
-            description: See REQ-1127.
+            description: Inclusive upper bound for the baseline date (WINDOW-9).
         - window:
             type: window_selection
-            description: See REQ-1127.
+            description: Baseline-selection partitions for the window (WINDOW-9).
