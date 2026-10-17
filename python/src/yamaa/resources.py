@@ -156,10 +156,31 @@ class MemoryResolver(ResourceResolver):
             self.put(key, data)
         super().__init__(self._request)
 
+    @staticmethod
+    def _validate_key_reference(key: str, reference: str | None) -> None:
+        # A non-string or empty key stores an object no _key() lookup can
+        # ever reach: capture then reports 'missing', misleadingly blaming
+        # the specification instead of this call. A non-string, empty or
+        # NUL-containing reference is likewise only discovered at capture
+        # time as 'rejected', under the rule _dispatch applies to every
+        # reply reference. Refuse both here, at put time.
+        if not isinstance(key, str):
+            raise TypeError("resource key must be a string")
+        if not key or "\x00" in key:
+            raise ValueError("resource key must be a non-empty string without NUL")
+        if reference is not None:
+            if not isinstance(reference, str):
+                raise TypeError("resource reference must be a string")
+            if not reference or "\x00" in reference:
+                raise ValueError(
+                    "resource reference must be a non-empty string without NUL"
+                )
+
     def put(self, key: str, data: bytes, *, reference: str | None = None):
         """Replace an object version; existing attempts refuse the new identity."""
         if not isinstance(data, bytes):
             raise TypeError("resource data must be immutable bytes")
+        self._validate_key_reference(key, reference)
         self._next += 1
         self.objects[key] = ResourceResult(
             reference or f"{self.prefix}{key}#v{self._next}", data
@@ -167,6 +188,7 @@ class MemoryResolver(ResourceResolver):
 
     def put_frame(self, key: str, frame, *, reference: str | None = None):
         """Retain an immutable Arrow-compatible frame without IPC serialization."""
+        self._validate_key_reference(key, reference)
         self._next += 1
         self.objects[key] = ResourceResult(
             reference or f"{self.prefix}{key}#v{self._next}", frame=frame
