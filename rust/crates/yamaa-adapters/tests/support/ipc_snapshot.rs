@@ -31,7 +31,7 @@ fn scalar(value: yamaa_core::value::Value) -> yamaa_core::json::Value {
             json!({"date":{"text":d.to_string(),"precision":match d.collected_precision(){DatePrecision::Year=>"year",DatePrecision::Month=>"month",DatePrecision::Day=>"day"}}})
         }
         Value::DateTime(d) => {
-            json!({"datetime":{"text":d.to_string(),"precision":match d.collected_precision(){DateTimePrecision::Day=>"day",DateTimePrecision::Second=>"second"}}})
+            json!({"datetime":{"text":d.to_string(),"precision":match d.collected_precision(){DateTimePrecision::Day=>"day",DateTimePrecision::Hour=>"hour",DateTimePrecision::Minute=>"minute",DateTimePrecision::Second=>"second"}}})
         }
     }
 }

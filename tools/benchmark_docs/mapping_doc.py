@@ -687,19 +687,23 @@ def describe_to_epoch_day(node, ctx=None, depth=0):
     )
 
 
+PRECISION_CODES = {
+    "date": "D for a complete date, M for year and month, Y for a year alone",
+    "datetime": (
+        "S through the second, M through the minute, H through the hour, "
+        "D for a date alone"
+    ),
+}
+
+
 def describe_precision(node, word, ctx=None, depth=0):
-    codes = (
-        "S when a time of day was collected, D when only the date was"
-        if word == "datetime"
-        else "D for a complete date, M for year and month, Y for a year alone"
-    )
     text = (
         "Collected "
         + word
         + " precision of "
         + describe_variable(node.get("source"), ctx, depth)
         + ": "
-        + codes
+        + PRECISION_CODES[word]
     )
     text += handler_phrase(node, "missing", "a missing source")
     return sentence(text + handler_phrase(node, "invalid", "invalid text"))
@@ -730,16 +734,13 @@ def describe_date_impute(node, ctx=None, depth=0):
 
 def describe_datetime_impute(node, ctx=None, depth=0):
     time = str(node.get("time", ""))
-    instant = (
-        "the first instant of the day"
-        if time == "first"
-        else "the last instant of the day"
-    )
+    edge = "earliest" if time == "first" else "latest"
     text = (
         "Impute incomplete datetime from "
         + describe_variable(node.get("source"), ctx, depth)
-        + ", defaulting the time to "
-        + instant
+        + ", giving each time part the source lacks its "
+        + edge
+        + " value"
     )
     text += handler_phrase(node, "missing", "a missing source")
     return sentence(text + handler_phrase(node, "invalid", "invalid text"))
@@ -1338,6 +1339,14 @@ REVISION_HISTORY_HEADERS = [
 # entry whenever a change alters the text of a rendered cell. Reviewer and
 # Sign-off stay empty -- those are the reviewer's to fill, not the build's.
 RENDERER_REVISIONS = [
+    (
+        "1.4",
+        "2026-10-15",
+        (
+            "State datetime precision codes through the hour and minute, and "
+            "complete only the time parts a collected datetime lacks"
+        ),
+    ),
     (
         "1.3",
         "2026-09-29",

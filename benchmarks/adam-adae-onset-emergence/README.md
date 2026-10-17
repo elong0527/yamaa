@@ -41,7 +41,5 @@ HEADACHE is collected as `2025-03-04T11:45` and VOMITING as
 `AOCCFL` tie-break ("the lower sequence number settles ties at
 the same second") is what picks the earliest treatment-emergent
 event. No time-imputation flag is derived for the coerced value:
-the coercion happens inside the engine's datetime type, and the
-language's collected-precision model reports only day/second
-tiers, so a minute-precision source is not distinguishable from
-a second-precision one in spec language.
+the onset is read directly as a date and time, which takes the
+omitted seconds as collected zeros rather than as supplied ones.

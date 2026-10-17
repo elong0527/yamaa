@@ -61,7 +61,7 @@ columns:
       to_date:
         source: AE.AESTDTC
 
-  # S when the onset was collected with a time of day, D for a date alone.
+  # M or S when the onset was collected with a time of day, D for a date alone.
   - name: ASTTPR
     type: str
     label: Onset Date/Time Collected Precision
@@ -78,7 +78,7 @@ columns:
     label: Analysis Start Date/Time
     derivation:
       case:
-        - when: "ASTTPR = 'S'"
+        - when: "ASTTPR IN ('M', 'S')"
           then: AE.AESTDTC
 
   - name: DOSENUM
