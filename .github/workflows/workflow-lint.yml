@@ -1,0 +1,39 @@
+name: Workflow lint
+
+# A broken file for a scheduled workflow stops it from running without any
+# failure to see, so check every workflow when a pull request changes one.
+on:
+  # PRs into a release integration branch run only the CI workflow.
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-lint-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Checks workflow syntax, expressions, contexts and job graphs. Shell
+      # style in run steps is left to the review bot's shellcheck.
+      - name: Check every workflow
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+            | tar -xz -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color -shellcheck= -pyflakes=
