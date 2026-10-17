@@ -128,6 +128,7 @@ class PublicContract(unittest.TestCase):
             "_ProjectAttempt",
             "_ProjectResult",
             "_ProducerSpecification",
+            "_ProducerAttempt",
             "_BuildResult",
         ):
             with self.subTest(name=name):
@@ -771,10 +772,8 @@ class ResolvedSpecificationContract(unittest.TestCase):
                 artifact = yamaa.resolve_specification(source, environment=environment)
             self.assertEqual(artifact.to_dict()["environment"], environment.as_posix())
 
-    def test_two_studies_keep_producer_entry_bindings_used_by_domain(self):
-        with tempfile.TemporaryDirectory(
-            prefix="yamaa-resolved-producers-"
-        ) as temporary:
+    def test_two_studies_keep_schema_link_bindings_used_by_domain(self):
+        with tempfile.TemporaryDirectory(prefix="yamaa-resolved-links-") as temporary:
             root = Path(temporary).resolve()
             (root / "shared").mkdir()
             (root / "shared/producer.yaml").write_text(
@@ -806,22 +805,33 @@ class ResolvedSpecificationContract(unittest.TestCase):
                     encoding="utf-8",
                 )
                 artifact = yamaa.resolve_specification(study / "spec.yaml")
-                root_entry, producer = artifact.to_dict()["entries"]
-                self.assertEqual(
-                    root_entry["producers"], {"P": (study / "producer.yaml").as_posix()}
-                )
-                resource = next(
+                # A linked producer is type metadata, not a resolved entry.
+                (root_entry,) = artifact.to_dict()["entries"]
+                self.assertNotIn("producers", root_entry)
+                schema = next(
                     item
-                    for item in producer["resources"]
+                    for item in root_entry["resources"]
+                    if item["role"] == "producer_schema"
+                )
+                self.assertEqual(
+                    schema["location"]["path"], (study / "producer.yaml").as_posix()
+                )
+                source = next(
+                    item
+                    for item in root_entry["resources"]
                     if item["role"] == "input_data"
                 )
                 self.assertEqual(
-                    resource["location"]["path"], (study / "input/raw.csv").as_posix()
+                    source["location"]["path"],
+                    (study / "output/produced.csv").as_posix(),
                 )
+                # Callers build and save each study's producer first.
+                (study / "output").mkdir()
+                self.assertTrue(yamaa.domain(study / "producer.yaml").save())
                 result = yamaa.domain(study / "spec.yaml")
                 self.assertTrue(result.issues.is_empty(), result.issues)
                 self.assertEqual(result.output["ID"].to_list(), [identifier])
-                self.assertFalse((study / "output").exists())
+                self.assertFalse((study / "output/final.csv").exists())
 
     def test_owned_inspection_and_explicit_round_trip_without_sources_or_callbacks(
         self,

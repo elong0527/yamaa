@@ -54,39 +54,13 @@ pub struct Refusal {
     pub required: Option<usize>,
 }
 
-/// The actual graph node, borrowed only for the observer call. Ordinary requests
-/// have no graph node; a retained adapter already owns the graph's identities.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Node<'a> {
-    pub index: usize,
-    pub identity: &'a str,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Event<'a> {
-    Phase {
-        node: Option<Node<'a>>,
-        phase: Phase,
-    },
-    FunctionCall {
-        node: Option<Node<'a>>,
-        stage: CallStage,
-    },
-    Exit {
-        node: Option<Node<'a>>,
-        phase: Phase,
-        outcome: Outcome,
-    },
-    FunctionReturn {
-        node: Option<Node<'a>>,
-        stage: CallStage,
-        outcome: Outcome,
-    },
-    Refusal {
-        node: Option<Node<'a>>,
-        phase: Phase,
-        refusal: Refusal,
-    },
+pub enum Event {
+    Phase { phase: Phase },
+    FunctionCall { stage: CallStage },
+    Exit { phase: Phase, outcome: Outcome },
+    FunctionReturn { stage: CallStage, outcome: Outcome },
+    Refusal { phase: Phase, refusal: Refusal },
 }
 
 /// Observers have no failure result and must not mutate source/callback state,
@@ -94,12 +68,12 @@ pub enum Event<'a> {
 /// interior-mutability clocks without aliasing mutable execution/function ports.
 /// Returned failures retain the actual entered prefix; a panic may omit Finished.
 pub trait Observer {
-    fn observe(&self, event: Event<'_>);
+    fn observe(&self, event: Event);
 }
 
 pub struct Noop;
 impl Observer for Noop {
-    fn observe(&self, _: Event<'_>) {}
+    fn observe(&self, _: Event) {}
 }
 
 /// Every observed operation takes one scope; an unobserved caller passes
@@ -107,7 +81,6 @@ impl Observer for Noop {
 #[derive(Clone, Copy)]
 pub struct Scope<'a> {
     pub observer: &'a dyn Observer,
-    pub node: Option<Node<'a>>,
 }
 impl Default for Scope<'_> {
     fn default() -> Self {
@@ -116,36 +89,16 @@ impl Default for Scope<'_> {
 }
 impl<'a> Scope<'a> {
     pub fn new(observer: &'a dyn Observer) -> Self {
-        Self {
-            observer,
-            node: None,
-        }
-    }
-    pub fn for_node(self, index: usize, identity: &'a str) -> Self {
-        Self {
-            node: Some(Node { index, identity }),
-            ..self
-        }
+        Self { observer }
     }
     pub fn phase(self, phase: Phase) {
-        self.observer.observe(Event::Phase {
-            node: self.node,
-            phase,
-        });
+        self.observer.observe(Event::Phase { phase });
     }
     pub fn exit(self, phase: Phase, outcome: Outcome) {
-        self.observer.observe(Event::Exit {
-            node: self.node,
-            phase,
-            outcome,
-        });
+        self.observer.observe(Event::Exit { phase, outcome });
     }
     pub fn refusal(self, phase: Phase, refusal: Refusal) {
-        self.observer.observe(Event::Refusal {
-            node: self.node,
-            phase,
-            refusal,
-        });
+        self.observer.observe(Event::Refusal { phase, refusal });
     }
     pub(crate) fn activation<P: ActivationPort>(self, port: &mut P) -> Activation<'_, 'a, P> {
         Activation { port, scope: self }
@@ -178,12 +131,10 @@ impl<E> FunctionPort for Functions<'_, '_, E> {
     }
     fn call(&mut self, slot: usize, arguments: &[Argument<'_>]) -> Result<Value, HostError<E>> {
         self.scope.observer.observe(Event::FunctionCall {
-            node: self.scope.node,
             stage: CallStage::Dataset(self.phase.get()),
         });
         let result = self.port.call(slot, arguments);
         self.scope.observer.observe(Event::FunctionReturn {
-            node: self.scope.node,
             stage: CallStage::Dataset(self.phase.get()),
             outcome: Outcome::from_result(&result),
         });
@@ -222,12 +173,10 @@ impl<P: ActivationPort> ActivationPort for Activation<'_, '_, P> {
         arguments: &[Argument<'_>],
     ) -> Result<Value, HostError<P::Error>> {
         self.scope.observer.observe(Event::FunctionCall {
-            node: self.scope.node,
             stage: CallStage::Activation,
         });
         let result = self.port.invoke(handle, arguments);
         self.scope.observer.observe(Event::FunctionReturn {
-            node: self.scope.node,
             stage: CallStage::Activation,
             outcome: Outcome::from_result(&result),
         });

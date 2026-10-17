@@ -879,9 +879,9 @@ its neighbours with [window operations](windows.md), then derive each segment
 as an ordinary column. A second specification reduces the stored segments at
 the subject grain. Its input may declare
 `SEGS: {path: segments.csv, schema: segments.yaml}` under
-[INPUT-10](inputs.md#input-10); the producing specification
-completes before the consumer reads its artifact under
-[INPUT-10](inputs.md#input-10). For the linear trapezoid, the
+[INPUT-10](inputs.md#input-10); the caller builds and saves the
+producing specification before building the consumer, which reads the saved
+artifact. For the linear trapezoid, the
 producer's segment expression is `0.5 * (PREVC + AVAL) * (ARELTM - PREVT)`,
 and the consumer's reduction is `SUM(SEGS.SEG)`. A first sample's missing
 neighbour produces a missing segment, which `SUM` skips under

@@ -16,57 +16,8 @@ pub struct Domain {
     pub(crate) inner: Arc<Mutex<Build>>,
 }
 
-#[pyclass(frozen, module = "yamaa._native", name = "_ProducerAttempt")]
-pub struct Attempt {
-    inner: Arc<Mutex<Build>>,
-}
-
-impl Attempt {
-    fn get(&self) -> PyResult<std::sync::MutexGuard<'_, Build>> {
-        self.inner.try_lock().map_err(|_| {
-            pyo3::exceptions::PyRuntimeError::new_err(
-                "native producer handle is already borrowed or poisoned",
-            )
-        })
-    }
-}
-
 #[pymethods]
 impl Domain {
-    /// The public facade propagates control flow from this retained owner.
-    fn propagate_interrupt(&self, py: Python<'_>) -> PyResult<()> {
-        let interrupt = self
-            .inner
-            .try_lock()
-            .map_err(|_| poisoned())?
-            .producer_interrupt()
-            .and_then(|error| crate::function_callback::payload(py, error));
-        match interrupt {
-            Some(error) => Err(crate::function_callback::raise(py, error)),
-            None => Ok(()),
-        }
-    }
-    /// Private qualification borrows the actual retained whole attempt.
-    fn producer_attempt(&self, py: Python<'_>) -> PyResult<Option<Attempt>> {
-        let producer = self
-            .inner
-            .try_lock()
-            .map_err(|_| poisoned())?
-            .producer_nodes()
-            .is_some();
-        let _ = py;
-        Ok(producer.then(|| Attempt {
-            inner: Arc::clone(&self.inner),
-        }))
-    }
-    fn producer_projection_failure(&self) -> PyResult<Option<String>> {
-        Ok(self
-            .inner
-            .try_lock()
-            .map_err(|_| poisoned())?
-            .projection_failure()
-            .map(str::to_owned))
-    }
     fn preparation_sources<'py>(
         &self,
         py: Python<'py>,
@@ -85,14 +36,9 @@ impl Domain {
     fn project_failures(&self, py: Python<'_>) -> PyResult<Vec<(String, Py<PyAny>)>> {
         let _ = py;
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        let project = guard.project_failures().unwrap_or(&[]);
-        let producer = guard.producer_failures().unwrap_or(&[]);
-        let failures = if project.is_empty() {
-            producer
-        } else {
-            project
-        };
-        let failures = failures
+        let failures = guard
+            .project_failures()
+            .unwrap_or(&[])
             .iter()
             .filter_map(|failure| {
                 crate::function_callback::payload(py, &failure.error)
@@ -141,62 +87,6 @@ impl Domain {
     }
 }
 
-#[pymethods]
-impl Attempt {
-    fn accepted(&self) -> PyResult<bool> {
-        Ok(self.get()?.producer_accepted().unwrap_or(false))
-    }
-    fn entered_nodes(&self) -> PyResult<Vec<usize>> {
-        Ok(self.get()?.producer_nodes().unwrap_or(&[]).to_vec())
-    }
-    pub(crate) fn host_failures(&self, py: Python<'_>) -> PyResult<Vec<(String, Py<PyAny>)>> {
-        let _ = py;
-        let failures = self
-            .get()?
-            .producer_failures()
-            .unwrap_or(&[])
-            .iter()
-            .filter_map(|failure| {
-                crate::function_callback::payload(py, &failure.error)
-                    .map(|error| (failure.stage.to_owned(), error))
-            })
-            .collect();
-        Ok(failures)
-    }
-    pub(crate) fn propagate_interrupt(&self, py: Python<'_>) -> PyResult<()> {
-        let interrupt = self
-            .get()?
-            .producer_interrupt()
-            .and_then(|error| crate::function_callback::payload(py, error));
-        match interrupt {
-            Some(error) => Err(crate::function_callback::raise(py, error)),
-            None => Ok(()),
-        }
-    }
-    fn retained_sources<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<Vec<(String, Bound<'py, PyBytes>)>> {
-        let sources = self
-            .get()?
-            .producer_sources()
-            .into_iter()
-            .flatten()
-            .map(|(name, bytes)| (name.clone(), PyBytes::new(py, bytes)))
-            .collect();
-        Ok(sources)
-    }
-    /// Artifact bytes are evidence, including earlier accepted producer evidence
-    /// after a later failure. This class exposes no publisher or Save method.
-    fn artifact<'py>(&self, py: Python<'py>, node: usize) -> PyResult<Option<Bound<'py, PyBytes>>> {
-        let bytes = self
-            .get()?
-            .producer_artifact(node)
-            .map(|bytes| PyBytes::new(py, bytes));
-        Ok(bytes)
-    }
-}
-
 fn engine(py: Python<'_>, resolver: Option<Py<PyAny>>) -> Engine {
     let mut options =
         EngineOptions::new(HostLanguage::Python, "python".into(), py.version().into())
@@ -235,7 +125,7 @@ pub fn _domain_file(
         .inner
         .try_lock()
         .map_err(|_| poisoned())?
-        .project_interrupt()
+        .interrupt()
         .and_then(|error| crate::function_callback::payload(py, error));
     if let Some(error) = interrupt {
         return Err(crate::function_callback::raise(py, error));

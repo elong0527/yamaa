@@ -15,12 +15,11 @@ use yamaa_core::{
 mod sealed {
     pub trait Sealed {}
     impl Sealed for super::PreparedRun {}
-    impl Sealed for crate::file_producer_build::Provenance {}
     impl<T: super::ActivationView + ?Sized> Sealed for std::sync::Arc<T> {}
 }
 
-/// One retained activation context: ordinary selected calls or the complete
-/// consumed graph union. External callers cannot mix unrelated provenance.
+/// One retained activation context: the project run's selected calls.
+/// External callers cannot mix unrelated provenance.
 pub trait ActivationView: sealed::Sealed {
     fn called_functions(&self) -> &[usize];
     fn environment(&self) -> &ExecutionEnvironment;
@@ -46,17 +45,6 @@ impl ActivationView for PreparedRun {
     }
     fn captured_environment(&self) -> &CapturedEnvironment {
         self.captured_environment()
-    }
-}
-impl ActivationView for crate::file_producer_build::Provenance {
-    fn called_functions(&self) -> &[usize] {
-        self.metadata().called_functions()
-    }
-    fn environment(&self) -> &ExecutionEnvironment {
-        self.metadata().environment()
-    }
-    fn captured_environment(&self) -> &CapturedEnvironment {
-        self.environment()
     }
 }
 

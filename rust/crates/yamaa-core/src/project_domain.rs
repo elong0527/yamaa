@@ -78,7 +78,16 @@ pub fn check_owned(
     document: &SpecificationDocument,
     environment: ExecutionEnvironment,
 ) -> Result<CheckedOwnedProject, Box<RejectedOwnedProject>> {
-    match domain::check_with_environment(document, &environment) {
+    check_owned_linked(document, environment, Default::default())
+}
+/// Own the admitted environment beside a compilation that also admits the
+/// output contracts of linked producing specifications.
+pub fn check_owned_linked(
+    document: &SpecificationDocument,
+    environment: ExecutionEnvironment,
+    links: crate::producer_contract::Links<'_>,
+) -> Result<CheckedOwnedProject, Box<RejectedOwnedProject>> {
+    match domain::check_linked(document, Some(&environment), links) {
         Ok(checked) => Ok(CheckedOwnedProject {
             checked,
             environment,

@@ -78,23 +78,6 @@ pub(crate) fn resource_failure_from(
 ) -> Failure {
     with_source(resource_diagnostic(stage, error), Some(source))
 }
-/// A typed limit keeps its resource facts and, when known, its owning source.
-pub(crate) fn resource_limit_from(
-    stage: &str,
-    limit: &yamaa_core::limits::LimitExceeded,
-    source: Option<&str>,
-) -> Failure {
-    with_source(limit_diagnostic(stage, limit), source)
-}
-/// An internal graph invariant names its fixed reason and, when known, the
-/// source document; it never claims a language or resource cause.
-pub(crate) fn graph_boundary(stage: &str, reason: &str, source: Option<&str>) -> Failure {
-    let mut diagnostic = yamaa_core::application_issue::rejected(stage, "graph_boundary");
-    diagnostic
-        .context
-        .insert("reason".into(), Value::String(reason.into()));
-    with_source(diagnostic, source)
-}
 fn with_source(
     mut diagnostic: yamaa_core::diagnostic::Diagnostic,
     source: Option<&str>,
@@ -539,11 +522,6 @@ pub trait RuntimePort {
         prepared: Box<crate::file_project::FileProject>,
         scope: Scope<'_>,
     ) -> Result<Self::Result, Self::Error>;
-    fn producer(
-        &mut self,
-        prepared: Box<crate::file_graph::FileGraph>,
-        scope: Scope<'_>,
-    ) -> Result<Self::Result, Self::Error>;
 }
 pub enum ApplicationError<E> {
     Preparation(crate::file_workflow::SelectionError),
@@ -556,7 +534,6 @@ pub struct Application<R> {
 impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     type Plain = FileSpecification;
     type Project = Box<crate::file_project::FileProject>;
-    type Producer = Box<crate::file_graph::FileGraph>;
     type CheckResult = Failure;
     type BuildResult = R::Result;
     type Failure = ApplicationError<R::Error>;
@@ -580,10 +557,6 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
         Ok(crate::project_check::prepared(prepared.run())
             .unwrap_or_else(|_| rejected("check", "issue_projection")))
     }
-    fn check_producer(&mut self, prepared: Self::Producer) -> Result<Failure, Self::Failure> {
-        Ok(crate::producer_check::prepared(&prepared)
-            .unwrap_or_else(|_| rejected("check", "issue_projection")))
-    }
     fn build_plain(
         &mut self,
         prepared: FileSpecification,
@@ -600,15 +573,6 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
             .project(prepared, scope)
-            .map_err(ApplicationError::Runtime)
-    }
-    fn build_producer(
-        &mut self,
-        prepared: Self::Producer,
-        scope: Scope<'_>,
-    ) -> Result<R::Result, Self::Failure> {
-        self.runtime
-            .producer(prepared, scope)
             .map_err(ApplicationError::Runtime)
     }
 }
@@ -666,13 +630,6 @@ impl RuntimePort for Native<'_> {
         _: Scope<'_>,
     ) -> Result<Domain, Failure> {
         Err(unsupported("environment", Some("environment")))
-    }
-    fn producer(
-        &mut self,
-        _: Box<crate::file_graph::FileGraph>,
-        _: Scope<'_>,
-    ) -> Result<Domain, Failure> {
-        Err(unsupported("producer_host", None))
     }
 }
 

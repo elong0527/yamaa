@@ -30,6 +30,18 @@ both its data path and producer `schema` link; output settings cover all logs
 and the primary artifact.
 There is no upward project-root discovery.
 
+An input's `schema` link names the producing specification whose output columns
+and declared types type a stored artifact. The link is metadata only: the
+consumer never runs its producer. Build and save the producer first; the
+consumer then reads the artifact at its own `path` like any other input, and
+refuses a stored header or Parquet schema that differs from the producer's
+output columns.
+
+```python
+yamaa.domain("dm.yaml").save()
+built = yamaa.domain("suppdm.yaml")
+```
+
 ## Host resources
 
 Pass `resolver=` to `domain` or `check` to supply metadata, study inputs and
@@ -65,7 +77,8 @@ truncation require an explicit preserving conversion by the host.
 For another backend, wrap a callback in `ResourceResolver`. It receives a frozen
 `ResourceRequest` and returns `ResourceResult` or raises a classified
 `ResourceFailure`. Logical declaring locations begin at `/`; later requests
-retain each metadata or producer entry's own location. The operation contract is:
+retain each metadata document's own location, including a linked producing
+specification's. The operation contract is:
 
 | Operation | Result |
 | --- | --- |
@@ -78,7 +91,7 @@ retain each metadata or producer entry's own location. The operation contract is
 
 Abort is idempotent and must also accept a target reference when Stage raises
 before returning a token. Save preflights every target and publishes logs before
-primary output, and producers before consumers. A later failure keeps the completed
+primary output. A later failure keeps the completed
 prefix and cleans the current provisional object. Source resources are never
 reopened at Save. Original callback exceptions and interrupts propagate after
 cleanup, including errors raised while exporting a frame.
@@ -108,8 +121,9 @@ output:
 ```
 
 Each study's entry inherits that parent. `save()` publishes its held bytes at
-the selected study destinations without rerunning the build. A producer linked
-through `schema` uses its own entry file, which may also inherit shared code.
+the selected study destinations without rerunning the build. A producing
+specification linked through `schema` is read from its own file, which may also
+inherit shared code; build and save it as its own entry before the consumer.
 
 Inputs can use CSV, Parquet, SAS datasets (`.sas7bdat`), or SAS Transport v5/v8
 (`.xpt`). SAS inputs explicitly declare `encoding`, for example
@@ -177,7 +191,7 @@ held bytes, without rereading inputs or rerunning callbacks. A failed build has
 no accepted output and Save raises `yamaa.DomainError`; a diagnostic verification
 sidecar can still be publishable. An operational publication failure returns
 `False` and remains in issues. Publication preflights targets, then writes the
-ordered producer/log/output set. Replacement is atomic for each file; completed
+ordered log/output set. Replacement is atomic for each file; completed
 writes remain if a later target fails. There is no whole-run file rollback.
 
 ## Resolved specification inspection
@@ -191,8 +205,9 @@ restored = yamaa.ResolvedSpecification.from_json(serialized)
 
 The [resolved artifact format](../rust/README.md#resolved-specification-artifact)
 records the complete composed normalized model, field origins and each resource's
-declaring source, selected base, authored spelling and location. Linked producers
-have their own entries. Resolution uses the same metadata preparation as direct
+declaring source, selected base, authored spelling and location. A linked
+producing specification is a `producer_schema` resource of its consumer, not a
+separate entry. Resolution uses the same metadata preparation as direct
 compilation and accepts the same optional `environment`; it invokes no callbacks.
 Missing study data and nonexistent output directories can be inspected. Missing
 required metadata still raises `ResolvedSpecificationError` with `issues` and

@@ -1,7 +1,7 @@
 //! Measurements captured during the original application. Reading them
 //! later never runs a source, function, serializer or publisher again.
 use serde::Serialize;
-use std::{collections::BTreeMap, sync::Mutex, time::Instant};
+use std::{sync::Mutex, time::Instant};
 use yamaa_core::{
     application_observer::{CallStage, Event, Observer, Outcome, Phase},
     dataset::ExecutionPhase,
@@ -40,13 +40,7 @@ struct Calls {
     observed: bool,
 }
 #[derive(Serialize)]
-struct Node {
-    index: usize,
-    identity: String,
-}
-#[derive(Serialize)]
 struct Record {
-    node: Option<usize>,
     phase: &'static str,
     entered_ns: u64,
     completed_ns: Option<u64>,
@@ -61,7 +55,6 @@ struct Save {
 }
 #[derive(Serialize)]
 struct Refusal {
-    node: Option<usize>,
     phase: &'static str,
     resource: &'static str,
     limit: usize,
@@ -72,9 +65,8 @@ fn resource_name(resource: yamaa_core::dataset::Resource) -> &'static str {
 }
 
 struct State {
-    nodes: Vec<Node>,
     records: Vec<Record>,
-    calls: BTreeMap<Option<usize>, [Calls; 6]>,
+    calls: [Calls; 6],
     refused: Option<&'static str>,
     finished: bool,
     accepted: Option<bool>,
@@ -96,9 +88,8 @@ impl Measurements {
         Self {
             origin: Instant::now(),
             state: Mutex::new(State {
-                nodes: Vec::new(),
                 records: Vec::new(),
-                calls: BTreeMap::new(),
+                calls: [Calls::default(); 6],
                 refused: None,
                 finished: false,
                 accepted: None,
@@ -135,8 +126,7 @@ impl Measurements {
         }
         if state
             .calls
-            .values()
-            .flatten()
+            .iter()
             .any(|calls| calls.entered != calls.succeeded.saturating_add(calls.failed))
         {
             state
@@ -187,15 +177,15 @@ impl Measurements {
     }
     pub fn evidence(&self) -> yamaa_core::json::Value {
         let state = self.state();
-        let callback_counts=state.calls.iter().filter(|(node, _)| node.is_some()).chain(state.calls.iter().filter(|(node, _)| node.is_none())).flat_map(|(node,stages)|stages.iter().enumerate().filter(|(_,calls)|calls.observed).map(move |(stage,calls)|crate::json!({
-            "node":node,"stage":(["activation","execution_admission","execution_derivation","output_keys","verification","execution_finished"][stage]),
+        let callback_counts=state.calls.iter().enumerate().filter(|(_,calls)|calls.observed).map(|(stage,calls)|crate::json!({
+            "stage":(["activation","execution_admission","execution_derivation","output_keys","verification","execution_finished"][stage]),
             "entered":calls.entered,"succeeded":calls.succeeded,"failed":calls.failed
-        }))).collect::<Vec<_>>();
+        })).collect::<Vec<_>>();
         crate::json!({"protocol":"application-measurements/1", "clock":{"provider":"std::time::Instant","unit":"nanoseconds","origin":"owner-local monotonic origin immediately before original application entry"},
             "types":{"offsets":"uint64 nanoseconds since owner origin","function_counts":"uint64 actual calls","resource_counts":"usize; required null preserves original overflow/absence"},
             "classified_refusals":state.refusals,
             "admitted":state.refused.is_none() && state.finished && state.accepted.is_some() && state.saves.iter().all(|save|save.completed_ns.is_some()),"refusal":state.refused,"original_execution_finished":state.finished,"build_accepted":state.accepted,
-            "nodes":state.nodes,"stages":state.records,"function_calls":callback_counts,"save_attempts":state.save_attempts,"saves":state.saves})
+            "stages":state.records,"function_calls":callback_counts,"save_attempts":state.save_attempts,"saves":state.saves})
     }
     pub fn envelope(&self, report: Option<String>) -> String {
         #[derive(Serialize)]
@@ -217,65 +207,39 @@ impl Measurements {
     }
 }
 impl Observer for Measurements {
-    fn observe(&self, event: Event<'_>) {
+    fn observe(&self, event: Event) {
         let mut state = self.state();
         if state.refused.is_some() {
             return;
         }
-        let node = match event {
-            Event::Phase { node, .. }
-            | Event::FunctionCall { node, .. }
-            | Event::Exit { node, .. }
-            | Event::FunctionReturn { node, .. }
-            | Event::Refusal { node, .. } => node,
-        };
-        if let Some(node) = node {
-            if let Some(held) = state.nodes.iter().find(|held| held.index == node.index) {
-                if held.identity != node.identity {
-                    state.refused = Some("node_identity_changed");
-                    return;
-                }
-            } else {
-                state.nodes.push(Node {
-                    index: node.index,
-                    identity: node.identity.to_owned(),
-                });
-            }
-        }
-        let index = node.map(|node| node.index);
         match event {
-            Event::Phase { phase, .. } => {
+            Event::Phase { phase } => {
                 let Some(now) = self.now(&mut state) else {
                     return;
                 };
                 if phase == Phase::Finished {
-                    if node.is_none() {
-                        state.finished = true;
-                    }
+                    state.finished = true;
                     return;
                 }
                 if phase == Phase::Dataset(ExecutionPhase::Finished) {
                     return;
                 }
                 state.records.push(Record {
-                    node: node.map(|node| node.index),
                     phase: phase_name(phase),
                     entered_ns: now,
                     completed_ns: None,
                     outcome: None,
                 });
                 match phase {
-                    Phase::Activation => state.calls.entry(index).or_default()[0].observed = true,
+                    Phase::Activation => state.calls[0].observed = true,
                     Phase::Dataset(phase) => {
-                        state.calls.entry(index).or_default()
-                            [stage_index(CallStage::Dataset(phase))]
-                        .observed = true
+                        state.calls[stage_index(CallStage::Dataset(phase))].observed = true
                     }
                     _ => {}
                 }
             }
-            Event::FunctionCall { stage, .. } => {
-                let calls = &mut state.calls.entry(index).or_default()[stage_index(stage)];
+            Event::FunctionCall { stage } => {
+                let calls = &mut state.calls[stage_index(stage)];
                 calls.observed = true;
                 if let Some(count) = calls.entered.checked_add(1) {
                     calls.entered = count;
@@ -283,14 +247,12 @@ impl Observer for Measurements {
                     state.refused = Some("function_count_capacity");
                 }
             }
-            Event::Exit { phase, outcome, .. } => {
+            Event::Exit { phase, outcome } => {
                 let Some(now) = self.now(&mut state) else {
                     return;
                 };
                 if let Some(record) = state.records.iter_mut().rev().find(|record| {
-                    record.node == node.map(|node| node.index)
-                        && record.phase == phase_name(phase)
-                        && record.completed_ns.is_none()
+                    record.phase == phase_name(phase) && record.completed_ns.is_none()
                 }) {
                     record.completed_ns = Some(now);
                     record.outcome = Some(match outcome {
@@ -301,8 +263,8 @@ impl Observer for Measurements {
                     state.refused = Some("stage_entry_unavailable");
                 }
             }
-            Event::FunctionReturn { stage, outcome, .. } => {
-                let calls = &mut state.calls.entry(index).or_default()[stage_index(stage)];
+            Event::FunctionReturn { stage, outcome } => {
+                let calls = &mut state.calls[stage_index(stage)];
                 let counter = match outcome {
                     Outcome::Succeeded => &mut calls.succeeded,
                     Outcome::Failed => &mut calls.failed,
@@ -313,9 +275,8 @@ impl Observer for Measurements {
                     state.refused = Some("function_count_capacity");
                 }
             }
-            Event::Refusal { phase, refusal, .. } => {
+            Event::Refusal { phase, refusal } => {
                 state.refusals.push(Refusal {
-                    node: node.map(|node| node.index),
                     phase: phase_name(phase),
                     resource: resource_name(refusal.resource),
                     limit: refusal.limit,
@@ -340,11 +301,9 @@ mod tests {
         scope.phase(Phase::Dataset(ExecutionPhase::Derivation));
         for _ in 0..100_000 {
             measurements.observe(Event::FunctionCall {
-                node: None,
                 stage: CallStage::Dataset(ExecutionPhase::Derivation),
             });
             measurements.observe(Event::FunctionReturn {
-                node: None,
                 stage: CallStage::Dataset(ExecutionPhase::Derivation),
                 outcome: Outcome::Succeeded,
             });
@@ -374,7 +333,6 @@ mod tests {
         let scope = Scope::new(&measurements);
         scope.phase(Phase::Dataset(ExecutionPhase::Derivation));
         measurements.observe(Event::FunctionCall {
-            node: None,
             stage: CallStage::Dataset(ExecutionPhase::Derivation),
         });
         scope.exit(Phase::Dataset(ExecutionPhase::Derivation), Outcome::Failed);
@@ -390,17 +348,10 @@ mod tests {
         let _ = Scope::new(&Noop);
     }
     #[test]
-    fn complete_observations_keep_all_nodes_stages_identities_and_save_attempts() {
+    fn complete_observations_keep_all_stages_and_save_attempts() {
         let measurements = Measurements::new();
         let scope = Scope::new(&measurements);
-        let long_identity = "é".repeat(524_289);
-        for index in 0..65 {
-            let identity = if index == 64 {
-                &long_identity
-            } else {
-                "ordinary-node"
-            };
-            let scope = scope.for_node(index, identity);
+        for _ in 0..65 {
             scope.phase(Phase::Activation);
             scope.exit(Phase::Activation, Outcome::Succeeded);
         }
@@ -416,10 +367,10 @@ mod tests {
         }
         let evidence = measurements.evidence();
         assert_eq!(evidence["admitted"], true);
-        assert_eq!(evidence["nodes"].as_array().unwrap().len(), 65);
-        assert_eq!(evidence["nodes"][64]["identity"], long_identity);
-        assert_eq!(evidence["function_calls"].as_array().unwrap().len(), 65);
-        assert_eq!(evidence["function_calls"][64]["node"], 64);
+        assert!(evidence["nodes"].is_null());
+        assert_eq!(evidence["function_calls"].as_array().unwrap().len(), 1);
+        assert_eq!(evidence["function_calls"][0]["stage"], "activation");
+        assert!(evidence["function_calls"][0]["node"].is_null());
         assert_eq!(evidence["stages"].as_array().unwrap().len(), 1090);
         assert_eq!(evidence["save_attempts"], 17);
         assert_eq!(evidence["saves"].as_array().unwrap().len(), 17);
