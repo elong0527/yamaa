@@ -351,15 +351,23 @@ class ExactCoverage(unittest.TestCase):
             gate.verify(api, NUMBER, publish=True)
         self.assertEqual([v.state for v in api.published], ["pending", "failure"])
 
-    def test_closed_wrong_repository_and_non_main_pulls_do_not_publish(self):
+    def test_closed_wrong_repository_and_non_target_pulls_do_not_publish(self):
         for value in [
             pull(state="closed"),
             pull(branch="release"),
+            pull(branch="release/next"),
+            pull(branch="release/1.0.0/extra"),
+            pull(branch="review/1-base"),
             pull(repository_id=123),
         ]:
             api = Evidence(pulls=[value])
             self.assertIsNone(gate.verify(api, NUMBER, publish=True))
             self.assertEqual(api.published, [])
+
+    def test_release_branch_pulls_are_verified_like_main_pulls(self):
+        api = Evidence(pulls=[pull(branch="release/1.0.0")])
+        self.assertEqual(gate.verify(api, NUMBER).state, "success")
+        self.assertEqual(api.published, [])
 
 
 class CompletePagination(unittest.TestCase):
