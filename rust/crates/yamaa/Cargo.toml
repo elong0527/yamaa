@@ -23,8 +23,8 @@ yamaa-adapters = { path = "../yamaa-adapters", default-features = false }
 yamaa-core = { path = "../yamaa-core" }
 # Table representation and host transfer only. These edges select no physical
 # reader; format admission stays behind the forwarded features above.
-arrow-array = { version = "=60.0.0", default-features = false, features = ["ffi"] }
-arrow-schema = { version = "=60.0.0", default-features = false }
+arrow-array = { version = "=57.3.0", default-features = false, features = ["ffi"] }
+arrow-schema = { version = "=57.3.0", default-features = false }
 
 [lints]
 workspace = true
