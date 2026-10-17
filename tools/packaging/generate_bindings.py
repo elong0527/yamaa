@@ -467,6 +467,29 @@ def _split_default(text):
     return text, None
 
 
+def _split_top_level(text):
+    """Split ``text`` on commas at angle-bracket/paren depth zero.
+
+    Generic types such as ``HashMap<String, i32>`` contain commas that do
+    not separate arguments.
+    """
+    parts = []
+    depth = 0
+    current = []
+    for char in text:
+        if char in "<([{":
+            depth += 1
+        elif char in ">)]}":
+            depth -= 1
+        if char == "," and depth == 0:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+    parts.append("".join(current))
+    return parts
+
+
 def _python_args(args, definition, classes):
     rendered = []
     for name, spec in (args or {}).items():
@@ -654,7 +677,7 @@ def _reconcile_r(definition):
         for match in pattern.finditer(source):
             name, arguments, returns = match.groups()
             args = []
-            for argument in arguments.split(","):
+            for argument in _split_top_level(arguments):
                 if not argument.strip():
                     continue
                 key, separator, kind = argument.partition(":")
