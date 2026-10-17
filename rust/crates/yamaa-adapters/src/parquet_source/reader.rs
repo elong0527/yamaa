@@ -547,6 +547,30 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_known_boolean_page_header_field_with_another_wire_type_is_malformed() {
+        // A PLAIN dictionary page {a, ab}, then an RLE_DICTIONARY data page
+        // [a, ab]. The native page reader unwraps a known boolean's value, so
+        // an i32 DictionaryPageHeader.is_sorted must be refused as malformed
+        // rather than panic; false is the control.
+        let indices = [1, 3, 2]; // bit width 1; one bit-packed group 0, 1
+        let mut data = data_page(2, &indices);
+        let encoding = data.len() - indices.len() - 7;
+        data[encoding] = 16; // RLE_DICTIONARY in place of DELTA_BYTE_ARRAY
+        for (sorted, valid) in [(&[0x15u8, 0][..], false), (&[0x12][..], true)] {
+            // DICTIONARY_PAGE; both sizes 11; header: 2 values, PLAIN
+            let mut dictionary = vec![0x15, 4, 0x15, 22, 0x15, 22, 0x4c, 0x15, 4, 0x15, 0];
+            dictionary.extend(sorted);
+            dictionary.extend([0, 0, 1, 0, 0, 0, b'a', 2, 0, 0, 0, b'a', b'b']);
+            let decoded = read(&container(0, 2, 2, 0, &[dictionary, data.clone()]));
+            if valid {
+                assert_eq!(strings(&decoded.unwrap()), [Some("a"), Some("ab")]);
+            } else {
+                assert_eq!(decoded.unwrap_err(), Error::Malformed);
+            }
+        }
+    }
+
     /// Unknown fields that parquet 57.3.0's skip cannot step over as held,
     /// beginning with `set`, the header of the first field (a set):
     /// set<bool>{true, false}, map<byte, bool>{-1: true}, a UUID, list<uuid>
