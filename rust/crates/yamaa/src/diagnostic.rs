@@ -1,12 +1,16 @@
 //! Facade-owned diagnostics: typed records, never JSON text or tuples.
 //!
 //! This is the public form of the adapter issue rows (phase, condition,
-//! requirement, spec paths, context). Severity is error for every record the
-//! portable shape carries today: only error-severity findings become issue
-//! rows, while warning-severity findings surface as log tables. The
-//! structured context work enriches `DiagnosticContext` contents without
-//! changing this shape. The original context text is retained privately so
-//! host conversion stays byte-identical; the public shape is the value map.
+//! requirement, spec paths, structured context and optional geometry).
+//! Severity is error for every record the portable shape carries today: only
+//! error-severity findings become issue rows, while warning-severity findings
+//! surface as log tables. Context numbers keep their exact identity: an
+//! integer token wider than both 64-bit machine types keeps its decimal
+//! spelling instead of passing through binary64. The original context text is
+//! retained privately so host data-frame conversion stays byte-identical; the
+//! public shape is the value map. Geometry is optional, and absent means
+//! unavailable: a present zero-width span or a present empty route is a
+//! recorded fact, never a default.
 
 use std::collections::BTreeMap;
 
@@ -18,14 +22,32 @@ pub enum Severity {
     Warning,
 }
 
+/// Half-open UTF-8 byte offsets into the original expression text.
+///
+/// Present only when the failure site recorded geometry; `start == end == 0`
+/// is a real zero-width span at the first byte, not an absent span.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SourceSpan {
+    pub start: usize,
+    pub end: usize,
+}
+
 /// A structured diagnostic context value, the public form of the JSON value.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextValue {
     Null,
     Bool(bool),
+    /// An integer token within the signed 64-bit range.
     Int(i64),
+    /// An integer token above `i64::MAX` within the unsigned 64-bit range.
     Uint(u64),
+    /// A number token no machine type here holds exactly, kept as its exact
+    /// spelling: an integer outside both 64-bit ranges, or a fraction or
+    /// exponent token outside binary64's finite range.
+    Wide(String),
+    /// A fraction or exponent token, as binary64.
     Float(f64),
     Text(String),
     List(Vec<ContextValue>),
@@ -38,14 +60,20 @@ fn context_value_from_core(value: &yamaa_core::json::Value) -> ContextValue {
         Value::Null => ContextValue::Null,
         Value::Bool(value) => ContextValue::Bool(*value),
         Value::Number(value) => {
-            if let Some(number) = value.as_i64() {
-                ContextValue::Int(number)
-            } else if let Some(number) = value.as_u64() {
-                ContextValue::Uint(number)
+            // Integer tokens never pass through binary64: an integer that
+            // fits neither 64-bit type keeps its spelling.
+            if value.is_integer() {
+                if let Some(number) = value.as_i64() {
+                    ContextValue::Int(number)
+                } else if let Some(number) = value.as_u64() {
+                    ContextValue::Uint(number)
+                } else {
+                    ContextValue::Wide(value.as_str().to_owned())
+                }
             } else if let Some(number) = value.as_f64() {
                 ContextValue::Float(number)
             } else {
-                ContextValue::Text(value.as_str().to_owned())
+                ContextValue::Wide(value.as_str().to_owned())
             }
         }
         Value::String(value) => ContextValue::Text(value.clone()),
@@ -122,6 +150,12 @@ pub struct Diagnostic {
     pub requirement: Option<String>,
     pub spec_path: Vec<String>,
     pub context: DiagnosticContext,
+    /// Byte span in the original expression, when the failure site recorded one.
+    pub source_span: Option<SourceSpan>,
+    /// Operand steps from the expression root to the failing node, in recorded
+    /// order, when the failure site recorded them. A present empty route is a
+    /// failure at the root, not an absent route.
+    pub operand_route: Option<Vec<String>>,
 }
 
 impl Diagnostic {
@@ -133,6 +167,11 @@ impl Diagnostic {
             requirement: issue.requirement.clone(),
             spec_path: issue.spec_paths.clone(),
             context: DiagnosticContext::from_issue(issue),
+            source_span: issue.source_span.map(|span| SourceSpan {
+                start: span.start,
+                end: span.end,
+            }),
+            operand_route: issue.operand_route.clone(),
         }
     }
 }
@@ -173,16 +212,15 @@ mod tests {
     // under test is a pure field mapping, so registry membership is
     // irrelevant here; tests/diagnostic_records.rs covers real registry
     // diagnostics end to end through the public Engine API.
+    const CONTEXT: &str = r#"{"beyond":18446744073709551615,"maximum":9223372036854775807,"minimum":-9223372036854775808,"ratio":1.5,"values":[null,"é🙂",true],"wide":[-18446744073709551617,340282366920938463463374607431768211456]}"#;
+
     fn issue() -> yamaa_adapters::issue_rows::Issue {
         yamaa_adapters::issue_rows::Issue {
             phase: "input".into(),
             condition: "conversion_probe".into(),
             requirement: None,
             spec_paths: vec!["columns.A".into()],
-            context: yamaa_adapters::json_wire::decode(
-                r#"{"maximum":9223372036854775807,"minimum":-9223372036854775808,"values":[null,"é🙂",true]}"#,
-            )
-            .unwrap(),
+            context: yamaa_adapters::json_wire::decode(CONTEXT).unwrap(),
             source_span: None,
             operand_route: None,
         }
@@ -199,10 +237,7 @@ mod tests {
         assert_eq!(diagnostic.code, "conversion_probe");
         assert_eq!(diagnostic.requirement.as_deref(), None);
         assert_eq!(diagnostic.spec_path, ["columns.A"]);
-        assert_eq!(
-            diagnostic.context.to_json(),
-            r#"{"maximum":9223372036854775807,"minimum":-9223372036854775808,"values":[null,"é🙂",true]}"#
-        );
+        assert_eq!(diagnostic.context.to_json(), CONTEXT);
         assert_eq!(
             diagnostic.context.get("minimum"),
             Some(&ContextValue::Int(i64::MIN))
@@ -212,6 +247,23 @@ mod tests {
             Some(&ContextValue::Int(i64::MAX))
         );
         assert_eq!(
+            diagnostic.context.get("beyond"),
+            Some(&ContextValue::Uint(u64::MAX))
+        );
+        assert_eq!(
+            diagnostic.context.get("ratio"),
+            Some(&ContextValue::Float(1.5))
+        );
+        // Integers outside both 64-bit ranges keep their exact spelling and
+        // stay numbers, never text and never a rounded binary64.
+        assert_eq!(
+            diagnostic.context.get("wide"),
+            Some(&ContextValue::List(vec![
+                ContextValue::Wide("-18446744073709551617".into()),
+                ContextValue::Wide("340282366920938463463374607431768211456".into()),
+            ]))
+        );
+        assert_eq!(
             diagnostic.context.get("values"),
             Some(&ContextValue::List(vec![
                 ContextValue::Null,
@@ -219,9 +271,42 @@ mod tests {
                 ContextValue::Bool(true),
             ]))
         );
-        assert_eq!(diagnostic.context.len(), 3);
+        assert_eq!(diagnostic.context.len(), 6);
         assert!(!diagnostic.context.is_empty());
         assert!(diagnostic.context.get("absent").is_none());
+        assert_eq!(diagnostic.source_span, None);
+        assert_eq!(diagnostic.operand_route, None);
+    }
+
+    #[test]
+    fn present_zero_geometry_differs_from_absent_geometry() {
+        let mut zero = issue();
+        zero.source_span = Some(yamaa_core::numeric_parser::SourceSpan { start: 0, end: 0 });
+        zero.operand_route = Some(Vec::new());
+        let mut located = issue();
+        located.source_span = Some(yamaa_core::numeric_parser::SourceSpan { start: 3, end: 9 });
+        located.operand_route = Some(vec!["left".into(), "argument:1".into()]);
+        let report = Report::from_issues(&[issue(), zero, located]);
+        let [absent, zero, located] = report.diagnostics.as_slice() else {
+            panic!("three diagnostics");
+        };
+        assert_eq!(absent.source_span, None);
+        assert_eq!(absent.operand_route, None);
+        let span = zero.source_span.expect("recorded zero-width span");
+        assert_eq!((span.start, span.end), (0, 0));
+        assert_eq!(zero.operand_route.as_deref(), Some(&[][..]));
+        let span = located.source_span.expect("recorded span");
+        assert_eq!((span.start, span.end), (3, 9));
+        assert_eq!(
+            located.operand_route.as_deref(),
+            Some(&["left".to_owned(), "argument:1".to_owned()][..])
+        );
+        assert_ne!(absent, zero);
+        assert_ne!(zero, located);
+        // Geometry never changes the retained context text.
+        for diagnostic in [absent, zero, located] {
+            assert_eq!(diagnostic.context.to_json(), CONTEXT);
+        }
     }
 
     #[test]

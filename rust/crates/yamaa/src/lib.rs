@@ -36,7 +36,7 @@ pub mod table;
 mod internal;
 
 pub use cancel::CancellationToken;
-pub use diagnostic::{ContextValue, Diagnostic, DiagnosticContext, Report, Severity};
+pub use diagnostic::{ContextValue, Diagnostic, DiagnosticContext, Report, Severity, SourceSpan};
 pub use engine::{
     AttemptFailure, Build, DefineArtifact, DefineBuild, DefineRequest, Engine, EngineOptions,
     Request, ResolvedSpecification, SaveOutcome, SourceBytes,
