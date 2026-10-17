@@ -14,7 +14,7 @@ status: normative
 
 **REQ-0309.** `date_diff`, `study_day`, `date_impute`, `date_precision`,
 `datetime_impute`, `datetime_precision`, `to_date`, `date_shift`,
-`datetime_diff`, `datetime_shift`, `duration_value`, and `duration_text` use the input contracts
+`datetime_diff`, `datetime_shift`, and `duration_value` use the input contracts
 below; [Temporal values](../values/temporal.md) defines the values themselves.
 
 ### Partial collected dates
@@ -201,7 +201,6 @@ nests these operations. Their input and result types are:
 | `datetime_diff` | `start` and `end` are `datetime`; declared elapsed unit | `int` seconds or `float` minutes, hours or days |
 | `datetime_shift` | `source` is `datetime`; numeric `amount`; declared elapsed unit | `datetime` |
 | `duration_value` | `source` is duration text; declared elapsed unit | `int` whole seconds or `float` |
-| `duration_text` | numeric `source`; declared elapsed unit | `str` |
 
 <a id="req-1187"></a>
 
@@ -339,30 +338,6 @@ handler; without it, the condition `invalid_duration_text` is fatal on the
 | `expressions.duration_value.unit` | Numeric result unit: second, minute, hour or day. |
 | `expressions.duration_value.invalid` | Literal result for invalid or out-of-range duration text; null gives missing. |
 | `Result` | Signed numeric duration in the declared elapsed unit. |
-
-<a id="req-1302"></a>
-
-**REQ-1302.** `duration_text` writes a numeric duration as canonical ISO 8601
-text. The declared elapsed unit gives the meaning of the input number.
-Integer inputs are scaled exactly; float inputs are scaled to seconds as
-binary64 and use that result's shortest round-trip decimal spelling, expanded
-without exponent notation. Split the seconds into days, hours, minutes and
-seconds with days as the largest unit, omit zero components, and omit `T`
-when there is no time component. Zero, including negative zero, is `PT0S`.
-A negative duration has a single leading `-`. Fractional seconds use a dot
-and omit trailing zeros. For example, 93780 seconds is `P1DT2H3M`, 26 hours
-is `P1DT2H`, and -0.25 hours is `-PT15M`. Reading the written duration in
-its original unit preserves whole-second inputs within the numeric range.
-No duration column type or calendar-year/month interpretation is introduced.
-A missing source returns missing; a non-numeric source fails validation as
-`incompatible_input_type`. A float whose scaling is non-finite fails at
-build as `conversion_failed` on the `convert` stage.
-
-| Field | Meaning |
-| --- | --- |
-| `expressions.duration_text.source` | Signed numeric literal or variable to format. |
-| `expressions.duration_text.unit` | Input number's elapsed unit: second, minute, hour or day. |
-| `Result` | Canonical ISO 8601 duration text with days as the largest unit. |
 
 ### Whole calendar units
 

@@ -1,7 +1,8 @@
 # Numeric Functions
 
-**Goal:** apply `CEIL`, `FLOOR`, `TRUNC`, `EXP`, `MOD`,
-`GREATEST`, `LEAST`, and `COALESCE` to carried values.
+**Goal:** apply `CEIL`, `FLOOR`, `TRUNC`, `EXP`, and `MOD` to
+carried values, and choose the largest, the smallest, and the first
+present of the carried whole numbers.
 
 **Input:** subject-level records carrying `AVAL` as a decimal
 number and `BVAL` and `CVAL` as whole numbers, each copied to the

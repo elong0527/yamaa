@@ -203,7 +203,6 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
         Expression::Intermediate { index, .. } => visitor(*index),
         Expression::SourceBinding { source, .. }
         | Expression::MappingCut { source, .. }
-        | Expression::StrContains { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }

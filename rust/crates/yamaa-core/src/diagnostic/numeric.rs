@@ -73,7 +73,6 @@ impl ArithmeticErrorKind {
             Self::DivisionByZero => ConditionCode::DivisionByZero,
             Self::SqrtOfNegative => ConditionCode::SqrtOfNegative,
             Self::LnOfNonpositive => ConditionCode::LnOfNonpositive,
-            Self::InvalidRoundingDigits => ConditionCode::RoundingDigitsType,
             Self::InvalidPower { .. } => ConditionCode::InvalidPower,
         }
     }
@@ -110,10 +109,6 @@ impl NumericCondition {
                 context.insert("source".into(), text(identifier));
                 context.insert("expected".into(), text("numeric"));
                 context.insert("actual".into(), text(type_name(*actual)));
-            }
-            Self::Arithmetic(ArithmeticErrorKind::InvalidRoundingDigits) => {
-                context.insert("expected".into(), text("int"));
-                context.insert("actual".into(), text("float"));
             }
             Self::Arithmetic(ArithmeticErrorKind::InvalidPower {
                 base_bits,
@@ -183,7 +178,6 @@ impl<E> CompiledEvaluationError<E> {
                         Operand::Unary => "unary".into(),
                         Operand::Left => "left".into(),
                         Operand::Right => "right".into(),
-                        Operand::Argument(index) => format!("argument:{index}"),
                     })
                     .collect(),
             ),

@@ -2168,7 +2168,7 @@ mod execution {
         }
 
         #[test]
-        fn only_is_eager_and_retains_complete_group_context_before_outer_coalesce() {
+        fn only_is_eager_and_retains_complete_group_context_behind_outer_missing() {
             let source = table(vec![
                 vec![Value::Int(1), Value::Missing],
                 vec![Value::Int(1), Value::Missing],
@@ -2183,7 +2183,7 @@ mod execution {
                         assignment(
                             1,
                             aggregate(
-                                "COALESCE(1, ONLY(D.V))",
+                                "NULL + ONLY(D.V)",
                                 AggregateRelation::CurrentGroup,
                                 &[("D.V", 1)],
                                 AggregatePhase::RowConstruction,
@@ -2227,7 +2227,7 @@ mod execution {
             assert_eq!(
                 diagnostic.context,
                 [
-                    ("expr".into(), V::String("COALESCE(1, ONLY(D.V))".into())),
+                    ("expr".into(), V::String("NULL + ONLY(D.V)".into())),
                     ("reducer".into(), V::String("ONLY".into())),
                     (
                         "record_count".into(),

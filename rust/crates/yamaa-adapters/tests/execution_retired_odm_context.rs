@@ -1082,26 +1082,6 @@ rows:
         }
 
         #[test]
-        fn contains_reads_lookup_and_preserves_boolean_conversion_diagnostic() {
-            for row_derivation in [false, true] {
-                let study = Study::new(&specification(
-                    "{str_contains: {source: DOSE.EXSPID, pattern: '^PER'}}",
-                    "str",
-                    row_derivation,
-                ));
-                let result = study.run();
-                let issues = result.issues();
-                assert_eq!(issues.len(), 1, "{issues:?}");
-                for issue in issues {
-                    assert_eq!(issue.condition, "conversion_failed");
-                    assert_eq!(issue.requirement.as_deref(), Some("REQ-0013"));
-                    assert_eq!(issue.context.clone()["value"], true);
-                }
-                assert!(result.output().is_none());
-            }
-        }
-
-        #[test]
         fn lookup_scalar_operands_preserve_completed_keys_and_missing_field_findings() {
             let source =
                 specification("{str_case: {source: DOSE.EXROUTE, to: lower}}", "str", true)

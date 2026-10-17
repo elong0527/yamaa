@@ -209,8 +209,7 @@ pub(super) fn admit<E>(
                 admit(&operand.expression, functions)?;
             }
         }
-        Expression::StrContains { source, .. }
-        | Expression::StrExtract { source, .. }
+        Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }

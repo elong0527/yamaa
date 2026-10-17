@@ -42,9 +42,7 @@ impl Temporal {
                 },
                 1,
             ) => "int",
-            (TemporalKind::DateTimeShift { .. }, 1) | (TemporalKind::DurationText { .. }, _) => {
-                "numeric"
-            }
+            (TemporalKind::DateTimeShift { .. }, 1) => "numeric",
             (TemporalKind::DateTimeShift { .. } | TemporalKind::DateTimeDifference { .. }, _) => {
                 "datetime"
             }
@@ -67,7 +65,6 @@ impl Temporal {
             TemporalKind::DateTimeDifference { .. } => C::DatetimeDifferenceInput,
             TemporalKind::DateTimeShift { .. } => C::DatetimeShiftInput,
             TemporalKind::DurationValue { .. } => C::DurationValueInput,
-            TemporalKind::DurationText { .. } => C::DurationTextInput,
             _ => C::TemporalOperand,
         };
         Diagnostic {
@@ -175,9 +172,6 @@ impl Temporal {
                     None => return Err(self.failure(C::DurationInvalid)),
                 }
             }
-            TemporalKind::DurationText { unit } => super::duration::write(&values[0], unit)
-                .map(Value::Str)
-                .ok_or_else(|| self.failure(C::DurationTextRange))?,
             _ => {
                 let dates: Vec<_> = values
                     .iter()

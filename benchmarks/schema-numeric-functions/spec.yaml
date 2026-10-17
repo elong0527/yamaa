@@ -35,6 +35,14 @@ columns:
     label: Tertiary Analysis Value
     derivation: SOURCE.CVAL
 
+  # Zero joins the largest and smallest choices below as a column, because
+  # their sources are variables rather than literals. It stays out of the
+  # output.
+  - name: ZERO
+    type: int
+    label: Zero
+    derivation: {literal: 0}
+
   - name: CEILVAL
     type: int
     label: Ceiling of Analysis Value
@@ -72,28 +80,30 @@ columns:
       compute:
         expr: "MOD(BVAL, 3)"
 
-  # GREATEST and LEAST skip missing arguments, so with the literal 0 among
-  # them neither result is ever missing.
+  # Greatest and least skip missing sources, so with ZERO among them
+  # neither result is ever missing.
   - name: GREATESTVAL
     type: int
     label: Largest of Secondary, Tertiary, and Zero
     derivation:
-      compute:
-        expr: "GREATEST(BVAL, CVAL, 0)"
+      greatest:
+        sources: [BVAL, CVAL, ZERO]
 
   - name: LEASTVAL
     type: int
     label: Smallest of Secondary, Tertiary, and Zero
     derivation:
-      compute:
-        expr: "LEAST(BVAL, CVAL, 0)"
+      least:
+        sources: [BVAL, CVAL, ZERO]
 
+  # First_available returns the first present source, or missing when
+  # every source is missing.
   - name: COALESCEVAL
     type: int
     label: First Present Value Among Tertiary and Secondary
     derivation:
-      compute:
-        expr: "COALESCE(CVAL, BVAL)"
+      first_available:
+        sources: [CVAL, BVAL]
 
 verifications:
   - unique:

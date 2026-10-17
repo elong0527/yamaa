@@ -293,7 +293,6 @@ fn default_reads(
         "greatest"
         | "least"
         | "str_concat"
-        | "str_contains"
         | "case"
         | "first_available"
         | "mapping"
@@ -321,7 +320,7 @@ fn default_reads(
         }
         "round_half_away_from_zero" => reference(text(d, field(d, payload, "source")?)?),
         "date_diff" | "study_day" | "to_epoch_day" | "date_shift" | "datetime_diff"
-        | "datetime_shift" | "duration_value" | "duration_text" => {
+        | "datetime_shift" | "duration_value" => {
             for &name in temporal::fields(operation) {
                 if let N::Text(source) = &d.nodes()[field(d, payload, name)?] {
                     reference(source);

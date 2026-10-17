@@ -43,7 +43,6 @@ pub fn result_type(catalog: &Catalog, expression: Expression<'_>) -> Option<Comp
             | "str_concat" | "str_extract" | "str_pad" | "str_replace" | "str_template" => {
                 Some(Str.into())
             }
-            "str_contains" => Some(ComparableType::Boolean),
             _ => None,
         },
         Expression::Unresolved => None,

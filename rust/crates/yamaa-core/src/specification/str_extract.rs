@@ -1,6 +1,6 @@
 //! Whole-request text declaration admission, then reference-owned extraction binding.
-//! `str_contains` and `str_replace` share the extraction declaration and its
-//! source binding; only the bound expression differs.
+//! `str_replace` shares the extraction declaration and its source binding; only
+//! the bound expression differs.
 use super::*;
 use crate::text_extract::{AdmissionError, StringExtract};
 use crate::text_replace::StringReplace;
@@ -155,7 +155,7 @@ fn walk(
             ));
         }
 
-        for name in ["str_extract", "str_contains", "str_replace"] {
+        for name in ["str_extract", "str_replace"] {
             if let Some(payload) = d.field(id, name) {
                 visit(payload, &format!("{path}.{name}"), rows)?;
             }

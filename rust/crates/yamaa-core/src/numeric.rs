@@ -81,8 +81,6 @@ pub enum ArithmeticErrorKind {
     DivisionByZero,
     SqrtOfNegative,
     LnOfNonpositive,
-    /// A present digits argument is float, even when its value is integral.
-    InvalidRoundingDigits,
     /// Promoted finite arguments retained as exact bits for future diagnostic transport.
     InvalidPower {
         base_bits: u64,
@@ -99,7 +97,7 @@ pub struct ArithmeticError {
 }
 
 impl ArithmeticError {
-    /// Distinguish integer-digits validation from numeric derivation failures.
+    /// Return the registry phase owning this arithmetic failure.
     pub fn phase(&self) -> &'static str {
         self.kind.diagnostic_code().definition().phase
     }
@@ -195,46 +193,6 @@ pub fn unary(
             UnaryOperator::Negate => -value.get(),
             UnaryOperator::Abs => value.get().abs(),
         })),
-    }
-}
-
-/// Numeric functions selecting among already-evaluated arguments (REQ-0424).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SelectionFunction {
-    Greatest,
-    Least,
-    Coalesce,
-}
-
-/// Select a present value, then promote if any present argument is float.
-/// Extremes compare before promotion and retain the first equal value (including
-/// signed zero); COALESCE selects the first present value. Missing arguments do
-/// not influence promotion. Empty primitive input is missing; the grammar layer
-/// separately enforces each function's minimum arity.
-pub fn select(function: SelectionFunction, arguments: &[Number]) -> Number {
-    use std::cmp::Ordering;
-    let mut selected = Number::Missing;
-    let mut has_float = false;
-    for &argument in arguments {
-        if argument == Number::Missing {
-            continue;
-        }
-        has_float |= matches!(argument, Number::Float(_));
-        if selected == Number::Missing {
-            selected = argument;
-        } else if function != SelectionFunction::Coalesce {
-            let order = crate::value::compare_present(&argument.into(), &selected.into())
-                .expect("present numeric arguments are comparable");
-            if (function == SelectionFunction::Greatest && order == Ordering::Greater)
-                || (function == SelectionFunction::Least && order == Ordering::Less)
-            {
-                selected = argument;
-            }
-        }
-    }
-    match (selected, has_float) {
-        (Number::Int(value), true) => Number::float(value as f64),
-        _ => selected,
     }
 }
 
@@ -365,27 +323,7 @@ pub fn power(left: Number, right: Number, expression: &str) -> Result<Number, Ar
 }
 
 /// Round to decimal places under REQ-0418, returning float or normalized missing.
-/// Both operands are already evaluated. Missing precedes digits validation;
-/// a float digits argument is invalid even when numerically integral.
-pub fn round_half_away_from_zero(
-    value: Number,
-    digits: Number,
-    expression: &str,
-) -> Result<Number, ArithmeticError> {
-    if matches!(value, Number::Missing) || matches!(digits, Number::Missing) {
-        return Ok(Number::Missing);
-    }
-    let Number::Int(digits) = digits else {
-        return Err(ArithmeticError {
-            expression: expression.to_string(),
-            kind: ArithmeticErrorKind::InvalidRoundingDigits,
-        });
-    };
-    Ok(round_integer_places(value, digits))
-}
-
-/// Apply the shared arithmetic after an integer declaration has been admitted.
-/// Declarative operations do not construct formula text or formula diagnostics.
+/// The integer digits declaration is admitted before any value is read.
 pub(crate) fn round_integer_places(value: Number, digits: i64) -> Number {
     value.as_float().map_or(Number::Missing, |value| {
         Number::float(crate::decimal_rounding::round_finite(value, digits))

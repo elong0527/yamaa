@@ -818,17 +818,6 @@ def describe_str_replace(node, ctx=None, depth=0):
     return sentence(text + handler_phrase(node, "missing", "a missing source"))
 
 
-def describe_str_contains(node, ctx=None, depth=0):
-    text = (
-        "True when "
-        + describe_variable(node.get("source"), ctx, depth)
-        + " matches "
-        + str(node.get("pattern"))
-        + " anywhere, false when it does not"
-    )
-    return sentence(text + handler_phrase(node, "missing", "a missing source"))
-
-
 def describe_str_concat(node, ctx=None, depth=0):
     parts = []
     for part in node.get("sources") or []:
@@ -959,7 +948,6 @@ DERIVATION_DESCRIBERS = {
     "str_pad": describe_str_pad,
     "str_extract": describe_str_extract,
     "str_replace": describe_str_replace,
-    "str_contains": describe_str_contains,
     "str_concat": describe_str_concat,
     "str_template": describe_str_template,
     "row_number": describe_row_number,

@@ -99,7 +99,6 @@ pub(super) fn prepare_value_with_driver(
         "str_template" => Operation::StrTemplate(templates.get(payload)?),
         "str_extract" => Operation::StrExtract(extraction.get(payload)?),
         "str_replace" => Operation::StrReplace(extraction.replacement(payload)?),
-        "str_contains" => Operation::StrContains(extraction.get(payload)?),
         "greatest" | "least" | "str_concat" => {
             Operation::Scalar(std::boxed::Box::new(scalar::prepare(
                 d,
@@ -170,7 +169,7 @@ pub(super) fn prepare_value_with_driver(
             Operation::Imputation(operation)
         }
         "date_diff" | "study_day" | "to_epoch_day" | "date_shift" | "datetime_diff"
-        | "datetime_shift" | "duration_value" | "duration_text" => {
+        | "datetime_shift" | "duration_value" => {
             let mut features = Vec::new();
             let operation = temporal::prepare(
                 d,
@@ -590,21 +589,6 @@ pub(super) fn bind_row(
             reported,
             output,
             project,
-            named,
-            secondary,
-            intermediates,
-        ),
-        Operation::StrContains(operation) => scalar::bind_row_contains(
-            operation,
-            column,
-            catalog,
-            driver,
-            row,
-            phase,
-            available,
-            edges,
-            findings,
-            output,
             named,
             secondary,
             intermediates,

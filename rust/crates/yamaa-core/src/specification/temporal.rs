@@ -10,7 +10,6 @@ pub(super) const OPERATIONS: &[&str] = &[
     "datetime_diff",
     "datetime_shift",
     "duration_value",
-    "duration_text",
 ];
 
 fn elapsed_unit(d: &Document, payload: usize) -> Result<ElapsedUnit, PrepareError> {
@@ -65,9 +64,6 @@ fn kind(d: &Document, payload: usize, operation: &str) -> Result<TemporalKind, P
             unit: elapsed_unit(d, payload)?,
         },
         "duration_value" => TemporalKind::DurationValue {
-            unit: elapsed_unit(d, payload)?,
-        },
-        "duration_text" => TemporalKind::DurationText {
             unit: elapsed_unit(d, payload)?,
         },
         _ => return Err(PrepareError::Internal),
@@ -282,13 +278,7 @@ pub(super) fn prepare(
         let name = text(d, name)?;
         if !(kind.fields().contains(&name)
             || op == "date_diff" && ["unit", "bounds"].contains(&name)
-            || [
-                "datetime_diff",
-                "datetime_shift",
-                "duration_value",
-                "duration_text",
-            ]
-            .contains(&op)
+            || ["datetime_diff", "datetime_shift", "duration_value"].contains(&op)
                 && name == "unit"
             || op == "duration_value" && name == "invalid")
         {

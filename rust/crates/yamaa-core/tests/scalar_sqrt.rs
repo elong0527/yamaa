@@ -377,38 +377,6 @@ mod scalar {
         }
 
         #[test]
-        fn duration_text_writes_canonical_days_and_exact_integer_boundaries() {
-            for (source, unit, expected) in [
-                (Value::Int(93780), U::Second, "P1DT2H3M"),
-                (Value::float(2.5), U::Hour, "PT2H30M"),
-                (Value::Int(26), U::Hour, "P1DT2H"),
-                (Value::Int(7), U::Day, "P7D"),
-                (Value::float(-0.25), U::Hour, "-PT15M"),
-                (Value::float(-0.0), U::Second, "PT0S"),
-                (Value::float(0.1), U::Second, "PT0.1S"),
-                (Value::float(0.0000001), U::Second, "PT0.0000001S"),
-                (Value::Int(0), U::Day, "PT0S"),
-            ] {
-                assert_eq!(result(K::DurationText { unit }, &[source]), text(expected));
-            }
-            for source in [
-                i64::MIN,
-                -9007199254740993,
-                -1,
-                0,
-                1,
-                9007199254740993,
-                i64::MAX,
-            ] {
-                let written = result(K::DurationText { unit: U::Second }, &[Value::Int(source)]);
-                assert_eq!(
-                    result(K::DurationValue { unit: U::Second }, &[written]),
-                    Value::Int(source)
-                );
-            }
-        }
-
-        #[test]
         fn invalid_duration_text_recovers_only_when_declared() {
             for source in [
                 "",
@@ -482,11 +450,6 @@ mod scalar {
                     vec![datetime("2030-01-01T00:00:00"), Value::float(f64::MAX)],
                     "REQ-1300",
                 ),
-                (
-                    K::DurationText { unit: U::Day },
-                    vec![Value::float(f64::MAX)],
-                    "REQ-1302",
-                ),
             ] {
                 let error = operation(kind).apply_values(&values).unwrap().unwrap_err();
                 assert_eq!(error.definition().condition, "conversion_failed");
@@ -502,7 +465,6 @@ mod scalar {
                     K::DateTimeShift { unit: U::Second },
                     vec![Value::Missing, Value::float(1.0)],
                 ),
-                (K::DurationText { unit: U::Second }, vec![text("1")]),
                 (K::DurationValue { unit: U::Second }, vec![Value::Int(1)]),
             ] {
                 assert_eq!(
@@ -520,7 +482,6 @@ mod scalar {
                 K::DateTimeDifference { unit: U::Hour },
                 K::DateTimeShift { unit: U::Second },
                 K::DurationValue { unit: U::Second },
-                K::DurationText { unit: U::Second },
             ] {
                 assert_eq!(
                     result(kind, &vec![Value::Missing; kind.fields().len()]),

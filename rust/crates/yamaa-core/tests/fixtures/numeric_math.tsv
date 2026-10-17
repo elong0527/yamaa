@@ -35,5 +35,4 @@ power-first-failure	POWER(A, B)	B=int:2	error:unknown_field:REQ-0443:A	A	left
 power-literal-overflow	POWER(9223372036854775808, A)	A=int:2	error:integer_overflow:REQ-0434:9223372036854775808	-	left
 math-nested-domain	EXP(LN(A))	A=int:0	error:ln_of_nonpositive:REQ-0432	A	unary
 math-normalization-before-next	LN(EXP(A))	A=int:710	missing	A	-
-math-normalization-in-selection	COALESCE(EXP(A), B)	A=int:710;B=int:2	int:2	A,B	-
 math-nonfinite-literal	POWER(1, 1e9999)	-	missing	-	-

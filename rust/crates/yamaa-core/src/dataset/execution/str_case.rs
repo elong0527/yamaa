@@ -27,8 +27,7 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
                 register(&source.expression, counter);
             }
         }
-        Expression::StrContains { source, .. }
-        | Expression::StrExtract { source, .. }
+        Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::MappingCut { source, .. }

@@ -64,7 +64,7 @@ The sixteen controls cover:
   validation with original operation and expression paths.
 - Scalar and list key shorthands, including repeated equal list pairs, and
   explicit empty map/list keys with their complete retained declarations.
-- Eager ONLY behind COALESCE, retaining row name, complete raw group context
+- Eager ONLY behind a missing operand, retaining row name, complete raw group context
   and record cardinality before any accepted output or publication.
 - A later column ONLY failure preserving the enclosing grouped-row context
   and the current output key identity.

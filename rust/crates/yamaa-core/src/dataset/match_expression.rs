@@ -126,7 +126,6 @@ fn normalize(expression: &mut Expression, reads: &[MatchRead]) -> Result<(), Pla
         }
         Expression::SourceBinding { source, .. }
         | Expression::MappingCut { source, .. }
-        | Expression::StrContains { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::StrCase { source, .. }
@@ -172,7 +171,6 @@ fn contains_window(expression: &Expression, depth: usize) -> Result<bool, PlanEr
         }
         Expression::SourceBinding { source, .. }
         | Expression::MappingCut { source, .. }
-        | Expression::StrContains { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::StrCase { source, .. }

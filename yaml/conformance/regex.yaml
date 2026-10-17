@@ -9,9 +9,9 @@
 #   str_replace     optional: the str_replace expression, a search replacing
 #                   every match, with its replacement text and its result
 #
-# The matches outcome also governs the str_contains expression and predicate
-# call. Those consumers share search semantics but retain their own result
-# type, missing behavior, and invalid-pattern condition.
+# The matches outcome also governs the str_contains predicate call. That
+# consumer shares search semantics but retains its own result type, missing
+# behavior, and invalid-pattern condition.
 #
 # A str_extract outcome is null when the pattern matched nowhere. It is a
 # mapping of the requested group and its value when the pattern matched, and

@@ -277,7 +277,7 @@
   },
   {
     "family": "aggregate",
-    "text": "\u2003SUM(COALESCE(MIN(A), MAX(B)))",
+    "text": "\u2003SUM(NULLIF(MIN(A), MAX(B)))",
     "expected": {
       "status": "invalid",
       "condition": "nested_reduction",

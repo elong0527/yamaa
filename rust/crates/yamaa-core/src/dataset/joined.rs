@@ -154,7 +154,6 @@ pub(super) fn validate_sources(
         | Expression::StrCase { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
-        | Expression::StrContains { source, .. }
         | Expression::MappingCut { source, .. }
         | Expression::SourceBinding { source, .. } => {
             validate_sources(&source.expression, primary, secondary)?

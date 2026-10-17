@@ -29,5 +29,4 @@ sqrt-domain-stops-later	SQRT(A) + B	A=int:-1;B=int:4	error:sqrt_of_negative:REQ-
 sqrt-missing-later-domain	A + SQRT(B)	A=missing;B=int:-1	error:sqrt_of_negative:REQ-0431	A,B	right
 sqrt-nested-domain	CEIL(SQRT(A))	A=int:-1	error:sqrt_of_negative:REQ-0431	A	unary
 sqrt-nested-result	SQRT(SQRT(A))	A=int:16	float:4000000000000000	A	-
-sqrt-selection-domain	COALESCE(1, SQRT(A), B)	A=int:-1;B=int:4	error:sqrt_of_negative:REQ-0431	A	argument:1
 sqrt-negative-zero-dependent	SQRT(A) * 2	A=float:-0.0	float:8000000000000000	A	-

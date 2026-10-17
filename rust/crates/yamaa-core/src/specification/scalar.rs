@@ -350,35 +350,6 @@ pub(super) fn bind(
     }
 }
 #[allow(clippy::too_many_arguments)]
-pub(super) fn bind_contains(
-    spec: &PreparedSpecification,
-    operation: &crate::text_extract::StringExtract,
-    column: usize,
-    catalog: &Catalog,
-    secondary: &[SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-) -> Result<Option<Expression>, BindError> {
-    Ok(str_extract::bind(
-        operation,
-        column,
-        &spec.keys,
-        catalog,
-        &spec.intermediates,
-        secondary,
-        intermediates,
-        edges,
-        findings,
-    )?
-    .map(|expression| match expression {
-        Expression::StrExtract { source, operation } => {
-            Expression::StrContains { source, operation }
-        }
-        _ => unreachable!(),
-    }))
-}
-#[allow(clippy::too_many_arguments)]
 pub(super) fn bind_row(
     operation: &Declaration,
     column: usize,
@@ -491,45 +462,6 @@ pub(super) fn bind_row(
         }
     }
 }
-#[allow(clippy::too_many_arguments)]
-pub(super) fn bind_row_contains(
-    operation: &crate::text_extract::StringExtract,
-    column: usize,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    output: &TableSchema,
-    named: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-) -> Result<Option<Expression>, BindError> {
-    Ok(str_extract::bind_row(
-        operation,
-        column,
-        catalog,
-        driver,
-        row,
-        phase,
-        available,
-        edges,
-        findings,
-        output,
-        named,
-        secondary,
-        intermediates,
-    )?
-    .map(|expression| match expression {
-        Expression::StrExtract { source, operation } => {
-            Expression::StrContains { source, operation }
-        }
-        _ => unreachable!(),
-    }))
-}
-
 /// These new scalar operands may read the driver and an admitted named
 /// intermediate; implicit secondary joins are a separate language work package.
 pub(super) fn operand_references(
@@ -575,7 +507,6 @@ pub(super) fn operand_references(
         }
     }
     for op in [
-        "str_contains",
         "str_case",
         "str_extract",
         "str_pad",

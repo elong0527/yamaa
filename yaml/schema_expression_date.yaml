@@ -156,16 +156,6 @@ expressions:
         - invalid:
             type: literal_value
             description: See REQ-1301.
-    duration_text: # See REQ-1302.
-        - source:
-            type: [variable, int, float]
-            required: true
-            description: See REQ-1302.
-        - unit:
-            type: str
-            required: true
-            values: [second, minute, hour, day]
-            description: See REQ-1302.
 
 day_rule:
     type: str

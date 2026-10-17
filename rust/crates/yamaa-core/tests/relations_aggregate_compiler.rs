@@ -2392,7 +2392,6 @@ mod relations {
                 "date_shift",
                 "datetime_shift",
                 "datetime_diff",
-                "duration_text",
                 "duration_value",
                 "row_value",
                 "locf",
