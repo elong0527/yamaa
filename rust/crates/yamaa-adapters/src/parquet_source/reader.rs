@@ -133,15 +133,28 @@ fn admit_page_counts(
 /// bodies keep their held bytes.
 fn native_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<bytes::Bytes, Error> {
     let mut file: Option<Vec<u8>> = None;
-    for header in &frame.headers {
+    for (header, _) in &frame.headers {
         if let Cow::Owned(native) = compact::native_metadata(&bytes[header.clone()])? {
             file.get_or_insert_with(|| bytes.to_vec())[header.clone()].copy_from_slice(&native);
         }
     }
-    Ok(match file {
-        Some(file) => bytes::Bytes::from(file),
-        None => bytes::Bytes::copy_from_slice(bytes),
-    })
+    let Some(file) = file else {
+        return Ok(bytes::Bytes::copy_from_slice(bytes));
+    };
+    // Once a header is presented, no two pages may share a byte, or the native
+    // reader could read header or body bytes that admission never saw. Written
+    // files never overlap pages, and a file with nothing to present is read
+    // exactly as held.
+    let mut extents: Vec<_> = frame
+        .headers
+        .iter()
+        .map(|(header, end)| (header.start, *end))
+        .collect();
+    extents.sort_unstable();
+    if extents.windows(2).any(|pair| pair[1].0 < pair[0].1) {
+        return Err(Error::Malformed);
+    }
+    Ok(bytes::Bytes::from(file))
 }
 
 fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
@@ -588,6 +601,31 @@ mod tests {
         page.splice(stop..stop, unskippable_fields(0xaa));
         let bytes = container(0, 2, 2, 0, &[page]);
         assert_eq!(strings(&read(&bytes).unwrap()), [Some("a"), Some("ab")]);
+    }
+
+    #[test]
+    fn presented_page_headers_refuse_pages_that_share_bytes() {
+        // A page header holding only an unknown empty set, which the native
+        // copy presents as a list, then a one-byte body.
+        let presented = [0x1a, 0x01, 0, 0xee];
+        let frame = |headers| framing::Framing {
+            metadata: &[],
+            pages: Vec::new(),
+            headers,
+        };
+        let mut file = presented.to_vec();
+        file.extend(presented);
+        let native = native_pages(&file, &frame(vec![(0..3, 4), (4..7, 8)])).unwrap();
+        assert_eq!(native.as_ref(), [0x19, 0x01, 0, 0xee, 0x19, 0x01, 0, 0xee]);
+        // Two chunks that name the same page share its bytes.
+        let shared = frame(vec![(0..3, 4), (0..3, 4)]);
+        assert_eq!(
+            native_pages(&presented, &shared).unwrap_err(),
+            Error::Malformed
+        );
+        // With nothing to present, the held bytes are read as they are.
+        let held = [0x19, 0x01, 0, 0xee];
+        assert_eq!(native_pages(&held, &shared).unwrap().as_ref(), held);
     }
 
     #[test]
