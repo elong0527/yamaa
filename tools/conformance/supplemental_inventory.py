@@ -441,7 +441,7 @@ def load_catalog(root, catalog_path):
     for contract in catalog["contracts"]:
         _keys(contract, ("path", "family", "level", "consumers"))
         name = contract["path"]
-        if name in contracts or not _path(root, name).is_file():
+        if not _path(root, name).is_file() or name in contracts:
             raise ValueError(f"duplicate or missing contract: {name}")
         if name not in discovered_fixtures:
             raise ValueError(f"contract is not a discovered fixture: {name}")
@@ -451,15 +451,13 @@ def load_catalog(root, catalog_path):
         if not isinstance(contract["family"], str) or not contract["family"]:
             raise ValueError(f"missing semantic family: {name}")
         consumers = contract["consumers"]
-        if (
-            not isinstance(consumers, list)
-            or not consumers
-            or len(set(consumers)) != len(consumers)
-        ):
+        if not isinstance(consumers, list) or not consumers:
             raise ValueError(f"missing or duplicate contract consumers: {name}")
         for consumer in consumers:
             if not _path(root, consumer).is_file():
                 raise ValueError(f"missing contract consumer: {consumer}")
+        if len(set(consumers)) != len(consumers):
+            raise ValueError(f"missing or duplicate contract consumers: {name}")
     support_files = []
     for name in sorted(discovered_fixtures - contracts):
         role = catalog["support_roles"].get(
