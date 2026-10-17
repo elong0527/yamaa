@@ -11,9 +11,11 @@ def test_installed_package_exports_public_helpers() -> None:
     assert yamaa.__version__ == version("yamaa")
     assert set(yamaa.__all__) == {
         "DefineError",
+        "Diagnostic",
         "DomainError",
         "ResolvedSpecification",
         "ResolvedSpecificationError",
+        "SourceSpan",
         "__version__",
         "check",
         "define",

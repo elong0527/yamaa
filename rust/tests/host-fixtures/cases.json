@@ -4254,8 +4254,18 @@
       "owned_view_names": [
         "output",
         "issues",
+        "diagnostics",
         "verification_log",
         "warning_log"
+      ],
+      "diagnostic_record_names": [
+        "phase",
+        "condition",
+        "requirement",
+        "spec_paths",
+        "context",
+        "source_span",
+        "operand_route"
       ],
       "interrupt_message": "public contract activation interrupt",
       "define_argument_names": [

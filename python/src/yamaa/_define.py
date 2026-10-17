@@ -3,7 +3,7 @@
 from os import PathLike, fspath
 
 from yamaa._native import _CORE_VERSION, DefineError, _define_file
-from yamaa._native_results import issues_frame
+from yamaa._native_results import Diagnostic, diagnostic_records, issues_frame
 
 
 class Define:
@@ -14,14 +14,25 @@ class Define:
 
     @property
     def issues(self):
+        """The five-column frame projected from the same records as ``diagnostics``."""
         return issues_frame(self._native.issues())
 
+    @property
+    def diagnostics(self) -> list[Diagnostic]:
+        """Named records with structured context and optional geometry."""
+        return diagnostic_records(self._native.issues())
+
     def save(self) -> bool:
-        """Publish all preflighted outputs; failure raises DefineError."""
+        """Publish all preflighted outputs; failure raises DefineError.
+
+        The error carries both views of the same retained diagnostics.
+        """
         try:
             return self._native.save()
         except DefineError as error:
-            error.issues = self.issues
+            rows = self._native.issues()
+            error.issues = issues_frame(rows)
+            error.diagnostics = diagnostic_records(rows)
             raise
 
 

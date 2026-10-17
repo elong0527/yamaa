@@ -10,12 +10,14 @@ import yamaa
 built = yamaa.domain("spec.yaml", environment="python/environment.yaml")
 built.output
 built.issues
+built.diagnostics
 built.verification_log
 built.warning_log
 built.save()
 
 checked = yamaa.check("spec.yaml", environment="python/environment.yaml")
 checked.issues
+checked.diagnostics
 ```
 
 `environment` is optional. Pass a declared host environment explicitly when the
@@ -120,9 +122,36 @@ or Parquet.
 Build reads inputs and invokes the declared project functions through the shared
 engine. Check performs preparation/static validation without reading study data
 or invoking project code. Each result owns its native state; owned Polars output,
-issue and log views remain independent. Issues contain `phase`, `condition`,
-`requirement`, `spec_paths` and JSON-text `context`. The public issue table has no
-`severity` field. Signed integers retain their full 64-bit range; strings
+issue and log views remain independent.
+
+## Diagnostics
+
+`diagnostics` is a list of frozen `yamaa.Diagnostic` records, one per finding
+in the engine's authored order, and `issues` is the five-column Polars
+projection of those same records: `phase`, `condition`, `requirement`,
+`spec_paths` and `context` as the engine's canonical JSON text. Both views are
+built from one native record, so they cannot disagree, and neither parses JSON
+text in Python. `domain`, `check` and `define` results, `DefineError` after a
+failed save and `ResolvedSpecificationError` all carry both.
+
+```python
+for finding in built.diagnostics:
+    finding.phase, finding.condition, finding.requirement  # str, str, str | None
+    finding.spec_paths                                     # list[str]
+    finding.context                                        # dict[str, object]
+    finding.source_span                                    # yamaa.SourceSpan | None
+    finding.operand_route                                  # list[str] | None
+```
+
+`context` is structured: integer tokens are `int` with their exact value
+whatever their width, other numbers `float`, objects `dict`, arrays `list`,
+text `str` and null `None`. `source_span` is `SourceSpan(start, end)` with
+half-open byte offsets into the original expression, and `operand_route` lists
+the operand steps from the expression root to the failing node; both are
+`None` when the failure site recorded no geometry. Absent geometry is
+distinct from recorded zero geometry: `SourceSpan(0, 0)` is a zero-width span
+and `[]` is a failure at the root. The public issue table has no `severity`
+field. Signed integers retain their full 64-bit range; strings
 retain Unicode and embedded NUL, and date/datetime columns retain ordinary Polars
 types. Capacity refusals retain the shared condition and authored paths;
 [release guidance](../docs/release.md#resource-refusals) describes their context.
