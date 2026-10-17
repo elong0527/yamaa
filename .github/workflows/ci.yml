@@ -67,6 +67,23 @@ jobs:
         run: |
           uv pip install --python python/.venv/bin/python 'polars==1.43.2' 'pyarrow==23.0.1' 'lxml==6.1.0'
           make test-python
+  python-newest:
+    name: python (3.15)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # uv 0.11.6 can only download a 3.15 alpha; uv finds this released
+      # interpreter on PATH instead.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.15'
+      - uses: ./.github/actions/setup
+        with:
+          python: '3.15'
+      - run: make test-python
   r:
     runs-on: ubuntu-24.04
     timeout-minutes: 40

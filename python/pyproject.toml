@@ -18,6 +18,14 @@ authors = [
   { name = "Bingjun Wang" },
   { name = "Jingwei Xiong" },
 ]
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
+  "Programming Language :: Python :: Implementation :: CPython",
+]
 dependencies = [
   "lxml>=6.1.0",
   # 1.43.2 is the first installable release that decodes the IEEE 754 total-order
