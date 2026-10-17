@@ -69,16 +69,16 @@ a binding has no positional, variadic, or arbitrary keyword parameter bag.
 
 <a id="req-0677"></a>
 
-**REQ-0677.** Parameter types are the [Types and conversion](../values/types.md) column vocabulary plus function-only
-`bool`. Return types are the [Types and conversion](../values/types.md) column vocabulary and do not include `bool`,
+**REQ-0677.** Parameter types are the [Values](../values.md) column vocabulary plus function-only
+`bool`. Return types are the [Values](../values.md) column vocabulary and do not include `bool`,
 so this extension introduces neither Boolean columns nor Boolean derivation
 results.
 
 <a id="req-0678"></a>
 
 **REQ-0678.** Every argument and default matches its declared exact type. There
-is no implicit conversion, including no `int`-to-`float` widening. [Types and conversion](../values/types.md)
-conversion can run only after the function has returned under the [Column derivation](../columns.md)
+is no implicit conversion, including no `int`-to-`float` widening. [Values](../values.md)
+conversion can run only after the function has returned under the [Execution lifecycle](../execution/lifecycle.md)
 lifecycle. Argument names, requiredness, and exact types are contract-dependent
 checks at the implementation stage. Structural validation before then checks
 only the closed argument-leaf forms below.
@@ -95,7 +95,7 @@ only the closed argument-leaf forms below.
 
 <a id="req-0680"></a>
 
-**REQ-0680.** The temporal text must be an [Temporal values](../values/temporal.md) value. No argument may contain
+**REQ-0680.** The temporal text must be an [Values](../values.md) value. No argument may contain
 another expression. A calculation needed by a function is first declared as an
 internal column and then passed by name, preserving its visible dependency.
 
@@ -138,8 +138,8 @@ independent calls in logical row order.
 
 **REQ-0686.** An invoked binding may return missing only when
 `may_return_missing` is true. It may not return a vector, collection, table,
-object wrapper, or value of a different type. [Column derivation](../columns.md) conversion is not a repair
-mechanism for an invalid function result. [Types and conversion](../values/types.md)'s non-finite normalization runs
+object wrapper, or value of a different type. [Execution lifecycle](../execution/lifecycle.md) conversion is not a repair
+mechanism for an invalid function result. [Values](../values.md)'s non-finite normalization runs
 immediately after the host scalar is returned and before these result checks.
 The normalized missing result therefore still requires `may_return_missing:
 true`.
@@ -153,7 +153,7 @@ are not admitted. Results may use those same representations or an unclassed
 R integer/character scalar of the corresponding exact logical type. Double and
 logical scalars remain `float` and `bool`; there is no numeric or text coercion.
 R `date` and `datetime` use the Date and explicitly UTC POSIXct representations
-fixed by [Temporal values](../values/temporal.md#req-0563). This host mapping adds no logical type.
+fixed by [Temporal values](../values.md#value-14). This host mapping adds no logical type.
 
 ### Activation conformance
 
@@ -200,7 +200,7 @@ input is the contract semantic boundary. Activation checks the declared result.
 <a id="req-0692"></a>
 
 **REQ-0692.** Nonnumeric expected results and missingness use equality for their
-type, including [Text values](../values/text.md) for strings. Numeric results compare temporary decimal
+type, including [Values](../values.md) for strings. Numeric results compare temporary decimal
 copies at the contract's non-negative `comparison_decimals`; the default is
 four. At an exact decimal tie, the copy rounds to the nearest value away from
 zero. For example, at four places, `1.23445` becomes `1.2345` and `-1.23445`
@@ -285,7 +285,7 @@ default: `invalid_function_argument`.
 <a id="req-0701"></a>
 
 **REQ-0701.** A host exception or enforced
-resource failure: `function_call_failed`. It is fatal and has no [Column derivation](../columns.md) local
+resource failure: `function_call_failed`. It is fatal and has no [Local handlers](../execution/handlers.md) local
 fallback.
 
 <a id="req-0702"></a>

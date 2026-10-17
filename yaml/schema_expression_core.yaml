@@ -70,23 +70,23 @@ keep_policy:
 
 order_by_term:
     type: [variable, order_term_class]
-    description: See REQ-1102.
+    description: Order term; a bare variable sorts ascending with missing values last (VALUE-22).
 
 order_term_class:
     - variable:
         type: variable
         required: true
-        description: See REQ-1103.
+        description: Variable used as an ordering term (VALUE-22).
     - direction:
         type: str
         default: asc
         values: [asc, desc]
-        description: See REQ-1103.
+        description: Sort direction for non-missing values (VALUE-22).
     - nulls:
         type: str
         default: last
         values: [first, last]
-        description: See REQ-1103.
+        description: Placement of missing values, independent of direction (VALUE-22).
 
 case_item_class:
     type: [case_branch_class, case_otherwise_class]

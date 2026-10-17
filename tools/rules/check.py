@@ -106,11 +106,17 @@ CITATION_SUFFIXES = frozenset(
     }
 )
 CITATION_NAMES = ("DESCRIPTION", "Makefile", "NAMESPACE")
-# Files that build invalid rule IDs on purpose. None exempts the whole file.
+# Files that build invalid rule IDs on purpose, or hold data that reads like
+# a rule ID. None exempts the whole file.
 CITATION_EXEMPT = {
-    # A synthetic diagnostic record that names no rule, and this entry.
+    # Benchmark subject identifiers that read like TEXT card IDs.
+    "benchmarks/schema-text-functions/expected/adsl.csv": None,
+    "benchmarks/schema-text-functions/input/dm.csv": None,
+    # SAS arithmetic on a variable named VALUE.
+    "evaluations/harbor/solutions/sdtm-vs-units/result.sas": frozenset({"VALUE-32"}),
+    # A synthetic diagnostic record that names no rule, and this table.
     "python/tests/test_native_results.py": frozenset({"REQ-0000"}),
-    "tools/rules/check.py": frozenset({"REQ-0000"}),
+    "tools/rules/check.py": frozenset({"REQ-0000", "VALUE-32"}),
     "tools/tests/test_diagnostics.py": None,
     "tools/tests/test_rule_reference.py": None,
     "tools/tests/test_rules_check.py": None,

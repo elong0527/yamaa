@@ -48,7 +48,7 @@ input:
 may retain `str` on a character field, retain `float` on a numeric field, or
 narrow a numeric field to `int`, `date`, or `datetime`. Any other physical/type
 pair fails ingestion. Unknown named fields retain `unknown_field`.
-A producing-specification link retains its sole authority under REQ-0523.
+A producing-specification link retains its sole authority under INPUT-6.
 
 <a id="req-1313"></a>
 
@@ -68,7 +68,7 @@ decoded numeric value.
 `datetime` counts whole seconds from 1960-01-01T00:00:00, without a timezone.
 Negative values precede the epoch. Fractions are rejected before conversion;
 dates and datetimes must remain within the complete civil ranges fixed by
-[Temporal values](../values/temporal.md).
+[Values](../values.md).
 
 ### Missing and character storage
 
@@ -76,7 +76,7 @@ dates and datetimes must remain within the complete civil ranges fixed by
 
 **REQ-1315.** Ordinary numeric missing and tagged missing values `.A` through
 `.Z` and `._` become the shared missing value. Non-finite numeric values
-normalize to missing under REQ-0006. Character storage loses right-hand ASCII
+normalize to missing under VALUE-4. Character storage loses right-hand ASCII
 space and NUL padding; leading spaces and internal spaces remain. The resulting
 zero-length character value follows `empty_string`: omitted or `missing`
 produces missing; `present` produces the present empty string. Strings such as
@@ -89,7 +89,7 @@ produces missing; `present` produces the present empty string. Strings such as
 **REQ-1316.** Readers decode only the captured immutable bytes obtained from
 the declared source authority. Native readers do not reopen a path. Stored
 field order and record order are preserved, and the generated `ordinal`
-applies before filtering under REQ-1292. Source bytes, rows, fields, cells,
+applies before filtering under INPUT-3. Source bytes, rows, fields, cells,
 retained values, page/row work, and header work are admitted before their
 corresponding allocations where the physical framing supplies those counts.
 Resource refusal is separate from semantic source invalidity.

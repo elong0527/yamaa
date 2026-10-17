@@ -64,11 +64,11 @@ contract fixes one.
 specification published at its `output.path`. They are read exactly as a
 consuming specification reads a producer's artifact:
 
-- under the profile [REQ-0751](../storage/ingestion.md#req-0751) says the
+- under the profile [INPUT-1](../inputs.md#input-1) says the
   producer wrote it with;
-- with the field agreement [REQ-0522](../storage/ingestion.md#req-0522)
+- with the field agreement [INPUT-11](../inputs.md#input-11)
   requires; and
-- with the typed values [REQ-0524](../storage/ingestion.md#req-0524)
+- with the typed values [INPUT-11](../inputs.md#input-11)
   delivers.
 
 The producer completes before the document is generated.
@@ -213,10 +213,10 @@ through this closed table:
 smaller than Define-XML's, so the eight collapsed types are carried as text
 here. They keep their submission type in the `ItemDef` the column's `itemOID`
 points at. A reader that needs the finer type reads the document. `float` is
-written for a `float` column even though [Types and conversion](../values/types.md)'s value is binary64,
+written for a `float` column even though [Values](../values.md)'s value is binary64,
 This member must equal the `DataType` that `ItemDef` carries. The
 storage width of a number is not what it names. `boolean`, `decimal`, and
-`double` are never written: [Types and conversion](../values/types.md) declares no Boolean column type, and
+`double` are never written: [Values](../values.md) declares no Boolean column type, and
 neither of the other two names a submission type [Submission metadata](metadata.md) resolves.
 
 ### Values
@@ -229,11 +229,11 @@ entry, in that order, written by the column's declared type:
 | Column type | Written as |
 |---|---|
 | missing, any type | `null` |
-| `str` | a JSON string carrying the value's scalar values, under [Text values](../values/text.md) |
+| `str` | a JSON string carrying the value's scalar values, under [Values](../values.md) |
 | `int` | a JSON number, its decimal digits |
-| `float` | a JSON number, [Numeric values](../values/numbers.md)'s float text |
-| `date` | a JSON string, [Temporal values](../values/temporal.md)'s canonical `date` text |
-| `datetime` | a JSON string, [Temporal values](../values/temporal.md)'s canonical `datetime` text |
+| `float` | a JSON number, [Values](../values.md)'s float text |
+| `date` | a JSON string, [Values](../values.md)'s canonical `date` text |
+| `datetime` | a JSON string, [Values](../values.md)'s canonical `datetime` text |
 
 <a id="req-1213"></a>
 
@@ -248,8 +248,8 @@ property of that container and are not a second spelling here.
 Which of them reaches this file is decided by the artifact's own container
 and by nothing else. A `parquet` artifact's zero-length string arrives as a
 present empty string. A `csv` artifact's empty field arrives as missing under
-[REQ-0529](../storage/ingestion.md#req-0529).
-[REQ-1158](../storage/ingestion.md#req-1158)'s empty-string convention does not apply here.
+[INPUT-8](../inputs.md#input-8).
+[INPUT-9](../inputs.md#input-9)'s empty-string convention does not apply here.
 
 ### Serialization
 
@@ -302,7 +302,7 @@ itself in UTF-8.
 
 **REQ-1219.** No number is written with an exponent, a leading `U+002B`, digit
 grouping, or a leading zero. An `int` is [REQ-0733](../storage/csv.md#req-0733)'s integer spelling and a
-`float` is [REQ-0018](../values/numbers.md#req-0018)'s float text, which is positional and shortest and therefore
+`float` is [VALUE-8](../values.md#value-8)'s float text, which is positional and shortest and therefore
 the one spelling two runtimes can both produce.
 
 <a id="req-1220"></a>
@@ -333,7 +333,7 @@ and its log.
 
 <a id="req-1223"></a>
 
-**REQ-1223.** This container is not a source. [Source ingestion](../storage/ingestion.md)'s extension mapping
+**REQ-1223.** This container is not a source. [Inputs](../inputs.md)'s extension mapping
 stays closed at `.csv` and `.parquet`, and a `dataset_class.path` ending in
 `.json` names no profile.
 
@@ -364,7 +364,7 @@ leaf names.
 
 **REQ-1230.** An artifact that has not been published, or whose fields, order,
 or types do not match the producing specification's output contract: fail
-under [REQ-0535](../storage/ingestion.md#req-0535), reporting the dataset and the artifact path. The document
+under [INPUT-11](../inputs.md#input-11), reporting the dataset and the artifact path. The document
 and its data files are generated from one composition, so a stale artifact
 fails the generation rather than producing a package whose two halves
 describe different datasets.

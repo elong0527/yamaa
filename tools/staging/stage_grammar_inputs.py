@@ -20,7 +20,7 @@ CONTRACTS = {
     "aggregate": "operations/aggregation",
     "numeric": "operations/computation",
     "predicate": "operations/predicates",
-    "string-template": "operations/text",
+    "string-template": "text",
 }
 
 

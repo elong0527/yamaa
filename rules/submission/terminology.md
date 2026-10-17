@@ -72,7 +72,7 @@ is a contradiction rather than an extension.
 
 <a id="req-0935"></a>
 
-**REQ-0935.** Coded values are unique within a codelist under [Text values](../values/text.md) equality for
+**REQ-0935.** Coded values are unique within a codelist under [Values](../values.md) equality for
 `text` and under numeric equality otherwise. Items keep their declared order;
 [Define-XML](define-xml.md) carries the declared order into the generated document.
 

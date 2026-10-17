@@ -61,7 +61,7 @@ than nest one inside an operation; this policy does not restrict those fields.
 <a id="req-0292"></a>
 
 **REQ-0292.** Fields typed `numeric_expression`, `string_template`, and
-`aggregate_expression` are leaves whose identifiers [Numeric computation](computation.md), [Text operations](text.md), and [Aggregation](aggregation.md)
+`aggregate_expression` are leaves whose identifiers [Numeric computation](computation.md), [Text](../text.md), and [Aggregation](aggregation.md)
 resolve. Plain strings are values unless their schema field is typed as
 `variable`, `function_arg`, `predicate`, or `string_template`. [Project functions](functions.md) closes
 `function_arg`: a string is a variable, while string, date, and datetime
@@ -75,7 +75,7 @@ literals use their explicit tagged leaf forms.
 
 <a id="req-0315"></a>
 
-**REQ-0315.** `source` retains its source type under [Source ingestion](../storage/ingestion.md). `literal` retains its YAML
+**REQ-0315.** `source` retains its source type under [Inputs](../inputs.md). `literal` retains its YAML
 scalar type after non-finite normalization. Mapping, conditional, coalescing,
 and extreme expressions retain the selected value type, including collected
 precision when the selected value is temporal. Numeric computation follows

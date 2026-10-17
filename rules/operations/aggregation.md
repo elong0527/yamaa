@@ -35,7 +35,7 @@ gives `function` the return type declared by its logical contract.
 returns one value per group. The expression never changes the row count.
 [Lookup and joins](lookup.md) joins
 a right-side reduction to constructed rows. An output-row reduction broadcasts
-under [REQ-0467](aggregation.md#req-0467). A grouped row template asks the expression for one value while [Column derivation](../columns.md)
+under [REQ-0467](aggregation.md#req-0467). A grouped row template asks the expression for one value while [Execution lifecycle](../execution/lifecycle.md)
 decides whether that candidate row is appended.
 
 ### Relations and identifiers
@@ -43,7 +43,7 @@ decides whether that candidate row is appended.
 <a id="req-0466"></a>
 
 **REQ-0466.** An identifier is `NAME` or `DATASET.NAME`. Name binding
-[resolves each identifier](../names.md#name-3) in the same phase. A
+[resolves each identifier](../specification/binding.md) in the same phase. A
 reducer expression and predicate resolve each name the same way.
 
 <a id="req-0467"></a>
@@ -81,7 +81,7 @@ under [Lookup and joins](lookup.md).
 **REQ-0469.** A qualified name in this grammar reaches a field of its
 relation, never an ODM item by its `ItemOID`. ODM item identifiers carry
 further periods. Read the item into a column with
-[`odm`](../names.md#name-7) first.
+[`odm`](../specification/binding.md#req-1265) first.
 
 <a id="req-0470"></a>
 
@@ -130,9 +130,9 @@ derive its neighbours with [Window functions](windows.md), then derive each
 segment as an ordinary column. A second specification reduces the stored
 segments at the subject grain. Its input may declare
 `SEGS: {path: segments.csv, schema: segments.yaml}` under
-[REQ-0520](../storage/ingestion.md#req-0520); the producing specification
+[INPUT-10](../inputs.md#input-10); the producing specification
 completes before the consumer reads its artifact under
-[REQ-0521](../storage/ingestion.md#req-0521). For the linear trapezoid, the
+[INPUT-10](../inputs.md#input-10). For the linear trapezoid, the
 producer's segment expression is `0.5 * (PREVC + AVAL) * (ARELTM - PREVT)`,
 and the consumer's reduction is `SUM(SEGS.SEG)`. A first sample's missing
 neighbour produces a missing segment, which `SUM` skips under
@@ -141,10 +141,10 @@ neighbour produces a missing segment, which `SUM` skips under
 <a id="req-1190"></a>
 
 **REQ-1190.** Each derive binding's evaluated value converts to its declared
-`type` through [Types and conversion](../values/types.md)'s REQ-0009 and
-REQ-0010. Text that is not convertible to the declared numeric type fails as
-a conversion failure under [Types and conversion](../values/types.md)'s
-REQ-0013, answered by a declared `unconvertible` handler and fatal
+`type` through [Values](../values.md)'s VALUE-3 and
+VALUE-3. Text that is not convertible to the declared numeric type fails as
+a conversion failure under [Values](../values.md)'s
+VALUE-3, answered by a declared `unconvertible` handler and fatal
 otherwise. A missing value stays missing without attempting conversion.
 
 <a id="req-1191"></a>
@@ -182,7 +182,7 @@ bound makes the match one-sided without excluding the stated endpoint.
 <a id="req-0473"></a>
 
 **REQ-0473.** The value and every stated bound must be mutually comparable under
-[REQ-0005](../values/types.md#req-0005). A missing current-row value admits no right-side record. The aggregate
+[VALUE-19](../values.md#value-19). A missing current-row value admits no right-side record. The aggregate
 result is missing under the empty-group rule below. A right-side
 record with a missing stated bound is ineligible. A missing cutoff never
 reduces the unrestricted right side.
@@ -257,7 +257,7 @@ order, starting with the first such value and adding each later value with
 [Numeric computation](computation.md)'s `+` semantics. Implementations must not
 reorder, reassociate, partition, or use a compensated or correctly rounded
 summation. The `filter`, when present, removes records and keeps the order of
-the records that remain. [Source ingestion](../storage/ingestion.md) defines stored-source record order. [Column derivation](../columns.md)
+the records that remain. [Inputs](../inputs.md) defines stored-source record order. [Execution lifecycle](../execution/lifecycle.md)
 defines constructed-output and grouped-input record order. `MEAN` uses the same
 ordered `SUM`, followed by division by `COUNT`; `MEAN` inherits `SUM`'s binary64
 rounding behavior.
@@ -281,16 +281,16 @@ one source record and must reject duplicates.
 reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one key level and
 reducing that result at another uses two specifications. The first artifact
 names and validates the intermediate keys. The downstream specification
-declares that artifact as an ordinary source under [Name binding](../names.md#name-1)
+declares that artifact as an ordinary source under [Name binding](../specification/binding.md)
 and can link its producing specification through `dataset_class.schema`
-([REQ-0520](../storage/ingestion.md#req-0520)). That link supplies the workflow
+([INPUT-10](../inputs.md#input-10)). That link supplies the workflow
 boundary: the producer completes first under
-[REQ-0521](../storage/ingestion.md#req-0521), and the consumer reads its held
+[INPUT-10](../inputs.md#input-10), and the consumer reads its held
 serialized artifact under [REQ-1247](../storage/resources.md#req-1247).
 One domain build executes both levels; neither artifact must already exist,
 and only explicit Save publishes them. A source path alone does not establish
 this boundary. The producer's selected columns must declare their types and
-labels under [REQ-0522](../storage/ingestion.md#req-0522).
+labels under [INPUT-11](../inputs.md#input-11).
 
 For example, `daily.yaml` can group exposure records by subject, treatment,
 and day and derive `ADOSE: {aggregate: "SUM(EX.EXDOSE)"}`. A downstream
@@ -338,7 +338,7 @@ when `EX.EXPLDOS` is declared in `group_by`.
 <a id="req-0488"></a>
 
 **REQ-0488.** An expression using any operator or [Numeric computation](computation.md) function is numeric.
-  Every reduction and grouped identifier in it must be numeric, and [Numeric values](../values/numbers.md)'s
+  Every reduction and grouped identifier in it must be numeric, and [Values](../values.md)'s
   promotion rules give the result type.
 
 <a id="req-0489"></a>
@@ -346,11 +346,11 @@ when `EX.EXPLDOS` is declared in `group_by`.
 **REQ-0489.** `SUM` and `MEAN` require a numeric argument. `MIN` and `MAX`
   require mutually comparable values; a column mixing incomparable types is an
   error rather than an implementation-defined order. Their string order is
-  [Text values](../values/text.md)'s. `COUNT` and `ONLY` accept any type.
+  [Values](../values.md)'s. `COUNT` and `ONLY` accept any type.
 
 <a id="req-0490"></a>
 
-**REQ-0490.** [Types and conversion](../values/types.md) converts a completed derivation result, as it does for every
+**REQ-0490.** [Values](../values.md) converts a completed derivation result, as it does for every
 other expression. No implicit conversion happens inside this grammar.
 
 ### Missing values and empty groups
@@ -399,7 +399,7 @@ rather than fail says so with `NULLIF`.
 
 **REQ-0496.** [Numeric computation](computation.md)'s failure conditions apply to the arithmetic unchanged:
 division by zero, `SQRT` of a negative argument, `LN` of a non-positive
-argument, invalid `POWER`, and integer overflow each fail the run. [Types and conversion](../values/types.md)'s non-
+argument, invalid `POWER`, and integer overflow each fail the run. [Values](../values.md)'s non-
 finite normalization applies after every arithmetic or reduction result. `SUM`
 fails on integer overflow under the same condition. `MEAN` is defined
 by `SUM`. The same intermediate overflow fails even when the mathematical mean

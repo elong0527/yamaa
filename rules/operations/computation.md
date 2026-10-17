@@ -26,7 +26,7 @@ numeric.
 **REQ-0407.** `compute` evaluates a closed numeric grammar over constructed output
 columns, fields of a declared record lookup, and numeric literals.
 `compute` returns one numeric value per current row. The grammar is a
-subset of SQL. [Numeric values](../values/numbers.md)'s representation,
+subset of SQL. [Values](../values.md)'s representation,
 promotion, and overflow rules apply to every operator and function.
 
 ### Identifiers
@@ -79,8 +79,8 @@ itself qualifies no dataset but its own.
 <a id="req-0412"></a>
 
 **REQ-0412.** An identifier that does not resolve in its phase is an error. A
-lookup field carries the type [Source ingestion](../storage/ingestion.md) assigns to the field in the lookup's
-dataset. [Column derivation](../columns.md) collects these identifiers and lookup source dependencies. A
+lookup field carries the type [Inputs](../inputs.md) assigns to the field in the lookup's
+dataset. [Execution lifecycle](../execution/lifecycle.md) collects these identifiers and lookup source dependencies. A
 `compute` derivation therefore participates in dependency ordering like a
 predicate does.
 
@@ -167,8 +167,8 @@ The source must be numeric; a non-numeric source is an
 `incompatible_input_type` validation error. Missing stays missing. A value
 that rounds to zero returns positive zero, never negative zero. The result
 is a float. Analysis datasets otherwise carry computed values at full
-precision; reporting decides the displayed places. [Types and
-conversion](../values/types.md) has the same rule at conversion, where a
+precision; reporting decides the displayed places.
+[VALUE-7](../values.md#value-7) has the same rule at conversion, where a
 non-integral value fails rather than being truncated.
 
 <a id="req-0419"></a>
@@ -176,8 +176,8 @@ non-integral value fails rather than being truncated.
 **REQ-0419.** `CEIL`, `FLOOR`, and `TRUNC` remain. They are not presentation
 rounding. They return an integral part, with no mode to choose.
 `FLOOR(a / b)` floors the binary64 quotient under
-[REQ-0421](../values/numbers.md#req-0421) and returns an integral `float`
-under [REQ-0423](../values/numbers.md#req-0423). It need not equal the floor
+[VALUE-10](../values.md#value-10) and returns an integral `float`
+under [VALUE-10](../values.md#value-10). It need not equal the floor
 of the exact integer quotient.
 
 ### Types
@@ -192,7 +192,7 @@ grammar is not widened to reach them.
 <a id="req-0426"></a>
 
 **REQ-0426.** An identifier whose runtime type is neither `int` nor `float`
-is an error. [REQ-0004](../values/types.md#req-0004) forbids implicit conversion between operation
+is an error. [VALUE-2](../values.md#value-2) forbids implicit conversion between operation
 inputs, and this contract does not relax that rule. A collected string is
 converted by binding it to a numeric column first.
 
@@ -215,7 +215,7 @@ fail uses `NULLIF`. Percentage change against a zero base is
 
 <a id="req-0429"></a>
 
-**REQ-0429.** The following conditions fail the run. Consistent with [Column derivation](../columns.md),
+**REQ-0429.** The following conditions fail the run. Consistent with [Execution lifecycle](../execution/lifecycle.md),
 implementations must not silently convert a failure to missing.
 
 <a id="req-0430"></a>

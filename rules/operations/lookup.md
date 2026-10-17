@@ -151,9 +151,9 @@ carries `field`, the diagnostic suggests that bare name.
 <a id="req-0118"></a>
 
 **REQ-0118.** Each source/key pair must be mutually comparable under
-[REQ-0005](../values/types.md#req-0005). The match converts no operand. A pair that cannot compare fails
-as `incompatible_input_type` under [REQ-0323](../values/types.md#req-0323), reporting both declared
-types. [REQ-0517](../storage/ingestion.md#req-0517) gives an undeclared field of a typeless container the type
+[VALUE-19](../values.md#value-19). The match converts no operand. A pair that cannot compare fails
+as `incompatible_input_type` under [VALUE-2](../values.md#value-2), reporting both declared
+types. [INPUT-5](../inputs.md#input-5) gives an undeclared field of a typeless container the type
 `str`; a key typed on one side and defaulted on the other needs repair,
 not a wider comparison.
 
@@ -184,7 +184,7 @@ matching, independent of the runtime implementation.
 | Numeric (`int` or `float`) | `compute` |
 
 For `compute`, either possible result type compares with `int` and `float`
-under [REQ-0005](../values/types.md#req-0005); `float` represents that
+under [VALUE-19](../values.md#value-19); `float` represents that
 numeric comparison class in a validation diagnostic, without changing the
 computed value. Every other expression operation states no static type for
 this check, even when a particular invocation's inputs could reveal one.
@@ -289,7 +289,7 @@ the intermediate derives under [REQ-1185](lookup.md#req-1185). A bound
 naming a field the augmented donor record does not have,
 or a `value` that is not a known variable, fails as `unknown_field`. The
 value and every stated bound must be mutually comparable: `int` and `float`
-compare exactly under [REQ-0005](../values/types.md#req-0005), and every other runtime type
+compare exactly under [VALUE-19](../values.md#value-19), and every other runtime type
 must match exactly, with no operand converted. A mismatch fails as
 `incomparable_range_types` before any record is compared, reporting the
 runtime types of the value and the stated bounds.
@@ -426,15 +426,15 @@ derivations written in the same expression language as row-template
 An untyped entry retains its raw result and cannot declare `unconvertible`;
 the formerly accepted untyped handler wrapper fails schema validation.
 A typed entry converts each result to its declared type under
-[REQ-0009](../values/types.md#req-0009) and
-[REQ-0010](../values/types.md#req-0010), before any later derivation, filter,
+[VALUE-3](../values.md#value-3) and
+[VALUE-3](../values.md#value-3), before any later derivation, filter,
 match, ordering or verification reads it. Missing stays missing. A conversion
 failure is fatal without `unconvertible`; a declared literal replacement
 converts to the same type and is counted under
 [REQ-0358](../execution/handlers.md#req-0358) and
 [REQ-0359](../execution/handlers.md#req-0359). The conversion boundary is the
 binding's result; expressions still never convert implicitly
-([REQ-0004](../values/types.md#req-0004)). For example:
+([VALUE-2](../values.md#value-2)). For example:
 
 ```yaml
 derivations:
@@ -446,7 +446,7 @@ derivations:
 
 `WEEK 02` thus yields the integer `2` before numeric matching. `check`
 reports incompatible key types under
-[REQ-0323](../values/types.md#req-0323) when the declared source types and
+[VALUE-2](../values.md#value-2) when the declared source types and
 derivation result types establish the mismatch without reading data.
 
 The derivations evaluate in declaration order: a derivation
@@ -632,7 +632,7 @@ no match and fails as `missing_aggregate_keys`.
 
 **REQ-0141.** An aggregate's declared `key` columns must exist in the
 relation and its match values must be known, or fail as
-`unknown_field`. A pair that cannot compare fails under [REQ-0004](../values/types.md#req-0004).
+`unknown_field`. A pair that cannot compare fails under [VALUE-2](../values.md#value-2).
 
 <a id="req-0142"></a>
 
@@ -699,7 +699,7 @@ match yields a missing result.
 
 <a id="req-0151"></a>
 
-**REQ-0151.** An inferred key must compare equal on both sides. [REQ-0004](../values/types.md#req-0004)
+**REQ-0151.** An inferred key must compare equal on both sides. [VALUE-2](../values.md#value-2)
 performs no implicit conversion, so an applicable key whose left and
 right types are not mutually comparable fails as
 `incompatible_input_type`, reporting both types.

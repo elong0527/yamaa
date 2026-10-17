@@ -12,7 +12,7 @@ status: normative
 
 <a id="req-0722"></a>
 
-**REQ-0722.** The artifact is UTF-8 and has no byte-order mark. [Text values](../values/text.md)
+**REQ-0722.** The artifact is UTF-8 and has no byte-order mark. [Values](../values.md)
   owns the text being encoded.
 
 <a id="req-0723"></a>
@@ -70,7 +70,7 @@ output.
 collected empty string is written as two quote characters. The two forms stay
 apart in the artifact, and no text is ever pressed into service as a sentinel
 for absence. Reading does not restore the pair.
-[REQ-0529](ingestion.md#req-0529) reads an empty field as missing whether it
+[INPUT-8](../inputs.md#input-8) reads an empty field as missing whether it
 was bare or quoted. A collected empty string written here therefore returns as
 missing if this artifact is later read as a delimited source.
 
@@ -90,17 +90,17 @@ collected empty string. The first row's is missing.
 
 | Column type | Text written |
 |---|---|
-| `str` | its scalar values, under [Text values](../values/text.md) |
+| `str` | its scalar values, under [Values](../values.md) |
 | `int` | its decimal digits, with a leading `U+002D` when negative |
-| `float` | [Types and conversion](../values/types.md)'s float text, or the fixed-point form below |
-| `date` | [Temporal values](../values/temporal.md)'s canonical `date` text |
-| `datetime` | [Temporal values](../values/temporal.md)'s canonical `datetime` text |
+| `float` | [Values](../values.md)'s float text, or the fixed-point form below |
+| `date` | [Values](../values.md)'s canonical `date` text |
+| `datetime` | [Values](../values.md)'s canonical `datetime` text |
 
 <a id="req-0733"></a>
 
 **REQ-0733.** An `int` is written without a leading `U+002B`, without digit
 grouping, and without a leading zero. Zero is `0`. A `float` that takes no
-display precision is written by [Types and conversion](../values/types.md)'s conversion to `str`: the shortest round-
+display precision is written by [Values](../values.md)'s conversion to `str`: the shortest round-
 tripping digits in positional notation, with a trailing `.0` omitted. That
 conversion has no exponent.
 
@@ -116,7 +116,7 @@ of the artifact.
 
 <a id="req-0745"></a>
 
-**REQ-0745.** When it is absent, a `float` is written as [Types and conversion](../values/types.md)'s float text. When
+**REQ-0745.** When it is absent, a `float` is written as [Values](../values.md)'s float text. When
 it is present with the value `n`, a `float` is written in fixed-point form with
 exactly `n` digits after the decimal point, and with a decimal point only when
 `n` is greater than zero. A value therefore keeps its declared width whether or
@@ -192,7 +192,7 @@ change to the records or values the file delivers.
 <a id="req-0836"></a>
 
 **REQ-0836.** A delimited source is UTF-8. Ill-formed encoded bytes fail under
-[Text values](../values/text.md) rather than being replaced, skipped, or decoded under a machine default.
+[Values](../values.md) rather than being replaced, skipped, or decoded under a machine default.
 
 <a id="req-0837"></a>
 
@@ -243,7 +243,7 @@ the field, and a reader that removes it changes a collected value.
 
 **REQ-0845.** The first record is the **header**, and it names the source's
 fields in order. Each name is non-empty, and no two names are the same
-under [Text values](../values/text.md)'s equality. A quoted name carries the text inside its quotes, so a
+under [Values](../values.md)'s equality. A quoted name carries the text inside its quotes, so a
 quoted empty name is an empty name and fails.
 
 <a id="req-0846"></a>
@@ -271,7 +271,7 @@ sentinel.
 <a id="req-0849"></a>
 
 **REQ-0849.** A missing-value sentinel is easy to mistake for an oversight.
-[Source ingestion](ingestion.md) fixes what a stored field means, including that no text spells absence.
+[Inputs](../inputs.md) fixes what a stored field means, including that no text spells absence.
 A reader option that spells absence decides the meaning of absence before
 any rule in this design sees the value.
 
@@ -279,10 +279,10 @@ any rule in this design sees the value.
 
 <a id="req-0850"></a>
 
-**REQ-0850.** Every field reaches [Source ingestion](ingestion.md) as its text or as missing, and an
+**REQ-0850.** Every field reaches [Inputs](../inputs.md) as its text or as missing, and an
 implementation must preserve the text and the missing state. A field with
 no characters is missing, bare or quoted. Quoting is a transport detail the
-reader does not report. [Source ingestion](ingestion.md) gives an empty field one meaning and never sees
+reader does not report. [Inputs](../inputs.md) gives an empty field one meaning and never sees
 an empty string. Common dataframe readers discard text-versus-missing
 distinctions by default; conformance is a property of what the reader
 delivers, not of which library produced it.
@@ -336,7 +336,7 @@ message carries no host path.
 
 <a id="req-0853"></a>
 
-**REQ-0853.** Ill-formed encoded bytes: fail with [Text values](../values/text.md)'s `invalid_text`,
+**REQ-0853.** Ill-formed encoded bytes: fail with [Values](../values.md)'s `invalid_text`,
   reporting the record and field the reader had reached.
 
 <a id="req-0854"></a>

@@ -173,5 +173,5 @@ Filters retain the original positions, while `row_number` assigns consecutive
 numbers within each group. The generated name must be absent from the stored
 fields. It is typed automatically and is emitted only through a selected
 output column that derives it. Fixed-schema ODM inputs do not accept `ordinal`.
-See the [source ingestion contract](../rules/storage/ingestion.md#req-1291)
+See the [source ingestion contract](../rules/inputs.md#input-3)
 and [source ordinal benchmark](../benchmarks/schema-source-ordinal/spec.yaml).

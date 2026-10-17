@@ -8,7 +8,7 @@ column_type:
 
 literal_value:
     type: [str, int, float, bool, "null"]
-    description: See REQ-1149.
+    description: Scalar literal; a non-finite float becomes missing (VALUE-4).
 
 path:
     type: str

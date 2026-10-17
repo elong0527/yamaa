@@ -6,7 +6,7 @@ The language admits four closed grammars. Each one is defined once, here:
 |---|---|---|
 | [`predicate.yaml`](predicate.yaml) | [Predicates](../../rules/operations/predicates.md) | a field typed `predicate` |
 | [`numeric.yaml`](numeric.yaml) | [Numeric computation](../../rules/operations/computation.md) | `compute.expr` |
-| [`string-template.yaml`](string-template.yaml) | [Text operations](../../rules/operations/text.md) | `str_template.template` |
+| [`string-template.yaml`](string-template.yaml) | [Text](../../rules/text.md) | `str_template.template` |
 | [`aggregate.yaml`](aggregate.yaml) | [Aggregation](../../rules/operations/aggregation.md) | `aggregate.expr` |
 
 These files are the single authored grammar truth for the shared Rust parser

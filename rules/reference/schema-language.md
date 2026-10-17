@@ -47,8 +47,8 @@ merge keys, explicit tags, and unknown schema constructs.
 
 <a id="req-0247"></a>
 
-**REQ-0247.** Schema documents and the documents they validate use [Text values](../values/text.md)'s
-ASCII source boundary. A decoded string value follows [Text values](../values/text.md) even when written
+**REQ-0247.** Schema documents and the documents they validate use [Values](../values.md)'s
+ASCII source boundary. A decoded string value follows [Values](../values.md) even when written
 with ASCII escape notation.
 
 ### Scalar resolution
@@ -66,7 +66,7 @@ string.
 
 **REQ-0249.** Default parser settings do not satisfy this requirement.
 Implementations must meet it without requiring authors to quote values.
-[Types and conversion](../values/types.md)'s non-finite normalization
+[Values](../values.md)'s non-finite normalization
 applies immediately after core-schema scalar resolution.
 
 The reference implementations use the `py-yaml12` package (imported as
@@ -122,7 +122,7 @@ one by repeating its name.
 **REQ-0253.** A field name is not a descriptor keyword and may match one. In
 `- type: {type: column_type, required: true}` the outer name is the field
 `type` of `column_class` and the inner `type` is this contract's descriptor
-keyword. The two uses are unrelated. [Types and conversion](../values/types.md) separates the vocabularies.
+keyword. The two uses are unrelated. [Values](../values.md) separates the vocabularies.
 
 <a id="req-0254"></a>
 
@@ -192,7 +192,7 @@ explicitly:
 
 - a schema descriptor's `type`, a column's declared `type`, and a value's
   runtime type belong to different naming lists
-  ([REQ-0001](../values/types.md#req-0001));
+  ([VALUE-1](../values.md#value-1));
 - datasets and record lookups share one naming list
   ([NAME-3](../names.md#name-3));
 - a lookup `id` shares one naming list with dataset identifiers, other
@@ -300,12 +300,12 @@ owning contract, which the description references.
 <a id="req-0272"></a>
 
 **REQ-0272.** `pattern` is allowed only for `str` and carries a regular
-  expression. [Text operations](../operations/text.md) owns its syntax, the engine that reads it, and what
+  expression. [Text](../text.md) owns its syntax, the engine that reads it, and what
   satisfying it means.
 
 <a id="req-0273"></a>
 
-**REQ-0273.** `min_length` is allowed only for `str` and counts [Text values](../values/text.md) scalar
+**REQ-0273.** `min_length` is allowed only for `str` and counts [Values](../values.md) scalar
   values.
 
 <a id="req-0274"></a>
@@ -316,7 +316,7 @@ owning contract, which the description references.
 <a id="req-0275"></a>
 
 **REQ-0275.** `values` is allowed only for `str` and lists permitted values
-  compared by [Text values](../values/text.md) equality.
+  compared by [Values](../values.md) equality.
 
 <a id="req-0276"></a>
 

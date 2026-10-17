@@ -39,10 +39,10 @@ names.
 
 <a id="req-0738"></a>
 
-**REQ-0738.** [Temporal values](../values/temporal.md)'s `datetime` is a reading on a wall clock and carries no zone
+**REQ-0738.** [Values](../values.md)'s `datetime` is a reading on a wall clock and carries no zone
 and no offset. Its Timestamp is not adjusted to UTC. An implementation must
 not attach a zone when writing or reading. A runtime whose
-native timestamp always carries a zone -- [Temporal values](../values/temporal.md) names R's `POSIXct` as such a
+native timestamp always carries a zone -- [Values](../values.md) names R's `POSIXct` as such a
 type -- must still write and read this column. The same wall clock
 survives. Shifting a value into or out of a machine timezone changes the
 value.
@@ -107,13 +107,13 @@ A file with no readable Parquet schema is not.
 
 <a id="req-1031"></a>
 
-**REQ-1031.** Every schema field name is non-empty and unique under [Text values](../values/text.md)
+**REQ-1031.** Every schema field name is non-empty and unique under [Values](../values.md)
 equality. A field is scalar; nested, repeated, dictionary, and extension
 types are outside this profile.
 
 <a id="req-1032"></a>
 
-**REQ-1032.** The embedded Parquet type supplies the [Source ingestion](ingestion.md) field type through
+**REQ-1032.** The embedded Parquet type supplies the [Inputs](../inputs.md) field type through
 this closed mapping, which is the inverse of [REQ-0734](parquet.md#req-0734):
 
 | Parquet type | Column type |
@@ -146,7 +146,7 @@ is the collected empty string. The two remain distinct.
 <a id="req-1035"></a>
 
 **REQ-1035.** A finite `DOUBLE` is delivered bit-identically. A non-finite
-`DOUBLE` is normalized immediately to missing under [Types and conversion](../values/types.md).
+`DOUBLE` is normalized immediately to missing under [Values](../values.md).
 
 <a id="req-1036"></a>
 

@@ -389,7 +389,7 @@ mod declaration {
                 ("numeric", "operations/computation"),
                 ("aggregate", "operations/aggregation"),
                 ("predicate", "operations/predicates"),
-                ("string-template", "operations/text"),
+                ("string-template", "text"),
             ]
             .map(|(contract, rule)| {
                 let document = yaml(&format!("yaml/grammar/{contract}.yaml"));

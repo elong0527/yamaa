@@ -236,13 +236,13 @@ match_value:
 
 dataset_source:
     type: [project_path, dataset_class]
-    description: See REQ-1059.
+    description: Path to the dataset, or a path with its producing specification, field types or generated ordinal (INPUT-5).
 
 dataset_class:
     - path:
         type: project_path
         required: true
-        description: See REQ-1060.
+        description: Source data path, relative to its relative_to base or absolute at its local location, with no missing-file fallback; its extension selects the source profile (INPUT-1).
     - relative_to:
         type: path_base
         default: declaring
@@ -250,7 +250,7 @@ dataset_class:
     - types:
         type: "dict[identifier, column_type]"
         required: false
-        description: See REQ-1060.
+        description: Type each named field carries; every other field of a typeless source is str (INPUT-5).
     - encoding:
         type: str
         required: false
@@ -259,7 +259,7 @@ dataset_class:
     - schema:
         type: project_path
         required: false
-        description: See REQ-1060.
+        description: Producing specification whose output contract supplies the source fields and types (INPUT-10).
     - empty_string:
         type: str
         required: false
@@ -269,7 +269,7 @@ dataset_class:
     - ordinal:
         type: identifier
         required: false
-        description: See REQ-1291.
+        description: Name of the generated source record ordinal (INPUT-3).
 
 intermediate_id:
     type: str
@@ -443,23 +443,23 @@ keep_policy:
 
 order_by_term:
     type: [variable, order_term_class]
-    description: See REQ-1102.
+    description: Order term; a bare variable sorts ascending with missing values last (VALUE-22).
 
 order_term_class:
     - variable:
         type: variable
         required: true
-        description: See REQ-1103.
+        description: Variable used as an ordering term (VALUE-22).
     - direction:
         type: str
         default: asc
         values: [asc, desc]
-        description: See REQ-1103.
+        description: Sort direction for non-missing values (VALUE-22).
     - nulls:
         type: str
         default: last
         values: [first, last]
-        description: See REQ-1103.
+        description: Placement of missing values, independent of direction (VALUE-22).
 
 case_item_class:
     type: [case_branch_class, case_otherwise_class]
@@ -491,167 +491,167 @@ expressions:
         - start:
             type: variable
             required: true
-            description: See REQ-1104.
+            description: Starting date (TIME-4).
         - end:
             type: variable
             required: true
-            description: See REQ-1104.
+            description: Ending date; an earlier date produces a negative result (TIME-4).
         - unit:
             type: str
             required: true
             values: [day, week, month, year]
-            description: See REQ-1104.
+            description: Calendar unit counted between the dates (TIME-4).
         - bounds:
             type: str
             default: exclusive
             values: [exclusive, inclusive, between]
-            description: See REQ-1104.
+            description: Which endpoints the day count includes, defined only with unit day (TIME-5).
     date_impute: # See REQ-1105.
         - source:
             type: variable
             required: true
-            description: See REQ-1105.
+            description: ISO 8601 date text, complete or truncated to year or month (TIME-8).
         - month:
             type: int
-            description: See REQ-1105.
+            description: Month used when the source carries only a year, 1 to 12; required when minimum_source_precision is year and absent when it is month (TIME-10).
         - day:
             type: [int, day_rule]
             required: true
-            description: See REQ-1105.
+            description: Day used when the source carries no day, an integer from 1 to 31 or first or last resolved against the month the date lands in (TIME-8).
         - minimum_source_precision:
             type: str
             default: year
             values: [year, month]
-            description: See REQ-1105.
+            description: Least precision the collected source must carry before imputation; month leaves a year-only source missing instead of supplying both month and day (TIME-8).
         - not_before:
             type: variable
-            description: See REQ-1105.
+            description: Date the completed value must not precede; it moves only the components imputation supplied, never a collected date (TIME-9).
         - not_after:
             type: variable
-            description: See REQ-1105.
+            description: Date the completed value must not follow; it moves only the components imputation supplied, never a collected date (TIME-9).
         - missing:
             type: literal_value
-            description: See REQ-1105.
+            description: Result when the source value is missing (TIME-13).
         - invalid:
             type: literal_value
-            description: See REQ-1105.
+            description: Result when the source is not an ISO 8601 date or date prefix (TIME-13).
     date_precision: # See REQ-1106.
         - source:
             type: variable
             required: true
-            description: See REQ-1106.
+            description: ISO 8601 date text, complete or truncated to year or month, or a date whose collected precision is reported (TIME-7).
         - missing:
             type: literal_value
-            description: See REQ-1106.
+            description: Result when the source value is missing (TIME-13).
         - invalid:
             type: literal_value
-            description: See REQ-1106.
+            description: Result when the source is not an ISO 8601 date or date prefix (TIME-13).
     datetime_impute: # See REQ-1182.
         - source:
             type: variable
             required: true
-            description: See REQ-1182.
+            description: ISO 8601 complete date text, or datetime text collected to the hour, minute or second (TIME-11).
         - time:
             type: time_rule
             required: true
-            description: See REQ-1182.
+            description: Time fields supplied when the source does not carry them; first supplies 00 to each, and last supplies 23, 59 and 59 (TIME-12).
         - missing:
             type: literal_value
-            description: See REQ-1182.
+            description: Result when the source value is missing (TIME-13).
         - invalid:
             type: literal_value
-            description: See REQ-1182.
+            description: Result when the source is neither a complete date nor a datetime collected to the hour, minute or second (TIME-13).
     datetime_precision: # See REQ-1183.
         - source:
             type: variable
             required: true
-            description: See REQ-1183.
+            description: ISO 8601 complete date text or datetime text collected to the hour, minute or second, or a datetime whose collected precision is reported (TIME-11).
         - missing:
             type: literal_value
-            description: See REQ-1183.
+            description: Result when the source value is missing (TIME-13).
         - invalid:
             type: literal_value
-            description: See REQ-1183.
+            description: Result when the source is neither a complete date nor a datetime collected to the hour, minute or second (TIME-13).
     to_date: # See REQ-1107.
         - source:
             type: variable
             required: true
-            description: See REQ-1107.
+            description: Datetime whose calendar date is returned, or ISO 8601 date or datetime text to parse (TIME-2).
     study_day: # See REQ-1108.
         - date:
             type: variable
             required: true
-            description: See REQ-1108.
+            description: Date whose study day is returned (TIME-6).
         - reference:
             type: variable
             required: true
-            description: See REQ-1108.
+            description: Reference start date, which is study day 1 (TIME-6).
     to_epoch_day: # See REQ-1188.
         - source:
             type: variable
             required: true
-            description: See REQ-1188.
+            description: Date converted to days since 1970-01-01 (TIME-3).
 
     date_shift: # See REQ-1298.
         - source:
             type: variable
             required: true
-            description: See REQ-1298.
+            description: Complete date to move (TIME-14).
         - days:
             type: [variable, int]
             required: true
-            description: See REQ-1298.
+            description: Signed integer literal or integer variable; a negative count moves backward (TIME-14).
     datetime_diff: # See REQ-1299.
         - start:
             type: variable
             required: true
-            description: See REQ-1299.
+            description: Starting civil datetime (TIME-15).
         - end:
             type: variable
             required: true
-            description: See REQ-1299.
+            description: Ending civil datetime (TIME-15).
         - unit:
             type: str
             required: true
             values: [second, minute, hour, day]
-            description: See REQ-1299.
+            description: Elapsed unit of second, minute, hour or day, where a day is 86400 seconds (TIME-15).
     datetime_shift: # See REQ-1300.
         - source:
             type: variable
             required: true
-            description: See REQ-1300.
+            description: Complete civil datetime to move (TIME-16).
         - amount:
             type: [variable, int, float]
             required: true
-            description: See REQ-1300.
+            description: Signed numeric literal or variable; an integer is required with unit second (TIME-16).
         - unit:
             type: str
             required: true
             values: [second, minute, hour, day]
-            description: See REQ-1300.
+            description: Elapsed unit of second, minute, hour or day, where a day is 86400 seconds (TIME-16).
     duration_value: # See REQ-1301.
         - source:
             type: variable
             required: true
-            description: See REQ-1301.
+            description: ISO 8601 fixed-length duration text (TIME-17).
         - unit:
             type: str
             required: true
             values: [second, minute, hour, day]
-            description: See REQ-1301.
+            description: Numeric result unit of second, minute, hour or day (TIME-17).
         - invalid:
             type: literal_value
-            description: See REQ-1301.
+            description: Literal result for invalid or out-of-range duration text; null gives missing (TIME-17).
 
 day_rule:
     type: str
     values: [first, last]
-    description: See REQ-1109.
+    description: Day resolved against the month the completed date lands in (TIME-8).
 
 time_rule:
     type: str
     values: [first, last]
-    description: See REQ-1184.
+    description: Earliest or latest civil moment the collected source admits, each missing time field taking its first or last value (TIME-12).
 "#),
     ("schema_expression_mapping.yaml", r#"version: "1.0"
 
@@ -775,74 +775,74 @@ expressions:
         - source:
             type: variable
             required: true
-            description: See REQ-1111.
+            description: String variable to search (TEXT-10).
         - pattern:
             type: regex
             required: true
-            description: See REQ-1111.
+            description: Regular expression searched for in the source (TEXT-9).
         - group:
             type: int
             default: 0
-            description: See REQ-1111.
+            description: Match group to return; 0 is the full match (TEXT-10).
         - missing:
             type: literal_value
-            description: See REQ-1111.
+            description: Value returned when the source is missing (TEXT-10).
         - no_match:
             type: literal_value
-            description: See REQ-1111.
+            description: Value returned when the pattern does not match the source (TEXT-10).
     str_replace: # See REQ-1322.
         - source:
             type: variable
             required: true
-            description: See REQ-1322.
+            description: String variable to search (TEXT-11).
         - pattern:
             type: regex
             required: true
-            description: See REQ-1322.
+            description: Regular expression whose every match in the source is replaced (TEXT-11).
         - replacement:
             type: str
             required: true
-            description: See REQ-1322.
+            description: Literal text that replaces each match (TEXT-11).
         - missing:
             type: literal_value
-            description: See REQ-1322.
+            description: Value returned when the source is missing (TEXT-11).
     str_concat: # See REQ-1112.
         - sources:
             type: "list[expression]"
             required: true
-            description: See REQ-1112.
+            description: Expressions to concatenate in order (TEXT-1).
         - missing:
             type: literal_value
-            description: See REQ-1112.
+            description: Value returned when any source is missing (TEXT-1).
     str_template: # See REQ-1113.
         type: [string_template, str_template_class]
-        description: See REQ-1113.
+        description: Portable string template, concise or with missing handling (TEXT-4).
     str_case: # See REQ-1114.
         - source:
             type: variable
             required: true
-            description: See REQ-1114.
+            description: String variable whose ASCII letters change case (TEXT-5).
         - to:
             type: str
             required: true
             values: [upper, lower, sentence, title]
-            description: See REQ-1114.
+            description: Case to produce, one of upper, lower, sentence or title (TEXT-5).
         - missing:
             type: literal_value
-            description: See REQ-1114.
+            description: Value returned when the source is missing (TEXT-5).
 
 string_template:
     type: str
-    description: See REQ-1116.
+    description: Template string of literal text, braced placeholders and doubled braces (TEXT-3).
 
 str_template_class:
     - template:
         type: string_template
         required: true
-        description: See REQ-1117.
+        description: Text containing literal content and braced variables (TEXT-3).
     - missing:
         type: literal_value
-        description: See REQ-1117.
+        description: Value returned when any placeholder value is missing (TEXT-4).
 "#),
     ("schema_expression_window.yaml", r#"version: "1.0"
 
@@ -1201,7 +1201,7 @@ column_type:
 
 literal_value:
     type: [str, int, float, bool, "null"]
-    description: See REQ-1149.
+    description: Scalar literal; a non-finite float becomes missing (VALUE-4).
 
 path:
     type: str
@@ -1707,7 +1707,7 @@ column_type:
 
 literal_value:
     type: [str, int, float, bool, "null"]
-    description: See REQ-1149.
+    description: Scalar literal; a non-finite float becomes missing (VALUE-4).
 
 path:
     type: str

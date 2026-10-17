@@ -88,7 +88,7 @@ that breaks it, whichever method it uses.
 **REQ-0316.** `row_number` and `rank` return integers; `baseline_flag` returns a string.
 `row_value`, `previous_non_missing`, and `locf` retain the selected
 value type and preserve a selected temporal value's collected precision.
-Scalar selection follows [REQ-0315](expressions.md#req-0315); temporal operation results follow [REQ-0590](temporal.md#req-0590).
+Scalar selection follows [REQ-0315](expressions.md#req-0315); temporal operation results follow [TIME-1](../temporal.md#time-1).
 
 ### Interface behavior
 
@@ -185,7 +185,7 @@ derivation:
 
 | Field | Meaning |
 | --- | --- |
-| `Scope` | This contract defines partitioning and filtering; [Ordering](../execution/ordering.md) defines the ordering one window_spec declares; each window expression below nests it as `window:` and adds only its own specific fields. |
+| `Scope` | This contract defines partitioning and filtering; [VALUE-22](../values.md#value-22) defines the ordering one window_spec declares; each window expression below nests it as `window:` and adds only its own specific fields. |
 
 ## Error conditions
 

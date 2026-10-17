@@ -19,7 +19,7 @@ GRAMMAR_DIR = PurePosixPath("yaml/grammar")
 GRAMMAR_CONTRACTS = {
     "predicate": "operations/predicates",
     "numeric": "operations/computation",
-    "string-template": "operations/text",
+    "string-template": "text",
     "aggregate": "operations/aggregation",
 }
 GRAMMAR_MARKER = re.compile(

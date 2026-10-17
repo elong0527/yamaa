@@ -62,7 +62,7 @@ yamaa containment failure. A parent step at a filesystem root stays at that root
 
 <a id="req-0779"></a>
 
-**REQ-0779.** A written path is ASCII under [Text values](../values/text.md), like every other
+**REQ-0779.** A written path is ASCII under [Values](../values.md), like every other
 repository-authored value.
 
 ### Resolution and file kind
@@ -114,7 +114,7 @@ written path.
 <a id="req-1247"></a>
 
 **REQ-1247.** A path that names an artifact the run itself produces, through the
-`schema` link of [Source ingestion](ingestion.md), denotes its selected location
+`schema` link of [Inputs](../inputs.md), denotes its selected location
 even before that file exists. Both the artifact path and the `schema` link use
 the input's selected `relative_to` base under [REQ-0780](resources.md#req-0780).
 The producing specification that `schema` names already exists. Its
@@ -166,7 +166,7 @@ produce one key and bind one snapshot.
 
 **REQ-0787.** Several dataset identifiers may resolve to one physical file. The
 declarations remain distinct -- each carries its own identifier and its own
-[Source ingestion](ingestion.md) field types -- but they share the one snapshot, so no two of them
+[Inputs](../inputs.md) field types -- but they share the one snapshot, so no two of them
 observe different bytes.
 
 <a id="req-0788"></a>

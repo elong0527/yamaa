@@ -232,13 +232,13 @@ match_value:
 
 dataset_source:
     type: [project_path, dataset_class]
-    description: See REQ-1059.
+    description: Path to the dataset, or a path with its producing specification, field types or generated ordinal (INPUT-5).
 
 dataset_class:
     - path:
         type: project_path
         required: true
-        description: See REQ-1060.
+        description: Source data path, relative to its relative_to base or absolute at its local location, with no missing-file fallback; its extension selects the source profile (INPUT-1).
     - relative_to:
         type: path_base
         default: declaring
@@ -246,7 +246,7 @@ dataset_class:
     - types:
         type: "dict[identifier, column_type]"
         required: false
-        description: See REQ-1060.
+        description: Type each named field carries; every other field of a typeless source is str (INPUT-5).
     - encoding:
         type: str
         required: false
@@ -255,7 +255,7 @@ dataset_class:
     - schema:
         type: project_path
         required: false
-        description: See REQ-1060.
+        description: Producing specification whose output contract supplies the source fields and types (INPUT-10).
     - empty_string:
         type: str
         required: false
@@ -265,7 +265,7 @@ dataset_class:
     - ordinal:
         type: identifier
         required: false
-        description: See REQ-1291.
+        description: Name of the generated source record ordinal (INPUT-3).
 
 intermediate_id:
     type: str

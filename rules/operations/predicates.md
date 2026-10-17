@@ -89,12 +89,12 @@ a fractional part nor an exponent, and `float` otherwise.
 
 **REQ-0164.** A `string` is delimited by single quotes. A doubled quote denotes
 one quote. Backslash has no escape meaning, so `'C:\new'` contains a
-backslash. The literal has runtime type `str` under [Text values](../values/text.md).
+backslash. The literal has runtime type `str` under [Values](../values.md).
 
 <a id="req-0165"></a>
 
 **REQ-0165.** A temporal literal is `DATE '...'` or `DATETIME '...'`. Its text
-must parse under [Temporal values](../values/temporal.md) for the named type. The keyword is required:
+must parse under [Values](../values.md) for the named type. The keyword is required:
 `'2025-06-01'` alone is a `str`, not a `date`.
 
 <a id="req-0166"></a>
@@ -108,21 +108,21 @@ and are never `UNKNOWN`.
 <a id="req-0167"></a>
 
 **REQ-0167.** Two non-missing operands compare only
-when [REQ-0005](../values/types.md#req-0005) makes their runtime types mutually comparable:
+when [VALUE-19](../values.md#value-19) makes their runtime types mutually comparable:
 
 | Types | Order |
 |---|---|
 | `int` with `int` | Exact integer order |
 | `float` with `float` | Binary64 numeric order |
-| Mixed `int` and `float` | Widen the integer to binary64 under [REQ-0017](../values/numbers.md#req-0017), then compare |
-| `str` with `str` | [Text values](../values/text.md) text order |
-| `date` with `date` | Chronological under [Temporal values](../values/temporal.md) |
-| `datetime` with `datetime` | Chronological under [Temporal values](../values/temporal.md) |
+| Mixed `int` and `float` | Widen the integer to binary64 under [VALUE-8](../values.md#value-8), then compare |
+| `str` with `str` | [Values](../values.md) text order |
+| `date` with `date` | Chronological under [Values](../values.md) |
+| `datetime` with `datetime` | Chronological under [Values](../values.md) |
 
 No other operand conversion occurs. Above `2^53`, widening can make a
 neighboring integer equal to a float: `9007199254740993 = 9007199254740992.0`
 is `TRUE`. The same pair remains unequal in the exact comparison consumers
-listed in [REQ-0005](../values/types.md#req-0005).
+listed in [VALUE-19](../values.md#value-19).
 
 <a id="req-0168"></a>
 
@@ -131,7 +131,7 @@ comparable to text, and a `date` is not comparable to a `datetime`.
 
 <a id="req-0169"></a>
 
-**REQ-0169.** Strings use the equality and total order [Text values](../values/text.md) defines.
+**REQ-0169.** Strings use the equality and total order [Values](../values.md) defines.
 
 ### Three-valued logic
 
@@ -177,14 +177,14 @@ comparable to text, and a `date` is not comparable to a `datetime`.
 <a id="req-0176"></a>
 
 **REQ-0176.** For `LIKE`, both non-missing operands must be `str`. In the
-pattern, `%` matches any sequence of [Text values](../values/text.md) scalar values, `_` matches exactly
-one, and every other scalar matches by [Text values](../values/text.md) equality. Matching is
+pattern, `%` matches any sequence of [Values](../values.md) scalar values, `_` matches exactly
+one, and every other scalar matches by [Values](../values.md) equality. Matching is
 case-sensitive.
 
 <a id="req-0177"></a>
 
 **REQ-0177.** No escape character exists by default. `ESCAPE` declares a string
-literal of exactly one [Text values](../values/text.md) scalar value. That character marks the next
+literal of exactly one [Values](../values.md) scalar value. That character marks the next
 pattern scalar as literal; a trailing escape character is invalid.
 
 ```yaml
@@ -250,7 +250,7 @@ predicate as dependency-free.
 
 **REQ-0187.** [Numeric computation](computation.md#req-0436)'s determinism
 requirement applies unchanged. A conforming implementation must use
-[Text values](../values/text.md) for string comparison.
+[Values](../values.md) for string comparison.
 The implementation must not inherit implicit coercion, collation, `LIKE`
 escape, or missing-value behavior from a host SQL engine. The implementation
 must either configure and override those behaviors to match these rules or
@@ -297,7 +297,7 @@ evaluate the grammar itself.
 
 <a id="req-0192"></a>
 
-**REQ-0192.** A temporal literal that [Temporal values](../values/temporal.md)
+**REQ-0192.** A temporal literal that [Values](../values.md)
 rejects while parsing a predicate fails with `invalid_predicate` under
 [REQ-0188](#req-0188). Retain the literal kind and applicable temporal cause
 on the parser finding; standalone syntax diagnostic context reports those
