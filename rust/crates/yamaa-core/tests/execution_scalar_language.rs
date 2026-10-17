@@ -45,7 +45,7 @@ mod execution {
         }
         #[test]
         fn equal_extremes_retain_the_first_dates_collected_precision() {
-            use yamaa_core::temporal::{Date, DatePrecision};
+            use yamaa_core::temporal::{Date, Precision};
             let source = schema(&["ID"]);
             let table = Table {
                 schema: source.clone(),
@@ -64,7 +64,7 @@ mod execution {
             ])
             .unwrap();
             for largest in [true, false] {
-                let operands = [DatePrecision::Month, DatePrecision::Day]
+                let operands = [Precision::Month, Precision::Day]
                     .into_iter()
                     .enumerate()
                     .map(|(index, precision)| Assignment {
@@ -111,7 +111,7 @@ mod execution {
                 let Value::Date(date) = result.dataset.rows()[0][1] else {
                     panic!("date result")
                 };
-                assert_eq!(date.collected_precision(), DatePrecision::Month);
+                assert_eq!(date.collected_precision(), Precision::Month);
             }
         }
 

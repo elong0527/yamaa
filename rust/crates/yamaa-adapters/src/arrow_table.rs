@@ -14,7 +14,7 @@ use arrow_schema::{ArrowError, DataType, Field, Fields, Schema, SchemaRef, TimeU
 use std::{convert::Infallible, sync::Arc};
 use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
-    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+    temporal::{Date, DateTime, Precision},
     value::{ColumnType, FiniteFloat},
 };
 
@@ -126,6 +126,37 @@ fn temporal_fields(kind: ColumnType) -> Fields {
     .into()
 }
 
+/// Collected-precision codes of the date child array. The codes predate the
+/// one precision ladder and keep their values; `none` was added last.
+const DATE_PRECISION: [Precision; 4] = [
+    Precision::Year,
+    Precision::Month,
+    Precision::Day,
+    Precision::None,
+];
+/// Collected-precision codes of the datetime child array, likewise extended.
+const DATETIME_PRECISION: [Precision; 7] = [
+    Precision::Day,
+    Precision::Second,
+    Precision::Hour,
+    Precision::Minute,
+    Precision::None,
+    Precision::Year,
+    Precision::Month,
+];
+fn date_precision_code(precision: Precision) -> u8 {
+    DATE_PRECISION
+        .iter()
+        .position(|&code| code == precision)
+        .expect("a date's collected precision is at most day") as u8
+}
+fn datetime_precision_code(precision: Precision) -> u8 {
+    DATETIME_PRECISION
+        .iter()
+        .position(|&code| code == precision)
+        .expect("every collected precision has a datetime code") as u8
+}
+
 /// Encode validated core dates, retaining imputed fields and collected precision.
 /// Input values are already materialized; transport limits belong to the caller.
 pub fn date_array(values: &[Option<Date>]) -> Result<StructArray, ArrowError> {
@@ -138,13 +169,7 @@ pub fn date_array(values: &[Option<Date>]) -> Result<StructArray, ArrowError> {
     let precision = UInt8Array::from(
         values
             .iter()
-            .map(|value| {
-                value.map_or(0, |date| match date.collected_precision() {
-                    DatePrecision::Year => 0,
-                    DatePrecision::Month => 1,
-                    DatePrecision::Day => 2,
-                })
-            })
+            .map(|value| value.map_or(0, |date| date_precision_code(date.collected_precision())))
             .collect::<Vec<_>>(),
     );
     StructArray::try_new(
@@ -168,11 +193,8 @@ pub fn datetime_array(values: &[Option<DateTime>]) -> Result<StructArray, ArrowE
         values
             .iter()
             .map(|value| {
-                value.map_or(0, |date| match date.collected_precision() {
-                    DateTimePrecision::Day => 0,
-                    DateTimePrecision::Second => 1,
-                    DateTimePrecision::Hour => 2,
-                    DateTimePrecision::Minute => 3,
+                value.map_or(0, |date| {
+                    datetime_precision_code(date.collected_precision())
                 })
             })
             .collect::<Vec<_>>(),
@@ -369,12 +391,9 @@ fn temporal_cell(
             .as_any()
             .downcast_ref::<Date32Array>()
             .ok_or(TableError::TemporalChildType { batch, column, row })?;
-        let precision = match precision.value(row) {
-            0 => DatePrecision::Year,
-            1 => DatePrecision::Month,
-            2 => DatePrecision::Day,
-            _ => return Err(TableError::TemporalPrecision { batch, column, row }),
-        };
+        let precision = *DATE_PRECISION
+            .get(usize::from(precision.value(row)))
+            .ok_or(TableError::TemporalPrecision { batch, column, row })?;
         date_from_days(i64::from(values.value(row)), precision)
             .map(ValueRef::Date)
             .ok_or(TableError::TemporalRange { batch, column, row })
@@ -384,13 +403,9 @@ fn temporal_cell(
             .as_any()
             .downcast_ref::<TimestampSecondArray>()
             .ok_or(TableError::TemporalChildType { batch, column, row })?;
-        let precision = match precision.value(row) {
-            0 => DateTimePrecision::Day,
-            1 => DateTimePrecision::Second,
-            2 => DateTimePrecision::Hour,
-            3 => DateTimePrecision::Minute,
-            _ => return Err(TableError::TemporalPrecision { batch, column, row }),
-        };
+        let precision = *DATETIME_PRECISION
+            .get(usize::from(precision.value(row)))
+            .ok_or(TableError::TemporalPrecision { batch, column, row })?;
         datetime_from_seconds(values.value(row), precision)
             .map(ValueRef::DateTime)
             .ok_or(TableError::TemporalRange { batch, column, row })

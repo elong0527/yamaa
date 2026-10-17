@@ -141,13 +141,18 @@ fn numeric_and_aggregate_result_kinds_are_native_metadata() {
 #[test]
 fn independent_calendar_findings_keep_first_error_priority() {
     use crate::{
-        dataset::{date_policy, date_policy_findings, DatePolicyError, DayDeclaration},
-        temporal::DatePrecision,
+        dataset::{
+            completion_policy, completion_policy_findings, DatePolicyError, DayDeclaration,
+            TemporalType,
+        },
+        temporal::Precision,
     };
-    let findings = date_policy_findings(
+    let findings = completion_policy_findings(
+        TemporalType::Date,
         Some("13"),
-        DayDeclaration::Number("0"),
-        DatePrecision::Year,
+        Some(DayDeclaration::Number("0")),
+        Precision::Year,
+        None,
         "date",
     )
     .unwrap()
@@ -159,10 +164,12 @@ fn independent_calendar_findings_keep_first_error_priority() {
             .collect::<Vec<_>>(),
         vec![C::ImputationMonthRange, C::ImputationDayRange]
     );
-    let DatePolicyError::Diagnostic(first) = date_policy(
+    let DatePolicyError::Diagnostic(first) = completion_policy(
+        TemporalType::Date,
         Some("13"),
-        DayDeclaration::Number("0"),
-        DatePrecision::Year,
+        Some(DayDeclaration::Number("0")),
+        Precision::Year,
+        None,
         "date",
     )
     .unwrap_err() else {
@@ -170,8 +177,9 @@ fn independent_calendar_findings_keep_first_error_priority() {
     };
     assert_eq!(first, findings[0]);
     let invalid = operation(
-        "date_impute",
+        "impute",
         vec![
+            ("type", Tree::text("date")),
             ("source", Tree::text("TERM")),
             ("month", Tree::Scalar(N::Integer("13".into()))),
             ("day", Tree::Scalar(N::Integer("0".into()))),

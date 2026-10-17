@@ -31,7 +31,8 @@ columns:
     type: date
     label: Analysis Start Date
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: AE.AESTDTC
         month: 15
         day: 1

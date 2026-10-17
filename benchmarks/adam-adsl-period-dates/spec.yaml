@@ -58,9 +58,9 @@ columns:
       case:
         - when: "AP02SDT IS NOT NULL"
           then:
-            date_shift: {source: AP02SDT, days: -1}
+            shift: {type: date, source: AP02SDT, days: -1}
         - otherwise:
-            date_shift: {source: LASTEXDT, days: 30}
+            shift: {type: date, source: LASTEXDT, days: 30}
 
   # The last period ends 30 days after last exposure; empty when the
   # subject never entered period 2.
@@ -71,7 +71,7 @@ columns:
       case:
         - when: "AP02SDT IS NOT NULL"
           then:
-            date_shift: {source: LASTEXDT, days: 30}
+            shift: {type: date, source: LASTEXDT, days: 30}
 
 verifications:
   - row_count:

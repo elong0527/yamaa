@@ -212,7 +212,7 @@ no expression or field names, no `output.columns`, and none of the words
 
     - counting neither the last day of period one nor the first day of period
       two, so consecutive periods give zero
-    + `date_diff` with `bounds: between`
+    + `diff` with `bounds: between`
 
     - A subject who never entered period two has no exposure records there
     + Its period-two right side is empty after filtering, treated as
@@ -426,9 +426,9 @@ numeric grammar once rather than registering `add`, `subtract`, and `divide`.
 
 Prefer widening an existing entry to adding a new one -- but the test is the
 kind of value, not the saving in YAML. Widen when the new behavior returns the
-same kind of value, as `date_diff`'s `bounds` still returns a count. Add an
+same kind of value, as `diff`'s `bounds` still returns a count. Add an
 entry when it does not: `study_day` returns an ordinal on a calendar with no
-zero, and folding it into `date_diff` would have allowed `unit: week` with it.
+zero, and folding it into `diff` would have allowed `unit: week` with it.
 
 After registering one, update every place that enumerates the vocabulary: the
 expression registry in the owning `../yaml/schema_*.yaml` module and the

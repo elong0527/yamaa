@@ -23,8 +23,10 @@ data result;
   else if prxmatch('/^[0-9]{4}-[0-9]{2}$/',strip(AESTDTC)) then do;
     analysis=input(cats(AESTDTC,'-15'),yymmdd10.);
     if not missing(analysis) then do;
-      if not missing(treatment) and intnx('month',analysis,0,'end')<treatment then analysis=.;
-      else do; analysis=max(analysis,treatment); ASTDTF='D'; end;
+      /* First exposure moves the 15th forward only when it falls inside the
+         collected month; when it falls after the whole month, the 15th stands. */
+      if missing(treatment) or treatment<=intnx('month',analysis,0,'end') then analysis=max(analysis,treatment);
+      ASTDTF='D';
     end;
   end;
   if not missing(analysis) then do;

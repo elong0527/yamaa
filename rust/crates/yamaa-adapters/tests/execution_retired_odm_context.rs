@@ -1038,7 +1038,7 @@ rows:
                     "S1,2030-01-01\nS2,2030-02-01\n",
                 ),
                 (
-                    "{datetime_impute: {source: DOSE.DTM, time: first}}",
+                    "{impute: {type: datetime, source: DOSE.DTM, minimum_source_precision: day, time: first}}",
                     "datetime",
                     "S1,2030-01-01T08:00:00\nS2,2030-02-01T09:00:00\n",
                 ),
@@ -1048,7 +1048,7 @@ rows:
                     "S1,1.3\nS2,-2.3\n",
                 ),
                 (
-                    "{date_diff: {start: DOSE.DATE, end: PP.DATE, unit: day}}",
+                    "{diff: {type: date, start: DOSE.DATE, end: PP.DATE, unit: day}}",
                     "int",
                     "S1,2\nS2,3\n",
                 ),

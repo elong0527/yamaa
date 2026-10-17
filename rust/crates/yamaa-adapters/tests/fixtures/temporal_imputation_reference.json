@@ -4,11 +4,11 @@
       "phase": "impute",
       "condition": "invalid_date_text",
       "spec_paths": [
-        "columns.ASTDT.derivation.date_impute"
+        "columns.ASTDT.derivation.impute"
       ],
       "requirement": "REQ-0588",
       "context": {
-        "operation": "date_impute",
+        "operation": "impute",
         "source": "AE.AESTDTC",
         "value": "UNKNOWN",
         "keys": [
@@ -26,11 +26,11 @@
       "phase": "impute",
       "condition": "invalid_date_text",
       "spec_paths": [
-        "columns.ASTDTF.derivation.date_precision"
+        "columns.ASTDTF.derivation.precision"
       ],
       "requirement": "REQ-0588",
       "context": {
-        "operation": "date_precision",
+        "operation": "precision",
         "source": "AE.AESTDTC",
         "value": "UNK",
         "keys": [
@@ -43,45 +43,45 @@
       }
     }
   ],
-  "negative-datetime-impute-bad-source": [
+  "negative-impute-datetime-text": [
     {
       "phase": "impute",
-      "condition": "invalid_datetime_text",
+      "condition": "invalid_date_text",
       "spec_paths": [
-        "columns.TRTSDTM.derivation.datetime_impute"
+        "columns.TRTSDTM.derivation.impute"
       ],
-      "requirement": "REQ-1182",
+      "requirement": "REQ-0588",
       "context": {
-        "operation": "datetime_impute",
+        "operation": "impute",
         "source": "EX.EXSTDTC",
-        "value": "2025-01",
+        "value": "2025-01-15 09:30",
         "keys": [
           {
             "STUDYID": "YAMAA-01",
             "USUBJID": "YAMAA-01-101",
-            "EXSEQ": 1
+            "EXSEQ": 2
           }
         ]
       }
     }
   ],
-  "negative-datetime-precision-bad-source": [
+  "negative-precision-datetime-text": [
     {
       "phase": "impute",
-      "condition": "invalid_datetime_text",
+      "condition": "invalid_date_text",
       "spec_paths": [
-        "columns.TRTSTPR.derivation.datetime_precision"
+        "columns.TRTSTPR.derivation.precision"
       ],
-      "requirement": "REQ-1183",
+      "requirement": "REQ-0588",
       "context": {
-        "operation": "datetime_precision",
+        "operation": "precision",
         "source": "EX.EXSTDTC",
-        "value": "2025-01",
+        "value": "2025-01-15T09:30:00Z",
         "keys": [
           {
             "STUDYID": "YAMAA-01",
             "USUBJID": "YAMAA-01-101",
-            "EXSEQ": 1
+            "EXSEQ": 3
           }
         ]
       }

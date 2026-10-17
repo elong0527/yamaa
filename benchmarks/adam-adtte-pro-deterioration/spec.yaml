@@ -181,7 +181,8 @@ columns:
     type: int
     label: Analysis Value
     derivation:
-      date_diff:
+      diff:
+        type: date
         start: STARTDT
         end: ADT
         unit: month

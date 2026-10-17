@@ -1,4 +1,5 @@
-//! Bounded imputation evaluates its bounds only after a partial source needs them.
+//! Imputation reads its bounds and fallback only after a source needs them,
+//! and counts default substitutions and crossed bounds like declared handlers.
 use super::*;
 use crate::dataset::ImputationStep;
 pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
@@ -7,13 +8,34 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
             operation,
             operands,
         } => {
-            for (name, kind) in [
-                ("missing", HandlerKind::Missing),
-                ("invalid", HandlerKind::Invalid),
-            ] {
-                if operation.handler(name).is_some() {
-                    counter.register(&std::format!("{}.{}", operation.path(), name), kind);
-                }
+            if operation.counts_missing_source() {
+                let field = if operation.fallback().is_some() {
+                    "fallback"
+                } else {
+                    "missing"
+                };
+                counter.register(
+                    &std::format!("{}.{field}", operation.path()),
+                    HandlerKind::Missing,
+                );
+            }
+            if operation.handler("invalid").is_some() {
+                counter.register(
+                    &std::format!("{}.invalid", operation.path()),
+                    HandlerKind::Invalid,
+                );
+            }
+            if operation.counts_crossed_bounds() {
+                counter.register(
+                    &std::format!("{}.not_after", operation.path()),
+                    HandlerKind::CrossedBounds,
+                );
+            }
+            if matches!(operation.kind(), crate::dataset::ImputationKind::ToDate) {
+                counter.register(
+                    &std::format!("{}.partial", operation.path()),
+                    HandlerKind::Partial,
+                );
             }
             for source in operands {
                 register(&source.expression, counter);
@@ -62,43 +84,61 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     row: usize,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    let count = |state: &mut EvaluationState<'_, T::Error>, field: &str, kind| {
+        state
+            .handlers
+            .record(&std::format!("{}.{field}", operation.path()), kind)
+            .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))
+    };
     let source = evaluate_raw(table, &operands[0], candidate, plan, row, state)?;
-    let result = operation.source_value(ValueRef::from(&source));
-    let result = match result {
-        Ok(step) => match step {
-            ImputationStep::Value(value) => Ok(value),
-            ImputationStep::Recovered { handler } => {
-                let path = std::format!("{}.{}", operation.path(), handler);
-                let value = operation.handler(handler).expect("declared recovery");
-                state
-                    .handlers
-                    .record(
-                        &path,
-                        if handler == "missing" {
-                            HandlerKind::Missing
-                        } else {
-                            HandlerKind::Invalid
-                        },
-                    )
-                    .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
-                Ok(value.clone())
+    let result = match operation.source_value(ValueRef::from(&source)) {
+        Ok(ImputationStep::Value(value)) => Ok(value),
+        Ok(ImputationStep::Recovered { handler }) => {
+            count(state, handler, HandlerKind::Invalid)?;
+            Ok(operation
+                .handler(handler)
+                .expect("declared recovery")
+                .clone())
+        }
+        Ok(ImputationStep::Missing) => match operation.fallback() {
+            Some(_) => {
+                count(state, "fallback", HandlerKind::Missing)?;
+                let fallback = operands.last().expect("declared fallback operand");
+                let value = evaluate_raw(table, fallback, candidate, plan, row, state)?;
+                operation.fallback_value(ValueRef::from(&value))
             }
-            ImputationStep::Bound(completed) => {
-                let (mut not_before, mut not_after) = (Value::Missing, Value::Missing);
-                for ((field, _), operand) in operation.bounds().zip(&operands[1..]) {
-                    let value = evaluate_raw(table, operand, candidate, plan, row, state)?;
-                    match field {
-                        "not_before" => not_before = value,
-                        _ => not_after = value,
-                    }
-                }
-                operation.apply_bounds(
-                    completed,
-                    ValueRef::from(&not_before),
-                    ValueRef::from(&not_after),
-                )
+            None => {
+                count(state, "missing", HandlerKind::Missing)?;
+                Ok(Value::Missing)
             }
         },
+        Ok(ImputationStep::Partial) => {
+            count(state, "partial", HandlerKind::Partial)?;
+            Ok(Value::Missing)
+        }
+        Ok(ImputationStep::Bound(pending)) => {
+            let (mut not_before, mut not_after) = (Value::Missing, Value::Missing);
+            for ((field, _), operand) in operation.bounds().zip(&operands[1..]) {
+                let value = evaluate_raw(table, operand, candidate, plan, row, state)?;
+                match field {
+                    "not_before" => not_before = value,
+                    _ => not_after = value,
+                }
+            }
+            match operation.apply_bounds(
+                pending,
+                ValueRef::from(&not_before),
+                ValueRef::from(&not_after),
+            ) {
+                Ok((value, crossed)) => {
+                    if crossed {
+                        count(state, "not_after", HandlerKind::CrossedBounds)?;
+                    }
+                    Ok(value)
+                }
+                Err(diagnostic) => Err(diagnostic),
+            }
+        }
         Err(diagnostic) => Err(diagnostic),
     };
     result.map_err(|diagnostic| {

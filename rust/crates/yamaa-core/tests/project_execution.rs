@@ -1296,7 +1296,7 @@ mod project {
     mod project_function_result {
         use yamaa_core::{
             project_function_result::results_match,
-            temporal::{Date, DatePrecision},
+            temporal::{Date, Precision},
             value::Value,
         };
         #[test]
@@ -1379,8 +1379,8 @@ mod project {
                     &Value::Int(i64::MAX),
                     digits
                 ));
-                let full = Value::Date(Date::new(2024, 1, 1, DatePrecision::Day).unwrap());
-                let collected = Value::Date(Date::new(2024, 1, 1, DatePrecision::Year).unwrap());
+                let full = Value::Date(Date::new(2024, 1, 1, Precision::Day).unwrap());
+                let collected = Value::Date(Date::new(2024, 1, 1, Precision::Year).unwrap());
                 assert!(results_match(&full, &collected, digits));
             }
             assert!(!results_match(&Value::Int(1), &Value::Int(1), -1));

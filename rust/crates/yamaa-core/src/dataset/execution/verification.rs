@@ -6,7 +6,7 @@ use crate::{
     bound_expression::{Binding, Read},
     predicate::{ErrorKind, Truth},
     table::TableAccess,
-    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+    temporal::{Date, DateTime, Precision},
     value::{ColumnType, Value},
 };
 
@@ -16,14 +16,14 @@ fn sample(kind: ColumnType) -> Value {
         ColumnType::Str => Value::Str("sample".into()),
         ColumnType::Int => Value::Int(0),
         ColumnType::Float => Value::float(0.0),
-        ColumnType::Date => Value::Date(Date::new(2000, 1, 1, DatePrecision::Day).unwrap()),
+        ColumnType::Date => Value::Date(Date::new(2000, 1, 1, Precision::Day).unwrap()),
         ColumnType::DateTime => Value::DateTime(
             DateTime::new(
-                Date::new(2000, 1, 1, DatePrecision::Day).unwrap(),
+                Date::new(2000, 1, 1, Precision::Day).unwrap(),
                 0,
                 0,
                 0,
-                DateTimePrecision::Second,
+                Precision::Second,
             )
             .unwrap(),
         ),

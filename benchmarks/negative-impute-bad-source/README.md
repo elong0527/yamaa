@@ -16,8 +16,8 @@ adverse event (AE) from its collected onset text (`AESTDTC`).
   it and no artifact is accepted.
 
 **Note:** a date that was never collected and text that cannot be
-read as a date are different defects, and neither has a stated
-outcome here.
+read as a date are different defects: an onset never collected gives
+no analysis date, while unreadable text has no stated outcome here.
 
 ## How to fix
 
@@ -26,7 +26,8 @@ is intentionally treated as no analysis date, declare that outcome locally:
 
 ```yaml
 derivation:
-  date_impute:
+  impute:
+    type: date
     source: AE.AESTDTC
     month: 1
     day: 1
@@ -34,5 +35,5 @@ derivation:
 ```
 
 The `invalid` outcome applies to text that is not a calendar date or date
-beginning; it is distinct from text that was never collected, which
-`missing` answers.
+beginning; it is distinct from text that was never collected, which gives
+no analysis date without any declaration.

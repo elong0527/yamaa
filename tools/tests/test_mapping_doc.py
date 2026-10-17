@@ -547,10 +547,27 @@ class DerivationShapeTests(unittest.TestCase):
         self.assertIn("SUM(EX.EXDOSE)", rule)
         self.assertIn("matching on the shared output keys", rule)
 
-    def test_date_diff_states_which_endpoints_are_counted(self):
+    def test_no_spec_renders_a_temporal_verb_as_raw_yaml(self):
+        # A verb nested in a case branch or a lookup sits mid-cell, where the
+        # leading-brace check above cannot see it, and an entry spec need not
+        # be spec.yaml; so every spec file and every cell is read.
+        verbs = ("diff", "shift", "impute", "precision", "imputation_flag", "to_date")
+        raw = []
+        for benchmark in sorted(BENCHMARKS.iterdir()):
+            for path in generate.benchmark_spec_files(benchmark):
+                spec = yaml.safe_load(path.read_text(encoding="utf-8"))
+                for _, _, _, rows in mapping_doc.mapping_sheets(spec):
+                    for row in rows:
+                        for cell in row:
+                            if any("{'" + verb + "'" in str(cell) for verb in verbs):
+                                raw.append(benchmark.name + "/" + path.name)
+        self.assertEqual(raw, [])
+
+    def test_diff_of_dates_states_which_endpoints_are_counted(self):
         rule = mapping_doc.describe_derivation(
             {
-                "date_diff": {
+                "diff": {
+                    "type": "date",
                     "start": "BRTHDT",
                     "end": "RANDDT",
                     "unit": "year",
@@ -563,10 +580,17 @@ class DerivationShapeTests(unittest.TestCase):
             "Whole years from BRTHDT to RANDDT, counting the end date but not the start.",
         )
 
-    def test_datetime_diff_states_its_sign_and_rounding(self):
+    def test_diff_of_datetimes_states_its_sign_and_rounding(self):
         def rule(unit):
             return mapping_doc.describe_derivation(
-                {"datetime_diff": {"start": "FANLDTM", "end": "ADTM", "unit": unit}}
+                {
+                    "diff": {
+                        "type": "datetime",
+                        "start": "FANLDTM",
+                        "end": "ADTM",
+                        "unit": unit,
+                    }
+                }
             )
 
         self.assertEqual(
@@ -579,28 +603,221 @@ class DerivationShapeTests(unittest.TestCase):
             "Whole seconds from FANLDTM to ADTM, negative when ADTM is earlier.",
         )
 
-    def test_precision_names_the_codes_of_its_own_type(self):
-        def rule(word):
-            return mapping_doc.describe_derivation(
-                {word + "_precision": {"source": "PC.PCDTC"}}
-            )
+    def test_shift_names_how_far_and_which_way_the_value_moves(self):
+        def rule(node):
+            return mapping_doc.describe_derivation({"shift": node})
 
         self.assertEqual(
+            rule({"type": "date", "source": "AP02SDT", "days": -1}),
+            "The date 1 day before AP02SDT.",
+        )
+        self.assertEqual(
+            rule({"type": "date", "source": "LASTEXDT", "days": 30}),
+            "The date 30 days after LASTEXDT.",
+        )
+        self.assertEqual(
+            rule({"type": "date", "source": "TRTSDT", "days": "OFFSET"}),
+            "The date TRTSDT plus OFFSET days.",
+        )
+        self.assertEqual(
+            rule(
+                {"type": "datetime", "source": "EXSTDTC", "amount": 24, "unit": "hour"}
+            ),
+            "The datetime 24 hours after EXSTDTC.",
+        )
+        self.assertEqual(
+            rule(
+                {"type": "datetime", "source": "WINEND", "amount": -1, "unit": "second"}
+            ),
+            "The datetime 1 second before WINEND.",
+        )
+
+    def test_shift_reads_as_a_value_inside_a_case_branch(self):
+        rule = mapping_doc.describe_derivation(
+            {
+                "case": [
+                    {
+                        "when": "AP02SDT IS NOT NULL",
+                        "then": {
+                            "shift": {"type": "date", "source": "AP02SDT", "days": -1}
+                        },
+                    },
+                    {
+                        "otherwise": {
+                            "shift": {"type": "date", "source": "LASTEXDT", "days": 30}
+                        }
+                    },
+                ]
+            }
+        )
+        self.assertEqual(
+            rule,
+            "If AP02SDT IS NOT NULL then the date 1 day before AP02SDT; "
+            "otherwise the date 30 days after LASTEXDT.",
+        )
+
+    def test_precision_names_the_words_of_its_own_type(self):
+        def rule(kind):
+            return mapping_doc.describe_derivation(
+                {"precision": {"type": kind, "source": "PC.PCDTC", "invalid": None}}
+            )
+
+        blank = "; invalid text " + mapping_doc.ARROW + " blank."
+        self.assertEqual(
             rule("datetime"),
-            "Collected datetime precision of PC.PCDTC: S through the second, "
-            "M through the minute, H through the hour, D for a date alone.",
+            'Collected datetime precision of PC.PCDTC: "second" through the '
+            'second, "minute" through the minute, "hour" through the hour, '
+            '"day" for a date alone, "month" for a year and month, "year" for '
+            'a year alone, "none" for an entirely imputed datetime' + blank,
         )
         self.assertEqual(
             rule("date"),
-            "Collected date precision of PC.PCDTC: D for a complete date, M for "
-            "year and month, Y for a year alone.",
+            'Collected date precision of PC.PCDTC: "day" for a complete date, '
+            '"month" for a year and month, "year" for a year alone, "none" for '
+            "an entirely imputed date" + blank,
         )
 
-    def test_datetime_impute_supplies_only_missing_time_parts(self):
+    def test_invalid_text_with_no_handler_is_an_error(self):
+        for verb, node in (
+            ("precision", {"type": "date", "source": "AESTDTC"}),
+            ("impute", {"type": "date", "source": "AESTDTC", "month": 1, "day": 1}),
+        ):
+            with self.subTest(verb=verb):
+                rule = mapping_doc.describe_derivation({verb: node})
+                self.assertTrue(rule.endswith("; invalid text is an error."), rule)
+
+    def test_impute_of_a_datetime_supplies_only_missing_time_parts(self):
         rule = mapping_doc.describe_derivation(
-            {"datetime_impute": {"source": "AEENDTC", "time": "last"}}
+            {
+                "impute": {
+                    "type": "datetime",
+                    "source": "AEENDTC",
+                    "minimum_source_precision": "day",
+                    "time": "last",
+                    "invalid": None,
+                }
+            }
         )
-        self.assertIn("each time part the source lacks its latest value", rule)
+        self.assertEqual(
+            rule,
+            "Impute incomplete datetime from AEENDTC, giving each time part the "
+            "source lacks its latest value; a source without a complete date "
+            "gives blank; invalid text " + mapping_doc.ARROW + " blank.",
+        )
+
+    def test_impute_states_what_its_minimum_source_precision_leaves_blank(self):
+        def rule(minimum):
+            node = {"type": "date", "source": "AESTDTC", "day": 15}
+            if minimum:
+                node["minimum_source_precision"] = minimum
+            return mapping_doc.describe_derivation({"impute": node})
+
+        self.assertNotIn("gives blank", rule(None))
+        self.assertNotIn("gives blank", rule("year"))
+        self.assertIn("day=15; a year alone gives blank;", rule("month"))
+        self.assertIn("; a source without a complete date gives blank;", rule("day"))
+
+    def test_impute_bound_outside_the_collected_period_is_ignored(self):
+        def rule(**bounds):
+            return mapping_doc.describe_derivation(
+                {
+                    "impute": {
+                        "type": "date",
+                        "source": "AESTDTC",
+                        "month": 1,
+                        "day": "first",
+                        **bounds,
+                    }
+                }
+            )
+
+        self.assertEqual(
+            rule(not_before="TRTSDT", not_after="AENDT"),
+            "Impute incomplete date from AESTDTC, defaulting month=1, day=first, "
+            "never before TRTSDT, never after AENDT; a bound outside the "
+            "collected period is ignored, and AENDT wins over a later TRTSDT; "
+            "invalid text is an error.",
+        )
+        single = rule(not_after="DTHDT")
+        self.assertIn(
+            "never after DTHDT; a bound outside the collected period is ignored;",
+            single,
+        )
+        self.assertNotIn("wins", single)
+
+    def test_impute_bound_read_through_a_lookup_names_its_column_again(self):
+        ctx = mapping_doc.SpecContext(
+            {"intermediates": [{"id": "DEATH", "dataset": "DS", "no_match": None}]}
+        )
+        rule = mapping_doc.describe_derivation(
+            {
+                "impute": {
+                    "type": "date",
+                    "source": "AEENDTC",
+                    "month": 12,
+                    "day": "last",
+                    "not_before": "TRTSDT",
+                    "not_after": "DEATH.DTHDT",
+                }
+            },
+            ctx,
+        )
+        self.assertNotIn("DEATH.", rule)
+        self.assertIn("never after DTHDT from the DS record", rule)
+        self.assertIn(", and DTHDT wins over a later TRTSDT;", rule)
+
+    def test_impute_fallback_counts_as_entirely_imputed(self):
+        rule = mapping_doc.describe_derivation(
+            {
+                "impute": {
+                    "type": "datetime",
+                    "source": "AESTDTC",
+                    "month": 1,
+                    "day": "first",
+                    "time": "first",
+                    "fallback": "TRTSDTM",
+                }
+            }
+        )
+        self.assertEqual(
+            rule,
+            "Impute incomplete datetime from AESTDTC, defaulting month=1, "
+            "day=first, giving each time part the source lacks its earliest "
+            "value; a missing source takes TRTSDTM, counted as entirely "
+            "imputed; invalid text is an error.",
+        )
+
+    def test_imputation_flag_names_the_adam_codes(self):
+        def rule(**fields):
+            return mapping_doc.describe_derivation(
+                {"imputation_flag": {"source": "ASTDTM", **fields}}
+            )
+
+        self.assertEqual(
+            rule(part="date"),
+            'Date imputation flag for ASTDTM: "Y" when the whole date was '
+            'imputed, "M" when the month and day were, "D" when only the day '
+            "was; blank when the date was collected in full.",
+        )
+        self.assertEqual(
+            rule(part="time"),
+            'Time imputation flag for ASTDTM: "H" when the whole time was '
+            'imputed, "M" when the minutes and seconds were, "S" when only the '
+            "seconds were; blank when the time was collected to the second.",
+        )
+        self.assertEqual(
+            rule(part="time", seconds_collected=False),
+            'Time imputation flag for ASTDTM: "H" when the whole time was '
+            'imputed, "M" when the minutes were; blank when the minutes were '
+            "collected, since the study does not collect seconds.",
+        )
+
+    def test_to_date_leaves_a_partial_date_blank(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation({"to_date": {"source": "CMSTDTC"}}),
+            "Take the date part of CMSTDTC, blank for a year or a year and month "
+            "alone.",
+        )
 
     def test_cut_names_the_closed_side_of_each_interval(self):
         rule = method_column("adam-adsl-demographics")["AGEGR1"]

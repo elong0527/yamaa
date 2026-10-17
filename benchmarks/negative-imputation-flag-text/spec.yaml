@@ -1,0 +1,46 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, ASTDT, ASTDTF]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      impute:
+        type: date
+        source: AE.AESTDTC
+        month: 1
+        day: first
+
+  # The flag reads the collected text rather than the completed date, so
+  # nothing records which parts were supplied.
+  - name: ASTDTF
+    type: str
+    label: Analysis Start Date Imputation Flag
+    derivation:
+      imputation_flag:
+        source: AE.AESTDTC
+        part: date

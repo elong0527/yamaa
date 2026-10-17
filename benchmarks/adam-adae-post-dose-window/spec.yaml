@@ -30,8 +30,10 @@ intermediates:
           window:
             group_by: [EX.STUDYID, EX.USUBJID]
             order_by: [EX.EXSTDTC, EX.EXSEQ]
-      WINEND: {datetime_shift: {source: EXSTDTC, amount: 24, unit: hour}}
-      WINLAST: {datetime_shift: {source: WINEND, amount: -1, unit: second}}
+      WINEND:
+        shift: {type: datetime, source: EXSTDTC, amount: 24, unit: hour}
+      WINLAST:
+        shift: {type: datetime, source: WINEND, amount: -1, unit: second}
 
 columns:
   - name: STUDYID
@@ -61,14 +63,15 @@ columns:
       to_date:
         source: AE.AESTDTC
 
-  # M or S when the onset was collected with a time of day, D for a date alone.
+  # minute or second when the onset was collected with a time of day, day
+  # for a date alone.
   - name: ASTTPR
     type: str
     label: Onset Date/Time Collected Precision
     derivation:
-      datetime_precision:
+      precision:
+        type: datetime
         source: AE.AESTDTC
-        missing: null
 
   # Only an onset collected with a time is a moment; no time is imputed,
   # so a date alone leaves the onset moment empty and the event outside
@@ -78,7 +81,7 @@ columns:
     label: Analysis Start Date/Time
     derivation:
       case:
-        - when: "ASTTPR IN ('M', 'S')"
+        - when: "ASTTPR IN ('minute', 'second')"
           then: AE.AESTDTC
 
   - name: DOSENUM

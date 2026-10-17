@@ -126,7 +126,8 @@ columns:
     type: int
     label: Age at Collection
     derivation:
-      date_diff:
+      diff:
+        type: date
         start: BRTHDTC
         end: LBDTC
         unit: year

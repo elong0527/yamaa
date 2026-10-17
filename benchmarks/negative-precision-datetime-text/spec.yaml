@@ -1,0 +1,37 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID, EXSEQ]
+input:
+  EX: input/ex.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, EXSEQ, TRTSTPR]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EX.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX.USUBJID
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation: EX.EXSEQ
+
+  # How much of a date and time the collected start carries: year, month,
+  # day, hour, minute or second. No invalid handler is declared, so a start
+  # that is not ISO 8601 date or date/time text, such as one carrying a
+  # time zone, stops the run.
+  - name: TRTSTPR
+    type: str
+    label: First Exposure Date/Time Collected Precision
+    derivation:
+      precision:
+        type: datetime
+        source: EX.EXSTDTC

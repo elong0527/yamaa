@@ -47,19 +47,12 @@ columns:
     type: datetime
     label: Analysis Start Date/Time
     derivation:
-      datetime_impute:
+      impute:
+        type: datetime
         source: AESTDTC
+        minimum_source_precision: day
         time: first
-        missing: null   # handlers are explicit: an omitted one is fatal
-        invalid: null
-
-  - name: ASTDTPR
-    type: str
-    label: Analysis Start Date/Time Collected Precision
-    derivation:
-      datetime_precision:
-        source: ASTDTM
-        missing: null
+        invalid: null   # handlers are explicit: an omitted one is fatal
 
   # The flag names the first imputed part: a date alone imputes the hour
   # first (H), a time collected to the hour imputes the minutes first
@@ -68,13 +61,9 @@ columns:
     type: str
     label: Analysis Start Time Imputation Flag
     derivation:
-      case:
-        - when: "ASTDTPR = 'D'"
-          then: {literal: H}
-        - when: "ASTDTPR = 'H'"
-          then: {literal: M}
-        - when: "ASTDTPR = 'M'"
-          then: {literal: S}
+      imputation_flag:
+        source: ASTDTM
+        part: time
     verifications:
       allowed_values:
         values: [H, M, S]
@@ -84,31 +73,20 @@ columns:
     type: datetime
     label: Analysis End Date/Time
     derivation:
-      datetime_impute:
+      impute:
+        type: datetime
         source: AEENDTC
+        minimum_source_precision: day
         time: last
-        missing: null
         invalid: null
-
-  - name: AENDTPR
-    type: str
-    label: Analysis End Date/Time Collected Precision
-    derivation:
-      datetime_precision:
-        source: AENDTM
-        missing: null
 
   - name: AENTMF
     type: str
     label: Analysis End Time Imputation Flag
     derivation:
-      case:
-        - when: "AENDTPR = 'D'"
-          then: {literal: H}
-        - when: "AENDTPR = 'H'"
-          then: {literal: M}
-        - when: "AENDTPR = 'M'"
-          then: {literal: S}
+      imputation_flag:
+        source: AENDTM
+        part: time
     verifications:
       allowed_values:
         values: [H, M, S]

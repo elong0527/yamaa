@@ -18,6 +18,10 @@ pub enum HandlerKind {
     Unconvertible,
     MultipleMatches,
     NoMatch,
+    /// `to_date` read year or year-month text and gave missing.
+    Partial,
+    /// Both imputation bounds lay inside the collected interval and crossed.
+    CrossedBounds,
 }
 
 impl HandlerKind {
@@ -35,6 +39,8 @@ impl HandlerKind {
                     .condition
             }
             Self::NoMatch => "no_match",
+            Self::Partial => "partial",
+            Self::CrossedBounds => "crossed_bounds",
         }
     }
 }

@@ -54,10 +54,10 @@ pub use joined::JoinedRead;
 mod rounding;
 pub use rounding::{InvalidDigits, Rounding};
 mod imputation;
-pub(crate) use imputation::date_policy_findings;
+pub(crate) use imputation::completion_policy_findings;
 pub use imputation::{
-    date_policy, DatePolicyError, DayDeclaration, DayRule, Imputation, ImputationKind,
-    ImputationStep, PartialDate, TimeRule,
+    completion_policy, Completion, DatePolicyError, DayDeclaration, DayRule, FlagPart, Imputation,
+    ImputationKind, ImputationStep, Pending, TemporalType, TimeRule,
 };
 mod duration;
 mod temporal;
@@ -1725,7 +1725,7 @@ fn validate_operand_assignment(
             operands,
             operation,
         } => {
-            if operands.len() != 1 + operation.bounds().count() {
+            if operands.len() != operation.operands().count() {
                 return Err(PlanError::InvalidColumns);
             }
             for operand in operands {

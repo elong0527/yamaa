@@ -4,7 +4,7 @@ pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
     diagnostic::{ConditionCode, DatasetFinding as F, ProjectionError},
     reduction::NumericReducer,
-    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+    temporal::{Date, DateTime, Precision},
     value::{Value, ValueType},
 };
 pub(crate) fn text(value: &str) -> V {
@@ -14,7 +14,7 @@ pub(crate) fn text(value: &str) -> V {
 /// Independent normative assertions; engine tests reach the same causes from
 /// real attempted runs and pin their first-failure table effects.
 pub fn reached() -> BTreeSet<ConditionCode> {
-    let date = Value::Date(Date::new(2024, 2, 29, DatePrecision::Month).unwrap());
+    let date = Value::Date(Date::new(2024, 2, 29, Precision::Month).unwrap());
     let cases = [
         (
             F::MultipleValues {

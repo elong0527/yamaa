@@ -31,7 +31,8 @@ columns:
     type: date
     label: Analysis End Date
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: AE.AEENDTC
         month: 12
         day: 31

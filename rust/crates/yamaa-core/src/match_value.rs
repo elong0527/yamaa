@@ -12,12 +12,16 @@ pub enum LiteralKind {
     Other,
 }
 
-/// Normalized expression metadata; handlers and operation arguments are irrelevant here.
+/// Normalized expression metadata; handlers and operation arguments are
+/// irrelevant here, except the temporal type an operation declares with `type`.
 #[derive(Clone, Copy, Debug)]
 pub enum Expression<'a> {
     Source(&'a str),
     Literal(LiteralKind),
-    Operation(&'a str),
+    Operation {
+        name: &'a str,
+        target: Option<ColumnType>,
+    },
     Unresolved,
 }
 
@@ -33,14 +37,19 @@ pub fn result_type(catalog: &Catalog, expression: Expression<'_>) -> Option<Comp
             LiteralKind::Bool => Some(ComparableType::Boolean),
             LiteralKind::Missing | LiteralKind::Other => None,
         },
-        Expression::Operation(name) => match name {
-            "date_impute" | "to_date" => Some(Date.into()),
-            "datetime_impute" => Some(DateTime.into()),
-            "date_diff" | "rank" | "row_number" | "study_day" | "to_epoch_day" => Some(Int.into()),
-            "compute" => Some(crate::numeric_compiler::NUMERIC_RESULT_TYPE.into()),
-            "round_half_away_from_zero" => Some(Float.into()),
-            "baseline_flag" | "cut" | "date_precision" | "datetime_precision" | "str_case"
-            | "str_extract" | "str_pad" | "str_replace" | "str_template" => Some(Str.into()),
+        Expression::Operation { name, target } => match (name, target) {
+            ("impute", Some(target @ (Date | DateTime))) => Some(target.into()),
+            ("to_date", _) => Some(Date.into()),
+            ("diff", Some(Date)) | ("rank" | "row_number" | "study_day" | "to_epoch_day", _) => {
+                Some(Int.into())
+            }
+            ("compute", _) => Some(crate::numeric_compiler::NUMERIC_RESULT_TYPE.into()),
+            ("round_half_away_from_zero", _) => Some(Float.into()),
+            (
+                "baseline_flag" | "cut" | "imputation_flag" | "precision" | "str_case"
+                | "str_extract" | "str_pad" | "str_replace" | "str_template",
+                _,
+            ) => Some(Str.into()),
             _ => None,
         },
         Expression::Unresolved => None,

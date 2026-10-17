@@ -24,7 +24,8 @@ Carry the day count in its own column and compare the named value:
   type: int
   label: Days from Treatment End to Onset
   derivation:
-    date_diff:
+    diff:
+      type: date
       start: TRTEDT
       end: ASTDT
       unit: day
