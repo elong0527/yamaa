@@ -18,7 +18,7 @@ fn physical(stored: &ColumnDescriptor) -> core_profile::Physical {
     }
 }
 fn logical(stored: &ColumnDescriptor) -> core_profile::Logical {
-    crate::storage_api::logical_type(stored.logical_type_ref())
+    crate::storage_api::column_logical(stored)
 }
 fn converted(stored: &ColumnDescriptor) -> core_profile::Converted {
     use core_profile::Converted as C;
