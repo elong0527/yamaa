@@ -405,20 +405,20 @@ relative time.
 
 `datetime_shift` adds a signed elapsed amount to a complete civil datetime and
 returns a datetime. `second` requires an integer amount; `minute`, `hour` and
-`day` admit integer or float amounts. Integer amounts are scaled exactly. Float
-amounts are multiplied by 60, 3600 or 86400 as binary64, and the resulting
-civil datetime is rounded to the nearest whole second, a halfway result
-choosing the even second. No timezone or daylight-saving adjustment occurs, and
-the source's collected precision is preserved.
+`day` admit integer or float amounts. Integer amounts are scaled exactly. A
+float amount is multiplied by 60, 3600 or 86400 as binary64, rounded to whole
+seconds with the one rounding of [FORMULA-16](formulas.md#formula-16), and
+then added exactly. No timezone or daylight-saving adjustment occurs, and the
+source's collected precision is preserved.
 
 Fails: `incompatible_input_type`, `conversion_failed`.
 Evidence: `adam-adae-post-dose-window`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`, `rust/tests/host-fixtures/cases.json`.
 Replaces: REQ-1300.
 
 Other input types fail validation as `incompatible_input_type`, and a missing
-source or amount returns missing. Rounding applies to the result: an odd source
-second plus half a second moves to the next even second. A day is 86400
-seconds. A rounded result outside years 0001 through 9999 fails at build as
+source or amount returns missing. The rounding applies to the amount, so the
+source second does not affect it: `0.025` minute is exactly `1.5` seconds and
+adds `2` seconds. A day is 86400 seconds. A rounded result outside years 0001 through 9999 fails at build as
 `conversion_failed` on the `convert` stage; no local handler answers the
 arithmetic overflow.
 

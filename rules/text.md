@@ -161,15 +161,15 @@ must not enable broader casing from a host or environment default.
 
 <a id="text-6"></a>
 
-### TEXT-6. Every pattern is an ECMA-262 Pattern read with the Unicode flag, minus a few constructs
+### TEXT-6. Every pattern is a portable ECMA-262 subset without lookaround or backreferences
 
 A regular expression is admitted in a schema `pattern` descriptor,
 `str_extract.pattern`, `str_replace.pattern`, a `matches` verification and the
-`str_contains` predicate call. Each is ECMA-262 `Pattern` source text with its
-matching semantics and the Unicode flag set. Property escapes `\p{...}`,
-variable-length lookbehind, `(?P<name>` groups, inline flag groups such as
-`(?i)` and malformed escapes such as `\a` are invalid. An invalid pattern fails
-validation with `invalid_regex`, or with `invalid_predicate` in `str_contains`.
+`str_contains` predicate call. Each is ECMA-262 `Pattern` source text read with
+the Unicode flag, without lookahead, lookbehind, backreferences, property
+escapes `\p{...}`, flags or inline flag groups; a group name is an ASCII
+identifier. An invalid pattern fails validation with `invalid_regex`, or with
+`invalid_predicate` in `str_contains`.
 
 Fails: `invalid_regex`, `invalid_predicate`.
 Evidence: `negative-matches-bad-pattern`, `negative-str-replace-invalid-regex`, `negative-str-contains-invalid-regex`.
@@ -193,19 +193,19 @@ rule below applies to every consumer except where it names one.
 
 A pattern value is the ECMA-262 `Pattern` source text alone. It is not a
 `/.../flags` literal: a leading or trailing `/` is an ordinary character to
-match. Fixed-length lookbehind stays allowed, and `(?<name>...)` stays the way
-to name a group.
+match. `(?<name>...)` names a group, and the name matches
+`[A-Za-z_][A-Za-z0-9_]*`.
 
-Every consumer reads patterns through the one shared portable matcher; no host
-regex library or host default defines what a pattern means, and no consumer
-translates a pattern into another dialect or skips the check. Every consumer
-therefore accepts and rejects the same patterns and returns the same match,
-group and verification outcome for the same pattern and subject. A pattern is
-well formed exactly when that matcher accepts it under the flags and classes of
-[TEXT-7](#text-7) and [TEXT-8](#text-8), and a match is exactly the match it
-reports.
+Every consumer reads patterns through one shared validator, which rejects
+anything outside the subset, lowers the classes of [TEXT-8](#text-8) to
+explicit sets, and compiles the pattern for a linear-time engine with
+leftmost-first semantics ([TEXT-9](#text-9)). Every consumer therefore accepts
+and rejects the same patterns and returns the same match, group and
+verification outcome for the same pattern and subject, and matching takes time
+linear in the subject.
 
-These rules and `yaml/conformance/regex.yaml` are the decisive authority. Each
+These rules and `yaml/conformance/regex.yaml` (contract 3.0.0) are the
+decisive authority. Each
 fixture case names a pattern and either records that it is rejected or gives a
 subject with its full-match, search and extraction outcomes, and optionally a
 replacement and its outcome; the search outcome also governs `str_contains`.
@@ -213,7 +213,11 @@ Changing the grammar or the classes versions this contract and its fixtures.
 
 A pattern the grammar or the classes reject, in a schema descriptor,
 `str_extract`, `str_replace` or a `matches` verification, fails validation with
-`invalid_regex` and reports the declaring path and the rejection. The
+`invalid_regex` and reports the declaring path and the rejection. Rejected
+constructs include lookahead `(?=` and `(?!`, lookbehind `(?<=` and `(?<!`,
+backreferences `\1` to `\9` and `\k<name>`, `(?P<name>`, non-ASCII group
+names, inline flag groups such as `(?i)`, `\p{...}` and malformed escapes such
+as `\a`. The
 `str_contains` predicate call instead fails with `invalid_predicate` at parse
 time under [FORMULA-8](formulas.md#formula-8). Each consumer
 rejects a pattern with its stated condition whether its syntax is malformed or
@@ -261,8 +265,9 @@ Replaces: REQ-0808, REQ-0810, REQ-0822, REQ-0823, REQ-0825.
 
 The `\s` set is `U+0009`, `U+000B`, `U+000C`, `U+0020`, `U+00A0`, `U+1680`,
 `U+2000` through `U+200A`, `U+202F`, `U+205F`, `U+3000`, `U+FEFF`, `U+000A`,
-`U+000D`, `U+2028` and `U+2029`. These sets hold whatever any host library
-would do; a default that widens a class to a Unicode category stays off.
+`U+000D`, `U+2028` and `U+2029`. `\b` and `\B` use the ASCII `\w`. The
+validator lowers each class to its explicit set before compiling, so no class
+widens to a Unicode category.
 
 A pattern is text under [VALUE-11](values.md#value-11) and obeys the ASCII
 source boundary of [SPEC-8](specification.md#spec-8), so
@@ -277,8 +282,9 @@ The schema `pattern` keyword is a full match: a value satisfies it when the
 match starts before the first scalar and ends after the last, as if the source
 were wrapped in `^(?:` and `)$`. `matches` is a search: a non-missing value
 satisfies it when the pattern matches at any position. `str_extract` is a
-search that keeps the leftmost match and, among matches starting there, the one
-ECMA-262 backtracking reaches first. An empty match is a match.
+search that keeps the leftmost match and, among matches starting there, the
+leftmost-first one: an earlier alternative wins, a greedy quantifier prefers
+more iterations and a lazy one fewer. An empty match is a match.
 
 Evidence: `yaml/conformance/regex.yaml`, `adam-adsl-demographics`, `schema-str-contains`.
 Replaces: REQ-0811, REQ-0812, REQ-0813, REQ-0814, REQ-0818, REQ-0819.
@@ -313,8 +319,11 @@ Fails: `regex_group_out_of_range`.
 Evidence: `negative-str-uncaptured-group`, `adam-adsl-site-parse`, `rust/crates/yamaa-adapters/tests/fixtures/text_extract_reference.json`.
 Replaces: REQ-0815, REQ-0816, REQ-0817, REQ-1111.
 
-`(?:...)`, lookaround and a character class contribute no number. The failure
-reports the path, the requested group and the number of capturing groups.
+`(?:...)` and a character class contribute no number. The failure reports the
+path, the requested group and the number of capturing groups. A capture inside
+a repetition keeps the last iteration that entered it, and past its minimum
+count an empty iteration ends the repetition: `(a|){1,3}b` on `ab` captures the
+empty string.
 
 A group that the pattern declares but the match does not enter has no value,
 so `str_extract` produces missing and `no_match` does not apply: the pattern
@@ -338,9 +347,8 @@ Evidence: `schema-str-replace`, `rust/crates/yamaa-core/tests/execution_declarat
 Replaces: REQ-1318, REQ-1319, REQ-1320, REQ-1321, REQ-1322.
 
 Every step matches against the whole source, so `^` still matches only before
-its first scalar and a lookbehind reads the scalars before the scan position.
-The scan of one source value is one match call, and one step counter covers all
-of its steps ([TEXT-12](#text-12)).
+its first scalar and an assertion such as `\b` reads the scalars around the
+scan position. The whole scan is linear in the source.
 
 An empty match is replaced like any other ([TEXT-9](#text-9)). With pattern
 `x*` and replacement `-`, `ab` becomes `-a-b-`; with pattern `a*`, `baa`
@@ -354,20 +362,19 @@ missing source is fatal under [Column derivation](columns.md).
 
 <a id="text-12"></a>
 
-### TEXT-12. A match that exceeds its step limit is refused, never treated as no match
+### TEXT-12. A pattern too deep or too large to compile is refused at its path; matching is never refused
 
-The portable matcher follows the shared fixed resource policy. Each complete
-match call starts a fresh step counter covering search starts, backtracking and
-nested assertions. A match-step refusal is reported as `engine_rejected`, with
-`resource` `regex_steps`, the applied `limit`, and `actual` when known. A
-refused match cannot be treated as an unmatched string or a skipped
-verification.
+A pattern whose nesting exceeds `semantic_depth`, or whose compiled program
+exceeds the fixed size limit, is refused when it compiles, as `engine_rejected`
+with `resource` `semantic_depth` or `regex_size`, the applied `limit`, and the
+declaring pattern path. A compiled pattern always completes a match in time
+linear in the subject, so no match is refused, and a refusal is never treated
+as an unmatched string or a skipped verification.
 
 Fails: `engine_rejected`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::matching_budget_refusal_retains_pattern_path_and_applied_bound`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs::fixed_regex_steps_preserve_the_actual_resolution_prefix_and_fresh_retry`.
+Evidence: `rust/crates/yamaa-core/tests/execution_declarative_text_replace.rs::oversized_patterns_report_the_compiled_size_limit_at_the_pattern`, `rust/crates/yamaa-core/tests/execution_declarative_text_replace.rs::a_catastrophic_pattern_without_a_match_leaves_the_value_unchanged`.
 
 The policy is the [fixed resource policy](../docs/release.md#resource-limits).
 For a column `matches` check, `spec_paths` names its declaring pattern, such as
-`columns.TERM.verifications[0].matches.pattern`. Pattern or context nesting
-beyond `semantic_depth` keeps its typed compilation or resource refusal and its
-declaring path.
+`columns.TERM.verifications[0].matches.pattern`. Nesting counts every group,
+alternation, sequence, repetition and class.

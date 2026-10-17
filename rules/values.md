@@ -217,11 +217,12 @@ numeric text when no display precision is selected.
 
 Calculations, comparisons, verifications and dependent derivations use
 unrounded values. Display precision under the [CSV profile](reference/csv.md)
-applies half-away-from-zero rounding once, when a field is written, and
-[Project functions](profiles/functions.md) conformance comparison operates
-on a temporary copy; neither changes a value the specification uses.
+applies the one rounding of [FORMULA-16](formulas.md#formula-16) once, when a
+field is written, and [Project functions](profiles/functions.md) conformance
+comparison rounds a temporary copy the same way; neither changes a value the
+specification uses.
 
-Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::genuine_binary64_ties_and_adjacent_values_match_independent_text`.
+Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::ties_and_near_ties_round_away_from_zero_with_independent_text`.
 Replaces: REQ-0019, REQ-0435.
 
 Floating-point results are not exact decimals: `POWER(x, 2)` and `x * x` may
@@ -255,11 +256,10 @@ To get an integer from `CEIL`, `FLOOR` or `TRUNC`, declare the column
 `type: int`: the [Column derivation](columns.md) converts the
 completed result under [VALUE-7](#value-7).
 
-`NULLIF` compares two `int` arguments exactly. For a mixed `int` and `float`
-pair it first widens the integer under [VALUE-8](#value-8) and compares the
-binary64 values, like a predicate comparison under
-[FORMULA-5](formulas.md#formula-5). Thus
-`NULLIF(9007199254740993, 9007199254740992.0)` returns missing.
+`NULLIF` compares its arguments exactly under [VALUE-19](#value-19),
+including a mixed `int` and `float` pair. Thus
+`NULLIF(9007199254740993, 9007199254740992.0)` returns `9007199254740993`
+promoted to `float`, which is `9007199254740992.0`.
 
 ## Text
 
@@ -524,23 +524,22 @@ Replaces: REQ-0576, REQ-0577, REQ-0604.
 
 <a id="value-19"></a>
 
-### VALUE-19. An int and a float compare with each other; every other type compares only with itself
+### VALUE-19. An int and a float compare exactly; every other type compares only with itself
 
 `int` and `float` are mutually comparable, and every other runtime type is
-comparable only with itself. Extremes, lookup key pairs, grouping keys,
-ordering terms, aggregate `MIN` and `MAX`, `cut` breaks and range bounds
-compare a mixed `int` and `float` pair by exact mathematical value, without
-rounding the integer to binary64; predicate comparisons and `NULLIF` instead
-widen the integer. Comparing values that are not mutually comparable fails
-rather than converting an operand.
+comparable only with itself. Every comparison of a mixed `int` and `float`
+pair uses its exact mathematical value, never rounding the integer to
+binary64: predicates, `NULLIF`, extremes, lookup key pairs, grouping keys,
+ordering terms, aggregate `MIN` and `MAX`, `cut` breaks and range bounds alike.
+Comparing values that are not mutually comparable fails rather than converting
+an operand.
 
 Fails: `incompatible_input_type`, `incomparable_sources`.
 Evidence: `negative-greatest-mixed`, `negative-least-mixed`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`.
 Replaces: REQ-0005, REQ-0324, REQ-0605.
 
-Predicate comparisons widen a mixed pair under
-[FORMULA-5](formulas.md#formula-5), as `NULLIF` does under
-[VALUE-10](#value-10). Collected temporal precision changes neither a value's
+So `9007199254740993` and `9007199254740992.0` are unequal everywhere.
+Collected temporal precision changes neither a value's
 runtime type nor its comparability. The type's owner defines its order:
 [VALUE-20](#value-20) for `str` and [VALUE-21](#value-21) for `date` and
 `datetime`.
