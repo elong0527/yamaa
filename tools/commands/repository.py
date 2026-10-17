@@ -18,6 +18,7 @@ CHECKS = (
     "tools.packaging.generate_style_orders",
     "tools.packaging.generate_shipped_schema",
     "tools.packaging.generate_facade_api",
+    "tools.packaging.generate_bindings",
     "tools.validation.validate_repository",
     "tools.validation.check_execution_manifest",
     "tools.validation.check_vocabulary_coverage",

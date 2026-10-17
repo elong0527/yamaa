@@ -121,7 +121,7 @@ python:
       returns: text
     - kind: class
       name: _ProducerAttempt
-      rust: file_producer::Attempt
+      rust: domain_entry::Attempt
       constructible: false
       methods:
         - {name: accepted, args: {}, returns: bool}
