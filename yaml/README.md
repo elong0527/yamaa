@@ -33,7 +33,6 @@ replay the same parser vectors.
 | --- | --- |
 | [schema.yaml](schema.yaml) | Specification entry point |
 | [schema_environment.yaml](schema_environment.yaml) | Study environment entry point |
-| [schema_define.yaml](schema_define.yaml) | Study-document entry point |
 | [rules/](../rules/README.md) | Normative contracts |
 | [Schema fields](https://elong0527.github.io/yamaa/reference/schema-fields/) | Generated shapes, defaults, and semantic links |
 | [Requirement index](https://elong0527.github.io/yamaa/reference/requirements/) | Generated canonical IDs and owners |
@@ -84,7 +83,7 @@ rule, grammar, or fixture:
   length comes from `max_length`, an ADaM origin source from its type, and a
   collected value's annotated-CRF reference from the document that declares
   it.
-- Declare a codelist once in the study document and bind columns to its
+- Declare a codelist once in the study environment and bind columns to its
   identifier, as required by the
   [terminology contract](../rules/submission/terminology.md).
 - Change a closed grammar in its `grammar/` file first. The rule's grammar

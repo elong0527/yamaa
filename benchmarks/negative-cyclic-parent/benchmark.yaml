@@ -1,6 +1,3 @@
 lifecycle: reviewed
 standard: TEST
 domain: TEST
-validation:
-  rule: R017
-  validator: inheritance

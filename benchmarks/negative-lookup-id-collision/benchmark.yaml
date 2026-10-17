@@ -1,6 +1,3 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADSL
-validation:
-  rule: R003
-  validator: name_contract

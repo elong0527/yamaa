@@ -1,8 +1,5 @@
 lifecycle: draft
 standard: ADaM
 domain: ADSL
-validation:
-  rule: R004
-  validator: predicate
 covers:
 - flag

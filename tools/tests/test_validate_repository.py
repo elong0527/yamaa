@@ -296,22 +296,12 @@ class TestValidationMetadata(unittest.TestCase):
             set(OWNER_REPOSITORY_MANIFESTS.validation_phase_contracts(ROOT)),
         )
 
-    def test_metadata_rejects_missing_stale_and_unregistered_declarations(self):
+    def test_unregistered_validation_conditions_fail(self):
         source = ROOT / "benchmarks/negative-unknown-window"
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             case = root / "benchmarks" / source.name
             shutil.copytree(source, case)
-            metadata_path = case / "benchmark.yaml"
-            metadata = yaml.safe_load(metadata_path.read_text())
-            original = copy.deepcopy(metadata)
-            del metadata["validation"]
-            metadata_path.write_text(yaml.safe_dump(metadata))
-            _, errors = OWNER_REPOSITORY_MANIFESTS.load_validation_fixtures(root)
-            self.assertTrue(
-                any("missing validation declaration" in error for error in errors)
-            )
-            metadata_path.write_text(yaml.safe_dump(original))
             contract_path = case / "expected/error.yaml"
             contract = yaml.safe_load(contract_path.read_text())
             contract["condition"] = "not_registered"
@@ -320,117 +310,42 @@ class TestValidationMetadata(unittest.TestCase):
             self.assertTrue(
                 any("unregistered validation condition" in error for error in errors)
             )
-            contract["phase"] = "derivation"
-            contract_path.write_text(yaml.safe_dump(contract))
-            _, errors = OWNER_REPOSITORY_MANIFESTS.load_validation_fixtures(root)
-            self.assertTrue(
-                any("stale or non-validation fixture" in error for error in errors)
-            )
 
 
-class TestRuleMetadata(unittest.TestCase):
-    def test_requires_normative_rule_and_index_status(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            rules = root / "rules"
-            rules.mkdir(parents=True)
-            (rules / "README.md").write_text(
-                "| ID | Rule | Status | Owns | Depends on |\n"
-                "|---|---|---|---|---|\n"
-                "| R001 | Rule | proposed | Topic | -- |\n"
-            )
-            (rules / "R001-rule.md").write_text(
-                "---\nid: R001\ntitle: Rule\nstatus: proposed\n---\n"
-            )
-
-            errors = OWNER_EDITORIAL.validate_rule_metadata(root)
-
-        self.assertEqual(len(errors), 2)
-        self.assertTrue(all("normative" in error for error in errors))
-
-
-class TestStableRequirementReferences(unittest.TestCase):
+class TestErrorCitations(unittest.TestCase):
     def setUp(self):
         directory = self.enterContext(tempfile.TemporaryDirectory())
         self.root = Path(directory)
         self.enterContext(patch.object(RULE_CHECK, "REPO", self.root))
-        self.rule = self.root / "R001-rule.md"
         self.error = self.root / "error.yaml"
 
-    def check_rule(self, requirements, ending=None):
-        self.rule.write_text(
-            "---\nid: R001\ntitle: Rule\nstatus: normative\n"
-            "applies_to: [root.rows]\n---\n"
-            "# Rule\n\n## Intent\n\nIntent.\n\n"
-            "## Boundaries\n\nBoundary.\n\n## Requirements\n\n"
-            + requirements
-            + "\n\n"
-            + (ending or "## Errors\n\nErrors.\n\n## Rationale\n\nReason.\n")
-        )
-        errors, found = [], set()
-        RULE_CHECK.check_rule(self.rule, errors, found)
-        return errors, found
+    def errors_for(self, requirement):
+        body = {"phase": "validation", "condition": "unknown_field"}
+        if requirement is not None:
+            body["requirement"] = requirement
+        self.error.write_text(yaml.safe_dump(body))
+        errors = []
+        RULE_CHECK.check_error(self.error, {"REQ-0001"}, errors)
+        return errors
 
-    def test_reordering_preserves_integer_and_suffix_citations(self):
-        errors, found = self.check_rule(
-            "**R001-12b.** Existing extension.\n\n"
-            "**R001-2.** Moved topic.\n\n"
-            "**R001-12a.** Existing extension.\n\n"
-            "**R001-1.** Original topic."
-        )
-        for requirement in ("R001-1", "R001-2", "R001-12a", "R001-12b"):
-            self.error.write_text(f"requirement: {requirement}\n")
-            RULE_CHECK.check_error(self.error, found, errors)
-        self.assertEqual(errors, [])
-        self.assertEqual(found, {"R001-1", "R001-2", "R001-12a", "R001-12b"})
+    def test_a_defined_requirement_is_accepted(self):
+        self.assertEqual(self.errors_for("REQ-0001"), [])
 
-    def test_duplicate_requirement_ids_fail_including_suffixes(self):
-        for identifier in ("R001-1", "R001-12a"):
-            with self.subTest(identifier=identifier):
-                errors, _ = self.check_rule(
-                    f"**{identifier}.** First.\n\n**{identifier}.** Second."
-                )
-                self.assertTrue(any("duplicate requirements" in e for e in errors))
+    def test_an_absent_requirement_is_accepted(self):
+        self.assertEqual(self.errors_for(None), [])
 
-    def test_foreign_requirement_cannot_satisfy_a_citation(self):
-        errors, found = self.check_rule("**R002-1.** Wrong owner.")
-        self.assertTrue(any("requirements of other rules" in e for e in errors))
-        self.error.write_text("requirement: R002-1\n")
-        citation_errors = []
-        RULE_CHECK.check_error(self.error, found, citation_errors)
+    def test_unknown_and_legacy_citations_fail(self):
         self.assertTrue(
-            any("names no numbered requirement" in e for e in citation_errors)
+            any(
+                "names no numbered requirement" in e
+                for e in self.errors_for("REQ-0002")
+            )
         )
-
-    def test_unresolved_and_malformed_citations_fail(self):
-        _, found = self.check_rule("**R001-1.** Existing requirement.")
-        for identifier in ("R001-2", "R001-1a", "R001-0", "R001-1ab"):
-            with self.subTest(identifier=identifier):
-                self.error.write_text(f"requirement: {identifier}\n")
-                errors = []
-                RULE_CHECK.check_error(self.error, found, errors)
-                self.assertEqual(len(errors), 1)
-
-    def test_numbered_forward_reference_keeps_old_citation_valid(self):
-        errors, found = self.check_rule(
-            "**R001-1.** See R011-35 for the canonical contract."
-        )
-        self.error.write_text("requirement: R001-1\n")
-        RULE_CHECK.check_error(self.error, found, errors)
-        self.assertEqual(errors, [])
-        self.assertEqual(found, {"R001-1"})
-
-    def test_topics_cannot_follow_errors_and_rationale(self):
-        errors, _ = self.check_rule(
-            "**R001-1.** Existing requirement.",
-            "## Errors\n\nErrors.\n\n## Rationale\n\nReason.\n\n"
-            "## Late topic\n\n**R001-2.** Appended topic.\n",
-        )
-        self.assertTrue(any("end with Errors and Rationale" in e for e in errors))
-
-    def test_rule_without_requirement_ids_fails(self):
-        errors, _ = self.check_rule("Unnumbered contract.")
-        self.assertTrue(any("no numbered requirements" in e for e in errors))
+        for legacy in ("R001-1", "R019"):
+            with self.subTest(legacy=legacy):
+                self.assertTrue(
+                    any("must cite REQ-NNNN" in e for e in self.errors_for(legacy))
+                )
 
 
 class TestClosedGrammarContracts(unittest.TestCase):
@@ -580,7 +495,7 @@ class TestValidatorCLI(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.TemporaryDirectory()
         self.root_dir = Path(self.test_dir.name)
-        # Every repository carries R022's shared fixtures and the closed
+        # Every repository carries the shared regex fixtures and the closed
         # grammars, which are read against their rules, so a synthetic root
         # that expects a clean run needs all of them too.
         repository = ROOT

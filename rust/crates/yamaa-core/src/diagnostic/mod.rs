@@ -435,7 +435,7 @@ conditions! {
     DefineDatasetJsonOutsidePackage => ("validation", "artifact_outside_document", Some("REQ-1229")),
     DefineArtifactCollision => ("validation", "artifact_path_collision", Some("REQ-1195")),
     DefineDatasetJsonCollision => ("validation", "dataset_json_path_collision", Some("REQ-1226")),
-    DefineCreatedInvalid => ("validation", "value_not_permitted", Some("REQ-1072")),
+    DefineCreatedInvalid => ("validation", "value_not_permitted", Some("REQ-0962")),
     CodelistUnknownBinding => ("validation", "unknown_codelist", Some("REQ-0953")),
     CodelistBindingTypeMismatch => ("validation", "codelist_type_mismatch", Some("REQ-0954")),
     CodelistBindingValuesConflict => ("validation", "codelist_values_conflict", Some("REQ-0955")),

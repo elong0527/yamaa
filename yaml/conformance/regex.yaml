@@ -1,10 +1,10 @@
-# Shared regular-expression fixtures for R022.
+# Shared fixtures for the portable regular-expression contract.
 #
 # Every case names one pattern and, unless the pattern is rejected, one
-# subject and the outcome each R022 consumer produces for it:
+# subject and the outcome each consumer produces for it:
 #
-#   schema_pattern  the R006 pattern descriptor keyword, a full match
-#   matches         the R009 matches column verification, a search
+#   schema_pattern  the schema `pattern` descriptor keyword, a full match
+#   matches         the `matches` column verification, a search
 #   str_extract     the str_extract expression, a search keeping one group
 #   str_replace     optional: the str_replace expression, a search replacing
 #                   every match, with its replacement text and its result
@@ -26,7 +26,7 @@
 # names no subject and no outcome.
 #
 # Subjects are YAML double-quoted scalars so that a non-ASCII scalar value is
-# written as an escape and this file stays ASCII under R019. Patterns are
+# written as an escape and this file stays ASCII. Patterns are
 # single-quoted so that a backslash is literal, and spell a non-ASCII scalar
 # with the ECMAScript \u{...} escape instead.
 #

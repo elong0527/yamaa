@@ -17,8 +17,6 @@ status: normative
 supplies `study` and shared `codelists`; the selected section supplies one
 implementation guide, supporting documents, an ordered `specs` list and one
 `define` target. Each section produces exactly one Define-XML document.
-The retained `define.yaml` reference route and its schema remain transition
-qualification history until the complete replacement is qualified.
 
 <a id="req-0960"></a>
 
@@ -570,7 +568,7 @@ regardless of which requirement above it satisfied.
 
 **REQ-1011.** The following are outside this contract. None has a field in
 the schema [Submission metadata](metadata.md),
-[Controlled terminology](terminology.md), and `schema_define.yaml` close. A
+[Controlled terminology](terminology.md), and `schema_environment.yaml` close. A
 specification that tries to declare one is therefore rejected as an unknown
 field, rather than generating a document that quietly omits it.
 
@@ -627,9 +625,7 @@ code linked from the column's `ItemRef` would violate these constraints.
 generated form. A generator that cannot consume an entry fails loudly under
 the `Submission` context, naming its row and column; it never quietly omits
 per-value definitions. The shared generator consumes the bounded typed map
-and the semantics in [REQ-1013](#req-1013). The retained reference generator's
-unconsumed-entry failure remains a historical transition control until its
-replacement is fully qualified.
+and the semantics in [REQ-1013](#req-1013).
 
 ### Interface behavior
 
@@ -653,28 +649,6 @@ replacement is fully qualified.
 | `submission_section_class.source_system_version` | Optional nonempty XML and JSON source-system version; omission selects the installed package version under [REQ-1080](../operations/functions.md#req-1080). |
 
 The generated Define-XML release is `2.1.11` and SourceSystem is `yamaa`.
-The following `define_class` table describes the retained reference-only route
-pending coordinated retirement:
-
-| Field | Meaning |
-| --- | --- |
-| `define_class.schema_version` | Schema bundle this document is written against; [Schema language](../reference/schema-language.md) requires an exact match. |
-| `define_class.define_version` | Define-XML release the generated document conforms to. |
-| `define_class.context` | Context the document is used in; [Define-XML](define-xml.md) states which requirements it adds. |
-| `define_class.language` | Language tag every generated translated text carries. |
-| `define_class.file_oid` | Identity of the generated file, declared rather than derived from a run. |
-| `define_class.creation_datetime` | Creation timestamp the document carries; declaring it keeps generation reproducible. |
-| `define_class.originator` | Party submitting the document. |
-| `define_class.source_system` | Application that generated the document. |
-| `define_class.source_system_version` | Version of that application; declared only with source_system. |
-| `define_class.stylesheet` | Stylesheet the generated document references, relative to the document. |
-| `define_class.study` | Study the datasets belong to. |
-| `define_class.metadata_version` | Identity and name of this metadata version. |
-| `define_class.standards` | Standards the represented datasets and codelists conform to. |
-| `define_class.default_standard` | Foundational standard every dataset follows unless its entry names another. |
-| `define_class.documents` | Supporting documents referenced by datasets, origins, methods, and comments. |
-| `define_class.datasets` | Represented datasets in the order the document presents them. |
-| `define_class.output` | File this document produces. |
 
 <a id="req-1062"></a>
 
@@ -697,19 +671,6 @@ pending coordinated retirement:
 | `metadata_version_class.name` | Name of this metadata version. |
 | `metadata_version_class.description` | Description of what this metadata version covers. |
 
-<a id="req-1064"></a>
-
-**REQ-1064.** The `standard_class` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `standard_class.id` | Name datasets and codelists refer to this standard by. |
-| `standard_class.name` | Published standard name. |
-| `standard_class.type` | Whether the standard is an implementation guide or controlled terminology. |
-| `standard_class.publishing_set` | Publishing set of a controlled-terminology standard. |
-| `standard_class.version` | Version identifier exactly as the standard publishes it. |
-| `standard_class.status` | Publication status of that version. |
-
 <a id="req-1065"></a>
 
 **REQ-1065.** The `document_class` fields have these meanings:
@@ -721,26 +682,6 @@ pending coordinated retirement:
 | `document_class.href` | File the document is, relative to the directory holding the generated document. |
 | `document_class.title` | Label a reader sees for the document. |
 
-<a id="req-1066"></a>
-
-**REQ-1066.** The `define_dataset_class` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `define_dataset_class.id` | Name the generated document gives this dataset. |
-| `define_dataset_class.spec` | Resolved specification whose output this dataset is. |
-| `define_dataset_class.standard` | Foundational standard this dataset follows; defaults to default_standard. |
-| `define_dataset_class.has_no_data` | Whether the dataset was planned but holds no records; [Define-XML](define-xml.md) requires a comment with it. |
-| `define_dataset_class.dataset_json` | Dataset-JSON file this document produces for the dataset; [Dataset-JSON](dataset-json.md) owns its contents and bytes. |
-
-<a id="req-1067"></a>
-
-**REQ-1067.** The `define_output_class` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `define_output_class.path` | File this document produces; its extension must be .xml. |
-
 <a id="req-1068"></a>
 
 **REQ-1068.** The `define_id` fields have these meanings:
@@ -749,14 +690,6 @@ pending coordinated retirement:
 | --- | --- |
 | `define_id` | Identifier a generated OID is built from. |
 
-<a id="req-1069"></a>
-
-**REQ-1069.** The `define_version` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `define_version` | Define-XML release, written as Define-XML 2.1 publishes it. |
-
 <a id="req-1070"></a>
 
 **REQ-1070.** The `relative_href` fields have these meanings:
@@ -764,22 +697,6 @@ pending coordinated retirement:
 | Field | Meaning |
 | --- | --- |
 | `relative_href` | Location referenced from the generated document, relative to the directory holding it and never leaving that directory. [Define-XML](define-xml.md) does not require the file to exist when the document is generated. |
-
-<a id="req-1071"></a>
-
-**REQ-1071.** The `define_path` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `define_path` | Relative file this document produces, named with an xml extension. |
-
-<a id="req-1072"></a>
-
-**REQ-1072.** The `creation_datetime` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `creation_datetime` | Local civil datetime resolved to a whole second, as [Temporal values](../values/temporal.md) writes one. |
 
 <a id="req-1073"></a>
 
@@ -797,19 +714,12 @@ pending coordinated retirement:
 | --- | --- |
 | `standard_name` | Standard name, in the exact case Define-XML 2.1 publishes. |
 
-<a id="req-1075"></a>
-
-**REQ-1075.** The `module` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `Scope` | Separately validated entry point for the study document [Define-XML](define-xml.md) defines. One document selects the resolved dataset specifications a Define-XML 2.1 document represents, declares the standards, supporting documents, and codelists they share, and fixes every value the generated document carries that no specification supplies. A specification stays a single-dataset contract. Nothing here changes what a specification derives. |
-
 ## Error conditions
 
 <a id="req-1014"></a>
 
-**REQ-1014.** An `output.path` whose extension is not `.xml`: fail validation.
+**REQ-1014.** A selected section's `define` target whose extension is not
+`.xml`: fail validation.
 
 <a id="req-1015"></a>
 

@@ -1,8 +1,5 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
-validation:
-  rule: R016
-  validator: temporal_contract
 covers:
 - date_impute

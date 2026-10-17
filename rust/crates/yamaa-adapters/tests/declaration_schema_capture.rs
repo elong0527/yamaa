@@ -432,7 +432,7 @@ mod declaration {
                 .unwrap()
                 .map(|p| p.unwrap().file_name().into_string().unwrap())
                 .filter(|p| p == "schema.yaml" || p.starts_with("schema_") && p.ends_with(".yaml"))
-                .filter(|p| p != "schema_define.yaml" && p != "schema_environment.yaml")
+                .filter(|p| p != "schema_environment.yaml")
                 .collect::<Vec<_>>();
             expected.sort();
             let mut actual = schema

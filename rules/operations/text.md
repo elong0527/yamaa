@@ -65,7 +65,7 @@ grammar:
 template    := part*
 part        := text | placeholder | "{{" | "}}"
 placeholder := "{" variable "}"
-text        := one or more R019 scalar values other than "{" and "}"
+text        := one or more Unicode scalar values other than "{" and "}"
 ```
 
 <a id="req-0450"></a>

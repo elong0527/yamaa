@@ -20,7 +20,7 @@ tracker, one work item per root cause.
         README.md                  # the data contract
         spec.yaml                  # one entry specification
         spec_<name>.yaml ...       # alternatives, parents or producers
-        define.yaml                # when the entry generates a document
+        environment.yaml           # when the entry generates a document
         input/                     # independently authored source files
         expected/                  # exact output, logs, documents or error
         python/environment.yaml    # when Python calls a project function

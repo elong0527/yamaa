@@ -190,9 +190,6 @@ class PublicConformance(unittest.TestCase):
             "spec_paths: [columns.A.derivation, columns.B.derivation]\n"
             "requirement: REQ-0072\ncontext: {cycle: [A, B, A]}\n"
         )
-        (self.case / "benchmark.yaml").write_text(
-            METADATA + "validation: {rule: R001, validator: dependency_graph}\n"
-        )
         cycle = {
             "phase": "validation",
             "condition": "dependency_cycle",
@@ -753,10 +750,7 @@ class PublicConformance(unittest.TestCase):
             names["sdtm-dm-metadata"]["entries"]["python"][0]["environment"]
         )
         self.assertIsNone(names["schema-inheritance-project-root"]["excluded"])
-        self.assertEqual(
-            {n for n, e in names.items() if e["excluded"]},
-            {"negative-path-absolute", "negative-path-parent-escape"},
-        )
+        self.assertEqual({n for n, e in names.items() if e["excluded"]}, set())
 
     def test_corpus_metamorphic_plan_and_expectations_follow_each_entry(self):
         corpus = judge.plan(ROOT / "benchmarks")

@@ -25,7 +25,6 @@ explained in [Schema introduction](schema-intro.md).
 | [`schema_environment.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_environment.yaml) | The project environment: packaging lock, versionless installed functions, inline tests, codelists and submission metadata (Project functions) |
 | [`schema_verification.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_verification.yaml) | Dataset and column verifications (Verification) |
 | [`schema_metadata.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_metadata.yaml) | Governed dataset and column metadata (Submission metadata) |
-| [`schema_define.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_define.yaml) | Define-XML composition inputs (Define-XML) |
 | [`conditions.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/conditions.yaml) | The validation-condition registry: every condition an implementation may raise, keyed to the phases that may raise it |
 
 The derivation verbs in full, with what each one is for, are tabulated in

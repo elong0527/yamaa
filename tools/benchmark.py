@@ -53,7 +53,6 @@ def load_metadata(case):
                 "standard",
                 "domain",
                 "entries",
-                "validation",
                 "covers",
                 "conformance",
                 "harbor",
@@ -84,23 +83,6 @@ def load_metadata(case):
         and len(set(covers)) == len(covers),
         f"{label}: covers must name unique operations",
     )
-    if "validation" in metadata:
-        validation = metadata["validation"]
-        require(
-            isinstance(validation, dict)
-            and set(validation) in ({"rule", "validator"}, {"rule", "blocked_by"})
-            and isinstance(validation.get("rule"), str)
-            and re.fullmatch(r"R[0-9]{3}", validation["rule"]),
-            f"{label}: validation needs rule and exactly one validator or blocked_by",
-        )
-        key = "validator" if "validator" in validation else "blocked_by"
-        pattern = (
-            r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*" if key == "validator" else r"#[1-9][0-9]*"
-        )
-        require(
-            isinstance(validation[key], str) and re.fullmatch(pattern, validation[key]),
-            f"{label}: invalid validation {key}",
-        )
     if "conformance" in metadata:
         conformance = metadata["conformance"]
         require(

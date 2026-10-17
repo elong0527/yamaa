@@ -1,14 +1,14 @@
 """Render the "Mapping spec" pane of a benchmark dashboard.
 
-The pane is generated from the benchmark's spec.yaml and, when present,
-define.yaml as a familiar Excel specification: one row per output column. The
-header layout follows the sponsor's SDTM and ADaM variable sheets, so a
-reviewer reads the derived spec in the same shape they author it. Rendering is
-deterministic: unchanged inputs produce identical HTML.
+The pane is generated from the benchmark's spec.yaml and, when present, the
+codelists of its study environment, as a familiar Excel specification: one row
+per output column. The header layout follows the sponsor's SDTM and ADaM
+variable sheets, so a reviewer reads the derived spec in the same shape they
+author it. Rendering is deterministic: unchanged inputs produce identical HTML.
 
 Values come from each column's `submission:` block when present -- `core`,
 `length`, `codelist`, `data_type`, `origin.type`, `method`, `comment` -- and from
-the study document's codelists. The derivation supplies a plain-language
+the study environment's codelists. The derivation supplies a plain-language
 conversion rule and a Define-XML 2.1 origin classification (Assigned,
 Collected, Derived, Not Available, Other, Predecessor, Protocol).
 
@@ -1221,7 +1221,7 @@ def define_comment(col):
 
 
 def allowed_value_codelists(columns):
-    """Fallback terminology when a benchmark has no study document."""
+    """Fallback terminology when a benchmark declares no codelists."""
     out = []
     for col in columns:
         checks = col.get("verifications") or []
@@ -1240,7 +1240,7 @@ def allowed_value_codelists(columns):
 
 
 def document_codelists(define):
-    """The study document's codelists in declaration order."""
+    """The study environment's codelists in declaration order."""
     if not isinstance(define, dict):
         return []
     codelists = define.get("codelists")

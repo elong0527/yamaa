@@ -810,7 +810,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         DefineCreatedInvalid,
         "validation",
         "value_not_permitted",
-        "REQ-1072",
+        "REQ-0962",
     );
     assert!(define_diagnostics::admit_relation(
         TargetRelation::Independent,

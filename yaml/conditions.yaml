@@ -50,11 +50,9 @@ conditions:
   forward_reference: {phases: [validation]}
   function_call_failed: {phases: [derivation, validation]}
   function_conformance_failed: {phases: [validation]}
-  function_contract_mismatch: {phases: [validation]}
   incomparable_range_types: {phases: [validation]}
   incomparable_sources: {phases: [validation]}
   incompatible_input_type: {phases: [validation]}
-  incomplete_output_row: {phases: [derivation]}
   inheritance_cycle: {phases: [validation]}
   integer_overflow: {phases: [derivation, parse, validation]}
   internal_column_in_keys: {phases: [validation]}
@@ -72,7 +70,6 @@ conditions:
   invalid_function_argument: {phases: [derivation, validation]}
   invalid_function_result: {phases: [derivation]}
   invalid_intermediate_driver: {phases: [validation]}
-  invalid_mapping_dictionary: {phases: [validation]}
   invalid_numeric_expression: {phases: [validation]}
   invalid_odm_context: {phases: [validation]}
   invalid_operation_count: {phases: [validation]}
@@ -126,7 +123,6 @@ conditions:
   pattern_mismatch: {phases: [validation]}
   phase_boundary: {phases: [validation]}
   producer_contract_mismatch: {phases: [validation]}
-  producer_not_completed: {phases: [validation]}
   producer_output_path_mismatch: {phases: [validation]}
   producer_workflow_cycle: {phases: [validation]}
   prohibited_construct: {phases: [validation]}
@@ -147,11 +143,8 @@ conditions:
   resource_path_missing: {phases: [validation]}
   resource_path_not_normalized: {phases: [validation]}
   resource_path_not_regular_file: {phases: [validation]}
-  resource_path_not_relative: {phases: [validation]}
-  resource_path_outside_project: {phases: [validation]}
   resource_path_symlink: {phases: [validation]}
   resource_path_uri_scheme: {phases: [validation]}
-  row_count_changed: {phases: [derivation]}
   row_count_failed: {phases: [verification]}
   runner_language_mismatch: {phases: [validation]}
   runtime_artifact_mismatch: {phases: [validation]}
@@ -196,18 +189,15 @@ conditions:
   unknown_standard: {phases: [validation]}
   unknown_standard_family: {phases: [validation]}
   unknown_window: {phases: [validation]}
-  unmapped_key: {phases: [mapping]}
   unmapped_value: {phases: [mapping]}
   unmatched_key: {phases: [join]}
   unmatched_pattern: {phases: [mapping]}
   unpaired_fields: {phases: [validation]}
-  unreferenced_codelist: {phases: [validation]}
   unresolvable_name: {phases: [validation]}
   unsupported_operation: {phases: [planning]}
   unsupported_regex_engine: {phases: [validation]}
   unsupported_text_contract: {phases: [validation]}
   untransportable_text: {phases: [validation]}
-  unwritable_value: {phases: [output]}
   # REQ-1166
   value_metadata_not_output_column: {phases: [validation]}
   # REQ-1164

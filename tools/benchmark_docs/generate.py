@@ -670,7 +670,36 @@ def render_material_pane(key, title, provenance, picker_label, documents):
     )
 
 
-def render_materials(benchmark, spec, define, code_snippets, edit_base):
+def environment_codelists(benchmark):
+    """The codelists a benchmark's study environment declares, or None.
+
+    A codelist source is inline or a path relative to the environment file.
+    """
+    for candidate in (
+        benchmark / "environment.yaml",
+        benchmark / "python" / "environment.yaml",
+    ):
+        if candidate.is_file():
+            break
+    else:
+        return None
+    environment = yaml.safe_load(candidate.read_text(encoding="utf-8"))
+    sources = environment.get("codelists") if isinstance(environment, dict) else None
+    codelists = []
+    for source in sources if isinstance(sources, list) else []:
+        if isinstance(source, str):
+            path = candidate.parent / source
+            source = (
+                yaml.safe_load(path.read_text(encoding="utf-8"))
+                if path.is_file()
+                else None
+            )
+        if isinstance(source, dict) and isinstance(source.get("codelists"), list):
+            codelists.extend(c for c in source["codelists"] if isinstance(c, dict))
+    return {"codelists": codelists} if codelists else None
+
+
+def render_materials(benchmark, spec, document, code_snippets, edit_base):
     """Tabs and panes for the assessment materials shown beside Comments.
 
     None of them is under review: the mapping spec is generated from the YAML,
@@ -679,7 +708,7 @@ def render_materials(benchmark, spec, define, code_snippets, edit_base):
     benchmark lacks has no tab.
     """
     materials = []
-    sheets = mapping_doc.render_mapping_sheets(spec, define)
+    sheets = mapping_doc.render_mapping_sheets(spec, document)
     if sheets:
         materials.append(
             (
@@ -1038,14 +1067,8 @@ def render_benchmark(benchmark, previous=None, next=None):
         spec_code = "".join(panes)
         spec_file_header = ""
     code_snippets = benchmark_code(benchmark)
-    define_path = benchmark / "define.yaml"
-    define = (
-        yaml.safe_load(define_path.read_text(encoding="utf-8"))
-        if define_path.is_file()
-        else None
-    )
     material_tabs, material_panes = render_materials(
-        benchmark, spec, define, code_snippets, edit_base
+        benchmark, spec, environment_codelists(benchmark), code_snippets, edit_base
     )
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(

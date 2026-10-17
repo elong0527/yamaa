@@ -4,10 +4,10 @@ The language admits four closed grammars. Each one is defined once, here:
 
 | Contract | Rule | Written in |
 |---|---|---|
-| [`predicate.yaml`](predicate.yaml) | [R004](../../rules/operations/predicates.md) | a field typed `predicate` |
-| [`numeric.yaml`](numeric.yaml) | [R010](../../rules/operations/computation.md) | `compute.expr` |
-| [`string-template.yaml`](string-template.yaml) | [R012](../../rules/operations/text.md) | `str_template.template` |
-| [`aggregate.yaml`](aggregate.yaml) | [R013](../../rules/operations/aggregation.md) | `aggregate.expr` |
+| [`predicate.yaml`](predicate.yaml) | [Predicates](../../rules/operations/predicates.md) | a field typed `predicate` |
+| [`numeric.yaml`](numeric.yaml) | [Numeric computation](../../rules/operations/computation.md) | `compute.expr` |
+| [`string-template.yaml`](string-template.yaml) | [Text operations](../../rules/operations/text.md) | `str_template.template` |
+| [`aggregate.yaml`](aggregate.yaml) | [Aggregation](../../rules/operations/aggregation.md) | `aggregate.expr` |
 
 These files are the single authored grammar truth for the shared Rust parser
 used by Python and R. Repository validation renders each rule's grammar block
@@ -41,7 +41,7 @@ accept different specifications.
 A `definition` is EBNF: a quoted terminal is literal, `[x]` is optional, `x*`
 and `{x}` repeat, `(x | y)` groups alternatives, and `...` spans a scalar
 range. A production marked `prose: true` states its definition in words
-because its terminal set is an R019 scalar range rather than an enumeration;
+because its terminal set is a Unicode scalar range rather than an enumeration;
 only such a definition may name something other than a terminal or a
 non-terminal. `imports` may also name a closed set, and names `schema` as the
 source of a non-terminal the schema language rather than another grammar
@@ -52,7 +52,7 @@ that opens an alternative begins with `|`.
 
 ## The rule's grammar block
 
-Each rule's `## Grammar` block is the rendering of its `productions`: the
+Each rule's `### Grammar` block is the rendering of its `productions`: the
 name column is as wide as the longest production name, `:=` follows it, a
 continuation that opens an alternative aligns its bar under the `=`, and
 every other continuation aligns under the definition. Validation reports the
@@ -75,11 +75,13 @@ make about it:
 | `shape` | the parse an accepted text produces |
 
 A vector pins what the grammar and its closed vocabulary decide. Which names
-are visible, and what they are typed, belongs to R001, R002, and R007, so a
+are visible, and what they are typed, belongs to the binding, lifecycle and
+type contracts, so a
 replay resolves every identifier rather than importing a binding context the
 vector does not declare.
 
-`identifiers` is what R001 collects for dependency ordering, so a vector also
+`identifiers` is what the lifecycle collects for dependency ordering, so a
+vector also
 pins that an implementation sees every name a text depends on.
 
 ### Shapes
@@ -111,7 +113,7 @@ parenthesis in the source text groups and leaves no trace in the shape.
 
 A function, reducer, or keyword is written in upper case because its spelling
 is case-insensitive; an identifier is written as the text spells it because
-its spelling is not. A quoted value doubles an interior quote, as R004 does.
+its spelling is not. A quoted value doubles an interior quote, as predicates do.
 
 ## Running the vectors
 

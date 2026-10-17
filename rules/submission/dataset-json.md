@@ -18,8 +18,7 @@ boolean requests one Dataset-JSON file for each specification in its ordered
 `output.path`, with the same basename and a `.json` extension. Omission or
 false produces only the Define-XML document. Package references use `/`
 separators and satisfy [REQ-1206](dataset-json.md#req-1206) and
-[REQ-1229](dataset-json.md#req-1229). The retained reference document's
-per-dataset path declarations remain qualification history until transition.
+[REQ-1229](dataset-json.md#req-1229).
 
 <a id="req-1194"></a>
 
@@ -150,9 +149,7 @@ travels together: the file names the document its `itemOID`s point into, and
 in that order. Its name is `yamaa`; its version is the selected section's
 explicit `source_system_version`, or the actual installed yamaa version when
 omitted, under [REQ-1080](../operations/functions.md#req-1080). The same selected
-version is used in Define-XML and Dataset-JSON. The retained reference
-`define_class` source-system pair remains qualification history until
-transition.
+version is used in Define-XML and Dataset-JSON.
 
 <a id="req-1208"></a>
 
@@ -340,16 +337,6 @@ and its log.
 stays closed at `.csv` and `.parquet`, and a `dataset_class.path` ending in
 `.json` names no profile.
 
-### Interface behavior
-
-<a id="req-1225"></a>
-
-**REQ-1225.** The `dataset_json_path` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `dataset_json_path` | Relative file this dataset's data is written to, named with a json extension. |
-
 ## Error conditions
 
 <a id="req-1226"></a>
@@ -364,15 +351,6 @@ the conflicting targets.
 **REQ-1227.** Dataset-JSON requested for a selected specification whose
 dataset submission metadata declares `has_no_data`: fail validation with
 `dataset_json_without_data`, reporting the dataset.
-
-<a id="req-1228"></a>
-
-**REQ-1228.** In the retained reference `define_class` format, a declared
-`source_system` without `source_system_version` on a document requesting
-Dataset-JSON fails validation with `source_system_incomplete`. Environment
-submission sections derive both values under
-[REQ-1207](dataset-json.md#req-1207); omission of their version override selects
-the actual installed version.
 
 <a id="req-1229"></a>
 

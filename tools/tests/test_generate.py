@@ -138,14 +138,16 @@ class DashboardTests(unittest.TestCase):
         ).decode("ascii")
         self.assertIn("Public entries: Python and R.", active)
         self.assertIn("Passing coverage requires an installed inventory.", active)
-        excluded = generate.render_benchmark(
-            generate.BENCHMARKS / "negative-path-absolute"
-        ).decode("ascii")
-        self.assertIn(
-            "Public conformance excluded: reference-only path history (#1905)", excluded
-        )
+        with tempfile.TemporaryDirectory() as temporary:
+            case = Path(temporary) / "negative-unknown-window"
+            shutil.copytree(generate.BENCHMARKS / case.name, case)
+            metadata = yaml.safe_load((case / "benchmark.yaml").read_text())
+            metadata["conformance"] = {"excluded": "a reviewed reason"}
+            (case / "benchmark.yaml").write_text(yaml.safe_dump(metadata))
+            excluded = generate.render_benchmark(case).decode("ascii")
+        self.assertIn("Public conformance excluded: a reviewed reason", excluded)
 
-    def test_mapping_uses_define_document_beside_the_benchmark(self):
+    def test_mapping_uses_environment_codelists_beside_the_benchmark(self):
         benchmark = generate.BENCHMARKS / "sdtm-dm-metadata"
         page = generate.render_benchmark(benchmark).decode("ascii")
         mapping = page.split('id="mapping-spec"', 1)[1].split('role="tabpanel"', 1)[0]
