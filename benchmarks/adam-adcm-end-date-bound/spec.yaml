@@ -1,0 +1,95 @@
+schema_version: "1.0"
+domain: ADCM
+keys: [STUDYID, USUBJID, CMSEQ]
+input:
+  CM: input/cm.csv
+  ADSL: {path: input/adsl.csv, types: {DTHDT: date}}
+base: CM
+
+output:
+  path: adcm.csv
+  columns: [STUDYID, USUBJID, CMSEQ, CMTRT, CMENDTC, AENDT, AENDTF, DTHDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: CM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: CM.USUBJID
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation: CM.CMSEQ
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Medication, or Therapy
+    derivation: CM.CMTRT
+
+  - name: CMENDTC
+    type: str
+    label: End Date/Time of Medication
+    derivation: CM.CMENDTC
+
+  - name: DTHDT
+    type: date
+    label: Date of Death
+    derivation: ADSL.DTHDT
+
+  # Complete a partial end to the last day of its month, or of the year when
+  # only a year was collected, never after death. The bound moves only the
+  # supplied components, so a month that begins after death gives no date.
+  - name: AENDT
+    type: date
+    label: Analysis End Date
+    derivation:
+      date_impute:
+        source: CMENDTC
+        month: 12
+        day: last
+        not_after: DTHDT
+        missing: null   # handlers are explicit: an omitted one is fatal
+        invalid: null
+
+  - name: AENDTPR
+    type: str
+    label: Analysis End Date Precision
+    derivation:
+      date_precision:
+        source: AENDT
+        missing: null
+
+  # M means a year and month were collected, so the day was supplied; Y
+  # means only the year was, so the month and day were supplied.
+  - name: AENDTF
+    type: str
+    label: Analysis End Date Imputation Flag
+    derivation:
+      case:
+        - when: "AENDTPR = 'M'"
+          then: {literal: "D"}
+        - when: "AENDTPR = 'Y'"
+          then: {literal: "M"}
+    verifications:
+      allowed_values:
+        values: ["D", "M"]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, CMSEQ]
+  - row_count:
+      min: 11
+      max: 11
+  - assert:
+      id: imputation-flag-requires-an-analysis-date
+      when: "AENDTF IS NOT NULL"
+      require: "AENDT IS NOT NULL"
+  - assert:
+      id: supplied-end-never-follows-death
+      when: "AENDTF IS NOT NULL"
+      require: "DTHDT IS NULL OR AENDT <= DTHDT"

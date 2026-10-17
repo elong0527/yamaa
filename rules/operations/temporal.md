@@ -81,16 +81,39 @@ than it must. When no day in the interval satisfies the bound, the result is
 missing. Like falling below minimum precision, this is neither missing nor
 invalid text and invokes no handler. A missing bound is no bound.
 
+<a id="req-1323"></a>
+
+**REQ-1323.** `not_after` bounds the completed date from above and, like
+`not_before`, moves only what imputation supplied, within the interval the
+collected components admit ([REQ-0585](temporal.md#req-0585)). A completed
+date on or before the bound stands. Otherwise the result is the latest day
+the interval admits that satisfies the bound. When no day in the interval
+satisfies the bound, the result is missing and invokes no handler. A missing
+bound is no bound. For example, `2025-03` completed to `2025-03-31` under a
+bound of `2025-03-12` gives `2025-03-12`; under a bound of `2025-02-10` it
+gives missing, never a day in February.
+
+<a id="req-1324"></a>
+
+**REQ-1324.** `not_before` and `not_after` may be declared together, and
+then every candidate day must satisfy both. A completed date that does
+stands. Otherwise the result is the day within the interval and between the
+bounds that is nearest the completed date: the earliest such day when the
+completed date precedes `not_before`, the latest when it follows `not_after`.
+When no day in the interval lies between the bounds, including a `not_after`
+earlier than `not_before`, the result is missing. A missing value of either
+bound leaves only the other.
+
 <a id="req-0586"></a>
 
-**REQ-0586.** A complete source date is returned unchanged whatever the bound
-says. A specification constraining collected dates states a verification under [Verification](../execution/verification.md).
+**REQ-0586.** A complete source date is returned unchanged whatever its bounds
+say. A specification constraining collected dates states a verification under [Verification](../execution/verification.md).
 
 <a id="req-0587"></a>
 
 **REQ-0587.** The parameters apply in this order: a missing or invalid source,
 then a source below the minimum precision, then completion from `month` and
-`day`, then the bound.
+`day`, then the bounds.
 
 <a id="req-0588"></a>
 
@@ -365,9 +388,10 @@ before any data is seen.
 | `expressions.date_impute.day` | Day used when the source carries no day: an integer from 1 to 31, or first or last resolved against the month the date lands in. |
 | `expressions.date_impute.minimum_source_precision` | Least precision the collected source must carry before imputation; month leaves a year-only source missing instead of supplying both month and day. |
 | `expressions.date_impute.not_before` | Date the completed value must not precede; it moves only the components imputation supplied, and never a collected date. |
+| `expressions.date_impute.not_after` | Date the completed value must not follow; it moves only the components imputation supplied, and never a collected date. |
 | `expressions.date_impute.missing` | Result when the source value is missing. |
 | `expressions.date_impute.invalid` | Result when the source is not an ISO 8601 date or date prefix. |
-| `Result` | Completes a truncated ISO 8601 date and returns a date. A complete source date is returned unchanged; a source carrying only a year, or a year and month, is completed from month and day unless minimum_source_precision forbids supplying that much information. A day token is resolved after month is fixed, so it names a day in the month the completed date lands in. not_before is applied last, to the completed date alone: a date already on or after the bound stands, and otherwise the result is the earliest day the collected text still admits that satisfies the bound. When the collected text admits no such day the result is missing, invoking no handler. A source that is not an ISO 8601 date or an ISO 8601 date prefix is an invalid value, distinct from a missing one; omitting the `missing` or `invalid` handler makes its condition fatal per [REQ-0344](../execution/handlers.md#req-0344). [Temporal values](../values/temporal.md) governs the resulting date. |
+| `Result` | Completes a truncated ISO 8601 date and returns a date. A complete source date is returned unchanged; a source carrying only a year, or a year and month, is completed from month and day unless minimum_source_precision forbids supplying that much information. A day token is resolved after month is fixed, so it names a day in the month the completed date lands in. not_before and not_after are applied last, to the completed date alone: a date already within its declared bounds stands; otherwise the result is the nearest day the collected text still admits that satisfies them, the earliest when the date precedes not_before and the latest when it follows not_after. When the collected text admits no such day the result is missing, invoking no handler. A source that is not an ISO 8601 date or an ISO 8601 date prefix is an invalid value, distinct from a missing one; omitting the `missing` or `invalid` handler makes its condition fatal per [REQ-0344](../execution/handlers.md#req-0344). [Temporal values](../values/temporal.md) governs the resulting date. |
 
 <a id="req-1106"></a>
 
@@ -490,6 +514,14 @@ same way under [REQ-1184](temporal.md#req-1184).
 within the interval its collected components admit: missing, no failure. Like
 a source below minimum precision, it is neither missing nor invalid
 text, so no [Local handlers](../execution/handlers.md) handler answers it.
+
+<a id="req-1325"></a>
+
+**REQ-1325.** `date_impute` whose completed value cannot satisfy `not_after`,
+or both declared bounds together, within the interval its collected
+components admit: missing, no failure. As under
+[REQ-0610](temporal.md#req-0610), no [Local handlers](../execution/handlers.md)
+handler answers it.
 
 <a id="req-0611"></a>
 

@@ -35,6 +35,7 @@ pub(super) fn prepare(
             "day",
             "minimum_source_precision",
             "not_before",
+            "not_after",
             "missing",
             "invalid",
         ],
@@ -49,10 +50,8 @@ pub(super) fn prepare(
         }
     }
     let source = text(d, field(d, payload, "source")?)?;
-    let bound = d
-        .field(payload, "not_before")
-        .map(|id| text(d, id))
-        .transpose()?;
+    let bound = |name: &str| d.field(payload, name).map(|id| text(d, id)).transpose();
+    let (not_before, not_after) = (bound("not_before")?, bound("not_after")?);
     let kind = match op {
         "date_impute" => {
             let minimum = match d
@@ -111,7 +110,8 @@ pub(super) fn prepare(
     Imputation::new(
         kind,
         source.into(),
-        bound.map(String::from),
+        not_before.map(String::from),
+        not_after.map(String::from),
         path.into(),
         handler("missing")?,
         handler("invalid")?,
@@ -173,7 +173,7 @@ pub(super) fn declaration_findings(
                                 ));
                             }
                         }
-                        if let Some(bound) = operation.bound_source() {
+                        for (field, bound) in operation.bounds() {
                             let kind = if rows {
                                 None
                             } else {
@@ -193,7 +193,7 @@ pub(super) fn declaration_findings(
                                     ColumnType::Date => unreachable!(),
                                 };
                                 findings.push(PreflightFinding::Imputation(
-                                    operation.bound_input_diagnostic(actual),
+                                    operation.bound_input_diagnostic(field, bound, actual),
                                 ));
                             }
                         }
@@ -289,11 +289,7 @@ pub(super) fn bind(
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
     let mut operands = Vec::new();
-    for (name, field) in std::iter::once((operation.source(), "source")).chain(
-        operation
-            .bound_source()
-            .map(|source| (source, "not_before")),
-    ) {
+    for (field, name) in std::iter::once(("source", operation.source())).chain(operation.bounds()) {
         let path = format!("{}.{}", operation.path(), field);
         if let Some(expression) = rounding::bind_operand(
             name,
@@ -315,11 +311,9 @@ pub(super) fn bind(
         }
     }
     Ok(
-        (operands.len() == 1 + usize::from(operation.bound_source().is_some())).then(|| {
-            Expression::Imputation {
-                operands,
-                operation: operation.clone(),
-            }
+        (operands.len() == 1 + operation.bounds().count()).then(|| Expression::Imputation {
+            operands,
+            operation: operation.clone(),
         }),
     )
 }
@@ -340,11 +334,7 @@ pub(super) fn bind_row(
     intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
     let mut operands = Vec::new();
-    for (name, field) in std::iter::once((operation.source(), "source")).chain(
-        operation
-            .bound_source()
-            .map(|source| (source, "not_before")),
-    ) {
+    for (field, name) in std::iter::once(("source", operation.source())).chain(operation.bounds()) {
         let path = format!("{}.{}", operation.path(), field);
         if let Some(expression) = self_relations::bind_operand(
             name,
@@ -369,11 +359,9 @@ pub(super) fn bind_row(
         }
     }
     Ok(
-        (operands.len() == 1 + usize::from(operation.bound_source().is_some())).then(|| {
-            Expression::Imputation {
-                operands,
-                operation: operation.clone(),
-            }
+        (operands.len() == 1 + operation.bounds().count()).then(|| Expression::Imputation {
+            operands,
+            operation: operation.clone(),
         }),
     )
 }

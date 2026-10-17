@@ -1016,6 +1016,167 @@ columns:
         b"ID,DTM,PR,DATE\n1,2024-02-29T23:59:59,D,2024-02-29\n2,2024-02-29T12:13:00,S,\n3,,,\n"
     );
         }
+        fn issue_rows(fixture: &Fixture) -> yamaa_core::json::Value {
+            let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+            let identity = Identity {
+                runtime: "test",
+                runtime_version: "test",
+                engine_version: yamaa_core::VERSION,
+                example: "test",
+                specification: &specification,
+                base_directory: ".",
+            };
+            let issues = match file_application::domain(
+                Request {
+                    specification: &specification,
+                    environment: None,
+                },
+                identity,
+            ) {
+                Ok(result) => {
+                    assert!(result.output().is_none());
+                    result.issues().to_vec()
+                }
+                Err(issues) => issues,
+            };
+            issues
+                .iter()
+                .map(|issue| {
+                    yamaa_adapters::json!({
+                        "phase": issue.phase,
+                        "condition": issue.condition,
+                        "requirement": issue.requirement,
+                        "spec_paths": issue.spec_paths,
+                        "context": yamaa_adapters::json_wire::decode(&issue.context).unwrap(),
+                    })
+                })
+                .collect()
+        }
+        #[test]
+        fn upper_and_paired_bounds_complete_within_the_collected_interval() {
+            let fixture = Fixture::new("schema-birth-date");
+            fs::write(
+                fixture.0.join("spec.yaml"),
+                r#"schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: {path: input.csv, types: {LOW: date, HIGH: date}}}
+output: {path: output.csv, columns: [ID, END, BOTH]}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - name: END
+    type: date
+    derivation:
+      date_impute:
+        source: SRC.TEXT
+        month: 12
+        day: last
+        not_after: SRC.HIGH
+        missing: null
+        invalid: null
+  - name: BOTH
+    type: date
+    derivation:
+      date_impute:
+        source: SRC.TEXT
+        month: 6
+        day: 15
+        not_before: SRC.LOW
+        not_after: SRC.HIGH
+        missing: null
+        invalid: null
+"#,
+            )
+            .unwrap();
+            fs::write(
+                fixture.0.join("input.csv"),
+                b"ID,TEXT,LOW,HIGH\n1,2025-03,,2025-03-12\n2,2025-03-28,,2025-03-12\n3,2025-03,,\n\
+4,2025,,2025-02-10\n5,2025-05,,2025-04-20\n6,2025-03,2025-03-20,2025-03-25\n\
+7,2025-03,2025-03-20,2025-03-10\n8,,,\n",
+            )
+            .unwrap();
+            let mut result = fixture.run();
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read(fixture.0.join("output.csv")).unwrap(),
+                b"ID,END,BOTH\n1,2025-03-12,2025-03-12\n2,2025-03-28,2025-03-28\n\
+3,2025-03-31,2025-03-15\n4,2025-02-10,2025-02-10\n5,,\n6,2025-03-25,2025-03-20\n\
+7,2025-03-10,\n8,,\n"
+            );
+        }
+        #[test]
+        fn a_non_date_upper_bound_and_a_bounded_key_are_refused_at_their_field() {
+            let fixture = Fixture::new("schema-birth-date");
+            fs::write(
+                fixture.0.join("spec.yaml"),
+                r#"schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: {path: input.csv, types: {HIGH: int}}}
+output: {path: output.csv, columns: [ID, END]}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - name: END
+    type: date
+    derivation:
+      date_impute:
+        source: SRC.TEXT
+        month: 12
+        day: last
+        not_after: SRC.HIGH
+        missing: null
+        invalid: null
+"#,
+            )
+            .unwrap();
+            fs::write(fixture.0.join("input.csv"), b"ID,TEXT,HIGH\n1,2025-03,20\n").unwrap();
+            assert_eq!(
+                issue_rows(&fixture),
+                yamaa_adapters::json!([{
+                    "phase": "validation",
+                    "condition": "incompatible_input_type",
+                    "requirement": "REQ-0606",
+                    "spec_paths": ["columns.END.derivation.date_impute.not_after"],
+                    "context": {"source": "SRC.HIGH", "expected": "date", "actual": "int"},
+                }])
+            );
+            fs::write(
+                fixture.0.join("spec.yaml"),
+                r#"schema_version: '1.0'
+domain: OUT
+input:
+  SRC: {path: source.csv, types: {ID: str, A: str, B: date}}
+  RIGHT: {path: right.csv, types: {M: date, RESULT: str}}
+base: SRC
+keys: [K]
+output: {path: out.csv, columns: [K, V]}
+columns:
+  - {name: K, type: str, derivation: SRC.ID}
+  - {name: A, type: str, derivation: SRC.A}
+  - {name: B, type: date, derivation: SRC.B}
+  - {name: V, type: str, derivation: LOOK.RESULT}
+intermediates:
+  - id: LOOK
+    dataset: RIGHT
+    key:
+      M: {date_impute: {source: A, day: first, not_after: B, month: 1}}
+"#,
+            )
+            .unwrap();
+            fs::write(fixture.0.join("source.csv"), b"ID,A,B\n1,x,\n").unwrap();
+            fs::write(fixture.0.join("right.csv"), b"M,RESULT\n,hit\n").unwrap();
+            assert_eq!(
+                issue_rows(&fixture),
+                yamaa_adapters::json!([{
+                    "phase": "planning",
+                    "condition": "unsupported_operation",
+                    "requirement": null,
+                    "spec_paths": ["intermediates[0].key.M.date_impute.not_after"],
+                    "context": {"operation": "not_after"},
+                }])
+            );
+        }
     }
     mod declarative_text_case {
         use std::{

@@ -172,7 +172,8 @@ pub enum ImputationKind {
 pub struct Imputation {
     kind: ImputationKind,
     source: String,
-    bound: Option<String>,
+    not_before: Option<String>,
+    not_after: Option<String>,
     path: String,
     missing: Option<Value>,
     invalid: Option<Value>,
@@ -224,12 +225,18 @@ impl Imputation {
     pub fn new(
         kind: ImputationKind,
         source: String,
-        bound: Option<String>,
+        not_before: Option<String>,
+        not_after: Option<String>,
         path: String,
         missing: Option<Value>,
         invalid: Option<Value>,
     ) -> Option<Self> {
-        if source.is_empty() || path.is_empty() || bound.as_ref().is_some_and(String::is_empty) {
+        if source.is_empty()
+            || path.is_empty()
+            || [&not_before, &not_after]
+                .into_iter()
+                .any(|bound| bound.as_ref().is_some_and(String::is_empty))
+        {
             return None;
         }
         match kind {
@@ -246,7 +253,7 @@ impl Imputation {
                     return None;
                 }
             }
-            _ if bound.is_some() => return None,
+            _ if not_before.is_some() || not_after.is_some() => return None,
             _ => (),
         }
         if matches!(kind, ImputationKind::ToDate) && (missing.is_some() || invalid.is_some()) {
@@ -255,7 +262,8 @@ impl Imputation {
         Some(Self {
             kind,
             source,
-            bound,
+            not_before,
+            not_after,
             path,
             missing,
             invalid,
@@ -267,8 +275,15 @@ impl Imputation {
     pub fn source(&self) -> &str {
         &self.source
     }
-    pub fn bound_source(&self) -> Option<&str> {
-        self.bound.as_deref()
+    /// Declared bounds as `(field, source)`, `not_before` first. Bound operands
+    /// follow the source operand in this order.
+    pub fn bounds(&self) -> impl Iterator<Item = (&'static str, &str)> + '_ {
+        [
+            ("not_before", self.not_before.as_deref()),
+            ("not_after", self.not_after.as_deref()),
+        ]
+        .into_iter()
+        .filter_map(|(field, source)| source.map(|source| (field, source)))
     }
     pub fn path(&self) -> &str {
         &self.path
@@ -325,15 +340,17 @@ impl Imputation {
             ],
         )
     }
-    pub(crate) fn bound_input_diagnostic(&self, actual: &str) -> Diagnostic {
+    pub(crate) fn bound_input_diagnostic(
+        &self,
+        field: &str,
+        source: &str,
+        actual: &str,
+    ) -> Diagnostic {
         diagnostic(
             C::TemporalOperand,
-            &format!("{}.not_before", self.path),
+            &format!("{}.{field}", self.path),
             &[
-                (
-                    "source",
-                    Value::Str(self.bound.clone().expect("declared bound")),
-                ),
+                ("source", Value::Str(source.into())),
                 ("expected", Value::Str("date".into())),
                 ("actual", Value::Str(actual.into())),
             ],
@@ -433,7 +450,7 @@ impl Imputation {
                     day,
                     precision,
                 };
-                if self.bound.is_some() {
+                if self.bounds().next().is_some() {
                     return Ok(ImputationStep::Bound(partial));
                 }
                 Value::Date(partial.complete(&self.path)?)
@@ -473,38 +490,39 @@ impl Imputation {
         Ok(ImputationStep::Value(result))
     }
     /// Move only imputed components within the collected year or month.
-    pub fn apply_bound(
+    /// A missing bound, like an undeclared one, is no bound.
+    pub fn apply_bounds(
         &self,
         completed: PartialDate,
-        bound: ValueRef<'_>,
+        not_before: ValueRef<'_>,
+        not_after: ValueRef<'_>,
     ) -> Result<Value, Diagnostic> {
-        let lower = match bound {
-            ValueRef::Missing => None,
-            ValueRef::Date(date) => Some(date),
-            other => return Err(self.bound_input_diagnostic(type_name(other))),
-        };
-        let completed = completed.complete(&self.path)?;
-        let Some(lower) = lower else {
-            return Ok(Value::Date(completed));
-        };
-        if completed >= lower {
-            return Ok(Value::Date(completed));
-        }
-        let (year, month, _) = completed.fields();
-        let upper = match completed.collected_precision() {
-            DatePrecision::Year => Date::new(year, 12, 31, DatePrecision::Day).unwrap(),
-            DatePrecision::Month => {
-                Date::new(year, month, month_length(year, month), DatePrecision::Day).unwrap()
+        let bound = |field: &str, source: Option<&str>, value: ValueRef<'_>| match (source, value) {
+            (None, _) | (_, ValueRef::Missing) => Ok(None),
+            (_, ValueRef::Date(date)) => Ok(Some(date)),
+            (Some(source), other) => {
+                Err(self.bound_input_diagnostic(field, source, type_name(other)))
             }
+        };
+        let lower = bound("not_before", self.not_before.as_deref(), not_before)?;
+        let upper = bound("not_after", self.not_after.as_deref(), not_after)?;
+        let completed = completed.complete(&self.path)?;
+        let precision = completed.collected_precision();
+        let (year, month, _) = completed.fields();
+        let (first, last) = match precision {
+            DatePrecision::Year => (1, 12),
+            DatePrecision::Month => (month, month),
             DatePrecision::Day => unreachable!("complete dates skip bounds"),
         };
-        if lower > upper {
+        let first = Date::new(year, first, 1, DatePrecision::Day).unwrap();
+        let last = Date::new(year, last, month_length(year, last), DatePrecision::Day).unwrap();
+        let earliest = lower.map_or(first, |lower| lower.max(first));
+        let latest = upper.map_or(last, |upper| upper.min(last));
+        if earliest > latest {
             return Ok(Value::Missing);
         }
-        let (year, month, day) = lower.fields();
-        Ok(Value::Date(
-            Date::new(year, month, day, completed.collected_precision()).unwrap(),
-        ))
+        let (year, month, day) = completed.clamp(earliest, latest).fields();
+        Ok(Value::Date(Date::new(year, month, day, precision).unwrap()))
     }
 }
 fn moment_date(moment: DateTime) -> Date {
