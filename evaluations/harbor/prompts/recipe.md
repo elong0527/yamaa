@@ -203,10 +203,12 @@ The brief tier follows the full prompt automatically.
 A prompt written with the golden files in view can carry their values, and
 a solution written by the same hand can lean on what the prompt left out.
 So the writer works in a Harbor sandbox that holds the benchmark's sources
-and nothing it is graded on, and the prompt is tried by solvers that hold
-only the prompt and the inputs, as an evaluated agent does.
-`evaluations/harbor/author.py` builds both. Run from the repository root;
-`--out` defaults to `~/.cache/yamaa-harbor/authoring`:
+and nothing it is graded on, with this recipe as its instruction, and the
+prompt is tried by solvers that hold only the prompt and the inputs, as an
+evaluated agent does. `evaluations/harbor/author.py` builds both. Run from
+the repository root, prefixing each command with
+`uv run --project python --no-sync`; `--out` defaults to
+`~/.cache/yamaa-harbor/authoring`:
 
 ```bash
 python -m evaluations.harbor.author write --model <provider/model> \
@@ -216,31 +218,58 @@ python -m evaluations.harbor.author collect <round>/jobs/<job> --into <prompts>
 python -m evaluations.harbor.author solve --prompts <prompts> \
     --model <provider/model> ... --n-attempts 3 --out <round>
 python -m evaluations.harbor.author run -c <round>/solve/configs/<job>.json
-python -m evaluations.harbor.author feedback <round>/jobs/<job> --into <prompts>
+python -m evaluations.harbor.author report <round>/jobs/<job>
 ```
 
-Prefix each command with `uv run --project python --no-sync`.
+### The writing task
 
-- **Sources.** The writer's sandbox (`packet.py`) holds the README, the
-  specifications and input schemas without their verifications, the
-  project functions without their tests, the language rules, this recipe,
-  the inputs as the agent gets them, and the skeleton. It never holds
-  `expected/`, an engine run, or a prompt or solution written before.
-- **Trace.** Beside `full.md` the writer saves `trace.json`, which quotes
-  each sentence of the outcome block and cites its source: a README quote,
-  a specification path (`spec.yaml: columns.DTHDT.derivation`), an input
-  file, or a rule file. Its verifier, `check.py`, runs the prompt checks
-  and the trace check, and needs no golden file; the writer runs it too.
+- **Sources.** `/app/sources` holds the benchmark's `README.md`;
+  `specification/`, its specifications and input schemas without their
+  verifications; `functions/`, the project functions it calls, without
+  their tests; the language rules in `rules/`; `skeleton.md`; and
+  `check.py` with `check.json`. `/app/input` holds the input datasets
+  exactly as the agent gets them. Nothing else is there: no expected data,
+  no engine, no earlier prompt or solution, nothing a solver did, and no
+  network but the model's.
+- **Prompt.** Copy `skeleton.md` to `/app/output/full.md`, replace each
+  `<record level>` (it may wrap across lines) and `<rules>` by sections 3
+  and 4, and keep the rest verbatim.
+- **Trace.** Save `/app/output/trace.json`, a list with an entry for each
+  sentence of the outcome block, quoting it and citing its sources:
+
+  ```json
+  [{"prompt": "DTHDT is the start date of the fatal adverse event",
+    "sources": ["README: \"the start date of the fatal event\"",
+                "spec.yaml: columns.DTHDT.derivation"]}]
+  ```
+
+  A source is `README: "<quote>"`; a specification file and a dotted path
+  through mapping keys and the name or id of list entries
+  (`spec.yaml: intermediates.DEATHEV.filter`); an input file and what it
+  holds (`input/ae.csv: AEOUT`); or a rule file.
+- **Questions.** When the sources cannot explain a value, say so in
+  `/app/output/questions.md` instead of guessing.
+- **Check.** Before finishing, run the verifier's own check, which needs
+  no golden file, and fix every problem it reports:
+
+  ```bash
+  python3 /app/sources/check.py full /app/output/full.md \
+      --data /app/sources/check.json --trace /app/output/trace.json
+  ```
+
+### After the writing task
+
 - **Solvers.** `solve` builds each candidate's task as an evaluation task
   without a reference: it grades the datasets and the clean rerun, and no
   leaderboard accepts it. Use at least two models.
-- **Feedback.** `feedback` tells the writer which output columns the
-  solvers failed and how often, never a value, key, or row count. `write
-  --prompts <prompts>` gives the writer its earlier candidate and that
-  feedback, and the writer finds the missing rule in its sources or asks
-  in `questions.md`. A column still failing after two rounds goes to a
-  person: one the README and specification cannot explain is a benchmark
-  finding, not a sentence to tune.
+- **Nothing flows back.** `report` tells the person reviewing the
+  candidates which output columns the solvers failed and how often, never
+  a value, key, or row count. No writer sees it, an earlier candidate, or
+  anything a solver did. A failing candidate is not edited toward the
+  golden: the person decides whether the README or specification misses a
+  rule, a benchmark finding fixed there, and a fresh writing task writes
+  from the corrected sources. Keep retries on unchanged sources few, and
+  count them in the pull request.
 - **Commit.** Review each passing candidate against sections 4 and 5, take
   a passing solver's program per language as its reference, and write
   the conventions prompt the same way (`write --tier conventions

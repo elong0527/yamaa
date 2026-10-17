@@ -1,21 +1,22 @@
 """Write prompts in Harbor sandboxes that hold no expected data.
 
 A benchmark's full prompt is written by an agent whose sandbox holds the
-benchmark's sources (`packet.py`) and nothing it is graded on. Solvers that
-see only a candidate prompt and the inputs, as an evaluated agent does, then
-try it, and the writer hears back which columns they failed, never a value.
-`prompts/recipe.md` describes the flow. From the repository root::
+benchmark's sources (`packet.py`) and nothing it is graded on, with the
+recipe (`prompts/recipe.md`) as its instruction. Solvers that see only a
+candidate prompt and the inputs, as an evaluated agent does, then try it.
+Nothing flows back to a writer: `report` tells the person reviewing the
+candidates which columns the solvers failed. From the repository root::
 
     python -m evaluations.harbor.author write --model <provider/model>
     python -m evaluations.harbor.author run -c <out>/write-full/configs/<job>.json
     python -m evaluations.harbor.author collect <out>/jobs/<job> --into <dir>
     python -m evaluations.harbor.author solve --prompts <dir> --model <provider/model>
-    python -m evaluations.harbor.author feedback <out>/jobs/<job> --into <dir>
-    python -m evaluations.harbor.author write --prompts <dir> --model <provider/model>
+    python -m evaluations.harbor.author report <out>/jobs/<job>
 
-`write --tier conventions` writes conventions prompts from full prompts the
-same way. These jobs run locally and are never uploaded to Harbor Hub. The
-output directory defaults to `~/.cache/yamaa-harbor/authoring`.
+`write --tier conventions --prompts <dir>` narrows the full prompts in
+`<dir>`, or the committed ones, with the tier contract (`prompts/README.md`)
+as the instruction. These jobs run locally and are never uploaded to Harbor
+Hub. The output directory defaults to `~/.cache/yamaa-harbor/authoring`.
 """
 
 from __future__ import annotations
@@ -33,8 +34,11 @@ from evaluations.harbor import build, packet
 
 HERE = Path(__file__).resolve().parent
 OUT = build.OUT / "authoring"
-# The instruction for each prompt tier a writing task can write.
-WRITERS = {"full": "author-full.md", "conventions": "author-conventions.md"}
+# A writer's instruction is the document that defines its prompt tier.
+INSTRUCTIONS = {
+    "full": HERE / "prompts" / "recipe.md",
+    "conventions": HERE / "prompts" / "README.md",
+}
 # What a passing writing task leaves, required files first; `collect` copies
 # the optional ones when they exist.
 WRITTEN = {"full": ("full.md", "trace.json"), "conventions": ("conventions.md",)}
@@ -91,22 +95,26 @@ def writing_task(
 ) -> Path:
     """One task in which an agent writes a benchmark's prompt of `tier`.
 
-    The full prompt is written from the benchmark's sources (`packet.py`),
-    joined by an earlier candidate and its feedback from
-    `prompts/<benchmark>/`. The conventions prompt is written from the full
-    prompt: the candidate in `prompts/<benchmark>/full.md`, else the
-    committed one. The verifier runs `check.py`, which needs no expected data.
+    The full prompt is written from the benchmark's sources alone
+    (`packet.py`): no earlier candidate or solver result joins them. The
+    conventions prompt is written from the full prompt alone, the candidate
+    in `prompts/<benchmark>/full.md` or else the committed one. Each
+    writer's instruction is the document that defines its tier, and the
+    verifier runs `check.py`, which needs no expected data.
     """
-    if tier not in WRITERS:
+    if tier not in INSTRUCTIONS:
         raise build.BuildError(f"no writing task for the {tier} prompt")
+    if tier == "full" and prompts is not None:
+        raise build.BuildError(
+            "a full prompt is written from the benchmark's sources alone"
+        )
     task = tasks / f"{benchmark.name}-write-{tier}"
     if task.exists():
         shutil.rmtree(task)
     tests = task / "tests"
     tests.mkdir(parents=True)
-    previous = prompts / benchmark.name if prompts is not None else None
     if tier == "full":
-        packet.write(benchmark, task / "environment", previous=previous)
+        packet.write(benchmark, task / "environment")
         shutil.copyfile(task / "environment/sources/check.json", tests / "check.json")
         mounts = "sources/ /app/sources/", "input/ /app/input/"
         data = "check.json"
@@ -115,7 +123,7 @@ def writing_task(
             "--data /tests/check.json"
         )
     else:
-        candidate = previous / "full.md" if previous is not None else None
+        candidate = prompts / benchmark.name / "full.md" if prompts else None
         if candidate is None or not candidate.is_file():
             candidate = build.PROMPTS / benchmark.name / "full.md"
         if not candidate.is_file():
@@ -123,7 +131,6 @@ def writing_task(
         sources = task / "environment" / "sources"
         sources.mkdir(parents=True)
         shutil.copyfile(candidate, sources / "full.md")
-        shutil.copyfile(HERE / "prompts" / "README.md", sources / "tiers.md")
         for name in packet.CHECKS:
             shutil.copyfile(HERE / name, sources / name)
         shutil.copyfile(candidate, tests / "full.md")
@@ -136,9 +143,7 @@ def writing_task(
         f"FROM {build.AGENT_IMAGES['python']}\n"
         + "".join(f"COPY --chown=agent:agent {m}\n" for m in mounts)
     )
-    (task / "instruction.md").write_text(
-        (HERE / WRITERS[tier]).read_text(encoding="utf-8")
-    )
+    (task / "instruction.md").write_text(INSTRUCTIONS[tier].read_text(encoding="utf-8"))
     (task / "task.toml").write_text(writing_toml(benchmark.name, tier, commit))
     (tests / "test.sh").write_text(
         "#!/usr/bin/env bash\n"
@@ -280,8 +285,9 @@ def _failures(grade: dict) -> set[str]:
     return failed
 
 
-def feedback(jobs: list[Path]) -> dict[str, str]:
-    """What candidate solvers failed, per benchmark, as `feedback.md` text."""
+def report(jobs: list[Path]) -> dict[str, str]:
+    """What candidate solvers failed, per benchmark, for the person who
+    reviews the candidates. No writer receives it."""
     attempts: dict[str, int] = defaultdict(int)
     passed: dict[str, int] = defaultdict(int)
     failed: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -359,9 +365,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
     write = commands.add_parser("write", help="build writing tasks and jobs")
-    write.add_argument("--tier", choices=list(WRITERS), default="full")
+    write.add_argument("--tier", choices=list(INSTRUCTIONS), default="full")
     write.add_argument(
         "--benchmarks", nargs="+", help="default: every sdtm-* and adam-* benchmark"
+    )
+    write.add_argument(
+        "--prompts", type=Path, help="full prompts to narrow, <dir>/<benchmark>/full.md"
     )
     solve = commands.add_parser("solve", help="build candidate solver tasks and jobs")
     solve.add_argument(
@@ -370,13 +379,10 @@ def main() -> None:
         choices=sorted(build.LANGUAGES),
         default=sorted(build.DEFAULT_LANGUAGES),
     )
+    solve.add_argument(
+        "--prompts", type=Path, required=True, help="<dir>/<benchmark>/full.md"
+    )
     for command in (write, solve):
-        command.add_argument(
-            "--prompts",
-            type=Path,
-            required=command is solve,
-            help="candidates, <dir>/<benchmark>/full.md, with any feedback.md",
-        )
         command.add_argument("--model", nargs="+", required=True, help="provider/model")
         command.add_argument("--api-host", help="model API host, for other providers")
         command.add_argument("--key-env", help="API key variable, for other providers")
@@ -387,24 +393,22 @@ def main() -> None:
     execute = commands.add_parser("run", help="run a writing or candidate job")
     execute.add_argument("-c", "--config", type=Path, required=True)
     gather = commands.add_parser("collect", help="copy what passing trials wrote")
-    report = commands.add_parser("feedback", help="list the columns solvers failed")
-    for command in (gather, report):
+    summary = commands.add_parser("report", help="list the columns solvers failed")
+    for command in (gather, summary):
         command.add_argument("jobs", nargs="+", type=Path)
     gather.add_argument("--into", type=Path, required=True)
-    report.add_argument("--into", type=Path, help="write <dir>/<benchmark>/feedback.md")
     args = parser.parse_args()
+    if args.command == "write" and args.tier == "full" and args.prompts:
+        parser.error("a full prompt is written from the benchmark's sources alone")
 
     if args.command == "run":
         asyncio.run(run(json.loads(args.config.read_text(encoding="utf-8"))))
     elif args.command == "collect":
         copied = [p for job in args.jobs for p in collect(job, args.into)]
         print(f"copied {len(copied)} file(s) into {args.into}")
-    elif args.command == "feedback":
-        for benchmark, text in feedback(args.jobs).items():
+    elif args.command == "report":
+        for benchmark, text in report(args.jobs).items():
             print(f"{benchmark}\n{text}")
-            if args.into is not None:
-                (args.into / benchmark).mkdir(parents=True, exist_ok=True)
-                (args.into / benchmark / "feedback.md").write_text(text)
     elif args.command == "write":
         commit = build.git_commit()
         tasks_dir = _fresh(args.out / f"write-{args.tier}" / "tasks")
