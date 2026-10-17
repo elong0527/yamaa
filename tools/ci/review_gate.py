@@ -471,7 +471,7 @@ def ordinary_review(api, number, pull, review):
 
 def linked_targets(api, numbers):
     targets = set()
-    for pull in api.pages("pulls?state=open&base=main"):
+    for pull in api.pages("pulls?state=open"):
         if not target_pull(api, pull):
             continue
         try:
@@ -527,7 +527,7 @@ def candidates(api, event_name, event):
         require(positive_integer(number), "event has no valid pull request number")
         return sorted({number} | linked_targets(api, {number}))
     elif event_name in {"schedule", "workflow_dispatch"}:
-        pulls = api.pages("pulls?state=open&base=main")
+        pulls = api.pages("pulls?state=open")
         return sorted({pull["number"] for pull in pulls if target_pull(api, pull)})
     else:
         raise GateError("unsupported review gate event")

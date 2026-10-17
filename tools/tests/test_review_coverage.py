@@ -257,7 +257,7 @@ class Payloads:
             return self.next(self.timeline_versions[int(endpoint.split("/")[1])])
         if endpoint.startswith("issues/") and endpoint.endswith("/comments"):
             return self.next(self.comment_versions[int(endpoint.split("/")[1])])
-        if endpoint == "pulls?state=open&base=main":
+        if endpoint == "pulls?state=open":
             return [copy.deepcopy(self.pull_versions[NUMBER][0])]
         if endpoint.startswith("commits/") and endpoint.endswith("/pulls"):
             head = endpoint.split("/")[1]
@@ -961,7 +961,7 @@ class BoundedRouting(unittest.TestCase):
             ),
             [NUMBER],
         )
-        self.assertIn(("pages", "pulls?state=open&base=main"), api.history)
+        self.assertIn(("pages", "pulls?state=open"), api.history)
 
     def test_chunk_discussion_refreshes_both_itself_and_linked_main_target(self):
         api = Payloads()
