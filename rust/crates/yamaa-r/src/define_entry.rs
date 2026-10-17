@@ -127,4 +127,4 @@ fn define_save(handle: Robj) -> List {
         }
     })
 }
-extendr_module! { mod define_entry; fn define_file; fn define_issues; fn define_artifacts; fn define_save; }
+include!("generated/define_entry.rs");

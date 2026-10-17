@@ -18,11 +18,4 @@ fn core_version() -> &'static str {
     yamaa::VERSION
 }
 
-extendr_module! {
-    mod yamaa;
-    fn core_version;
-    use domain_entry;
-    use define_entry;
-    use scalars;
-    use resolved_artifact;
-}
+include!("generated/yamaa.rs");
