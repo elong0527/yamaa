@@ -266,7 +266,9 @@ def _concrete_signature(target: object, depth: int = 0) -> inspect.Signature:
         or inspect.ismethoddescriptor(target)
         or inspect.ismethodwrapper(target)
     ):
-        return inspect._signature_from_builtin(
+        # inspect.signature would honour a writable __signature__; this is the
+        # stdlib's own builtin path, present on every supported CPython.
+        return inspect._signature_from_builtin(  # pyrefly: ignore[missing-attribute]
             inspect.Signature, target, skip_bound_arg=True
         )
     else:

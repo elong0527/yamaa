@@ -5,10 +5,10 @@ from __future__ import annotations
 import lzma
 import tarfile
 import zlib
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
-from typing import BinaryIO, Literal
+from typing import IO, Literal
 
 import polars as pl
 from lxml import etree
@@ -34,6 +34,12 @@ _ARCHIVE_READ_ERRORS = (
 )
 
 DefinitionKind = Literal["event", "form", "group", "item"]
+_DEFINITION_KINDS: dict[str, DefinitionKind] = {
+    "StudyEventDef": "event",
+    "FormDef": "form",
+    "ItemGroupDef": "group",
+    "ItemDef": "item",
+}
 MetadataKey = tuple[str, str, str]
 
 
@@ -177,7 +183,7 @@ def _open_xml_stream(
     path: Path,
     member_name: str | None,
     max_archive_members: int,
-) -> Iterator[BinaryIO]:
+) -> Generator[IO[bytes], None, None]:
     if member_name is None:
         with path.open("rb") as stream:
             yield stream
@@ -358,12 +364,7 @@ def iter_odm_records(
                     }:
                         if metadata_study is None or metadata_version is None:
                             raise ODMError(f"{name} appears outside MetaDataVersion")
-                        kind: DefinitionKind = {
-                            "StudyEventDef": "event",
-                            "FormDef": "form",
-                            "ItemGroupDef": "group",
-                            "ItemDef": "item",
-                        }[name]
+                        kind = _DEFINITION_KINDS[name]
                         _add_metadata_name(
                             names,
                             kind,
