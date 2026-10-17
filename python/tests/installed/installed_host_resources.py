@@ -105,6 +105,20 @@ class HostResources(unittest.TestCase):
                     resolver.objects["raw.csv"].reference, "memory:/raw.csv#v1"
                 )
 
+    def test_put_frame_rejects_none_frame(self):
+        # A None frame stores a ResourceResult with neither data nor
+        # frame; capture then fails 'rejected', misleadingly blaming the
+        # specification or session instead of this call. Refuse it at
+        # put time. Frames are otherwise opaque host objects.
+        for backend in (MemoryResolver, SyntheticRemoteResolver):
+            with self.subTest(backend=backend):
+                resolver = backend()
+                with self.assertRaises(TypeError):
+                    resolver.put_frame("raw.csv", None)
+                self.assertEqual(resolver.objects, {})
+                resolver.put_frame("raw.csv", object())
+                self.assertIn("raw.csv", resolver.objects)
+
     def test_frame_exporter_interrupt_preserves_original_object(self):
         interruption = KeyboardInterrupt("frame exporter interrupted")
 
