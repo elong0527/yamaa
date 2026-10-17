@@ -12,6 +12,7 @@ from tools.ci.dependency_graphs import (
     assert_patches,
     minimum_cargo,
     minimum_python,
+    pin_manifest,
     prepare,
 )
 from tools.paths import ROOT
@@ -29,6 +30,45 @@ class DependencyGraphsTests(unittest.TestCase):
         for value in ["*", "1", "~1.2", ">1.2.3", "1.2.3 || 2.0.0"]:
             with self.subTest(value=value), self.assertRaises(ValueError):
                 minimum_cargo(value)
+
+    def test_pin_manifest_rejects_malformed_shapes_as_value_error(self):
+        # Malformed Cargo.toml sections must follow the module's ValueError
+        # convention, not escape as AttributeError/TypeError/KeyError.
+        for content in [
+            'target = "x"\n[dependencies]\nfoo = "1.2.3"\n',
+            'dependencies = "x"\n',
+            "dependencies = []\n",
+            "[dependencies]\nfoo = 123\n",
+            "[dependencies]\nfoo = []\n",
+            "[dependencies]\nfoo = {}\n",
+            "[dependencies]\nfoo = {version = 123}\n",
+            '[target]\nx = "y"\n',
+        ]:
+            with self.subTest(content=content), tempfile.TemporaryDirectory() as td:
+                path = Path(td) / "Cargo.toml"
+                path.write_text(content)
+                with self.assertRaises(ValueError):
+                    pin_manifest(path, set())
+        for value in (123, None, b"1.2.3"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                minimum_cargo(value)
+            with self.subTest(value=value, python=True), self.assertRaises(ValueError):
+                minimum_python(value)
+
+    def test_pin_manifest_pins_string_and_table_dependencies(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "Cargo.toml"
+            path.write_text(
+                '[dependencies]\nfoo = "1.2.3"\nbar = {version = ">=0.9.8, <2"}\n'
+                'local = {path = "../local"}\n'
+                '[target.x.dependencies]\nbaz = "=2.0.0"\n'
+            )
+            pin_manifest(path, set())
+            text = path.read_text()
+            self.assertIn('foo = "=1.2.3"', text)
+            self.assertIn('bar = {version = "=0.9.8"}', text)
+            self.assertIn('baz = "=2.0.0"', text)
+            self.assertIn('local = {path = "../local"}', text)
 
     def test_python_minimum_preserves_markers_and_extras(self):
         self.assertEqual(
