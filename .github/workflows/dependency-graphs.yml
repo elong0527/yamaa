@@ -1,13 +1,33 @@
 name: Dependency graphs
 
+# Every graph is resolved and built from scratch, so main runs nightly and a
+# pull request runs only when it changes what the graphs resolve or the
+# advisory policy in rust/deny.toml.
 on:
   # PRs into a release integration branch run only the CI workflow.
   pull_request:
     branches: [main]
+    paths:
+      - 'rust/**/Cargo.toml'
+      - 'rust/Cargo.lock'
+      - 'rust/deny.toml'
+      - 'rust/rust-toolchain.toml'
+      - 'rust/vendor/**'
+      - 'pyproject.toml'
+      - 'python/pyproject.toml'
+      - 'python/uv.lock'
+      - 'rust/tests/project-programs/python/pyproject.toml'
+      - 'rust/tests/project-programs/r/DESCRIPTION'
+      - 'R/yamaa/DESCRIPTION'
+      - 'tools/ci/dependency_graphs.py'
+      - 'tools/ci/toolchain.py'
+      - '.github/actions/setup/**'
+      - '.github/workflows/dependency-graphs.yml'
+  # Schedules only check main, so release branches are checked on each push.
   push:
-    branches: [main, 'release/**']
+    branches: ['release/**']
   schedule:
-    - cron: '23 6 * * 1'
+    - cron: '23 6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -37,7 +57,7 @@ jobs:
           command: check advisories
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
       - name: Check the Python lock against advisories
         run: |
           uv export --project python --frozen --all-extras --all-groups \
@@ -58,11 +78,6 @@ jobs:
       matrix:
         graph: [minimum, newest]
         python: ['3.12', '3.14', '3.15']
-        exclude:
-          # The declared minima of Polars, PyArrow, lxml and Pydantic do not
-          # work on CPython 3.15 (docs/release.md).
-          - graph: minimum
-            python: '3.15'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -70,12 +85,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           r: check
-      # uv 0.11.6 can only download a 3.15 alpha; the graph's `uv venv` finds
-      # this released interpreter on PATH instead.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        if: matrix.python == '3.15'
-        with:
-          python-version: '3.15'
       - name: Resolve and test an isolated graph
         env:
           GRAPH: ${{ matrix.graph }}

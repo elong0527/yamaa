@@ -7,6 +7,8 @@ import tomllib
 import unittest
 from pathlib import Path
 
+from packaging.requirements import Requirement
+
 from tools.ci.dependency_graphs import (
     assert_msrv,
     assert_patches,
@@ -16,6 +18,32 @@ from tools.ci.dependency_graphs import (
     prepare,
 )
 from tools.paths import ROOT
+
+# Floors split by interpreter in python/pyproject.toml.
+EARLIER_FLOORS = {
+    "lxml": "6.1.0",
+    "polars": "1.35.2",
+    "pyarrow": "23.0.1",
+    "pydantic": "2.12.4",
+}
+PYTHON_315_FLOORS = {
+    "lxml": "6.1.2",
+    "polars": "2.0.0",
+    "pyarrow": "26.0.0",
+    "pydantic": "2.14.0",
+}
+
+
+def applicable(requirements, python):
+    """Specifiers by package for the requirements that apply on one interpreter."""
+    selected = {}
+    for line in requirements:
+        requirement = Requirement(line)
+        if requirement.marker is None or requirement.marker.evaluate(
+            {"python_version": python}
+        ):
+            selected.setdefault(requirement.name, []).append(str(requirement.specifier))
+    return selected
 
 
 class DependencyGraphsTests(unittest.TestCase):
@@ -78,6 +106,21 @@ class DependencyGraphsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             minimum_python("example>2")
 
+    def test_python_minimum_keeps_one_pin_per_marker_split_floor(self):
+        pins = [
+            minimum_python("example>=1.2; python_version < '3.15'"),
+            minimum_python("example>=2.0; python_version >= '3.15'"),
+        ]
+        self.assertEqual(
+            pins,
+            [
+                'example==1.2; python_version < "3.15"',
+                'example==2.0; python_version >= "3.15"',
+            ],
+        )
+        self.assertEqual(applicable(pins, "3.14"), {"example": ["==1.2"]})
+        self.assertEqual(applicable(pins, "3.15"), {"example": ["==2.0"]})
+
     def test_minimum_stage_keeps_patches_and_exact_policy_pins(self):
         locks = {
             name: (ROOT / name).read_bytes()
@@ -112,9 +155,15 @@ class DependencyGraphsTests(unittest.TestCase):
                 (stage / "python/uv.lock").read_bytes(), locks["python/uv.lock"]
             )
             requirements = (stage / "requirements.in").read_text().splitlines()
-            self.assertIn("polars==1.35.2", requirements)
-            self.assertIn("pyarrow==23.0.1", requirements)
-            self.assertIn("pydantic==2.12.4", requirements)
+            for python, floors in (
+                ("3.12", EARLIER_FLOORS),
+                ("3.14", EARLIER_FLOORS),
+                ("3.15", PYTHON_315_FLOORS),
+            ):
+                selected = applicable(requirements, python)
+                for name, floor in floors.items():
+                    with self.subTest(python=python, package=name):
+                        self.assertEqual(selected[name], ["==" + floor])
         self.assertEqual(locks, {name: (ROOT / name).read_bytes() for name in locks})
 
     def test_newest_stage_retains_supported_ranges(self):
@@ -129,8 +178,14 @@ class DependencyGraphsTests(unittest.TestCase):
                     (stage / path).read_bytes(), (ROOT / path).read_bytes()
                 )
             requirements = (stage / "requirements.in").read_text().splitlines()
-            self.assertIn("polars>=1.35.2", requirements)
-            self.assertIn("pyarrow>=23.0.1", requirements)
+            for python, floors in (
+                ("3.14", EARLIER_FLOORS),
+                ("3.15", PYTHON_315_FLOORS),
+            ):
+                selected = applicable(requirements, python)
+                for name, floor in floors.items():
+                    with self.subTest(python=python, package=name):
+                        self.assertEqual(selected[name], [">=" + floor])
             self.assertFalse((stage / "rust/Cargo.lock").exists())
 
     def test_destination_cannot_change_source_or_overwrite_existing(self):

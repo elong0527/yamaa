@@ -1,9 +1,16 @@
 name: CI
 
+# Pull requests are the gate. Main is checked on a schedule rather than after
+# every merge; the scheduled runs also save the Rust caches that pull requests
+# restore. Odd hours at :37 keep clear of the start times of the nightly
+# R CMD check (02:47) and native qualification (05:17) runs.
+# Schedules only check main, so release branches are checked on each push.
 on:
   pull_request:
   push:
-    branches: [main, 'release/**']
+    branches: ['release/**']
+  schedule:
+    - cron: '37 1-23/2 * * *'
   workflow_dispatch:
 
 permissions:
@@ -18,7 +25,7 @@ defaults:
     shell: bash
 
 jobs:
-  lint:
+  repository:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -28,16 +35,11 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           r: runtime
-      - run: make check-lint
-  repository:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: make check-repository
+      - id: lint
+        run: make check-lint
+      # Report repository findings even when lint fails.
+      - if: success() || steps.lint.outcome == 'failure'
+        run: make check-repository
   rust:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -83,13 +85,20 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: make test-python
-      - name: Test the minimum supported Python saved artifact readers
-        # The minimum dependency graph also tests these floors, and neither
-        # runs on PRs into a release integration branch.
-        if: github.event_name != 'pull_request' || github.base_ref == 'main'
-        run: |
-          uv pip install --python python/.venv/bin/python 'polars==1.35.2' 'pyarrow==23.0.1' 'lxml==6.1.0'
-          make test-python
+  python-minimum:
+    # The minimum dependency graph also tests these floors, and neither
+    # runs on PRs into a release integration branch.
+    if: github.event_name != 'pull_request' || github.base_ref == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install the minimum supported Python saved artifact readers
+        run: uv pip install --python python/.venv/bin/python 'polars==1.35.2' 'pyarrow==23.0.1' 'lxml==6.1.0'
+      - run: make test-python
   python-newest:
     name: python (3.15)
     runs-on: ubuntu-24.04
@@ -98,11 +107,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # uv 0.11.6 can only download a 3.15 alpha; uv finds this released
-      # interpreter on PATH instead.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.15'
       - uses: ./.github/actions/setup
         with:
           python: '3.15'

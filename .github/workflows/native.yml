@@ -47,7 +47,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -71,7 +71,7 @@ jobs:
           # Without `workspaces` the action looks for Cargo.toml at the root,
           # fails, and saves an empty cache under a key that never refreshes.
           workspaces: rust
-          shared-key: yamaa-${{ runner.os }}
+          key: ${{ github.workflow }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install build tools
         run: |
@@ -119,17 +119,8 @@ jobs:
         run: uv run --no-project --python 3.12 python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment-3.12/math-assessment.json"
       - name: Preserve Python 3.13 numerical assessment coverage
         run: uv run --no-project --python 3.13 python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment-3.13/math-assessment.json"
-      # uv 0.11.6 can only download a 3.15 alpha, so take the released
-      # interpreter from setup-python without changing this job's PATH.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        id: python-315
-        with:
-          python-version: '3.15'
-          update-environment: false
       - name: Preserve Python 3.15 numerical assessment coverage
-        env:
-          PYTHON_315: ${{ steps.python-315.outputs.python-path }}
-        run: uv run --no-project --python "${PYTHON_315}" python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment-3.15/math-assessment.json"
+        run: uv run --no-project --python 3.15 python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment-3.15/math-assessment.json"
       - name: Preserve candidate math assessment (not parity qualification)
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -179,7 +170,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -192,7 +183,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: rust
-          shared-key: yamaa-${{ runner.os }}
+          key: ${{ github.workflow }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Check benchmark SDK lock versions
         run: python -m tools.packaging.check_benchmark_sdk_versions
@@ -272,7 +263,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -322,8 +313,8 @@ jobs:
           python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz project-dist/*.whl
       - name: Install the minimum supported Python saved artifact readers
         working-directory: ${{ runner.temp }}
-        # The minimum readers do not work on CPython 3.15 (docs/release.md), so
-        # 3.15 takes the oldest releases that do.
+        # CPython 3.15 has its own floors in python/pyproject.toml, the oldest
+        # releases that work there.
         run: |
           if [ "${{ matrix.python }}" = 3.15 ]; then
             python -m pip install polars==2.0.0 pyarrow==26.0.0 lxml==6.1.2
@@ -383,7 +374,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -419,7 +410,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -432,7 +423,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: rust
-          shared-key: yamaa-${{ runner.os }}
+          key: ${{ github.workflow }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
         with:
@@ -600,7 +591,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:

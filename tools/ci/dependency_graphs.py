@@ -90,6 +90,11 @@ def pin_manifest(path, patched):
 
 
 def minimum_python(requirement):
+    """Pin one requirement to its floor, keeping its extras and markers.
+
+    A package with marker-split floors keeps one pin per entry, so the resolver
+    gives each interpreter its own floor.
+    """
     if not isinstance(requirement, str):
         raise ValueError(
             f"Python requirement needs one explicit minimum: {requirement}"

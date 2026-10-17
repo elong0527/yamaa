@@ -7,21 +7,29 @@ inputs:
   python:
     description: Python version for the locked development environment
     default: '3.14'
+  package:
+    description: Build the development package and install repository tools (true or false)
+    default: 'true'
 runs:
   using: composite
   steps:
-    - name: Validate R setup mode
+    - name: Validate setup inputs
       shell: bash
       env:
         R_SETUP_MODE: ${{ inputs.r }}
+        PACKAGE_SETUP: ${{ inputs.package }}
       run: |
         case "$R_SETUP_MODE" in
           none|runtime|check) ;;
           *) echo "::error::r must be none, runtime, or check"; exit 1 ;;
         esac
+        case "$PACKAGE_SETUP" in
+          true|false) ;;
+          *) echo "::error::package must be true or false"; exit 1 ;;
+        esac
     - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
       with:
-        version: '0.11.6'
+        version: '0.13.0'
         enable-cache: true
         python-version: ${{ inputs.python }}
     - name: Read the workspace toolchain
@@ -30,10 +38,13 @@ runs:
     - name: Activate the workspace toolchain
       shell: bash
       run: python -m tools.ci.toolchain --install
+    # Jobs build different profiles and features, and the action never
+    # overwrites an existing key, so each workflow job keeps its own cache
+    # (the action appends the job id to this key).
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       with:
         workspaces: rust
-        shared-key: yamaa-${{ runner.os }}
+        key: ${{ github.workflow }}
         save-if: ${{ github.ref == 'refs/heads/main' }}
     - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
       if: inputs.r != 'none'
@@ -54,5 +65,6 @@ runs:
         stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE)))
         RS
     - name: Build the development package and install repository tools
+      if: inputs.package == 'true'
       shell: bash
       run: make setup
