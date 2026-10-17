@@ -88,13 +88,15 @@ columns:
     derivation: PLANNEDVISIT.VISITNUM
 
   # The latest planned number collected for the subject before this row's
-  # date, in collection-date order; the current row is never a candidate.
+  # date, in collection-date order; with include_current false the current
+  # row is never a candidate.
   - name: PREVPLANNED
     type: float
     label: Latest Earlier Planned Visit Number
     derivation:
-      previous_non_missing:
+      locf:
         source: PLANNEDNUM
+        include_current: false
         window:
           group_by: [USUBJID]
           order_by: [VSDTC]

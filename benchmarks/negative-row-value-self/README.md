@@ -34,8 +34,9 @@ earlier collected values, then take the first available of `AVAL` and
 - name: PRIOR
   type: float
   derivation:
-    previous_non_missing:
+    locf:
       source: AVAL
+      include_current: false
       window:
         group_by: [STUDYID, USUBJID, PARAMCD]
         order_by: [ADT, VSSEQ]

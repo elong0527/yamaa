@@ -111,7 +111,7 @@ fn reads(expression: &Expression, items: &[Intermediate]) -> bool {
         | Expression::StrCase { source, .. } | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. } | Expression::StrReplace { source, .. } | Expression::MappingCut { source, .. } | Expression::Round { source, .. } => reads(&source.expression, items),
         Expression::FirstAvailable(selection) => selection.sources().iter().any(|source| matches!(&source.read, SelectionRead::Expression(source) if reads(&source.expression, items))),
-        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. }
+        Expression::Extreme { operands, .. }
         | Expression::StrTemplate { operands, .. } | Expression::Temporal { operands, .. }
         | Expression::Imputation { operands, .. } => operands.iter().any(|source| reads(&source.expression, items)),
         Expression::Compute(expression) => expression.bindings().iter().any(|binding| named_read(&binding.read, items)),

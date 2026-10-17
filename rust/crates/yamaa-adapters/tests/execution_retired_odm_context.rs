@@ -577,10 +577,10 @@ mod execution {
         }
         #[test]
         fn row_cases_numeric_and_temporal_share_dependency_lowering() {
-            let columns="  - {name: VALUE, type: int}\n  - {name: PICK, type: str}\n  - {name: DAY, type: int}\n  - {name: TEXT, type: str}\n";
+            let columns="  - {name: VALUE, type: int}\n  - {name: PICK, type: str}\n  - {name: DAY, type: int}\n  - {name: LABEL, type: str}\n  - {name: TEXT, type: str}\n";
             // Authored consumer-before-producer order proves that row-local reads use
             // the dependency graph, and that nested branches see converted values.
-            let rows="  - id: one\n    derivations:\n      SECTION: {literal: one}\n      TEXT: {str_concat: {sources: [{case: [{when: 'VALUE = 9', then: {literal: nine}}, {otherwise: {literal: other}}]}, {source: PICK}]}}\n      DAY: {study_day: {date: SRC.D, reference: SRC.R}}\n      PICK: {first_available: {sources: [SRC.TEXT, ID], missing: none}}\n      VALUE: {case: [{when: 'SRC.I > 0', then: {compute: {expr: 'POWER(SRC.I, 2)'}}}, {otherwise: {literal: 0}}]}\n";
+            let rows="  - id: one\n    derivations:\n      SECTION: {literal: one}\n      TEXT: {str_template: '{LABEL}{PICK}'}\n      LABEL: {case: [{when: 'VALUE = 9', then: {literal: nine}}, {otherwise: {literal: other}}]}\n      DAY: {study_day: {date: SRC.D, reference: SRC.R}}\n      PICK: {first_available: {sources: [SRC.TEXT, ID], missing: none}}\n      VALUE: {case: [{when: 'SRC.I > 0', then: {compute: {expr: 'POWER(SRC.I, 2)'}}}, {otherwise: {literal: 0}}]}\n";
             let f = bespoke(
                 &specification(columns, rows, "[ID, SECTION, VALUE, PICK, DAY, TEXT]"),
                 b"ID,I,D,R,TEXT\na,3,2025-01-02,2025-01-01,x\nb,-2,2024-12-31,2025-01-01,\n",
@@ -718,7 +718,7 @@ mod execution {
 
         #[test]
         fn column_and_case_scopes_use_the_shared_dispatch_with_distinct_nested_values() {
-            let source="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv}}\noutput: {path: output.csv, columns: [ID, VALUE, TEXT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {compute: {expr: 'EXP(0) + LN(1) + POWER(3, 2)'}}}\n  - name: TEXT\n    type: str\n    derivation:\n      case:\n        - when: VALUE = 10\n          then: {str_concat: {sources: [{literal: 'prefix:'}, {first_available: {sources: [ID], missing: fallback}}]}}\n        - otherwise: {literal: wrong}\n";
+            let source="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv}}\noutput: {path: output.csv, columns: [ID, VALUE, TEXT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {compute: {expr: 'EXP(0) + LN(1) + POWER(3, 2)'}}}\n  - {name: PICK, type: str, derivation: {first_available: {sources: [ID], missing: fallback}}}\n  - name: TEXT\n    type: str\n    derivation:\n      case:\n        - when: VALUE = 10\n          then: {str_template: 'prefix:{PICK}'}\n        - otherwise: {literal: wrong}\n";
             let f = bespoke(source, b"ID\na\n");
             assert_eq!(saved(&f), b"ID,VALUE,TEXT\na,10,prefix:a\n");
         }

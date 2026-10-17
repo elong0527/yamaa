@@ -83,7 +83,6 @@ pub enum WindowDeclarationKind {
     Competition,
     Dense,
     RowValue,
-    PreviousNonMissing,
     Locf,
     BaselineFlag,
 }
@@ -94,7 +93,6 @@ impl From<WindowKind> for WindowDeclarationKind {
             WindowKind::Competition => Self::Competition,
             WindowKind::Dense => Self::Dense,
             WindowKind::RowValue { .. } => Self::RowValue,
-            WindowKind::PreviousNonMissing { .. } => Self::PreviousNonMissing,
             WindowKind::Locf { .. } => Self::Locf,
             WindowKind::BaselineFlag { .. } => Self::BaselineFlag,
         }

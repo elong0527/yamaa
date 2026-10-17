@@ -20,13 +20,7 @@ columns:
     # STUDYID-SITEID-SUBJID. With no missing: value, a record missing any
     # part stops the run.
     derivation:
-      str_concat:
-        sources:
-          - source: DM_RAW.STUDYID
-          - literal: '-'
-          - source: DM_RAW.SITEID
-          - literal: '-'
-          - source: DM_RAW.SUBJID
+      str_template: "{DM_RAW.STUDYID}-{DM_RAW.SITEID}-{DM_RAW.SUBJID}"
     # A long site identifier pushes the joined value past 20 characters,
     # which fails once the dataset is complete.
     verifications:

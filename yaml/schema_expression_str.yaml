@@ -45,14 +45,6 @@ expressions:
         - missing:
             type: literal_value
             description: Value returned when the source is missing (TEXT-11).
-    str_concat: # See REQ-1112.
-        - sources:
-            type: "list[expression]"
-            required: true
-            description: Expressions to concatenate in order (TEXT-1).
-        - missing:
-            type: literal_value
-            description: Value returned when any source is missing (TEXT-1).
     str_template: # See REQ-1113.
         type: [string_template, str_template_class]
         description: Portable string template, concise or with missing handling (TEXT-4).

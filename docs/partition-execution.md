@@ -75,7 +75,7 @@ The inventory follows `Expression`, `RowMode` and the execution stages in
 | Family | Class | Required scope or reconciliation |
 | --- | --- | --- |
 | Plan/schema admission, function binding, source geometry and fixed limits | Global | Admit once in the current order before data reads; retain complete-table row/cell/column counts and source-list positions. |
-| `Source`, `Column`, `Literal`; `Compute`, `Round`, `Temporal`, `Imputation`, `Extreme`; string concatenation, contains, template, extract, case and pad | Safe | Complete operands first; retain conversion/handler order, exact arithmetic and regex refusal paths. A scalar wrapping a lookup or window inherits that dependency. |
+| `Source`, `Column`, `Literal`; `Compute`, `Round`, `Temporal`, `Imputation`, `Extreme`; string template, extract, case and pad | Safe | Complete operands first; retain conversion/handler order, exact arithmetic and regex refusal paths. A scalar wrapping a lookup or window inherits that dependency. |
 | `Case`, `FirstAvailable`, `Flag`, `SourceBinding` and bound predicates | Safe | Keep authored operand order, three-valued truth, lazy branch/operand evaluation and binding-handler ownership. Never evaluate a suppressed alternative to fill a batch. |
 | `MappingCut` (dictionary mapping and interval cut) | Safe | Admit dictionaries/breaks once; select independently from each completed source value with exact mixed-number comparison, then convert and record missing/unmapped handlers in order. |
 | ODM reads (`Odm`) | Safe-with-combine-step | Use the same complete captured ODM relation and ordinal/provenance coordinates. Reconcile record eligibility and multiplicity before selecting a scalar; a chunk of XML or records is not the complete read scope. |
@@ -104,7 +104,7 @@ complete; a physical batch is not such a unit.
 | `RowNumber` | Eligible member order and global numbering within that group. |
 | `Competition`, `Dense` | Complete ordering, tie runs crossing batch boundaries, and preceding ranks. |
 | `RowValue` | The donor at the signed offset, including donors outside the current batch. |
-| `PreviousNonMissing`, `Locf` | Ordered preceding present donor, with their different treatment of the current row. |
+| `Locf` | Ordered preceding present donor; `include_current` decides whether the current row's own present value answers first. |
 | `BaselineFlag` | All eligible candidate dates and reference dates, including the complete ambiguity count and original offending identity. |
 
 Column windows observe the constructed output relation. Row-template windows

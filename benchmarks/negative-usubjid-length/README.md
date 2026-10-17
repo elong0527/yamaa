@@ -39,13 +39,7 @@ subject identifier is described:
 - name: USUBJID
   type: str
   derivation:
-    str_concat:
-      sources:
-        - source: DM_RAW.STUDYID
-        - literal: '-'
-        - source: DM_RAW.SITEID
-        - literal: '-'
-        - source: DM_RAW.SUBJID
+    str_template: "{DM_RAW.STUDYID}-{DM_RAW.SITEID}-{DM_RAW.SUBJID}"
   verifications:
     - max_length:
         max: 30

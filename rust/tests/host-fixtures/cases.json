@@ -2766,8 +2766,8 @@
           "handlers": []
         },
         {
-          "name": "string-concatenation",
-          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"source.csv\",\n      \"types\": {\n        \"ID\": \"str\",\n        \"A\": \"str\",\n        \"B\": \"str\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"right.csv\",\n      \"types\": {\n        \"M\": \"str\",\n        \"RESULT\": \"str\"\n      }\n    }\n  },\n  \"base\": \"SRC\",\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.ID\"\n      }\n    },\n    {\n      \"name\": \"A\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.A\"\n      }\n    },\n    {\n      \"name\": \"B\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.B\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"LOOK.RESULT\"\n      }\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"LOOK\",\n      \"dataset\": \"RIGHT\",\n      \"key\": {\n        \"M\": {\n          \"str_concat\": {\n            \"sources\": [\n              {\n                \"source\": \"A\"\n              },\n              {\n                \"source\": \"B\"\n              }\n            ]\n          }\n        }\n      }\n    }\n  ]\n}\n",
+          "name": "string-template-adjacent-placeholders",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"source.csv\",\n      \"types\": {\n        \"ID\": \"str\",\n        \"A\": \"str\",\n        \"B\": \"str\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"right.csv\",\n      \"types\": {\n        \"M\": \"str\",\n        \"RESULT\": \"str\"\n      }\n    }\n  },\n  \"base\": \"SRC\",\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.ID\"\n      }\n    },\n    {\n      \"name\": \"A\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.A\"\n      }\n    },\n    {\n      \"name\": \"B\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.B\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"LOOK.RESULT\"\n      }\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"LOOK\",\n      \"dataset\": \"RIGHT\",\n      \"key\": {\n        \"M\": {\n          \"str_template\": \"{A}{B}\"\n        }\n      }\n    }\n  ]\n}\n",
           "inputs": {
             "source.csv": "ID,A,B\n1,a,b\n2,c,d\n",
             "right.csv": "M,RESULT\nab,hit1\ncd,hit2\n"
@@ -3314,8 +3314,8 @@
           "handlers": []
         },
         {
-          "name": "previous_non_missing-completed-current-relation",
-          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"source.csv\",\n      \"types\": {\n        \"ID\": \"str\",\n        \"A\": \"int\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"right.csv\",\n      \"types\": {\n        \"M\": \"int\",\n        \"RESULT\": \"str\"\n      }\n    }\n  },\n  \"base\": \"SRC\",\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.ID\"\n      }\n    },\n    {\n      \"name\": \"A\",\n      \"type\": \"int\",\n      \"derivation\": {\n        \"source\": \"SRC.A\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"LOOK.RESULT\"\n      }\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"LOOK\",\n      \"dataset\": \"RIGHT\",\n      \"key\": {\n        \"M\": {\n          \"previous_non_missing\": {\n            \"source\": \"A\",\n            \"window\": {\n              \"order_by\": [\n                \"K\"\n              ]\n            }\n          }\n        }\n      },\n      \"no_match\": null\n    }\n  ]\n}\n",
+          "name": "locf-excluding-current-completed-current-relation",
+          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"source.csv\",\n      \"types\": {\n        \"ID\": \"str\",\n        \"A\": \"int\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"right.csv\",\n      \"types\": {\n        \"M\": \"int\",\n        \"RESULT\": \"str\"\n      }\n    }\n  },\n  \"base\": \"SRC\",\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.ID\"\n      }\n    },\n    {\n      \"name\": \"A\",\n      \"type\": \"int\",\n      \"derivation\": {\n        \"source\": \"SRC.A\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"LOOK.RESULT\"\n      }\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"LOOK\",\n      \"dataset\": \"RIGHT\",\n      \"key\": {\n        \"M\": {\n          \"locf\": {\n            \"source\": \"A\",\n            \"include_current\": false,\n            \"window\": {\n              \"order_by\": [\n                \"K\"\n              ]\n            }\n          }\n        }\n      },\n      \"no_match\": null\n    }\n  ]\n}\n",
           "inputs": {
             "source.csv": "ID,A\n1,1\n2,\n3,2\n",
             "right.csv": "M,RESULT\n1,first\n2,last\n"
@@ -3564,42 +3564,6 @@
           "issues": [],
           "handlers": [],
           "csv": "ID,T,EARLY,LATE\n1,A,one,one\n2,A,two,three\n1,B,one,two\n2,B,two,four\n"
-        },
-        {
-          "name": "concat-case-key-explicitly-deferred",
-          "specification": "{\n  \"schema_version\": \"1.0\",\n  \"domain\": \"OUT\",\n  \"input\": {\n    \"SRC\": {\n      \"path\": \"source.csv\",\n      \"types\": {\n        \"ID\": \"str\",\n        \"A\": \"str\"\n      }\n    },\n    \"RIGHT\": {\n      \"path\": \"right.csv\",\n      \"types\": {\n        \"M\": \"str\",\n        \"RESULT\": \"str\"\n      }\n    }\n  },\n  \"base\": \"SRC\",\n  \"keys\": [\n    \"K\"\n  ],\n  \"output\": {\n    \"path\": \"out.csv\",\n    \"columns\": [\n      \"K\",\n      \"V\"\n    ]\n  },\n  \"columns\": [\n    {\n      \"name\": \"K\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.ID\"\n      }\n    },\n    {\n      \"name\": \"A\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"SRC.A\"\n      }\n    },\n    {\n      \"name\": \"V\",\n      \"type\": \"str\",\n      \"derivation\": {\n        \"source\": \"LOOK.RESULT\"\n      }\n    }\n  ],\n  \"intermediates\": [\n    {\n      \"id\": \"LOOK\",\n      \"dataset\": \"RIGHT\",\n      \"key\": {\n        \"M\": {\n          \"str_concat\": {\n            \"sources\": [\n              {\n                \"literal\": \"value\"\n              },\n              {\n                \"case\": [\n                  {\n                    \"when\": \"A = 'x'\",\n                    \"then\": {\n                      \"literal\": 1\n                    }\n                  },\n                  {\n                    \"otherwise\": {\n                      \"literal\": 2\n                    }\n                  }\n                ]\n              }\n            ]\n          }\n        }\n      }\n    }\n  ]\n}\n",
-          "inputs": {
-            "source.csv": "ID,A\n1,x\n2,y\n",
-            "right.csv": "M,RESULT\n1,hit1\n2,hit2\n"
-          },
-          "check_issues": [
-            {
-              "phase": "planning",
-              "condition": "unsupported_operation",
-              "requirement": null,
-              "spec_paths": [
-                "intermediates[0].key.M.str_concat.sources[1].case"
-              ],
-              "context": {
-                "operation": "case"
-              }
-            }
-          ],
-          "issues": [
-            {
-              "phase": "planning",
-              "condition": "unsupported_operation",
-              "requirement": null,
-              "spec_paths": [
-                "intermediates[0].key.M.str_concat.sources[1].case"
-              ],
-              "context": {
-                "operation": "case"
-              }
-            }
-          ],
-          "csv": "",
-          "handlers": []
         },
         {
           "name": "conditional-imputation-bound-key-explicitly-deferred",

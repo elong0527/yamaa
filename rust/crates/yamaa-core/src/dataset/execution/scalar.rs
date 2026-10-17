@@ -79,18 +79,6 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
                 }
             }
         }
-        Expression::StrConcat {
-            operands,
-            missing,
-            path,
-        } => {
-            if missing.is_some() {
-                counter.register(&std::format!("{path}.missing"), HandlerKind::Missing);
-            }
-            for source in operands {
-                register(source, counter);
-            }
-        }
         Expression::Extreme { operands, .. }
         | Expression::Imputation { operands, .. }
         | Expression::Temporal { operands, .. }
@@ -111,17 +99,6 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
         | Expression::Round { source, .. } => register(source, counter),
         _ => (),
     }
-}
-fn recover<T: TableAccess + ?Sized>(
-    value: &Value,
-    path: &str,
-    state: &mut EvaluationState<'_, T::Error>,
-) -> Result<Value, Box<ExecutionError<T::Error>>> {
-    state
-        .handlers
-        .record(&std::format!("{path}.missing"), HandlerKind::Missing)
-        .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
-    Ok(value.clone())
 }
 #[allow(clippy::too_many_arguments)]
 pub(super) fn evaluate<T: TableAccess + ?Sized>(
@@ -144,33 +121,6 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                 }
             }
             Ok(selected)
-        }
-        Expression::StrConcat {
-            operands,
-            missing,
-            path,
-        } => {
-            let mut rendered = String::new();
-            for (index, source) in operands.iter().enumerate() {
-                let value = evaluate_raw(table, source, candidate, plan, row, state)?;
-                if matches!(value, Value::Missing) {
-                    if let Some(value) = missing {
-                        return recover::<T>(value, path, state);
-                    }
-                }
-                if let Some(diagnostic) = scalar_language::concat_diagnostic(path, index, &value) {
-                    let keys = diagnostic.definition().phase == "mapping";
-                    return Err(retained_diagnostic(diagnostic, keys, candidate, plan, row));
-                }
-                let Value::Str(text) = value else {
-                    unreachable!()
-                };
-                rendered
-                    .try_reserve(text.len())
-                    .map_err(|_| Box::new(ExecutionError::Allocation))?;
-                rendered.push_str(&text);
-            }
-            Ok(Value::Str(rendered))
         }
         _ => unreachable!("scalar dispatch"),
     }

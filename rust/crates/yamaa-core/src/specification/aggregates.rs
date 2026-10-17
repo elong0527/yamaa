@@ -86,7 +86,7 @@ fn window_path(
     let operation = text(d, operation)?;
     let path = format!("{path}.{operation}");
     match operation {
-        "row_number" | "rank" | "row_value" | "previous_non_missing" | "locf" | "baseline_flag" => {
+        "row_number" | "rank" | "row_value" | "locf" | "baseline_flag" => {
             return Ok(Some(path));
         }
         "case" => {
@@ -99,18 +99,6 @@ fn window_path(
                             return Ok(Some(path));
                         }
                     }
-                }
-            }
-        }
-        "str_concat" => {
-            for (index, &child) in sequence(d, field(d, payload, "sources")?)?
-                .iter()
-                .enumerate()
-            {
-                if let Some(path) =
-                    window_path(d, child, &format!("{path}.sources[{index}]"), depth + 1)?
-                {
-                    return Ok(Some(path));
                 }
             }
         }

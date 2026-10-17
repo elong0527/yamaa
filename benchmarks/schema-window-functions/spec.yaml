@@ -136,21 +136,23 @@ columns:
           order_by: [VISITN]
           filter: "VSEVAL = 'Y'"
 
-  # The closest strictly earlier non-missing result; the current row is
-  # never a candidate. Crosses any number of consecutive gaps: subject 02
-  # visit 4 reads the visit 1 result across two missing visits.
+  # The closest strictly earlier non-missing result; with include_current
+  # false the current row is never a candidate. Crosses any number of
+  # consecutive gaps: subject 02 visit 4 reads the visit 1 result across
+  # two missing visits.
   - name: LASTRES
     type: float
     label: Last Non-missing Result
     derivation:
-      previous_non_missing:
+      locf:
         source: VSSTRESN
+        include_current: false
         window: VISIT_ORDER
 
   # Returns the current result when present, otherwise the closest
-  # strictly earlier non-missing result. Differs from the previous
-  # non-missing column only where the current row has a value: the first
-  # visit keeps its own result instead of reading missing.
+  # strictly earlier non-missing result. Differs from the last non-missing
+  # column only where the current row has a value: the first visit keeps
+  # its own result instead of reading missing.
   - name: CARRYRES
     type: float
     label: Carried-forward Result

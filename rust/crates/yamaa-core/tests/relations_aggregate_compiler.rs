@@ -444,7 +444,8 @@ mod relations {
             };
             assert!(matches!(
                 compile_dataset(declaration(D::Number(window(WindowKind::Locf {
-                    column: 0
+                    column: 0,
+                    include_current: true,
                 })))),
                 Err(Error::Plan(PlanError::InvalidWindow))
             ));
@@ -2395,7 +2396,6 @@ mod relations {
                 "duration_value",
                 "row_value",
                 "locf",
-                "previous_non_missing",
                 "mapping",
                 "case",
                 "greatest",

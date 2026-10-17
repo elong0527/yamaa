@@ -182,12 +182,12 @@ The Windows implementations use retained handles in [windows_file.rs](../../src/
 ## odm_deferred
 # Deferred ODM defaults
 
-Eight independently authored reports and CSV artifacts retain REQ-1265 through
+Seven independently authored reports and CSV artifacts retain REQ-1265 through
 REQ-1278 semantics when a column default depends on a completed row-number window.
 They cover record occurrence scope, missing items, group hierarchy scope,
-selectors followed by source-only predicates, an unselected CASE branch,
-a nested string operand, and complete ambiguity context with the authored
-row-template identity. Record occurrences use the completed sequence key.
+selectors followed by source-only predicates, an unselected CASE branch, and
+complete ambiguity context with the authored row-template identity. Record
+occurrences use the completed sequence key.
 
 Expected reports and CSV bytes were authored independently of the evaluator.
 Each replay compares the complete report and source ledger and publishes a
@@ -294,14 +294,14 @@ Ordinary-column wrappers compile handlers into the existing core `ConversionHand
 ## original_mapping_cut
 # Original mapping and cut truth
 
-These twenty-one authored specifications and complete reports were written from
+These twenty authored specifications and complete reports were written from
 REQ-0304, REQ-0306, REQ-0334, REQ-0343 through REQ-0347, REQ-0360,
 REQ-0361, REQ-0364, REQ-0709, REQ-0710, REQ-0714, REQ-1110 and REQ-1118.
 No candidate or reference evaluator authored an expected value. The truth owns
 source bytes, typed observations, declared zero/reached handler counts, failure
 identity and geometry, and repeated exact CSV publication. It covers roots,
-row templates, lazy cases and raw nested concatenation, both interval closures,
-numeric order above 2^53, empty inputs and typed dictionary literals.
+row templates, lazy cases, both interval closures, numeric order above 2^53,
+empty inputs and typed dictionary literals.
 
 Static collision and malformed boundary diagnostics additionally have complete
 independent core/adapter checks before study ports. Dictionary file capture is

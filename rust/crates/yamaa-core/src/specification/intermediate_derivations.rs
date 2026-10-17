@@ -148,7 +148,7 @@ fn prepare_kind(
         "row_number" | "rank" | "date_diff" | "study_day" | "to_epoch_day" => {
             Kind::Literal(Some(ColumnType::Int))
         }
-        "str_pad" | "str_case" | "str_concat" | "str_template" | "str_extract" | "str_replace"
+        "str_pad" | "str_case" | "str_template" | "str_extract" | "str_replace"
         | "date_precision" | "datetime_precision" | "baseline_flag" => {
             Kind::Literal(Some(ColumnType::Str))
         }
@@ -173,9 +173,7 @@ fn prepare_kind(
             }
         }
         "round_half_away_from_zero" => Kind::Literal(Some(ColumnType::Float)),
-        "row_value" | "previous_non_missing" | "locf" => {
-            Kind::Reference(text(d, field(d, payload, "source")?)?.into())
-        }
+        "row_value" | "locf" => Kind::Reference(text(d, field(d, payload, "source")?)?.into()),
         _ => Kind::Unavailable,
     })
 }

@@ -167,7 +167,7 @@ number of consecutive gaps. `locf` returns the current source when it is
 present and otherwise that closest strictly earlier non-missing source. Either
 yields missing when its partition has no earlier non-missing source.
 
-Evidence: `adam-advs-locf`, `adam-adqs-missed-visit-locf`, `rust/crates/yamaa-core/tests/dataset_windows.rs::previous_non_missing_crosses_long_gaps`.
+Evidence: `adam-advs-locf`, `adam-adqs-missed-visit-locf`, `rust/crates/yamaa-core/tests/dataset_windows.rs::locf_excluding_current_crosses_long_gaps`.
 Replaces: REQ-1126, REQ-1239.
 
 `locf` preserves row count and the selected value's type and temporal

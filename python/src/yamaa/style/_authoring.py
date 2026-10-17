@@ -65,7 +65,6 @@ _DATASET_LEVEL_OPERATIONS = frozenset(
         "row_number",
         "rank",
         "row_value",
-        "previous_non_missing",
         "locf",
         "baseline_flag",
     }

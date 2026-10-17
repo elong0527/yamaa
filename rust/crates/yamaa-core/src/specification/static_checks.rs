@@ -73,8 +73,8 @@ fn operation(
     output: Option<&TableSchema>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<(), BindError> {
-    // Build already uses this declaration pass for flags, padding, nested cases,
-    // numeric failures and concatenation operands. Keep exactly its paths/causes.
+    // Build already uses this declaration pass for flags, padding, nested cases
+    // and numeric failures. Keep exactly its paths/causes.
     derivations::declaration_findings(op, path, findings)?;
     filters(op, path, None, output, findings)
 }
@@ -123,13 +123,6 @@ fn filters(
         }
         Operation::Aggregate(aggregate) => aggregate.check_findings(findings)?,
         Operation::Odm(odm) => odm.check_findings(findings)?,
-        Operation::Scalar(scalar) => {
-            if let scalar::Declaration::Concat { sources, .. } = &**scalar {
-                for source in sources {
-                    filters(&source.operation, &source.path, scope, output, findings)?;
-                }
-            }
-        }
         _ => (),
     }
     Ok(())

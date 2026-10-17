@@ -149,12 +149,6 @@ pub(super) fn padding_findings(
             Operation::Case(branches) => branches
                 .iter()
                 .any(|branch| has_width_error(&branch.operation)),
-            Operation::Scalar(operation) => match operation.as_ref() {
-                scalar::Declaration::Concat { sources, .. } => sources
-                    .iter()
-                    .any(|branch| has_width_error(&branch.operation)),
-                _ => false,
-            },
             _ => false,
         }
     }
@@ -179,13 +173,6 @@ pub(super) fn padding_findings(
                         findings.push(BindFinding::Predicate(invalid.diagnostic()?));
                     }
                     append(&branch.operation, &branch.path, findings)?;
-                }
-            }
-            Operation::Scalar(operation) => {
-                if let scalar::Declaration::Concat { sources, .. } = operation.as_ref() {
-                    for branch in sources {
-                        append(&branch.operation, &branch.path, findings)?;
-                    }
                 }
             }
             _ => (),
@@ -420,12 +407,10 @@ fn bind_operation(
             operation,
             column,
             catalog,
-            driver,
             secondary,
             intermediates,
             edges,
             findings,
-            declarations_reported,
         )?,
         Operation::StrExtract(operation) => str_extract::bind(
             operation,

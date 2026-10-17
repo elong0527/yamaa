@@ -63,19 +63,19 @@ family:
 |---|---|---|
 | Core selection | `schema_expression_core.yaml` | `source`, `literal`, `first_available`, `case`, `flag`, `greatest`, `least` |
 | Vocabulary | `schema_expression_mapping.yaml` | `mapping`, `cut` |
-| Strings | `schema_expression_str.yaml` | `str_extract`, `str_replace`, `str_concat`, `str_template`, `str_case`, `str_pad` |
+| Strings | `schema_expression_str.yaml` | `str_extract`, `str_replace`, `str_template`, `str_case`, `str_pad` |
 | Arithmetic | `schema_expression_numeric.yaml` | `compute`, `round_half_away_from_zero` |
 | Aggregation | `schema_expression_aggregate.yaml` | `aggregate` |
 | Dates | `schema_expression_date.yaml` | `date_diff`, `study_day`, `date_impute`, `date_precision`, `datetime_impute`, `datetime_precision`, `to_date`, `to_epoch_day`, `date_shift`, `datetime_diff`, `datetime_shift`, `duration_value` |
-| Windows | `schema_expression_window.yaml` | `row_number`, `rank`, `row_value`, `previous_non_missing`, `locf`, `baseline_flag` |
+| Windows | `schema_expression_window.yaml` | `row_number`, `rank`, `row_value`, `locf`, `baseline_flag` |
 | Collected data | `schema_expression_odm.yaml` | `odm` |
 | Extension | `schema_function.yaml` | `function` |
 
 Two composition rules keep dependencies visible: operands are named
 variables, not nested expressions (bind a value to a column, then
-reference the name), and nesting is permitted in exactly three places
-(`case` branches, `str_concat.sources`, and lookup `key` match values,
-which may be expressions under REQ-1259).
+reference the name), and nesting is permitted in exactly two places
+(`case` branches and lookup `key` match values, which may be expressions
+under REQ-1259).
 
 ## What the schema does not do
 

@@ -133,11 +133,6 @@ pub(super) fn template_references(
             }
         }
     }
-    if let Some(payload) = d.field(value, "str_concat") {
-        for &child in sequence(d, field(d, payload, "sources")?)? {
-            template_references(d, child, templates, names, depth + 1)?;
-        }
-    }
     Ok(())
 }
 
@@ -239,15 +234,6 @@ impl<'a> FirstTemplate<'a> {
                     };
                     self.visit(child, &format!("{path}[{index}].{alternative}"), depth + 1)?;
                 }
-            }
-            return Ok(());
-        }
-        if operation == "str_concat" {
-            for (index, &child) in sequence(d, field(d, payload, "sources")?)?
-                .iter()
-                .enumerate()
-            {
-                self.visit(child, &format!("{path}.sources[{index}]"), depth + 1)?;
             }
             return Ok(());
         }

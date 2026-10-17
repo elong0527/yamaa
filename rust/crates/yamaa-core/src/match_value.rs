@@ -40,9 +40,7 @@ pub fn result_type(catalog: &Catalog, expression: Expression<'_>) -> Option<Comp
             "compute" => Some(crate::numeric_compiler::NUMERIC_RESULT_TYPE.into()),
             "round_half_away_from_zero" => Some(Float.into()),
             "baseline_flag" | "cut" | "date_precision" | "datetime_precision" | "str_case"
-            | "str_concat" | "str_extract" | "str_pad" | "str_replace" | "str_template" => {
-                Some(Str.into())
-            }
+            | "str_extract" | "str_pad" | "str_replace" | "str_template" => Some(Str.into()),
             _ => None,
         },
         Expression::Unresolved => None,
