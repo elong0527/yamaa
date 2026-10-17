@@ -160,7 +160,8 @@ requires a fresh PR and head, even if the base was later changed back to main.
 PRs above 300 changed files require bounded coverage below, including when a
 shared head already has a successful status. Triage findings outside inline
 threads as well.
-The fresh manual check above remains mandatory before every merge.
+The fresh manual check above remains mandatory before every merge, except when
+CodeRabbit cannot review the PR; AGENTS.md states what replaces it then.
 An atomic change above CodeRabbit's 300-file review limit can use bounded
 review-only PRs. Each review PR must have a distinct head commit with the
 **complete target head tree**, a synthetic base in this repository, and at

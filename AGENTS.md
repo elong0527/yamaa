@@ -40,7 +40,11 @@ their prerequisites. Local targets and CI share the owned scripts under
   skipped alone or older-head reviews do not count. Run the fresh read-only
   review gate in `CONTRIBUTING.md` before every merge, alongside CI. When
   environment policy blocks GitHub CLI reads, approved authenticated connector
-  reads must prove the same predicates on fresh exact-head evidence.
+  reads must prove the same predicates on fresh exact-head evidence. When
+  CodeRabbit cannot review a PR (its free reviews are exhausted, or it skips
+  the PR), merging does not wait for it: the merging agent reviews the exact
+  diff itself, records that review on the PR, and still requires green CI on
+  that exact head.
 - **Expected data is truth.** Files under `benchmarks/**/expected/` are
   independently authored and define what an implementation must
   reproduce. Never regenerate them from the implementation, and never
