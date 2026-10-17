@@ -109,6 +109,7 @@ columns:
           group_by: [STUDYID, USUBJID]
         date: HGTDT
         reference_date: TRTSDT
+        value: AVALCOL
 
   # The flagged height, repeated on every row of the subject; missing when
   # no height is flagged.

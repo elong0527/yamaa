@@ -23,6 +23,9 @@ enum Kind {
     BaselineFlag {
         date: String,
         reference_date: String,
+        value: String,
+        inclusive: bool,
+        tie_break: Vec<(String, bool, bool)>,
     },
 }
 #[derive(Clone, Debug)]
@@ -136,10 +139,37 @@ impl Declaration {
                     _ => return Err(PrepareError::Internal),
                 },
             },
-            "baseline_flag" => Kind::BaselineFlag {
-                date: name("date")?,
-                reference_date: name("reference_date")?,
-            },
+            "baseline_flag" => {
+                let mut tie_break = Vec::new();
+                if let Some(terms) = d
+                    .field(payload, "tie_break")
+                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                {
+                    let items = sequence(d, terms)?;
+                    if items.len() > crate::limits::Limits::COLUMNS {
+                        return Err(PrepareError::limit(
+                            "window_order",
+                            crate::limits::Limits::COLUMNS,
+                            Some(items.len()),
+                            Some(&format!("{path}.tie_break")),
+                        ));
+                    }
+                    for &term in items {
+                        tie_break.push(order_term(d, term)?);
+                    }
+                }
+                Kind::BaselineFlag {
+                    date: name("date")?,
+                    reference_date: name("reference_date")?,
+                    value: name("value")?,
+                    inclusive: match d.field(payload, "inclusive").map(|id| &d.nodes()[id]) {
+                        Some(N::Boolean(value)) => *value,
+                        None => true,
+                        _ => return Err(PrepareError::Internal),
+                    },
+                    tie_break,
+                }
+            }
             _ => return Err(PrepareError::Internal),
         };
         let mut groups = Vec::new();
@@ -183,25 +213,7 @@ impl Declaration {
                     ));
                 }
                 for &term in items {
-                    let (variable, descending, nulls_first) =
-                        if let N::Text(value) = &d.nodes()[term] {
-                            (value.as_str(), false, false)
-                        } else {
-                            (
-                                text(d, field(d, term, "variable")?)?,
-                                d.field(term, "direction")
-                                    .map(|id| text(d, id))
-                                    .transpose()?
-                                    .unwrap_or("asc")
-                                    == "desc",
-                                d.field(term, "nulls")
-                                    .map(|id| text(d, id))
-                                    .transpose()?
-                                    .unwrap_or("last")
-                                    == "first",
-                            )
-                        };
-                    order.push((variable.into(), descending, nulls_first));
+                    order.push(order_term(d, term)?);
                 }
             }
             if let Some(id) = d
@@ -348,11 +360,31 @@ impl Declaration {
             Kind::BaselineFlag {
                 date,
                 reference_date,
+                value,
+                inclusive,
+                ..
             } => WindowKind::BaselineFlag {
                 date: resolve(date, format!("{}.date", self.path))?,
                 reference_date: resolve(reference_date, format!("{}.reference_date", self.path))?,
+                value: resolve(value, format!("{}.value", self.path))?,
+                inclusive: *inclusive,
             },
         };
+        // The baseline's tie-break terms bind in authored order and become the
+        // plan's order terms; `window.order_by` stays forbidden beside them.
+        let mut tie_break = Vec::new();
+        if let Kind::BaselineFlag {
+            tie_break: terms, ..
+        } = &self.kind
+        {
+            for (index, (name, descending, nulls_first)) in terms.iter().enumerate() {
+                tie_break.push(OrderTerm {
+                    column: resolve(name, format!("{}.tie_break[{index}]", self.path))?,
+                    descending: *descending,
+                    nulls_first: *nulls_first,
+                });
+            }
+        }
         let mut group_by = Vec::new();
         for (index, name) in self.groups.iter().enumerate() {
             group_by.push(resolve(
@@ -368,6 +400,7 @@ impl Declaration {
                 nulls_first: *nulls_first,
             });
         }
+        order_by.extend(tie_break);
         let mut bindings = Vec::new();
         if let Some(plan) = filter {
             let names: BTreeSet<_> = plan.identifiers().into_iter().collect();
@@ -384,6 +417,7 @@ impl Declaration {
         if let Kind::BaselineFlag {
             date,
             reference_date,
+            ..
         } = &self.kind
         {
             let kind = |name: &str| match catalog.bind(name) {
@@ -436,6 +470,7 @@ impl Declaration {
         let Kind::BaselineFlag {
             date,
             reference_date,
+            ..
         } = &self.kind
         else {
             return None;
@@ -474,6 +509,9 @@ impl Declaration {
         let Kind::BaselineFlag {
             date,
             reference_date,
+            value,
+            tie_break,
+            ..
         } = &self.kind
         else {
             return;
@@ -486,6 +524,8 @@ impl Declaration {
                 .map(|column| column.kind)
         };
         if !self.order.is_empty()
+            || kind(value).is_none()
+            || tie_break.iter().any(|(name, ..)| kind(name).is_none())
             || self
                 .groups
                 .iter()

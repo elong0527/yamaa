@@ -366,6 +366,7 @@ mod schema {
                         "baseline_flag" => {
                             fields.push(("date", Tree::text(variable)));
                             fields.push(("reference_date", Tree::text(variable)));
+                            fields.push(("value", Tree::text(variable)));
                         }
                         _ => {}
                     }
@@ -757,7 +758,8 @@ mod schema {
             assert!(window.group_by.is_empty());
             assert_eq!(window.order_by[0].column, 0);
             assert!(!window.order_by[0].descending);
-            assert!(!window.order_by[0].nulls_first);
+            // Missing sorts lowest, so an ascending term places it first.
+            assert!(window.order_by[0].nulls_first);
             assert_eq!(
                 window.filter.as_ref().unwrap().plan().spec_path(),
                 "columns.VALUE.derivation.row_number.window.filter"
@@ -796,7 +798,13 @@ mod schema {
                         };
                         assert_eq!(window.kind, kind);
                         assert_eq!(window.order_by[0].descending, direction == Some("desc"));
-                        assert_eq!(window.order_by[0].nulls_first, nulls == Some("first"));
+                        // An omitted placement sorts missing lowest; a declared one
+                        // is absolute whatever the direction.
+                        let nulls_first = match nulls {
+                            Some(placement) => placement == "first",
+                            None => direction != Some("desc"),
+                        };
+                        assert_eq!(window.order_by[0].nulls_first, nulls_first);
                     }
                 }
             }

@@ -1749,6 +1749,216 @@ mod execution {
             );
         }
 
+        /// A missing value makes a row ineligible, and an exclusive bound drops the reference day.
+        #[test]
+        fn baseline_requires_a_present_value_and_honors_an_exclusive_reference() {
+            let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+            let source = table(
+                &[
+                    ("ID", ColumnType::Int),
+                    ("G", ColumnType::Str),
+                    ("D", ColumnType::Date),
+                    ("R", ColumnType::Date),
+                    ("V", ColumnType::Float),
+                ],
+                vec![
+                    vec![
+                        Value::Int(1),
+                        Value::Str("a".into()),
+                        date(2),
+                        date(5),
+                        Value::float(10.0),
+                    ],
+                    vec![
+                        Value::Int(2),
+                        Value::Str("a".into()),
+                        date(4),
+                        date(5),
+                        Value::Missing,
+                    ],
+                    vec![
+                        Value::Int(3),
+                        Value::Str("b".into()),
+                        date(3),
+                        date(5),
+                        Value::float(7.0),
+                    ],
+                    vec![
+                        Value::Int(4),
+                        Value::Str("b".into()),
+                        date(5),
+                        date(5),
+                        Value::float(8.0),
+                    ],
+                ],
+            );
+            let flag = Value::Str("Y".into());
+            for (value, inclusive, expected) in [
+                // The key is never missing, so the later dated row of "a" wins.
+                (0, true, [None, Some(()), None, Some(())]),
+                // The analysis value is missing on that row, so the earlier one wins.
+                (4, true, [Some(()), None, None, Some(())]),
+                // Strictly before the reference: the reference-day row of "b" drops out.
+                (4, false, [Some(()), None, Some(()), None]),
+            ] {
+                let result =
+                    baseline_options_plan(&source, vec![1], None, value, inclusive, vec![])
+                        .execute(
+                            &source,
+                            &[],
+                            &mut yamaa_core::function_invocation::NoFunctions::new(),
+                            None,
+                        )
+                        .result
+                        .unwrap();
+                assert_eq!(
+                    result
+                        .dataset
+                        .rows()
+                        .iter()
+                        .map(|row| row[5].clone())
+                        .collect::<Vec<_>>(),
+                    expected
+                        .iter()
+                        .map(|marked| marked.map_or(Value::Missing, |()| flag.clone()))
+                        .collect::<Vec<_>>(),
+                    "value {value}, inclusive {inclusive}"
+                );
+            }
+        }
+
+        /// Tie-break terms order same-date rows, each with its own direction and
+        /// missing placement; rows still equal on every term stay ambiguous.
+        #[test]
+        fn baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied() {
+            use yamaa_core::dataset::OrderTerm;
+            let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+            let rows = |times: [Value; 3]| {
+                times
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, time)| {
+                        vec![
+                            Value::Int(index as i64 + 1),
+                            Value::Str("a".into()),
+                            date(3),
+                            date(5),
+                            time,
+                            Value::Int(3 - index as i64),
+                        ]
+                    })
+                    .chain(std::iter::once(vec![
+                        Value::Int(4),
+                        Value::Str("a".into()),
+                        date(1),
+                        date(5),
+                        Value::Int(2300),
+                        Value::Int(9),
+                    ]))
+                    .collect::<Vec<_>>()
+            };
+            let columns = [
+                ("ID", ColumnType::Int),
+                ("G", ColumnType::Str),
+                ("D", ColumnType::Date),
+                ("R", ColumnType::Date),
+                ("TM", ColumnType::Int),
+                ("SEQ", ColumnType::Int),
+            ];
+            let term = |column, descending, nulls_first| OrderTerm {
+                column,
+                descending,
+                nulls_first,
+            };
+            let timed = [Value::Int(900), Value::Int(800), Value::Missing];
+            for (terms, flagged) in [
+                // The latest time wins; a missing time sorts lowest.
+                (vec![term(4, false, true)], 1),
+                // Descending prefers the smallest time, and missing stays lowest,
+                // which is now last.
+                (vec![term(4, true, false)], 3),
+                // A declared absolute placement puts the missing time last.
+                (vec![term(4, false, false)], 3),
+                // A sequence number instead of a time.
+                (vec![term(5, false, true)], 1),
+                (vec![term(5, true, false)], 3),
+            ] {
+                let source = table(&columns, rows(timed.clone()));
+                let result = baseline_options_plan(&source, vec![1], None, 0, true, terms)
+                    .execute(
+                        &source,
+                        &[],
+                        &mut yamaa_core::function_invocation::NoFunctions::new(),
+                        None,
+                    )
+                    .result
+                    .unwrap();
+                assert_eq!(
+                    result
+                        .dataset
+                        .rows()
+                        .iter()
+                        .map(|row| row[6].clone())
+                        .collect::<Vec<_>>(),
+                    (1..=4)
+                        .map(|id| if id == flagged {
+                            Value::Str("Y".into())
+                        } else {
+                            Value::Missing
+                        })
+                        .collect::<Vec<_>>()
+                );
+            }
+            // Two same-date rows equal on every declared term remain a tie;
+            // declaring the sequence as a further term breaks it.
+            let tied = table(
+                &columns,
+                rows([Value::Int(900), Value::Int(900), Value::Int(800)]),
+            );
+            match *baseline_options_plan(&tied, vec![1], None, 0, true, vec![term(4, false, true)])
+                .execute(
+                    &tied,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None,
+                )
+                .result
+                .unwrap_err()
+            {
+                ExecutionError::BaselineAmbiguity {
+                    date, match_count, ..
+                } => {
+                    assert_eq!(date, date_value(3));
+                    assert_eq!(match_count, 2);
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+            let broken = baseline_options_plan(
+                &tied,
+                vec![1],
+                None,
+                0,
+                true,
+                vec![term(4, false, true), term(5, false, true)],
+            )
+            .execute(
+                &tied,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+            .result
+            .unwrap();
+            assert_eq!(
+                broken.dataset.rows()[0][6],
+                Value::Str("Y".into()),
+                "the higher sequence of the two 9:00 rows"
+            );
+            fn date_value(day: u8) -> Value {
+                Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap())
+            }
+        }
+
         /// Filtering removes bad keys and conflicting values while preserving source memberships.
         #[test]
         fn root_filter_precedes_keys_and_retains_only_qualifying_feeders() {

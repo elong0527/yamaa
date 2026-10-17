@@ -66,7 +66,7 @@ columns:
       source:
         variable: EX.EXTRT
         filter: "EX.EPOCH = 'TREATMENT 1'"
-        order_by: [EX.EXSTDTC, EX.EXSEQ]
+        order_by: [{variable: EX.EXSTDTC, nulls: last}, EX.EXSEQ]
         keep: first
     verifications:
       allowed_values:
@@ -79,7 +79,7 @@ columns:
       source:
         variable: EX.EXTRT
         filter: "EX.EPOCH = 'TREATMENT 2'"
-        order_by: [EX.EXSTDTC, EX.EXSEQ]
+        order_by: [{variable: EX.EXSTDTC, nulls: last}, EX.EXSEQ]
         keep: first
     verifications:
       allowed_values:

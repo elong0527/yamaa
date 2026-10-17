@@ -479,6 +479,34 @@ fn present(d: &Document, id: usize, name: &str) -> bool {
     d.field(id, name)
         .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
 }
+/// Decode one admitted order term as `(variable, descending, nulls_first)`.
+/// Every `list[order_by_term]` field uses this one reading (VALUE-22): an
+/// omitted `nulls` sorts missing lowest, first under `asc` and last under
+/// `desc`, while a declared `nulls` is absolute and never flips.
+fn order_term(d: &Document, term: usize) -> Result<(String, bool, bool), PrepareError> {
+    let (name, direction, nulls) = match &d.nodes()[term] {
+        N::Text(name) => (name.as_str(), None, None),
+        _ => (
+            text(d, field(d, term, "variable")?)?,
+            d.field(term, "direction")
+                .map(|id| text(d, id))
+                .transpose()?,
+            d.field(term, "nulls").map(|id| text(d, id)).transpose()?,
+        ),
+    };
+    let descending = match direction {
+        None | Some("asc") => false,
+        Some("desc") => true,
+        Some(_) => return Err(PrepareError::Internal),
+    };
+    let nulls_first = match nulls {
+        None => !descending,
+        Some("first") => true,
+        Some("last") => false,
+        Some(_) => return Err(PrepareError::Internal),
+    };
+    Ok((name.into(), descending, nulls_first))
+}
 fn reject(extra: &mut Vec<UnsupportedFeature>, operation: &str, path: String) {
     extra.push(UnsupportedFeature {
         operation: operation.into(),
@@ -1040,19 +1068,7 @@ fn prepare_output_declarations(
         .map(|id| {
             sequence(d, id)?
                 .iter()
-                .map(|&term| {
-                    if let N::Text(name) = &d.nodes()[term] {
-                        return Ok((name.clone(), false, false));
-                    }
-                    let name = text(d, field(d, term, "variable")?)?.into();
-                    let descending = d.field(term, "direction").is_some_and(
-                        |id| matches!(&d.nodes()[id], N::Text(value) if value == "desc"),
-                    );
-                    let nulls_first = d.field(term, "nulls").is_some_and(
-                        |id| matches!(&d.nodes()[id], N::Text(value) if value == "first"),
-                    );
-                    Ok((name, descending, nulls_first))
-                })
+                .map(|&term| order_term(d, term))
                 .collect::<Result<Vec<_>, PrepareError>>()
         })
         .transpose()?

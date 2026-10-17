@@ -1,0 +1,61 @@
+schema_version: "1.0"
+domain: ADLB
+keys: [USUBJID, LBSEQ]
+input:
+  LB:
+    path: input/lb.csv
+    types: {LBSEQ: int, ADT: date, AVAL: float, TRTSDT: date}
+
+output:
+  path: adlb.csv
+  columns: [USUBJID, LBSEQ, ADT, AVAL, TRTSDT, ABLFL]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation: LB.LBSEQ
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: LB.ADT
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.AVAL
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: LB.TRTSDT
+
+  # The last non-missing result on or before treatment start. A record
+  # without a result is passed over even when it is the latest dated one.
+  - name: ABLFL
+    type: str
+    label: Baseline Record Flag
+    derivation:
+      baseline_flag:
+        date: ADT
+        reference_date: TRTSDT
+        value: AVAL
+        window:
+          group_by: [USUBJID]
+
+verifications:
+  - row_count:
+      id: at-most-one-baseline-per-subject
+      group_by: [USUBJID]
+      filter: "ABLFL = 'Y'"
+      max: 1
+  - assert:
+      id: baseline-has-a-result
+      when: "ABLFL = 'Y'"
+      require: "AVAL IS NOT NULL"

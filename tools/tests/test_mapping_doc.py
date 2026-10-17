@@ -277,11 +277,33 @@ class AdamMappingTests(unittest.TestCase):
                 "baseline_flag": {
                     "date": "ADT",
                     "reference_date": "TRTSDT",
+                    "value": "AVAL",
                     "window": "BASELINE_GROUPS",
                 }
             }
         )
-        self.assertIn("ADT on or before TRTSDT using window BASELINE_GROUPS", baseline)
+        self.assertIn(
+            "ADT on or before TRTSDT and a non-missing AVAL using window "
+            "BASELINE_GROUPS, ordered by ADT;",
+            baseline,
+        )
+        exclusive = mapping_doc.describe_derivation(
+            {
+                "baseline_flag": {
+                    "date": "ADT",
+                    "reference_date": "TRTSDT",
+                    "value": "AVAL",
+                    "inclusive": False,
+                    "tie_break": [{"variable": "ATM", "direction": "desc"}, "ASEQ"],
+                    "window": {"group_by": ["USUBJID"]},
+                }
+            }
+        )
+        self.assertIn(
+            "ADT before TRTSDT and a non-missing AVAL within each group of "
+            "USUBJID, ordered by ADT then ATM descending then ASEQ;",
+            exclusive,
+        )
 
     def test_unknown_window_benchmark_still_renders_for_review(self):
         tables = rendered_tables(load_spec("negative-unknown-window"))

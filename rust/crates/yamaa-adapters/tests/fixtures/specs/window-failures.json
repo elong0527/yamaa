@@ -83,8 +83,8 @@
   },
   {
     "name": "baseline_order",
-    "before": "reference_date: TRTSDT\n        window:\n          group_by: [USUBJID]",
-    "after": "reference_date: TRTSDT\n        window:\n          group_by: [USUBJID]\n          order_by: [VISITN]",
+    "before": "value: VSSTRESN\n        window:\n          group_by: [USUBJID]",
+    "after": "value: VSSTRESN\n        window:\n          group_by: [USUBJID]\n          order_by: [VISITN]",
     "diagnostics": [
       {
         "phase": "validation",
@@ -410,11 +410,11 @@
     "name": "baseline_tie",
     "before": "BASELINE_NO_CHANGE",
     "after": "BASELINE_NO_CHANGE",
-    "input_before": "2025-01-16",
+    "input_before": "2025-01-02",
     "input_after": "2025-01-09",
     "source_cells": [
       [
-        2,
+        0,
         4,
         {
           "type": "date",

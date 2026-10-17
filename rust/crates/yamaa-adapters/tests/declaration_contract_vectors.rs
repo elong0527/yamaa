@@ -1587,7 +1587,7 @@ mod declaration {
         fn complete_window_model_keeps_parent_definition_child_override_and_schema_defaults() {
             let mut parent = window();
             parent["windows"]["UNUSED"] = json!({"group_by":["NOT_A_COLUMN"]});
-            let child = json!({"schema_version":"1.0","parents":"parent.yaml","windows":{"VISITS":{"order_by":[{"variable":"SEQ","direction":"desc"}]}}});
+            let child = json!({"schema_version":"1.0","parents":"parent.yaml","windows":{"VISITS":{"order_by":[{"variable":"SEQ","nulls":"first"}]}}});
             let mut host = new_host(yamaa_adapters::json_wire::encode(&parent).as_bytes());
             let prepared = shipped_schema::prepare(
                 source(yamaa_adapters::json_wire::encode(&child).into_bytes()),
@@ -1603,7 +1603,7 @@ mod declaration {
                     {"name":"ID","type":"str","label":"ID","derivation":{"value":{"source":{"variable":"SRC.ID"}}}},
                     {"name":"SEQ","type":"int","label":"SEQ","derivation":{"value":{"source":{"variable":"SRC.SEQ"}}}},
                     {"name":"VAL","type":"int","label":"VAL","derivation":{"value":{"source":{"variable":"SRC.VAL"}}}},
-                    {"name":"PREV","type":"int","label":"Previous value","derivation":{"value":{"row_value":{"source":"VAL","offset":-1,"window":{"order_by":[{"variable":"SEQ","direction":"desc","nulls":"last"}]}}}}}
+                    {"name":"PREV","type":"int","label":"Previous value","derivation":{"value":{"row_value":{"source":"VAL","offset":-1,"window":{"order_by":[{"variable":"SEQ","direction":"asc","nulls":"first"}]}}}}}
                 ]
             });
             let document = prepared.model().document();
@@ -1633,17 +1633,17 @@ mod declaration {
             let window = document.field(expression, "window").unwrap();
             let order = document.field(window, "order_by").unwrap();
             let term = sequence(document, order)[0];
-            let nulls = document.field(term, "nulls").unwrap();
-            // Earlier layer materialization has already supplied nulls. Preserve the
-            // actual normalization-input authority; do not infer a Default descriptor
-            // origin from the equal text in a different schema arena.
-            assert_eq!(prepared.origins()[nulls].source, SchemaSource::Input);
+            let direction = document.field(term, "direction").unwrap();
+            // Earlier layer materialization has already supplied direction. Preserve
+            // the actual normalization-input authority; do not infer a Default
+            // descriptor origin from the equal text in a different schema arena.
+            assert_eq!(prepared.origins()[direction].source, SchemaSource::Input);
             assert_eq!(
-                prepared.normalization_input().nodes()[prepared.origins()[nulls].node],
-                N::Text("last".into())
+                prepared.normalization_input().nodes()[prepared.origins()[direction].node],
+                N::Text("asc".into())
             );
             assert_eq!(
-                prepared.declaring_source("windows.VISITS.order_by[0].nulls"),
+                prepared.declaring_source("windows.VISITS.order_by[0].direction"),
                 Some("entry.yaml")
             );
             assert_eq!(
@@ -1732,7 +1732,7 @@ mod declaration {
                         {"name":"SEQ","type":"int","label":"SEQ","derivation":{"value":{"source":{"variable":"SRC.SEQ"}}}},
                         {"name":"VAL","type":"int","label":"VAL","derivation":{"value":{"source":{"variable":"SRC.VAL"}}}},
                         {"name":"LK","type":"int","label":"Lookup value","derivation":{"value":{"source":{"variable":"LOOK.VAL"}}}},
-                        {"name":"PREV","type":"int","label":"Previous value","derivation":{"value":{"row_value":{"source":"VAL","offset":-1,"window":{"group_by":["G"],"order_by":[{"variable":"SEQ","direction":"asc","nulls":"last"}]}}}}}
+                        {"name":"PREV","type":"int","label":"Previous value","derivation":{"value":{"row_value":{"source":"VAL","offset":-1,"window":{"group_by":["G"],"order_by":[{"variable":"SEQ","direction":"asc"}]}}}}}
                     ],
                     "intermediates":[{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":null}]
                 })
@@ -1763,7 +1763,7 @@ mod declaration {
             let window = document.field(expression, "window").unwrap();
             let order = document.field(window, "order_by").unwrap();
             let term = sequence(document, order)[0];
-            let nulls = document.field(term, "nulls").unwrap();
+            let direction = document.field(term, "direction").unwrap();
             let descriptor = prepared
                 .schema()
                 .structure()
@@ -1771,27 +1771,29 @@ mod declaration {
                 .unwrap()
                 .fields
                 .iter()
-                .find(|field| field.name == "nulls")
+                .find(|field| field.name == "direction")
                 .unwrap()
                 .descriptor;
             let admitted = &prepared.schema().structure().descriptors()[descriptor];
             assert_eq!(
-                prepared.origins()[nulls].source,
+                prepared.origins()[direction].source,
                 SchemaSource::Default {
                     module: admitted.module,
                     descriptor
                 }
             );
             assert_eq!(
-                prepared.origins()[nulls].node,
+                prepared.origins()[direction].node,
                 admitted.descriptor.default_node().unwrap()
             );
             assert_eq!(
                 prepared.schema().structure().modules()[admitted.module]
                     .document
-                    .nodes()[prepared.origins()[nulls].node],
-                N::Text("last".into())
+                    .nodes()[prepared.origins()[direction].node],
+                N::Text("asc".into())
             );
+            // An omitted placement stays absent: its meaning depends on direction.
+            assert!(document.field(term, "nulls").is_none());
         }
 
         #[test]

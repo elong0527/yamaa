@@ -15,13 +15,20 @@ pub enum WindowKind {
         column: usize,
         include_current: bool,
     },
+    /// The last eligible row by `date`, then by the window's `order_by`, which
+    /// holds the declared `tie_break` terms. A row is eligible when `date`,
+    /// `reference_date` and `value` are present and `date` is before the
+    /// reference, or equal to it when `inclusive`.
     BaselineFlag {
         date: usize,
         reference_date: usize,
+        value: usize,
+        inclusive: bool,
     },
 }
 
-/// Null placement is independent of direction; construction order breaks remaining ties.
+/// `nulls_first` is the resolved placement of missing values, applied after direction
+/// orders the present ones; construction order breaks remaining ties.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OrderTerm {
     pub column: usize,
@@ -30,6 +37,8 @@ pub struct OrderTerm {
 }
 
 /// Window dependencies bind only completed output columns, never qualified source reads.
+/// `order_by` orders each partition; for `baseline_flag` it holds the optional
+/// `tie_break` terms, compared only between eligible rows sharing a date.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Window {
     pub kind: WindowKind,
@@ -45,7 +54,7 @@ impl Window {
         output: &TableSchema,
     ) -> Result<(), PlanError> {
         let baseline = matches!(self.kind, WindowKind::BaselineFlag { .. });
-        if self.order_by.is_empty() != baseline
+        if (!baseline && self.order_by.is_empty())
             || self.group_by.iter().enumerate().any(|(i, column)| {
                 !available.get(*column).copied().unwrap_or(false)
                     || self.group_by[..i].contains(column)
@@ -70,10 +79,13 @@ impl Window {
         if let WindowKind::BaselineFlag {
             date,
             reference_date,
+            value,
+            ..
         } = self.kind
         {
             if !available.get(date).copied().unwrap_or(false)
                 || !available.get(reference_date).copied().unwrap_or(false)
+                || !available.get(value).copied().unwrap_or(false)
             {
                 return Err(PlanError::InvalidWindow);
             }
