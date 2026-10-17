@@ -36,6 +36,22 @@ record_value_matches <- function(actual, expected, text) {
     isTRUE(as.numeric(actual) == expected) && grepl(actual, text, fixed = TRUE)
 }
 check_projection <- function(frame, index, record) {
+  debug_expected <- jsonlite::fromJSON(frame$context[[index]], simplifyVector = FALSE)
+  if (!isTRUE(record_value_matches(record$context, debug_expected, frame$context[[index]]))) {
+    cat("DEBUG2813 mismatch condition=", frame$condition[[index]], " index=", index, "\n", sep = "")
+    cat("DEBUG2813 text=", frame$context[[index]], "\n", sep = "")
+    cat("DEBUG2813 record context:\n"); str(record$context); dput(record$context)
+    cat("DEBUG2813 expected parsed:\n"); str(debug_expected); dput(debug_expected)
+    for (key in names(debug_expected)) {
+      cat("DEBUG2813 key=", key,
+        " match=", record_value_matches(record$context[[key]], debug_expected[[key]], frame$context[[index]]),
+        " actual=", paste(deparse(record$context[[key]]), collapse = " "),
+        " actual_class=", paste(class(record$context[[key]]), collapse = ","),
+        " expected=", paste(deparse(debug_expected[[key]]), collapse = " "),
+        " expected_class=", paste(class(debug_expected[[key]]), collapse = ","),
+        " expected_typeof=", typeof(debug_expected[[key]]), "\n", sep = "")
+    }
+  }
   stopifnot(is.list(record),
     identical(names(record), fixture_strings(host_truth[["diagnostic_record_names"]])),
     identical(record$phase, frame$phase[[index]]),
