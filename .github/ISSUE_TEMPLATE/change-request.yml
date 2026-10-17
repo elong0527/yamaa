@@ -1,0 +1,57 @@
+name: "Change request"
+description: "Propose a language, API, packaging, docs or benchmark change. Show before vs. after."
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Everything here is public: use public fixtures or invented data only.
+        Checking yamaa against a private study? Follow
+        [Reporting findings from private studies](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#reporting-findings-from-private-studies)
+        first. Title it `<area>: <the change>`, where the area is rules,
+        schema, engine, python, R, benchmark, harbor or docs.
+
+        Be concrete: a language change touches every spec ever written. For a
+        new or changed benchmark, also cover the
+        [work-item points](https://github.com/elong0527/yamaa/blob/main/automation/benchmark_factory/README.md#work-item).
+
+  - type: textarea
+    id: what
+    attributes:
+      label: "In plain words, what should change?"
+      description: "One or two sentences, no jargon."
+    validations:
+      required: true
+
+  - type: textarea
+    id: before-after
+    attributes:
+      label: "Before -> after"
+      description: "The same spec snippet, call or output as it is today and as it would be with your change. Wrap each in a code block (```) and label them."
+      placeholder: |
+        Before (today):
+        ```yaml
+        ...
+        ```
+        After (proposed):
+        ```yaml
+        ...
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: "Why is this better?"
+      description: "Who wins, what gets simpler, and which alternatives you considered."
+      placeholder: "Study teams drop the pre-processing step; specs get shorter and harder to get wrong."
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "Where does this show up today?"
+      description: "Benchmarks, REQ IDs, rule files or URLs that show the need."
+      placeholder: "benchmarks/adam-advs-windows, REQ-1260, rules/specification/structure.md"
