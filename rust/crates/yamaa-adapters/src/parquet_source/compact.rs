@@ -248,7 +248,9 @@ impl<'a> Reader<'a> {
                     return Err(Error::Malformed);
                 }
                 self.collection(count)?;
-                if count != 0 {
+                // The native decoder refuses a UUID element type even when the
+                // collection is empty.
+                if count != 0 || kind == 13 {
                     let native = if kind == 1 { 3 } else { native_opaque(kind) };
                     self.native_header(position, (header & 0xf0) | native);
                 }
@@ -277,7 +279,8 @@ impl<'a> Reader<'a> {
                     }
                 }
                 self.native_metadata = native;
-                if self.native_metadata.is_some() {
+                // An empty map's zero count already reads as an empty binary.
+                if count != 0 && self.native_metadata.is_some() {
                     self.native_prefixes.push((start, self.position - start));
                 }
                 Value::Map(&self.bytes[start..self.position])
@@ -319,8 +322,8 @@ pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
 /// exact bytes, only to the native decoder; every field header and id stays.
 /// Keep the original metadata for admission and the original data pages for
 /// reads. This independently authored correction copies the footer only when
-/// needed, changes no values the native decoder reads, and never turns
-/// invalid booleans into bytes.
+/// needed, changes no values the native decoder reads from a well-typed
+/// footer, and never turns invalid booleans into bytes.
 pub(super) fn native_metadata(bytes: &[u8]) -> Result<Cow<'_, [u8]>, Error> {
     let mut reader = Reader::new(bytes);
     reader.native_metadata = Some(Cow::Borrowed(bytes));
@@ -331,7 +334,11 @@ pub(super) fn native_metadata(bytes: &[u8]) -> Result<Cow<'_, [u8]>, Error> {
     }
     let mut prefixes = reader.native_prefixes;
     prefixes.sort_unstable();
-    let mut output = Vec::with_capacity(native.len() + 5 * prefixes.len());
+    let prefix_bytes: usize = prefixes
+        .iter()
+        .map(|&(_, length)| (usize::BITS - (length | 1).leading_zeros()).div_ceil(7) as usize)
+        .sum();
+    let mut output = Vec::with_capacity(native.len() + prefix_bytes);
     let mut cursor = 0;
     for (position, mut length) in prefixes {
         output.extend_from_slice(&native[cursor..position]);
@@ -368,11 +375,21 @@ mod tests {
         let native = native_metadata(&bytes).unwrap();
         assert_eq!(native.as_ref(), expected);
         assert!(matches!(native, Cow::Owned(_)));
-        // An empty map still needs its binary presentation.
+        // An empty map becomes an empty binary in place: its zero count is
+        // the binary's zero length, so no prefix is inserted.
         assert_eq!(
             native_metadata(&[0x19, 0x01, 0x1b, 0, 0]).unwrap().as_ref(),
-            &[0x19, 0x01, 0x18, 1, 0, 0]
+            &[0x19, 0x01, 0x18, 0, 0]
         );
+        // An empty UUID list or set still needs a binary element type, in
+        // short and long collection header form.
+        for (bytes, expected) in [
+            (&[0x19, 0x0d, 0][..], &[0x19, 0x08, 0][..]),
+            (&[0x1a, 0x0d, 0], &[0x19, 0x08, 0]),
+            (&[0x19, 0xfd, 0, 0], &[0x19, 0xf8, 0, 0]),
+        ] {
+            assert_eq!(native_metadata(bytes).unwrap().as_ref(), expected);
+        }
         // A bool set becomes a byte list; UUID values become 16-byte binaries,
         // both as a field and as list elements.
         let uuid = [7u8; 16];

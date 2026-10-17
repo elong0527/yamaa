@@ -1,6 +1,7 @@
 //! Complete held-container read, followed by closed-profile admission.
 //! No filesystem reads, semantic fallback, publication or host date conversion.
 use super::{compact, compression, framing, metadata, payload, physical, profile, schema};
+use crate::storage_api::contain_decode;
 use arrow_array::{
     ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, RecordBatch, StringArray,
     TimestampMicrosecondArray,
@@ -130,15 +131,20 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     let frame = framing::admit(bytes)?;
     let metadata = Arc::new({
         let native = compact::native_metadata(frame.metadata)?;
-        ParquetMetaDataReader::decode_metadata(&native).map_err(|_| Error::Malformed)?
+        contain_decode(|| ParquetMetaDataReader::decode_metadata(&native))
+            .ok_or(Error::Malformed)?
+            .map_err(|_| Error::Malformed)?
     });
     let hint = metadata::admit(metadata.file_metadata().key_value_metadata())?;
     let columns = metadata.file_metadata().schema_descr().columns();
     // ODM field admission uses metadata alone. Ordinary profile findings keep
     // their existing precedence after all physical chunks have been decoded.
     let odm_metadata = if odm {
-        let arrow = ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
-            .map_err(|_| Error::Malformed)?;
+        let arrow = contain_decode(|| {
+            ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
+        })
+        .ok_or(Error::Malformed)?
+        .map_err(|_| Error::Malformed)?;
         let arrow_schema = schema::normalize(arrow.schema(), hint.as_ref());
         let fields = arrow_schema
             .fields()
@@ -186,8 +192,11 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     }
     let row_count =
         usize::try_from(metadata.file_metadata().num_rows()).map_err(|_| Error::Malformed)?;
-    let arrow = ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
-        .map_err(|_| Error::Malformed)?;
+    let arrow = contain_decode(|| {
+        ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
+    })
+    .ok_or(Error::Malformed)?
+    .map_err(|_| Error::Malformed)?;
     yamaa_core::limits::Limits::table(row_count, columns.len())?;
     let arrow_schema = schema::normalize(arrow.schema(), hint.as_ref());
     // Determine retention only. Profile errors remain deferred until every
@@ -207,7 +216,8 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
                 })
         })
         .collect();
-    let raw = physical::read(bytes, &metadata, &keep, &arrow_schema)?;
+    let raw = contain_decode(|| physical::read(bytes, &metadata, &keep, &arrow_schema))
+        .ok_or(Error::Malformed)??;
     let group_rows = metadata
         .row_groups()
         .iter()
@@ -474,6 +484,35 @@ mod tests {
         for declared in [3, 5] {
             let bytes = container(0, declared, declared, 3, &pages);
             assert_eq!(read(&bytes).unwrap_err(), Error::Malformed);
+        }
+    }
+
+    #[test]
+    fn a_known_boolean_footer_field_with_another_wire_type_is_malformed() {
+        // RowGroup.sorting_columns = [{column_idx: 0, descending, nulls_first:
+        // true}]. The native decoder unwraps a known boolean's value, so an i32
+        // `descending` must be refused as malformed rather than panic.
+        let mut body = progression(0, 1, 2);
+        body.extend(progression(1, 0, 2));
+        body.extend(b"ab"); // a, ab
+        for (descending, valid) in [(&[0x15u8, 0][..], false), (&[0x12][..], true)] {
+            let mut bytes = container(0, 2, 2, 0, &[data_page(2, &body)]);
+            let end = bytes.len() - 8;
+            let mut sorting = vec![0x19, 0x1c, 0x15, 0];
+            sorting.extend(descending);
+            sorting.extend([0x11, 0]);
+            // Before the row group's stop byte and the file metadata's.
+            bytes.splice(end - 2..end - 2, sorting.iter().copied());
+            let length = bytes.len() - 8;
+            let footer = u32::from_le_bytes(bytes[length..length + 4].try_into().unwrap());
+            let footer = footer + u32::try_from(sorting.len()).unwrap();
+            bytes[length..length + 4].copy_from_slice(&footer.to_le_bytes());
+            let decoded = read(&bytes);
+            if valid {
+                assert_eq!(decoded.unwrap().batches[0].num_rows(), 2);
+            } else {
+                assert_eq!(decoded.unwrap_err(), Error::Malformed);
+            }
         }
     }
 
