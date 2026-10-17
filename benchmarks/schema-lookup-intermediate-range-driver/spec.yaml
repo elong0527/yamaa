@@ -1,0 +1,76 @@
+schema_version: "1.0"
+domain: OUT
+keys: [STUDYID, USUBJID, SOURCE, SEQ]
+input:
+  CLINIC:
+    path: input/clinic.csv
+    types: {SEQ: int, DAY: int}
+  HOME:
+    path: input/home.csv
+    types: {DAY: int, SEQ: int}
+  WINDOWS:
+    path: input/windows.csv
+    types: {LO: int, HI: int}
+
+output:
+  path: out.csv
+  columns: [STUDYID, USUBJID, SOURCE, SEQ, DAY, WINDOW]
+
+intermediates:
+  # The window whose first to last day, both ends inclusive, holds the home
+  # measurement's day, matched on STUDYID (the one output key the window
+  # table carries). HOME.DAY reads the record of HOME, which drives the row
+  # template that reads this window.
+  - id: HOMEWIN
+    dataset: WINDOWS
+    between: {value: HOME.DAY, lower: LO, upper: HI}
+    no_match: null
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: SOURCE
+    type: str
+    label: Measurement Source
+
+  - name: SEQ
+    type: int
+    label: Sequence Number
+
+  - name: DAY
+    type: int
+    label: Study Day
+
+  - name: WINDOW
+    type: str
+    label: Analysis Window
+
+rows:
+  # Clinic measurements keep the visit they were collected at.
+  - id: clinic
+    dataset: CLINIC
+    derivations:
+      STUDYID: CLINIC.STUDYID
+      USUBJID: CLINIC.USUBJID
+      SOURCE: {literal: CLINIC}
+      SEQ: CLINIC.SEQ
+      DAY: CLINIC.DAY
+      WINDOW: CLINIC.VISIT
+
+  # Home measurements carry no visit. Each takes the window that holds the
+  # day of the home record that builds it.
+  - id: home
+    dataset: HOME
+    derivations:
+      STUDYID: HOME.STUDYID
+      USUBJID: HOME.USUBJID
+      SOURCE: {literal: HOME}
+      SEQ: HOME.SEQ
+      DAY: HOME.DAY
+      WINDOW: HOMEWIN.NAME
