@@ -132,14 +132,20 @@ def linked_specs(spec):
 
 
 def sibling_producers(benchmark, spec):
-    """Return the spec files beside the entry that it reads through `schema`."""
+    """Return the producers the entry reads through `schema` that the benchmark
+    builds itself: spec files beside the entry or other declared entries."""
     inputs = spec.get("input", {}) if isinstance(spec, dict) else {}
+    built = set(benchmark_spec_files(benchmark))
+    built.update(
+        benchmark / call["specification"]
+        for call in benchmark_entries(benchmark)["python"]
+    )
     producers = []
     for source in inputs.values() if isinstance(inputs, dict) else ():
         if not isinstance(source, dict) or not isinstance(source.get("schema"), str):
             continue
         candidate = benchmark / source["schema"]
-        if candidate in benchmark_spec_files(benchmark):
+        if candidate in built:
             producers.append(candidate)
     return producers
 

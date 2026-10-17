@@ -1982,7 +1982,9 @@ fn check_positive(
                 continue;
             }
             let truth_bytes = fs::read(&truth_path).unwrap();
-            let published = backend.published(&format!("memory:/{declared}"));
+            // An entry below the case root saves beside its own file.
+            let target = normalize(&spec, declared);
+            let published = backend.published(&format!("memory:/{target}"));
             match &published {
                 None => findings.push(format!(
                     "{name}: entry {spec} save did not publish {declared}"
@@ -2331,15 +2333,6 @@ const EXEMPTIONS: &[(&str, &str)] = &[
         "negative-path-symlink",
         "expected diagnostic judges a symlinked filesystem path; a memory resolver holds no symlinks, so the input resolves and the build succeeds",
     ),
-    // Blocked on authored data (1): a `schema` link types a stored artifact
-    // but never runs its producer. This case links input/subjects.csv to the
-    // producing specification input/subjects.schema.yaml, and neither an
-    // authored input/subjects.csv nor a producer entry with its own expected
-    // artifact exists, so the consumer's input is missing on every route.
-    (
-        "ars-ae-incidence-results",
-        "its schema-linked input/subjects.csv is not an authored file and no declared entry produces it; type-only links never run the producing specification",
-    ),
 ];
 
 /// A representative subset across every mechanism class (inheritance,
@@ -2350,6 +2343,7 @@ const REPRESENTATIVE: &[&str] = &[
     "adam-adsl-age-group",
     "adam-adlb-reported-precision",
     "adam-adsl-randomization",
+    "ars-ae-incidence-results",
     "adam-adae-exposure-adjusted-incidence",
     "sdtm-dm-race-ethnicity",
     "sdtm-dm-metadata",
