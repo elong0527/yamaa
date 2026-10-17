@@ -4,8 +4,8 @@ The writer of a full prompt gets what a statistician hands a programmer:
 the benchmark's data contract (README), its specifications without their
 checks, the project functions they call, the language rules, the inputs the
 evaluated agent also gets, and the prompt's skeleton (`scaffold.py`). The
-writer never gets `expected/`, anything computed from it, or a prompt or
-solution written with it in view. Nothing here reads `expected/`::
+writer never gets `expected/`, anything computed from it, an earlier prompt
+or solution, or what a solver did with one. Nothing here reads `expected/`::
 
     python -m evaluations.harbor.packet benchmarks/<case> --out <dir>
 
@@ -205,12 +205,9 @@ def check_data(benchmark: Path) -> dict:
     }
 
 
-def write(benchmark: Path, out: Path, *, previous: Path | None = None) -> Path:
-    """Write the writer's sources and inputs under `out`.
-
-    `previous` holds an earlier candidate (`full.md`) and, from
-    `author.py feedback`, the columns its solvers failed (`feedback.md`).
-    """
+def write(benchmark: Path, out: Path) -> Path:
+    """Write the writer's sources and inputs under `out`; the benchmark's
+    files are the only thing that shapes them."""
     sources = out / "sources"
     if out.exists():
         shutil.rmtree(out)
@@ -224,17 +221,12 @@ def write(benchmark: Path, out: Path, *, previous: Path | None = None) -> Path:
         (sources / "functions").mkdir(exist_ok=True)
         (sources / "functions" / name).write_text(text, encoding="utf-8")
     shutil.copytree(RULES, sources / "rules")
-    shutil.copyfile(HERE / "prompts" / "recipe.md", sources / "recipe.md")
-    shutil.copyfile(HERE / "prompts" / "README.md", sources / "tiers.md")
     (sources / "skeleton.md").write_text(scaffold.skeleton(benchmark))
     for name in CHECKS:
         shutil.copyfile(HERE / name, sources / name)
     (sources / "check.json").write_text(
         json.dumps(check_data(benchmark), indent=2) + "\n"
     )
-    for name, target in (("full.md", "previous.md"), ("feedback.md", "feedback.md")):
-        if previous is not None and (previous / name).is_file():
-            shutil.copyfile(previous / name, sources / target)
     # Data files only, as the agent gets them (`build.build_task`).
     shutil.copytree(
         benchmark / "input",
@@ -248,9 +240,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("benchmark", type=Path)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--previous", type=Path, help="an earlier candidate's folder")
     args = parser.parse_args()
-    print(write(args.benchmark.resolve(), args.out, previous=args.previous))
+    print(write(args.benchmark.resolve(), args.out))
 
 
 if __name__ == "__main__":
