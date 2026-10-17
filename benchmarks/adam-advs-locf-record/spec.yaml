@@ -27,7 +27,7 @@ intermediates:
       AND OBS.AVISITN <= PLAN.AVISITN
     order_by: [OBS.AVISITN, OBS.QSSEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: USUBJID

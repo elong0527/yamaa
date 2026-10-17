@@ -361,11 +361,11 @@ columns:
         #[test]
         fn false_when_still_resolves_require_lookup_and_refuses_an_unhandled_absence() {
             let (fixture, body) = lookup_fixture("assert_lookup_only");
-            for pattern in ["    no_match: null\n", "when: 'P.X IS NOT NULL'"] {
+            for pattern in ["    no_match: {literal: null}\n", "when: 'P.X IS NOT NULL'"] {
                 assert!(body.contains(pattern), "fixture drifted: {pattern}");
             }
             let body = body
-                .replace("    no_match: null\n", "")
+                .replace("    no_match: {literal: null}\n", "")
                 .replace("when: 'P.X IS NOT NULL'", "when: 'FALSE'");
             let mut result = fixture.run(&body).unwrap();
             assert!(
@@ -520,7 +520,7 @@ intermediates:
     filter: "D.TIME < SRC.CUT"
     order_by: [D.TIME]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: SEQ, type: int, derivation: SRC.SEQ}
@@ -653,7 +653,7 @@ columns:
             // (REQ-0638) keeps P live and its filter is still refused. A
             // refused intermediate's fields no longer bind, so A's read
             // reports unknown_field as well — the same pair a composed
-            // specification (parents: []) reports.
+            // specification (one with a parent) reports.
             let issues = refusal(
                 &fixture,
                 &BODY
@@ -961,7 +961,7 @@ intermediates:
     dataset: DONOR
     order_by: [DONOR.SEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: PARAM, type: str, derivation: {literal: only}}
@@ -1014,11 +1014,14 @@ columns:
                 .replace("derivation: P.A", "derivation: {literal: a}")
                 .replace("derivation: P.B", "derivation: {literal: b}");
             fs::write(fixture.0.join("parent.yaml"), &body).unwrap();
-            let explicit = body.replace("domain: TEST", "parents: []\ndomain: TEST");
+            // Explicit composition: the complete declaration in an entry whose
+            // parent contributes nothing but the schema version.
+            fs::write(fixture.0.join("base.yaml"), "schema_version: '1.0'\n").unwrap();
+            let explicit = body.replace("domain: TEST", "parent: base.yaml\ndomain: TEST");
             for authored in [
                 body,
                 explicit,
-                "schema_version: '1.0'\nparents: parent.yaml\n".into(),
+                "schema_version: '1.0'\nparent: parent.yaml\n".into(),
             ] {
                 assert_eq!(
                     issues(fixture.run(&authored)),
@@ -1054,7 +1057,7 @@ columns:
             // (REQ-0638) keeps P live and key admission still runs for it.
             // A refused intermediate's fields no longer bind, so A's read
             // reports unknown_field as well — the same pair a composed
-            // specification (parents: []) reports.
+            // specification (one with a parent) reports.
             let unused = BODY
                 .replace("derivation: P.B", "derivation: {literal: b}")
                 .replace("types: {ID: float, SEQ: int}", "types: {SEQ: int}");
@@ -1115,7 +1118,7 @@ intermediates:
     key: ID
     order_by: [D.SEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: A, type: str, derivation: P.V}
@@ -1581,7 +1584,7 @@ intermediates:
     between: {value: TRTSDT, lower: ADT}
     order_by: [VS.ADT]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: str, derivation: SRC.ID}
   - {name: TRTSDT, type: date, derivation: SRC.TRTSDT}
@@ -1753,8 +1756,8 @@ columns:
             )
             .unwrap();
             let body = BODY.replace("no_match: absent", "no_match: true")
-        .replace("derivation: P.V", "derivation: {flag: {condition: 'P.V IS NOT NULL', true_value: Y, false_value: N, missing: null}}")
-        .replace("derivation: P.W", "derivation: {flag: {condition: 'P.W IS NOT NULL', true_value: Y, false_value: N, missing: null}}");
+        .replace("derivation: P.V", "derivation: {flag: {condition: 'P.V IS NOT NULL', true_value: Y, false_value: N, missing: {literal: null}}}")
+        .replace("derivation: P.W", "derivation: {flag: {condition: 'P.W IS NOT NULL', true_value: Y, false_value: N, missing: {literal: null}}}");
             let mut result = f.run(&body);
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
@@ -2346,7 +2349,7 @@ intermediates:
     filter: "SRC.ELIG = 'Y'"
     order_by: [SRC.SEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: SEQ, type: int, derivation: SRC.SEQ}

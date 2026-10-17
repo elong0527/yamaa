@@ -56,8 +56,8 @@ columns:
       str_extract:
         source: DSTXT
         pattern: '^[0-9]+(\.[0-9]+)?$'
-        missing: null
-        no_match: null
+        missing: {literal: null}
+        no_match: {literal: null}
 
   # Any other collected dose, such as the range "200-400", stays as text.
   - name: CMDOSTXT
@@ -88,7 +88,7 @@ columns:
         dict:
           Once daily: QD
           Twice daily: BID
-        missing: null
+        missing: {literal: null}
 
   - name: ROUTELBL
     type: str
@@ -102,7 +102,7 @@ columns:
         source: ROUTELBL
         dict:
           By mouth: ORAL
-        missing: null
+        missing: {literal: null}
 
   - name: CMSTDTC
     type: str

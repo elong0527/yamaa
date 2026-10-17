@@ -883,8 +883,6 @@ def stage_inheritance_replay(destination: Path):
         )
         writer.writeheader()
         for case in cases:
-            if case["case"] == "diamond_alias":
-                continue  # The complete original document qualifies successful composition.
             request = json.loads(case["request"])
             expected = json.loads(case["expected"])
             expected["protocol"] = "specification/prototype"

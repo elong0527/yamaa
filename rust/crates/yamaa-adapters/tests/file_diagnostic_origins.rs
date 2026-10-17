@@ -52,7 +52,7 @@ mod file {
             "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: out.csv, columns: [ID]}}\ncolumns: [{{name: ID, type: str}}]\nrows:\n  - {{id: clean, dataset: SRC, derivations: {{ID: SRC.ID}}}}\n  - {{id: '{id}', dataset: SRC, filter: 'ID >', derivations: {{ID: SRC.ID}}}}\n")).unwrap();
                 fs::write(
                     study.0.join("spec.yaml"),
-                    "schema_version: '1.0'\nparents: parent/base.yaml\n",
+                    "schema_version: '1.0'\nparent: parent/base.yaml\n",
                 )
                 .unwrap();
                 let owner = file_workflow::select_with_optional_resources(
@@ -126,7 +126,7 @@ mod file {
         "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    label: Identifier\n    derivation: SRC.ID\n    verifications: [{matches: {pattern: '('}}]\n").unwrap();
             fs::write(
                 study.0.join("spec.yaml"),
-                "schema_version: '1.0'\nparents: parent/base.yaml\n",
+                "schema_version: '1.0'\nparent: parent/base.yaml\n",
             )
             .unwrap();
             let owner = file_workflow::select_with_optional_resources(
@@ -690,8 +690,8 @@ mod file {
                 ("group_keys", 64, 65, "rows[0].group_by"),
                 // No row_columns case: after pruning (REQ-0638) a row's
                 // derivations survive only for live columns, and 1025 live
-                // columns refuse at the columns capacity first — a composed
-                // specification (parents: []) behaves identically, so the
+                // columns refuse at the columns capacity first — an inherited
+                // specification behaves identically, so the
                 // row_columns limit cannot be isolated here.
             ] {
                 let study = Study::new();
@@ -1012,13 +1012,13 @@ mod file {
                 };
                 fs::write(
                     study.0.join(format!("layer-{index}.yaml")),
-                    format!("schema_version: '1.0'\nparents: [{parent}]\n"),
+                    format!("schema_version: '1.0'\nparent: {parent}\n"),
                 )
                 .unwrap();
             }
             fs::write(
                 study.0.join("spec.yaml"),
-                "schema_version: '1.0'\nparents: [layer-0.yaml]\n",
+                "schema_version: '1.0'\nparent: layer-0.yaml\n",
             )
             .unwrap();
             fs::write(
@@ -1345,9 +1345,15 @@ mod file {
                     "unused.csv",
                 ),
             );
+            // The chain contributes origins/schema.yaml, then origins/path.yaml,
+            // then the entry.
             study.write(
                 "origins/path.yaml",
-                &yaml("{P: {path: ../data/p.csv}}", "P", "root.csv"),
+                &yaml("{P: {path: ../data/p.csv}}", "P", "root.csv").replacen(
+                    "schema_version: '1.0'\n",
+                    "schema_version: '1.0'\nparent: schema.yaml\n",
+                    1,
+                ),
             );
             study.write(
                 "producer/base.yaml",
@@ -1355,11 +1361,11 @@ mod file {
             );
             study.write(
                 "producer/p.yaml",
-                "schema_version: '1.0'\nparents: [base.yaml]\ndomain: PRODUCER\n",
+                "schema_version: '1.0'\nparent: base.yaml\ndomain: PRODUCER\n",
             );
             study.write(
                 "root.yaml",
-                "schema_version: '1.0'\nparents: [origins/schema.yaml, origins/path.yaml]\ndomain: ROOT\n",
+                "schema_version: '1.0'\nparent: origins/path.yaml\ndomain: ROOT\n",
             );
             let prepared = plain(study.select());
             assert_eq!(prepared.capture_reads(), 5);
@@ -1424,7 +1430,7 @@ mod file {
                 if parent {
                     study.write(
                         "root.yaml",
-                        "schema_version: '1.0'\nparents: [broken.yaml]\ndomain: ROOT\n",
+                        "schema_version: '1.0'\nparent: broken.yaml\ndomain: ROOT\n",
                     );
                 }
                 let failure = rejected_entry(study.select());
@@ -1787,7 +1793,7 @@ mod file {
             let actual: Value = yamaa_adapters::json_wire::decode(&failure(
                 &study,
                 &format!(
-                    "{}parents: ../outside/missing.yaml\n",
+                    "{}parent: ../outside/missing.yaml\n",
                     VALID.replace("'1.0'", "'99.0'")
                 ),
             ))
@@ -1802,12 +1808,12 @@ mod file {
             let study = Study::new();
             let actual: Value = yamaa_adapters::json_wire::decode(&failure(
                 &study,
-                &format!("{VALID}parents: absent.yaml\n"),
+                &format!("{VALID}parent: absent.yaml\n"),
             ))
             .unwrap();
             assert_eq!(
                 actual,
-                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"absent.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
+                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":"absent.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
             );
         }
         #[test]
@@ -1820,7 +1826,7 @@ mod file {
             .unwrap();
             let actual: Value = yamaa_adapters::json_wire::decode(&failure(
                 &study,
-                &format!("{VALID}parents: ../parent/base.yaml\n"),
+                &format!("{VALID}parent: ../parent/base.yaml\n"),
             ))
             .unwrap();
             assert_eq!(
@@ -1829,12 +1835,12 @@ mod file {
             );
         }
         #[test]
-        fn inherited_paths_rebase_lexically_and_shared_parent_bytes_are_retained_once() {
+        fn inherited_paths_rebase_lexically_and_parent_bytes_are_retained_once() {
             let study = Study::new();
             fs::write(study.0.join("parent/base.yaml"), VALID).unwrap();
             let mut prepared = study
-        .prepare("schema_version: '1.0'\nparents: [../parent/base.yaml, ../parent/./base.yaml]\n")
-        .unwrap();
+                .prepare("schema_version: '1.0'\nparent: ../parent/./base.yaml\n")
+                .unwrap();
             assert_eq!(prepared.capture_reads(), 2);
             assert_eq!(prepared.run().document().parents().len(), 1);
             assert_eq!(
@@ -1864,14 +1870,14 @@ mod file {
             )
             .unwrap();
             assert_eq!(
-                failure(&study, &format!("{VALID}parents: link.yaml\n")),
+                failure(&study, &format!("{VALID}parent: link.yaml\n")),
                 "resource path contains a symbolic link"
             );
             let resources =
                 Resources::new(&study.text("entry"), &study.text("entry"), &[]).unwrap();
             fs::write(
                 study.0.join("entry/spec.yaml"),
-                format!("{VALID}parents: ../parent/base.yaml\n"),
+                format!("{VALID}parent: ../parent/base.yaml\n"),
             )
             .unwrap();
             let error = match FileSpecification::prepare(resources, "spec.yaml") {
@@ -1896,7 +1902,7 @@ mod file {
                 eprintln!("process bypasses DAC; unreadable-parent case not exercised");
                 return;
             }
-            let result = study.prepare(&format!("{VALID}parents: blocked.yaml\n"));
+            let result = study.prepare(&format!("{VALID}parent: blocked.yaml\n"));
             fs::set_permissions(&parent, permissions).unwrap();
             let error = match result {
                 Ok(_) => panic!("unreadable parent accepted through fallback"),
@@ -1905,7 +1911,7 @@ mod file {
             let actual: Value = yamaa_adapters::json_wire::decode(&error.into_message()).unwrap();
             assert_eq!(
                 actual,
-                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"blocked.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
+                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":"blocked.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
             );
         }
         #[test]
@@ -2050,7 +2056,7 @@ mod file {
             fs::write(study.0.join("parent/dict.yaml"), "A: declared-parent\n").unwrap();
             fs::write(study.0.join("entry/dict.yaml"), "A: wrong-entry\n").unwrap();
             let prepared = study
-                .prepare("schema_version: '1.0'\nparents: [../parent/base.yaml]\n")
+                .prepare("schema_version: '1.0'\nparent: ../parent/base.yaml\n")
                 .unwrap();
             assert_eq!(prepared.capture_reads(), 3);
             let dictionary = prepared

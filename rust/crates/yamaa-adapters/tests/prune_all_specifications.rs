@@ -1,7 +1,7 @@
 #![cfg(feature = "yaml")]
-//! Issue #2696 (Option B): a specification that declares no `parents` is a
+//! Issue #2696 (Option B): a specification that declares no `parent` is a
 //! composition of one layer and is pruned on the same terms as one that
-//! declares `parents: []` or is inherited by an empty child. A dead
+//! writes `parent: null` or is inherited by an empty child. A dead
 //! declaration's unresolved reference is discarded with it and does not fail
 //! validation; the three forms build with equal outputs.
 
@@ -76,23 +76,24 @@ impl Study {
         let dir = self.0.join(case);
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("flat.yaml"), body).unwrap();
+        // A null parent is absent, so this form takes the standalone route.
         fs::write(
-            dir.join("empty_parents.yaml"),
+            dir.join("null_parent.yaml"),
             body.replacen(
                 "schema_version: \"1.0\"\n",
-                "schema_version: \"1.0\"\nparents: []\n",
+                "schema_version: \"1.0\"\nparent: null\n",
                 1,
             ),
         )
         .unwrap();
         fs::write(
             dir.join("child.yaml"),
-            "schema_version: \"1.0\"\nparents: flat.yaml\n",
+            "schema_version: \"1.0\"\nparent: flat.yaml\n",
         )
         .unwrap();
         let flat = self.build(case, "flat.yaml");
         assert_eq!(flat, b"ID,AGE\n1,40\n2,52\n", "{case} flat output");
-        assert_eq!(self.build(case, "empty_parents.yaml"), flat, "{case} empty");
+        assert_eq!(self.build(case, "null_parent.yaml"), flat, "{case} null");
         assert_eq!(self.build(case, "child.yaml"), flat, "{case} child");
     }
 }

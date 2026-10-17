@@ -85,7 +85,7 @@ columns:
         source: TRTSDTC
         minimum_source_precision: day
         time: first
-        invalid: null
+        invalid: {literal: null}
 
   - name: TRTSTMF
     type: str
@@ -107,7 +107,7 @@ columns:
         source: TRTEDTC
         minimum_source_precision: day
         time: last
-        invalid: null
+        invalid: {literal: null}
 
   - name: TRTETMF
     type: str

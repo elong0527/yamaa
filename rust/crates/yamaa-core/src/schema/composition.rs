@@ -1,9 +1,10 @@
 //! Schema-directed composition of normalized fragments, before default materialization.
 
 use super::{
-    document::scalar_keys_equal, validation::matches_member, Document, DocumentNode as N,
-    NormalizationError, NormalizationResource, SchemaAliasKind, SchemaField, SchemaShape,
-    SchemaStructure, TypeExpression, TypeNode, ValidationError,
+    document::scalar_keys_equal,
+    validation::{matches_member, NullPolicy},
+    Document, DocumentNode as N, NormalizationError, NormalizationResource, SchemaAliasKind,
+    SchemaField, SchemaShape, SchemaStructure, TypeExpression, TypeNode, ValidationError,
 };
 
 /// An occurrence in one retained input, not a host identity or content digest.
@@ -33,6 +34,12 @@ impl<'a> Site<'a> {
     fn value(self) -> &'a N {
         &self.document.nodes()[self.node]
     }
+    fn mapping(self) -> Option<&'a [(usize, usize)]> {
+        match self.value() {
+            N::Mapping(items) => Some(items),
+            _ => None,
+        }
+    }
 }
 #[derive(Clone, Copy)]
 struct Member<'a> {
@@ -46,6 +53,14 @@ impl<'a> Member<'a> {
     fn child(self, node: usize) -> Self {
         Self { node, ..self }
     }
+}
+
+/// How a mapping's entries compose: class fields by their own descriptors, or
+/// dictionary values by the dictionary's value type.
+#[derive(Clone, Copy)]
+enum Entries<'a> {
+    Fields(&'a [SchemaField]),
+    Values(Member<'a>),
 }
 
 struct Run<'a> {
@@ -98,6 +113,7 @@ impl Run<'_> {
         };
         Ok(self.push(value, site))
     }
+    /// The first union member a fragment matches. Clear markers read as absent.
     fn selected<'a>(
         &mut self,
         descriptor: usize,
@@ -115,6 +131,7 @@ impl Run<'_> {
                 (expression, expression.root()),
                 site.node,
                 true,
+                NullPolicy::Clear,
                 &[],
             )? {
                 return Ok(Some(Member {
@@ -125,34 +142,39 @@ impl Run<'_> {
         }
         Ok(None)
     }
+    /// Compose one value by its descriptor. A mapping composes with an inherited
+    /// mapping that selects the same union member; anything else replaces it, and
+    /// a value without an inherited counterpart is taken with its clears dropped.
     fn descriptor(
         &mut self,
         descriptor: usize,
-        old: Site<'_>,
+        old: Option<Site<'_>>,
         new: Site<'_>,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
         self.step(depth)?;
-        if !matches!((old.value(), new.value()), (N::Mapping(_), N::Mapping(_))) {
+        if new.mapping().is_none() {
             return self.copy(new, depth + 1);
         }
         let Some(incoming) = self.selected(descriptor, new, self.schema)? else {
             return self.copy(new, depth + 1);
         };
-        let inherited = self.selected(descriptor, old, self.schema)?;
-        match inherited {
-            Some(inherited) if incoming.text() == inherited.text() => {
-                self.member(incoming, old, new, depth + 1)
-            }
-            _ => self.copy(new, depth + 1),
-        }
+        let inherited = match old {
+            Some(old) if old.mapping().is_some() => self.selected(descriptor, old, self.schema)?,
+            _ => None,
+        };
+        let old = match inherited {
+            Some(inherited) if inherited.text() == incoming.text() => old,
+            _ => None,
+        };
+        self.member(incoming, old, new, depth + 1)
     }
     fn matching_key(
         &mut self,
         key: Site<'_>,
         mapping: Site<'_>,
     ) -> Result<Option<(usize, usize)>, NormalizationError> {
-        let N::Mapping(items) = mapping.value() else {
+        let Some(items) = mapping.mapping() else {
             return Err(ValidationError::InvalidDescriptor.into());
         };
         for &(candidate, value) in items {
@@ -163,136 +185,168 @@ impl Run<'_> {
         }
         Ok(None)
     }
+    fn entry(
+        &mut self,
+        entries: Entries<'_>,
+        key: Site<'_>,
+        old: Option<Site<'_>>,
+        new: Site<'_>,
+        depth: usize,
+    ) -> Result<usize, NormalizationError> {
+        match entries {
+            Entries::Fields(fields) => {
+                let name = match key.value() {
+                    N::Text(text) => Some(text.as_str()),
+                    _ => None,
+                };
+                match fields.iter().find(|f| Some(f.name.as_str()) == name) {
+                    Some(field) => self.descriptor(field.descriptor, old, new, depth),
+                    None => self.copy(new, depth),
+                }
+            }
+            Entries::Values(member) => self.member(member, old, new, depth),
+        }
+    }
+    /// A class merges field by field and a dictionary key by key. A null entry
+    /// is a clear: it removes the inherited entry and is never itself retained.
     fn mapping(
         &mut self,
-        fields: Option<&[SchemaField]>,
-        inner: Option<Member<'_>>,
-        old: Site<'_>,
+        entries: Entries<'_>,
+        old: Option<Site<'_>>,
         new: Site<'_>,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
         self.step(depth)?;
-        let (N::Mapping(before), N::Mapping(after)) = (old.value(), new.value()) else {
+        let Some(after) = new.mapping() else {
             return self.copy(new, depth + 1);
         };
+        let old = old.filter(|old| old.mapping().is_some());
+        let before = old.and_then(Site::mapping).unwrap_or(&[]);
         // Conservative reservation also bounds the temporary container capacity.
         let capacity = before.len().saturating_add(after.len());
         let mut output = Vec::with_capacity(capacity);
-        for &(key, value) in before {
-            let inherited = old.child(value);
-            let incoming = self.matching_key(old.child(key), new)?;
-            let value = if let Some((_, value)) = incoming {
-                let incoming = new.child(value);
-                if let Some(fields) = fields {
-                    let name = match old.child(key).value() {
-                        N::Text(text) => Some(text.as_str()),
-                        _ => None,
-                    };
-                    if let Some(field) = fields.iter().find(|f| Some(f.name.as_str()) == name) {
-                        self.descriptor(field.descriptor, inherited, incoming, depth + 1)?
-                    } else {
-                        self.copy(incoming, depth + 1)?
-                    }
-                } else if let Some(inner) = inner {
-                    self.member(inner, inherited, incoming, depth + 1)?
-                } else {
-                    self.copy(incoming, depth + 1)?
-                }
-            } else {
-                self.copy(inherited, depth + 1)?
-            };
-            output.push((self.copy(old.child(key), depth + 1)?, value));
-        }
-        for &(key, value) in after {
-            if self.matching_key(new.child(key), old)?.is_none() {
-                output.push((
-                    self.copy(new.child(key), depth + 1)?,
-                    self.copy(new.child(value), depth + 1)?,
-                ));
+        if let Some(old) = old {
+            for &(key, value) in before {
+                let inherited = old.child(value);
+                let value = match self.matching_key(old.child(key), new)? {
+                    Some((_, value)) if matches!(new.child(value).value(), N::Null) => continue,
+                    Some((_, value)) => self.entry(
+                        entries,
+                        old.child(key),
+                        Some(inherited),
+                        new.child(value),
+                        depth + 1,
+                    )?,
+                    None => self.copy(inherited, depth + 1)?,
+                };
+                output.push((self.copy(old.child(key), depth + 1)?, value));
             }
         }
-        Ok(self.push(N::Mapping(output), old))
+        for &(key, value) in after {
+            if let Some(old) = old {
+                if self.matching_key(new.child(key), old)?.is_some() {
+                    continue;
+                }
+            }
+            if matches!(new.child(value).value(), N::Null) {
+                continue;
+            }
+            let value = self.entry(entries, new.child(key), None, new.child(value), depth + 1)?;
+            output.push((self.copy(new.child(key), depth + 1)?, value));
+        }
+        Ok(self.push(N::Mapping(output), old.unwrap_or(new)))
     }
     fn member(
         &mut self,
         member: Member<'_>,
-        old: Site<'_>,
+        old: Option<Site<'_>>,
         new: Site<'_>,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
         self.step(depth)?;
-        if !matches!((old.value(), new.value()), (N::Mapping(_), N::Mapping(_)))
-            || member.text() == "match_key"
-        {
+        let Some(after) = new.mapping() else {
             return self.copy(new, depth + 1);
-        }
+        };
+        let old = old.filter(|old| old.mapping().is_some());
         match &member.expression.nodes()[member.node] {
             TypeNode::Dictionary { value, .. } => {
-                self.mapping(None, Some(member.child(*value)), old, new, depth + 1)
+                self.mapping(Entries::Values(member.child(*value)), old, new, depth + 1)
             }
             TypeNode::Name(_) => {
                 if let Some(class) = self.schema.class_named(member.text()) {
-                    return self.mapping(Some(&class.fields), None, old, new, depth + 1);
+                    return self.mapping(Entries::Fields(&class.fields), old, new, depth + 1);
                 }
-                if let Some((_, alias)) = self.schema.alias_named(member.text()) {
-                    match alias.kind {
-                        SchemaAliasKind::Descriptor(id) => {
-                            return self.descriptor(id, old, new, depth + 1)
-                        }
+                match self.schema.alias_named(member.text()) {
+                    Some((_, alias)) => match alias.kind {
+                        SchemaAliasKind::Descriptor(id) => self.descriptor(id, old, new, depth + 1),
                         SchemaAliasKind::Registry(id) => {
-                            let (N::Mapping(before), N::Mapping(after)) =
-                                (old.value(), new.value())
-                            else {
-                                unreachable!()
-                            };
-                            if before.len() == 1 && after.len() == 1 {
-                                let ((old_key, old_value), (new_key, new_value)) =
-                                    (before[0], after[0]);
-                                if let (N::Text(a), N::Text(b)) =
-                                    (old.child(old_key).value(), new.child(new_key).value())
-                                {
-                                    if a == b {
-                                        let registry = &self.schema.registries()[id];
-                                        if let Some(entry) =
-                                            registry.entries.iter().find(|entry| entry.name == *b)
-                                        {
-                                            let value = match &entry.shape {
-                                                SchemaShape::Class(fields) => self.mapping(
-                                                    Some(fields),
-                                                    None,
-                                                    old.child(old_value),
-                                                    new.child(new_value),
-                                                    depth + 1,
-                                                )?,
-                                                SchemaShape::Descriptor(id) => self.descriptor(
-                                                    *id,
-                                                    old.child(old_value),
-                                                    new.child(new_value),
-                                                    depth + 1,
-                                                )?,
-                                            };
-                                            let key = self.copy(old.child(old_key), depth + 1)?;
-                                            return Ok(
-                                                self.push(N::Mapping(std::vec![(key, value)]), old)
-                                            );
-                                        }
-                                    }
-                                }
-                            }
+                            self.registry(id, after, old, new, depth + 1)
                         }
-                    }
+                    },
+                    None => self.copy(new, depth + 1),
                 }
-                self.copy(new, depth + 1)
             }
             TypeNode::List(_) => self.copy(new, depth + 1),
         }
     }
+    /// A registry value composes only with an inherited value naming the same
+    /// keyword; any other inherited value is replaced whole.
+    fn registry(
+        &mut self,
+        registry: usize,
+        after: &[(usize, usize)],
+        old: Option<Site<'_>>,
+        new: Site<'_>,
+        depth: usize,
+    ) -> Result<usize, NormalizationError> {
+        self.step(depth)?;
+        let &[(new_key, new_value)] = after else {
+            return self.copy(new, depth + 1);
+        };
+        let N::Text(keyword) = new.child(new_key).value() else {
+            return self.copy(new, depth + 1);
+        };
+        let Some(entry) = self.schema.registries()[registry]
+            .entries
+            .iter()
+            .find(|entry| entry.name == *keyword)
+        else {
+            return self.copy(new, depth + 1);
+        };
+        let inherited = old.and_then(|old| match old.mapping() {
+            Some(&[(key, value)])
+                if matches!(old.child(key).value(), N::Text(text) if text == keyword) =>
+            {
+                Some((old, key, value))
+            }
+            _ => None,
+        });
+        let payload = inherited.map(|(old, _, value)| old.child(value));
+        let value = match &entry.shape {
+            SchemaShape::Class(fields) => self.mapping(
+                Entries::Fields(fields),
+                payload,
+                new.child(new_value),
+                depth + 1,
+            )?,
+            SchemaShape::Descriptor(id) => {
+                self.descriptor(*id, payload, new.child(new_value), depth + 1)?
+            }
+        };
+        let (key, site) = match inherited {
+            Some((old, key, _)) => (self.copy(old.child(key), depth + 1)?, old),
+            None => (self.copy(new.child(new_key), depth + 1)?, new),
+        };
+        Ok(self.push(N::Mapping(std::vec![(key, value)]), site))
+    }
 }
 impl SchemaStructure {
-    /// Compose two admitted normalized values by a field's declared kind (REQ-0630).
-    /// Lists and match keys replace whole; null is a value here, not a clearing marker.
-    /// Input 0 denotes the accumulated value and input 1 the later contribution.
-    /// Default insertion and root/member clearing belong to the surrounding layer pass.
+    /// Compose two admitted normalized values by a field's declared kind (LAYER-6).
+    /// A class merges field by field and a mapping key by key; a registry value
+    /// composes with the same keyword and otherwise replaces; scalars and lists
+    /// replace. A null entry is a clear marker: it removes the inherited entry and
+    /// never survives. Input 0 denotes the accumulated value and input 1 the later
+    /// contribution. Default insertion belongs to the surrounding layer pass.
     pub fn compose_descriptor(
         &self,
         descriptor: usize,
@@ -301,7 +355,7 @@ impl SchemaStructure {
     ) -> Result<ComposedValue, NormalizationError> {
         self.compose_descriptor_at(
             descriptor,
-            (accumulated, accumulated.root()),
+            Some((accumulated, accumulated.root())),
             (incoming, incoming.root()),
         )
     }
@@ -309,11 +363,11 @@ impl SchemaStructure {
     pub(super) fn compose_descriptor_at(
         &self,
         descriptor: usize,
-        accumulated: (&Document, usize),
+        accumulated: Option<(&Document, usize)>,
         incoming: (&Document, usize),
     ) -> Result<ComposedValue, NormalizationError> {
         if descriptor >= self.descriptors().len()
-            || accumulated.1 >= accumulated.0.nodes().len()
+            || accumulated.is_some_and(|(document, node)| node >= document.nodes().len())
             || incoming.1 >= incoming.0.nodes().len()
         {
             return Err(ValidationError::InvalidDescriptor.into());
@@ -325,11 +379,66 @@ impl SchemaStructure {
         };
         let root = run.descriptor(
             descriptor,
-            Site {
-                document: accumulated.0,
-                node: accumulated.1,
+            accumulated.map(|(document, node)| Site {
+                document,
+                node,
                 input: 0,
+            }),
+            Site {
+                document: incoming.0,
+                node: incoming.1,
+                input: 1,
             },
+            0,
+        )?;
+        let document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;
+        Ok(ComposedValue {
+            document,
+            origins: run.origins,
+        })
+    }
+
+    /// Compose one member of a keyed root collection, a `list[T]` or `dict[K, T]`
+    /// field, by its member type `T` (LAYER-5). Without an inherited member the
+    /// incoming member is taken with its clear markers dropped.
+    pub(super) fn compose_member_at(
+        &self,
+        collection: usize,
+        accumulated: Option<(&Document, usize)>,
+        incoming: (&Document, usize),
+    ) -> Result<ComposedValue, NormalizationError> {
+        let located = self
+            .descriptors()
+            .get(collection)
+            .ok_or(ValidationError::InvalidDescriptor)?;
+        let [expression] = located.descriptor.members() else {
+            return Err(ValidationError::InvalidDescriptor.into());
+        };
+        let member = match &expression.nodes()[expression.root()] {
+            TypeNode::List(inner) => *inner,
+            TypeNode::Dictionary { value, .. } => *value,
+            TypeNode::Name(_) => return Err(ValidationError::InvalidDescriptor.into()),
+        };
+        if accumulated.is_some_and(|(document, node)| node >= document.nodes().len())
+            || incoming.1 >= incoming.0.nodes().len()
+        {
+            return Err(ValidationError::InvalidDescriptor.into());
+        }
+        let mut run = Run {
+            schema: self,
+            nodes: Vec::new(),
+            origins: Vec::new(),
+        };
+        let root = run.member(
+            Member {
+                expression,
+                node: member,
+            },
+            accumulated.map(|(document, node)| Site {
+                document,
+                node,
+                input: 0,
+            }),
             Site {
                 document: incoming.0,
                 node: incoming.1,

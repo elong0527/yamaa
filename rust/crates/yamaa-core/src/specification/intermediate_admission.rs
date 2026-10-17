@@ -19,7 +19,7 @@ pub(crate) fn is_rename_only(d: &Document, item: usize) -> bool {
     .any(|field| present(d, item, field));
     !changes_relation
         && d.field(item, "no_match")
-            .is_some_and(|node| matches!(d.nodes()[node], N::Null))
+            .is_some_and(|node| missing_literal(d, node))
 }
 
 /// Declaration failures precede source access and key-type binding.

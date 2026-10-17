@@ -7,7 +7,7 @@ expressions:
             required: true
             description: String variable used as the dictionary key, or a filtered source carrying it (EXPR-11).
         - dict:
-            type: ["dict[str, literal_value]", project_path]
+            type: ["dict[str, substitute_value]", project_path]
             required: true
             description: Source-value to result-value dictionary, written inline or as the path of a YAML file holding it (EXPR-11).
         - case_sensitive:
@@ -15,10 +15,10 @@ expressions:
             default: true
             description: Compare exactly when true; fold ASCII letters when false (EXPR-12).
         - missing:
-            type: literal_value
+            type: substitute_value
             description: Value returned when the source is missing; without it, a missing source fails (EXPR-11).
         - unmapped:
-            type: literal_value
+            type: substitute_value
             description: Value returned when the source is present but has no dictionary entry; without it, such a source fails (EXPR-11).
     cut: # See REQ-1118.
 
@@ -39,5 +39,5 @@ expressions:
             default: false
             description: Right-closed and left-open when true; left-closed and right-open when false (EXPR-13).
         - missing:
-            type: literal_value
+            type: substitute_value
             description: Value returned when the source is missing (EXPR-13).

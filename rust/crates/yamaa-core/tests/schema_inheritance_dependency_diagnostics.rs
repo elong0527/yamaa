@@ -756,7 +756,7 @@ mod schema {
                             V::List(vec![
                                 field("value", "patch"),
                                 required("schema_version", "str"),
-                                field("parents", "list[str]"),
+                                field("parent", "str"),
                                 field("input", "dict[str, dataset_class]"),
                                 field("columns", "list[column_class]"),
                                 field("rows", "list[row_class]"),
@@ -918,7 +918,7 @@ mod schema {
         }
 
         #[test]
-        fn recursive_patches_keep_positions_replace_lists_and_match_keys_and_defer_defaults() {
+        fn recursive_patches_keep_positions_merge_mappings_replace_lists_and_defer_defaults() {
             let value = compose(
                 V::map(vec![
                     ("label", V::text("parent")),
@@ -960,7 +960,63 @@ mod schema {
                         V::map(vec![("left", V::text("L")), ("right", V::text("R"))]),
                     ),
                     ("items", V::List(vec![V::text("three")])),
-                    ("key", V::map(vec![("b", V::text("new B"))])),
+                    (
+                        "key",
+                        V::map(vec![("a", V::text("A")), ("b", V::text("new B"))]),
+                    ),
+                ]),
+            );
+        }
+        #[test]
+        fn a_null_at_any_depth_clears_the_inherited_value_and_is_never_retained() {
+            let value = compose(
+                V::map(vec![
+                    ("label", V::text("parent")),
+                    (
+                        "metadata",
+                        V::map(vec![("a", V::text("A")), ("b", V::text("B"))]),
+                    ),
+                    (
+                        "options",
+                        V::map(vec![("left", V::text("L")), ("right", V::text("R"))]),
+                    ),
+                ]),
+                V::map(vec![
+                    ("label", V::Scalar(N::Null)),
+                    ("metadata", V::map(vec![("a", V::Scalar(N::Null))])),
+                    (
+                        "options",
+                        V::map(vec![
+                            ("right", V::Scalar(N::Null)),
+                            ("defaulted", V::Scalar(N::Null)),
+                        ]),
+                    ),
+                    ("items", V::Scalar(N::Null)),
+                ]),
+            );
+            check(
+                &value.document,
+                V::map(vec![
+                    ("metadata", V::map(vec![("b", V::text("B"))])),
+                    ("options", V::map(vec![("left", V::text("L"))])),
+                ]),
+            );
+            // A first declaration drops its nulls at every depth.
+            let value = compose(
+                V::map(vec![]),
+                V::map(vec![
+                    (
+                        "options",
+                        V::map(vec![("left", V::Scalar(N::Null)), ("right", V::text("R"))]),
+                    ),
+                    ("metadata", V::map(vec![("a", V::Scalar(N::Null))])),
+                ]),
+            );
+            check(
+                &value.document,
+                V::map(vec![
+                    ("options", V::map(vec![("right", V::text("R"))])),
+                    ("metadata", V::map(vec![])),
                 ]),
             );
         }
@@ -1068,7 +1124,7 @@ mod schema {
             let layers = vec![
                 document(V::map(vec![
                     ("schema_version", V::text("1.0")),
-                    ("parents", V::List(vec![V::text("parent.yaml")])),
+                    ("parent", V::text("parent.yaml")),
                     ("keys", V::List(vec![V::text("A")])),
                     ("metadata", V::map(vec![("old", V::text("old"))])),
                     (
@@ -1175,7 +1231,10 @@ mod schema {
                             "DS",
                             V::map(vec![
                                 ("path", V::text("parent.csv")),
-                                ("types", V::map(vec![("B", V::text("str"))])),
+                                (
+                                    "types",
+                                    V::map(vec![("A", V::text("int")), ("B", V::text("str"))]),
+                                ),
                             ]),
                         )]),
                     ),
@@ -1198,7 +1257,10 @@ mod schema {
                         V::map(vec![
                             (
                                 "W",
-                                V::map(vec![("order_by", V::List(vec![V::text("NEW")]))]),
+                                V::map(vec![
+                                    ("group_by", V::List(vec![V::text("ID")])),
+                                    ("order_by", V::List(vec![V::text("NEW")])),
+                                ]),
                             ),
                             (
                                 "KEEP",
@@ -1210,7 +1272,10 @@ mod schema {
                         "rows",
                         V::List(vec![V::map(vec![
                             ("id", V::text("R")),
-                            ("options", V::map(vec![("right", V::text("only"))])),
+                            (
+                                "options",
+                                V::map(vec![("left", V::text("old")), ("right", V::text("only"))]),
+                            ),
                         ])]),
                     ),
                 ]),
@@ -1222,10 +1287,15 @@ mod schema {
                 ("columns.A.options.right", 1),
                 ("columns.B.label", 1),
                 ("columns.C", 2),
-                ("windows.W", 1),
+                ("windows.W", 0),
+                ("windows.W.group_by", 0),
+                ("windows.W.order_by", 1),
                 ("windows.KEEP", 0),
+                ("rows.R.options.left", 0),
+                ("rows.R.options.right", 1),
                 ("input.DS.path", 0),
-                ("input.DS.types", 1),
+                ("input.DS.types.A", 0),
+                ("input.DS.types.B", 1),
                 ("metadata", 1),
             ] {
                 assert_eq!(
@@ -1239,13 +1309,14 @@ mod schema {
                     "{path}"
                 );
             }
-            assert!(!result.provenance.iter().any(|p| p.path == "keys"
-                || p.path == "metadata.new"
-                || p.path.starts_with("windows.W.group_by")));
+            assert!(!result
+                .provenance
+                .iter()
+                .any(|p| p.path == "keys" || p.path == "metadata.new" || p.path == "parent"));
         }
 
         #[test]
-        fn introduced_invalid_null_values_and_required_clears_fail_in_contribution_order() {
+        fn first_declaration_nulls_are_absent_and_required_clears_fail() {
             let layers = vec![document(V::map(vec![
                 ("metadata", V::Scalar(N::Null)),
                 (
@@ -1269,33 +1340,28 @@ mod schema {
                         d.definition().requirement
                     ))
                     .collect::<Vec<_>>(),
-                vec![
-                    ("metadata", "invalid_field_type", Some("REQ-0287")),
-                    ("columns.NEW.label", "invalid_field_type", Some("REQ-0287")),
-                    ("keys", "invalid_field_type", Some("REQ-0287")),
-                    ("output", "invalid_clear", Some("REQ-0660")),
-                ]
+                vec![("output", "invalid_clear", Some("REQ-0660"))]
             );
             check(
                 &result.document,
-                V::map(vec![
-                    ("metadata", V::Scalar(N::Null)),
-                    (
-                        "columns",
-                        V::List(vec![V::map(vec![
-                            ("name", V::text("NEW")),
-                            ("label", V::Scalar(N::Null)),
-                        ])]),
-                    ),
-                    ("keys", V::Scalar(N::Null)),
-                ]),
+                V::map(vec![(
+                    "columns",
+                    V::List(vec![V::map(vec![("name", V::text("NEW"))])]),
+                )]),
             );
         }
 
         #[test]
-        fn introducing_null_values_survive_all_boundaries_and_empty_children() {
+        fn first_declaration_nulls_are_absent_at_every_boundary_but_a_literal_payload_is_a_value() {
             let first = document(V::map(vec![
                 ("literal", V::Scalar(N::Null)),
+                (
+                    "value",
+                    V::map(vec![(
+                        "expression",
+                        V::map(vec![("literal", V::Scalar(N::Null))]),
+                    )]),
+                ),
                 (
                     "input",
                     V::map(vec![("SRC", V::map(vec![("missing", V::Scalar(N::Null))]))]),
@@ -1334,38 +1400,50 @@ mod schema {
                 "rows.R.missing",
                 "intermediates.LOOK.no_match",
             ] {
-                assert_eq!(
-                    result
-                        .provenance
-                        .iter()
-                        .find(|p| p.path == path)
-                        .unwrap()
-                        .layer,
-                    0,
-                    "{path}"
-                );
+                assert!(!result.provenance.iter().any(|p| p.path == path), "{path}");
             }
+            check(
+                &result.document,
+                V::map(vec![
+                    (
+                        "value",
+                        V::map(vec![(
+                            "expression",
+                            V::map(vec![("literal", V::Scalar(N::Null))]),
+                        )]),
+                    ),
+                    ("input", V::map(vec![("SRC", V::map(vec![]))])),
+                    (
+                        "columns",
+                        V::List(vec![V::map(vec![("name", V::text("A"))])]),
+                    ),
+                    ("rows", V::List(vec![V::map(vec![("id", V::text("R"))])])),
+                    (
+                        "intermediates",
+                        V::List(vec![V::map(vec![("id", V::text("LOOK"))])]),
+                    ),
+                    ("schema_version", V::text("1.0")),
+                ]),
+            );
             let same_member = document(V::map(vec![(
                 "intermediates",
-                V::List(vec![V::map(vec![("id", V::text("LOOK"))])]),
+                V::List(vec![V::map(vec![
+                    ("id", V::text("LOOK")),
+                    ("no_match", V::text("UNKNOWN")),
+                ])]),
             )]));
             let result = schema()
                 .compose_layer_fragments(&[same_member, first])
                 .unwrap();
             assert!(result.diagnostics.is_empty());
-            assert_eq!(
-                result
-                    .provenance
-                    .iter()
-                    .find(|p| p.path == "intermediates.LOOK.no_match")
-                    .unwrap()
-                    .layer,
-                1
-            );
+            assert!(!result
+                .provenance
+                .iter()
+                .any(|p| p.path == "intermediates.LOOK.no_match"));
         }
 
         #[test]
-        fn inherited_literal_or_null_handler_is_cleared_and_can_be_introduced_again() {
+        fn inherited_handler_is_cleared_a_repeated_null_stays_absent_and_a_value_returns() {
             for inherited in [V::text("UNKNOWN"), V::Scalar(N::Null)] {
                 let first = document(V::map(vec![(
                     "intermediates",
@@ -1397,16 +1475,33 @@ mod schema {
                     .iter()
                     .any(|p| p.path == "intermediates.LOOK.no_match"));
                 let result = schema()
-                    .compose_layer_fragments(&[first, next.clone(), next])
+                    .compose_layer_fragments(&[first.clone(), next.clone(), next.clone()])
                     .unwrap();
                 assert!(result.diagnostics.is_empty());
                 check(
                     &result.document,
                     V::map(vec![(
                         "intermediates",
+                        V::List(vec![V::map(vec![("id", V::text("LOOK"))])]),
+                    )]),
+                );
+                let again = document(V::map(vec![(
+                    "intermediates",
+                    V::List(vec![V::map(vec![
+                        ("id", V::text("LOOK")),
+                        ("no_match", V::text("AGAIN")),
+                    ])]),
+                )]));
+                let result = schema()
+                    .compose_layer_fragments(&[first, next, again])
+                    .unwrap();
+                check(
+                    &result.document,
+                    V::map(vec![(
+                        "intermediates",
                         V::List(vec![V::map(vec![
                             ("id", V::text("LOOK")),
-                            ("no_match", V::Scalar(N::Null)),
+                            ("no_match", V::text("AGAIN")),
                         ])]),
                     )]),
                 );
@@ -1423,7 +1518,7 @@ mod schema {
         }
 
         #[test]
-        fn invalid_introduced_null_collections_keep_value_findings_when_later_replaced() {
+        fn null_collections_are_absent_and_a_later_layer_supplies_them() {
             let first = document(V::map(vec![
                 ("windows", V::Scalar(N::Null)),
                 ("rows", V::Scalar(N::Null)),
@@ -1432,23 +1527,15 @@ mod schema {
             let result = schema()
                 .compose_layer_fragments(std::slice::from_ref(&first))
                 .unwrap();
-            assert_eq!(result.diagnostics.len(), 3);
-            for (finding, path) in
-                result
-                    .diagnostics
-                    .iter()
-                    .zip(["windows", "rows", "intermediates"])
-            {
-                assert_eq!(finding.definition().condition, "invalid_field_type");
-                assert_eq!(finding.path, path);
-            }
+            assert!(result.diagnostics.is_empty());
+            check(&result.document, V::map(vec![]));
             let next = document(V::map(vec![
                 ("windows", V::map(vec![])),
                 ("rows", V::List(vec![])),
                 ("intermediates", V::List(vec![])),
             ]));
             let result = schema().compose_layer_fragments(&[first, next]).unwrap();
-            assert_eq!(result.diagnostics.len(), 3);
+            assert!(result.diagnostics.is_empty());
             check(
                 &result.document,
                 V::map(vec![
@@ -1585,7 +1672,7 @@ mod schema {
                 diagnostics[0].definition().condition,
                 "missing_required_field"
             );
-            assert_eq!(diagnostics[0].path, "<normalization>.one");
+            assert_eq!(diagnostics[0].path, "columns.A.mandatory.one");
             let layers = [document(V::map(vec![("output", V::Scalar(N::Null))]))];
             let Err(yamaa_core::schema::LayerCompositionError {
                 error: NormalizationError::Invalid(diagnostics),

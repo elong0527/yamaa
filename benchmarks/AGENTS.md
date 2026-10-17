@@ -152,18 +152,9 @@ An expected failure before a dataset is completed replaces the CSV with
 contract. A failure over a completed dataset carries both the expected CSV and
 `expected/error.yaml`.
 
-A positive inherited benchmark also carries the exact resolved YAML data tree.
-Use `expected/resolved.yaml` with `spec.yaml`, or
-`expected/resolved_<variant>.yaml` with `spec_<variant>.yaml`. This fixture
-must be complete, canonical, minimal, and free of `parents`; the repository
-validator requires it and compares it with the resolved specification. Only
-the retained historical benchmarks named in `HISTORICAL_RESOLVED_FIXTURES`
-(`../tools/validation/repository_artifacts.py`) are exempt;
-every new positive inherited benchmark needs one.
-
 A multi-level benchmark keeps each inheritance level beside the entry as
 `spec_<level>.yaml` and carries no top-level `spec.yaml`. The level no other
-file names in `parents` is the entry: it declares the complete `output`, and
+file names as its `parent` is the entry: it declares the complete `output`, and
 the chain resolves to `expected/spec_resolved.yaml`, which the dashboard shows
 in its specification dropdown (the default view) rather than as an expected
 dataset. Reserve this layout for benchmarks whose point is the layering itself;
@@ -402,7 +393,6 @@ uv run --project python --no-sync pytest evaluations/harbor/tests
    files, the input
    data, and either the expected output or the expected error. Add an expected
    CSV beside an error when it makes a blocked or rejected result concrete.
-   For a positive inherited benchmark, also write its expected resolved YAML.
 2. Write the README to the contract above. A negative benchmark must include its
    `## How to fix` section.
 3. Once the README of a positive `sdtm-*` or `adam-*` benchmark is

@@ -122,7 +122,7 @@ columns:
                 '1 PLUS': '1+'
                 '2+': '2+'
                 '+2': '2+'
-              missing: null
+              missing: {literal: null}
         - otherwise: LBORRES
 
   # A result that is not a plain number (a grade, or a censored value such as
@@ -133,7 +133,7 @@ columns:
     derivation:
       value:
         source: LBSTRESC
-      unconvertible: null
+      unconvertible: {literal: null}
 
   - name: LBSTRESU
     type: str

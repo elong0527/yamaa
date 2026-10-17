@@ -479,9 +479,18 @@ mod declaration {
                 malformed,
                 Err(InheritanceError::Entry(Error::Decode { .. }))
             ));
-            // Presence selects inheritance even for an invalid null field; no fallback.
+            // A null parent is absent: the entry takes the standalone route.
+            let standalone = shipped_schema::prepare(
+                source(&(VALID.to_owned() + "parent: null\n")),
+                "domain.yaml".into(),
+                &mut NoParents,
+            )
+            .unwrap();
+            assert!(standalone.inheritance().is_none());
+            assert!(standalone.parents().is_empty());
+            // Any other written parent selects inheritance even when invalid; no fallback.
             let inherited = shipped_schema::prepare(
-                source(&(VALID.to_owned() + "parents: null\n")),
+                source(&(VALID.to_owned() + "parent: [parent.yaml]\n")),
                 "domain.yaml".into(),
                 &mut NoParents,
             );
@@ -711,7 +720,7 @@ mod declaration {
             use yamaa_adapters::json;
             use yamaa_adapters::specification_diagnostics::inheritance_failure;
             use yamaa_core::json::Value;
-            let entry = format!("{VALID}parents: parent.yaml\n");
+            let entry = format!("{VALID}parent: parent.yaml\n");
             let invalid_parent = "schema_version: '1.0'\ndomain: bad-name\n";
             let outcome: Value = yamaa_adapters::json_wire::decode(
                 &inheritance_failure(inherited_error(&entry, invalid_parent)).unwrap(),
@@ -959,13 +968,13 @@ mod declaration {
         #[test]
         fn physical_decode_and_source_boundary_precede_lifecycle() {
             let schema = schema();
-            let text = VALID.to_owned() + "parents: null\n";
+            let text = VALID.to_owned() + "parent: parent.yaml\n";
             assert!(matches!(
                 schema.prepare_standalone(source(&text)),
                 Err(Error::InheritanceRequired)
             ));
             assert!(matches!(
-                schema.prepare_standalone(source("parents: null\n[unterminated")),
+                schema.prepare_standalone(source("parent: parent.yaml\n[unterminated")),
                 Err(Error::Decode {
                     error: DecodeFailure::InvalidYaml { .. },
                     ..
@@ -1396,15 +1405,15 @@ mod declaration {
         }
 
         #[test]
-        fn environment_parents_and_retired_runtime_fields_are_complete_schema_findings() {
+        fn environment_parent_and_retired_runtime_fields_are_complete_schema_findings() {
             let schema = environment_schema();
             let findings = captured_findings(
         &schema,
-        "schema_version: '1.0'\nparents: [base.yaml]\nruntime: {language: python}\nversion: old\n",
+        "schema_version: '1.0'\nparent: base.yaml\nruntime: {language: python}\nversion: old\n",
     );
             assert_eq!(
                 findings[0],
-                finding("parents", "unknown_field", "parents", "environment_class")
+                finding("parent", "unknown_field", "parent", "environment_class")
             );
             assert_eq!(findings.len(), 3);
             for (finding, field) in findings[1..].iter().zip(["runtime", "version"]) {
@@ -1427,7 +1436,7 @@ mod declaration {
             assert_eq!(
                 captured_findings(
                     &schema,
-                    "schema_version: '99.0'\nparents: [base.yaml]\nruntime: {}\n"
+                    "schema_version: '99.0'\nparent: base.yaml\nruntime: {}\n"
                 ),
                 vec![SchemaDiagnostic {
                     path: "schema_version".into(),
@@ -2071,9 +2080,9 @@ mod declaration {
         fn live_root_full_reports_preserve_original_source_and_stop_before_every_dependency() {
             let schema = captured_schema();
             for (text,expected) in [
-        ("schema_version: '99.0'\nparents: [parent.yaml]\nfunctions: {bad: bad.yaml}\n",json!([{ "phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0281","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}}])),
-        ("schema_version: '1.0'\nparents: [base.yaml]\nruntime: {language: python}\nversion: old\n",json!([
-            {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["parents"],"context":{"field":"parents","class":"environment_class","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}},
+        ("schema_version: '99.0'\nparent: parent.yaml\nfunctions: {bad: bad.yaml}\n",json!([{ "phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0281","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}}])),
+        ("schema_version: '1.0'\nparent: base.yaml\nruntime: {language: python}\nversion: old\n",json!([
+            {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["parent"],"context":{"field":"parent","class":"environment_class","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}},
             {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["runtime"],"context":{"field":"runtime","class":"environment_class","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}},
             {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["version"],"context":{"field":"version","class":"environment_class","source":"study/environment.yaml","entry":"study/environment.yaml","environment_path":"$"}}
         ])),

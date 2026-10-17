@@ -219,7 +219,7 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
                 }
             }
         }
-        E::ParentsRequired => rejected("parents_required"),
+        E::ParentRequired => rejected("parent_required"),
         E::Document(error) => errors::document(*error).unwrap_or_else(|_| rejected("document")),
         E::Normalize(failure) => {
             normalized(schema, failure.input.as_ref(), failure.error.clone(), &[])
@@ -293,7 +293,7 @@ pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
                 Err(error) => return source(error),
             },
         },
-        E::ParentsRequired => rejected("parents_required"),
+        E::ParentRequired => rejected("parent_required"),
         E::Document(error) => errors::document(error).unwrap_or_else(|_| rejected("document")),
         E::Normalize(failure) => normalized(schema, failure.input.as_ref(), failure.error, &[]),
         E::Validation(error) => {
@@ -335,7 +335,7 @@ mod tests {
                 projected,
                 json!({"status":"invalid", "diagnostics":[{
                     "phase":expected.phase, "condition":expected.condition, "requirement":expected.requirement,
-                    "spec_paths":["parents"], "context":{"source":"entry", "path":"x".repeat(3_000_000)}
+                    "spec_paths":["parent"], "context":{"source":"entry", "path":"x".repeat(3_000_000)}
                 }]})
             );
         }

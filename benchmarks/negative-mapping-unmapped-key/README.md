@@ -28,7 +28,7 @@ intermediates:
   - id: LBREF_LOOKUP
     dataset: LBREF
     key: {LBTESTCD: PARAMCD, SEX: SEX}
-    no_match: null
+    no_match: {literal: null}
 ```
 
 The same answer also covers a result whose test code or sex is blank: both

@@ -1540,16 +1540,12 @@ mod preparation {
         }
 
         #[test]
-        fn parents_presence_selects_inheritance_before_standalone_semantic_checks() {
+        fn parent_presence_selects_inheritance_before_standalone_semantic_checks() {
             let schema = schema(false, false);
-            for parents in [
-                V::Scalar(N::Null),
-                V::List(vec![]),
-                V::List(vec![V::text("parent.yaml")]),
-            ] {
+            for parent in [V::List(vec![]), V::text("parent.yaml")] {
                 let raw = document(V::map(vec![
                     ("schema_version", V::text("99.0")),
-                    ("parents", parents),
+                    ("parent", parent),
                     ("domain", V::integer("8")),
                 ]));
 
@@ -1558,6 +1554,28 @@ mod preparation {
                     Err(Error::InheritanceRequired)
                 ));
             }
+            // A null parent is absent: the entry takes the standalone route,
+            // whose version gate refuses it.
+            let raw = document(V::map(vec![
+                ("schema_version", V::text("99.0")),
+                ("parent", V::Scalar(N::Null)),
+                ("domain", V::integer("8")),
+            ]));
+            let actual_node = field_id(&raw, &["schema_version"]);
+            let Err(Error::Normalize(failure)) = prepare(&schema, raw) else {
+                panic!("a null parent takes the standalone route")
+            };
+            assert_eq!(
+                failure.error,
+                NormalizationError::Invalid(vec![SchemaDiagnostic {
+                    path: "schema_version".into(),
+                    code: yamaa_core::diagnostic::ConditionCode::SchemaVersionMismatch,
+                    context: vec![
+                        ("expected", C::Text("1.0".into())),
+                        ("actual", C::InputValue(actual_node))
+                    ]
+                }])
+            );
         }
 
         #[test]

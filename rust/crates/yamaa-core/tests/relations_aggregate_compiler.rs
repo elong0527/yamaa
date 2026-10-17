@@ -1475,7 +1475,11 @@ mod relations {
             let f = diagnostics(vec![(
                 "A",
                 "str",
-                flag("ABSENT = 1", Some(Tree::Scalar(N::Null)), None),
+                flag(
+                    "ABSENT = 1",
+                    Some(Tree::map(vec![("literal", Tree::Scalar(N::Null))])),
+                    None,
+                ),
             )]);
             assert_eq!(f[0].code, C::FlagMissingValueRequired);
         }
@@ -1558,7 +1562,7 @@ mod relations {
                         flag(
                             "TRUE",
                             Some(Tree::text("x".repeat(10_000))),
-                            Some(Tree::Scalar(N::Null)),
+                            Some(Tree::map(vec![("literal", Tree::Scalar(N::Null))])),
                         ),
                     )
                 })
@@ -1764,7 +1768,10 @@ mod relations {
                         ("id", Tree::text("LOOK")),
                         ("dataset", Tree::text("TAB")),
                         ("key", key),
-                        ("no_match", Tree::Scalar(N::Null)),
+                        (
+                            "no_match",
+                            Tree::map(vec![("literal", Tree::Scalar(N::Null))]),
+                        ),
                     ])]),
                 ),
                 (

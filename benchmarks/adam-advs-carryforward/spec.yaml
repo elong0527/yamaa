@@ -24,7 +24,7 @@ intermediates:
   - id: COLLECTED
     dataset: VS
     key: {STUDYID: STUDYID, USUBJID: USUBJID, VSTESTCD: PARAMCD, VSDTC: ADT}
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID

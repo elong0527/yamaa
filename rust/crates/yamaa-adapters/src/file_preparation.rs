@@ -376,7 +376,7 @@ mod profile_inspection_tests {
         fs::write(root.join("parent/base.yaml"), source).unwrap();
         fs::write(
             root.join("entry/root.yaml"),
-            "schema_version: '1.0'\nparents: [../parent/base.yaml]\n",
+            "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
         )
         .unwrap();
         let root = crate::canonical_path::canonicalize(root).unwrap();
@@ -486,7 +486,7 @@ mod declaring_origin_tests {
         }
         fn check(&self) {
             let parent = "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-            let child = "schema_version: '1.0'\nparents: ['./base.yaml']\ndomain: PRODUCER\n";
+            let child = "schema_version: '1.0'\nparent: './base.yaml'\ndomain: PRODUCER\n";
             fs::write(self.0.join("entry/root.yaml"), b"declaring metadata").unwrap();
             fs::write(self.0.join("producer/base.yaml"), parent).unwrap();
             fs::write(self.0.join("producer/child.yaml"), child).unwrap();
@@ -546,7 +546,7 @@ mod dispatch_policy_tests {
     };
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     const PARENT: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";
-    const ROOT: &str = "schema_version: '1.0'\nparents: [../parent/base.yaml, ../parent/./base.yaml, ../parent/base.yaml]\n";
+    const ROOT: &str = "schema_version: '1.0'\nparent: ../parent/base.yaml\n";
     struct Study(PathBuf);
     impl Study {
         fn new(root: &str) -> Self {
@@ -670,7 +670,7 @@ mod dispatch_policy_tests {
         if matches!(*error, yamaa_core::inheritance_preparation::Error::Traversal(
             yamaa_core::inheritance::Error::Host(crate::specification_source::SourceFailure::Host(ResourceError::Changed))
         ))));
-        assert_content_change(&diagnostic, "parents", "../parent/base.yaml");
+        assert_content_change(&diagnostic, "parent", "../parent/base.yaml");
         assert_eq!(original.as_ref(), PARENT.as_bytes());
         assert_eq!(resources.capture_reads(), 2);
         assert_eq!(resources.resolve("root.yaml").unwrap(), original_base);
@@ -807,7 +807,7 @@ mod dispatch_policy_tests {
             diagnostic.code,
             yamaa_core::diagnostic::ConditionCode::ResourceContentChanged
         );
-        assert_eq!(diagnostic.spec_paths, ["parents[0]"]);
+        assert_eq!(diagnostic.spec_paths, ["parent"]);
         assert_eq!(
             diagnostic.context,
             [(

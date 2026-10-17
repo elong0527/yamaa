@@ -434,11 +434,22 @@ fn literal_handler(
         .transpose()
 }
 
+/// `{literal: null}`, the one spelling of the missing value a handler, flag,
+/// mapping entry or function argument substitutes (COLUMN-10).
+pub(crate) fn missing_literal(d: &Document, id: usize) -> bool {
+    matches!(&d.nodes()[id], N::Mapping(items) if matches!(
+        items.as_slice(),
+        &[(key, value)] if matches!(&d.nodes()[key], N::Text(key) if key == "literal")
+            && matches!(d.nodes()[value], N::Null)
+    ))
+}
+
 /// Read an admitted scalar leaf once; rows and columns share the same boundary.
 fn literal(d: &Document, id: usize, path: &str) -> Result<crate::value::Value, PrepareError> {
     use crate::value::Value;
     Ok(match &d.nodes()[id] {
         N::Null => Value::Missing,
+        N::Mapping(_) if missing_literal(d, id) => Value::Missing,
         N::Text(value) => Value::Str(value.clone()),
         N::Boolean(value) => Value::Bool(*value),
         N::Float(value) => Value::float(*value),
@@ -1394,7 +1405,7 @@ impl PreparedSpecification {
             .map(|id| sequence(d, id))
             .transpose()?
             .is_some_and(|rows| !rows.is_empty());
-        optional_features(d, root, &["parents"], "", &mut extra);
+        optional_features(d, root, &["parent"], "", &mut extra);
         let root_filter = root_filter::RootFilter::prepare(d)?;
         let inputs = mapping(d, field(d, root, "input")?)?;
         let odm_inputs = odm::inputs(d)?;
@@ -1417,7 +1428,7 @@ impl PreparedSpecification {
         }
         // Unsupported row/intermediate/metadata semantics must never reach the
         // closed no-row lowering representation, even when their shapes are valid.
-        if extra.iter().any(|feature| feature.operation == "parents") {
+        if extra.iter().any(|feature| feature.operation == "parent") {
             return Err(PrepareError::Unsupported(extra));
         }
         let (sources, source_interpretations, source_contracts) =

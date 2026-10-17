@@ -110,6 +110,7 @@ impl Run<'_> {
                     (expression, expression.root()),
                     value,
                     true,
+                    super::validation::NullPolicy::Absent,
                     &self.active,
                 )? {
                     continue;

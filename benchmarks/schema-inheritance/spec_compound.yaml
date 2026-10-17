@@ -1,5 +1,5 @@
 schema_version: "1.0"
-parents: spec_organization.yaml
+parent: spec_organization.yaml
 input:
   LB:
     types:

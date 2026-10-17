@@ -63,7 +63,7 @@ pub fn document(
         ),
     ];
     if unsupported_parent {
-        fields.push(("parents", Tree::List(vec![Tree::text("parent.yaml")])));
+        fields.push(("parent", Tree::text("parent.yaml")));
     }
     let mut nodes = Vec::new();
     let root = Tree::map(fields).append(&mut nodes);

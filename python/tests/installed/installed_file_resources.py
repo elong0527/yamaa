@@ -54,7 +54,7 @@ class FileResources(unittest.TestCase):
                 entry = study / "spec.yaml"
                 program = "consumer" if producer else "ordinary"
                 entry.write_text(
-                    f"schema_version: '1.0'\nparents: ../shared/{program}.yaml\n",
+                    f"schema_version: '1.0'\nparent: ../shared/{program}.yaml\n",
                     encoding="ascii",
                 )
                 (study / "producer.yaml").write_text(

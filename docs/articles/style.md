@@ -43,7 +43,7 @@ dataset, the output, each named intermediate, each column, each row template
 and each separately authored function definition. The root declares its fields
 in reading order:
 
-- what the specification is (`schema_version`, `parents`, `domain`, `keys`);
+- what the specification is (`schema_version`, `parent`, `domain`, `keys`);
 - what it reads (`input`, `base`, `filter`);
 - what it writes (`output`);
 - how it derives the rows (`windows`, `intermediates`, `columns`, `rows`);
@@ -81,7 +81,7 @@ columns:
 ## Blank lines
 
 One blank line precedes every root field from `output` on. The fields before
-`output` (`schema_version`, `parents`, `domain`, `keys`, `input`, `base` and
+`output` (`schema_version`, `parent`, `domain`, `keys`, `input`, `base` and
 `filter`) may stand together. A comment written directly above a field belongs
 to that field, and the blank line precedes the comment. A missing blank line is
 reported as `root_spacing`.
@@ -176,15 +176,15 @@ default.
 A simple named intermediate equivalent to the implicit join is reported as
 `redundant_intermediate`. An intermediate with no `filter`, `between`,
 `order_by`, `keep`, `derivations`, `verifications` or `columns`, with
-`no_match: null`, and with an explicit `key` that restates exactly the output
-`keys`, reads what `DATASET.COLUMN` already reads. The check reports the
-intermediate's `id` and suggests reading the input dataset directly. An omitted
-`key` with `no_match: null` fails validation as `rename_only_intermediate`
-instead and is never a style finding. An intermediate without `no_match`
-requires a match the implicit join cannot state. A non-null `no_match` literal,
-a custom key and a `SELF` intermediate all change behavior and are never
-reported. An unread intermediate is unused, not redundant, and is never
-reported.
+`no_match: {literal: null}`, and with an explicit `key` that restates exactly
+the output `keys`, reads what `DATASET.COLUMN` already reads. The check reports
+the intermediate's `id` and suggests reading the input dataset directly. An
+omitted `key` with `no_match: {literal: null}` fails validation as
+`rename_only_intermediate` instead and is never a style finding. An
+intermediate without `no_match` requires a match the implicit join cannot
+state. Any other `no_match` literal, a custom key and a `SELF` intermediate all
+change behavior and are never reported. An unread intermediate is unused, not
+redundant, and is never reported.
 
 ```yaml
 keys: [STUDYID, USUBJID]
@@ -192,7 +192,7 @@ intermediates:
   - id: ADSL1
     dataset: ADSL
     key: [STUDYID, USUBJID]
-    no_match: null
+    no_match: {literal: null}
 ```
 
 Read `ADSL.TRTSDTM` instead of `ADSL1.TRTSDTM` here.
@@ -200,7 +200,7 @@ Read `ADSL.TRTSDTM` instead of `ADSL1.TRTSDTM` here.
 Every output column declares `label:`. A column named in `output.columns` and
 declared in the same file without a non-empty `label` is reported as
 `missing_label` at its `columns[]` entry. A column not declared in the same
-file, and any file with `parents`, is never reported: the label may come from
+file, and any file with a `parent`, is never reported: the label may come from
 an inherited layer. Labels do not change derivation behavior; they carry the
 reader-facing description a submission document is generated from.
 

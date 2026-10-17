@@ -44,7 +44,7 @@ columns:
     derivation:
       mapping:
         source: ASEV
-        missing: null
+        missing: {literal: null}
         dict:
           MILD: 1
           MODERATE: 2

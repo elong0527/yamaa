@@ -88,7 +88,7 @@ columns:
     label: Numeric Result/Finding in Standard Units
     derivation:
       value: {source: LBORRES}
-      unconvertible: null
+      unconvertible: {literal: null}
 
   - name: LBDTC
     type: date

@@ -19,19 +19,19 @@ intermediates:
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'SMQ01'"
-    no_match: null
+    no_match: {literal: null}
 
   - id: SMQ2
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'SMQ02'"
-    no_match: null
+    no_match: {literal: null}
 
   - id: CQ1
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'CQ01'"
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID

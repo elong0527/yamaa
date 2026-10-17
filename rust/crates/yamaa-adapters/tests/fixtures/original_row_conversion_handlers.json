@@ -126,7 +126,7 @@
   },
   {
     "case": "null-replacement",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"value\":{\"literal\":\"one\"}},\"VALUE\":{\"value\":{\"literal\":1.5},\"unconvertible\":null}}}]}",
+    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"value\":{\"literal\":\"one\"}},\"VALUE\":{\"value\":{\"literal\":1.5},\"unconvertible\":{\"literal\":null}}}}]}",
     "expected": {
       "artifacts": [
         {

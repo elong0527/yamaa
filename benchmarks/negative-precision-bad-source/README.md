@@ -26,7 +26,7 @@ outcome explicitly:
 precision:
   type: date
   source: AE.AESTDTC
-  invalid: null
+  invalid: {literal: null}
 ```
 
 The `invalid` outcome covers `UNK`; a source value that was not collected

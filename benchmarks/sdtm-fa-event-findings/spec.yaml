@@ -22,7 +22,7 @@ intermediates:
       StudyEventOID: ODM.StudyEventOID
       StudyEventRepeatKey: ODM.StudyEventRepeatKey
     filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: DOMAIN

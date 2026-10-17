@@ -23,7 +23,7 @@ intermediates:
     between: {value: ASTDTM, lower: EXSTDTC, upper: WINLAST}
     order_by: [EX.EXSTDTC]
     keep: last
-    no_match: null
+    no_match: {literal: null}
     derivations:
       DOSENUM:
         row_number:

@@ -358,7 +358,7 @@
   },
   {
     "name": "no_match",
-    "before": "    no_match: null\n",
+    "before": "    no_match: {literal: null}\n",
     "after": "",
     "diagnostics": [
       {

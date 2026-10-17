@@ -1,8 +1,8 @@
 # Spec Inheritance
 
-**Goal:** show how a study spec inherits from its organization and
-compound parents: shared levels carry the common mapping once, and
-the deepest study level wins on final wording.
+**Goal:** show how a study spec inherits through its compound level
+from its organization level: shared levels carry the common mapping
+once, and the study level wins on final wording.
 
 **Dataset:** `adlb.csv`, ADLB analysis dataset. One record per
 subject per laboratory parameter.
@@ -13,10 +13,10 @@ subject per laboratory parameter.
   and unit into `PARAMCD`, `AVAL`, and `AVALU`;
 - `spec_compound.yaml` adds field types and retitles the AVAL
   result;
-- `spec_study.yaml` is the entry: it names both levels as parents,
-  restates the AVALU unit wording, and declares the complete
-  output.
+- `spec_study.yaml` is the entry: it names the compound level as
+  its parent, restates the AVALU unit wording, and declares the
+  complete output.
 
-Parents resolve depth-first, left to right, with later levels
-winning; the chain resolves to `expected/spec_resolved.yaml`, the
-default view in the specification dropdown.
+Each level names the one level above it, so the chain reads
+organization, then compound, then study, and a later level wins
+where two levels state the same detail.

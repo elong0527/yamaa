@@ -52,7 +52,8 @@ columns:
         source: AESTDTC
         minimum_source_precision: day
         time: first
-        invalid: null   # handlers are explicit: an omitted one is fatal
+        # handlers are explicit: an omitted one is fatal
+        invalid: {literal: null}
 
   # The flag names the first imputed part: a date alone imputes the hour
   # first (H), a time collected to the hour imputes the minutes first
@@ -78,7 +79,7 @@ columns:
         source: AEENDTC
         minimum_source_precision: day
         time: last
-        invalid: null
+        invalid: {literal: null}
 
   - name: AENTMF
     type: str

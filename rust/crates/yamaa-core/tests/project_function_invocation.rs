@@ -635,7 +635,7 @@ mod project {
                 true,
             );
             assert!(
-                matches!(PreparedSpecification::prepare_linked(&consumer, None, links(&[link(&source)])), Err(PrepareError::Unsupported(features)) if features.iter().any(|f| f.path=="parents" && f.operation == "parents"))
+                matches!(PreparedSpecification::prepare_linked(&consumer, None, links(&[link(&source)])), Err(PrepareError::Unsupported(features)) if features.iter().any(|f| f.path=="parent" && f.operation == "parent"))
             );
         }
         #[test]

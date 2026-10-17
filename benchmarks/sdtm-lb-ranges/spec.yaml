@@ -24,7 +24,7 @@ intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     key: [LBTESTCD, SEX]
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: DOMAIN

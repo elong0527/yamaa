@@ -119,7 +119,7 @@ columns:
     label: Numeric Result/Finding in Standard Units
     derivation:
       value: {source: VSORRES}
-      unconvertible: null
+      unconvertible: {literal: null}
 
   - name: VSSTRESC
     type: str

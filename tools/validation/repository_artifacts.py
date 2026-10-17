@@ -133,7 +133,7 @@ def validate_examples_csv(root: Path):
                 continue
             if not isinstance(document, dict):
                 continue
-            inherited |= bool(document.get("parents"))
+            inherited |= document.get("parent") is not None
             output = document.get("output")
             if not isinstance(output, dict):
                 continue
@@ -163,7 +163,7 @@ def validate_examples_csv(root: Path):
                         f"ERROR: {label}:{number}: expected {len(header)} fields, got {len(row)}"
                     )
             if inherited:
-                # Resolving parents is a language operation owned by the Rust suite.
+                # Resolving a parent chain is a language operation owned by the Rust suite.
                 continue
             if path.name not in declarations:
                 errors.append(

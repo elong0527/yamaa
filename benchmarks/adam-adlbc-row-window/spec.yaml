@@ -67,4 +67,4 @@ rows:
         mapping:
           source: LB.LBTESTCD
           dict: {ALB: "_ALB", BILI: "_BILI"}
-          unmapped: null
+          unmapped: {literal: null}

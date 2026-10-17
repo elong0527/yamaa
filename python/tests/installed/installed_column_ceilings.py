@@ -9,6 +9,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 import yamaa
+from yamaa.resources import MemoryResolver
 
 
 class ColumnCeilings(unittest.TestCase):
@@ -198,16 +199,17 @@ class ColumnCeilings(unittest.TestCase):
                 }
                 parent = root / "parent.yaml"
                 parent.write_text(json.dumps(document), encoding="ascii")
-                document["parents"] = []
+                # A null parent names no parent: the entry stays standalone.
+                document["parent"] = None
                 explicit = root / "explicit.yaml"
                 explicit.write_text(json.dumps(document), encoding="ascii")
                 child = root / "child.yaml"
                 child.write_text(
-                    "schema_version: '1.0'\nparents: [parent.yaml]\n", encoding="ascii"
+                    "schema_version: '1.0'\nparent: parent.yaml\n", encoding="ascii"
                 )
                 grandchild = root / "grandchild.yaml"
                 grandchild.write_text(
-                    "schema_version: '1.0'\nparents: [child.yaml]\n", encoding="ascii"
+                    "schema_version: '1.0'\nparent: child.yaml\n", encoding="ascii"
                 )
                 expected = [
                     (
@@ -233,15 +235,21 @@ class ColumnCeilings(unittest.TestCase):
                             (root / "out.csv").read_bytes(), expected_bytes
                         )
 
-    def test_pathological_repeated_parents_are_still_refused(self):
-        parent = self.write_case("repeated-parents")
-        child = parent.with_name("child.yaml")
-        child.write_text(
-            json.dumps({"schema_version": "1.0", "parents": [parent.name] * 8193}),
-            encoding="ascii",
-        )
+    def test_pathological_parent_chain_is_still_refused(self):
+        # Each layer names one parent, so only a chain of 8,193 distinct layers
+        # reaches the occurrence bound. Serve that chain from memory rather than
+        # writing thousands of files; without the bound it would reach the base.
+        base = self.write_case("long-parent-chain")
+        objects = {
+            f"layer-{index}.yaml": (
+                f"schema_version: '1.0'\nparent: layer-{index + 1}.yaml\n"
+            ).encode("ascii")
+            for index in range(8193)
+        }
+        objects["layer-8193.yaml"] = base.read_bytes()
+        resolver = MemoryResolver(objects)
         for operation in (yamaa.check, yamaa.domain):
-            result = operation(child)
+            result = operation("layer-0.yaml", resolver=resolver)
             self.assert_refusal(result)
             self.assertEqual(result.issues.height, 1)
             self.assertEqual(
@@ -255,6 +263,7 @@ class ColumnCeilings(unittest.TestCase):
                     "actual": 8193,
                 },
             )
+        self.assertEqual(resolver.outputs, {})
 
     def test_output_columns_reach_their_own_boundary(self):
         self.assert_build(self.write_case("admit-output", columns=1024), width=1024)

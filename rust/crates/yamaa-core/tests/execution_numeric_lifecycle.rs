@@ -2487,7 +2487,10 @@ mod execution {
                         ("id", Tree::text("P")),
                         ("dataset", Tree::text("DONOR")),
                         ("key", Tree::map(vec![("K", Tree::text("KEY"))])),
-                        ("no_match", Tree::Scalar(N::Null)),
+                        (
+                            "no_match",
+                            Tree::map(vec![("literal", Tree::Scalar(N::Null))]),
+                        ),
                     ])]),
                 ),
                 (

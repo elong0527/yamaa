@@ -118,7 +118,7 @@ impl<P: NativePort> AliasCache<'_, P> {
     fn parent_error(port: &P, written: &str, error: &SourceError<P::Error>) -> Option<Diagnostic> {
         if let SourceError::Raised(error) = error {
             if port.resource_failure(error) == Some(ResourceFailure::ContentChanged) {
-                return Some(ResourceFailure::ContentChanged.field_diagnostic("parents", written));
+                return Some(ResourceFailure::ContentChanged.field_diagnostic("parent", written));
             }
         }
         None

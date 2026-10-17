@@ -753,26 +753,23 @@ class DashboardTests(unittest.TestCase):
         # RACE is a DM column: only the producer's columns can label it.
         self.assertIn('<th scope="col" class="derived" title="Race">RACE</th>', page)
 
-    def test_linked_specs_ignores_non_list_parents(self):
-        # A malformed spec whose parents is a scalar, null or a mapping
-        # names no parents. Iterating it raised TypeError, which escapes
-        # main's per-benchmark (OSError, ValueError, YAMLError) handler
-        # and aborts the whole dashboard build.
-        for parents in (42, None, 1.5, {"spec.yaml": True}):
-            with self.subTest(parents=parents):
-                self.assertEqual(generate.linked_specs({"parents": parents}), [])
-        self.assertEqual(generate.linked_specs({"parents": "a.yaml"}), ["a.yaml"])
-        self.assertEqual(
-            generate.linked_specs({"parents": ["a.yaml", 42, ""]}), ["a.yaml"]
-        )
+    def test_linked_specs_ignores_a_parent_that_is_not_a_path(self):
+        # A malformed spec whose parent is a number, null, a list, a
+        # mapping or empty names no parent. Iterating it raised TypeError,
+        # which escapes main's per-benchmark (OSError, ValueError,
+        # YAMLError) handler and aborts the whole dashboard build.
+        for parent in (42, None, 1.5, "", ["a.yaml"], {"spec.yaml": True}):
+            with self.subTest(parent=parent):
+                self.assertEqual(generate.linked_specs({"parent": parent}), [])
+        self.assertEqual(generate.linked_specs({"parent": "a.yaml"}), ["a.yaml"])
 
-    def test_scalar_parents_and_columns_do_not_abort_rendering(self):
+    def test_scalar_parent_and_columns_do_not_abort_rendering(self):
         source = generate.BENCHMARKS / "sdtm-dm-race-ethnicity"
         with tempfile.TemporaryDirectory() as directory:
             benchmark = (Path(directory) / source.name).resolve()
             shutil.copytree(source, benchmark)
             for name, key in (
-                ("spec_dm.yaml", "parents"),
+                ("spec_dm.yaml", "parent"),
                 ("spec_suppdm.yaml", "columns"),
             ):
                 path = benchmark / name

@@ -91,7 +91,7 @@ rows:
         mapping:
           source: PP.PPTESTCD
           dict: {CMAX: CMAXD, AUCLST: AUCLSTD, AUCIFO: AUCIFOD}
-          unmapped: null
+          unmapped: {literal: null}
       PARAM:
         mapping:
           source: PP.PPTESTCD
@@ -99,7 +99,7 @@ rows:
             CMAX: Max Conc Norm by Dose
             AUCLST: AUC to Last Nonzero Conc Norm by Dose
             AUCIFO: AUC Infinity Obs Norm by Dose
-          unmapped: null
+          unmapped: {literal: null}
       DOSE_MG: DOSE.DOSE_MG
       AVAL:
         compute:
@@ -107,7 +107,7 @@ rows:
       AVALU:
         str_template:
           template: "{PP.PPSTRESU}/mg"
-          missing: null
+          missing: {literal: null}
 
 verifications:
   - row_count:

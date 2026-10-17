@@ -31,7 +31,7 @@ intermediates:
   order_by:
   - ADAE.ASEQ
   keep: first
-  no_match: null
+  no_match: {literal: null}
 
 columns:
 - name: STUDYID

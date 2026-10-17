@@ -21,7 +21,7 @@ intermediates:
     dataset: ADAE
     order_by: [{variable: ADAE.ASTDT, nulls: last}, ADAE.AESEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID

@@ -94,7 +94,7 @@ columns:
           NON-CR/NON-PD: 4
           PD: 5
           NE: 6
-        missing: null
+        missing: {literal: null}
     verifications:
       range: {min: 1, max: 6}
 

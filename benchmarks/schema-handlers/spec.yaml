@@ -52,7 +52,7 @@ columns:
     derivation:
       value:
         source: VS.VSSTRESN
-      unconvertible: null
+      unconvertible: {literal: null}
 
   # A dosing record with no dose never qualifies; among the dosed
   # records the later start date wins. A subject with no dosing
@@ -69,4 +69,4 @@ columns:
         filter: "EX.EXDOSE IS NOT NULL"
         order_by: [EX.EXSTDTC]
         keep: last
-        absent: null
+        absent: {literal: null}

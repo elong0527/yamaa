@@ -44,7 +44,7 @@ intermediates:
   - ADAE.ASTDT
   - ADAE.ASEQ
   keep: first
-  no_match: null
+  no_match: {literal: null}
   derivations:
     POSTDAYS:
       diff:

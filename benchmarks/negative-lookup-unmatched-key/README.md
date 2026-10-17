@@ -18,14 +18,14 @@ sex (`SEX`), plus a reference table carrying an upper limit
 
 Add the governed `AST/M` range to the reference table when one exists. If an
 absent range is intentionally represented by a missing value, declare
-`no_match: null`:
+`no_match: {literal: null}`:
 
 ```yaml
 intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     key: [LBTESTCD, SEX]
-    no_match: null
+    no_match: {literal: null}
 ```
 
 The lookup then returns a missing value for every column read through it when

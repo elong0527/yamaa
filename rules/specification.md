@@ -22,7 +22,7 @@ Replaces: REQ-1042, REQ-1045.
 
 Each root field's schema description states its meaning.
 [Schema language](reference/schema-language.md) requires `schema_version` to
-match the bundle exactly, and [Inheritance](inheritance.md) resolves `parents`
+match the bundle exactly, and [Inheritance](inheritance.md) resolves `parent`
 before validation and execution. `filter` and `rows` exclude each other under
 [Row construction](rows.md). `columns` are declared in the
 dependency order [Column derivation](columns.md) requires, and

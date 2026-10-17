@@ -13,10 +13,10 @@ root_class:
         type: str
         required: true
         description: Schema bundle this specification is written against, which must match exactly (SPEC-1).
-    - parents:
-        type: [path, "list[path]"]
+    - parent:
+        type: path
         required: false
-        description: Ordered local specification layers resolved before validation and execution (LAYER-2).
+        description: Local specification layer this one inherits from, resolved before validation and execution (LAYER-2).
     - domain:
         type: identifier
         required: true
@@ -117,7 +117,7 @@ intermediate_class:
         required: false
         description: Stored and derived columns the lookup may read; defaults to every available column (LOOKUP-11).
     - no_match:
-        type: literal_value
+        type: substitute_value
         required: false
         description: Value returned when the lookup yields nothing; without it, yielding nothing fails (LOOKUP-13).
     - derivations:

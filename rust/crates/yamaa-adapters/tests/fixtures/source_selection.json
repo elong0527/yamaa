@@ -73,7 +73,7 @@
       "csv": "ID,BASE,FIRST,LAST\na,-9223372036854775808,-9223372036854775808,-9223372036854775808\nb,9223372036854775807,9223372036854775807,9223372036854775807\n"
     },
     "already-selected-intermediate": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID}\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: {source: {variable: P.A, order_by: [DONOR.SEQ], keep: last}}}\n  - {name: B, type: str, derivation: {source: {variable: P.B, order_by: [DONOR.SEQ], keep: first, absent: fallback}}}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID}\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: {source: {variable: P.A, order_by: [DONOR.SEQ], keep: last}}}\n  - {name: B, type: str, derivation: {source: {variable: P.B, order_by: [DONOR.SEQ], keep: first, absent: fallback}}}\n",
       "inputs": {
         "input.csv": "ID\na\n",
         "donor.csv": "ID,SEQ,A,B\na,1,first,\na,1,second,present\n"
@@ -376,7 +376,7 @@
       "csv": "ID,K,VALUE\na,second,10\nb,local-b,20\n"
     },
     "named-key-candidates-choice": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, A, B]\ninput:\n  SRC: {path: input.csv, types: {CUT: int}}\n  DONOR: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B, C]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID}\n    filter: 'DONOR.SEQ > SRC.CUT'\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: {first_available: {sources: [P.A, SRC.BACKUP]}}}\n  - {name: B, type: str, derivation: {source: {variable: P.B, order_by: [DONOR.SEQ], keep: last}}}\n  - {name: C, type: str, derivation: P.C}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, A, B]\ninput:\n  SRC: {path: input.csv, types: {CUT: int}}\n  DONOR: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B, C]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID}\n    filter: 'DONOR.SEQ > SRC.CUT'\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: {first_available: {sources: [P.A, SRC.BACKUP]}}}\n  - {name: B, type: str, derivation: {source: {variable: P.B, order_by: [DONOR.SEQ], keep: last}}}\n  - {name: C, type: str, derivation: P.C}\n",
       "inputs": {
         "input.csv": "ID,CUT,BACKUP\na,0,unused\nb,1,unused\n",
         "donor.csv": "ID,SEQ,A,B,C\na,1,a1,b1,c1\na,2,a2,b2,c2\nb,1,a1,b1,c1\nb,2,a2,b2,c2\n"

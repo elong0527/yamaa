@@ -393,9 +393,10 @@ whole-second duration returns an `int` and a fractional-second duration a
 outside the resulting numeric range is invalid: whole seconds must fit the
 signed integer range, and float results must be finite.
 
-Invalid text returns the literal `invalid` handler, and a null `invalid` gives
-missing; without the handler, the condition `invalid_duration_text` is fatal on
-the `impute` stage. A declared handler is counted only when reached.
+Invalid text returns the literal `invalid` handler, and
+`invalid: {literal: null}` gives missing; without the handler, the condition
+`invalid_duration_text` is fatal on the `impute` stage. A declared handler is
+counted only when reached.
 
 ## Imputation flags
 

@@ -183,7 +183,7 @@ owns decoding behavior.
   contract, cache and resource identities use references, canonical forms or
   bytes; only packaging-tool lockfiles carry their own checksum fields.
 - Prune every specification after composition, including an entry file that
-  declares no `parents`; resolved-column ordering stays inheritance-only.
+  declares no `parent`; resolved-column ordering stays inheritance-only.
 - Ship `str_replace` with literal replacement text only. Group references,
   if ever added, come through a different field, so `replacement` never
   changes meaning.

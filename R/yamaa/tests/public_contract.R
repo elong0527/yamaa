@@ -569,8 +569,8 @@ qualify_resolved_schema_links <- function() {
     dir.create(file.path(study, "input"), recursive = TRUE)
     identifier <- if (identical(wrapper, "A")) "17" else "29"
     writeLines(c("ID", identifier), file.path(study, "input/raw.csv"))
-    writeLines(c("schema_version: '1.0'", "parents: ../shared/consumer.yaml"), file.path(study, "spec.yaml"))
-    writeLines(c("schema_version: '1.0'", "parents: ../shared/producer.yaml"), file.path(study, "producer.yaml"))
+    writeLines(c("schema_version: '1.0'", "parent: ../shared/consumer.yaml"), file.path(study, "spec.yaml"))
+    writeLines(c("schema_version: '1.0'", "parent: ../shared/producer.yaml"), file.path(study, "producer.yaml"))
     artifact <- yamaa_resolve_specification(file.path(study, "spec.yaml"))
     entries <- jsonlite::fromJSON(as.character(artifact), simplifyVector = FALSE)$entries
     # A linked producer is type metadata, not a resolved entry.
@@ -600,7 +600,7 @@ qualify_resolved_origins <- function() {
   writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]", "input: {RAW: missing.csv}",
     "columns: [{name: ID, type: str, derivation: {mapping: {source: RAW.ID, dict: {A: Alpha}}}}]",
     "output: {path: result.csv, columns: [ID]}"), base)
-  writeLines(c("schema_version: '1.0'", "parents: base.yaml"), child)
+  writeLines(c("schema_version: '1.0'", "parent: base.yaml"), child)
   origins <- function(path) jsonlite::fromJSON(as.character(yamaa_resolve_specification(path)), simplifyVector = FALSE)$entries[[1L]]$origins
   direct <- origins(base)
   inherited <- origins(child)
@@ -610,7 +610,7 @@ qualify_resolved_origins <- function() {
   writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]", "input: {RAW: missing.csv}",
     "windows: {W: {order_by: [RAW.ID]}}", "columns: [{name: ID, type: int, derivation: RAW.ID}]",
     "output: {path: result.csv, columns: [ID]}"), base)
-  writeLines(c("schema_version: '1.0'", "parents: base.yaml",
+  writeLines(c("schema_version: '1.0'", "parent: base.yaml",
     "columns: [{name: N, type: int, derivation: {row_number: {window: W}}}]",
     "output: {path: result.csv, columns: [ID, N]}"), child)
   inherited <- origins(child)

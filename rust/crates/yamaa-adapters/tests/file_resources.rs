@@ -19,7 +19,7 @@ mod file {
                 fs::write(study.0.join(name).join("input/data.csv"), bytes).unwrap();
                 fs::write(
                     study.0.join(name).join("spec.yaml"),
-                    "schema_version: '1.0'\nparents: ../shared/base.yaml\ndomain: STUDY\n",
+                    "schema_version: '1.0'\nparent: ../shared/base.yaml\ndomain: STUDY\n",
                 )
                 .unwrap();
                 let path = study.text(&format!("{name}/spec.yaml"));
@@ -76,7 +76,7 @@ mod file {
                 ("declaring", "../shared/data.csv"),
                 ("null", "../shared/data.csv"),
             ] {
-                fs::write(study.0.join("entry/spec.yaml"), format!("schema_version: '1.0'\nparents: ../shared/base.yaml\ninput: {{SRC: {{relative_to: {mode}}}}}\n")).unwrap();
+                fs::write(study.0.join("entry/spec.yaml"), format!("schema_version: '1.0'\nparent: ../shared/base.yaml\ninput: {{SRC: {{relative_to: {mode}}}}}\n")).unwrap();
                 let (resources, entry) =
                     file_configuration::resources(&study.text("entry/spec.yaml")).unwrap();
                 let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
@@ -147,10 +147,10 @@ mod file {
             for inherited_base in ["", "relative_to: entry, "] {
                 let study = Study::new();
                 fs::write(study.0.join("shared/base.yaml"), format!("schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {{SRC: {{path: data.csv, types: {{ID: int}}}}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: ignored.csv, {inherited_base}columns: [ID], warning_log: ignored-warning.csv, verification_log: ignored-verification.csv}}\n")).unwrap();
-                fs::write(study.0.join("shared/replacement.yaml"), "schema_version: '1.0'\nparents: base.yaml\noutput: {path: result.csv, columns: [ID], warning_log: warnings.csv, verification_log: verifications.csv}\n").unwrap();
+                fs::write(study.0.join("shared/replacement.yaml"), "schema_version: '1.0'\nparent: base.yaml\noutput: {path: result.csv, columns: [ID], warning_log: warnings.csv, verification_log: verifications.csv}\n").unwrap();
                 fs::write(
                     study.0.join("entry/spec.yaml"),
-                    "schema_version: '1.0'\nparents: ../shared/replacement.yaml\n",
+                    "schema_version: '1.0'\nparent: ../shared/replacement.yaml\n",
                 )
                 .unwrap();
                 fs::write(study.0.join("shared/data.csv"), b"ID\n7\n").unwrap();
@@ -239,7 +239,7 @@ mod file {
                 fs::write(
                     study.0.join("entry/spec.yaml"),
                     format!(
-                        "schema_version: '1.0'\nparents: ../shared/base.yaml\noutput: {output}\n"
+                        "schema_version: '1.0'\nparent: ../shared/base.yaml\noutput: {output}\n"
                     ),
                 )
                 .unwrap();
@@ -393,7 +393,7 @@ mod file {
         fn inherited_parent_keeps_its_own_input_and_output_locations_without_configuration() {
             let study = Study::new();
             let parent = "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\noutput: {path: ../outputs/out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-            let child = "schema_version: '1.0'\nparents: ../shared/base.yaml\ndomain: CHILD\n";
+            let child = "schema_version: '1.0'\nparent: ../shared/base.yaml\ndomain: CHILD\n";
             fs::write(study.0.join("entry/child.yaml"), child).unwrap();
             fs::write(study.0.join("shared/base.yaml"), parent).unwrap();
             fs::write(study.0.join("entry/data.csv"), b"ID\n999\n").unwrap();
@@ -618,7 +618,7 @@ mod file {
             fs::write(temp.0.join("parents/base.yaml"), parent).unwrap();
             fs::write(
                 temp.0.join("children/spec.yaml"),
-                "schema_version: '1.0'\nparents: ../parents/base.yaml\n",
+                "schema_version: '1.0'\nparent: ../parents/base.yaml\n",
             )
             .unwrap();
             let environment = fs::read_to_string(temp.0.join("environment.yaml"))
@@ -885,7 +885,7 @@ mod file {
                         fs::rename(temp.0.join("spec.yaml"), temp.0.join("base.yaml")).unwrap();
                         fs::write(
                             temp.0.join("spec.yaml"),
-                            "schema_version: '1.0'\nparents: base.yaml\n",
+                            "schema_version: '1.0'\nparent: base.yaml\n",
                         )
                         .unwrap();
                     }
@@ -1091,7 +1091,7 @@ mod file {
             fs::write(temp.0.join("parents/base.yaml"), parent).unwrap();
             fs::write(
                 temp.0.join("children/spec.yaml"),
-                "schema_version: '1.0'\nparents: ../parents/base.yaml\n",
+                "schema_version: '1.0'\nparent: ../parents/base.yaml\n",
             )
             .unwrap();
             let environment = fs::read_to_string(temp.0.join("environment.yaml"))

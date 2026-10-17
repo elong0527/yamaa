@@ -28,5 +28,5 @@ impute:
   source: EX.EXSTDTC
   minimum_source_precision: day
   time: first
-  invalid: null
+  invalid: {literal: null}
 ```

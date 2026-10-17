@@ -1,5 +1,5 @@
 schema_version: "1.0"
-parents: layers/parent.yaml
+parent: layers/parent.yaml
 domain: ADSL
 keys: [USUBJID]
 

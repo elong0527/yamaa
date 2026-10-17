@@ -102,7 +102,7 @@ as `core`, `codelist`, `length`, or `comment`.
 | Sort Order (submission sort) | `output.order_by` | A presentation order applied after every check |
 | Input datasets (usually only in a Comment) | `input:` | Every input is declared and named |
 | Structure: "one record per subject per visit" | `base` plus `rows` templates | Row count comes from these, not from a sentence |
-| Copy the corporate template and edit | `parents:` | Real layering; a change to the parent flows down (Specification composition) |
+| Copy the corporate template and edit | `parent:` | Real layering; a change to the parent flows down (Specification composition) |
 | Dataset-level review checks | `verifications:` | `unique`, `row_count`, `all_or_none`, `assert` |
 
 ### 2.2 Variable level
@@ -274,7 +274,7 @@ What changed:
   "unrecognised" branch to answer -- SEX is already constrained to three
   values. Where a wording genuinely can surprise you, the same benchmark's
   RACEN shows both handlers at once: `unmapped: 99` for a race the
-  dictionary does not know, `missing: null` for an empty one. A condition
+  dictionary does not know, `missing: {literal: null}` for an empty one. A condition
   with no handler stops the run instead of turning into a blank.
 - The codelist *name* (`SEX`, `AGEGR1`) has no single home. The translation
   lives in `mapping.dict`, and the name goes in `submission.codelist` if you
@@ -394,4 +394,4 @@ benchmark for the full side-by-side:
 | [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-partial-dates) | `impute` with a treatment-start bound beside `imputation_flag` reading the completed date; a missing start gives no date and `invalid` answers non-date text |
 | [`sdtm-dm-metadata`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata) | `submission` vs `verifications`: Length becomes both `submission.length` (for define.xml) and a `max_length` check |
 | [`sdtm-ae-coding`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-ae-coding) | Coding against MedDRA with a named intermediate; several columns read the one record it selects |
-| [`schema-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmarks/schema-inheritance) | Corporate, compound and study layers via `parents:` -- real layering instead of copying the template |
+| [`schema-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmarks/schema-inheritance) | Corporate, compound and study layers chained by `parent:` -- real layering instead of copying the template |

@@ -84,8 +84,8 @@ columns:
                 "Other, specify: Fijian": OTHER
                 "Not reported": NOT REPORTED
                 "Subject refused": UNKNOWN
-              missing: null
-              unmapped: null
+              missing: {literal: null}
+              unmapped: {literal: null}
     verifications:
       allowed_values:
         values: [AMERICAN INDIAN OR ALASKA NATIVE, ASIAN,
@@ -105,8 +105,8 @@ columns:
           "Not Hispanic or Latino": NOT HISPANIC OR LATINO
           "Not reported": NOT REPORTED
           "Unknown": UNKNOWN
-        missing: null
-        unmapped: null
+        missing: {literal: null}
+        unmapped: {literal: null}
     verifications:
       allowed_values:
         values: [HISPANIC OR LATINO, NOT HISPANIC OR LATINO,

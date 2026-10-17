@@ -82,7 +82,7 @@ intermediates:
     filter: "SECTION = 'first'"
     order_by: [SEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: str, derivation: SRC.ID}
   - {name: SECTION, type: str}
@@ -714,7 +714,7 @@ columns:
             copy_dir(&root.join(benchmark), &case);
             fs::write(
                 case.join("__child.yaml"),
-                "schema_version: \"1.0\"\nparents: spec.yaml\n",
+                "schema_version: \"1.0\"\nparent: spec.yaml\n",
             )
             .unwrap();
             let parent = first_issue(&case.join("spec.yaml"));
@@ -839,7 +839,7 @@ columns:
                 .unwrap();
                 fs::write(
                     fixture.0.join("child.yaml"),
-                    "schema_version: '1.0'\nparents: parent.yaml\n",
+                    "schema_version: '1.0'\nparent: parent.yaml\n",
                 )
                 .unwrap();
                 for entry in ["parent.yaml", "child.yaml"] {
@@ -932,7 +932,7 @@ columns:
                 let lookup = "intermediates:\n  - {id: REF, dataset: REF, filter: \"REF.TRT = 'DRUG A'\", no_match: NONE}\n";
                 fs::write(fixture.0.join("parent.yaml"), parent).unwrap();
                 let entry = if inherited {
-                    format!("schema_version: '1.0'\nparents: parent.yaml\n{lookup}")
+                    format!("schema_version: '1.0'\nparent: parent.yaml\n{lookup}")
                 } else {
                     format!("{parent}{lookup}")
                 };
@@ -1043,7 +1043,7 @@ columns:
             .unwrap();
                     fs::write(
                         fixture.0.join("child.yaml"),
-                        "schema_version: '1.0'\nparents: parent.yaml\n",
+                        "schema_version: '1.0'\nparent: parent.yaml\n",
                     )
                     .unwrap();
                     let mut parent_issues = None;
@@ -1151,7 +1151,7 @@ columns:
         .unwrap();
                 fs::write(
                     fixture.0.join("child.yaml"),
-                    "schema_version: '1.0'\nparents: parent.yaml\n",
+                    "schema_version: '1.0'\nparent: parent.yaml\n",
                 )
                 .unwrap();
                 let mut result = fixture.build("child.yaml");
@@ -1247,7 +1247,7 @@ columns:
                     fs::write(fixture.0.join("parent.yaml"), parent).unwrap();
                     fs::write(
                         fixture.0.join("child.yaml"),
-                        "schema_version: '1.0'\nparents: parent.yaml\n",
+                        "schema_version: '1.0'\nparent: parent.yaml\n",
                     )
                     .unwrap();
                     for entry in ["parent.yaml", "child.yaml"] {
@@ -1401,7 +1401,7 @@ columns:
             fs::rename(case.0.join("spec.yaml"), case.0.join("parent.yaml")).unwrap();
             fs::write(
                 case.0.join("spec.yaml"),
-                "schema_version: '1.0'\nparents: parent.yaml\n",
+                "schema_version: '1.0'\nparent: parent.yaml\n",
             )
             .unwrap();
             assert_overflow(&case, "columns.N.derivation.case[0].then.literal", wide);
@@ -2394,7 +2394,7 @@ output: {path: out.csv, columns: [I, V]}
                 study.write(
             "spec.yaml",
             &json!({
-                "schema_version":"1.0", "parents":"parent.yaml",
+                "schema_version":"1.0", "parent":"parent.yaml",
                 "columns":[{"name":"PREV","derivation":{"row_value":{"window":replacement}}}]
             }),
         );
@@ -2411,7 +2411,7 @@ output: {path: out.csv, columns: [I, V]}
             study.write("parent.yaml", &document());
             study.write(
                 "spec.yaml",
-                &json!({"schema_version":"1.0","parents":"parent.yaml","windows":null}),
+                &json!({"schema_version":"1.0","parent":"parent.yaml","windows":null}),
             );
             let issues = study.refused();
             assert_eq!(issues[0].condition, "unknown_window");

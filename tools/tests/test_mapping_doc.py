@@ -659,7 +659,13 @@ class DerivationShapeTests(unittest.TestCase):
     def test_precision_names_the_words_of_its_own_type(self):
         def rule(kind):
             return mapping_doc.describe_derivation(
-                {"precision": {"type": kind, "source": "PC.PCDTC", "invalid": None}}
+                {
+                    "precision": {
+                        "type": kind,
+                        "source": "PC.PCDTC",
+                        "invalid": {"literal": None},
+                    }
+                }
             )
 
         blank = "; invalid text " + mapping_doc.ARROW + " blank."
@@ -694,7 +700,7 @@ class DerivationShapeTests(unittest.TestCase):
                     "source": "AEENDTC",
                     "minimum_source_precision": "day",
                     "time": "last",
-                    "invalid": None,
+                    "invalid": {"literal": None},
                 }
             }
         )
@@ -747,7 +753,11 @@ class DerivationShapeTests(unittest.TestCase):
 
     def test_impute_bound_read_through_a_lookup_names_its_column_again(self):
         ctx = mapping_doc.SpecContext(
-            {"intermediates": [{"id": "DEATH", "dataset": "DS", "no_match": None}]}
+            {
+                "intermediates": [
+                    {"id": "DEATH", "dataset": "DS", "no_match": {"literal": None}}
+                ]
+            }
         )
         rule = mapping_doc.describe_derivation(
             {

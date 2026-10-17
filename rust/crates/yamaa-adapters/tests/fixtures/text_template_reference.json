@@ -567,7 +567,9 @@
           "derivation": {
             "str_template": {
               "template": "{A}:{B}",
-              "missing": null
+              "missing": {
+                "literal": null
+              }
             }
           }
         }
@@ -2362,7 +2364,9 @@
                 "otherwise": {
                   "str_template": {
                     "template": "{B}",
-                    "missing": null
+                    "missing": {
+                      "literal": null
+                    }
                   }
                 }
               }

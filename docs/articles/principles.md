@@ -56,9 +56,9 @@ becomes an iterative way to review generated datasets and improve the specificat
 
 These four principles follow from the core principle of one execution:
 
-- **Inheritance**: Parent specifications combine in a fixed order into one final
-  specification: parents are visited left to right, depth first, and each layer
-  contributes once; a cycle fails instead of resolving. A company standard is
+- **Inheritance**: Each specification names at most one parent, and the chain
+  combines in a fixed order, from its root ancestor to the entry, into one final
+  specification; a cycle fails instead of resolving. A company standard is
   shared, not copied into files that then change separately.
 - **Language neutral**: The same specification with the same inputs generates the
   same output dataset in R and in Python, wherever the project's declared

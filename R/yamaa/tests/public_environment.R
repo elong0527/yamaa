@@ -321,7 +321,7 @@ graph_document <- function(input, base, output, invalid = FALSE) c(
   paste0("output: {path: ", output, ", columns: [ID, VALUE]}"))
 dir.create("parents")
 writeLines(graph_document("{RAW: ../never-read.csv}", "RAW", "../leaf.csv", TRUE), "parents/base.yaml")
-writeLines(c("schema_version: '1.0'", "parents: [parents/base.yaml]", "domain: LEAF"), "leaf.yaml")
+writeLines(c("schema_version: '1.0'", "parent: parents/base.yaml", "domain: LEAF"), "leaf.yaml")
 writeLines(graph_document(host_truth[["aliased_leaf_reference"]], "P", "left.csv"), "left.yaml")
 writeLines(graph_document(host_truth[["leaf_reference"]], "P", "right.csv"), "right.yaml")
 writeLines(graph_document(host_truth[["diamond_reference"]], "L", "consumer.csv", TRUE), "spec.yaml")
@@ -353,7 +353,7 @@ setwd(local_paths)
 for (name in fixture_strings(host_truth[["inherited_directories"]])) dir.create(name)
 writeLines("[invalid configuration", "yamaa-project.yaml")
 writeLines(c("schema_version: '1.0'", "language: r"), "shared/environment.yaml")
-writeLines(c("schema_version: '1.0'", "parents: ../shared/base.yaml", "domain: CHILD"), "entry/spec.yaml")
+writeLines(c("schema_version: '1.0'", "parent: ../shared/base.yaml", "domain: CHILD"), "entry/spec.yaml")
 writeLines(c("schema_version: '1.0'", "domain: BASE", "keys: [ID]", "input: {SRC: data.csv}",
   "columns: [{name: ID, type: int, derivation: SRC.ID}]",
   "output: {path: ../outputs/held.csv, columns: [ID]}"), "shared/base.yaml")

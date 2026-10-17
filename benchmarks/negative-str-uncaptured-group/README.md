@@ -28,8 +28,8 @@ str_extract:
   source: USUBJID
   pattern: '^CATH-([^-]+)-[0-9]{4}$'
   group: 1
-  missing: null
-  no_match: null
+  missing: {literal: null}
+  no_match: {literal: null}
 ```
 
 Setting aside the subject number as well does not move the site: its
@@ -41,8 +41,8 @@ str_extract:
   source: USUBJID
   pattern: '^CATH-([^-]+)-([0-9]{4})$'
   group: 1
-  missing: null
-  no_match: null
+  missing: {literal: null}
+  no_match: {literal: null}
 ```
 
 Keep the blank results for a blank or ill-formed identifier; dropping them

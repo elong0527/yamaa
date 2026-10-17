@@ -16,7 +16,7 @@ intermediates:
   # projection, so the spec is rejected before any data is read.
   - id: CODED
     dataset: CODING
-    no_match: null
+    no_match: {literal: null}
 
   - id: WHODRUG_LOOKUP
     dataset: WHODRUG

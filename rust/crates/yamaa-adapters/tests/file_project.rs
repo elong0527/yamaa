@@ -547,7 +547,7 @@ mod file {
             study.write("parent/data.csv", "ID\n1\n");
             study.write(
                 "entry/domain.yaml",
-                "schema_version: '1.0'\nparents: ../parent/base.yaml\n",
+                "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
             );
             let mut project = study.prepare(&study.text(""), &[]).unwrap();
             assert_eq!(project.capture_reads(), 6);
@@ -569,7 +569,7 @@ mod file {
             study.write("parent/base.yaml", &DOMAIN.replace("input.csv", "data.csv"));
             study.write(
                 "entry/domain.yaml",
-                "schema_version: '1.0'\nparents: ../parent/base.yaml\n",
+                "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
             );
             let Selected::Ordinary(mut project) = file_workflow::select_with_resources(
                 Resources::new(&study.text(""), &study.text("entry"), &[]).unwrap(),
@@ -2211,7 +2211,7 @@ mod file {
             );
             study.write(
                 "root.yaml",
-                "schema_version: \"1.0\"\nparents: parent.yaml\ninput:\n  DM: {schema: producer/dm.yaml}\n",
+                "schema_version: \"1.0\"\nparent: parent.yaml\ninput:\n  DM: {schema: producer/dm.yaml}\n",
             );
             let error = study.compile_rejection();
             let rows = project_check::rejected(error.run()).unwrap();
@@ -2379,7 +2379,7 @@ mod file {
             );
             study.write(
                 "root.yaml",
-                "schema_version: '1.0'\nparents: [parent/base.yaml]\ndomain: CHILD\n",
+                "schema_version: '1.0'\nparent: parent/base.yaml\ndomain: CHILD\n",
             );
             let error = study.rejected();
             let rows = preparation_issues(&error, Language::Python).unwrap();
@@ -2400,7 +2400,7 @@ mod file {
             );
             study.write(
                 "leaf.yaml",
-                "schema_version: '1.0'\nparents: [producer/base.yaml]\ndomain: LEAF\n",
+                "schema_version: '1.0'\nparent: producer/base.yaml\ndomain: LEAF\n",
             );
             let parent = yaml("{P: {path: ../leaf.csv, schema: ../leaf.yaml}, Q: {path: ../leaf.csv, schema: '../leaf.yaml'}}", "P", "../root.csv", false)
         .replace("columns:\n", "intermediates: [{id: Q_REFERENCE, dataset: Q}]\ncolumns:\n")
@@ -2409,7 +2409,7 @@ mod file {
             study.write("parents/base.yaml", &parent);
             study.write(
                 "root.yaml",
-                "schema_version: '1.0'\nparents: [parents/base.yaml]\ndomain: ROOT\n",
+                "schema_version: '1.0'\nparent: parents/base.yaml\ndomain: ROOT\n",
             );
             let project = study.prepare();
             // One environment, the entry, its parent and the one linked producer
@@ -2616,7 +2616,7 @@ mod file {
             );
             study.write(
                 "root.yaml",
-                "schema_version: '1.0'\nparents: [base.yaml]\ndomain: TEST\n",
+                "schema_version: '1.0'\nparent: base.yaml\ndomain: TEST\n",
             );
             let project = study.prepare();
             assert_eq!(project.capture_reads(), 4);
@@ -2639,10 +2639,23 @@ mod file {
         }
 
         #[test]
-        fn rejected_null_schema_keeps_the_original_shipped_schema_cause_and_raw_entry() {
+        fn rejected_mistyped_schema_keeps_the_original_shipped_schema_cause_and_raw_entry() {
             let study = Study::new();
+            // A null schema is absent, so the input is an ordinary source.
+            study.write(
+                "root.yaml",
+                &yaml(
+                    "{RAW: {path: never-read.csv, schema: null}}",
+                    "RAW",
+                    "never-written.csv",
+                    false,
+                ),
+            );
+            let plain = study.prepare().unwrap();
+            assert_eq!(plain.graph().nodes().len(), 1);
+            assert!(plain.graph().nodes()[0].producers.is_empty());
             let original = yaml(
-                "{RAW: {path: never-read.csv, schema: null}}",
+                "{RAW: {path: never-read.csv, schema: 7}}",
                 "RAW",
                 "never-written.csv",
                 false,
@@ -2859,7 +2872,7 @@ mod file {
         .replace("output:", "  - {name: RIGHT_VALUE, type: str, label: Right value, derivation: RIGHT.VALUE}\n  - {name: ALIAS_VALUE, type: str, label: Alias value, derivation: ALIAS.VALUE}\noutput:")
         .replace("columns: [ID, VALUE]", "columns: [ID, VALUE, RIGHT_VALUE, ALIAS_VALUE]");
             study.write("parents/base.yaml", &parent);
-            let entry = "schema_version: '1.0'\nparents: [parents/base.yaml]\ndomain: ROOT\n";
+            let entry = "schema_version: '1.0'\nparent: parents/base.yaml\ndomain: ROOT\n";
             study.write("root.yaml", entry);
             let Selected::Ordinary(project) = study.select().unwrap() else {
                 panic!("project capability");
@@ -2926,7 +2939,7 @@ mod file {
             study.write(
                 "root.yaml",
                 &yaml(
-                    "{RAW: {path: never-read.csv, schema: null}}",
+                    "{RAW: {path: never-read.csv, schema: 7}}",
                     "RAW",
                     "root.csv",
                     false,
@@ -3163,7 +3176,7 @@ mod file {
             study.write("parent/base.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/unknown}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n");
             study.write(
                 "entry/root.yaml",
-                "schema_version: '1.0'\nparents: [../parent/base.yaml]\n",
+                "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
             );
             fs::create_dir_all(study.0.join("parent/input")).unwrap();
             for (kind, expected) in [

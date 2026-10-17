@@ -47,7 +47,7 @@ model!(
         required!("domain", Text),
         required!("input", Dictionary(&Object(SOURCE))),
         optional!("base", Text),
-        optional!("parents", STRINGS),
+        optional!("parent", Text),
         optional!("intermediates", List(&Object(INTERMEDIATE))),
         required!("keys", STRINGS),
         required!("output", Object(OUTPUT)),

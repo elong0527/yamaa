@@ -1122,7 +1122,10 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
         fields.push(("base", Tree::text("SRC")));
         let mut declaration = vec![("id", Tree::text("P")), ("dataset", Tree::text("SECOND"))];
         match variant {
-            0 => declaration.push(("no_match", Tree::Scalar(N::Null))),
+            0 => declaration.push((
+                "no_match",
+                Tree::map(vec![("literal", Tree::Scalar(N::Null))]),
+            )),
             1 => declaration.push((
                 "order_by",
                 Tree::List(vec![Tree::map(vec![

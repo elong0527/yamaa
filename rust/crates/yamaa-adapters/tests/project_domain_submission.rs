@@ -479,7 +479,7 @@ mod project {
                 fs::write(study.0.join("environment.yaml"), INVENTORY_ENV).unwrap();
                 fs::write(
                     study.0.join("catalog/renamed.yaml"),
-                    "schema_version: '1.0'\nparents: [parent.yaml]\n",
+                    "schema_version: '1.0'\nparent: parent.yaml\n",
                 )
                 .unwrap();
                 fs::write(
@@ -1124,14 +1124,14 @@ mod project {
         }
         #[test]
         fn inherited_link_and_artifact_paths_keep_independent_authored_layers() {
-            let entry="schema_version: '1.0'\nparents: parent.yaml\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './child.csv'}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
+            let entry="schema_version: '1.0'\nparent: parent.yaml\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './child.csv'}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
             let parent =
         "schema_version: '1.0'\ninput: {SRC: {path: parent.csv, schema: '../producer.yaml'}}\n";
             let (consumer, consumer_port) = inherited("/consumer.yaml", entry, parent);
             let producer_entry = PRODUCER
                 .replace(
                     "schema_version: '1.0'",
-                    "schema_version: '1.0'\nparents: parent.yaml",
+                    "schema_version: '1.0'\nparent: parent.yaml",
                 )
                 .replace("output: {path: './produced.csv', columns: [ID, VALUE]}", "");
             let producer_parent =
@@ -1158,25 +1158,17 @@ mod project {
             assert_eq!(before, (consumer_port.calls, producer_port.calls));
         }
         #[test]
-        fn explicit_null_schema_is_refused_by_the_structural_root() {
-            // The shipped structural root rejects explicit-null schema before
-            // link admission; retain that original finding.
+        fn explicit_null_schema_is_an_absent_link() {
+            // Null clears (LAYER-9): an explicit-null schema is absent, so the
+            // input is an ordinary schema-less source.
             let null = CONSUMER.replace("schema: nested/producer.yaml", "schema: null");
-            let Err(yamaa_adapters::specification_source::Error::Findings(findings)) =
-                shipped_schema::capture()
-                    .unwrap()
-                    .prepare_standalone(Source {
-                        identity: "/consumer.yaml".into(),
-                        bytes: null.into_bytes(),
-                    })
-            else {
-                panic!("original structural null refusal")
-            };
-            assert_eq!(findings.findings()[0].path, "input.SRC.schema");
-            assert_eq!(
-                findings.findings()[0].definition().requirement,
-                Some("REQ-0287")
-            );
+            assert!(shipped_schema::capture()
+                .unwrap()
+                .prepare_standalone(Source {
+                    identity: "/consumer.yaml".into(),
+                    bytes: null.into_bytes(),
+                })
+                .is_ok());
         }
     }
     mod project_activation_diagnostics {
@@ -2038,7 +2030,7 @@ mod project {
                 wide: false,
                 shape: false,
             };
-            let body = "schema_version: '1.0'\nparents: []\nruntime: {}\nversion: '1'\n";
+            let body = "schema_version: '1.0'\nparent: base.yaml\nruntime: {}\nversion: '1'\n";
             let Failure::Root(SourceError::Findings(captured)) = project_source::prepare(
                 schema(),
                 source("held/environment.yaml", body),
@@ -2050,7 +2042,7 @@ mod project {
             };
             let issues = schema_root(&captured).unwrap();
             assert_eq!(issues.len(), 3);
-            for (issue, field) in issues.iter().zip(["parents", "runtime", "version"]) {
+            for (issue, field) in issues.iter().zip(["parent", "runtime", "version"]) {
                 assert_eq!(issue.spec_paths, [field]);
                 assert_eq!(issue.condition, "unknown_field");
                 assert_eq!(issue.requirement, Some("REQ-0285".into()));

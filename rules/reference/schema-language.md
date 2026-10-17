@@ -221,7 +221,7 @@ quotes a bracketed type expression in both:
 
 ```yaml
 - keys: {type: "list[identifier]", required: true}
-- parents: {type: [path, "list[path]"], required: false}
+- verifications: {type: [column_verification, "list[column_verification]"]}
 - order_by:
     type: "list[order_by_term]"
     required: false

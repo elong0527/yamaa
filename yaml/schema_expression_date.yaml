@@ -57,7 +57,7 @@ expressions:
             type: variable
             description: Value of the declared type returned, with collected precision none, when the source is missing (TIME-13).
         - invalid:
-            type: literal_value
+            type: substitute_value
             description: Result when the source is text that is not a right-truncated ISO 8601 date or datetime (TIME-13).
     precision: # See REQ-1106.
         - type:
@@ -69,7 +69,7 @@ expressions:
             required: true
             description: Right-truncated ISO 8601 date or datetime text, or a value of the declared type (TIME-7).
         - invalid:
-            type: literal_value
+            type: substitute_value
             description: Result when the source is text that is not a right-truncated ISO 8601 date or datetime (TIME-13).
     imputation_flag:
         - source:
@@ -135,8 +135,8 @@ expressions:
             values: [second, minute, hour, day]
             description: Numeric result unit of second, minute, hour or day (TIME-17).
         - invalid:
-            type: literal_value
-            description: Literal result for invalid or out-of-range duration text; null gives missing (TIME-17).
+            type: substitute_value
+            description: Literal result for invalid or out-of-range duration text (TIME-17).
 
 temporal_type:
     type: str

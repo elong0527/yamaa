@@ -241,7 +241,7 @@ class PublicEnvironment(unittest.TestCase):
             document("{RAW: ../never-read.csv}", "RAW", "../leaf.csv", True)
         )
         Path("leaf.yaml").write_text(
-            "schema_version: '1.0'\nparents: [parents/base.yaml]\ndomain: LEAF\n"
+            "schema_version: '1.0'\nparent: parents/base.yaml\ndomain: LEAF\n"
         )
         Path("left.yaml").write_text(
             document(TRUTH["aliased_leaf_reference"], "P", "left.csv")
@@ -319,7 +319,7 @@ class PublicEnvironment(unittest.TestCase):
             "schema_version: '1.0'\nlanguage: python\n"
         )
         Path("entry/spec.yaml").write_text(
-            "schema_version: '1.0'\nparents: ../shared/base.yaml\ndomain: CHILD\n"
+            "schema_version: '1.0'\nparent: ../shared/base.yaml\ndomain: CHILD\n"
         )
         Path("shared/base.yaml").write_text(
             "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\n"

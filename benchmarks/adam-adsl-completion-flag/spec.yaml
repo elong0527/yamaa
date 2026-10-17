@@ -19,7 +19,7 @@ intermediates:
     dataset: DS
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'FOLLOW-UP'
       AND DS.DSDECOD = 'COMPLETED'"
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID

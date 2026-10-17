@@ -1816,11 +1816,13 @@ S1,002,2024-06
             for (name, schemas, output, keys, templates, checks) in cases {
                 let (document, parents) = prepare(name, false);
                 // Only YAML parent captures are possible. No study bytes are supplied;
-                // binding receives independently enumerated immutable metadata.
+                // binding receives independently enumerated immutable metadata. The
+                // chain is captured from the entry upward: the compound level names
+                // the organization level.
                 assert_eq!(
                     parents.reads,
                     if name == "schema-inheritance" {
-                        vec!["spec_organization.yaml", "spec_compound.yaml"]
+                        vec!["spec_compound.yaml", "spec_organization.yaml"]
                     } else {
                         vec![]
                     }
@@ -2118,7 +2120,7 @@ S1,002,2024-06
             assert!(position.offset < parent.source().bytes.len());
             assert_eq!(
                 parents.reads,
-                ["spec_organization.yaml", "spec_compound.yaml"]
+                ["spec_compound.yaml", "spec_organization.yaml"]
             );
         }
     }
@@ -2907,7 +2909,7 @@ intermediates:
     dataset: DONOR
     order_by: [DONOR.SEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: SELECT, type: str, derivation: SRC.SELECT}

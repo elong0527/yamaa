@@ -57,7 +57,8 @@ columns:
         day: 15
         minimum_source_precision: month
         not_before: TRTSDT
-        invalid: null   # handlers are explicit: an omitted one is fatal
+        # handlers are explicit: an omitted one is fatal
+        invalid: {literal: null}
 
   - name: ASTDTC
     type: str
@@ -75,7 +76,7 @@ columns:
         source: AESTDTC
         day: last
         minimum_source_precision: month
-        invalid: null
+        invalid: {literal: null}
 
   # D: the collected start carried a year and month, so the day was
   # supplied, whether or not first exposure then moved it.

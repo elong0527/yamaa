@@ -25,7 +25,7 @@ missing numeric value, handle the failed conversion explicitly:
 derivation:
   value:
     source: LB.LBSTRESC
-  unconvertible: null
+  unconvertible: {literal: null}
 ```
 
 If the study uses a numeric substitution for values below the assay limit,
