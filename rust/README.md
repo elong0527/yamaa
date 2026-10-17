@@ -9,9 +9,10 @@ and executable examples with authored expected results in
 The [contributor guide](../CONTRIBUTING.md) owns crate boundaries, locked builds
 and local verification commands. The
 [release guide](../docs/release.md) owns supported platforms, approved decisions
-and migration notes. The [shared host interface](interface/README.md) chooses
-the generated boundary and inventories both hosts' declarations in one input;
-registrations remain handwritten until the generators land. Current rule checks and
+and migration notes. The [shared host interface](interface/README.md) owns
+`interface/bindings.yaml`, the one input from which both hosts' registrations
+and declarations are generated; `make check-repository` and the native
+qualification lane compare the generated files with it. Current rule checks and
 schema-owner controls are described in the [contributor guide](../CONTRIBUTING.md#develop-and-verify).
 [Installed package checks](qualification/README.md) compare actual Python and R
 results with authored expected data. The workflow recipes in
@@ -166,11 +167,12 @@ obtain fresh resource authority through their existing preparation lifecycle.
 
 ## Public Rust API design
 
-This section is the design note for #2726. It settles the public Rust API
+This section is the design note for #2726. It settled the public Rust API
 before implementation; it changes no language semantics and no benchmark data.
-Implementation is tracked in #2733 (facade crate and host migration), #2734
-(committed API inventory and its check) and #2735 (rustdoc and the in-memory
-example program).
+The facade crate and host migration (#2733), the committed API inventory
+`crates/yamaa/public-api.txt` and its check (#2734), and the rustdoc examples
+with the in-memory example program `crates/yamaa/examples/memory.rs` (#2735)
+are implemented.
 
 ### Facade location and boundary
 

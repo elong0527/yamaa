@@ -110,7 +110,9 @@ archives. Missing, expired or ambiguous artifacts fail publication; an existing
 release is never overwritten. The release includes committed notes from
 `docs/releases/<version>.md` and identifies the native run and selected artifacts.
 This route uses the workflow's GitHub token and needs no package-index
-credentials. PyPI publication is separate and requires configured authentication;
+credentials. The workflow has no PyPI step: 0.4.0 is distributed as GitHub
+release assets only, and those assets do not establish PyPI publication. PyPI
+publication is a separate decision and requires configured authentication;
 the GitHub release assets remain the documented standalone download route.
 
 ## Source package contents
@@ -131,7 +133,8 @@ owns decoding behavior.
 ## Approved decisions
 
 - Keep Python `domain`/`check`/`define`/`resolve_specification`, result/error
-  types, version metadata and `read_odm`/`write_odm_parquet`; keep the R
+  types, the `Diagnostic` and `SourceSpan` record types, version metadata and
+  `read_odm`/`write_odm_parquet`; keep the R
   equivalents, including `yamaa_define`, `yamaa_resolve_specification` and
   `yamaa_read_resolved_specification`. `resolve_specification` publicly
   produces the retained resolved-specification artifact; the retired resolved
@@ -140,7 +143,7 @@ owns decoding behavior.
   private and native-backed.
 - Keep Python `environment` keyword-only, wrong argument types as `TypeError`,
   R argument failures as `yamaa_argument_error`, and missing specifications as
-  issue rows. Check returns issues. Python `domain`/`check` and R
+  issue rows. Check returns its findings without reading study data. Python `domain`/`check` and R
   `yamaa_domain`/`yamaa_check` accept a host resource resolver through the
   keyword-only `resolver=` argument: Python's `yamaa.resources` module
   (`ResourceResolver`, `MemoryResolver`, `SyntheticRemoteResolver`) and R's
@@ -154,10 +157,12 @@ owns decoding behavior.
 - Keep the Rust adapter features `yaml`, `parquet` and `readstat` independent,
   all enabled by default; the Python and R packages enable all three.
 - Preserve full signed-i64 values and separate missingness, lossless R
-  `yamaa_int64_vector`/`yamaa_utf8_vector`, preserve-or-error conversions and
-  JSON-text diagnostic context in the issue frames, with the same findings as
-  named `diagnostics` records carrying structured context and optional
-  geometry in both hosts.
+  `yamaa_int64_vector`/`yamaa_utf8_vector` and preserve-or-error conversions.
+- Expose every finding two ways in both hosts, mapped from one Rust record:
+  named `diagnostics` records with structured context and optional
+  `source_span` and `operand_route`, and the five-column issues frame, whose
+  JSON-text context is a documented projection of the same records. No host
+  interprets conditions.
 - Resolve resources from their original declaring file by default; explicit
   input/output `relative_to: entry` selects each specification entry. Admit
   absolute and parent-relative local paths without project-root fallback. Preserve snapshots,
@@ -175,6 +180,28 @@ owns decoding behavior.
 - Keep canonical Cargo locking and unchanged source-package copies. Runtime,
   contract, cache and resource identities use references, canonical forms or
   bytes; only packaging-tool lockfiles carry their own checksum fields.
+- Prune every specification after composition, including an entry file that
+  declares no `parents`; resolved-column ordering stays inheritance-only.
+- Ship `str_replace` with literal replacement text only. Group references,
+  if ever added, come through a different field, so `replacement` never
+  changes meaning.
+- Promote row defaults per template: a column can be row-phase for the
+  templates that need it and column-phase for the rest, and a candidate a
+  template filter suppresses never reads a lookup it does not need.
+- Keep the Python Polars floor at 1.43.2, with no vendored Parquet writer.
+- Ship the reviewed vendored `saphyr-parser` compact-flow patch in every
+  supported graph; replacing it with a published parser is 0.5.0 work.
+- Keep Cargo dependency floors where they are tested; the crates are not
+  published.
+- Generate both hosts' binding declarations from
+  `rust/interface/bindings.yaml` and compare them in the repository check
+  and the native qualification lane. The version and feature handshake
+  runtime waits for an engine that loads separately from the host facade.
+- The `yamaa` facade crate is the only supported Rust surface;
+  `yamaa-adapters` and `yamaa-core` are internal and may change in any
+  release.
+- Distribute 0.4.0 as GitHub release assets only; `release.yml` has no PyPI
+  step.
 
 Host behavior and source installation commands live in the
 [Python](https://github.com/elong0527/yamaa/blob/main/python/README.md) and
@@ -203,7 +230,7 @@ cumulative byte, copy, traversal or work pools.
 
 The standalone Python `read_odm` and `write_odm_parquet` helpers retain their
 own archive-member, expanded-byte and XML-depth options and report parser
-refusals through `ODMError`.
+refusals as `ValueError`.
 
 | Boundary | Fixed maximum |
 | --- | ---: |
@@ -248,10 +275,31 @@ a range, derivations, a correlated filter or a `SELF` source, and any
 lookup over a donor relation below the small-relation index threshold.
 Indexed and scanned lookups keep the same diagnostics and ordering.
 
-## Specification and environment migration from 0.2.0
+## Migration
 
-The 0.4.0 upgrade also includes language and environment changes introduced
-before 0.3.0. Update old specifications and project locks together:
+### From 0.3.0
+
+| Earlier spelling or behavior | Current form |
+| --- | --- |
+| Python `yamaa_domain`, `DomainRun` and `DomainRunError` | `yamaa.domain` or `yamaa.check`, and `yamaa.DomainError`. |
+| Python `generate_study_document` | `yamaa.define`. |
+| Python subpackages such as `yamaa.odm` | `yamaa.read_odm` and `yamaa.write_odm_parquet`; the subpackages are private. |
+| R `cdiscbuilder` package | The `yamaa` R package. |
+| A dead declaration with an invalid reference fails a file without `parents` | The declaration is removed before validation and the file builds. To keep a declaration validated, name the column in `output.columns`, `keys` or `output.order_by`, or read it from a live derivation or verification. |
+| An input that no column reads is the implied driver | The input is removed too; name it in `base`. |
+| `parents: []` added only to enable pruning | Every specification is pruned; remove the line. |
+| Rust code depending on `yamaa-adapters` or `yamaa-core` | Depend on the `yamaa` facade crate by path or git. |
+| `datetime_precision` of minute text (`2025-03-04T08:30`) is `S`; `datetime_impute` with `time: last` gives `08:30:00`; hour text (`T08`) is invalid | `M`, `08:30:59`, and hour text is accepted (`H`). A condition that tested `= 'S'` for a collected time tests `IN ('M', 'S')`. |
+| Lock pins an earlier yamaa | Regenerate the project lock for 0.4.0 before using project functions; each applicable build checks the runtime version. |
+
+The `issues` table is unchanged. Code that parses its JSON-text `context` can
+read the `diagnostics` records instead: structured `context`, `source_span`
+and `operand_route`.
+
+### From 0.2.0 and earlier
+
+The 0.4.0 upgrade also includes language and environment changes made before
+0.3.0. Update old specifications and project locks together:
 
 | Earlier spelling or behavior | Current form |
 | --- | --- |
@@ -262,7 +310,6 @@ before 0.3.0. Update old specifications and project locks together:
 | Runner discovers a project environment | Pass it explicitly: Python `domain(spec, environment="python/environment.yaml")` or R `yamaa_domain(spec, environment="r/environment.yaml")`. |
 | Data roots or `yamaa-project.yaml` | Relative resources resolve from the YAML file that declares them, including inherited layers. |
 | Symbolic link below the entry directory | Copy or hard-link the input; the resource policy refuses symbolic links. |
-| Lock pins an earlier yamaa | Regenerate the project lock for 0.4.0 before using project functions; each applicable build checks the runtime version. |
 
 The normative contracts are [verification](https://github.com/elong0527/yamaa/blob/main/rules/execution/verification.md),
 [functions and project environments](https://github.com/elong0527/yamaa/blob/main/rules/operations/functions.md) and

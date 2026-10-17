@@ -73,8 +73,9 @@ columns:
           MET1: DRUG X
           DRGY: DRUG Y
 
-  # S when the collected text carries a time of day, D when it is a date
-  # alone; text that is neither stops the run.
+  # S or M when the collected text carries a time of day to the second or the
+  # minute, H when it stops at the hour, D when it is a date alone; text that
+  # is none of these stops the run.
   - name: PCDTPR
     type: str
     label: Sample Date/Time Collected Precision
@@ -90,7 +91,7 @@ columns:
     label: Analysis Date/Time
     derivation:
       case:
-        - when: "PCDTPR = 'S'"
+        - when: "PCDTPR IN ('M', 'S')"
           then: PC.PCDTC
 
   - name: FANLDTM
