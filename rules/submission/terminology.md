@@ -146,8 +146,7 @@ terminology.
 codelists bound by its represented output columns, in their declaration order,
 and the controlled-terminology standards cited by those sources. Unbound
 codelists may serve another submission section and are omitted without an
-unreferenced-codelist failure. The retained reference evaluator's former
-all-codelists-used policy remains qualification history until transition.
+unreferenced-codelist failure.
 
 ### Study-inventory vocabulary
 
@@ -167,19 +166,6 @@ values name the source SDTM domain or ADaM dataset, binds this vocabulary.
 
 ### Interface behavior
 
-The retained `define_class` format below remains available until #1758
-qualifies its replacement. Environment codelists use the same list and item
-fields except `standard`: that field belongs to the source under
-[REQ-0928](terminology.md#req-0928), and is absent from an environment list.
-
-<a id="req-1076"></a>
-
-**REQ-1076.** The `define_class` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `define_class.codelists` | Controlled terminology shared by bindings; [Controlled terminology](terminology.md) defines it. |
-
 <a id="req-1077"></a>
 
 **REQ-1077.** The `codelist_class` fields have these meanings:
@@ -188,7 +174,6 @@ fields except `standard`: that field belongs to the source under
 | --- | --- |
 | `codelist_class.id` | Name column bindings refer to this codelist by. |
 | `codelist_class.name` | Name of the codelist, unique within the document. |
-| `codelist_class.standard` | Controlled-terminology standard this codelist is drawn from; omission declares it sponsor-defined. |
 | `codelist_class.data_type` | Type of the coded values. |
 | `codelist_class.extensible` | Whether a value outside the list is admitted; [Controlled terminology](terminology.md) states what each answer enforces. |
 | `codelist_class.alias` | Published concept identifier of the codelist itself. |

@@ -107,7 +107,7 @@ fn reads(expression: &Expression, items: &[Intermediate]) -> bool {
         Expression::Aggregate(aggregate) => aggregate_reads(aggregate),
         Expression::Joined(_) | Expression::JoinedSource { .. } => false,
         Expression::Intermediate { index, .. } => named_selector(*index, items, 0),
-        Expression::SourceBinding { source, .. } | Expression::StrContains { source, .. }
+        Expression::SourceBinding { source, .. }
         | Expression::StrCase { source, .. } | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. } | Expression::StrReplace { source, .. } | Expression::MappingCut { source, .. } | Expression::Round { source, .. } => reads(&source.expression, items),
         Expression::FirstAvailable(selection) => selection.sources().iter().any(|source| matches!(&source.read, SelectionRead::Expression(source) if reads(&source.expression, items))),

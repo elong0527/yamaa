@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 import yaml
-from tools.benchmark_docs import mapping_doc
+from tools.benchmark_docs import generate, mapping_doc
 from tools.paths import ROOT
 
 HERE = Path(__file__).resolve().parent
@@ -15,10 +15,8 @@ def load_spec(name):
     return yaml.safe_load((BENCHMARKS / name / "spec.yaml").read_text(encoding="utf-8"))
 
 
-def load_define(name):
-    return yaml.safe_load(
-        (BENCHMARKS / name / "define.yaml").read_text(encoding="utf-8")
-    )
+def load_environment_codelists(name):
+    return generate.environment_codelists(BENCHMARKS / name)
 
 
 def rendered_tables(spec):
@@ -89,7 +87,8 @@ class SdtmMappingTests(unittest.TestCase):
         sheets = {
             tab_id: (headers, rows)
             for tab_id, _, headers, rows in mapping_doc.mapping_sheets(
-                load_spec("sdtm-dm-metadata"), load_define("sdtm-dm-metadata")
+                load_spec("sdtm-dm-metadata"),
+                load_environment_codelists("sdtm-dm-metadata"),
             )
         }
         _, mapping = sheets["mapping"]

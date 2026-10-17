@@ -1,14 +1,14 @@
 """Render the "Mapping spec" pane of a benchmark dashboard.
 
-The pane is generated from the benchmark's spec.yaml and, when present,
-define.yaml as a familiar Excel specification: one row per output column. The
-header layout follows the sponsor's SDTM and ADaM variable sheets, so a
-reviewer reads the derived spec in the same shape they author it. Rendering is
-deterministic: unchanged inputs produce identical HTML.
+The pane is generated from the benchmark's spec.yaml and, when present, the
+codelists of its study environment, as a familiar Excel specification: one row
+per output column. The header layout follows the sponsor's SDTM and ADaM
+variable sheets, so a reviewer reads the derived spec in the same shape they
+author it. Rendering is deterministic: unchanged inputs produce identical HTML.
 
 Values come from each column's `submission:` block when present -- `core`,
 `length`, `codelist`, `data_type`, `origin.type`, `method`, `comment` -- and from
-the study document's codelists. The derivation supplies a plain-language
+the study environment's codelists. The derivation supplies a plain-language
 conversion rule and a Define-XML 2.1 origin classification (Assigned,
 Collected, Derived, Not Available, Other, Predecessor, Protocol).
 
@@ -818,17 +818,6 @@ def describe_str_replace(node, ctx=None, depth=0):
     return sentence(text + handler_phrase(node, "missing", "a missing source"))
 
 
-def describe_str_contains(node, ctx=None, depth=0):
-    text = (
-        "True when "
-        + describe_variable(node.get("source"), ctx, depth)
-        + " matches "
-        + str(node.get("pattern"))
-        + " anywhere, false when it does not"
-    )
-    return sentence(text + handler_phrase(node, "missing", "a missing source"))
-
-
 def describe_str_concat(node, ctx=None, depth=0):
     parts = []
     for part in node.get("sources") or []:
@@ -959,7 +948,6 @@ DERIVATION_DESCRIBERS = {
     "str_pad": describe_str_pad,
     "str_extract": describe_str_extract,
     "str_replace": describe_str_replace,
-    "str_contains": describe_str_contains,
     "str_concat": describe_str_concat,
     "str_template": describe_str_template,
     "row_number": describe_row_number,
@@ -1221,7 +1209,7 @@ def define_comment(col):
 
 
 def allowed_value_codelists(columns):
-    """Fallback terminology when a benchmark has no study document."""
+    """Fallback terminology when a benchmark declares no codelists."""
     out = []
     for col in columns:
         checks = col.get("verifications") or []
@@ -1240,7 +1228,7 @@ def allowed_value_codelists(columns):
 
 
 def document_codelists(define):
-    """The study document's codelists in declaration order."""
+    """The study environment's codelists in declaration order."""
     if not isinstance(define, dict):
         return []
     codelists = define.get("codelists")

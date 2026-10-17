@@ -458,6 +458,69 @@ mod scalar {
             }
         }
 
+        /// Replay the independent exact rounding controls through the one rounding operation.
+        #[test]
+        fn shared_rounding_vectors() {
+            for row in include_str!("fixtures/numeric_rounding.tsv")
+                .lines()
+                .skip(1)
+            {
+                let fields: Vec<_> = row.split('\t').collect();
+                assert_eq!(fields.len(), 4);
+                let source = match fields[1].split_once(':') {
+                    None => Value::Missing,
+                    Some(("int", text)) => Value::Int(text.parse().unwrap()),
+                    Some(("float", text)) => Value::float(text.parse().unwrap()),
+                    _ => panic!("bad fixture source {}", fields[1]),
+                };
+                let rounding = Rounding::new(
+                    "VAL",
+                    "columns.RND.derivation.round_half_away_from_zero",
+                    fields[2],
+                )
+                .unwrap();
+                let actual = match rounding.apply(ValueRef::from(&source)).unwrap() {
+                    Value::Missing => "missing".into(),
+                    Value::Float(value) => format!("float:{:016x}", value.get().to_bits()),
+                    other => panic!("rounding returned {other:?}"),
+                };
+                assert_eq!(actual, fields[3], "{}", fields[0]);
+            }
+        }
+
+        /// Extreme digits keep a float result; a rounded overflow normalizes to missing.
+        #[test]
+        fn extreme_digits_and_values_keep_the_rounding_range_contract() {
+            for input in [f64::MAX, -f64::MAX] {
+                let rounding = Rounding::new("VAL", "round", "-308").unwrap();
+                assert_eq!(
+                    rounding.apply(ValueRef::from(&Value::float(input))),
+                    Ok(Value::Missing)
+                );
+            }
+            for input in [
+                -0.0,
+                0.0,
+                f64::from_bits(1),
+                -f64::from_bits(1),
+                f64::MAX,
+                -f64::MAX,
+            ] {
+                for (digits, expected) in [
+                    (i64::MIN, 0.0),
+                    (i64::MAX, if input == 0.0 { 0.0 } else { input }),
+                ] {
+                    let rounding = Rounding::new("VAL", "round", &digits.to_string()).unwrap();
+                    let Ok(Value::Float(result)) =
+                        rounding.apply(ValueRef::from(&Value::float(input)))
+                    else {
+                        panic!("float required")
+                    };
+                    assert_eq!(result.get().to_bits(), expected.to_bits());
+                }
+            }
+        }
+
         #[test]
         fn digits_are_admitted_before_values_and_arbitrary_width_is_not_narrowed() {
             for invalid in ["", "-", "+", "1.0", "false", " 1", "١", "--1"] {
@@ -1483,10 +1546,6 @@ mod scalar {
                     assert_eq!(condition.phase(), "derivation");
                     result.push_str(&format!(":{value}"));
                 }
-                NumericCondition::Arithmetic(ArithmeticErrorKind::InvalidRoundingDigits) => {
-                    assert_eq!(condition.phase(), "validation");
-                    result.push_str(":float");
-                }
                 NumericCondition::Arithmetic(kind) => {
                     assert_eq!(condition.phase(), "derivation");
                     if let ArithmeticErrorKind::IntegerOverflow { value } = kind {
@@ -1553,10 +1612,9 @@ mod scalar {
                     let route: Vec<_> = route
                         .iter()
                         .map(|position| match position {
-                            Operand::Unary => "unary".into(),
-                            Operand::Left => "left".into(),
-                            Operand::Right => "right".into(),
-                            Operand::Argument(index) => format!("argument:{index}"),
+                            Operand::Unary => "unary",
+                            Operand::Left => "left",
+                            Operand::Right => "right",
                         })
                         .collect();
                     assert_eq!(
@@ -1702,7 +1760,6 @@ mod scalar {
                 include_str!("fixtures/numeric_selection.tsv"),
                 include_str!("fixtures/numeric_integral.tsv"),
                 include_str!("fixtures/numeric_sqrt.tsv"),
-                include_str!("fixtures/numeric_rounding.tsv"),
                 include_str!("fixtures/numeric_math.tsv"),
             ]
             .into_iter()
@@ -1738,10 +1795,9 @@ mod scalar {
                 let route = route
                     .iter()
                     .map(|operand| match operand {
-                        Operand::Unary => "unary".into(),
-                        Operand::Left => "left".into(),
-                        Operand::Right => "right".into(),
-                        Operand::Argument(index) => format!("argument:{index}"),
+                        Operand::Unary => "unary",
+                        Operand::Left => "left",
+                        Operand::Right => "right",
                     })
                     .collect::<Vec<_>>()
                     .join(",");
@@ -2870,117 +2926,6 @@ mod scalar {
                             actual: value.value_type().unwrap()
                         })
                     );
-                }
-            }
-        }
-    }
-    mod rounding {
-        use yamaa_core::evaluation::{
-            EvaluationErrorKind, NumericCondition, NumericResolver, Operand,
-        };
-        use yamaa_core::numeric::{
-            round_half_away_from_zero as rounded, ArithmeticErrorKind, Number,
-        };
-        use yamaa_core::numeric_compiler::compile_numeric;
-        use yamaa_core::value::{Selection, Value};
-
-        /// Missing suppresses digits validation only after both operand values are available.
-        #[test]
-        fn rounding_missing_type_and_range_contracts() {
-            assert_eq!(
-                rounded(Number::Missing, Number::float(1.0), "expr"),
-                Ok(Number::Missing)
-            );
-            assert_eq!(
-                rounded(Number::Int(1), Number::Missing, "expr"),
-                Ok(Number::Missing)
-            );
-            let error = rounded(Number::Int(1), Number::float(1.0), "expr").unwrap_err();
-            assert_eq!(error.kind, ArithmeticErrorKind::InvalidRoundingDigits);
-            assert_eq!(error.expression, "expr");
-            assert_eq!(error.phase(), "validation");
-            assert_eq!(error.condition(), "incompatible_input_type");
-            assert_eq!(error.requirement(), "REQ-0418");
-            for input in [f64::MAX, -f64::MAX] {
-                assert_eq!(
-                    rounded(Number::float(input), Number::Int(-308), "expr"),
-                    Ok(Number::Missing)
-                );
-            }
-            for input in [
-                -0.0,
-                0.0,
-                f64::from_bits(1),
-                -f64::from_bits(1),
-                f64::MAX,
-                -f64::MAX,
-            ] {
-                for (digits, expected) in [
-                    (i64::MIN, 0.0),
-                    (i64::MAX, if input == 0.0 { 0.0 } else { input }),
-                ] {
-                    let Number::Float(result) =
-                        rounded(Number::float(input), Number::Int(digits), "expr").unwrap()
-                    else {
-                        panic!("float required")
-                    };
-                    assert_eq!(result.get().to_bits(), expected.to_bits());
-                }
-            }
-        }
-
-        /// A non-clone resolver failure must survive rounding without being replaced by missing.
-        #[derive(Debug)]
-        struct Opaque(String);
-
-        struct Resolver(Vec<String>);
-        impl NumericResolver for Resolver {
-            type Error = Opaque;
-            /// Resolve numeric/missing values and a deliberate callback failure in written order.
-            fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
-                self.0.push(name.into());
-                match name {
-                    "BROKEN" => Err(Opaque("opaque failure".into())),
-                    "A" => Ok(Selection::Present(Value::Int(1))),
-                    "D" => Ok(Selection::Present(Value::float(1.0))),
-                    _ => Ok(Selection::Absent),
-                }
-            }
-        }
-
-        /// Compilation retains call/operand source spans and eager resolver failures.
-        #[test]
-        fn rounding_compilation_preserves_provenance_and_occurrences() {
-            for (text, span, path, expected_trace) in [
-                (
-                    "1 + ROUND_HALF_AWAY_FROM_ZERO(A, D)",
-                    "ROUND_HALF_AWAY_FROM_ZERO(A, D)",
-                    vec![Operand::Right],
-                    vec!["A", "D"],
-                ),
-                (
-                    "ROUND_HALF_AWAY_FROM_ZERO(NULL, BROKEN)",
-                    "BROKEN",
-                    vec![Operand::Right],
-                    vec!["BROKEN"],
-                ),
-            ] {
-                let plan = compile_numeric(text, "spec").unwrap();
-                let mut resolver = Resolver(Vec::new());
-                let error = plan.evaluate(&mut resolver).unwrap_err();
-                assert_eq!(&text[error.source_span.start..error.source_span.end], span);
-                assert_eq!(error.evaluation.location.spec_path, "spec");
-                assert_eq!(error.evaluation.location.operands, path);
-                assert_eq!(resolver.0, expected_trace);
-                match error.evaluation.kind {
-                    EvaluationErrorKind::Numeric(NumericCondition::Arithmetic(
-                        ArithmeticErrorKind::InvalidRoundingDigits,
-                    )) => assert!(text.starts_with("1 +")),
-                    EvaluationErrorKind::Resolution { identifier, error } => {
-                        assert_eq!(identifier, "BROKEN");
-                        assert_eq!(error.0, "opaque failure");
-                    }
-                    _ => panic!("unexpected error"),
                 }
             }
         }

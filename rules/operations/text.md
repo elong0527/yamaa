@@ -65,7 +65,7 @@ grammar:
 template    := part*
 part        := text | placeholder | "{{" | "}}"
 placeholder := "{" variable "}"
-text        := one or more R019 scalar values other than "{" and "}"
+text        := one or more Unicode scalar values other than "{" and "}"
 ```
 
 <a id="req-0450"></a>
@@ -219,14 +219,13 @@ broader casing from a host or environment default.
 - `str_extract.pattern`;
 - `str_replace.pattern` ([REQ-1318](text.md#req-1318));
 - the `pattern` of [Verification](../execution/verification.md)'s `matches` column verification;
-- `str_contains.pattern` ([REQ-1243](text.md#req-1243));
 - the pattern literal in the predicate call `str_contains(source, pattern)`
   ([REQ-1244](predicates.md#req-1244)).
 
 <a id="req-0797"></a>
 
-**REQ-0797.** `regex` is the named schema type for `str_extract.pattern`,
-`str_contains.pattern`, and `str_replace.pattern`, and for
+**REQ-0797.** `regex` is the named schema type for `str_extract.pattern`
+and `str_replace.pattern`, and for
 [Verification](../execution/verification.md)'s
 `matches` pattern. The schema descriptor and predicate pattern literal use
 the same portable pattern contract. All requirements below apply to every
@@ -443,8 +442,8 @@ outcome for the same pattern and subject.
 **REQ-0821.** `conformance/regex.yaml` holds shared fixtures. Each case names
 the pattern, subject, and full-match, search, and extraction outcomes, and
 optionally a replacement and its outcome, or
-records a rejected pattern. The search outcome also governs both
-`str_contains` consumers. Repository validation replays the fixtures against
+records a rejected pattern. The search outcome also governs the
+`str_contains` predicate call. Repository validation replays the fixtures against
 the shared portable matcher. Installed-host qualification establishes that
 Python and R execute the same contract through that matcher; a fixture file
 or a shared-core replay alone is not evidence that either installed host has
@@ -529,17 +528,6 @@ whose length can vary. Fixed length lookbehind stays allowed, and
 | `expressions.str_replace.replacement` | Literal text that replaces each match ([REQ-1320](text.md#req-1320)). |
 | `expressions.str_replace.missing` | Value returned when source is missing. |
 | `Result` | Returns source with every non-overlapping match replaced, left to right ([REQ-1318](text.md#req-1318)). |
-
-<a id="req-1243"></a>
-
-**REQ-1243.** The `expressions.str_contains` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `expressions.str_contains.source` | String variable to search. |
-| `expressions.str_contains.pattern` | Regular expression searched in source under [Text operations](text.md). |
-| `expressions.str_contains.missing` | Value returned when source is missing. |
-| `Result` | Returns true when the pattern matches anywhere in the source, false when it matches nowhere. In a `when:` predicate, a missing source yields unknown under [Predicates](predicates.md) three-valued logic; as a column derivation the `missing` handler applies. |
 
 <a id="req-1112"></a>
 
@@ -632,8 +620,8 @@ compilation/resource refusal and declaring path.
 <a id="req-0827"></a>
 
 **REQ-0827.** A pattern the grammar or the normalization rejects, in any of
-  the schema descriptor, `str_extract`, `str_replace`, `str_contains` expression, or
-  `matches` verification: fail validation with `invalid_regex` and report
+  the schema descriptor, `str_extract`, `str_replace`, or `matches`
+  verification: fail validation with `invalid_regex` and report
   the declaring path and the rejection. The `str_contains` predicate call
   instead fails with `invalid_predicate` at parse time under
   [REQ-1244](predicates.md#req-1244). Each consumer rejects a pattern with its

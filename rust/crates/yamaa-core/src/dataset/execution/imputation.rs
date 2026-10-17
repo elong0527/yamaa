@@ -35,7 +35,6 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
         }
         Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
-        | Expression::StrContains { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::MappingCut { source, .. }

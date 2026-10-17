@@ -35,22 +35,7 @@ mod declaration {
         vocabulary!(
             numeric_vocabulary,
             NumericFunction,
-            [
-                Abs,
-                Ceil,
-                Floor,
-                Trunc,
-                Sqrt,
-                Power,
-                Exp,
-                Ln,
-                Mod,
-                Greatest,
-                Least,
-                NullIf,
-                Coalesce,
-                RoundHalfAwayFromZero
-            ]
+            [Abs, Ceil, Floor, Trunc, Sqrt, Power, Exp, Ln, Mod, NullIf]
         );
         vocabulary!(
             aggregate_vocabulary,
@@ -749,26 +734,8 @@ mod declaration {
         }
 
         #[test]
-        fn unchanged_independent_rational_rounding_corpus_matches_current_compiler() {
-            use std::convert::Infallible;
-            use yamaa_core::{
-                evaluation::NumericResolver,
-                numeric::Number,
-                numeric_compiler::compile_numeric,
-                value::{Selection, Value},
-            };
-            struct Inputs(f64, i64);
-            impl NumericResolver for Inputs {
-                type Error = Infallible;
-                fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
-                    Ok(Selection::Present(match name {
-                        "A" => Value::float(self.0),
-                        "D" => Value::Int(self.1),
-                        _ => panic!("unexpected rounding operand"),
-                    }))
-                }
-            }
-            let plan = compile_numeric("ROUND_HALF_AWAY_FROM_ZERO(A, D)", "rounding").unwrap();
+        fn unchanged_independent_rational_rounding_corpus_matches_the_rounding_operation() {
+            use yamaa_core::{dataset::Rounding, table::ValueRef, value::Value};
             // Original cb34f38a3:rust/tools/assess_rounding.py, using
             // Fraction(abs(value)) and the exact REQ-0418 half-minus-2^-26 threshold.
             // All 2,936 unchanged boundary/range/seed-1585 inputs and expected bits
@@ -782,11 +749,14 @@ mod declaration {
                 assert_eq!(fields.len(), 4);
                 assert!(seen.insert(fields[0]));
                 let value = f64::from_bits(u64::from_str_radix(fields[1], 16).unwrap());
-                let digits = fields[2].parse().unwrap();
-                let actual = match plan.evaluate(&mut Inputs(value, digits)).unwrap() {
-                    Number::Missing => "missing".into(),
-                    Number::Float(value) => format!("{:016x}", value.get().to_bits()),
-                    Number::Int(_) => panic!("rounding must retain float output"),
+                let rounding = Rounding::new("A", "rounding", fields[2]).unwrap();
+                let actual = match rounding
+                    .apply(ValueRef::from(&Value::float(value)))
+                    .unwrap()
+                {
+                    Value::Missing => "missing".into(),
+                    Value::Float(value) => format!("{:016x}", value.get().to_bits()),
+                    other => panic!("rounding must retain float output: {other:?}"),
                 };
                 assert_eq!(actual, fields[3], "{}", fields[0]);
             }

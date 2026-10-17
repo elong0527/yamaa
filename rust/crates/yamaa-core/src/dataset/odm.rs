@@ -172,7 +172,6 @@ macro_rules! walk {
             Expression::Odm(bound) => $visitor(bound)?,
             Expression::SourceBinding { source, .. }
             | Expression::MappingCut { source, .. }
-            | Expression::StrContains { source, .. }
             | Expression::StrExtract { source, .. }
             | Expression::StrReplace { source, .. }
             | Expression::StrCase { source, .. }

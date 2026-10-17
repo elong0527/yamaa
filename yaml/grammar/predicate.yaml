@@ -1,7 +1,7 @@
-# Machine-readable grammar for R004's Boolean predicate language.
+# Machine-readable grammar for the Boolean predicate language.
 #
 # This file is the single source for the closed grammar written in a field
-# typed `predicate`. R004's `## Grammar` block is rendered from
+# typed `predicate`. The Predicates contract's grammar block is rendered from
 # `productions`, and every implementation's parser is checked against
 # `reserved` and `cases`, so the rule, the R parser, and the Python parser
 # cannot drift apart without failing validation.
@@ -80,7 +80,7 @@ productions:
   - name: non_quote
     prose: true
     definition: |-
-      any R019 string scalar other than "'"
+      any Unicode scalar value other than "'"
   - name: temporal
     definition: |-
       "DATE" string | "DATETIME" string

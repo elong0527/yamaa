@@ -1,9 +1,6 @@
 //! Scalar evaluation retains authored reads, missing-handler counts and raw values.
 use super::*;
-use crate::{
-    scalar_language,
-    text_extract::{Error, Step},
-};
+use crate::scalar_language;
 pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
     match &assignment.expression {
         Expression::Aggregate(aggregate) => {
@@ -81,15 +78,6 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
                     register(source, counter);
                 }
             }
-        }
-        Expression::StrContains { source, operation } => {
-            if operation.handler("missing").is_some() {
-                counter.register(
-                    &std::format!("{}.missing", operation.path()),
-                    HandlerKind::Missing,
-                );
-            }
-            register(source, counter);
         }
         Expression::StrConcat {
             operands,
@@ -183,30 +171,6 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                 rendered.push_str(&text);
             }
             Ok(Value::Str(rendered))
-        }
-        Expression::StrContains { source, operation } => {
-            let value = evaluate_raw(table, source, candidate, plan, row, state)?;
-            match operation.apply(ValueRef::from(&value)) {
-                Ok(Step::Capture(_)) => Ok(Value::Bool(true)),
-                Ok(Step::NoMatch(_)) => Ok(Value::Bool(false)),
-                Ok(Step::Recovered(_)) => recover::<T>(
-                    operation
-                        .handler("missing")
-                        .expect("declared missing handler"),
-                    operation.path(),
-                    state,
-                ),
-                Ok(Step::Missing) => {
-                    let diagnostic = operation
-                        .failure_diagnostic(Step::Missing)
-                        .expect("admitted metadata");
-                    Err(retained_diagnostic(diagnostic, true, candidate, plan, row))
-                }
-                Err(Error::Diagnostic(diagnostic)) => {
-                    Err(retained_diagnostic(diagnostic, false, candidate, plan, row))
-                }
-                Err(Error::Regex(limit)) => Err(Box::new(regex_limit(limit))),
-            }
         }
         _ => unreachable!("scalar dispatch"),
     }

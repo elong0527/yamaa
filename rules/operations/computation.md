@@ -126,21 +126,13 @@ and `NULL` are case-insensitive; identifiers are not.
 - `EXP(x)`: `e` raised to `x`.
 - `LN(x)`: natural logarithm.
 - `MOD(x, y)`: remainder of `x / y`, taking the sign of `x`.
-- `GREATEST(x, ...)`: largest non-`NULL` argument, or `NULL` if all are
-  `NULL`.
-- `LEAST(x, ...)`: smallest non-`NULL` argument, or `NULL` if all are
-  `NULL`.
 - `NULLIF(x, y)`: `NULL` when `x = y`, otherwise `x`.
-- `COALESCE(x, ...)`: first non-`NULL` argument, or `NULL` if all are
-  `NULL`.
-- `ROUND_HALF_AWAY_FROM_ZERO(x, digits)`: `x` rounded to `digits` places
-  with ties half away from zero.
 
 <a id="req-0416"></a>
 
-**REQ-0416.** `GREATEST` and `LEAST` require at least two arguments;
-`COALESCE` requires at least one; `ROUND_HALF_AWAY_FROM_ZERO` requires
-exactly two. Each of the following is a validation error:
+**REQ-0416.** Each function takes exactly the arguments
+[REQ-0415](computation.md#req-0415) shows. Each of the following is a
+validation error:
 
 - any other function name;
 - any operator outside the grammar;
@@ -167,22 +159,15 @@ Widening the vocabulary requires amending the table in
 admits, and its tie behavior is fixed: a value exactly halfway between two
 candidates, or within `sqrt(2^-52) * 10^-digits` below such a tie, rounds
 half away from zero. No other
-rounding exists: the `compute` grammar gains no `ROUND`, and a derivation
-must not round by any other spelling. The `compute` function
-`ROUND_HALF_AWAY_FROM_ZERO(x, digits)` shares this tie behavior and the
-standalone operation's missing-value semantics:
-
-- A missing value or missing digits yields missing.
-- `digits` must be an integer, where negative rounds left of the decimal
-  point.
-- A non-integer `digits` is an `incompatible_input_type` validation error.
+rounding exists: the `compute` grammar has no rounding function, and a
+derivation must not round by any other spelling. `digits` is an integer,
+where negative rounds left of the decimal point.
 
 The source must be numeric; a non-numeric source is an
 `incompatible_input_type` validation error. Missing stays missing. A value
-that rounds to zero returns positive zero, never negative zero. The function
-form returns a float, matching the standalone operation. Analysis datasets
-otherwise carry computed values at full precision; reporting decides the
-displayed places. [Types and
+that rounds to zero returns positive zero, never negative zero. The result
+is a float. Analysis datasets otherwise carry computed values at full
+precision; reporting decides the displayed places. [Types and
 conversion](../values/types.md) has the same rule at conversion, where a
 non-integral value fails rather than being truncated.
 
@@ -199,10 +184,10 @@ of the exact integer quotient.
 
 <a id="req-0425"></a>
 
-**REQ-0425.** `GREATEST` and `LEAST` stay numeric like every other
-function in this grammar. A row-wise extreme over dates, or over any other
-comparable type, is the `greatest` and `least` registry expressions that
-[Expression evaluation](expressions.md) defines. This grammar is not widened to reach them.
+**REQ-0425.** No function in this grammar picks a row-wise extreme or the
+first present value. [Expression evaluation](expressions.md) defines those
+as the `greatest`, `least`, and `first_available` registry expressions. This
+grammar is not widened to reach them.
 
 <a id="req-0426"></a>
 
@@ -216,8 +201,8 @@ converted by binding it to a numeric column first.
 <a id="req-0427"></a>
 
 **REQ-0427.** `NULL` propagates. A `NULL` argument to an operator or function
-produces a `NULL` result, except `COALESCE`, `NULLIF`, `GREATEST`, and `LEAST`,
-whose argument-level behavior is defined in the [REQ-0415](computation.md#req-0415) table.
+produces a `NULL` result, except `NULLIF`, whose argument-level behavior is
+defined in the [REQ-0415](computation.md#req-0415) table.
 
 <a id="req-0428"></a>
 

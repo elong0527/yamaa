@@ -126,7 +126,6 @@ mod scalar {
             for name in [
                 "negative-greatest-mixed",
                 "negative-least-mixed",
-                "negative-str-contains-bool-result",
                 "negative-str-contains-invalid-regex",
                 "negative-usubjid-length",
             ] {
@@ -145,19 +144,6 @@ mod scalar {
                     "{name}"
                 );
             }
-            let fixture = Fixture::new("schema-str-contains-missing");
-            let mut result = fixture.run();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            let observed = result.observations();
-            assert_eq!(
-                observed["handler_counts"][0]["count"],
-                yamaa_adapters::json!(2)
-            );
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("adae.csv")).unwrap(),
-                fs::read(fixture.0.join("expected/adae.csv")).unwrap()
-            );
         }
         fn spec(derivation: &str, result_type: &str) -> String {
             format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{I: int, F: float, D: date}}}}}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: RESULT, type: {result_type}, derivation: {derivation}}}\n")
@@ -276,36 +262,6 @@ mod scalar {
             assert!(!fixture.0.join("output.csv").exists());
         }
         #[test]
-        fn contains_returns_false_and_true_with_single_result_conversion() {
-            for (pattern, subject, expected) in [
-                ("z", "abc", false),
-                ("()", "abc", true),
-                ("a|z", "abc", true),
-            ] {
-                let fixture = bespoke(
-                    &spec(
-                        &format!("{{str_contains: {{source: SRC.TEXT, pattern: '{pattern}'}}}}"),
-                        "str",
-                    ),
-                    format!("ID,I,F,D,TEXT\na,1,1,2025-01-01,{subject}\n").as_bytes(),
-                );
-                let result = fixture.run();
-                let issue = &result.issues()[0];
-                assert_eq!(
-                    (
-                        issue.phase.as_str(),
-                        issue.condition.as_str(),
-                        issue.requirement.as_deref()
-                    ),
-                    ("convert", "conversion_failed", Some("REQ-0013"))
-                );
-                assert_eq!(
-                    issue_json(issue)["context"]["value"],
-                    yamaa_adapters::json!(expected)
-                );
-            }
-        }
-        #[test]
         fn row_scalar_derivations_share_the_same_raw_contract() {
             let source="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float}}}\noutput: {path: output.csv, columns: [ID, RESULT, MAXIMUM]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RESULT, type: str}\n  - {name: MAXIMUM, type: int}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {str_concat: {sources: [{literal: '['}, {source: SRC.TEXT}, {literal: ']'}]}}\n      MAXIMUM: {greatest: {sources: [SRC.I, SRC.F]}}\n";
             let fixture = bespoke(source, b"ID,I,F,TEXT\na,3,2,abc\n");
@@ -319,10 +275,10 @@ mod scalar {
         }
 
         #[test]
-        fn row_contains_keeps_boolean_conversion_failure_and_refuses_every_save() {
-            for (pattern, expected) in [("z", false), ("a", true)] {
+        fn row_boolean_keeps_conversion_failure_and_refuses_every_save() {
+            for (literal, expected) in [("false", false), ("true", true)] {
                 let source = format!(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: RESULT, type: str}}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {{str_contains: {{source: SRC.TEXT, pattern: '{pattern}'}}}}\n"
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: RESULT, type: str}}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {{literal: {literal}}}\n"
         );
                 let fixture = bespoke(&source, b"ID,TEXT\na,abc\n");
                 let mut result = fixture.run();
@@ -371,12 +327,6 @@ mod scalar {
             "str_extract.group",
             "regex_group_out_of_range",
             "REQ-0816",
-        ),
-        (
-            "{str_contains: {source: SRC.TEXT, pattern: 'a)|(b'}}",
-            "str_contains.pattern",
-            "invalid_regex",
-            "REQ-0827",
         ),
         (
             "{case: [{when: 'SRC.I > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}}, {otherwise: {literal: x}}]}",

@@ -163,23 +163,27 @@ it. From
         source: Investigator
 ```
 
-then the `codelists:` entry in `define.yaml` that the binding names:
+then the codelist in the study's `environment.yaml` that the binding names:
 
 ```yaml
 codelists:
-  - id: SEX
-    name: Sex
-    standard: CT_SDTM
-    items:
-      - value: F
-        decode: Female
-      - value: M
-        decode: Male
-      - value: U
-        decode: Unknown
+  - standard:
+      name: CDISC/NCI
+      publishing_set: SDTM
+      version: '2023-12-15'
+    codelists:
+      - id: SEX
+        name: Sex
+        items:
+          - value: F
+            decode: Female
+          - value: M
+            decode: Male
+          - value: U
+            decode: Unknown
 ```
 
-`submission.codelist` carries the `id`, not the values. The document carries
+`submission.codelist` carries the `id`, not the values. The environment carries
 the values once, and every column naming that `id` shares the one statement.
 When the bound codelist declares `items`, an `allowed_values` verification on
 the same column must list the same values -- the check the run executes and

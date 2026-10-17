@@ -94,18 +94,14 @@ and [Types and conversion](types.md) defines that conversion.
 
 <a id="req-0424"></a>
 
-**REQ-0424.** `ABS`, `GREATEST`, `LEAST`, `MOD`, `NULLIF`, and `COALESCE`
-return the promoted type of their arguments: `int` when every argument is
-`int`, otherwise `float`.
+**REQ-0424.** `ABS`, `MOD`, and `NULLIF` return the promoted type of their
+arguments: `int` when every argument is `int`, otherwise `float`.
 
 `NULLIF` compares two `int` arguments exactly. For a mixed `int`/`float`
 pair, it first widens the integer under [REQ-0017](numbers.md#req-0017) and
 compares the binary64 values, like a predicate comparison under
 [REQ-0167](../operations/predicates.md#req-0167). Thus
-`NULLIF(9007199254740993, 9007199254740992.0)` returns missing, while
-`GREATEST` and `LEAST` select using the exact comparison under
-[REQ-0005](types.md#req-0005) before converting the selected result to the
-promoted return type.
+`NULLIF(9007199254740993, 9007199254740992.0)` returns missing.
 
 ### Overflow and precision
 

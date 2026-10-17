@@ -87,11 +87,7 @@ pub enum NumericFunction {
     Exp,
     Ln,
     Mod,
-    Greatest,
-    Least,
     NullIf,
-    Coalesce,
-    RoundHalfAwayFromZero,
 }
 
 impl NumericFunction {
@@ -107,11 +103,7 @@ impl NumericFunction {
             Self::Exp => "EXP",
             Self::Ln => "LN",
             Self::Mod => "MOD",
-            Self::Greatest => "GREATEST",
-            Self::Least => "LEAST",
             Self::NullIf => "NULLIF",
-            Self::Coalesce => "COALESCE",
-            Self::RoundHalfAwayFromZero => "ROUND_HALF_AWAY_FROM_ZERO",
         }
     }
 
@@ -127,22 +119,16 @@ impl NumericFunction {
             Self::Exp,
             Self::Ln,
             Self::Mod,
-            Self::Greatest,
-            Self::Least,
             Self::NullIf,
-            Self::Coalesce,
-            Self::RoundHalfAwayFromZero,
         ]
         .into_iter()
         .find(|function| name.eq_ignore_ascii_case(function.name()))
     }
 
-    /// Check the closed fixed/variadic arities after the whole call parses.
+    /// Check the closed fixed arities after the whole call parses.
     pub(crate) fn accepts(self, count: usize) -> bool {
         match self {
-            Self::Greatest | Self::Least => count >= 2,
-            Self::Coalesce => count >= 1,
-            Self::Power | Self::Mod | Self::NullIf | Self::RoundHalfAwayFromZero => count == 2,
+            Self::Power | Self::Mod | Self::NullIf => count == 2,
             _ => count == 1,
         }
     }

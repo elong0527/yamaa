@@ -215,11 +215,6 @@ are not substituted for the authored path in these diagnostics.
 | `resource_path_not_regular_file` | a directory, FIFO, socket, or device |
 | `resource_path_content_changed` | content that changed after validation |
 
-`resource_path_not_relative` and `resource_path_outside_project` are historical
-conditions from the retired containment policy. The replacement route emits
-neither for an absolute path or parent traversal that leaves an entry directory.
-Their old observations remain in the reference qualification record.
-
 <a id="req-0791"></a>
 
 **REQ-0791.** The written-form conditions are decided in the order [REQ-0773](resources.md#req-0773)

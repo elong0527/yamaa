@@ -6,7 +6,7 @@
 
 use crate::numeric::{
     self, ArithmeticErrorKind, BinaryOperator, IntegralFunction, MathFunction, Number,
-    SelectionFunction, UnaryOperator,
+    UnaryOperator,
 };
 use crate::value::{Selection, ValueType};
 
@@ -19,11 +19,6 @@ pub enum NumericNode {
     /// Deferred positive literal overflow, preserving exact canonical decimal digits.
     IntegerOverflowLiteral(String),
     Identifier(String),
-    /// Variadic numeric selection; the compiler owns closed-language arity checks.
-    Selection {
-        function: SelectionFunction,
-        arguments: Vec<NumericNode>,
-    },
     NullIf {
         left: Box<NumericNode>,
         right: Box<NumericNode>,
@@ -35,10 +30,6 @@ pub enum NumericNode {
     Power {
         left: Box<NumericNode>,
         right: Box<NumericNode>,
-    },
-    Round {
-        value: Box<NumericNode>,
-        digits: Box<NumericNode>,
     },
     Sqrt {
         operand: Box<NumericNode>,
@@ -73,8 +64,6 @@ pub enum Operand {
     Unary,
     Left,
     Right,
-    /// Zero-based argument index in a variadic selection function.
-    Argument(usize),
 }
 
 /// Provenance supplied by the compiler and the exact operand route that failed.
@@ -221,16 +210,6 @@ impl NumericPlan {
                 };
                 return Err(self.failure(EvaluationErrorKind::Numeric(condition), path));
             }
-            NumericNode::Selection {
-                function,
-                arguments,
-            } => {
-                let mut values = Vec::with_capacity(arguments.len());
-                for (index, argument) in arguments.iter().enumerate() {
-                    values.push(self.child(argument, Operand::Argument(index), resolver, path)?);
-                }
-                return Ok(numeric::select(*function, &values));
-            }
             NumericNode::NullIf { left, right } => {
                 let left = self.child(left, Operand::Left, resolver, path)?;
                 let right = self.child(right, Operand::Right, resolver, path)?;
@@ -244,11 +223,6 @@ impl NumericPlan {
                 let left = self.child(left, Operand::Left, resolver, path)?;
                 let right = self.child(right, Operand::Right, resolver, path)?;
                 numeric::power(left, right, &self.expression)
-            }
-            NumericNode::Round { value, digits } => {
-                let value = self.child(value, Operand::Left, resolver, path)?;
-                let digits = self.child(digits, Operand::Right, resolver, path)?;
-                numeric::round_half_away_from_zero(value, digits, &self.expression)
             }
             NumericNode::Sqrt { operand } => {
                 let value = self.child(operand, Operand::Unary, resolver, path)?;

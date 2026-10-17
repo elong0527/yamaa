@@ -60,19 +60,8 @@ flag_class:
         description: See REQ-1257.
 
 filtered_source:
-    type: [variable, filtered_source_class]
+    type: [variable, source_binding_class]
     description: See REQ-1052.
-
-filtered_source_class:
-    - variable:
-        type: variable
-        required: true
-        description: See REQ-1053.
-    - fields_from: match_filter_fields
-    - fields_from: match_selection_fields
-    - absent:
-        type: literal_value
-        description: See REQ-1053.
 
 keep_policy:
     type: str

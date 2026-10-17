@@ -39,7 +39,7 @@ imports:
   name: predicate
   digits: predicate
 # `function` is closed: a name outside this table is a validation error
-# whatever a host dialect provides. `max_arguments: null` is unbounded.
+# whatever a host dialect provides.
 vocabulary:
   function:
     ABS: {min_arguments: 1, max_arguments: 1}
@@ -51,11 +51,7 @@ vocabulary:
     EXP: {min_arguments: 1, max_arguments: 1}
     LN: {min_arguments: 1, max_arguments: 1}
     MOD: {min_arguments: 2, max_arguments: 2}
-    GREATEST: {min_arguments: 2, max_arguments: null}
-    LEAST: {min_arguments: 2, max_arguments: null}
     NULLIF: {min_arguments: 2, max_arguments: 2}
-    COALESCE: {min_arguments: 1, max_arguments: null}
-    ROUND_HALF_AWAY_FROM_ZERO: {min_arguments: 2, max_arguments: 2}
 # A spelling the grammar reserves for a construct it does not admit, so the
 # failure names the construct rather than a stray token.
 prohibited:
@@ -158,12 +154,6 @@ cases:
     text: "A.B.C + 1"
     parse: reject
     condition: invalid_numeric_expression
-  - id: a-variadic-function-takes-more-than-its-minimum
-    covers: [call, vocabulary]
-    text: "COALESCE(A, B, 0)"
-    parse: accept
-    identifiers: [A, B]
-    shape: (call COALESCE (id A) (id B) (int 0))
   - id: null-is-an-argument-rather-than-a-name
     covers: [call, null-literal]
     text: "NULLIF(A, NULL)"
@@ -172,10 +162,10 @@ cases:
     shape: (call NULLIF (id A) null)
   - id: null-is-case-insensitive
     covers: [null-literal, keyword-case]
-    text: "COALESCE(null, 0)"
+    text: "NULLIF(null, 0)"
     parse: accept
     identifiers: []
-    shape: (call COALESCE null (int 0))
+    shape: (call NULLIF null (int 0))
   - id: an-integer-literal-has-no-fraction-or-exponent
     covers: [literal]
     text: "A + 42"
@@ -213,40 +203,22 @@ cases:
   - id: every-permitted-function-parses
     covers: [call, vocabulary]
     text: "ABS(A) + CEIL(A) + FLOOR(A) + TRUNC(A) + SQRT(A) + EXP(A)
-      + LN(A) + MOD(A, 2) + GREATEST(A, 1) + LEAST(A, 1)"
+      + LN(A) + MOD(A, 2) + POWER(A, 2) + NULLIF(A, 1)"
     parse: accept
     identifiers: [A]
     shape: (+ (+ (+ (+ (+ (+ (+ (+ (+ (call ABS (id A)) (call CEIL (id
       A))) (call FLOOR (id A))) (call TRUNC (id A))) (call SQRT (id A)))
       (call EXP (id A))) (call LN (id A))) (call MOD (id A) (int 2)))
-      (call GREATEST (id A) (int 1))) (call LEAST (id A) (int 1)))
-  - id: rounding-with-ties-away-from-zero-parses
-    covers: [call, vocabulary]
-    text: "ROUND_HALF_AWAY_FROM_ZERO(A, 1)"
-    parse: accept
-    identifiers: [A]
-    shape: (call ROUND_HALF_AWAY_FROM_ZERO (id A) (int 1))
-  - id: rounding-function-name-is-case-insensitive
-    covers: [call, keyword-case]
-    text: "round_half_away_from_zero(A, 1)"
-    parse: accept
-    identifiers: [A]
-    shape: (call ROUND_HALF_AWAY_FROM_ZERO (id A) (int 1))
-  - id: average-daily-dose-rounds-a-guarded-division
+      (call POWER (id A) (int 2))) (call NULLIF (id A) (int 1)))
+  - id: average-daily-dose-guards-its-division
     covers: [call, arithmetic]
-    text: "ROUND_HALF_AWAY_FROM_ZERO(CUMDOSE / NULLIF(TRTDURD, 0), 1)"
+    text: "CUMDOSE / NULLIF(TRTDURD, 0)"
     parse: accept
     identifiers: [CUMDOSE, TRTDURD]
-    shape: (call ROUND_HALF_AWAY_FROM_ZERO (/ (id CUMDOSE) (call NULLIF
-      (id TRTDURD) (int 0))) (int 1))
-  - id: rounding-requires-value-and-digits
+    shape: (/ (id CUMDOSE) (call NULLIF (id TRTDURD) (int 0)))
+  - id: rounding-with-ties-away-from-zero-is-not-in-the-vocabulary
     covers: [vocabulary, rejection]
-    text: "ROUND_HALF_AWAY_FROM_ZERO(A)"
-    parse: reject
-    condition: prohibited_function
-  - id: rounding-rejects-a-third-argument
-    covers: [vocabulary, rejection]
-    text: "ROUND_HALF_AWAY_FROM_ZERO(A, 1, 2)"
+    text: "ROUND_HALF_AWAY_FROM_ZERO(A, 1)"
     parse: reject
     condition: prohibited_function
   - id: rounding-is-not-in-the-vocabulary
@@ -264,9 +236,19 @@ cases:
     text: "SUM(A)"
     parse: reject
     condition: prohibited_function
-  - id: greatest-requires-two-arguments
+  - id: greatest-is-not-in-the-vocabulary
     covers: [vocabulary, rejection]
-    text: "GREATEST(A)"
+    text: "GREATEST(A, B)"
+    parse: reject
+    condition: prohibited_function
+  - id: least-is-not-in-the-vocabulary
+    covers: [vocabulary, rejection]
+    text: "LEAST(A, B)"
+    parse: reject
+    condition: prohibited_function
+  - id: coalesce-is-not-in-the-vocabulary
+    covers: [vocabulary, rejection]
+    text: "COALESCE(A, B, 0)"
     parse: reject
     condition: prohibited_function
   - id: abs-takes-exactly-one-argument
@@ -274,9 +256,14 @@ cases:
     text: "ABS(A, B)"
     parse: reject
     condition: prohibited_function
-  - id: coalesce-requires-an-argument
+  - id: abs-requires-an-argument
     covers: [vocabulary, rejection]
-    text: "COALESCE()"
+    text: "ABS()"
+    parse: reject
+    condition: prohibited_function
+  - id: nullif-takes-exactly-two-arguments
+    covers: [vocabulary, rejection]
+    text: "NULLIF(A, B, C)"
     parse: reject
     condition: prohibited_function
   - id: a-comparison-is-not-a-numeric-expression

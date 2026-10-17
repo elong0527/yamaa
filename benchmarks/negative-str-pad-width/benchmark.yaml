@@ -1,8 +1,5 @@
 lifecycle: draft
 standard: ADaM
 domain: ADLB
-validation:
-  rule: R006
-  validator: schema
 covers:
 - str_pad

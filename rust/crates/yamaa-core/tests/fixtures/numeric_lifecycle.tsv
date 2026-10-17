@@ -22,8 +22,6 @@ division_is_not_convertible	A / 0	A=int:1	int	int:9	error:derivation:division_by
 overflow_is_not_convertible	9223372036854775807 + 1	-	int	int:9	error:derivation:integer_overflow:REQ-0434	columns.A.derivation.value.compute	-	0	integer:9223372036854775808	-
 missing_eager_unknown	NULL + UNKNOWN	-	int	int:9	error:validation:unknown_field:REQ-0443	columns.A.derivation.value.compute	UNKNOWN	0	identifier:UNKNOWN	-
 input_type_not_convertible	A	A=str:bad	int	int:9	error:validation:incompatible_input_type:REQ-0444	columns.A.derivation.value.compute	A	0	source:A:str	-
-round_digits_not_convertible	ROUND_HALF_AWAY_FROM_ZERO(A, D)	A=int:1;D=float:0.0	int	int:9	error:validation:incompatible_input_type:REQ-0418	columns.A.derivation.value.compute	A,D	0	digits:float	-
-round_then_convert	ROUND_HALF_AWAY_FROM_ZERO(A, 0)	A=float:0.49999998509883880615234375	int	int:9	int:1	-	A	0	-	-
 arithmetic_overflow_missing	A * 2	A=float:1.7976931348623157e308	int	int:9	missing	-	A	0	-	-
 negative_zero_to_float	A	A=float:-0.0	float	str:bad	float:8000000000000000	-	A	0	-	-
 integer_to_float_promotion	A	A=int:9007199254740993	float	-	float:4340000000000000	-	A	-	-	-

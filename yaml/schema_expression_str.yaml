@@ -45,18 +45,6 @@ expressions:
         - missing:
             type: literal_value
             description: See REQ-1322.
-    str_contains: # See REQ-1243.
-        - source:
-            type: variable
-            required: true
-            description: See REQ-1243.
-        - pattern:
-            type: regex
-            required: true
-            description: See REQ-1243.
-        - missing:
-            type: literal_value
-            description: See REQ-1243.
     str_concat: # See REQ-1112.
         - sources:
             type: "list[expression]"

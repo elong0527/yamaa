@@ -1,6 +1,3 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
-validation:
-  rule: R016
-  validator: schema

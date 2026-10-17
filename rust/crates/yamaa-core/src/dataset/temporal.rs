@@ -39,9 +39,6 @@ pub enum TemporalKind {
     DurationValue {
         unit: ElapsedUnit,
     },
-    DurationText {
-        unit: ElapsedUnit,
-    },
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ElapsedUnit {
@@ -202,7 +199,7 @@ impl TemporalKind {
             Self::StudyDay => &["date", "reference"],
             Self::DateShift => &["source", "days"],
             Self::DateTimeShift { .. } => &["source", "amount"],
-            Self::EpochDay | Self::DurationValue { .. } | Self::DurationText { .. } => &["source"],
+            Self::EpochDay | Self::DurationValue { .. } => &["source"],
         }
     }
 }

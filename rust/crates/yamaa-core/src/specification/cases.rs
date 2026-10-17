@@ -427,16 +427,6 @@ fn bind_operation(
             findings,
             declarations_reported,
         )?,
-        Operation::StrContains(operation) => scalar::bind_contains(
-            spec,
-            operation,
-            column,
-            catalog,
-            secondary,
-            intermediates,
-            edges,
-            findings,
-        )?,
         Operation::StrExtract(operation) => str_extract::bind(
             operation,
             column,

@@ -60,28 +60,12 @@ pub(crate) fn reached() -> BTreeSet<C> {
             "REQ-1301",
         ),
         (
-            K::DurationText { unit: U::Second },
-            vec![Value::Str("PT1S".into())],
-            C::DurationTextInput,
-            "validation",
-            "incompatible_input_type",
-            "REQ-1302",
-        ),
-        (
             K::DurationValue { unit: U::Hour },
             vec![Value::Str("P1M".into())],
             C::DurationInvalid,
             "impute",
             "invalid_duration_text",
             "REQ-1301",
-        ),
-        (
-            K::DurationText { unit: U::Day },
-            vec![Value::float(f64::MAX)],
-            C::DurationTextRange,
-            "convert",
-            "conversion_failed",
-            "REQ-1302",
         ),
     ] {
         let operation = Temporal::new(

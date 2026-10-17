@@ -181,7 +181,6 @@ matching, independent of the runtime implementation.
 | `int` | `date_diff`, `rank`, `row_number`, `study_day`, `to_epoch_day` |
 | `float` | `round_half_away_from_zero` |
 | `str` | `baseline_flag`, `cut`, `date_precision`, `datetime_precision`, `str_case`, `str_concat`, `str_extract`, `str_pad`, `str_replace`, `str_template` |
-| `bool` | `str_contains` |
 | Numeric (`int` or `float`) | `compute` |
 
 For `compute`, either possible result type compares with `int` and `float`
@@ -813,16 +812,4 @@ fields or names the intermediate derives under [REQ-1185](lookup.md#req-1185).
 
 | Field | Meaning |
 | --- | --- |
-| `filtered_source` | A variable, or the class form carrying the variable with its filter, selection, or absent value. |
-
-<a id="req-1053"></a>
-
-**REQ-1053.** The `filtered_source_class` fields have these meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `filtered_source_class.variable` | Variable to copy. |
-| `filtered_source_class.filter` | Predicate selecting the right-side records this source reads; [Lookup and joins](lookup.md) defines the selection. |
-| `filtered_source_class.absent` | Value used when the source variable or item is absent. |
-| `filtered_source_class.order_by` | Terms ordering eligible right-side matches; declared with keep ([REQ-0119](lookup.md#req-0119)). |
-| `filtered_source_class.keep` | Ordered match to retain; declared with order_by ([REQ-0119](lookup.md#req-0119)). |
+| `filtered_source` | A variable, or the `source_binding_class` form ([REQ-1051](lookup.md#req-1051)) carrying the variable with its filter, selection, or absent value. |

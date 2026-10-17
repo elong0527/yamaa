@@ -187,9 +187,6 @@ mod execution {
                                 NumericCondition::Arithmetic(
                                     ArithmeticErrorKind::IntegerOverflow { value },
                                 ) => format!("integer:{value}"),
-                                NumericCondition::Arithmetic(
-                                    ArithmeticErrorKind::InvalidRoundingDigits,
-                                ) => "digits:float".into(),
                                 _ => "-".into(),
                             };
                             format!(

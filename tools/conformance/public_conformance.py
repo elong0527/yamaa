@@ -716,17 +716,9 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
                 }
             )
         if want.get("phase") == "validation":
-            # Metadata registers the owning case, while expected/error.yaml is
-            # independent diagnostic truth. Keep the retired repository
-            # validator's complete-path controls here, against observations
-            # from actual installed public hosts.
-            registration = load_metadata(case).get("validation")
-            if registration is None:
-                result["findings"].append("validation fixture lacks case registration")
-            elif "blocked_by" in registration:
-                result["findings"].append(
-                    "validation fixture still declares a release blocker"
-                )
+            # expected/error.yaml is independent diagnostic truth. Keep the
+            # complete-path controls here, against observations from actual
+            # installed public hosts.
             paths = want["spec_paths"]
 
             def matches_path(actual, expected):

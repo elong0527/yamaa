@@ -4,9 +4,7 @@
 //! Compiled trees retain the parser's fixed recursion guard and exact node spans.
 
 use crate::evaluation::{EvaluationError, NumericNode, NumericPlan, NumericResolver, Operand};
-use crate::numeric::{
-    BinaryOperator, IntegralFunction, MathFunction, Number, SelectionFunction, UnaryOperator,
-};
+use crate::numeric::{BinaryOperator, IntegralFunction, MathFunction, Number, UnaryOperator};
 use crate::numeric_parser::{
     parse_numeric, NumericFunction, ParseError, ParsedKind, ParsedNumeric, SourceSpan,
 };
@@ -211,14 +209,6 @@ fn lower(
             right: child(parsed, arguments[1], Operand::Right, route, sources),
         },
         ParsedKind::Call {
-            function: NumericFunction::RoundHalfAwayFromZero,
-            arguments,
-            ..
-        } => NumericNode::Round {
-            value: child(parsed, arguments[0], Operand::Left, route, sources),
-            digits: child(parsed, arguments[1], Operand::Right, route, sources),
-        },
-        ParsedKind::Call {
             function: NumericFunction::Sqrt,
             arguments,
             ..
@@ -242,37 +232,6 @@ fn lower(
             left: child(parsed, arguments[0], Operand::Left, route, sources),
             right: child(parsed, arguments[1], Operand::Right, route, sources),
         },
-        ParsedKind::Call {
-            function,
-            arguments,
-            ..
-        } if matches!(
-            function,
-            NumericFunction::Greatest | NumericFunction::Least | NumericFunction::Coalesce
-        ) =>
-        {
-            let function = match function {
-                NumericFunction::Greatest => SelectionFunction::Greatest,
-                NumericFunction::Least => SelectionFunction::Least,
-                _ => SelectionFunction::Coalesce,
-            };
-            let arguments = arguments
-                .iter()
-                .enumerate()
-                .map(|(index, &id)| {
-                    route.push(Operand::Argument(index));
-                    let node = lower(parsed, id, route, sources);
-                    route.pop();
-                    node
-                })
-                .collect();
-            NumericNode::Selection {
-                function,
-                arguments,
-            }
-        }
-        ParsedKind::Call { .. } | ParsedKind::Group { .. } => {
-            unreachable!("preflighted calls and unwrapped groups")
-        }
+        ParsedKind::Group { .. } => unreachable!("unwrapped groups"),
     }
 }

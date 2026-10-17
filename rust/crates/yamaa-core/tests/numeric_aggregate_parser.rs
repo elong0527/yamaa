@@ -20,7 +20,7 @@ mod numeric {
         /// Distinguish fieldless record dependencies and ungrouped fields in written order.
         #[test]
         fn references_and_spans_preserve_written_context() {
-            let text = "\u{2003}COALESCE(sUm( D.A + D.B ), COUNT(D.*)) + D.A + X + COUNT(E.*) + X";
+            let text = "\u{2003}NULLIF(sUm( D.A + D.B ), COUNT(D.*)) + D.A + X + COUNT(E.*) + X";
             let parsed = parse_aggregate(text).unwrap();
             assert_eq!(parsed.expression(), text);
             assert_eq!(
@@ -105,7 +105,7 @@ mod numeric {
                 );
             }
             assert_eq!(
-                failure("\u{2003}SUM(COALESCE(MIN(A), MAX(B)))"),
+                failure("\u{2003}SUM(NULLIF(MIN(A), MAX(B)))"),
                 (
                     3,
                     1,
@@ -180,14 +180,19 @@ mod numeric {
                     ));
                 }
             }
-            let text = format!("COALESCE({})", vec!["SUM(A)"; 3000].join(","));
-            let parsed = parse_aggregate(&text).unwrap();
-            assert_eq!(parsed.identifiers().collect::<Vec<_>>(), ["A"]);
-            let ParsedKind::Call { arguments, .. } = &parsed.nodes()[parsed.root()].kind else {
-                panic!()
-            };
-            assert_eq!(arguments.len(), 3000);
-            assert_eq!(parsed.nodes().len(), 6001);
+            // Breadth has no counter: every argument parses before the closed
+            // arity rejects the call.
+            let text = format!("NULLIF({})", vec!["SUM(A)"; 3000].join(","));
+            assert!(matches!(
+                parse_aggregate(&text),
+                Err(ParseError::Grammar {
+                    failure: GrammarFailure::ProhibitedFunction {
+                        argument_count: Some(3000),
+                        ..
+                    },
+                    ..
+                })
+            ));
             let text = format!("{}A{}", "(".repeat(10000), ")".repeat(10000));
             assert!(matches!(
                 parse_aggregate(&text),
@@ -690,7 +695,6 @@ mod numeric {
                     }
                 );
             }
-            assert!(compile_numeric("EXP(A) + ROUND_HALF_AWAY_FROM_ZERO(A, 2)", "spec").is_ok());
         }
 
         /// Domain failures belong to calls; operand failures retain their exact inner span.
@@ -875,7 +879,7 @@ mod numeric {
                 ),
                 (format!("1 / 0 + {digits}"), "division_by_zero", vec![]),
                 (
-                    format!("COALESCE(A, {digits}, B)"),
+                    format!("NULLIF(A, {digits})"),
                     "integer_overflow",
                     vec!["A"],
                 ),
@@ -966,7 +970,7 @@ mod numeric {
             }
             for text in [
                 "ABS((BROKEN)) + A",
-                "COALESCE(1, (BROKEN), A)",
+                "NULLIF(1, (BROKEN)) + A",
                 "CEIL((BROKEN)) + A",
                 "FLOOR((BROKEN)) + A",
                 "TRUNC((BROKEN)) + A",
@@ -984,42 +988,6 @@ mod numeric {
                         error: BoundaryError(Box::new(7))
                     }
                 );
-            }
-        }
-
-        /// Variadic calls retain nested argument spans and count every resolver occurrence.
-        #[test]
-        fn selection_arguments_preserve_spans_and_resolution_order() {
-            for (text, route) in [
-                ("COALESCE(1, (UNKNOWN))", vec![Operand::Argument(1)]),
-                (
-                    "GREATEST(1, ABS(UNKNOWN), A)",
-                    vec![Operand::Argument(1), Operand::Unary],
-                ),
-                (
-                    "NULLIF(NULL, COALESCE(M, UNKNOWN))",
-                    vec![Operand::Right, Operand::Argument(1)],
-                ),
-            ] {
-                let error = compile(text)
-                    .evaluate(&mut Resolver::default())
-                    .unwrap_err();
-                assert_eq!(
-                    &text[error.source_span.start..error.source_span.end],
-                    "UNKNOWN"
-                );
-                assert_eq!(error.evaluation.location.operands, route);
-            }
-            for name in ["GREATEST", "LEAST", "COALESCE"] {
-                let text = format!("{name}({})", vec!["A"; 100].join(","));
-
-                let plan = compile_numeric(&text, "spec").unwrap();
-                let mut resolver = Resolver::default();
-                assert_eq!(
-                    plan.evaluate(&mut resolver).unwrap(),
-                    Number::Int(if name == "GREATEST" { 100 } else { 1 })
-                );
-                assert_eq!(resolver.trace.len(), 100);
             }
         }
 
@@ -1218,14 +1186,19 @@ mod numeric {
                     }
                 }
             }
-            let call = format!("COALESCE({})", vec!["A"; 9000].join(","));
-            let parsed = parse_numeric(&call).unwrap();
-            assert_eq!(parsed.identifiers().collect::<Vec<_>>(), ["A"]);
-            let ParsedKind::Call { arguments, .. } = &parsed.nodes()[parsed.root()].kind else {
-                panic!()
-            };
-            assert_eq!(arguments.len(), 9000);
-            assert_eq!(parsed.nodes().len(), 9001);
+            // Breadth has no counter: every argument parses before the closed
+            // arity rejects the call.
+            let call = format!("NULLIF({})", vec!["A"; 9000].join(","));
+            assert!(matches!(
+                parse_numeric(&call),
+                Err(ParseError::Grammar {
+                    failure: GrammarFailure::ProhibitedFunction {
+                        argument_count: Some(9000),
+                        ..
+                    },
+                    ..
+                })
+            ));
             assert!(matches!(
                 parse_numeric(&"(".repeat(9000)),
                 Err(ParseError::Limit {

@@ -346,17 +346,6 @@ fn numeric_choices_preserve_a_selected_integer_for_an_integer_only_operation() {
 }
 
 #[test]
-fn numeric_selection_functions_promote_present_values_without_inventing_missing_types() {
-    for expression in [
-        "{compute: {expr: 'COALESCE(EXINT, EXFLOAT)'}}",
-        "{compute: {expr: 'GREATEST(EXINT, EXFLOAT)'}}",
-        "{compute: {expr: 'LEAST(EXINT, EXFLOAT)'}}",
-    ] {
-        assert_integer_day_count(expression, "S01,2024-01-01,,1,", "S01,2024-01-01,,1,1.0");
-    }
-}
-
-#[test]
 fn nullif_preserves_an_integer_until_a_present_float_operand_promotes_it() {
     assert_integer_day_count(
         "{compute: {expr: 'NULLIF(EXINT, EXFLOAT)'}}",

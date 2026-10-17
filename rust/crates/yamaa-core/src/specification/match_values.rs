@@ -93,7 +93,6 @@ impl Declaration {
             | "greatest"
             | "least"
             | "str_concat"
-            | "str_contains"
             | "str_extract"
             | "str_replace"
             | "str_template"
@@ -107,8 +106,7 @@ impl Declaration {
             | "date_shift"
             | "datetime_diff"
             | "datetime_shift"
-            | "duration_value"
-            | "duration_text" => {
+            | "duration_value" => {
                 let mut references = Vec::new();
                 derivations::references(d, value, project, &mut references, 0)?;
                 self_relations::template_references(d, value, templates, &mut references, 0)?;

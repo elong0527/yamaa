@@ -1,8 +1,5 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADEX
-validation:
-  rule: R016
-  validator: temporal_contract
 covers:
 - to_epoch_day

@@ -77,7 +77,7 @@ authored conversion inputs, expected CSV bytes, refusal conditions and reached
 handler counts with the Rust adapter execution controls. Python and R exercise
 the same typed bindings through their installed public entry points.
 The `original-specifications.temporal_arithmetic` vectors likewise share
-PK relative times, civil shifts, duration parsing/formatting, static refusals,
+PK relative times, civil shifts, duration parsing, static refusals,
 range failures and reached `invalid` handler counts across Rust, Python and R.
 The `original-specifications.inheritance_nulls` cases share authored layers,
 missing-lookup CSV bytes, reached `no_match` counts and refusal conditions for

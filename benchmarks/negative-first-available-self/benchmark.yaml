@@ -1,8 +1,5 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADVS
-validation:
-  rule: R001
-  validator: dependency_graph
 covers:
 - first_available

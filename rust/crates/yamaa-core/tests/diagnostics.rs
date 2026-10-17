@@ -151,12 +151,6 @@ mod diagnostics {
                 ("MISSING", "validation", "unknown_field", "REQ-0443"),
                 ("TEXT", "validation", "incompatible_input_type", "REQ-0444"),
                 (
-                    "ROUND_HALF_AWAY_FROM_ZERO(1, 1.0)",
-                    "validation",
-                    "incompatible_input_type",
-                    "REQ-0418",
-                ),
-                (
                     "9223372036854775807 + 1",
                     "derivation",
                     "integer_overflow",

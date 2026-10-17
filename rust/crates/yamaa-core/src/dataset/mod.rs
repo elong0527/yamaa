@@ -98,10 +98,6 @@ pub enum Expression {
         missing: Option<Value>,
         path: String,
     },
-    StrContains {
-        source: std::boxed::Box<Assignment>,
-        operation: StringExtract,
-    },
     StrTemplate {
         operands: Vec<Assignment>,
         operation: StringTemplate,
@@ -848,8 +844,7 @@ fn key_expression(expression: &Expression) -> bool {
         Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
             .iter()
             .all(|source| key_expression(&source.expression)),
-        Expression::StrContains { source, .. }
-        | Expression::StrCase { source, .. }
+        Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
@@ -987,8 +982,7 @@ fn current_record_read(
         Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
             .iter()
             .any(|source| current_record_read(&source.expression, intermediates, scope)),
-        Expression::StrContains { source, .. }
-        | Expression::StrCase { source, .. }
+        Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
@@ -1738,9 +1732,6 @@ fn validate_operand_assignment(
             source: operand, ..
         }
         | Expression::StrReplace {
-            source: operand, ..
-        }
-        | Expression::StrContains {
             source: operand, ..
         } => {
             if operand.column != assignment.column {

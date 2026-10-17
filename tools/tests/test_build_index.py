@@ -41,8 +41,22 @@ class BenchmarkIndex(unittest.TestCase):
             result.count("| Python, R |"), len(payload["examples"]) - excluded
         )
         self.assertEqual(result.count("| Excluded: "), excluded)
-        self.assertTrue(excluded)
         self.assertIn("reviewed-yellow)](https://github.com/", result)
+
+    def test_a_reviewed_exclusion_is_rendered(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixtures = Path(temporary)
+            case = fixtures / "excluded-case"
+            case.mkdir()
+            (case / "spec.yaml").write_text("domain: TEST\n")
+            (case / "benchmark.yaml").write_text(
+                "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
+                "conformance: {excluded: a reviewed reason}\n"
+            )
+            (case / "README.md").write_text("# Excluded case\n")
+            result = index.render_index(fixtures, "# Index\n\n## Benchmarks\n")
+        self.assertEqual(result.count("| Excluded: "), 1)
+        self.assertIn("a reviewed reason", result)
 
     def test_directory_addition_and_removal_update_index_without_a_registry(self):
         with tempfile.TemporaryDirectory() as temporary:

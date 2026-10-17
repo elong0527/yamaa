@@ -693,7 +693,7 @@ def test_the_proof_keeps_types_and_comments_apart() -> None:
 
 def test_directories_expand_to_specifications_only(tmp_path: Path) -> None:
     _spec(tmp_path, CANONICAL, "adsl.yaml")
-    _spec(tmp_path, 'schema_version: "1.0"\ndefine_version: "2.1.11"\n', "define.yaml")
+    _spec(tmp_path, 'schema_version: "1.0"\nstudy: {id: S1}\n', "environment.yaml")
     _spec(tmp_path, "data_roots: [data]\n", "yamaa-project.yaml")
     hidden = tmp_path / ".cache"
     hidden.mkdir()
@@ -702,7 +702,7 @@ def test_directories_expand_to_specifications_only(tmp_path: Path) -> None:
     assert [path.name for path in specification_files([tmp_path], root_fields)] == [
         "adsl.yaml"
     ]
-    assert not is_specification(tmp_path / "define.yaml", root_fields)
+    assert not is_specification(tmp_path / "environment.yaml", root_fields)
 
 
 def test_a_complex_root_key_is_not_a_specification(tmp_path: Path) -> None:

@@ -433,19 +433,8 @@ flag_class:
         description: See REQ-1257.
 
 filtered_source:
-    type: [variable, filtered_source_class]
+    type: [variable, source_binding_class]
     description: See REQ-1052.
-
-filtered_source_class:
-    - variable:
-        type: variable
-        required: true
-        description: See REQ-1053.
-    - fields_from: match_filter_fields
-    - fields_from: match_selection_fields
-    - absent:
-        type: literal_value
-        description: See REQ-1053.
 
 keep_policy:
     type: str
@@ -653,16 +642,6 @@ expressions:
         - invalid:
             type: literal_value
             description: See REQ-1301.
-    duration_text: # See REQ-1302.
-        - source:
-            type: [variable, int, float]
-            required: true
-            description: See REQ-1302.
-        - unit:
-            type: str
-            required: true
-            values: [second, minute, hour, day]
-            description: See REQ-1302.
 
 day_rule:
     type: str
@@ -827,18 +806,6 @@ expressions:
         - missing:
             type: literal_value
             description: See REQ-1322.
-    str_contains: # See REQ-1243.
-        - source:
-            type: variable
-            required: true
-            description: See REQ-1243.
-        - pattern:
-            type: regex
-            required: true
-            description: See REQ-1243.
-        - missing:
-            type: literal_value
-            description: See REQ-1243.
     str_concat: # See REQ-1112.
         - sources:
             type: "list[expression]"

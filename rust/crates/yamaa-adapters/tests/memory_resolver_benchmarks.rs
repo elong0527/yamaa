@@ -2378,14 +2378,6 @@ const EXEMPTIONS: &[(&str, &str)] = &[
     // filesystem paths. A memory resolver holds references and content,
     // not paths, so the judged properties do not exist on this route.
     (
-        "negative-path-absolute",
-        "expected diagnostic resource_path_not_relative judges a path spelling; also excluded from the file route's own conformance plan (authored: reference-only path history, #1905)",
-    ),
-    (
-        "negative-path-parent-escape",
-        "expected diagnostic resource_path_outside_project judges a path spelling; also excluded from the file route's own conformance plan (authored: reference-only path history, #1905)",
-    ),
-    (
         "negative-path-directory",
         "expected diagnostic resource_path_not_regular_file: a memory resolver holds no directories; the held reference resolves as content instead",
     ),

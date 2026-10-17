@@ -146,17 +146,7 @@ class BenchmarkMetadata(unittest.TestCase):
                     }
                 },
             },
-            {**self.metadata, "validation": {"rule": "R007"}},
-            {
-                **self.metadata,
-                "validation": {
-                    "rule": "R007",
-                    "validator": "schema",
-                    "blocked_by": "#1",
-                },
-            },
-            {**self.metadata, "validation": {"rule": "R7", "validator": "schema"}},
-            {**self.metadata, "validation": {"rule": "R007", "blocked_by": "closed"}},
+            {**self.metadata, "validation": {"validator": "schema"}},
         ]
         for metadata in mutations:
             with self.subTest(metadata=metadata):
