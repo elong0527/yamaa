@@ -73,7 +73,6 @@ impl Define {
 #[pyfunction]
 #[pyo3(signature=(environment,standard,created,installed_version))]
 pub fn _define_file(
-    py: Python<'_>,
     environment: &str,
     standard: &str,
     created: Option<&str>,
@@ -87,7 +86,7 @@ pub fn _define_file(
     let engine = Engine::new(EngineOptions::new(
         HostLanguage::Python,
         "python".into(),
-        py.version().into(),
+        Python::version_str().into(),
     ));
     // Define composition is infallible at the boundary; failures are carried
     // by the result. Cancellation cannot trigger here with a fresh token.
