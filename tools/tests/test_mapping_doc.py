@@ -356,6 +356,27 @@ class SheetStructureTests(unittest.TestCase):
         self.assertIn("&#8594;", encoded)
         self.assertNotIn("&amp;#", encoded)
 
+    def test_malformed_spec_fields_render_empty_sheets_instead_of_crashing(self):
+        # A field written with no value parses as None, not as an absent
+        # key; a column without a name and a non-mapping row template are
+        # the same kind of authoring error. Each used to escape as a
+        # TypeError/KeyError/AttributeError and abort the dashboard build.
+        base = load_spec("sdtm-dm-basic")
+        for spec in (
+            {**base, "columns": None},
+            {
+                **base,
+                "output": None,
+                "columns": [{"type": "str", "label": "No name"}],
+            },
+            {**base, "rows": ["not-a-template"]},
+            None,
+        ):
+            with self.subTest(spec=spec):
+                sheets = mapping_doc.mapping_sheets(spec)
+                self.assertEqual(sheets[0][0], "mapping")
+                self.assertIsInstance(rendered_tables(spec), str)
+
 
 if __name__ == "__main__":
     unittest.main()

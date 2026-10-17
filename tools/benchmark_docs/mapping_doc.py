@@ -1180,7 +1180,7 @@ def allowed_value_codelists(columns):
         for check in checks:
             if isinstance(check, dict) and "allowed_values" in check:
                 values = check["allowed_values"].get("values", [])
-                out.append((col["name"], ", ".join(str(v) for v in values)))
+                out.append((col.get("name", ""), ", ".join(str(v) for v in values)))
     return out
 
 
@@ -1370,11 +1370,19 @@ def mapping_row(
 
 def mapping_sheets(spec, define=None):
     """Sheet models: list of (tab id, tab label, headers, rows)."""
-    columns = [c for c in spec.get("columns", []) if isinstance(c, dict)]
+    spec = spec if isinstance(spec, dict) else {}
+    # A field written with no value parses as None, not as an absent key, so
+    # a bare .get(..., []) default does not apply to it; the other fields in
+    # this function (and SpecContext above) already guard with `or` /
+    # isinstance, and a malformed field must render an empty sheet instead
+    # of crashing the whole dashboard build with a TypeError/KeyError.
+    columns = [c for c in spec.get("columns") or [] if isinstance(c, dict)]
     ctx = SpecContext(spec)
-    input_names = set((spec.get("input") or {}).keys())
-    output_names = (spec.get("output") or {}).get("columns") or [
-        c["name"] for c in columns
+    inputs = spec.get("input")
+    input_names = set(inputs) if isinstance(inputs, dict) else set()
+    output = spec.get("output")
+    output_names = (output.get("columns") if isinstance(output, dict) else None) or [
+        c.get("name") for c in columns if c.get("name")
     ]
     output_set = set(output_names)
     shown = [c for c in columns if c.get("name") in output_set]
@@ -1392,7 +1400,9 @@ def mapping_sheets(spec, define=None):
 
     sheets = [("mapping", "Mapping", map_headers, map_rows)]
 
-    rows_spec = spec.get("rows") or []
+    rows_spec = [
+        template for template in spec.get("rows") or [] if isinstance(template, dict)
+    ]
     if rows_spec:
         template_vars = []
         for template in rows_spec:
