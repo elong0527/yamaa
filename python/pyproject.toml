@@ -89,6 +89,32 @@ extend = "../pyproject.toml"
 project-includes = ["src/yamaa"]
 preset = "default"
 
+[tool.uv]
+# `make setup` installs a built wheel, which uv rebuilds only when a file listed
+# here changes. List every wheel input: the package files, the build backend,
+# and the Rust sources the backend restores into a source archive. Paths are
+# relative to this directory. uv walks everything under a glob's literal prefix,
+# so no glob starts at `.`, `..` or `../rust`, which hold `.venv`, `build` and
+# `target`.
+cache-keys = [
+  { file = "pyproject.toml" },
+  { file = "README.md" },
+  { file = "LICENSE-READSTAT.txt" },
+  { file = "LICENSE-UNICODE.txt" },
+  { file = "LICENSE-WINDOWS.txt" },
+  { file = "LICENSE-YAML.txt" },
+  { file = "src/**" },
+  { file = "yamaa_build_backend.py" },
+  { file = "../rust/Cargo.toml" },
+  { file = "../rust/Cargo.lock" },
+  { file = "../rust/rust-toolchain.toml" },
+  { file = "../rust/crates/*/Cargo.toml" },
+  { file = "../rust/crates/*/build.rs" },
+  { file = "../rust/crates/*/src/**/*.rs" },
+  { file = "../rust/crates/yamaa-adapters/vendor/**" },
+  { file = "../rust/vendor/**" },
+]
+
 [tool.uv.sources]
 yamaa-benchmarks = { path = "../rust/tests/project-programs/python", editable = true }
 yamaa-tools = { path = "..", editable = true }

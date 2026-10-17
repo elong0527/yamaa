@@ -48,6 +48,8 @@ the vendored licenses and patch provenance.
 Run `make help` at the repository root for prerequisites, configuration variables
 and supported targets. Its inventory is the command reference. Set
 `CARGO_TARGET_DIR` when separate worktrees need independent Rust build output.
+After Rust changes, rerun `make setup`: it rebuilds the Python extension whenever
+a file listed under `tool.uv.cache-keys` in `python/pyproject.toml` changes.
 
 | Command | Purpose |
 | --- | --- |
