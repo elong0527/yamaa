@@ -93,6 +93,15 @@ Python transitives are resolved compatibly. These isolated graphs do not change
 `rust/Cargo.lock` or `python/uv.lock`. The full native matrix separately qualifies
 the locked release across supported platforms and Python versions.
 
+The same workflow checks both locks against security advisories:
+`cargo deny check advisories` reads `rust/Cargo.lock` with `rust/deny.toml`,
+and `pip-audit` reads every package locked in `python/uv.lock`. An ignored Rust
+advisory names its id, a reason and a review date in `rust/deny.toml`. The
+scanners do not cover vendored source: the ReadStat C sources under
+`rust/crates/yamaa-adapters/vendor/readstat` are reviewed against upstream
+releases when they are updated, and the vendored `saphyr-parser` patch is
+replaced by a published release under #2583.
+
 ## Publication
 
 After the final commit is on main and its complete native qualification has

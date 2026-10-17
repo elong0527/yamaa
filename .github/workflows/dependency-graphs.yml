@@ -22,6 +22,29 @@ defaults:
     shell: bash
 
 jobs:
+  advisories:
+    name: advisories (Cargo.lock, uv.lock)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the Rust lock against RustSec advisories
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1 (cargo-deny 0.20.2)
+        with:
+          manifest-path: rust/Cargo.toml
+          command: check advisories
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.11.6'
+      - name: Check the Python lock against advisories
+        run: |
+          uv export --project python --frozen --all-extras --all-groups \
+            --no-emit-project --no-emit-local > "$RUNNER_TEMP/requirements.txt"
+          uvx --from pip-audit==2.10.1 pip-audit --strict --disable-pip \
+            --require-hashes -r "$RUNNER_TEMP/requirements.txt"
+
   graph:
     name: ${{ matrix.graph }} (Python ${{ matrix.python }}, Rust 1.90, R 4.6.1)
     runs-on: ubuntu-24.04
