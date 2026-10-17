@@ -3,7 +3,7 @@ name: Dependency graphs
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, 'release/**']
   schedule:
     - cron: '23 6 * * 1'
   workflow_dispatch:

@@ -4,8 +4,9 @@ Start with [AGENTS.md](AGENTS.md), the repository map and hard rules for people
 and coding agents. Language behavior belongs in [rules/](rules/README.md) and
 [yaml/](yaml/README.md). Independently authored benchmark expectations are the
 test oracle; reproduce a discrepancy independently before changing that truth.
-Breaking changes are allowed for 0.4.0. Remove obsolete interfaces and their
-callers together instead of keeping compatibility aliases.
+A change that breaks a user-facing interface needs an owner decision and a
+migration note (see AGENTS.md). Remove obsolete interfaces and their callers
+together instead of keeping compatibility aliases.
 
 ## Where changes belong
 
@@ -194,8 +195,8 @@ new matching batch heads and fresh completed reviews. Batch metadata belongs
 in the PR body, not a committed evidence ledger.
 
 Native qualification is separate: `.github/workflows/native.yml` builds and
-installs the supported Python wheel/source and R source combinations every two
-hours on main, on dispatch, or on a `qualification/issue-*` push. It checks public
+installs the supported Python wheel/source and R source combinations nightly on
+main, on dispatch, or on a `qualification/issue-*` push. It checks public
 benchmark conformance, installed host suites, packaging, optimized Rust behavior
 and portable math. Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including strict R package

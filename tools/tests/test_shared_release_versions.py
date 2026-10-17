@@ -3,6 +3,7 @@ ambiguous packaging owners."""
 
 import shutil
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -10,6 +11,11 @@ from tools.packaging import check_shared_release_versions as checker
 from tools.paths import ROOT
 
 TOOLS = ROOT / "tools"
+# The selected release version, read from the tree so that a version bump
+# does not have to edit these mutations.
+VERSION = tomllib.loads((ROOT / "python/pyproject.toml").read_text())["project"][
+    "version"
+]
 
 
 class CoherentRelease(unittest.TestCase):
@@ -50,7 +56,7 @@ class CoherentRelease(unittest.TestCase):
         self.assertEqual(checker.violations(self.root), [])
 
     def test_stale_cargo_workspace_is_refused(self):
-        self.change("rust/Cargo.toml", 'version = "0.4.0"', 'version = "0.1.0"')
+        self.change("rust/Cargo.toml", f'version = "{VERSION}"', 'version = "0.1.0"')
         self.assertIn(
             "Cargo workspace version differs from selected Python/R release",
             checker.violations(self.root),
@@ -70,7 +76,7 @@ class CoherentRelease(unittest.TestCase):
     def test_stale_cargo_lock_identity_is_refused(self):
         self.change(
             "rust/Cargo.lock",
-            'name = "yamaa-core"\nversion = "0.4.0"',
+            f'name = "yamaa-core"\nversion = "{VERSION}"',
             'name = "yamaa-core"\nversion = "0.1.0"',
         )
         self.assertIn(
@@ -80,7 +86,10 @@ class CoherentRelease(unittest.TestCase):
 
     def test_stale_python_lock_or_wrong_owner_is_refused(self):
         for old, new in (
-            ('name = "yamaa"\nversion = "0.4.0"', 'name = "yamaa"\nversion = "0.3.0"'),
+            (
+                f'name = "yamaa"\nversion = "{VERSION}"',
+                'name = "yamaa"\nversion = "0.3.0"',
+            ),
             ('source = { editable = "." }', 'source = { editable = "../foreign" }'),
         ):
             path = self.root / "python/uv.lock"
@@ -178,7 +187,7 @@ class CoherentRelease(unittest.TestCase):
             path = root / "rust/Cargo.lock"
             path.write_text(
                 path.read_text().replace(
-                    'name = "yamaa-core"\nversion = "0.4.0"', 'name = "yamaa-core"'
+                    f'name = "yamaa-core"\nversion = "{VERSION}"', 'name = "yamaa-core"'
                 )
             )
 
@@ -204,7 +213,7 @@ class CoherentRelease(unittest.TestCase):
         path = self.root / "python/uv.lock"
         path.write_text(
             path.read_text()
-            + '\n[[package]]\nname = "yamaa"\nversion = "0.4.0"\nsource = { editable = "." }\n'
+            + f'\n[[package]]\nname = "yamaa"\nversion = "{VERSION}"\nsource = {{ editable = "." }}\n'
         )
         self.assertIn(
             "uv.lock: selected yamaa project/version ownership differs",
