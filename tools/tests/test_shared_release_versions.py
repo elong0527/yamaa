@@ -151,6 +151,55 @@ class CoherentRelease(unittest.TestCase):
             checker.violations(self.root),
         )
 
+    def test_malformed_or_missing_metadata_is_a_violation_not_a_crash(self):
+        # The checker must report violations for the malformed shapes a
+        # hand-edited or partially generated tree can contain, instead of
+        # escaping as KeyError/TypeError/AttributeError/TOMLDecodeError.
+        def missing_project(root):
+            (root / "python/pyproject.toml").write_text("[tool.x]\nfoo = 1\n")
+
+        def invalid_python_toml(root):
+            (root / "python/pyproject.toml").write_text("not [ valid")
+
+        def missing_python_file(root):
+            (root / "python/pyproject.toml").unlink()
+
+        def integer_author_entry(root):
+            path = root / "python/pyproject.toml"
+            text = path.read_text()
+            start = text.index("authors = [")
+            end = text.index("]", start)
+            path.write_text(text[:start] + "authors = [123]\n" + text[end + 1 :])
+
+        def missing_workspace_package(root):
+            (root / "rust/Cargo.toml").write_text("[workspace]\nmembers = []\n")
+
+        def cargo_lock_entry_without_version(root):
+            path = root / "rust/Cargo.lock"
+            path.write_text(
+                path.read_text().replace(
+                    'name = "yamaa-core"\nversion = "0.4.0"', 'name = "yamaa-core"'
+                )
+            )
+
+        def missing_python_lock(root):
+            (root / "python/uv.lock").unlink()
+
+        for mutate in (
+            missing_project,
+            invalid_python_toml,
+            missing_python_file,
+            integer_author_entry,
+            missing_workspace_package,
+            cargo_lock_entry_without_version,
+            missing_python_lock,
+        ):
+            with self.subTest(mutation=mutate.__name__):
+                # Rebuild a pristine copy for each mutation.
+                self.setUp()
+                mutate(self.root)
+                self.assertNotEqual(checker.violations(self.root), [])
+
     def test_ambiguous_python_distribution_is_refused(self):
         path = self.root / "python/uv.lock"
         path.write_text(
