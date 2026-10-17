@@ -83,15 +83,22 @@ Replaces: REQ-0397, REQ-0399, REQ-0404, REQ-0405.
 
 <a id="check-5"></a>
 
-### CHECK-5. `not_missing` passes only when every value is present; every other value check passes missing values
+### CHECK-5. `not_missing` passes only when every value is present and is not declared on a key; every other value check passes missing values
 
 `not_missing` passes only when every value is non-missing. Every other value
 check passes missing values; combine it with `not_missing` when absence is
-invalid.
+invalid. A key column is never missing under
+[OUTPUT-3](output.md#output-3), so a `not_missing` on a key column restates the
+keys and fails validation.
 
-Fails: `not_missing_failed`.
-Evidence: `negative-not-missing-age`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`.
+Fails: `not_missing_failed`, `redundant_declaration`.
+Evidence: `negative-not-missing-age`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::VerificationNotMissingRedundant`.
 Replaces: REQ-0375.
+
+The redundant finding reports the verification's path and, in `stated_by`,
+the key's position in `keys`. A column whose submission metadata resolves
+`mandatory` to true on every row is checked without a `not_missing` too, and
+[SUB-11](profiles/submission.md#sub-11) rejects one beside it.
 
 <a id="check-6"></a>
 
@@ -154,19 +161,26 @@ Replaces: REQ-0379.
 
 <a id="check-10"></a>
 
-### CHECK-10. `unique` requires the combined values of its columns to be unique, missing values included
+### CHECK-10. `unique` requires the combined values of a column set other than the keys to be unique, missing values included
 
 `unique` requires the listed columns to exist and their combined values to be
 unique. Missing values participate as values; use column `not_missing` when
-they are prohibited.
+they are prohibited. A `unique` whose set of columns equals the set of `keys`
+restates [OUTPUT-3](output.md#output-3), which already requires those values
+to be present and unique, and fails validation.
 
-Fails: `unique_failed`.
-Evidence: `negative-unique-duplicate`, `schema-verification-log`.
+Fails: `unique_failed`, `redundant_declaration`.
+Evidence: `negative-unique-duplicate`, `negative-unique-repeats-keys`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`.
 Replaces: REQ-0381.
 
-Write an unnamed check as `unique: [STUDYID, USUBJID]`. The mapping form
-`unique: {columns: [STUDYID, USUBJID], id: subject-key}` also admits an
+Write an unnamed check as `unique: [SITEID, SUBJID]`. The mapping form
+`unique: {columns: [SITEID, SUBJID], id: site-subject}` also admits an
 optional `severity`.
+
+The redundant finding reports the verification's path, its columns and, in
+`stated_by`, `keys`. Equality is between sets: order and a repeated column do
+not matter. Any other set of columns, sharing some keys or none, is an ordinary
+check.
 
 <a id="check-11"></a>
 
@@ -322,7 +336,7 @@ A supplemental qualifier record points to its parent domain record. The
 derivation that produces the cross-dataset link asserts the link; a
 verification over the finished artifact does not. An intermediate without
 `no_match` rejects a value matching no record, and an intermediate read carried
-by a `not_missing` column does the same.
+by a key column or a `not_missing` column does the same.
 
 Evidence: `sdtm-suppmh-linkage`.
 Replaces: REQ-0369, REQ-0370.

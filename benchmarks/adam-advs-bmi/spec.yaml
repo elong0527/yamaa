@@ -66,8 +66,6 @@ rows:
           expr: "VS.VSSTRESN / NULLIF(HEIGHTBL * HEIGHTBL / 10000, 0)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
   - row_count:
       min: 24
       max: 24

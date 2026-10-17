@@ -103,8 +103,6 @@ rows:
       ALTDEN: LB.LBSTRESN
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, ADT, PARAMCD]
   - row_count:
       min: 6
       max: 6

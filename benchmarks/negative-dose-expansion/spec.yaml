@@ -97,8 +97,6 @@ rows:
       ADOSEN: {literal: 3}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, EXSEQ, ADOSEN]
   # Fails on every row of a record counting more administrations than
   # were built.
   - assert:

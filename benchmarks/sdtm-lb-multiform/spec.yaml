@@ -357,8 +357,6 @@ rows:
           expr: "ONLY(ODM.Value)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, LBSEQ]
   - row_count:
       min: 18
       max: 18

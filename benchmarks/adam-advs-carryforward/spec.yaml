@@ -123,8 +123,6 @@ columns:
         expr: "ONLY(AVALCOL)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, ASEQ]
   - row_count:
       min: 21
       max: 21

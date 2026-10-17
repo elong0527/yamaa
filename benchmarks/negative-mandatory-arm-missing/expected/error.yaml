@@ -1,0 +1,11 @@
+phase: verification
+condition: not_missing_failed
+spec_paths:
+  - columns.TRT01P.submission.mandatory
+requirement: REQ-0885
+context:
+  column: TRT01P
+  failure_count: 1
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-102

@@ -142,16 +142,19 @@ checking.
 
 | Bound list | What happens to completed column values |
 |---|---|
-| Non-extensible list with `items` | Every non-missing value must match an item; missing values pass. Add `not_missing` if absence must fail. |
-| Extensible list | The binding imposes no value check. An explicit `allowed_values` verification can impose a separate restriction. |
+| List with `items`, extensible or not | Every non-missing value must match a declared item; missing values pass. Declare `mandatory: true` in the column's submission metadata if absence must fail. |
 | `external` dictionary with a required version | The binding imposes no value check; yamaa does not read the dictionary. Declare `external` instead of `items`. |
 
-In this example, changing `SEX` to `INVALID` or `AGEGR1` to `OTHER` fails the
-build's value check. Changing `DTYPE` to `OTHER` is admitted because that list
-is extensible. A text list binds to `str`, an integer list to `int`, and a
-float list to `float`. For a non-extensible list with `items`, a binding and
-`allowed_values` must declare the same value set. For an extensible or external
-list, an explicit `allowed_values` verification stands alone.
+In this example, changing `SEX` to `INVALID`, `AGEGR1` to `OTHER` or `DTYPE` to
+`OTHER` fails the build's value check. `DTYPE` is extensible, which lets the
+study add a value: declare it as an item marked `extended: true`, and the
+Define-XML document marks it as an extended value. A text list binds to `str`,
+an integer list to `int`, and a float list to `float`.
+
+A list with `items` already states its column's value set, so an
+`allowed_values` verification on the same column is rejected as a redundant
+declaration, even when the two lists agree. Beside an `external` dictionary, or
+on a column with no binding, `allowed_values` stays an ordinary check.
 
 See the [environment schema](https://github.com/elong0527/yamaa/blob/main/yaml/schema_environment.yaml)
 for the accepted fields and the [controlled terminology rule](https://github.com/elong0527/yamaa/blob/main/rules/profiles/terminology.md)

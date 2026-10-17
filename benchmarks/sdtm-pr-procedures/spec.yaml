@@ -104,8 +104,6 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by: [PRSTDTC, PRTRT]
-    verifications:
-      not_missing: {}
 
 rows:
   - id: surgery
@@ -194,8 +192,6 @@ rows:
           expr: "ONLY(ODM.Value)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PRSEQ]
   - row_count:
       min: 3
       max: 3

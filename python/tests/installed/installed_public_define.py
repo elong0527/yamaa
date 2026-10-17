@@ -658,11 +658,17 @@ class PublicDefine(unittest.TestCase):
         self.assertTrue(result.save())
         self.assertTrue((directory / "artifacts/dm.json").is_file())
         self.assertFalse((directory / "dm.json").exists())
-        (directory / "parents/base.yaml").write_text(
-            spec.replace("values: [F, M, U]", "values: [F, M]")
+        # The SEX codelist lists its items, so an allowed_values beside it
+        # states the same value set twice.
+        redundant = spec.replace(
+            "derivation: DM_RAW.SEX\n",
+            "derivation: DM_RAW.SEX\n    verifications:\n      - allowed_values:\n"
+            "          values: [F, M, U]\n",
         )
+        self.assertNotEqual(redundant, spec)
+        (directory / "parents/base.yaml").write_text(redundant)
         result = self.call(directory)
-        self.assertIn("codelist_values_conflict", result.issues["condition"].to_list())
+        self.assertIn("redundant_declaration", result.issues["condition"].to_list())
         self.assertIn("REQ-0955", result.issues["requirement"].to_list())
         previous = (directory / "artifacts/define.xml").read_bytes()
         with self.assertRaises(DefineError):

@@ -38,8 +38,6 @@ columns:
         - otherwise: {literal: "Y"}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 6
       max: 6

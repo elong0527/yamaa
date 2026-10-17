@@ -32,8 +32,8 @@ ignored declaration.
 
 A column's `codelist` names a codelist the study document declares.
 [Controlled terminology](terminology.md) owns that object, the values a binding
-enforces, and its agreement with an `allowed_values` verification
-([CT-1](terminology.md#ct-1)).
+enforces ([CT-7](terminology.md#ct-7)), and the redundancy of an
+`allowed_values` verification beside it ([CT-9](terminology.md#ct-9)).
 
 <a id="sub-2"></a>
 
@@ -240,18 +240,18 @@ role vocabulary, so a role in that family would name nothing.
 
 <a id="sub-10"></a>
 
-### SUB-10. `core` uses its family's designations, and `mandatory` follows its family's rule
+### SUB-10. `core` uses its family's designations, and `mandatory` resolves from the keys, its declaration and the dataset's class
 
 `core` is the standard's core designation and is declared for every family:
 `Req`, `Exp` or `Perm` for `sdtm` and `send`, and `Req`, `Cond` or `Perm` for
-`adam`. `mandatory` states whether the completed column must carry a value and
-is not a second spelling of `core`. For `sdtm` and `send`, `mandatory`
-defaults from `core`, and a declared `mandatory: false` on a `Req` column is
-rejected. For `adam`, `core` and `mandatory` are both required and neither
-derives the other.
+`adam`. `mandatory` states whether every completed value must be present and
+resolves without a study document. A key column is mandatory, and declaring
+`mandatory: false` on one fails. Otherwise a declared `mandatory` wins, and
+`adam` must declare one; without one, a column is mandatory exactly when its
+dataset's class is a tabulation class and its `core` is `Req`.
 
-Fails: `core_mandatory_conflict`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCoreMandatory`, `rust/crates/yamaa-core/tests/schema_submission.rs::all_core_origin_source_and_method_choices_are_retained`.
+Fails: `core_mandatory_conflict`, `value_not_permitted`.
+Evidence: `sdtm-dm-metadata`, `negative-required-sex-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::mandatory_columns_are_checked_without_a_study_document`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCoreMandatory`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionClassFamily`.
 Replaces: REQ-0880, REQ-0881, REQ-0882, REQ-0883, REQ-0884, REQ-0915, REQ-1141.
 
 For `sdtm` and `send`, `Req` is required, `Exp` expected and `Perm`
@@ -260,21 +260,42 @@ permissible. For `adam`, `Req` is required, `Cond` conditionally required and
 for `adam`, or a `Cond` for `sdtm` or `send`, names no designation its standard
 publishes.
 
-The mapping between `core` and `mandatory` is standard-specific. For `sdtm` and
-`send`, `core` is required and `mandatory` defaults from it: `Req` gives true,
-and `Exp` and `Perm` give false. A declared `mandatory: true` on an `Exp` or
-`Perm` column is an accepted sponsor restriction. A declared
-`mandatory: false` on a `Req` column is rejected: the standard requires the
-column, and a specification cannot relax its standard by declaration.
+The dataset's `submission.class` names its family group, so the domain build
+resolves `mandatory` from the specification alone:
 
-For `adam`, the ADaM guides state that `Core` assists preparation, is not
-submitted in define.xml, and allows nulls unless otherwise specified. A `Req`
+| Group | Classes | Families |
+|---|---|---|
+| tabulation | `EVENTS`, `FINDINGS`, `FINDINGS ABOUT`, `INTERVENTIONS`, `RELATIONSHIP`, `SPECIAL PURPOSE`, `STUDY REFERENCE`, `TRIAL DESIGN` | `sdtm`, `send` |
+| analysis | `ADAM OTHER`, `BASIC DATA STRUCTURE`, `DEVICE LEVEL ANALYSIS DATASET`, `MEDICAL DEVICE BASIC DATA STRUCTURE`, `MEDICAL DEVICE OCCURRENCE DATA STRUCTURE`, `OCCURRENCE DATA STRUCTURE`, `REFERENCE DATA STRUCTURE`, `SUBJECT LEVEL ANALYSIS DATASET` | `adam` |
+
+A dataset that declares no class resolves `mandatory` from its keys and its
+declarations alone. A document that composes a dataset whose class belongs to
+the other group fails with `value_not_permitted`, reporting `submission.class`:
+the group the domain build read must be the family the study document binds.
+
+For a tabulation class, `core` derives `mandatory`: `Req` gives true, and `Exp`
+and `Perm` give false. A declared `mandatory: true` on an `Exp` or `Perm`
+column is an accepted sponsor restriction. A declared `mandatory: false` on a
+`Req` column is rejected when a document composes the dataset: the standard
+requires the column, and a specification cannot relax its standard by
+declaration.
+
+For `adam`, the ADaM guides state that `Core` assists preparation and allows
+nulls unless otherwise specified, and Define-XML has no Core attribute. A `Req`
 core requires the variable's inclusion in the dataset but allows nulls;
 `mandatory` states whether every row carries a non-missing value, as the
 programming specification decides. A `Cond` core therefore tells nothing about
 `mandatory`, and a `mandatory: false` on a `Req` column is accepted.
 
-Each of these fails with `core_mandatory_conflict`, reporting the column:
+A key column resolves to true whatever its `core`, since
+[OUTPUT-3](../output.md#output-3) already requires its values; a declared
+`mandatory: false` on a key column, at column or value level, fails validation
+with `value_not_permitted`, reporting the field. A value-level entry
+([SUB-12](#sub-12)) resolves the same way over its merged metadata, taking
+`mandatory` and `core` from the column where it declares neither.
+
+Each of these fails with `core_mandatory_conflict` when a document composes
+the dataset, reporting the column:
 
 - a `core` absent for any family;
 - an `Exp` for `adam`;
@@ -282,18 +303,44 @@ Each of these fails with `core_mandatory_conflict`, reporting the column:
 - a `mandatory: false` on a `Req` column for `sdtm` or `send`;
 - a `mandatory` absent for `adam`.
 
+[SUB-11](#sub-11) enforces the resolution, and
+[DEFINE-18](define-xml.md#define-18) writes it as `Mandatory`.
+
 <a id="sub-11"></a>
 
-### SUB-11. A mandatory column is enforced by a `not_missing` verification or by `keys`
+### SUB-11. A mandatory column is checked for missing values, and a `not_missing` beside it is redundant
 
-A column declaring `mandatory: true` must also carry a `not_missing`
-verification or appear in `keys`, whose non-missing requirement
-[OUTPUT-3](../output.md#output-3) already states. A
-`mandatory: true` column with neither fails.
+Every completed value of a column whose resolved `mandatory` is true must be
+present. [OUTPUT-3](../output.md#output-3) checks a key column. Any other
+mandatory column is checked where [Verification](../verification.md) runs a
+column verification and fails as `not_missing` fails. A value-level `mandatory`
+decides only the rows of its test code. A `not_missing` verification on a
+column that is mandatory on every row restates the fact and fails validation.
 
-Fails: `mandatory_not_enforced`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMandatoryUnenforced`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::effective_value_metadata_rejects_invalid_bounds_types_and_explicit_length_conflicts_before_data`.
+Fails: `not_missing_failed`, `redundant_declaration`.
+Evidence: `negative-mandatory-arm-missing`, `negative-required-sex-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::value_level_mandatory_applies_only_to_the_rows_of_its_test_code`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMandatoryRedundant`.
 Replaces: REQ-0885, REQ-0916.
+
+The domain build enforces the resolution of [SUB-10](#sub-10) without a study
+document. The check runs after the column's declared verifications and before
+its terminology checks, and the verification log records it as a `not_missing`
+check. Its failure reports the column, the failure count and the offending
+keys, as a failed `not_missing` does, at the path of the declaration that makes
+the column mandatory: `columns.<column>.submission.mandatory`, or
+`columns.<column>.submission.core` when `core` derives it, and the same fields
+under `rows.<row>.submission.<column>` for a value-level entry.
+
+A value-level entry that resolves differently from its column decides the rows
+whose completed `<DOMAIN>TESTCD` is its test code ([SUB-12](#sub-12)), and the
+column's resolution decides every other row. A value-level `mandatory: false`
+therefore exempts its test code from a mandatory column, and a value-level
+`mandatory: true` requires values on its test code's rows alone.
+
+The redundant finding reports the verification's path and, in `stated_by`,
+the declaration that already states the fact. A `not_missing` on a key column
+is redundant under [CHECK-5](../verification.md#check-5). A `not_missing` on a
+column that some test code exempts still requires values on that test code's
+rows, so it is not redundant.
 
 ## Value-level metadata
 
@@ -559,11 +606,13 @@ list.
 
 <a id="sub-23"></a>
 
-### SUB-23. Family-independent rules are checked on the specification alone, and family-dependent rules when a document composes it
+### SUB-23. Family-independent rules and the `mandatory` resolution are checked on the specification alone, and other family-dependent rules when a document composes it
 
 Every rule of this profile that does not depend on a family is checked when the
-specification is validated on its own. Every family-dependent rule is checked
-when [Define-XML](define-xml.md) composes the specification into a document.
+specification is validated on its own, and so is the resolution and enforcement
+of `mandatory`, which reads its family group from the dataset's `class`. Every
+other family-dependent rule is checked when [Define-XML](define-xml.md)
+composes the specification into a document.
 
 Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`.
 Replaces: REQ-0907, REQ-0908.
@@ -577,7 +626,18 @@ Checked when the specification is validated on its own:
 - the value-level declaration rules of [SUB-12](#sub-12) and
   [SUB-13](#sub-13);
 - the presence of `method` for a declared `Derived` origin
-  ([SUB-18](#sub-18)).
+  ([SUB-18](#sub-18));
+- the resolution of `mandatory` from the keys, its declaration and the class's
+  family group, a key column's declared `mandatory: false`, and the presence
+  check and redundant `not_missing` of [SUB-10](#sub-10) and
+  [SUB-11](#sub-11).
+
+Checked when a document composes the specification:
+
+- the core designations and `core`/`mandatory` conflicts of
+  [SUB-10](#sub-10), and the agreement of the class's group with the family;
+- the remaining family-dependent rules, such as the origin pairs of
+  [SUB-15](#sub-15).
 
 Only the study document says which standard the identifier names. A
 specification that is never composed carries declarations no family has

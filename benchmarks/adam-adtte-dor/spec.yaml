@@ -231,8 +231,6 @@ columns:
           then: LASTVLSEQ
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD]
   - row_count:
       min: 11
       max: 11

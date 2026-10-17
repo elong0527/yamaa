@@ -59,8 +59,6 @@ columns:
       not_missing: {}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 8
       max: 8

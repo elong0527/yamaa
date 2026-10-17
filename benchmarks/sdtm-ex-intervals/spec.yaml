@@ -87,8 +87,6 @@ rows:
       EXADJ: {aggregate: "MIN(EC_RAW.ECADJ)"}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, EXSEQ]
   - row_count:
       min: 6
       max: 6

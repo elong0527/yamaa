@@ -1,7 +1,7 @@
 [
   {
     "case": "search_held",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\na,abc\nb,zbz\n",
     "expected": {
       "artifacts": [
@@ -142,17 +142,6 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "not_missing",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        },
-        {
           "check": "matches",
           "evaluated_count": 2,
           "failure": null,
@@ -162,17 +151,6 @@
           "specification": "spec.yaml",
           "target": "V",
           "verification_id": "value-rule"
-        },
-        {
-          "check": "unique",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": null
         }
       ]
     },
@@ -180,7 +158,7 @@
   },
   {
     "case": "search_failed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\na,abc\nb,xxx\n",
     "expected": {
       "artifacts": [],
@@ -291,17 +269,6 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "not_missing",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        },
-        {
           "check": "matches",
           "evaluated_count": 2,
           "failure": {
@@ -351,7 +318,7 @@
   },
   {
     "case": "missing_passes",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\na,b\nb,\n",
     "expected": {
       "artifacts": [
@@ -492,17 +459,6 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "not_missing",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        },
-        {
           "check": "matches",
           "evaluated_count": 2,
           "failure": null,
@@ -512,17 +468,6 @@
           "specification": "spec.yaml",
           "target": "V",
           "verification_id": "value-rule"
-        },
-        {
-          "check": "unique",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": null
         }
       ]
     },
@@ -530,7 +475,7 @@
   },
   {
     "case": "empty_input",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [
@@ -619,17 +564,6 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "not_missing",
-          "evaluated_count": 0,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        },
-        {
           "check": "matches",
           "evaluated_count": 0,
           "failure": null,
@@ -639,17 +573,6 @@
           "specification": "spec.yaml",
           "target": "V",
           "verification_id": "value-rule"
-        },
-        {
-          "check": "unique",
-          "evaluated_count": 0,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": null
         }
       ]
     },
@@ -657,7 +580,7 @@
   },
   {
     "case": "unicode_scalars",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"\\u00e9.\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"\\u00e9.\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\na,é🙂\nb,xé🙂y\n",
     "expected": {
       "artifacts": [
@@ -798,17 +721,6 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "not_missing",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        },
-        {
           "check": "matches",
           "evaluated_count": 2,
           "failure": null,
@@ -818,17 +730,6 @@
           "specification": "spec.yaml",
           "target": "V",
           "verification_id": "value-rule"
-        },
-        {
-          "check": "unique",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": null
         }
       ]
     },
@@ -836,7 +737,7 @@
   },
   {
     "case": "lookahead",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(?=b)b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(?=b)b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\na,ab\nb,b\n",
     "expected": {
       "artifacts": [],
@@ -931,25 +832,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "not_missing",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "backreference",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(.)\\\\1\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(.)\\\\1\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\na,aa\nb,éé\n",
     "expected": {
       "artifacts": [],
@@ -1044,25 +933,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "not_missing",
-          "evaluated_count": 2,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "bad_pattern",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\na,b\n",
     "expected": {
       "artifacts": [],
@@ -1147,25 +1024,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "not_missing",
-          "evaluated_count": 1,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "python_named_group",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(?P<code>b)\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(?P<code>b)\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\na,b\n",
     "expected": {
       "artifacts": [],
@@ -1250,25 +1115,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "not_missing",
-          "evaluated_count": 1,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "bad_pattern_empty",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [],
@@ -1342,25 +1195,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "not_missing",
-          "evaluated_count": 0,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "wrong_type_empty",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [],
@@ -1434,25 +1275,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "not_missing",
-          "evaluated_count": 0,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "wrong_type_bad_conversion",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\na,bad\n",
     "expected": {
       "artifacts": [],
@@ -1551,25 +1380,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "not_missing",
-          "evaluated_count": 1,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "held_before_conversion",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": \"bad\"}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": \"bad\"}}]\n",
     "input": "ID,V\na,b\n",
     "expected": {
       "artifacts": [],
@@ -1670,17 +1487,6 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "not_missing",
-          "evaluated_count": 1,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        },
-        {
           "check": "matches",
           "evaluated_count": 1,
           "failure": null,
@@ -1697,7 +1503,7 @@
   },
   {
     "case": "bad_pattern_before_conversion",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"int\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\na,bad\n",
     "expected": {
       "artifacts": [],
@@ -1796,25 +1602,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "not_missing",
-          "evaluated_count": 1,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "bad_before_later_limit",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}, {\"matches\": {\"pattern\": \"a{1000001}\", \"id\": \"later-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"(\", \"id\": \"value-rule\"}}, {\"matches\": {\"pattern\": \"a{1000001}\", \"id\": \"later-rule\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\na,b\n",
     "expected": {
       "artifacts": [],
@@ -1899,25 +1693,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "not_missing",
-          "evaluated_count": 1,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "duplicate_before_later_limit",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\", \"verifications\": [{\"not_missing\": {\"id\": \"key-rule\"}}]}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"same\"}}, {\"matches\": {\"pattern\": \"a{1000001}\", \"id\": \"same\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\nverifications: [{unique: {columns: [ID]}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{\"name\": \"ID\", \"type\": \"str\", \"label\": \"ID\", \"derivation\": \"SRC.ID\"}, {\"name\": \"V\", \"type\": \"str\", \"label\": \"V\", \"derivation\": \"SRC.V\", \"verifications\": [{\"matches\": {\"pattern\": \"b\", \"id\": \"same\"}}, {\"matches\": {\"pattern\": \"a{1000001}\", \"id\": \"same\"}}]}, {\"name\": \"LATER\", \"type\": \"int\", \"label\": \"LATER\", \"derivation\": {\"literal\": 2}}]\n",
     "input": "ID,V\na,b\n",
     "expected": {
       "artifacts": [],
@@ -2003,17 +1785,6 @@
       ],
       "unsupported": [],
       "verifications": [
-        {
-          "check": "not_missing",
-          "evaluated_count": 1,
-          "failure": null,
-          "requirement": "REQ-0375",
-          "severity": "error",
-          "spec_path": "columns.ID.verifications[0].not_missing",
-          "specification": "spec.yaml",
-          "target": "ID",
-          "verification_id": "key-rule"
-        },
         {
           "check": "matches",
           "evaluated_count": 1,

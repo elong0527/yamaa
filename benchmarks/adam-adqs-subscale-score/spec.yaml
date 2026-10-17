@@ -98,8 +98,6 @@ rows:
       ITEMRESN: {literal: null}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VISIT, PARAMCD]
   - row_count:
       min: 25
       max: 25

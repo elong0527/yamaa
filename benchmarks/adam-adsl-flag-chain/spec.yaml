@@ -102,8 +102,6 @@ columns:
           order_by: [AGE, USUBJID]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 7
       max: 7

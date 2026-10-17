@@ -116,8 +116,6 @@ columns:
           then: P02DECOD
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 7
       max: 7

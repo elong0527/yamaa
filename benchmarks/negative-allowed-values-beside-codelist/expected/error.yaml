@@ -1,0 +1,9 @@
+phase: validation
+condition: redundant_declaration
+spec_paths:
+  - columns.SEX.verifications[0].allowed_values
+requirement: REQ-0955
+context:
+  column: SEX
+  codelist: SEX
+  stated_by: columns.SEX.submission.codelist

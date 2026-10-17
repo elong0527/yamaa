@@ -178,8 +178,6 @@ rows:
           - otherwise: {literal: 99}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, MHSEQ]
   - row_count:
       min: 10
       max: 10

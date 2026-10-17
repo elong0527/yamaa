@@ -66,8 +66,6 @@ columns:
           SEVERE: 3
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, ASEQ]
   - row_count:
       min: 11
       max: 11

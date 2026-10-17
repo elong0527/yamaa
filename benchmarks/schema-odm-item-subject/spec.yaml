@@ -30,7 +30,3 @@ columns:
     type: int
     label: Age
     derivation: {odm: ODM.IT.DM.AGE}
-
-verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]

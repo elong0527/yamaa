@@ -97,8 +97,6 @@ rows:
       LBRESN: {literal: null}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, ADT, PARAMCD]
   - row_count:
       min: 15
       max: 15

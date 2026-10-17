@@ -45,8 +45,6 @@ columns:
     type: str
     label: Identifying Variable Value
     derivation: USUBJID
-    verifications:
-      not_missing: {}
 
   - name: ITEMOID
     type: str
@@ -144,8 +142,6 @@ rows:
       DMRACE: DMREC.RACE
 
 verifications:
-  - unique:
-      columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
   - row_count:
       min: 11
       max: 11

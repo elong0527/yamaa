@@ -69,7 +69,7 @@ if(nzchar(report_directory)) {
 }
 held <- built$verification_log
 rm(built);gc()
-stopifnot(nrow(held)==4L,identical(as.character(held$EVALUATED_COUNT),fixture_strings(host_truth[["evaluated_counts"]])))
+stopifnot(nrow(held)==3L,identical(as.character(held$EVALUATED_COUNT),fixture_strings(host_truth[["evaluated_counts"]])))
 cat(case_name,"public domain complete Rust run report and successful save observations passed\n")
 
 # Fatal checks retain only the explicit diagnostic publication capability.

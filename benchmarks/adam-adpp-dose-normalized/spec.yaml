@@ -110,8 +110,6 @@ rows:
           missing: null
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VISIT, PARAMCD]
   - row_count:
       min: 34
       max: 34

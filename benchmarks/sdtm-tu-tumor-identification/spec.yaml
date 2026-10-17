@@ -32,8 +32,6 @@ columns:
     type: int
     label: Sequence Number
     derivation: TU_RAW.TUSEQ
-    verifications:
-      not_missing: {}
 
   - name: TULNKID
     type: str
@@ -125,8 +123,6 @@ columns:
     derivation: TU_RAW.TUDTC
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, TUSEQ]
   - unique:
       columns: [STUDYID, USUBJID, TULNKID]
   - row_count:

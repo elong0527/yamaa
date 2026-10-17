@@ -1,7 +1,8 @@
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::ConditionCode,
-    project_codelist_binding::{bind, AllowedValues, Binding},
+    json::Value as JsonValue,
+    project_codelist_binding::{bind, Binding},
     project_terminology::{Catalogue, Codelist, DataType, Item, Source},
     value::{ColumnType, Value},
 };
@@ -26,11 +27,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         }],
     }])
     .unwrap();
-    let values = [Value::Str("M".into())];
-    let allowed = [AllowedValues {
-        path: "columns.X.verifications[0].allowed_values",
-        values: &values,
-    }];
+    let allowed = ["columns.X.verifications[0].allowed_values"];
     let base = Binding {
         column: 0,
         name: "X",
@@ -59,7 +56,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         .zip([
             ("unknown_codelist", "REQ-0953"),
             ("codelist_type_mismatch", "REQ-0954"),
-            ("codelist_values_conflict", "REQ-0955"),
+            ("redundant_declaration", "REQ-0955"),
         ])
         .map(|(f, (c, r))| (f, c, r))
     {
@@ -74,6 +71,14 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         );
         reached.insert(diagnostic.code);
     }
+    // The redundant declaration is the verification, and the binding that
+    // already states its value set is named beside it.
+    let redundant = findings[2].diagnostic();
+    assert_eq!(redundant.spec_paths, allowed);
+    assert_eq!(
+        redundant.context["stated_by"],
+        JsonValue::String("columns.X.submission.codelist".into())
+    );
     assert_eq!(findings.len(), 3);
     reached
 }

@@ -87,8 +87,6 @@ columns:
         sources: [_SEL_AVAL, _CARRIED]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, AVISITN]
   - row_count:
       min: 12
       max: 12

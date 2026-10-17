@@ -15,16 +15,18 @@ Python implementation. Cached-repeat tests change only `snapshots_created` to 0.
 The `adam-adlb-ordered-sum` report is independently authored from the committed
 source and expected CSV plus literal specification metadata. Source numeric cells
 and derived float cells use exact IEEE-754 bits; totals preserve stored record
-order and the all-missing group. The report includes all 17 derived rows, both
-successful checks, and the exact 1,030-byte CSV artifact. Installed tests compare
-published bytes to the unchanged benchmark golden and retain original publication
-errors and interruptions. No engine output is promoted into expected truth.
+order and the all-missing group. The report includes all 17 derived rows, the
+successful row-count check, and the exact 1,030-byte CSV artifact. Installed
+tests compare published bytes to the unchanged benchmark golden and retain
+original publication errors and interruptions. No engine output is promoted into
+expected truth.
 
 The `schema-lookup` expectation is authored from the three committed source CSVs,
 the 138-byte expected artifact and literal specification metadata. It retains
-declaration-order source observations, all four output rows, the five inherited
-handler-count records and the successful unique check. Source ordering uses
-stored text; the selected `DTHDY` value is converted to an integer afterward.
+declaration-order source observations, all four output rows and the five
+inherited handler-count records; it declares no verification. Source ordering
+uses stored text; the selected `DTHDY` value is converted to an integer
+afterward.
 
 These authored reports cover the six original fixtures. Installed Python and R
 prototypes compare all six; the existing conformance frontend still needs routing
@@ -53,7 +55,7 @@ and expected benchmark files remain unchanged.
 
 The `schema-inheritance` expectation uses the two committed input/output rows,
 explicit input types, and literal study metadata. It names `spec_study.yaml`,
-contains only the surviving LB source, and retains the successful unique check.
+contains only the surviving LB source, and declares no verification.
 The reference independently validates the entire authored report. A native adapter
 integration compares that report and the unchanged CSV, including a cached repeat;
 installed Python and R prototypes also compare the entire report and artifact.

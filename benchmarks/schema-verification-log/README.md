@@ -12,16 +12,15 @@ outside the expected 18-to-100 range.
 - `range` on `AGE`: violated by the age outside 18-to-100; it is a
   warning, so the run still succeeds and the warning log carries the
   offending subject.
-- `unique` on `USUBJID`: held, no subject repeats.
 - `row_count`: held, the run produced at least one row.
 
 The check log records `REPORT_VERSION`, `ARTIFACT`, `SPEC_PATH`,
 `VERIFICATION_ID`, `CHECK`, `TARGET`, `REQUIREMENT`, `SEVERITY`,
 `OUTCOME`, `CONDITION`, `EVALUATED_COUNT`, `FAILURE_COUNT`, and
 `DETAILS`. `EVALUATED_COUNT` counts what the check examines: rows for a
-row-by-row check, distinct subjects for `unique`, and the whole dataset
-as one unit for `row_count`. A held check leaves `CONDITION` empty,
-reports zero failures, and has empty details (`{}`).
+row-by-row check and the whole dataset as one unit for `row_count`. A
+held check leaves `CONDITION` empty, reports zero failures, and has
+empty details (`{}`).
 
 The warning log records `LOG_VERSION`, `ARTIFACT`, `SEVERITY`,
 `CONDITION`, `REQUIREMENT`, `SPEC_PATH`, `VERIFICATION_ID`,

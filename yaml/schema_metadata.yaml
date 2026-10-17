@@ -50,7 +50,7 @@ submission_column_class:
     - mandatory:
         type: bool
         required: false
-        description: Whether the column must carry a value, derived or declared by family (SUB-10).
+        description: Whether every completed value must be present, resolved from keys, declaration and class (SUB-10) and enforced (SUB-11).
     - role:
         type: str
         required: false

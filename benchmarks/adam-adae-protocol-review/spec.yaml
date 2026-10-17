@@ -58,5 +58,4 @@ columns:
       allowed_values: {values: [Y, N]}
 
 verifications:
-  - unique: {columns: [STUDYID, USUBJID, AESEQ]}
   - row_count: {min: 12, max: 12}

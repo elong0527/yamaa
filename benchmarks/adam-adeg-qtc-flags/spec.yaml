@@ -188,8 +188,6 @@ columns:
         values: [Y, N]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - row_count:
       min: 16
       max: 16

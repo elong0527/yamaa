@@ -1301,10 +1301,16 @@ S1,002,2024-06
         ];
 
         /// Validation negatives this harness does not run, with the reason.
-        const NOT_BUILT_HERE: [(&str, &str); 1] = [(
-            "negative-function-contract",
-            "domain activates its project functions only in a host",
-        )];
+        const NOT_BUILT_HERE: [(&str, &str); 2] = [
+            (
+                "negative-allowed-values-beside-codelist",
+                "the bound codelist's items come from its host environment, which this harness does not pass",
+            ),
+            (
+                "negative-function-contract",
+                "domain activates its project functions only in a host",
+            ),
+        ];
 
         /// Every committed validation-phase negative benchmark that conformance runs.
         fn validation_benchmarks() -> Vec<String> {
@@ -1753,7 +1759,7 @@ S1,002,2024-06
                     ],
                     &[0, 1, 3, 2],
                     2,
-                    2,
+                    1,
                 ),
                 (
                     "schema-window-functions",
@@ -1791,7 +1797,7 @@ S1,002,2024-06
                     &["USUBJID", "DTHDY", "DTHCAUS", "DTHPTERM"],
                     &[0],
                     1,
-                    1,
+                    0,
                 ),
                 (
                     "schema-inheritance",
@@ -1804,7 +1810,7 @@ S1,002,2024-06
                     &["USUBJID", "PARAMCD", "AVAL", "AVALU"],
                     &[0, 1],
                     1,
-                    1,
+                    0,
                 ),
             ];
             for (name, schemas, output, keys, templates, checks) in cases {

@@ -91,8 +91,6 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by: [DSSTDTC, DSTERM]
-    verifications:
-      not_missing: {}
 
 # One row per collected form of each event. Each item is read from the
 # form's single record for it: a form holding the item twice fails the run,
@@ -211,8 +209,6 @@ rows:
           expr: "ONLY(ODM.Value)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, DSSEQ]
   - row_count:
       min: 10
       max: 10

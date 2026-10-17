@@ -2290,6 +2290,14 @@ const EXEMPTIONS: &[(&str, &str)] = &[
         "negative-function-contract",
         "calls project functions; environment preparation fails first (project_environment_invalid, REQ-0695 on the absent uv.lock), masking the expected invalid_function_argument finding (REQ-0700)",
     ),
+    // Environment terminology (1): the expected finding is a verification
+    // over completed values against a codelist the host environment
+    // declares. Static terminology findings still compare here, but a
+    // build with an environment is refused before it reaches the data.
+    (
+        "negative-epoch-outside-extensible-list",
+        "binds its codelist through a host environment; the build reaches the environment and is refused (unsupported_operation: environment) before the completed values the expected allowed_values_failed finding judges",
+    ),
     // File-ingest diagnostics (7): the expected diagnostic has phase
     // `ingest` — it is produced by decoding the input file's text. An
     // in-memory Arrow table has no file text, so the condition cannot
