@@ -133,6 +133,7 @@ columns:
       baseline_flag:
         date: ASTDTM
         reference_date: TRTSDTM
+        value: ASEVN
         window:
           group_by: [STUDYID, USUBJID, AESEQ]
           filter: "ASTDTM < TRTSDTM"

@@ -952,24 +952,7 @@ impl Declarations {
                     ));
                 }
                 for &term in terms {
-                    let (name, descending, nulls_first) = if let N::Text(name) = &d.nodes()[term] {
-                        (name.as_str(), false, false)
-                    } else {
-                        (
-                            text(d, field(d, term, "variable")?)?,
-                            d.field(term, "direction")
-                                .map(|id| text(d, id))
-                                .transpose()?
-                                .unwrap_or("asc")
-                                == "desc",
-                            d.field(term, "nulls")
-                                .map(|id| text(d, id))
-                                .transpose()?
-                                .unwrap_or("last")
-                                == "first",
-                        )
-                    };
-                    order.push((name.into(), descending, nulls_first));
+                    order.push(order_term(d, term)?);
                 }
             }
             let no_match = d

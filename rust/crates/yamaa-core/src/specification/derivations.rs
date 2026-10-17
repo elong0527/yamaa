@@ -1122,9 +1122,20 @@ fn references_mode(
     }
     for op in ["row_number", "rank", "row_value", "locf", "baseline_flag"] {
         if let Some(payload) = d.field(value, op) {
-            for field_name in ["source", "date", "reference_date"] {
+            for field_name in ["source", "date", "reference_date", "value"] {
                 if let Some(id) = d.field(payload, field_name) {
                     names.push(text(d, id)?.into());
+                }
+            }
+            if let Some(terms) = d
+                .field(payload, "tie_break")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+            {
+                for &id in sequence(d, terms)? {
+                    names.push(match &d.nodes()[id] {
+                        N::Text(name) => name.clone(),
+                        _ => text(d, field(d, id, "variable")?)?.into(),
+                    });
                 }
             }
             if let Some(window) = d

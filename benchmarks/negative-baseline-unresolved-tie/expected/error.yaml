@@ -1,0 +1,10 @@
+phase: derivation
+condition: ambiguous_baseline
+spec_paths:
+  - columns.ABLFL.derivation.baseline_flag
+requirement: REQ-0322
+context:
+  date: "2025-03-04"
+  match_count: 2
+  keys:
+    - USUBJID: "02"

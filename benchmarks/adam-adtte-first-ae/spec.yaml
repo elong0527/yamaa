@@ -19,7 +19,7 @@ intermediates:
   # no onset date sorts last.
   - id: AE_REC
     dataset: ADAE
-    order_by: [ADAE.ASTDT, ADAE.AESEQ]
+    order_by: [{variable: ADAE.ASTDT, nulls: last}, ADAE.AESEQ]
     keep: first
     no_match: null
 

@@ -886,12 +886,18 @@ def describe_baseline_flag(node, ctx=None, depth=0):
         else " within each group of "
         + ", ".join(str(g) for g in window.get("group_by", []))
     )
+    value = " and a non-missing " + str(node["value"]) if node.get("value") else ""
+    bound = " before " if node.get("inclusive") is False else " on or before "
+    ordering = order_terms([node.get("date"), *(node.get("tie_break") or [])])
     return (
         '"Y" for the last record with '
         + str(node.get("date"))
-        + " on or before "
+        + bound
         + str(node.get("reference_date"))
+        + value
         + scope
+        + ", ordered by "
+        + ordering
         + "; blank otherwise."
     )
 

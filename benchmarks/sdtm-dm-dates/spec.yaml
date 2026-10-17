@@ -15,8 +15,9 @@ output:
 
 intermediates:
   # Each subject's last exposure record with an end date: latest end date,
-  # ties to the higher sequence number. The filter matters: a record with
-  # no end date would otherwise sort last and be the one kept.
+  # ties to the higher sequence number. A record with no end date sorts
+  # first, so only a subject without a dated record could keep one; the
+  # filter leaves it out even then.
   - id: LASTEX
     dataset: EX
     filter: "EX.EXENDTC IS NOT NULL"

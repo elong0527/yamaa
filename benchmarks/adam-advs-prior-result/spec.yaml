@@ -54,7 +54,7 @@ columns:
         include_current: false
         window:
           group_by: [STUDYID, USUBJID, SERIES]
-          order_by: [AVISITN, VSSEQ]
+          order_by: [{variable: AVISITN, nulls: last}, VSSEQ]
 
 verifications:
   - unique:
