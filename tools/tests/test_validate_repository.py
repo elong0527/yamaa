@@ -7,12 +7,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 import yaml
 from tools.paths import ROOT
 from tools.validation import _repository_yaml as OWNER_REPOSITORY_YAML
-from tools.validation import check_rule_metadata as RULE_CHECK
 from tools.validation import editorial as OWNER_EDITORIAL
 from tools.validation import grammar_checks as OWNER_GRAMMAR_CHECKS
 from tools.validation import repository_artifacts as OWNER_REPOSITORY_ARTIFACTS
@@ -312,42 +310,6 @@ class TestValidationMetadata(unittest.TestCase):
             )
 
 
-class TestErrorCitations(unittest.TestCase):
-    def setUp(self):
-        directory = self.enterContext(tempfile.TemporaryDirectory())
-        self.root = Path(directory)
-        self.enterContext(patch.object(RULE_CHECK, "REPO", self.root))
-        self.error = self.root / "error.yaml"
-
-    def errors_for(self, requirement):
-        body = {"phase": "validation", "condition": "unknown_field"}
-        if requirement is not None:
-            body["requirement"] = requirement
-        self.error.write_text(yaml.safe_dump(body))
-        errors = []
-        RULE_CHECK.check_error(self.error, {"REQ-0001"}, errors)
-        return errors
-
-    def test_a_defined_requirement_is_accepted(self):
-        self.assertEqual(self.errors_for("REQ-0001"), [])
-
-    def test_an_absent_requirement_is_accepted(self):
-        self.assertEqual(self.errors_for(None), [])
-
-    def test_unknown_and_legacy_citations_fail(self):
-        self.assertTrue(
-            any(
-                "names no numbered requirement" in e
-                for e in self.errors_for("REQ-0002")
-            )
-        )
-        for legacy in ("R001-1", "R019"):
-            with self.subTest(legacy=legacy):
-                self.assertTrue(
-                    any("must cite REQ-NNNN" in e for e in self.errors_for(legacy))
-                )
-
-
 class TestClosedGrammarContracts(unittest.TestCase):
     """One machine-readable grammar per closed language, read by everyone."""
 
@@ -373,12 +335,38 @@ class TestClosedGrammarContracts(unittest.TestCase):
         self.assertEqual(OWNER_GRAMMAR_CHECKS.validate_grammar_contracts(self.root), [])
 
     def test_every_rule_that_owns_a_grammar_has_a_contract(self):
-        for contract, rule_id in OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS.items():
+        for contract in OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS:
             with self.subTest(contract=contract):
                 path = self.root / "yaml" / "grammar" / f"{contract}.yaml"
                 self.assertTrue(path.is_file())
                 document = yaml.safe_load(path.read_text())
-                self.assertEqual(document["rule"], rule_id)
+                self.assertEqual(
+                    document["rule"],
+                    OWNER_GRAMMAR_CHECKS.grammar_rule_id(self.root, contract),
+                )
+
+    def test_a_marked_card_block_owns_its_grammar(self):
+        text = (
+            "### FORMULA-1. Title\n\nStatement.\n\n<!-- grammar: numeric -->\n\n"
+            "```text\nexpr := term\n```\n"
+        )
+        self.assertEqual(
+            OWNER_GRAMMAR_CHECKS.rule_grammar_block(text, "numeric"), "expr := term"
+        )
+        self.assertIsNone(OWNER_GRAMMAR_CHECKS.rule_grammar_block(text, "predicate"))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "rules").mkdir()
+            (root / "rules" / "formulas.md").write_text(text)
+            self.assertEqual(
+                OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "numeric"), "formulas"
+            )
+            self.assertEqual(
+                OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "predicate"),
+                "operations/predicates",
+            )
+            (root / "rules" / "copy.md").write_text(text)
+            self.assertIsNone(OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "numeric"))
 
     def test_a_continuation_aligns_under_its_definition_or_its_bar(self):
         rendered = OWNER_GRAMMAR_CHECKS.render_grammar_block(

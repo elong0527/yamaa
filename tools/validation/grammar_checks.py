@@ -13,12 +13,18 @@ from tools.validation._repository_yaml import UniqueKeyLoader
 GRAMMAR_DIR = PurePosixPath("yaml/grammar")
 
 
+# Legacy owners of each grammar, used until a rule card file carries the
+# grammar's marker. A card file renders a grammar as a ```text block directly
+# after the line `<!-- grammar: NAME -->`.
 GRAMMAR_CONTRACTS = {
     "predicate": "operations/predicates",
     "numeric": "operations/computation",
     "string-template": "operations/text",
     "aggregate": "operations/aggregation",
 }
+GRAMMAR_MARKER = re.compile(
+    r"<!-- grammar: ([a-z-]+) -->\n+```text\n(.*?)\n```", re.DOTALL
+)
 
 
 GRAMMAR_DOCUMENT_KEYS = {
@@ -141,8 +147,15 @@ def render_grammar_block(productions):
     return "\n".join(lines)
 
 
-def rule_grammar_block(text):
-    """Return the grammar block written in a rule's Grammar section."""
+def rule_grammar_block(text, contract=None):
+    """Return the grammar block a rule renders for a contract.
+
+    A marked block wins; a legacy contract's Grammar section is the fallback.
+    """
+    if contract is not None:
+        for name, block in GRAMMAR_MARKER.findall(text):
+            if name == contract:
+                return block
     section = re.search(
         r"\n#{2,3} (?:Templates: )?Grammar\n(.*?)(?=\n#{2,3} |\Z)", text, re.DOTALL
     )
@@ -150,6 +163,23 @@ def rule_grammar_block(text):
         return None
     block = re.search(r"```text\n(.*?)\n```", section.group(1), re.DOTALL)
     return None if block is None else block.group(1)
+
+
+def grammar_rule_id(root: Path, contract: str):
+    """The rule file (relative to rules/, without .md) that renders a grammar."""
+    owners = sorted(
+        path.relative_to(root / "rules").with_suffix("").as_posix()
+        for path in (root / "rules").rglob("*.md")
+        if any(
+            name == contract
+            for name, _ in GRAMMAR_MARKER.findall(path.read_text(encoding="utf-8"))
+        )
+    )
+    if len(owners) == 1:
+        return owners[0]
+    if not owners:
+        return GRAMMAR_CONTRACTS[contract]
+    return None
 
 
 def grammar_symbol_references(definition):
@@ -204,7 +234,10 @@ def validate_grammar_contract(root: Path, contract: str):
             f"ERROR: {label}: contract must be {contract!r}, got "
             f"{document['contract']!r}"
         )
-    rule_id = GRAMMAR_CONTRACTS[contract]
+    rule_id = grammar_rule_id(root, contract)
+    if rule_id is None:
+        errors.append(f"ERROR: {label}: more than one rule file renders it")
+        return errors
     if document["rule"] != rule_id:
         errors.append(
             f"ERROR: {label}: rule must be {rule_id!r}, got {document['rule']!r}"
@@ -294,7 +327,7 @@ def validate_grammar_contract(root: Path, contract: str):
     if not rule_path.is_file():
         errors.append(f"ERROR: {label}: rule {rule_id} has no file")
     else:
-        block = rule_grammar_block(rule_path.read_text(encoding="utf-8"))
+        block = rule_grammar_block(rule_path.read_text(encoding="utf-8"), contract)
         rendered = render_grammar_block(productions)
         if block is None:
             errors.append(

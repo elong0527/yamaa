@@ -1,8 +1,9 @@
 """Editorial validators shared by the validity gate and the docs gate.
 
-The prose-oriented validators with their leaf helpers and constants. This
+The prose-oriented validators plus their leaf helpers and constants. This
 module imports only the standard library and PyYAML and must never import
-validate_repository (cycle risk).
+validate_repository (cycle risk). Rule files have their own checks in
+tools.rules.check.
 """
 
 import copy
@@ -197,12 +198,6 @@ def validate_example_readmes(root: Path):
                     + ", ".join(missing)
                 )
     return errors
-
-
-def validate_rule_metadata(root: Path):
-    from tools.validation.check_rule_rewrite import check
-
-    return check(root)[0]
 
 
 ASCII_SOURCE_SUFFIXES = {

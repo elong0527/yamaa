@@ -87,9 +87,17 @@ Standalone installed suites use copied fixtures and readers; they must not
 import repository packages.
 
 For rule or schema changes, follow their area guides and run the corresponding
-AGENTS recipe. Repository Python checks source syntax, physical schema includes,
-fixture metadata, grammar documents, layout and editorial rules without
-importing an installed engine. Its complete-corpus test refuses imports of
+AGENTS recipe. `make check-repository` runs `tools.rules.check`, which reads the
+rules once through `tools/rules/model.py` and checks cards, legacy requirements,
+every rule citation and markdown links. During the 1.0.0 conversion, run
+`python -m tools.rules.migrate statements --base origin/release/1.0.0` to list
+the card titles and statements a pull request adds, changes or removes for
+review; `report` accounts for the replaced requirements and `links` moves
+markdown citations to their cards.
+
+Repository Python checks source syntax, physical schema includes, fixture
+metadata, grammar documents, layout and editorial rules without importing an
+installed engine. Its complete-corpus test refuses imports of
 yamaa, Polars and PyArrow. Shared Rust tests own schema admission, inheritance,
 expressions, source binding, execution and the unchanged grammar, regex and
 exact rounding fixtures directly.
@@ -218,8 +226,9 @@ repository-relative links and preserves their edit targets. Do not create
 copies under `docs/`. Other site pages live there; the navigation links directly
 to this contributor guide.
 
-Requirement and schema-field references are generated from `rules/` and `yaml/`
-on every build. Edit the owning contract or schema, not a generated page.
+The requirement index, rules summary and schema-field references are generated
+from `rules/` and `yaml/` on every build. Edit the owning rule or schema, not a
+generated page.
 Benchmark dashboards likewise render authored fixtures without executing the
 engine. Their [guide](tools/benchmark_docs/README.md) describes the
 rendered materials. Generated pages and build output are ignored by Git.

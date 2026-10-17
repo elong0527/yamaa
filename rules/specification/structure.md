@@ -125,7 +125,7 @@ bundle.
 
 <a id="req-0228"></a>
 
-**REQ-0228.** [Specification composition](composition.md) matches identifiers across inheritance layers before this
+**REQ-0228.** [Inheritance](../inheritance.md) matches identifiers across inheritance layers before this
 rule applies, so a later layer may refine one inherited declaration.
 Duplicate identifiers within a single layer remain an error. The resolved
 specification contains one declaration for each identifier.
@@ -152,7 +152,7 @@ under this contract. A non-ASCII source byte fails validation with
 | Field | Meaning |
 | --- | --- |
 | `root_class.schema_version` | Schema bundle this specification is written against; [Schema language](../reference/schema-language.md) requires an exact match. |
-| `root_class.parents` | Ordered local specification layers resolved under [Specification composition](composition.md) before validation and execution. |
+| `root_class.parents` | Ordered local specification layers resolved under [Inheritance](../inheritance.md) before validation and execution. |
 | `root_class.domain` | Name of the output dataset this specification derives. |
 | `root_class.keys` | Output columns identifying a row; [Artifact publication](../storage/publication.md) defines the identity they assert. |
 | `root_class.input` | Source datasets readable by this specification, each under the name it is read through. |

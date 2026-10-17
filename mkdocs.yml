@@ -91,6 +91,7 @@ nav:
       - Schema introduction: articles/schema-intro.md
       - Schema reference: articles/schema.md
       - Rules: articles/rules.md
+      - Rules at a glance: reference/rules-summary.md
       - Requirement index: reference/requirements.md
       - Schema fields: reference/schema-fields.md
       - Codelists and terminology: articles/terminology.md

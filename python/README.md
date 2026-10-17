@@ -228,7 +228,7 @@ opens no supporting-document links. The shared lifecycle renders/validates the
 whole output set before Save, then publishes Dataset-JSON in section order and
 XML last. A failed Save raises `yamaa.DefineError` carrying `issues` and
 `diagnostics`. See the
-[submission contracts](../rules/README.md#submission).
+[submission contracts](../rules/README.md#rule-files).
 
 ## ODM file helpers
 
