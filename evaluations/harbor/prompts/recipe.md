@@ -12,7 +12,8 @@ golden files.
   column, and the outcome of each derived variable
 - say what each value is, never how to compute it
 - state every rule the golden depends on that CDISC practice alone does not
-  settle; drop every rule for a case the inputs never hold
+  settle; drop every rule for a case the inputs never hold, unless the rule
+  guards a result the prompt does state (section 5, item 4)
 - write it from the benchmark's README, specification, and inputs, never
   from its golden files or anything computed from them (section 7)
 - the file is committed verbatim; the evaluation copies it unchanged
@@ -172,7 +173,11 @@ Before committing, review the prompt as the agent would read it:
 3. **Check the keys.** Number every key column the way the prompt says
    and confirm it follows the specification's keys and numbering.
 4. **Remove what no input reaches.** Drop a rule for a case the inputs
-   never hold.
+   never hold, unless the rule guards a result the prompt does state:
+   when a stated outcome would be undefined for that case, such as a
+   division by a quantity that can be zero, keep the rule that says what
+   the result is there. A mapping for a collected term the inputs never
+   hold is not a guard and is still dropped.
 5. **Agree with the README.** Every `Variables:` bullet and the `Note:`
    show up in the prompt, and nothing contradicts them.
 6. **Keep it short.** Plain text with simple lists, straight quotes around
@@ -251,6 +256,12 @@ workspace folder otherwise.
 Run from the repository root, prefixing each command with
 `uv run --project python --no-sync`.
 
+Before a round, prove the checkout the round starts from provides the
+flow: `python -m evaluations.harbor.author prepare --help` offers
+`prepare`, and the same module offers `grade`. A change merged into a
+stacked branch, or a branch name that once held the tooling, does not
+prove the round's base has it.
+
 With Docker, Harbor runs each agent in a container that holds nothing else
 (`--out` defaults to `~/.cache/yamaa-harbor/authoring`):
 
@@ -292,13 +303,28 @@ the same report as `report`. The session that runs them:
 - starts a fresh subagent for every folder and attempt;
 - confines each subagent to its folder where the agent tool allows,
   because without a container the folder is the only boundary, and prefers
-  Harbor when Docker is available.
+  Harbor when Docker is available;
+- records every file a subagent reports reading outside its folder, and
+  rejects the candidate when such a read could carry benchmark content.
+  Two reads never reject: the Python environment, and an agent guide a
+  runtime requires its agents to read before working in a directory (an
+  `AGENTS.md` at the repository or worktree root). A guide holds no
+  benchmark content; the session notes the read in its log and goes on;
+- before the solvers run, checks that its Python provides every package
+  the track's system prompt lists and installs any that are missing, so
+  no solver is failed by the session's own environment;
+- runs at least two independent solver attempts per candidate, in
+  separate folder sets: two models where the agent tool allows a choice,
+  and where it does not, two fresh sessions, with the round's report
+  saying that is what its two attempts were.
 
 ### After the writing task
 
 - **Solvers.** A candidate's solver task is graded like an evaluation task
   but without a reference: the datasets, and the clean rerun under Harbor.
-  No leaderboard accepts it. Use at least two models.
+  No leaderboard accepts it. Use at least two models; a subagent session
+  whose tool allows no model choice uses two fresh sessions instead and
+  says so in its report.
 - **Nothing flows back.** `report` and `grade` tell the person reviewing
   the candidates which output columns the solvers failed and how often,
   never a value, key, or row count. No writer sees it, an earlier
