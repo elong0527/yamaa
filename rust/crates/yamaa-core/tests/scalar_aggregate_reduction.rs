@@ -1024,7 +1024,7 @@ mod scalar {
             assert_eq!(
                 operation(K::DateTimePrecision, false, None, None)
                     .source_value(ValueRef::Str("2024-02-29T12:13")),
-                Ok(S::Value(Value::Str("S".into())))
+                Ok(S::Value(Value::Str("M".into())))
             );
             for invalid in [
                 "0000",
@@ -1042,6 +1042,104 @@ mod scalar {
                         .is_err(),
                     "{invalid}"
                 );
+            }
+        }
+        #[test]
+        fn reduced_precision_times_receive_only_their_missing_fields() {
+            for (input, early, late, precision, code) in [
+                (
+                    "2025-03-04",
+                    "2025-03-04T00:00:00",
+                    "2025-03-04T23:59:59",
+                    TP::Day,
+                    "D",
+                ),
+                (
+                    "2025-03-04T08",
+                    "2025-03-04T08:00:00",
+                    "2025-03-04T08:59:59",
+                    TP::Hour,
+                    "H",
+                ),
+                (
+                    "2025-03-04T08:30",
+                    "2025-03-04T08:30:00",
+                    "2025-03-04T08:30:59",
+                    TP::Minute,
+                    "M",
+                ),
+                (
+                    "2025-03-04T08:30:15",
+                    "2025-03-04T08:30:15",
+                    "2025-03-04T08:30:15",
+                    TP::Second,
+                    "S",
+                ),
+                (
+                    "2024-12-31T23",
+                    "2024-12-31T23:00:00",
+                    "2024-12-31T23:59:59",
+                    TP::Hour,
+                    "H",
+                ),
+                (
+                    "2025-03-04T00",
+                    "2025-03-04T00:00:00",
+                    "2025-03-04T00:59:59",
+                    TP::Hour,
+                    "H",
+                ),
+            ] {
+                for (rule, expected) in [(TimeRule::First, early), (TimeRule::Last, late)] {
+                    let S::Value(Value::DateTime(value)) =
+                        operation(K::DateTime { time: rule }, false, None, None)
+                            .source_value(ValueRef::Str(input))
+                            .unwrap()
+                    else {
+                        panic!("datetime")
+                    };
+                    assert_eq!(value.to_string(), expected, "{input}");
+                    assert_eq!(value.collected_precision(), precision, "{input}");
+                    for source in [ValueRef::DateTime(value), ValueRef::Str(input)] {
+                        assert_eq!(
+                            operation(K::DateTimePrecision, false, None, None).source_value(source),
+                            Ok(S::Value(Value::Str(code.into()))),
+                            "{input}"
+                        );
+                    }
+                }
+            }
+            for invalid in [
+                "2025-03",
+                "2025-03-04T",
+                "2025-03-04T8",
+                "2025-03-04T08:",
+                "2025-03-04T08:3",
+                "2025-03-04T08:30:",
+                "2025-03-04T24",
+                "2025-03-04T08:60",
+                "2025-03-04T08:30:60",
+                "2025-03-04 08",
+                "2025-03-04t08",
+                "2025-03-04T08Z",
+                "2025-03-04T08.5",
+                "2025-03-04T0830",
+                "2025-02-30T08",
+                "2025-03-04T\u{0660}",
+            ] {
+                for kind in [
+                    K::DateTime {
+                        time: TimeRule::First,
+                    },
+                    K::DateTimePrecision,
+                ] {
+                    let op = operation(kind, false, None, Some(Value::Missing));
+                    assert_eq!(
+                        op.source_value(ValueRef::Str(invalid)),
+                        Ok(S::Recovered { handler: "invalid" }),
+                        "{invalid}"
+                    );
+                }
             }
         }
         use crate::support::diagnostic::temporal_imputation as diagnostic;

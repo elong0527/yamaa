@@ -190,6 +190,29 @@ mod table {
         }
 
         #[test]
+        /// Keep hour and minute collected precision beside the completed fields.
+        fn hour_and_minute_datetime_precision_survive_encoding() {
+            let schema = logical_schema(&[("datetime", CT::DateTime)]);
+            let day = Date::new(2025, 3, 4, DP::Day).unwrap();
+            let values = [
+                DateTime::new(day, 0, 0, 0, TP::Day).unwrap(),
+                DateTime::new(day, 8, 59, 59, TP::Hour).unwrap(),
+                DateTime::new(day, 8, 30, 0, TP::Minute).unwrap(),
+                DateTime::new(day, 8, 30, 15, TP::Second).unwrap(),
+            ];
+            let times = Arc::new(datetime_array(&values.map(Some)).unwrap());
+            let table =
+                ArrowTable::try_new(schema.clone(), vec![batch(&schema, vec![times])]).unwrap();
+            for (row, expected) in values.into_iter().enumerate() {
+                assert_eq!(datetime(&table, row, 0).fields(), expected.fields());
+                assert_eq!(
+                    datetime(&table, row, 0).collected_precision(),
+                    expected.collected_precision()
+                );
+            }
+        }
+
+        #[test]
         /// Retain declared schema with no records and record counts with no columns.
         fn zero_rows_and_zero_columns_retain_independent_shapes() {
             let schema = logical_schema(&[("D", CT::Date), ("T", CT::Str)]);
@@ -519,7 +542,7 @@ mod table {
                 (i64::MAX, 1, false),
                 (-62135596801, 1, false),
                 (253402300800, 1, false),
-                (0, 2, true),
+                (0, 4, true),
             ] {
                 let array = StructArray::try_new(
                     fields.clone(),
