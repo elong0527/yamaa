@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import csv
+import functools
 import importlib
 import json
 import os
@@ -31,7 +32,14 @@ def _load(name: str):
 grade = _load("grade")
 build = _load("build")
 brief = _load("brief")
+check = _load("check")
+packet = _load("packet")
 PROMPTED = sorted(p.parent.name for p in build.PROMPTS.glob("*/full.md"))
+
+
+@functools.cache
+def _check_data(benchmark: str) -> dict:
+    return packet.check_data(ROOT / "benchmarks" / benchmark)
 
 
 def _golden(
@@ -111,25 +119,19 @@ def test_a_brief_prompt_is_its_full_prompt_without_the_rules(benchmark):
     assert not (build.PROMPTS / benchmark / "brief.md").exists()
 
 
-# What a conventions prompt may name: a quoted value, an upper-case code or
-# variable, or a number. Each must come from the full prompt.
-LITERALS = re.compile(r'"[^"]*"|\b[A-Z][A-Z0-9_]+\b|\b\d+(?:\.\d+)?\b')
-
-
 @pytest.mark.parametrize("benchmark", PROMPTED)
 def test_a_conventions_prompt_only_narrows_the_full_prompt(benchmark):
     full = (build.PROMPTS / benchmark / "full.md").read_text(encoding="utf-8")
     text = (build.PROMPTS / benchmark / "conventions.md").read_text(encoding="utf-8")
-    opening, columns, rules, paths = brief.parts(full)
-    paragraphs = [p for p in re.split(r"\n[ \t]*\n", text.strip()) if p.strip()]
-    assert paragraphs[:2] == [opening, columns]
-    assert paragraphs[-1] == paths
-    assert text == "\n\n".join(paragraphs) + "\n"
-    assert len(text.splitlines()) <= 20
-    kept = " ".join(" ".join(paragraphs[2:-1]).split())
-    assert len(kept) <= len(" ".join(" ".join(rules).split()))
-    named = set(LITERALS.findall(" ".join(full.split())))
-    assert sorted(set(LITERALS.findall(kept)) - named) == []
+    assert check.conventions_problems(full, text) == []
+
+
+@pytest.mark.parametrize("benchmark", PROMPTED)
+def test_a_full_prompt_keeps_the_parts_its_benchmark_fixes(benchmark):
+    # The opening's standard and domains, the column lists, and the paths
+    # follow from the benchmark without its expected data (scaffold.py).
+    full = (build.PROMPTS / benchmark / "full.md").read_text(encoding="utf-8")
+    assert check.full_problems(full, _check_data(benchmark)) == []
 
 
 def test_a_prompt_without_its_four_parts_is_rejected():
@@ -167,20 +169,14 @@ def test_every_prompt_tier_asks_for_the_graded_datasets(benchmark, tier):
     assert sorted(saved) == sorted(o["file"] for o in contract["outputs"])
 
 
-# What a prompt never mentions (evaluations/harbor/prompts/recipe.md).
-UNSAID = re.compile(
-    r"\b(?:yamaa|yaml|spec|specifications?|schemas?|handlers?|verifications?"
-    r"|derivations?)\b|\bR0\d\d\b|\bREQ-\d+",
-    re.IGNORECASE,
-)
-
-
 @pytest.mark.parametrize("benchmark", PROMPTED)
 @pytest.mark.parametrize("tier", TIERS)
 def test_every_prompt_tier_keeps_to_the_recipe(benchmark, tier):
+    # No harness names or wide lines, and no fixture identifiers or dates or
+    # names only the specification uses (evaluations/harbor/prompts/recipe.md).
     text = build.prompt_text(ROOT / "benchmarks" / benchmark, tier.removesuffix(".md"))
-    assert [m.group(0) for m in UNSAID.finditer(text)] == []
-    assert [line for line in text.splitlines() if len(line) > 79] == []
+    assert check.recipe_problems(text) == []
+    assert check.unsaid_problems(text, _check_data(benchmark)["unsaid"]) == []
 
 
 @pytest.mark.parametrize("benchmark", PILOTS)

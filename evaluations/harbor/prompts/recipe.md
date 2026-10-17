@@ -12,7 +12,9 @@ golden files.
   column, and the outcome of each derived variable
 - say what each value is, never how to compute it
 - state every rule the golden depends on that CDISC practice alone does not
-  settle; drop everything no golden cell needs
+  settle; drop every rule for a case the inputs never hold
+- write it from the benchmark's README, specification, and inputs, never
+  from its golden files or anything computed from them (section 7)
 - the file is committed verbatim; the evaluation copies it unchanged
 
 ## 1. Scope
@@ -29,10 +31,11 @@ golden files.
   its datasets are. A project function (`environment.yaml`) is the
   agent's to compute: state what the value is, as for any other column.
 - **Where.** `evaluations/harbor/prompts/<name>/full.md`, beside the
-  benchmark's other prompt tiers: `conventions.md`, written from it by
-  hand, keeps only the sponsor's conventions of the outcome block, and
-  the brief tier is rendered from the full prompt by `brief.py` and drops
-  the block. No generated brief file is committed. What each tier means is in `evaluations/harbor/prompts/README.md`.
+  benchmark's other prompt tiers: `conventions.md`, written from it alone,
+  keeps only the sponsor's conventions of the outcome block, and the brief
+  tier is rendered from the full prompt by `brief.py` and drops the block.
+  No generated brief file is committed. What each tier means is in
+  `evaluations/harbor/prompts/README.md`.
 - **Worked examples.** `adam-adsl-age-group` (categories and codes),
   `adam-adae-death` (two inputs, precedence, ties), and `adam-adtte-dor`
   (three inputs, event and censoring rules, source tracing).
@@ -61,24 +64,31 @@ Following CDISC <SDTM|ADaM> standards, use the provided <A> and <B>
 datasets to create an <DOMAIN> dataset with one record per <record level>.
 
 The output dataset should contain the following columns in this order:
-<every column of the golden file, in golden order>
+<every output column, in order>
 
 <outcome block: labels, codes, rules, precedence, and ties>
 
 Read the source datasets from /app/input and save the completed dataset as
-/app/output/<golden file name>.
+/app/output/<output file name>.
 ```
 
-- **Inputs.** Name each input dataset by its uppercase identifier from the
-  specification's `input` (DM, AE, ADRS_RAW).
+`scaffold.py` renders every block but the outcome block and the record
+level from the benchmark, without its golden files: `python -m
+evaluations.harbor.scaffold benchmarks/<name>` prints the skeleton, and the
+prompt checks hold every full prompt to its standard, domains, column lists,
+and paths.
+
+- **Inputs.** Name each input dataset as the agent gets it, by its file
+  name in upper case (`ae.csv` is AE, `adrs_raw.csv` is ADRS_RAW).
 - **Record level.** Take it from the README goal and the specification
   keys: one record per subject, per adverse event, per responder, per
   subject per parameter per visit.
-- **Columns.** List every column of the golden header, pass-through
-  columns included, in golden order.
-- **Output file.** Use the golden file name under `/app/output/`. A
-  benchmark with several golden datasets (`spec_<domain>.yaml`) names each
-  dataset with its own column list and file.
+- **Columns.** List every column of the specification's `output.columns`,
+  pass-through columns included, in that order: the golden header's order.
+- **Output file.** Use the file name of the specification's `output.path`
+  under `/app/output/`. A benchmark with several output datasets
+  (`spec_<domain>.yaml`) names each dataset with its own column list and
+  file, in the order its entries write them.
 - **Paragraphs.** Keep each block its own paragraph, the column lists of
   several datasets together in the second. The brief tier keeps the first,
   second, and last paragraphs verbatim, and `brief.py` rejects a prompt
@@ -86,32 +96,33 @@ Read the source datasets from /app/input and save the completed dataset as
 
 ## 4. The outcome block
 
-Write it from the README's `Variables:` list and `Note:`, then confirm each
-statement against the golden file.
+Write it from the README's `Variables:` list and `Note:`, and take each rule
+they leave open from the specification, stated as an outcome. The golden
+files are what the agent is graded on, never a source (section 7).
 
 State:
 
-- the exact literal values the golden holds: category labels, flag values
-  (`Y`), fixed `PARAMCD` and `PARAM`, and descriptive text, spelled as in
-  the golden (`TUMOUR`, not `TUMOR`);
+- the exact literal values the output holds: category labels, flag values
+  (`Y`), fixed `PARAMCD` and `PARAM`, and descriptive text, spelled as the
+  specification or the inputs spell them (`TUMOUR`, not `TUMOR`);
 - the mapping of a numeric code to its label (`1 for <18, 2 for 18-64`);
 - every key column, including how a sequence number runs (per subject or
   across the study, in which order, from which start): rows are matched
   by key, so a key numbered another way loses the whole row;
-- the literal values of any text column the golden fills from a lookup or
+- the literal values of any text column the output fills from a lookup or
   a fixed label, such as visit names (`VISIT 1`, `DAY 1`);
-- a conversion factor or constant exactly as the golden uses it (`0.0167`,
-  `0.45359237 kg per pound`), never "the standard factor";
+- a conversion factor or constant exactly as the specification states it
+  (`0.0167`, `0.45359237 kg per pound`), never "the standard factor";
 - the precision of a rounded result, and that a result is not rounded
-  when the golden keeps full precision (`AVAL is not rounded`);
-- the text form of a number or datetime the golden holds in a text column,
+  when the output keeps full precision (`AVAL is not rounded`);
+- the text form of a number or datetime the output holds in a text column,
   which is compared exactly (`whole numbers are written without a decimal
   point`, `ISO 8601 with a T between date and time`);
 - study-specific rules a CDISC-literate programmer cannot infer: what
   counts as the event, when and where a record is censored, which source
   wins when several could supply a value, and how ties break;
 - what a derived variable holds when its inputs do not support a value,
-  but only where the golden fixes an outcome the labels do not imply
+  but only where the specification fixes an outcome the labels do not imply
   (`AGEGR1N has no value when AGEGR1 is Missing`);
 - the meaning of any term a rule depends on when a programmer could read
   it two ways (a responder; an evaluable assessment).
@@ -130,7 +141,9 @@ Do not:
   row exists", "calculated a second way"): the golden is a completed
   dataset, and only its values count;
 - mention sample data: subject identifiers, row counts, or particular
-  dates;
+  dates, unless a rule names the records it applies to;
+- name what only the specification uses: an intermediate result, a column
+  the output does not hold;
 - name a programming language, package, agent, model, or provider, or
   describe the sandbox;
 - prescribe file formatting, types, or sort order, or explain
@@ -140,24 +153,26 @@ Do not:
   reads dates as `YYYY-MM-DD` (a midnight datetime too). Text columns are
   compared exactly, surrounding spaces included.
 
-Write "has no value" for an empty golden cell.
+Write "has no value" for a value the output leaves empty.
 
 ## 5. Fairness review
 
 Before committing, review the prompt as the agent would read it:
 
-1. **Cover every golden cell.** Walk each derived column of the golden
-   file row by row. Every value must follow from the prompt, the inputs,
-   and ordinary CDISC practice. A value that needs an unstated choice
-   needs a sentence.
+1. **Cover every output column.** Trace each output column to the README
+   or the specification, and each sentence of the outcome block to its
+   source (section 7). Every value must follow from the prompt, the
+   inputs, and ordinary CDISC practice. A rule the specification applies
+   and the prompt leaves unstated needs a sentence.
 2. **Rule out a second reading.** If another plausible interpretation
-   changes any golden cell, say which one applies. In `adam-adtte-dor`,
+   gives the inputs another value, say which one applies. In `adam-adtte-dor`,
    censoring at "the last evaluable assessment before new therapy" would
    move one subject's date, so the prompt says evaluable assessments count
    whether they fall before or after new therapy.
 3. **Check the keys.** Number every key column the way the prompt says
-   and confirm it gives the golden's keys row for row.
-4. **Remove what no golden cell needs.**
+   and confirm it follows the specification's keys and numbering.
+4. **Remove what no input reaches.** Drop a rule for a case the inputs
+   never hold.
 5. **Agree with the README.** Every `Variables:` bullet and the `Note:`
    show up in the prompt, and nothing contradicts them.
 6. **Keep it short.** Plain text with simple lists, straight quotes around
@@ -168,20 +183,68 @@ Before committing, review the prompt as the agent would read it:
    (as given, or joined with a hyphen). Leave out what the standard
    already fixes, such as the study day rule (day 1 is the reference
    date, no day 0): a reader who knows CDISC applies it unprompted.
-8. **Solve it from the prompt.** Write the solution in R and in Python
-   working only from the full prompt and the inputs, with only the packages the
-   track's system prompt (`evaluations/harbor/system-*.md`) lists, and save
-   it as `evaluations/harbor/solutions/<benchmark>/result.R` and
-   `result.py`. It must score 1; if it cannot without the README, the
-   prompt is missing a rule. Harbor's oracle agent then runs it, so the
-   task page shows a readable reference instead of a script that writes
-   the golden files. Follow the pilots' solutions for style.
+8. **Let solvers try it.** Solvers that see only the full prompt and the
+   inputs, with only the packages the track's system prompt
+   (`evaluations/harbor/system-*.md`) lists, write the R and Python
+   solutions (section 7). A passing solution, reviewed against the
+   pilots' style, becomes `evaluations/harbor/solutions/<benchmark>/result.R`
+   or `result.py`. Harbor's oracle agent then runs it, so the task page
+   shows a readable reference instead of a script that writes the golden
+   files.
 
 ## 6. Keep it in step
 
 Change `full.md` in the same change as any edit to that benchmark's
 README, inputs, or golden files, and rewrite its `conventions.md` to match.
 The brief tier follows the full prompt automatically.
+
+## 7. Writing without the golden
+
+A prompt written with the golden files in view can carry their values, and
+a solution written by the same hand can lean on what the prompt left out.
+So the writer works in a Harbor sandbox that holds the benchmark's sources
+and nothing it is graded on, and the prompt is tried by solvers that hold
+only the prompt and the inputs, as an evaluated agent does.
+`evaluations/harbor/author.py` builds both. Run from the repository root;
+`--out` defaults to `~/.cache/yamaa-harbor/authoring`:
+
+```bash
+python -m evaluations.harbor.author write --model <provider/model> \
+    --benchmarks <name> ... --out <round>
+python -m evaluations.harbor.author run -c <round>/write-full/configs/<job>.json
+python -m evaluations.harbor.author collect <round>/jobs/<job> --into <prompts>
+python -m evaluations.harbor.author solve --prompts <prompts> \
+    --model <provider/model> ... --n-attempts 3 --out <round>
+python -m evaluations.harbor.author run -c <round>/solve/configs/<job>.json
+python -m evaluations.harbor.author feedback <round>/jobs/<job> --into <prompts>
+```
+
+Prefix each command with `uv run --project python --no-sync`.
+
+- **Sources.** The writer's sandbox (`packet.py`) holds the README, the
+  specifications and input schemas without their verifications, the
+  project functions without their tests, the language rules, this recipe,
+  the inputs as the agent gets them, and the skeleton. It never holds
+  `expected/`, an engine run, or a prompt or solution written before.
+- **Trace.** Beside `full.md` the writer saves `trace.json`, which quotes
+  each sentence of the outcome block and cites its source: a README quote,
+  a specification path (`spec.yaml: columns.DTHDT.derivation`), an input
+  file, or a rule file. Its verifier, `check.py`, runs the prompt checks
+  and the trace check, and needs no golden file; the writer runs it too.
+- **Solvers.** `solve` builds each candidate's task as an evaluation task
+  without a reference: it grades the datasets and the clean rerun, and no
+  leaderboard accepts it. Use at least two models.
+- **Feedback.** `feedback` tells the writer which output columns the
+  solvers failed and how often, never a value, key, or row count. `write
+  --prompts <prompts>` gives the writer its earlier candidate and that
+  feedback, and the writer finds the missing rule in its sources or asks
+  in `questions.md`. A column still failing after two rounds goes to a
+  person: one the README and specification cannot explain is a benchmark
+  finding, not a sentence to tune.
+- **Commit.** Review each passing candidate against sections 4 and 5, take
+  a passing solver's program per language as its reference, and write
+  the conventions prompt the same way (`write --tier conventions
+  --prompts <prompts>`). Name the jobs in the pull request.
 
 ## Checks to run before finishing
 
@@ -190,6 +253,7 @@ Run from the repository root:
 ```bash
 uv run --project python --no-sync pytest evaluations/harbor/tests/test_harbor_evaluation.py \
 	-k "prompt or reference_solution"
+uv run --project python --no-sync pytest evaluations/harbor/tests/test_harbor_authoring.py
 ```
 
 The prompt tests check every tier of every benchmark: the four blocks of
@@ -197,7 +261,10 @@ the full prompt, the brief prompt against `brief.py`, the conventions
 prompt against the full prompt it narrows, the column lists and output
 paths against the graded datasets (the evaluation's own build, so a
 benchmark it does not build yet, `adam-adsl-age-quality`, is skipped), the
-79-column width, and the words a prompt never uses. The reference test
+full prompt's fixed parts against `scaffold.py`, the 79-column width, the
+words a prompt never uses, and the fixture identifiers and dates and
+specification-only names it never says. The authoring tests check that the
+writer's sources are the same without `expected/`. The reference test
 grades every solution in `evaluations/harbor/solutions/` against the
 benchmark's current data; an R one is skipped when R lacks a package its
 script loads. The Harbor workflow runs the same tests with R
