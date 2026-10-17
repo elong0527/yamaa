@@ -102,7 +102,10 @@ unsafe fn callback(
     opaque: *mut c_void,
     action: impl FnOnce(&mut Context<'_>) -> Result<(), Error>,
 ) -> c_int {
-    let context = &mut *opaque.cast::<Context<'_>>();
+    // SAFETY: `opaque` is the `user` pointer that `parse` hands to
+    // `yamaa_readstat_parse`: a live, exclusively borrowed `Context` that
+    // outlives the parse, and ReadStat calls back on the parsing thread only.
+    let context = unsafe { &mut *opaque.cast::<Context<'_>>() };
     let result = catch_unwind(AssertUnwindSafe(|| action(context)));
     match result {
         Ok(Ok(())) => 0,
@@ -123,23 +126,26 @@ unsafe extern "C" fn metadata(
     _encoding: *const c_char,
     opaque: *mut c_void,
 ) -> c_int {
-    callback(opaque, |context| {
-        if context.source.profile == SourceProfile::Xport && !matches!(version, 5 | 8) {
-            return Err(Error::Invalid("version"));
-        }
-        let columns = usize::try_from(columns).map_err(|_| Error::Invalid("header"))?;
-        if columns == 0 {
-            return Err(Error::Invalid("header"));
-        }
-        Limits::columns(columns)?;
-        context.declared_columns = columns;
-        if rows >= 0 {
-            let rows = usize::try_from(rows).map_err(|_| Error::Invalid("header"))?;
-            Limits::table(rows, columns)?;
-            context.declared_rows = Some(rows);
-        }
-        Ok(())
-    })
+    // SAFETY: ReadStat passes back the `Context` pointer `parse` supplied.
+    unsafe {
+        callback(opaque, |context| {
+            if context.source.profile == SourceProfile::Xport && !matches!(version, 5 | 8) {
+                return Err(Error::Invalid("version"));
+            }
+            let columns = usize::try_from(columns).map_err(|_| Error::Invalid("header"))?;
+            if columns == 0 {
+                return Err(Error::Invalid("header"));
+            }
+            Limits::columns(columns)?;
+            context.declared_columns = columns;
+            if rows >= 0 {
+                let rows = usize::try_from(rows).map_err(|_| Error::Invalid("header"))?;
+                Limits::table(rows, columns)?;
+                context.declared_rows = Some(rows);
+            }
+            Ok(())
+        })
+    }
 }
 unsafe extern "C" fn variable(
     column: c_int,
@@ -148,38 +154,43 @@ unsafe extern "C" fn variable(
     text: c_int,
     opaque: *mut c_void,
 ) -> c_int {
-    callback(opaque, |context| {
-        if usize::try_from(column).ok() != Some(context.columns.len())
-            || context.columns.len() >= context.declared_columns
-            || name.is_null()
-        {
-            return Err(Error::Invalid("header"));
-        }
-        let name = context.text(CStr::from_ptr(name).to_bytes())?;
-        if name.is_empty() || context.columns.iter().any(|column| column.name == name) {
-            return Err(Error::Invalid("field_name"));
-        }
-        let kind = context
-            .source
-            .types
-            .iter()
-            .find(|(field, _)| field == &name)
-            .map_or(
-                if text != 0 {
-                    ColumnType::Str
-                } else {
-                    ColumnType::Float
-                },
-                |(_, kind)| *kind,
-            );
-        // SAS types narrow numeric storage. Character values carry no numeric
-        // epoch or integer meaning and numeric storage cannot become text.
-        if (text != 0) != (kind == ColumnType::Str) {
-            return Err(Error::Invalid("field_type"));
-        }
-        context.columns.push(Column { name, kind });
-        Ok(())
-    })
+    // SAFETY: ReadStat passes back the `Context` pointer `parse` supplied, and
+    // `name` is a NUL-terminated string that lives for this call; it is read
+    // only after the null check.
+    unsafe {
+        callback(opaque, |context| {
+            if usize::try_from(column).ok() != Some(context.columns.len())
+                || context.columns.len() >= context.declared_columns
+                || name.is_null()
+            {
+                return Err(Error::Invalid("header"));
+            }
+            let name = context.text(CStr::from_ptr(name).to_bytes())?;
+            if name.is_empty() || context.columns.iter().any(|column| column.name == name) {
+                return Err(Error::Invalid("field_name"));
+            }
+            let kind = context
+                .source
+                .types
+                .iter()
+                .find(|(field, _)| field == &name)
+                .map_or(
+                    if text != 0 {
+                        ColumnType::Str
+                    } else {
+                        ColumnType::Float
+                    },
+                    |(_, kind)| *kind,
+                );
+            // SAS types narrow numeric storage. Character values carry no numeric
+            // epoch or integer meaning and numeric storage cannot become text.
+            if (text != 0) != (kind == ColumnType::Str) {
+                return Err(Error::Invalid("field_type"));
+            }
+            context.columns.push(Column { name, kind });
+            Ok(())
+        })
+    }
 }
 unsafe extern "C" fn value(
     row: c_int,
@@ -190,52 +201,56 @@ unsafe extern "C" fn value(
     exact: c_int,
     opaque: *mut c_void,
 ) -> c_int {
-    callback(opaque, |context| {
-        if row == 0 && column == 0 {
-            context.declarations()?;
-        }
-        let row = usize::try_from(row).map_err(|_| Error::Invalid("record_order"))?;
-        let column = usize::try_from(column).map_err(|_| Error::Invalid("record_order"))?;
-        Limits::table(
-            row.checked_add(1).ok_or(Error::Invalid("record_order"))?,
-            context.columns.len(),
-        )?;
-        if column == 0 {
-            if row != context.rows.len() {
+    // SAFETY: ReadStat passes back the `Context` pointer `parse` supplied, and
+    // a non-null `text` is a NUL-terminated string that lives for this call.
+    unsafe {
+        callback(opaque, |context| {
+            if row == 0 && column == 0 {
+                context.declarations()?;
+            }
+            let row = usize::try_from(row).map_err(|_| Error::Invalid("record_order"))?;
+            let column = usize::try_from(column).map_err(|_| Error::Invalid("record_order"))?;
+            Limits::table(
+                row.checked_add(1).ok_or(Error::Invalid("record_order"))?,
+                context.columns.len(),
+            )?;
+            if column == 0 {
+                if row != context.rows.len() {
+                    return Err(Error::Invalid("record_order"));
+                }
+                context.rows.push(Vec::with_capacity(context.columns.len()));
+            }
+            if row + 1 != context.rows.len() || context.rows[row].len() != column {
                 return Err(Error::Invalid("record_order"));
             }
-            context.rows.push(Vec::with_capacity(context.columns.len()));
-        }
-        if row + 1 != context.rows.len() || context.rows[row].len() != column {
-            return Err(Error::Invalid("record_order"));
-        }
-        let kind = context.columns[column].kind;
-        let decoded = if missing != 0 || (text.is_null() && !number.is_finite()) {
-            Value::Missing
-        } else if !text.is_null() {
-            let text = context.text(CStr::from_ptr(text).to_bytes())?;
-            if context.source.text_is_missing(&text) {
+            let kind = context.columns[column].kind;
+            let decoded = if missing != 0 || (text.is_null() && !number.is_finite()) {
                 Value::Missing
+            } else if !text.is_null() {
+                let text = context.text(CStr::from_ptr(text).to_bytes())?;
+                if context.source.text_is_missing(&text) {
+                    Value::Missing
+                } else {
+                    Value::Str(text)
+                }
             } else {
-                Value::Str(text)
-            }
-        } else {
-            (if exact == 0 && kind != ColumnType::Float {
-                None
-            } else {
-                numeric(number, kind)
-            })
-            .ok_or_else(|| {
-                Error::Typing(yamaa_core::typed_csv::Error::FieldParse {
-                    field: context.columns[column].name.clone(),
-                    target: kind,
-                    value: number.to_string(),
+                (if exact == 0 && kind != ColumnType::Float {
+                    None
+                } else {
+                    numeric(number, kind)
                 })
-            })?
-        };
-        context.rows[row].push(decoded);
-        Ok(())
-    })
+                .ok_or_else(|| {
+                    Error::Typing(yamaa_core::typed_csv::Error::FieldParse {
+                        field: context.columns[column].name.clone(),
+                        target: kind,
+                        value: number.to_string(),
+                    })
+                })?
+            };
+            context.rows[row].push(decoded);
+            Ok(())
+        })
+    }
 }
 
 fn exact_i64(value: f64) -> Option<i64> {
@@ -561,7 +576,8 @@ mod tests {
             exact: c_int,
             opaque: *mut c_void,
         ) -> c_int {
-            let seen = &mut *opaque.cast::<Seen>();
+            // SAFETY: `opaque` is the `Seen` this test passes to the parse.
+            let seen = unsafe { &mut *opaque.cast::<Seen>() };
             seen.invalid |= usize::try_from(row).ok() != Some(seen.rows)
                 || column != 0
                 || !text.is_null()

@@ -2228,6 +2228,7 @@ mod file {
             };
             assert_eq!(
                 yamaa_adapters::file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     yamaa_core::domain_entry::Request {
                         specification: &entry,
                         environment: None,
@@ -2238,6 +2239,7 @@ mod file {
             );
             assert_eq!(
                 yamaa_adapters::file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     yamaa_core::domain_entry::Request {
                         specification: &entry,
                         environment: None,

@@ -526,6 +526,7 @@ pub(crate) fn run_check(
     }
     let identity = shared.identity("check", specification);
     yamaa_adapters::file_application::check_with_resolver(
+        shared.language,
         yamaa_core::domain_entry::Request {
             specification,
             environment,

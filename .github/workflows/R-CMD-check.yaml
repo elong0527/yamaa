@@ -38,7 +38,9 @@ on:
       - 'python/tests/installed/**'
       - 'pyproject.toml'
       - '.github/workflows/R-CMD-check.yaml'
+  # PRs into a release integration branch run only the CI workflow.
   pull_request:
+    branches: [main]
     paths:
       - 'R/**'
       - 'crates/**'

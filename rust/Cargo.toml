@@ -18,6 +18,11 @@ rust-version = "1.90"
 license = "MIT"
 publish = false
 
+# Every unsafe operation sits in its own `unsafe {}` block, also inside an
+# `unsafe fn`, as edition 2024 expects.
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
 [profile.release]
 lto = "thin"
 
