@@ -53,7 +53,7 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot_in_both
         NEXT.fetch_add(1, Ordering::Relaxed),
     ));
     fs::create_dir(&directory).unwrap();
-    let directory = directory.canonicalize().unwrap();
+    let directory = crate::canonical_path::canonicalize(&directory).unwrap();
     fs::write(directory.join("dm.csv"), b"ID\n1\n").unwrap();
     let text = file_resources::caller_path(&directory).unwrap();
     let mut resources = Resources::new(&text, &text, &[]).unwrap();
@@ -87,7 +87,7 @@ fn changed_define_metadata_uses_original_root_spec_parent_and_dictionary_occurre
             NEXT.fetch_add(1, Ordering::Relaxed),
         ));
         fs::create_dir(&directory).unwrap();
-        let directory = directory.canonicalize().unwrap();
+        let directory = crate::canonical_path::canonicalize(&directory).unwrap();
         fs::write(
             directory.join("environment.yaml"),
             b"schema_version: '1.0'\nlanguage: python\n",
@@ -172,7 +172,7 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     fs::create_dir(&directory).unwrap();
-    let directory = directory.canonicalize().unwrap();
+    let directory = crate::canonical_path::canonicalize(&directory).unwrap();
     let original =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks/sdtm-dm-metadata");
     let environment = fs::read_to_string(original.join("environment.yaml"))

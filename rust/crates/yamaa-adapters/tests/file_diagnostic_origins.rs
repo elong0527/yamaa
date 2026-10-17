@@ -29,21 +29,13 @@ mod file {
                     "schema_version: '1.0'\nlanguage: python\n",
                 )
                 .unwrap();
-                Self(fs::canonicalize(directory).unwrap())
+                Self(yamaa_adapters::canonical_path::canonicalize(directory).unwrap())
             }
             fn identity(&self, name: &str) -> String {
                 let value = self.0.join(name).to_string_lossy().into_owned();
                 #[cfg(windows)]
-                {
-                    value
-                        .strip_prefix(r"\\?\")
-                        .unwrap_or(&value)
-                        .replace('\\', "/")
-                }
-                #[cfg(unix)]
-                {
-                    value
-                }
+                let value = value.replace('\\', "/");
+                value
             }
         }
         impl Drop for Study {
@@ -208,15 +200,12 @@ mod file {
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
                 fs::create_dir(&path).unwrap();
-                Self(fs::canonicalize(path).unwrap())
+                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
             }
             fn text(&self, path: &str) -> String {
                 let path = self.0.join(path).to_str().unwrap().to_owned();
                 #[cfg(windows)]
-                let path = path
-                    .strip_prefix(r"\\?\")
-                    .unwrap_or(&path)
-                    .replace('\\', "/");
+                let path = path.replace('\\', "/");
                 path
             }
             fn build(&self) -> file_application::Domain {
@@ -502,20 +491,12 @@ mod file {
                 fs::create_dir(study.0.join("entry")).unwrap();
                 fs::write(study.0.join("outside.csv"), b"ID\n1\n").unwrap();
                 let input = if absolute {
-                    study
-                        .text("outside.csv")
-                        .replace('\\', "/")
-                        .trim_start_matches("//?/")
-                        .to_owned()
+                    study.text("outside.csv").replace('\\', "/")
                 } else {
                     "../outside.csv".to_owned()
                 };
                 let output = if absolute {
-                    study
-                        .text("output.csv")
-                        .replace('\\', "/")
-                        .trim_start_matches("//?/")
-                        .to_owned()
+                    study.text("output.csv").replace('\\', "/")
                 } else {
                     "../output.csv".to_owned()
                 };
@@ -1176,15 +1157,12 @@ mod file {
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
                 fs::create_dir(&root).unwrap();
-                Self(fs::canonicalize(root).unwrap())
+                Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
             }
             fn path(&self, written: &str) -> String {
                 let path = self.0.join(written).to_str().unwrap().to_owned();
                 #[cfg(windows)]
-                let path = path
-                    .strip_prefix(r"\\?\")
-                    .unwrap_or(&path)
-                    .replace('\\', "/");
+                let path = path.replace('\\', "/");
                 path
             }
             fn write(&self, written: &str, text: &str) {
@@ -1722,25 +1700,18 @@ mod file {
                 for name in ["entry", "parent", "outside"] {
                     fs::create_dir(path.join(name)).unwrap();
                 }
-                Self(fs::canonicalize(path).unwrap())
+                Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
             }
             fn text(&self, name: &str) -> String {
                 self.0.join(name).to_str().unwrap().into()
             }
             fn resource_key(&self, name: &str) -> String {
+                // Protocol identities use forward separators; native IO keeps the
+                // host spelling.
                 let path = self.text(name);
                 #[cfg(windows)]
-                {
-                    // Protocol identities use a local-drive path with forward separators,
-                    // rather than the Windows extended-path spelling used for native IO.
-                    path.strip_prefix(r"\\?\")
-                        .unwrap_or(&path)
-                        .replace('\\', "/")
-                }
-                #[cfg(unix)]
-                {
-                    path
-                }
+                let path = path.replace('\\', "/");
+                path
             }
             fn prepare(&self, source: &str) -> Result<FileSpecification, Error> {
                 fs::write(self.0.join("entry/spec.yaml"), source).unwrap();

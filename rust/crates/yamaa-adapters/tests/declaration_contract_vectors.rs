@@ -2613,20 +2613,13 @@ mod declaration {
                     fs::create_dir(&path).unwrap();
                     fs::create_dir(path.join("entry")).unwrap();
                     fs::create_dir(path.join("parent")).unwrap();
-                    Self(fs::canonicalize(path).unwrap())
+                    Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap())
                 }
                 fn identity(&self, name: &str) -> String {
                     let path = self.0.join(name).to_str().unwrap().to_string();
                     #[cfg(windows)]
-                    {
-                        path.strip_prefix(r"\\?\")
-                            .unwrap_or(&path)
-                            .replace('\\', "/")
-                    }
-                    #[cfg(unix)]
-                    {
-                        path
-                    }
+                    let path = path.replace('\\', "/");
+                    path
                 }
                 fn prepare(&self, text: &str) -> Result<FileSpecification, NativeError> {
                     fs::write(self.0.join("entry/root.yaml"), text).unwrap();

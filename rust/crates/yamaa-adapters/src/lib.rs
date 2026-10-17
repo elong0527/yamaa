@@ -50,6 +50,7 @@ mod verification_logs;
 
 pub mod typed_csv;
 
+pub mod canonical_path;
 pub mod file_application;
 pub mod file_configuration;
 pub mod file_graph;

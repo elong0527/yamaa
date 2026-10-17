@@ -23,7 +23,7 @@ pub fn resources(written: &str) -> Result<(Resources, String), Error> {
         .parent()
         .ok_or(Error::Path(ResourceError::InvalidPath))?;
     // Preserve caller-path failure ownership before selecting its descriptor.
-    std::fs::canonicalize(parent).map_err(|_| Error::Path(ResourceError::Missing))?;
+    crate::canonical_path::canonicalize(parent).map_err(|_| Error::Path(ResourceError::Missing))?;
     let resources = Resources::for_entry(text(parent)?).map_err(Error::Path)?;
     let entry = absolute
         .file_name()

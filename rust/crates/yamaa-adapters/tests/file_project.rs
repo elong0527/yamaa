@@ -43,7 +43,7 @@ mod file {
                 for name in ["env", "entry", "parent", "outside"] {
                     fs::create_dir(path.join(name)).unwrap();
                 }
-                let study = Self(fs::canonicalize(path).unwrap());
+                let study = Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap());
                 study.write("env/environment.yaml", "schema_version: '1.0'\nlanguage: python\nlock: ../uv.lock\nfunctions: {id: id.yaml}\ncodelists: [ct.yaml]\n");
                 study.write("uv.lock", "version = 1\npackage = []\n");
                 study.write("env/id.yaml", "function: program.id\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n");
@@ -183,12 +183,12 @@ mod file {
         #[test]
         fn project_report_uses_held_external_function_origins_after_metadata_files_change() {
             let study = Study::new();
-            // Resource identities use portable separators and omit the Windows verbatim
-            // prefix; the host path passed to preparation keeps its native spelling.
+            // Resource identities use portable separators; the host path passed to
+            // preparation keeps its native spelling.
             let identity = |name| {
                 let path = study.text(name);
                 #[cfg(windows)]
-                let path = path.trim_start_matches(r"\\?\").replace('\\', "/");
+                let path = path.replace('\\', "/");
                 path
             };
             let mut project = study.prepare(&study.text(""), &[]).unwrap();
@@ -908,23 +908,16 @@ mod file {
                 self.path(name).to_str().unwrap().into()
             }
             fn resource_key(&self, name: &str) -> String {
-                let path = fs::canonicalize(self.path(name))
+                // Expected protocol identities use forward separators, independently
+                // of the native spelling.
+                let path = yamaa_adapters::canonical_path::canonicalize(self.path(name))
                     .unwrap()
                     .to_str()
                     .unwrap()
                     .to_owned();
                 #[cfg(windows)]
-                {
-                    // Expected protocol identities use local-drive paths and forward
-                    // separators, independently of the native extended-path spelling.
-                    path.strip_prefix(r"\\?\")
-                        .unwrap_or(&path)
-                        .replace('\\', "/")
-                }
-                #[cfg(unix)]
-                {
-                    path
-                }
+                let path = path.replace('\\', "/");
+                path
             }
             fn resources(&self) -> Resources {
                 Resources::new(
@@ -1488,17 +1481,14 @@ mod file {
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
                 fs::create_dir(&path).unwrap();
-                let study = Self(fs::canonicalize(path).unwrap());
+                let study = Self(yamaa_adapters::canonical_path::canonicalize(path).unwrap());
                 study.write("environment.yaml", "schema_version: '1.0'\n");
                 study
             }
             fn path(&self, written: &str) -> String {
                 let path = self.0.join(written).to_str().unwrap().to_owned();
                 #[cfg(windows)]
-                let path = path
-                    .strip_prefix(r"\\?\")
-                    .unwrap_or(&path)
-                    .replace('\\', "/");
+                let path = path.replace('\\', "/");
                 path
             }
             fn write(&self, written: &str, text: &str) {

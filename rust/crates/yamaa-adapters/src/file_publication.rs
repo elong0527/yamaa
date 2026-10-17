@@ -193,7 +193,8 @@ impl Publisher {
             .ok_or(Error::InvalidTarget)?
             .to_owned();
         let parent_path = target.parent().ok_or(Error::InvalidTarget)?;
-        let parent_path = std::fs::canonicalize(parent_path).map_err(|_| Error::InvalidTarget)?;
+        let parent_path =
+            crate::canonical_path::canonicalize(parent_path).map_err(|_| Error::InvalidTarget)?;
         let initial = fs::lstat(&parent_path).map_err(|_| Error::InvalidTarget)?;
         let parent = fs::open(
             &parent_path,
@@ -538,7 +539,7 @@ mod tests {
             std::process::id()
         ));
         std::fs::create_dir(&path).unwrap();
-        let path = std::fs::canonicalize(path).unwrap();
+        let path = crate::canonical_path::canonicalize(path).unwrap();
         let target = path.join("result.csv");
         std::fs::write(&target, b"old").unwrap();
         let mut publisher = Publisher::new("result.csv", target.to_str().unwrap()).unwrap();
@@ -576,7 +577,7 @@ mod tests {
             std::process::id()
         ));
         std::fs::create_dir(&path).unwrap();
-        let path = std::fs::canonicalize(path).unwrap();
+        let path = crate::canonical_path::canonicalize(path).unwrap();
         let target = path.join("result.csv");
         std::fs::write(&target, b"old").unwrap();
         let mut publisher = Publisher::new("result.csv", target.to_str().unwrap()).unwrap();
