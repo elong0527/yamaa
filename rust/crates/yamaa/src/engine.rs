@@ -56,13 +56,6 @@ pub struct EngineOptions {
     pub observer: Option<Arc<dyn Progress>>,
 }
 
-// HostLanguage needs a default for the derived Default above.
-impl Default for HostLanguage {
-    fn default() -> Self {
-        Self::Python
-    }
-}
-
 impl EngineOptions {
     /// Configure one engine for a host language and runtime identity.
     /// The runtime name folds in the report identity (hosts pass their

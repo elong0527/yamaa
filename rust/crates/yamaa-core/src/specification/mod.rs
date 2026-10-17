@@ -2445,8 +2445,7 @@ pub enum OutputFinding {
 }
 fn output_basename(path: &str) -> &str {
     path.split('/')
-        .filter(|part| !part.is_empty() && *part != ".")
-        .next_back()
+        .rfind(|part| !part.is_empty() && *part != ".")
         .unwrap_or("")
 }
 fn output_profile(path: &str) -> Option<&'static str> {

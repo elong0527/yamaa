@@ -138,7 +138,9 @@ mod declaration {
                 } else {
                     let hex = row["source"]["hex"].as_str().unwrap();
                     hex.as_bytes()
-                        .chunks_exact(2)
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
                         .map(|p| u8::from_str_radix(std::str::from_utf8(p).unwrap(), 16).unwrap())
                         .collect()
                 };
@@ -637,7 +639,9 @@ mod declaration {
                 } else {
                     let hex = row["source"]["hex"].as_str().unwrap();
                     hex.as_bytes()
-                        .chunks_exact(2)
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
                         .map(|p| u8::from_str_radix(std::str::from_utf8(p).unwrap(), 16).unwrap())
                         .collect()
                 };

@@ -194,7 +194,6 @@ yamaa::engine::EngineOptions::runtime_version: pub runtime_version: String
 yamaa::engine::EngineOptions::with_functions: pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self
 yamaa::engine::EngineOptions::with_observer: pub fn with_observer(mut self, observer: Arc<dyn Progress>) -> Self
 yamaa::engine::EngineOptions::with_resolver: pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self
-yamaa::engine::HostLanguage: impl Default for HostLanguage
 yamaa::engine::Request: impl<'a> Request<'a>
 yamaa::engine::Request: pub struct Request<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::engine::Request::environment: pub environment: Option<&'a str>
@@ -298,7 +297,7 @@ yamaa::functions::FunctionIdentity: pub struct FunctionIdentity [derive(Clone, D
 yamaa::functions::FunctionIdentity::call: pub call: String
 yamaa::functions::FunctionIdentity::name: pub name: String
 yamaa::functions::HostLanguage: impl HostLanguage
-yamaa::functions::HostLanguage: pub enum HostLanguage [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::functions::HostLanguage: pub enum HostLanguage [derive(Clone, Copy, Debug, Default, Eq, PartialEq)] [non_exhaustive]
 yamaa::functions::HostLanguage::Python: Python
 yamaa::functions::HostLanguage::R: R
 yamaa::functions::LockContext: pub struct LockContext<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]

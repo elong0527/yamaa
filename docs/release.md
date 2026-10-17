@@ -70,7 +70,8 @@ Define-XML are generated through the public study-document API.
 
 ## Supported dependency combinations
 
-The Rust workspace declares MSRV 1.90 and builds with Rust 1.90.0. Canonical
+The Rust workspace declares MSRV 1.90 and builds with Rust 1.99.1; a CI job
+checks and lints it with Rust 1.90.0. Canonical
 release builds use `rust/Cargo.lock`, including unchanged copies in both source
 packages. Arrow and Parquet are supported at exactly 60.0.0 with flatbuffers
 25.12.19. Arrow/Parquet 57 (and other Rust Arrow major versions) are unsupported:
