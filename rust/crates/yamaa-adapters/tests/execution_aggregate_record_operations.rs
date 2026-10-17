@@ -282,7 +282,7 @@ mod execution {
                     yamaa_adapters::json!({
                         "phase": issue.phase, "condition": issue.condition,
                         "requirement": issue.requirement, "spec_paths": issue.spec_paths,
-                        "context": yamaa_adapters::json_wire::decode(&issue.context).unwrap()
+                        "context": issue.context.clone()
                     })
                 })
                 .collect()
@@ -530,8 +530,7 @@ S1,002,2024-06
             );
             let issues = original_derive_issues(&fixture);
             assert_eq!(issues[0].condition, "invalid_derive_step");
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value = issues[0].context.clone();
             assert!(context["reason"].as_str().unwrap().contains("unique"));
 
             let fixture = original_derive_fixture(
@@ -541,8 +540,7 @@ S1,002,2024-06
             );
             let issues = original_derive_issues(&fixture);
             assert_eq!(issues[0].condition, "unknown_derive_variable");
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issues[0].context).unwrap();
+            let context: yamaa_core::json::Value = issues[0].context.clone();
             assert_eq!(context["variable"], "QSNUM");
         }
 
@@ -622,8 +620,7 @@ S1,002,2024-06
                 .find(|issue| issue.condition == "invalid_derive_step")
                 .unwrap();
             assert_eq!(issue.requirement.as_deref(), Some("REQ-1191"));
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+            let context: yamaa_core::json::Value = issue.context.clone();
             assert_eq!(context["relations"], yamaa_adapters::json!(["QS", "XX"]));
 
             for (source, requirement) in
@@ -642,8 +639,7 @@ S1,002,2024-06
                     .collect::<Vec<_>>();
                 assert_eq!(unknown.len(), 1, "{issues:?}");
                 assert_eq!(unknown[0].requirement.as_deref(), Some(requirement));
-                let context: yamaa_core::json::Value =
-                    yamaa_adapters::json_wire::decode(&unknown[0].context).unwrap();
+                let context: yamaa_core::json::Value = unknown[0].context.clone();
                 assert_eq!(context["identifier"], source);
             }
 
@@ -660,8 +656,7 @@ S1,002,2024-06
                 .collect::<Vec<_>>();
             assert_eq!(invalid.len(), 1, "{issues:?}");
             assert_eq!(invalid[0].requirement.as_deref(), Some("REQ-1242"));
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&invalid[0].context).unwrap();
+            let context: yamaa_core::json::Value = invalid[0].context.clone();
             assert_eq!(context["intermediate"], "CAP");
         }
 
@@ -697,10 +692,13 @@ S1,002,2024-06
             }
         }
         fn issues(rows: &[yamaa_adapters::issue_rows::Issue]) -> yamaa_core::json::Value {
-            yamaa_adapters::json!(rows.iter().map(|row| yamaa_adapters::json!({
-        "phase":row.phase,"condition":row.condition,"requirement":row.requirement,
-        "spec_paths":row.spec_paths,"context":yamaa_adapters::json_wire::decode(&row.context).unwrap()
-    })).collect::<Vec<_>>())
+            yamaa_adapters::json!(rows
+                .iter()
+                .map(|row| yamaa_adapters::json!({
+                    "phase":row.phase,"condition":row.condition,"requirement":row.requirement,
+                    "spec_paths":row.spec_paths,"context":row.context.clone()
+                }))
+                .collect::<Vec<_>>())
         }
         #[test]
         fn baseline_types_preserve_conditions_and_reference_priority() {
@@ -836,7 +834,7 @@ S1,002,2024-06
                     .map(|row| {
                         yamaa_adapters::json!({
                             "phase": row.phase, "condition": row.condition, "requirement": row.requirement,
-                            "spec_paths": row.spec_paths, "context": yamaa_adapters::json_wire::decode(&row.context).unwrap()
+                            "spec_paths": row.spec_paths, "context": row.context.clone()
                         })
                     })
                     .collect(),
@@ -1000,7 +998,7 @@ S1,002,2024-06
         }
 
         fn issue(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
 
         fn expected(path: &Path) -> yamaa_core::json::Value {
@@ -1872,7 +1870,7 @@ S1,002,2024-06
             }
         }
         fn issue(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         fn expected(path: &Path) -> yamaa_core::json::Value {
             let text = fs::read_to_string(path).unwrap();
@@ -2465,8 +2463,7 @@ S1,002,2024-06
                 rows.iter()
                     .map(|issue| {
                         let mut value = issue.as_value();
-                        value["context"] =
-                            yamaa_adapters::json_wire::decode(&issue.context).unwrap();
+                        value["context"] = issue.context.clone();
                         value
                     })
                     .collect(),

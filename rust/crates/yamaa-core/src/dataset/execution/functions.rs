@@ -211,6 +211,7 @@ pub(super) fn admit<E>(
         }
         Expression::StrContains { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::StrReplace { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::MappingCut { source, .. }

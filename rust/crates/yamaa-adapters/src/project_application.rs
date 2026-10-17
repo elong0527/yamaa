@@ -400,7 +400,7 @@ mod resource_tests {
                 );
                 assert_eq!(rows[0].requirement, None);
                 assert_eq!(rows[0].spec_paths, ["$"]);
-                assert_eq!(rows[0].context, crate::json_wire::encode(&context));
+                assert_eq!(rows[0].context, context);
             }
         }
     }
@@ -420,7 +420,7 @@ mod resource_tests {
         assert_eq!(project, original);
         assert_eq!(project.len(), 1);
         assert_eq!(
-            crate::json_wire::decode(&project[0].context).unwrap(),
+            project[0].context.clone(),
             crate::json!({"stage":"prepare", "code":"inventory"})
         );
     }
@@ -508,11 +508,7 @@ mod resource_tests {
                     .condition
             );
             assert_eq!(rows[0].requirement, None);
-            assert_eq!(
-                crate::json_wire::decode(&rows[0].context).unwrap(),
-                context,
-                "{error:?}"
-            );
+            assert_eq!(rows[0].context.clone(), context, "{error:?}");
         }
     }
 
@@ -542,7 +538,7 @@ mod resource_tests {
         );
         assert_eq!(issue.requirement, None);
         assert_eq!(
-            crate::json_wire::decode(&issue.context).unwrap(),
+            issue.context.clone(),
             crate::json!({
                 "code":"resource_limit", "stage":"prepare", "phase":"validation", "resource":"semantic_depth", "limit":128,
             })

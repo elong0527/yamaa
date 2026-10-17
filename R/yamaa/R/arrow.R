@@ -6,5 +6,5 @@
     stop("Arrow views require nanoarrow >= 0.8.0", call. = FALSE)
   }
   destination <- nanoarrow::nanoarrow_allocate_array_stream()
-  .domain_reply(.Call(wrap__domain_arrow, handle, destination, kind))
+  .domain_reply(.native_domain_arrow(handle, destination, kind))
 }

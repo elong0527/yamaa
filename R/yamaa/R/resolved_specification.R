@@ -9,7 +9,7 @@
 #' @export
 yamaa_resolve_specification <- function(specification, environment = NULL) {
   args <- .domain_arguments(specification, environment)
-  reply <- .domain_reply(.Call(wrap__resolve_specification_file, args[[1L]], args[[2L]]))
+  reply <- .domain_reply(.native_resolve_specification_file(args[[1L]], args[[2L]]))
   if (is.null(reply$json)) {
     stop(structure(list(message = "cannot resolve specification; inspect issues", call = NULL,
       issues = reply$issues), class = c("yamaa_resolved_specification_error", "error", "condition")))
@@ -24,7 +24,7 @@ yamaa_resolve_specification <- function(specification, environment = NULL) {
 #'   opens resources, resolves paths, compiles a program or invokes callbacks.
 #' @export
 yamaa_read_resolved_specification <- function(json) {
-  value <- .domain_reply(.Call(wrap__read_resolved_specification, .domain_path_bytes(json)))
+  value <- .domain_reply(.native_read_resolved_specification(.domain_path_bytes(json)))
   structure(value, class = "yamaa_resolved_specification")
 }
 

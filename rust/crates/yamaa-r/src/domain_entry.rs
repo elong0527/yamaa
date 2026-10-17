@@ -362,20 +362,4 @@ fn domain_projection_failure(handle: Robj) -> List {
         }
     })
 }
-extendr_module! {
-    mod domain_entry;
-    fn domain_file;
-    fn domain_resolved;
-    fn check_file;
-    fn check_resolved;
-    fn domain_issues;
-    fn domain_output;
-    fn domain_arrow;
-    fn domain_log;
-    fn domain_observations;
-    fn domain_save;
-    fn domain_interrupt;
-    fn domain_producer_evidence;
-    fn domain_preparation_sources;
-    fn domain_projection_failure;
-}
+include!("generated/domain_entry.rs");

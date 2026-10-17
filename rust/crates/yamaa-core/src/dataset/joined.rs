@@ -153,6 +153,7 @@ pub(super) fn validate_sources(
         | Expression::StrPad { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::StrReplace { source, .. }
         | Expression::StrContains { source, .. }
         | Expression::MappingCut { source, .. }
         | Expression::SourceBinding { source, .. } => {

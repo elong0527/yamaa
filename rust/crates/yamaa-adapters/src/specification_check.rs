@@ -15,7 +15,8 @@ impl Error {
     }
 }
 
-/// Both hosts receive context as JSON text, so neither narrows its scalar values.
+/// Both hosts receive the same encoded payload; context stays a structured
+/// tree inside it, so neither host narrows its scalar values.
 pub fn issues(run: &dyn RunView) -> Result<String, Error> {
     Ok(crate::issue_rows::encode(&crate::issue_rows::collect(
         issue_rows(run)?,

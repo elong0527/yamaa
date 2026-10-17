@@ -113,9 +113,7 @@ fn invocation_host<'a, E>(
     }
 }
 pub(crate) fn diagnostic(issue: Issue) -> Result<Value, report::Error> {
-    issue
-        .report_value()
-        .map_err(|_| report::Error::InvalidObservation)
+    Ok(issue.as_value())
 }
 
 fn project_error<'a, C, E>(error: invocation::Error<'a, E>) -> Error<'a, C, E> {

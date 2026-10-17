@@ -482,7 +482,8 @@
           "context": {
             "left_type": "int",
             "right_type": "str"
-          }
+          },
+          "operand_route": []
         }
       ],
       "check_issues": [
@@ -533,7 +534,8 @@
           "context": {
             "left_type": "int",
             "right_type": "str"
-          }
+          },
+          "operand_route": []
         }
       ],
       "check_issues": [],

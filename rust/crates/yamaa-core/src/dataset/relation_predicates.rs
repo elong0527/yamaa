@@ -207,6 +207,7 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::StrReplace { source, .. }
         | Expression::Round { source, .. } => visit(&source.expression, visitor),
         Expression::FirstAvailable(selection) => {
             for source in selection.sources() {

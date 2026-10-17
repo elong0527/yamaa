@@ -232,6 +232,20 @@ identity, path authority, encoding, scalar types, handle ownership and interrupt
 propagation retain their own integrity checks. These fixed limits are independent
 of available process memory.
 
+## Keyed intermediate lookups
+
+A keyed intermediate (`intermediates: [{id, dataset, key, columns}]`) is
+served by a donor index built once per build attempt over the eligible
+donor rows whenever the intermediate is plain: any number of key columns
+and any scalar key type (`str`, `int`, `float`, `date` or `datetime`,
+including an `int` key matched against a `float` donor column or the
+reverse) are indexed over the full key tuple, and donor read order is
+kept inside each key bucket. Lookup shapes that still scan the eligible
+donor rows for every output row are intermediates with expression keys,
+a range, derivations, a correlated filter or a `SELF` source, and any
+lookup over a donor relation below the small-relation index threshold.
+Indexed and scanned lookups keep the same diagnostics and ordering.
+
 ## Specification and environment migration from 0.2.0
 
 The 0.4.0 upgrade also includes language and environment changes introduced

@@ -135,6 +135,10 @@ impl StringExtract {
     pub fn declaration_diagnostic(&self) -> Option<&Diagnostic> {
         self.deferred.as_ref()
     }
+    /// The compiled pattern, present unless a pattern or group finding is deferred.
+    pub(crate) fn admitted(&self) -> Option<&regex::Pattern> {
+        self.compiled.as_ref().filter(|_| self.deferred.is_none())
+    }
     pub fn handler(&self, name: &str) -> Option<&Value> {
         match name {
             "missing" => self.missing.as_ref(),

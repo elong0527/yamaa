@@ -80,7 +80,7 @@ mod tests {
     }
     #[test]
     #[cfg(target_pointer_width = "64")]
-    fn full_width_count_uses_the_one_five_field_diagnostic_shape() {
+    fn full_width_count_keeps_five_fields_when_no_geometry_was_recorded() {
         let error = ExecutionError::<Infallible>::MultipleValues {
             path: "columns.A.source".into(),
             identifier: "SRC.A".into(),
@@ -100,7 +100,7 @@ mod tests {
             issue.requirement.as_deref(),
             expected["requirement"].as_str()
         );
-        let context: Value = crate::json_wire::decode(&issue.context).unwrap();
+        let context: Value = issue.context.clone();
         assert_eq!(context, expected["context"]);
         assert_eq!(
             crate::json_wire::encode(&context["value_count"]),

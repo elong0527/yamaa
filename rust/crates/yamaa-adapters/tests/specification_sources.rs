@@ -365,9 +365,16 @@ output: {{path: output.csv, columns: [I, S]}}
                     context["maximum"] = json!(i64::MAX);
                     context["value"] = json!("9223372036854776832");
                 }
+                // The portable diagnostic now carries the geometry the core
+                // recorded for the failing expression instead of discarding it.
+                let (span, route): ((usize, usize), Vec<String>) = match condition {
+                    "division_by_zero" => ((0, 26), Vec::new()),
+                    _ => ((0, 16), Vec::new()),
+                };
                 let expected = json!({"protocol":"execution/1","outcome":{
                     "status":"condition","diagnostic":{"phase":"derivation","condition":condition,"requirement":requirement,
-                    "spec_paths":[format!("columns.{column}.derivation.compute")],"context":context},
+                    "spec_paths":[format!("columns.{column}.derivation.compute")],"context":context,
+                    "source_span":{"start":span.0,"end":span.1},"operand_route":route},
                     "identity":{"position":"1","keys":keys.iter().map(|key|json!({"str":key})).collect::<Vec<_>>()}
                 }});
                 for _ in 0..2 {
@@ -1514,8 +1521,8 @@ output: {{path: output.csv, columns: [I, S]}}
                 (
                     raw.replace("derivation: LB.VISIT", "derivation: LB.LBTEST"),
                     "columns.AVISIT.derivation.source",
-                    "REQ-0107",
-                    json!({"identifier":"LB.LBTEST","dataset":"LB"}),
+                    "REQ-0067",
+                    json!({"identifier":"LB.LBTEST","row":"total","dataset":"LB"}),
                 ),
             ] {
                 let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();

@@ -94,7 +94,7 @@ mod scalar {
         }
 
         fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":yamaa_adapters::json_wire::decode(&issue.context).unwrap()})
+            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adae-text-cleanup");
@@ -509,8 +509,7 @@ mod scalar {
             assert_eq!(result.issues()[0].condition, "multiple_matches");
             assert_eq!(result.issues()[0].requirement.as_deref(), Some("REQ-0127"));
             assert_eq!(result.issues()[0].spec_paths, ["rows[0].filter"]);
-            let context: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&result.issues()[0].context).unwrap();
+            let context: yamaa_core::json::Value = result.issues()[0].context.clone();
             assert_eq!(context["match_count"], 2);
             assert!(result.save().is_err());
             assert!(!fixture.0.join("result.csv").exists());

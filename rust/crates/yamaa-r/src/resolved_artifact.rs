@@ -64,4 +64,4 @@ fn read_resolved_specification(value: Raw) -> List {
     })
 }
 
-extendr_module! { mod resolved_artifact; fn resolve_specification_file; fn read_resolved_specification; }
+include!("generated/resolved_artifact.rs");

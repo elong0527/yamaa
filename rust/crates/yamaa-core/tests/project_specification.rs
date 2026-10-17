@@ -908,22 +908,34 @@ mod project {
         fn shared_defaults_bind_per_template_with_own_paths_and_repeated_binds() {
             // One large authored default is inherited by two of three
             // templates; the remaining template overrides it, and NOTE is
-            // overridden by a different template than BIG.
+            // overridden by a different template than BIG. Every template
+            // filters on the two bare defaults, so each needs all three
+            // columns row-phase and the inherited defaults stay shared.
             let large = "shared-authored-default ".repeat(256);
+            let mut templates = vec![
+                row("records", vec![("NOTE", text_literal("note-a"))], None),
+                row(
+                    "override",
+                    vec![("BIG", text_literal("big-override"))],
+                    None,
+                ),
+                row("grouped", vec![], Some(vec!["SRC.ID"])),
+            ];
+            for template in &mut templates {
+                let Tree::Map(fields) = template else {
+                    panic!("row mapping");
+                };
+                fields.push((
+                    "filter".into(),
+                    Tree::text("BIG IS NOT NULL AND NOTE IS NOT NULL"),
+                ));
+            }
             let spec = specification_with_rows(
                 vec![
                     ("BIG", "str", text_literal(&large)),
                     ("NOTE", "str", text_literal("note-default")),
                 ],
-                vec![
-                    row("records", vec![("NOTE", text_literal("note-a"))], None),
-                    row(
-                        "override",
-                        vec![("BIG", text_literal("big-override"))],
-                        None,
-                    ),
-                    row("grouped", vec![], Some(vec!["SRC.ID"])),
-                ],
+                templates,
             );
             let prepared = PreparedSpecification::prepare(&spec).unwrap();
             // Binding is per template and per bind call: repeated binds of

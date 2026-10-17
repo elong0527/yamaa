@@ -14,6 +14,7 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
                         imputation::register(&expression.assignment.expression, counter);
                         str_case::register(&expression.assignment.expression, counter);
                         str_extract::register(&expression.assignment.expression, counter);
+                        str_replace::register(&expression.assignment.expression, counter);
                         str_template::register(&expression.assignment.expression, counter);
                     }
                 }
@@ -26,6 +27,7 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
                 imputation::register(&binding.assignment.expression, counter);
                 str_case::register(&binding.assignment.expression, counter);
                 str_extract::register(&binding.assignment.expression, counter);
+                str_replace::register(&binding.assignment.expression, counter);
                 str_template::register(&binding.assignment.expression, counter);
             }
         }
@@ -116,6 +118,7 @@ pub(super) fn register(assignment: &Assignment, counter: &mut HandlerCounter) {
         }
         Expression::StrCase { source, .. }
         | Expression::StrExtract { source, .. }
+        | Expression::StrReplace { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::Round { source, .. } => register(source, counter),
         _ => (),

@@ -98,6 +98,7 @@ pub(super) fn prepare_value_with_driver(
         )?),
         "str_template" => Operation::StrTemplate(templates.get(payload)?),
         "str_extract" => Operation::StrExtract(extraction.get(payload)?),
+        "str_replace" => Operation::StrReplace(extraction.replacement(payload)?),
         "str_contains" => Operation::StrContains(extraction.get(payload)?),
         "greatest" | "least" | "str_concat" => {
             Operation::Scalar(std::boxed::Box::new(scalar::prepare(
@@ -609,6 +610,21 @@ pub(super) fn bind_row(
             intermediates,
         ),
         Operation::StrExtract(operation) => str_extract::bind_row(
+            operation,
+            column,
+            catalog,
+            driver,
+            row,
+            phase,
+            available,
+            edges,
+            findings,
+            output,
+            named,
+            secondary,
+            intermediates,
+        ),
+        Operation::StrReplace(operation) => str_extract::bind_row_replace(
             operation,
             column,
             catalog,

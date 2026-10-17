@@ -509,7 +509,9 @@ pub(crate) fn cancelled_issue() -> yamaa_adapters::issue_rows::Issue {
         condition: "cancelled".into(),
         requirement: None,
         spec_paths: Vec::new(),
-        context: "{}".into(),
+        context: yamaa_adapters::json!({}),
+        source_span: None,
+        operand_route: None,
     }
 }
 
