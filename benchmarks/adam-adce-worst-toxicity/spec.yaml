@@ -89,8 +89,6 @@ columns:
         values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, CESEQ]
   - row_count:
       min: 11
       max: 11

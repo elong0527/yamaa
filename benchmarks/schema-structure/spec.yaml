@@ -107,7 +107,3 @@ rows:
         aggregate:
           expr: "MIN(LB.LBSTRESN)"
       DTYPE: {literal: LOWEST}
-
-verifications:
-  - unique:
-      columns: [USUBJID, VISIT, PARAMCD]

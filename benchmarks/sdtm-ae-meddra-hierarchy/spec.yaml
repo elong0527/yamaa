@@ -108,8 +108,6 @@ columns:
     derivation: PRIMARY_PATH.SOCNAME
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 5
       max: 5

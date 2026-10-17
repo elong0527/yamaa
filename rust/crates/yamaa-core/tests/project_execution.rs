@@ -1696,55 +1696,43 @@ mod project {
             assert_eq!(catalogue.enforced_items("SEX").unwrap().len(), 4);
         }
         #[test]
-        fn binding_checks_exact_column_type_and_item_sets() {
+        fn binding_checks_exact_column_type_and_rejects_restated_item_sets() {
             let catalogue = Catalogue::admit(vec![source(list())]).unwrap();
             assert_eq!(
-                catalogue.bind("unknown", ColumnType::Str, None),
+                catalogue.bind("unknown", ColumnType::Str, false),
                 vec![BindingFinding::UnknownCodelist]
             );
             assert_eq!(
-                catalogue.bind("SEX", ColumnType::Int, Some(&[Value::Str("F".into())])),
+                catalogue.bind("SEX", ColumnType::Int, true),
                 vec![
                     BindingFinding::TypeMismatch {
                         expected: ColumnType::Str,
                         actual: ColumnType::Int
                     },
-                    BindingFinding::ValuesConflict
+                    BindingFinding::RedundantAllowedValues
                 ]
             );
-            assert!(catalogue
-                .bind(
-                    "SEX",
-                    ColumnType::Str,
-                    Some(&[
-                        Value::Str("M".into()),
-                        Value::Str("F".into()),
-                        Value::Str("F".into())
-                    ])
-                )
-                .is_empty());
-            for external in [false, true] {
-                let mut list = list();
-                if external {
-                    list.items = None;
-                    list.external = Some(External {
-                        dictionary: "d".into(),
-                        version: "1".into(),
-                        href: Some("relative/path".into()),
-                    });
-                } else {
-                    list.extensible = true;
-                }
-                let catalogue = Catalogue::admit(vec![source(list)]).unwrap();
-                assert!(catalogue
-                    .bind(
-                        "SEX",
-                        ColumnType::Str,
-                        Some(&[Value::Str("anything".into())])
-                    )
-                    .is_empty());
-                assert_eq!(catalogue.enforced_items("SEX"), None);
-            }
+            assert!(catalogue.bind("SEX", ColumnType::Str, false).is_empty());
+            // An extensible list of items is enforced like any other list; only
+            // an external dictionary leaves values and verifications unchecked.
+            let mut extensible = list();
+            extensible.extensible = true;
+            let catalogue = Catalogue::admit(vec![source(extensible)]).unwrap();
+            assert_eq!(
+                catalogue.bind("SEX", ColumnType::Str, true),
+                vec![BindingFinding::RedundantAllowedValues]
+            );
+            assert_eq!(catalogue.enforced_items("SEX").unwrap().len(), 2);
+            let mut external = list();
+            external.items = None;
+            external.external = Some(External {
+                dictionary: "d".into(),
+                version: "1".into(),
+                href: Some("relative/path".into()),
+            });
+            let catalogue = Catalogue::admit(vec![source(external)]).unwrap();
+            assert!(catalogue.bind("SEX", ColumnType::Str, true).is_empty());
+            assert_eq!(catalogue.enforced_items("SEX"), None);
         }
         #[test]
         fn invalid_shapes_and_missing_boolean_fractional_item_types_are_rejected() {
@@ -1927,22 +1915,25 @@ mod project {
             }
         }
         #[test]
-        fn compiler_projects_unknown_type_and_conflicting_sets_as_static_preflight_causes() {
-            for (doc, condition, requirement) in [
+        fn compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes() {
+            for (doc, condition, requirement, path) in [
                 (
                     spec("UNKNOWN", "str", None, false, None),
                     "unknown_codelist",
                     "REQ-0953",
+                    "columns.CODE.submission.codelist",
                 ),
                 (
                     spec("SEX", "int", None, false, None),
                     "codelist_type_mismatch",
                     "REQ-0954",
+                    "columns.CODE.submission.codelist",
                 ),
                 (
-                    spec("SEX", "str", Some("M"), false, None),
-                    "codelist_values_conflict",
+                    spec("SEX", "str", Some("F"), false, None),
+                    "redundant_declaration",
                     "REQ-0955",
+                    "columns.CODE.verifications[0].allowed_values",
                 ),
             ] {
                 let Err(PrepareError::Invalid(findings)) =
@@ -1960,18 +1951,39 @@ mod project {
                     ),
                     ("validation", condition, Some(requirement))
                 );
-                assert_eq!(d.spec_paths[0], "columns.CODE.submission.codelist");
+                assert_eq!(d.spec_paths, [path]);
             }
         }
         #[test]
-        fn extensible_catalogue_does_not_replace_the_ordinary_allowed_values_check() {
-            let doc = spec("SEX", "str", Some("M"), false, None);
-            let prepared =
-                PreparedSpecification::prepare_with_environment(&doc, &environment(true)).unwrap();
+        fn extensible_catalogue_is_enforced_and_states_the_value_set_once() {
+            let prepared = PreparedSpecification::prepare_with_environment(
+                &spec("SEX", "str", None, false, None),
+                &environment(true),
+            )
+            .unwrap();
             let plan = prepared.bind(&schema()).unwrap();
             assert_eq!(plan.column_verifications()[0].checks.len(), 1);
             assert!(
-                matches!(&plan.column_verifications()[0].checks[0].check,Check::AllowedValues(values) if values==&[Value::Str("M".into())])
+                matches!(&plan.column_verifications()[0].checks[0].check,Check::Codelist {id,values} if id=="SEX" && values==&[Value::Str("F".into())])
+            );
+            let Err(PrepareError::Invalid(findings)) =
+                PreparedSpecification::prepare_with_environment(
+                    &spec("SEX", "str", Some("M"), false, None),
+                    &environment(true),
+                )
+            else {
+                panic!("allowed values beside a listing codelist")
+            };
+            assert_eq!(findings.len(), 1);
+            let d = findings[0].diagnostic();
+            assert_eq!(d.definition().condition, "redundant_declaration");
+            assert_eq!(
+                d.spec_paths,
+                ["columns.CODE.verifications[0].allowed_values"]
+            );
+            assert_eq!(
+                d.context["stated_by"],
+                yamaa_core::json::Value::String("columns.CODE.submission.codelist".into())
             );
         }
         #[test]

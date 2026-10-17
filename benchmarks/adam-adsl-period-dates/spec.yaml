@@ -74,8 +74,6 @@ columns:
             date_shift: {source: LASTEXDT, days: 30}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 7
       max: 7

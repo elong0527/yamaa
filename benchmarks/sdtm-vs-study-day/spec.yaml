@@ -57,8 +57,6 @@ columns:
     type: int
     label: Sequence Number
     derivation: VS_RAW.VSSEQ
-    verifications:
-      not_missing: {}
 
   - name: VSTESTCD
     type: str
@@ -142,8 +140,6 @@ columns:
         values: [SCREENING, TREATMENT, FOLLOW-UP]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
       min: 7
       max: 7

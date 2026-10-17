@@ -280,8 +280,6 @@ rows:
     derivations: {}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, EXSEQ]
   - row_count:
       min: 6
       max: 6

@@ -48,8 +48,6 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by: [DSDTC]
-    verifications:
-      not_missing: {}
 
   - name: DSDECOD
     type: str
@@ -77,8 +75,6 @@ rows:
     derivations: {}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, DSSEQ]
   - row_count:
       min: 7
       max: 7

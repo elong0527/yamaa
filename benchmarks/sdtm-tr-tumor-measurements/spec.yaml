@@ -32,8 +32,6 @@ columns:
     type: int
     label: Sequence Number
     derivation: TR_RAW.TRSEQ
-    verifications:
-      not_missing: {}
 
   - name: TRLNKID
     type: str
@@ -139,8 +137,6 @@ columns:
     derivation: TR_RAW.TRDTC
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, TRSEQ]
   - row_count:
       min: 10
       max: 10

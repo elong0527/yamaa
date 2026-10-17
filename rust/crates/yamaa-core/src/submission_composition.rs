@@ -163,15 +163,18 @@ fn strings(document: &Document, node: usize, field: &str) -> Vec<String> {
         .field(node, field)
         .and_then(|n| document.nodes().get(n))
     {
-        Some(N::Sequence(values)) => values
-            .iter()
-            .filter_map(|&n| match &document.nodes()[n] {
-                N::Text(value) => Some(value.clone()),
-                _ => None,
-            })
-            .collect(),
+        Some(N::Sequence(values)) => texts(document, values),
         _ => Vec::new(),
     }
+}
+fn texts(document: &Document, values: &[usize]) -> Vec<String> {
+    values
+        .iter()
+        .filter_map(|&n| match &document.nodes()[n] {
+            N::Text(value) => Some(value.clone()),
+            _ => None,
+        })
+        .collect()
 }
 fn verification(document: &Document, node: usize, operation: &str) -> Vec<usize> {
     let Some(v) = document.field(node, "verifications") else {
@@ -311,6 +314,42 @@ fn reserved_metadata(
         }
     }
 }
+/// A redundant declaration: the path declares a fact `stated_by` already states.
+fn redundant(code: ConditionCode, path: &str, detail: &str, stated_by: &str) -> Finding {
+    let mut finding = Finding::cause(code, path, detail);
+    finding.context.insert(
+        "stated_by".into(),
+        crate::json::Value::String(stated_by.into()),
+    );
+    finding
+}
+/// The paths of one column's or one root's verifications of an operation.
+fn verification_paths(
+    document: &Document,
+    node: usize,
+    operation: &str,
+    prefix: &str,
+) -> Vec<String> {
+    let Some(N::Sequence(entries)) = document
+        .field(node, "verifications")
+        .map(|v| &document.nodes()[v])
+    else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .enumerate()
+        .filter(|&(_, &entry)| document.field(entry, operation).is_some())
+        .map(|(index, _)| format!("{prefix}.verifications[{index}].{operation}"))
+        .collect()
+}
+/// Whether a column's metadata is admitted as the column's own or as one test
+/// code's value-level metadata, which governs only that code's rows.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Level {
+    Column,
+    Value,
+}
 /// Admit the complete inherited column metadata for a base or per-value item.
 struct ColumnAdmission<'a> {
     doc: &'a Document,
@@ -320,14 +359,25 @@ struct ColumnAdmission<'a> {
     acrfs: &'a [&'a env::DocumentReference],
     keys: &'a [String],
     intermediates: &'a BTreeSet<String>,
+    /// The dataset's class decides whether `core` derives `mandatory` (SUB-10).
+    tabulation: bool,
 }
 impl ColumnAdmission<'_> {
+    /// SUB-10: the one resolution the domain build also enforces.
+    fn mandatory(&self, name: &str, metadata: &spec::ColumnSubmission) -> bool {
+        spec::resolve_mandatory(
+            self.keys.iter().any(|key| key == name),
+            metadata.mandatory.as_ref().map(|field| field.value),
+            metadata.core.as_ref().map(|field| field.value),
+            self.tabulation,
+        )
+    }
     fn admit(
         &self,
         column: &spec::Column,
         column_path: &str,
         derivations: &[usize],
-        refutation: ConditionCode,
+        level: Level,
         findings: &mut Vec<Finding>,
         bound: &mut BTreeSet<String>,
     ) -> Option<Column> {
@@ -340,6 +390,10 @@ impl ColumnAdmission<'_> {
             intermediates,
             ..
         } = *self;
+        let refutation = match level {
+            Level::Column => ConditionCode::SubmissionOriginRefuted,
+            Level::Value => ConditionCode::SubmissionValueOriginRefuted,
+        };
         let name = &column.name.value;
         let Some(metadata) = &column.submission else {
             findings.push(Finding::cause(
@@ -372,29 +426,17 @@ impl ColumnAdmission<'_> {
             ));
         }
         let core = metadata.core.as_ref().map(|c| c.value);
-        let mandatory = metadata
-            .mandatory
-            .as_ref()
-            .map_or(core == Some(spec::Core::Required), |c| c.value);
+        let mandatory = self.mandatory(name, metadata);
         if core.is_none()
             || (section.family == Submission::Adam
                 && (core == Some(spec::Core::Expected) || metadata.mandatory.is_none()))
             || (section.family != Submission::Adam
                 && (core == Some(spec::Core::Conditional)
-                    || (core == Some(spec::Core::Required) && !mandatory)))
+                    || (core == Some(spec::Core::Required)
+                        && metadata.mandatory.as_ref().is_some_and(|m| !m.value))))
         {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionCoreMandatory,
-                column_path,
-                name,
-            ));
-        }
-        if mandatory
-            && !keys.contains(name)
-            && verification(doc, column.node, "not_missing").is_empty()
-        {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionMandatoryUnenforced,
                 column_path,
                 name,
             ));
@@ -498,7 +540,7 @@ impl ColumnAdmission<'_> {
             ));
         }
         let length = self.admit_length(column, metadata, data_type, column_path, name, findings);
-        self.admit_codelist(column, metadata, column_path, findings, bound);
+        self.admit_codelist(column, metadata, column_path, level, findings, bound);
         Some(Column {
             declaration: column.clone(),
             data_type,
@@ -602,11 +644,14 @@ impl ColumnAdmission<'_> {
         length
     }
     /// Bind an admitted codelist declaration and report any binding findings.
+    /// A column-level list of items states the column's value set, so an
+    /// `allowed_values` verification beside it is redundant (CT-9).
     fn admit_codelist(
         &self,
         column: &spec::Column,
         metadata: &spec::ColumnSubmission,
         column_path: &str,
+        level: Level,
         findings: &mut Vec<Finding>,
         bound: &mut BTreeSet<String>,
     ) {
@@ -619,53 +664,105 @@ impl ColumnAdmission<'_> {
                 spec::ColumnType::Date => crate::value::ColumnType::Date,
                 spec::ColumnType::Datetime => crate::value::ColumnType::DateTime,
             };
-            let allowed = verification(self.doc, column.node, "allowed_values");
-            let mut reader = crate::project_function_document::Reader::new(self.doc);
-            let allowed: Vec<Vec<_>> = allowed
-                .iter()
-                .filter_map(|&n| self.doc.field(n, "values"))
-                .filter_map(|n| match &self.doc.nodes()[n] {
-                    N::Sequence(values) => Some(
-                        values
-                            .iter()
-                            .map(|&v| reader.scalar(v, column_path))
-                            .collect(),
-                    ),
-                    _ => None,
-                })
-                .collect();
-            if !reader.finish().is_empty() {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionAllowedValuesLiteral,
-                    column_path,
-                    "allowed_values literal admission",
-                ));
-            }
-            let bindings = if allowed.is_empty() {
-                self.catalogue.bind(&list.value, kind, None)
-            } else {
-                allowed
-                    .iter()
-                    .flat_map(|values| self.catalogue.bind(&list.value, kind, Some(values)))
-                    .collect()
+            let codelist_path = format!("{column_path}.codelist");
+            let allowed = match level {
+                Level::Column => verification_paths(
+                    self.doc,
+                    column.node,
+                    "allowed_values",
+                    column_path
+                        .strip_suffix(".submission")
+                        .unwrap_or(column_path),
+                ),
+                Level::Value => Vec::new(),
             };
-            for binding in bindings {
+            for binding in self.catalogue.bind(&list.value, kind, !allowed.is_empty()) {
                 let code = match binding {
                     ct::BindingFinding::UnknownCodelist => ConditionCode::CodelistUnknownBinding,
                     ct::BindingFinding::TypeMismatch { .. } => {
                         ConditionCode::CodelistBindingTypeMismatch
                     }
-                    ct::BindingFinding::ValuesConflict => {
-                        ConditionCode::CodelistBindingValuesConflict
+                    ct::BindingFinding::RedundantAllowedValues => {
+                        for path in &allowed {
+                            findings.push(redundant(
+                                ConditionCode::CodelistAllowedValuesRedundant,
+                                path,
+                                &column.name.value,
+                                &codelist_path,
+                            ));
+                        }
+                        continue;
                     }
                 };
-                findings.push(Finding::cause(
-                    code,
-                    &format!("{column_path}.codelist"),
-                    &list.value,
-                ));
+                findings.push(Finding::cause(code, &codelist_path, &list.value));
             }
         }
+    }
+}
+
+/// SUB-10 and SUB-11 for one column at composition: a key column declares no
+/// `mandatory: false`, and a `not_missing` verification beside a column that is
+/// mandatory on every row restates the resolution and is redundant.
+fn redundant_mandatory_checks(
+    admission: &ColumnAdmission<'_>,
+    declarations: &spec::Declarations,
+    column: &spec::Column,
+    path: &str,
+    findings: &mut Vec<Finding>,
+) {
+    let name = &column.name.value;
+    let prefix = format!("{path}.columns.{name}");
+    let position = admission.keys.iter().position(|key| key == name);
+    let base = column.submission.as_ref();
+    let declared = base.and_then(|metadata| metadata.mandatory.as_ref());
+    if position.is_some() && declared.is_some_and(|mandatory| !mandatory.value) {
+        findings.push(Finding::cause(
+            ConditionCode::SubmissionKeyMandatory,
+            &format!("{prefix}.submission.mandatory"),
+            name,
+        ));
+    }
+    // A value-level entry merges field by field over the column's metadata.
+    let resolve = |entry: Option<&spec::ColumnSubmission>| {
+        spec::resolve_mandatory(
+            position.is_some(),
+            entry
+                .and_then(|metadata| metadata.mandatory.as_ref())
+                .or(declared)
+                .map(|field| field.value),
+            entry
+                .and_then(|metadata| metadata.core.as_ref())
+                .or(base.and_then(|metadata| metadata.core.as_ref()))
+                .map(|field| field.value),
+            admission.tabulation,
+        )
+    };
+    let everywhere = resolve(None)
+        && declarations
+            .value_rows()
+            .iter()
+            .flat_map(|row| &row.overrides)
+            .filter(|entry| &entry.name.value == name)
+            .all(|entry| resolve(Some(&entry.submission)));
+    if !everywhere {
+        return;
+    }
+    let (code, stated_by) = match position {
+        Some(position) => (
+            ConditionCode::VerificationNotMissingRedundant,
+            format!("{path}.keys[{position}]"),
+        ),
+        None if declared.is_some() => (
+            ConditionCode::SubmissionMandatoryRedundant,
+            format!("{prefix}.submission.mandatory"),
+        ),
+        None => (
+            ConditionCode::SubmissionMandatoryRedundant,
+            format!("{prefix}.submission.core"),
+        ),
+    };
+    for check in verification_paths(admission.doc, column.node, "not_missing", &prefix) {
+        findings.push(redundant(code, &check, name, &stated_by));
     }
 }
 
@@ -824,11 +921,24 @@ fn compose_values(
                     .inherit(base.submission.as_ref().expect("selected column metadata")),
             );
             let first_finding = findings.len();
+            if admission.keys.contains(&value.name.value)
+                && value
+                    .submission
+                    .mandatory
+                    .as_ref()
+                    .is_some_and(|m| !m.value)
+            {
+                findings.push(Finding::cause(
+                    ConditionCode::SubmissionKeyMandatory,
+                    &format!("{column_path}.mandatory"),
+                    &value.name.value,
+                ));
+            }
             let column_value = admission.admit(
                 &effective,
                 &column_path,
                 &derivations,
-                ConditionCode::SubmissionValueOriginRefuted,
+                Level::Value,
                 findings,
                 bound,
             );
@@ -975,6 +1085,16 @@ fn compose_datasets(
                 &id,
             ));
         }
+        // The domain build reads the family group from the class alone, so the
+        // class must belong to the family this document binds the dataset to.
+        let tabulation = dataset.class.value.tabulation();
+        if tabulation == (section.family == Submission::Adam) {
+            findings.push(Finding::cause(
+                ConditionCode::SubmissionClassFamily,
+                &format!("{path}.submission.class"),
+                dataset.class.value.name(),
+            ));
+        }
         if dataset.has_no_data.value && dataset.comment.is_none() {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionNoDataComment,
@@ -1052,6 +1172,7 @@ fn compose_datasets(
             acrfs,
             keys: &keys,
             intermediates: &intermediates,
+            tabulation,
         };
         for name in &output_columns {
             let column_path = format!("{path}.columns.{name}.submission");
@@ -1063,16 +1184,41 @@ fn compose_datasets(
                 ));
                 continue;
             };
+            redundant_mandatory_checks(&admission, &declarations, column, &path, findings);
             let derivations = column_derivations(doc, column, declarations.value_rows(), None);
             if let Some(column) = admission.admit(
                 column,
                 &column_path,
                 &derivations,
-                ConditionCode::SubmissionOriginRefuted,
+                Level::Column,
                 findings,
                 bound,
             ) {
                 selected.push(column);
+            }
+        }
+        // A `unique` over exactly the keys restates their asserted identity.
+        let key_set: BTreeSet<_> = keys.iter().collect();
+        if let Some(N::Sequence(entries)) = doc
+            .field(doc.root(), "verifications")
+            .map(|v| &doc.nodes()[v])
+        {
+            for (index, &entry) in entries.iter().enumerate() {
+                let Some(payload) = doc.field(entry, "unique") else {
+                    continue;
+                };
+                let columns = match &doc.nodes()[payload] {
+                    N::Sequence(values) => texts(doc, values),
+                    _ => strings(doc, payload, "columns"),
+                };
+                if !columns.is_empty() && columns.iter().collect::<BTreeSet<_>>() == key_set {
+                    findings.push(redundant(
+                        ConditionCode::VerificationUniqueRedundant,
+                        &format!("{path}.verifications[{index}].unique"),
+                        &columns.join(", "),
+                        &format!("{path}.keys"),
+                    ));
+                }
             }
         }
         let discriminator = compose_values(

@@ -1,7 +1,7 @@
 phase: verification
 condition: assert_failed
 spec_paths:
-  - verifications[1].assert
+  - verifications[0].assert
 requirement: REQ-0384
 context:
   verification_id: a-record-is-expanded-into-every-administration-it-holds

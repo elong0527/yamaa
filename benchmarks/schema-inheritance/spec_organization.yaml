@@ -38,9 +38,5 @@ columns:
     label: Unused Intermediate Value
     derivation: {literal: unused}
 
-verifications:
-  unique:
-    columns: [USUBJID, PARAMCD]
-
 metadata:
   scope: organization

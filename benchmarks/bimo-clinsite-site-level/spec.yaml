@@ -63,7 +63,3 @@ rows:
       ENRLPOP:
         aggregate:
           expr: COUNT(SUBJ.USUBJID)
-
-verifications:
-  - unique:
-      columns: [STUDYID, SITEID]

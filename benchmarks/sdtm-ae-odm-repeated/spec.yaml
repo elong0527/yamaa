@@ -114,8 +114,6 @@ rows:
       AESER: {odm: ODM.IT.AE.AESER}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 4
       max: 4

@@ -175,8 +175,6 @@ columns:
           values: [Y, N]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 8
       max: 8

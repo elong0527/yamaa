@@ -62,9 +62,3 @@ columns:
     - when: FIRST.ASEQ IS NOT NULL
       then: {literal: 1}
     - otherwise: {literal: 0}
-
-verifications:
-- unique:
-    columns:
-    - STUDYID
-    - USUBJID

@@ -216,27 +216,62 @@ mod project {
             assert!(!study.0.join("output.csv").exists());
         }
         #[test]
-        fn per_value_external_and_extensible_bindings_exclude_default_enforcement() {
-            for codelist in ["EXT", "DICT"] {
-                let study = Study::new();
-                fs::write(
-                    study.0.join("spec.yaml"),
-                    ROW_CT.replace("codelist: GLUCOSE", &format!("codelist: {codelist}")),
-                )
-                .unwrap();
-                fs::write(study.0.join("environment.yaml"), CT_ENV).unwrap();
-                fs::write(study.0.join("input.csv"), "ID,VALUE\n1,D\n2,\n").unwrap();
-                let path = study.0.join("spec.yaml");
-                let path = path.to_str().unwrap();
-                let environment = study.0.join("environment.yaml");
-                let mut run = project_domain(path, environment.to_str().unwrap());
-                assert!(run.issues().is_empty(), "{codelist}: {:?}", run.issues());
-                assert!(run.save().unwrap());
-                assert_eq!(
-                    fs::read_to_string(study.0.join("output.csv")).unwrap(),
-                    "ID,RESULT,LBTESTCD\n1,D,GLUC\n2,,GLUC\n1,D,CREAT\n2,,CREAT\n"
-                );
-            }
+        fn per_value_extensible_lists_are_enforced_on_their_rows_and_dictionaries_replace_the_default(
+        ) {
+            // An extensible list of items states its rows' value set like any other
+            // list: the glucose rows are checked against EXT alone.
+            let study = Study::new();
+            fs::write(
+                study.0.join("spec.yaml"),
+                ROW_CT.replace("codelist: GLUCOSE", "codelist: EXT"),
+            )
+            .unwrap();
+            fs::write(study.0.join("environment.yaml"), CT_ENV).unwrap();
+            fs::write(study.0.join("input.csv"), "ID,VALUE\n1,D\n2,X\n").unwrap();
+            let path = study.0.join("spec.yaml");
+            let path = path.to_str().unwrap();
+            let environment = study.0.join("environment.yaml");
+            let mut run = project_domain(path, environment.to_str().unwrap());
+            assert_eq!(run.issues().len(), 2, "{:?}", run.issues());
+            assert_eq!(
+                (
+                    run.issues()[0].phase.as_str(),
+                    run.issues()[0].condition.as_str(),
+                    run.issues()[0].requirement.as_deref()
+                ),
+                ("verification", "allowed_values_failed", Some("REQ-0957"))
+            );
+            assert_eq!(
+                run.issues()
+                    .iter()
+                    .map(|issue| issue.context.clone())
+                    .collect::<Vec<_>>(),
+                [
+                    yamaa_adapters::json!({"column":"RESULT", "codelist":"DEFAULT", "failure_count":1, "keys":[{"ID":2,"LBTESTCD":"CREAT"}], "values":["X"]}),
+                    yamaa_adapters::json!({"column":"RESULT", "codelist":"EXT", "failure_count":1, "keys":[{"ID":1,"LBTESTCD":"GLUC"}], "values":["D"]}),
+                ]
+            );
+            assert!(run.save().is_err());
+            // An external dictionary is not enforced, and it still replaces the
+            // column's list on its own rows.
+            let study = Study::new();
+            fs::write(
+                study.0.join("spec.yaml"),
+                ROW_CT.replace("codelist: GLUCOSE", "codelist: DICT"),
+            )
+            .unwrap();
+            fs::write(study.0.join("environment.yaml"), CT_ENV).unwrap();
+            fs::write(study.0.join("input.csv"), "ID,VALUE\n1,D\n2,\n").unwrap();
+            let path = study.0.join("spec.yaml");
+            let path = path.to_str().unwrap();
+            let environment = study.0.join("environment.yaml");
+            let mut run = project_domain(path, environment.to_str().unwrap());
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            assert!(run.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(study.0.join("output.csv")).unwrap(),
+                "ID,RESULT,LBTESTCD\n1,D,GLUC\n2,,GLUC\n1,D,CREAT\n2,,CREAT\n"
+            );
         }
         #[test]
         fn per_value_codelist_unknown_and_type_failures_retain_the_authored_row_path() {
@@ -672,11 +707,6 @@ mod project {
                     "submission_length_invalid",
                     "rows.glucose.submission.RESULT.significant_digits",
                 ),
-                (
-                    "mandatory: true",
-                    "mandatory_not_enforced",
-                    "rows.glucose.submission.RESULT",
-                ),
             ] {
                 let study = Study::new();
                 let raw = ROW_CT
@@ -709,6 +739,198 @@ mod project {
             );
         }
 
+        fn domain(study: &Study, raw: &str, input: &str) -> file_application::Domain {
+            fs::write(study.0.join("spec.yaml"), raw).unwrap();
+            fs::write(study.0.join("input.csv"), input).unwrap();
+            let path = study.0.join("spec.yaml");
+            let path = path.to_str().unwrap();
+            file_application::domain(
+                Request {
+                    specification: path,
+                    environment: None,
+                },
+                identity(path),
+            )
+            .unwrap()
+        }
+        const FINDINGS: &str = "submission: {label: Results, class: FINDINGS, structure: One record per test, repeating: true}\n";
+        #[test]
+        fn mandatory_columns_are_checked_without_a_study_document() {
+            let missing = "ID,VALUE\n1,abc\n2,\n";
+            for (raw, path) in [
+                (
+                    VALID.replace(
+                        "submission: {length: 3",
+                        "submission: {mandatory: true, length: 3",
+                    ),
+                    "columns.VALUE.submission.mandatory",
+                ),
+                (
+                    format!(
+                        "{}{FINDINGS}",
+                        VALID.replace(
+                            "submission: {length: 3",
+                            "submission: {core: Req, length: 3"
+                        )
+                    ),
+                    "columns.VALUE.submission.core",
+                ),
+            ] {
+                let study = Study::new();
+                let mut run = domain(&study, &raw, missing);
+                assert_eq!(run.issues().len(), 1, "{path}: {:?}", run.issues());
+                let issue = &run.issues()[0];
+                assert_eq!(
+                    (
+                        issue.phase.as_str(),
+                        issue.condition.as_str(),
+                        issue.requirement.as_deref()
+                    ),
+                    ("verification", "not_missing_failed", Some("REQ-0885"))
+                );
+                assert_eq!(issue.spec_paths, [path]);
+                assert_eq!(
+                    yamaa_adapters::json_wire::encode(&issue.context),
+                    "{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}]}"
+                );
+                assert!(run.save().is_err());
+                assert!(!study.0.join("output.csv").exists());
+            }
+            // `core` derives nothing for an analysis class or without a declared
+            // class, so the same missing value is admitted.
+            for root in [
+                FINDINGS.replace("FINDINGS", "BASIC DATA STRUCTURE"),
+                String::new(),
+            ] {
+                let study = Study::new();
+                let raw = format!(
+                    "{}{root}",
+                    VALID.replace(
+                        "submission: {length: 3",
+                        "submission: {core: Req, length: 3"
+                    )
+                );
+                let mut run = domain(&study, &raw, missing);
+                assert!(run.issues().is_empty(), "{root}: {:?}", run.issues());
+                assert!(run.save().unwrap());
+            }
+        }
+        #[test]
+        fn value_level_mandatory_applies_only_to_the_rows_of_its_test_code() {
+            let missing = "ID,VALUE\n1,abc\n2,\n";
+            for (base, value, path, code) in [
+                (
+                    "length: 3",
+                    "mandatory: true",
+                    "rows.glucose.submission.RESULT.mandatory",
+                    "GLUC",
+                ),
+                (
+                    "mandatory: true, length: 3",
+                    "mandatory: false",
+                    "columns.RESULT.submission.mandatory",
+                    "CREAT",
+                ),
+            ] {
+                let raw = ROW_CT
+                    .replace("codelist: DEFAULT", base)
+                    .replace("codelist: GLUCOSE", value);
+                let study = Study::new();
+                let mut run = domain(&study, &raw, missing);
+                assert_eq!(run.issues().len(), 1, "{path}: {:?}", run.issues());
+                let issue = &run.issues()[0];
+                assert_eq!(
+                    (issue.condition.as_str(), issue.requirement.as_deref()),
+                    ("not_missing_failed", Some("REQ-0885"))
+                );
+                assert_eq!(issue.spec_paths, [path]);
+                assert_eq!(
+                    issue.context.clone(),
+                    yamaa_adapters::json!({"column":"RESULT","failure_count":1,"keys":[{"ID":2,"LBTESTCD":code}]})
+                );
+                assert!(run.save().is_err());
+                let study = Study::new();
+                let mut run = domain(&study, &raw, "ID,VALUE\n1,abc\n2,xyz\n");
+                assert!(run.issues().is_empty(), "{path}: {:?}", run.issues());
+                assert!(run.save().unwrap());
+            }
+        }
+        #[test]
+        fn restated_facts_and_relaxed_keys_fail_validation_before_data() {
+            let key_check = VALID.replace(
+                "{name: ID, type: int, derivation: SRC.ID}",
+                "{name: ID, type: int, derivation: SRC.ID, verifications: {not_missing: {}}}",
+            );
+            let mandatory_check = VALID.replace(
+                "    submission: {length: 3",
+                "    verifications: {not_missing: {}}\n    submission: {mandatory: true, length: 3",
+            );
+            let key_unique = format!("{VALID}verifications: [{{unique: [ID]}}]\n");
+            let relaxed_key = VALID.replace(
+                "{name: ID, type: int, derivation: SRC.ID}",
+                "{name: ID, type: int, derivation: SRC.ID, submission: {mandatory: false, length: 8, origin: {type: Assigned}}}",
+            );
+            for (raw, condition, requirement, path, context) in [
+                (
+                    key_check,
+                    "redundant_declaration",
+                    "REQ-0375",
+                    "columns.ID.verifications[0].not_missing",
+                    "{\"column\":\"ID\",\"stated_by\":\"keys[0]\"}",
+                ),
+                (
+                    mandatory_check,
+                    "redundant_declaration",
+                    "REQ-0916",
+                    "columns.VALUE.verifications[0].not_missing",
+                    "{\"column\":\"VALUE\",\"stated_by\":\"columns.VALUE.submission.mandatory\"}",
+                ),
+                (
+                    key_unique,
+                    "redundant_declaration",
+                    "REQ-0381",
+                    "verifications[0].unique",
+                    "{\"columns\":[\"ID\"],\"stated_by\":\"keys\"}",
+                ),
+                (
+                    relaxed_key,
+                    "value_not_permitted",
+                    "REQ-0881",
+                    "columns.ID.submission.mandatory",
+                    "{\"column\":\"ID\"}",
+                ),
+            ] {
+                let study = Study::new();
+                let issues = study.check(&raw);
+                assert_eq!(issues.len(), 1, "{path}: {issues:?}");
+                assert_eq!(
+                    (
+                        issues[0].phase.as_str(),
+                        issues[0].condition.as_str(),
+                        issues[0].requirement.as_deref()
+                    ),
+                    ("validation", condition, Some(requirement))
+                );
+                assert_eq!(issues[0].spec_paths, [path]);
+                assert_eq!(
+                    yamaa_adapters::json_wire::encode(&issues[0].context),
+                    context
+                );
+                assert!(!study.0.join("input.csv").exists());
+            }
+            // A `not_missing` restates nothing when a test code relaxes the column's
+            // `mandatory`, and a `unique` over more than the keys is its own claim.
+            let study = Study::new();
+            let relaxed = ROW_CT
+                .replace(
+                    "submission: {origin: {type: Assigned}, codelist: DEFAULT}",
+                    "verifications: {not_missing: {}}, submission: {origin: {type: Assigned}, mandatory: true}",
+                )
+                .replace("codelist: GLUCOSE", "mandatory: false");
+            assert!(study.check(&relaxed).is_empty());
+            let wider = format!("{VALID}verifications: [{{unique: [ID, VALUE]}}]\n");
+            assert!(study.check(&wider).is_empty());
+        }
         #[test]
         fn effective_value_fields_inherit_full_metadata_and_refute_inapplicable_lengths_and_digits()
         {

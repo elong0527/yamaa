@@ -95,8 +95,6 @@ columns:
 
 verifications:
   - unique:
-      columns: [STUDYID, USUBJID, PCSEQ]
-  - unique:
       columns: [STUDYID, USUBJID, PARAMCD, ATPTREF, ATPTN]
   - row_count:
       min: 20

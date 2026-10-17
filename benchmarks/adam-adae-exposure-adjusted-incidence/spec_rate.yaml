@@ -78,11 +78,6 @@ rows:
         expr: SUM(ADRISK.RISKDAYS)
 
 verifications:
-- unique:
-    columns:
-    - STUDYID
-    - TRT01A
-    - AEDECOD
 - assert:
     id: positive-person-time
     require: PERSONDAYS > 0 AND PERSONYRS > 0

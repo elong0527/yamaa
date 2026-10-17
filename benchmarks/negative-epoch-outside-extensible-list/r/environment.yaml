@@ -1,0 +1,14 @@
+schema_version: '1.0'
+codelists:
+  - standard:
+      name: CDISC/NCI
+      publishing_set: SDTM
+      version: '2023-12-15'
+    codelists:
+      - id: EPOCH
+        name: Epoch
+        extensible: true
+        items:
+          - {value: SCREENING}
+          - {value: TREATMENT}
+          - {value: FOLLOW-UP}

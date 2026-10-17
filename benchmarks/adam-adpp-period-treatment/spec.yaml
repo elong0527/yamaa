@@ -96,8 +96,6 @@ columns:
     derivation: PP.PPSTRESU
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARCAT1, PARAMCD, PPRFTDTC]
   - row_count:
       min: 18
       max: 18

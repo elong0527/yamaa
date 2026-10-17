@@ -307,6 +307,9 @@ pub struct RowTemplate {
 pub enum Check {
     /// Presence of the owning completed column, before later derivations.
     NotMissing,
+    /// Presence required by the column's resolved `mandatory`. Without a scope
+    /// every row is checked; a scope selects rows by their completed discriminator.
+    Mandatory(Option<CodeScope>),
     /// Already converted, present permitted values for the owning column.
     AllowedValues(Vec<Value>),
     /// Fixed environment terminology at the owning column's checkpoint.
@@ -371,6 +374,22 @@ pub enum Check {
     },
     /// Count filtered rows in each constructed-output group.
     ScopedRowCount(RowCount),
+}
+
+/// Rows selected by their completed discriminator value: the listed codes when
+/// `include`, and every other row, a missing discriminator included, otherwise.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CodeScope {
+    pub discriminator: usize,
+    pub codes: Vec<String>,
+    pub include: bool,
+}
+impl CodeScope {
+    pub fn selects(&self, row: &[Value]) -> bool {
+        let listed =
+            matches!(&row[self.discriminator], Value::Str(code) if self.codes.contains(code));
+        listed == self.include
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1483,6 +1502,7 @@ impl DatasetPlan {
                 if !matches!(
                     verification.check,
                     Check::NotMissing
+                        | Check::Mandatory(_)
                         | Check::AllowedValues(_)
                         | Check::Codelist { .. }
                         | Check::ValueCodelists { .. }
@@ -1517,6 +1537,22 @@ impl DatasetPlan {
                             .iter()
                             .enumerate()
                             .any(|(index, code)| codes[..index].contains(code))
+                    {
+                        return Err(PlanError::InvalidColumns);
+                    }
+                }
+                if let Check::Mandatory(Some(scope)) = &verification.check {
+                    if self
+                        .output
+                        .columns()
+                        .get(scope.discriminator)
+                        .is_none_or(|column| column.kind != crate::value::ColumnType::Str)
+                        || scope.codes.is_empty()
+                        || scope
+                            .codes
+                            .iter()
+                            .enumerate()
+                            .any(|(index, code)| scope.codes[..index].contains(code))
                     {
                         return Err(PlanError::InvalidColumns);
                     }
@@ -2210,6 +2246,7 @@ fn validate_plan_verifications(
         }
         match &verification.check {
             Check::NotMissing
+            | Check::Mandatory(_)
             | Check::AllowedValues(_)
             | Check::Codelist { .. }
             | Check::ValueCodelists { .. }

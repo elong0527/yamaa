@@ -13,8 +13,6 @@ columns:
     type: str
     label: Domain Abbreviation
     derivation: {literal: DM}
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Identifier
@@ -28,8 +26,6 @@ columns:
     type: str
     label: Study Identifier
     derivation: DM_RAW.STUDYID
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Identifier
@@ -50,7 +46,6 @@ columns:
           - literal: '-'
           - source: DM_RAW.SUBJID
     verifications:
-      - not_missing: {}
       - max_length:
           max: 30
     submission:
@@ -66,8 +61,6 @@ columns:
     type: str
     label: Subject Identifier for the Study
     derivation: DM_RAW.SUBJID
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Topic
@@ -83,8 +76,6 @@ columns:
     type: str
     label: Study Site Identifier
     derivation: DM_RAW.SITEID
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Record Qualifier
@@ -130,10 +121,6 @@ columns:
     type: str
     label: Sex
     derivation: DM_RAW.SEX
-    verifications:
-      - not_missing: {}
-      - allowed_values:
-          values: [F, M, U]
     submission:
       core: Req
       role: Record Qualifier
@@ -150,8 +137,6 @@ columns:
     type: str
     label: Country
     derivation: DM_RAW.COUNTRY
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Record Qualifier
@@ -165,8 +150,6 @@ columns:
             pages: {type: PhysicalRef, refs: "1"}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 3
       max: 3

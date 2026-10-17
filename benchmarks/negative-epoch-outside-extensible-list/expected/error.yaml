@@ -1,0 +1,14 @@
+phase: verification
+condition: allowed_values_failed
+spec_paths:
+  - columns.EPOCH.submission.codelist
+requirement: REQ-0957
+context:
+  column: EPOCH
+  codelist: EPOCH
+  failure_count: 1
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-101
+      VSSEQ: 2
+  values: [RUN-IN]

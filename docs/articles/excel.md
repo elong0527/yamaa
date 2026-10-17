@@ -51,8 +51,6 @@ columns:                       # this section (below) is the Variable sheet
         expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
 
 verifications:                 # <- no cell for this either
-  - unique:
-      columns: [STUDYID, USUBJID]
   - assert:
       id: bmi-missing-only-without-usable-inputs
       when: "BMI IS NULL"
@@ -71,9 +69,10 @@ what has no Excel counterpart at all. Four things:
    programmer picks differently.
 3. **Dependency order vs delivery order.** One `Variable Order` column does both
    jobs. yamaa splits them into `columns` order and `output.columns`.
-4. **The two verifications.** `Key Variables` looks like it asserts uniqueness,
-   but nothing executes it. The `assert` rule -- "BMI is empty only when
-   height or weight is unusable" -- normally survives as a sentence in a review email.
+4. **The checks.** `Key Variables` looks like it asserts uniqueness, but
+   nothing executes it; `keys` does, so no separate uniqueness check is
+   written. The `assert` rule -- "BMI is empty only when height or weight is
+   unusable" -- normally survives as a sentence in a review email.
 
 Going the other way, every one of the eleven columns has a yamaa field --
 two live in governed submission metadata rather than in the derivation:
@@ -185,9 +184,10 @@ codelists:
 
 `submission.codelist` carries the `id`, not the values. The environment carries
 the values once, and every column naming that `id` shares the one statement.
-When the bound codelist declares `items`, an `allowed_values` verification on
-the same column must list the same values -- the check the run executes and
-the terminology the document publishes stay in agreement.
+When the bound codelist declares `items`, the run checks every non-missing
+value against them, and an `allowed_values` verification on the same column is
+rejected as a second statement of the same list -- the check the run executes
+and the terminology the document publishes come from one declaration.
 
 ### 2.4 Value-level metadata
 
@@ -277,9 +277,10 @@ What changed:
   dictionary does not know, `missing: null` for an empty one. A condition
   with no handler stops the run instead of turning into a blank.
 - The codelist *name* (`SEX`, `AGEGR1`) has no single home. The translation
-  lives in `mapping.dict`, the check lives in `allowed_values`, and the name
-  itself goes in `submission.codelist` if you generate define.xml -- see
-  [Where the codelist name lives](#where-the-codelist-name-lives) below.
+  lives in `mapping.dict`, and the name goes in `submission.codelist` if you
+  generate define.xml; a bound list of items is then also the check, so the
+  `allowed_values` above is written only when no codelist is bound -- see
+  [Where the codelist name lives](#where-the-codelist-name-lives) above.
 
 ### Example 2: a Comment sentence becomes `compute`
 

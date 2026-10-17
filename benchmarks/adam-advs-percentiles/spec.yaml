@@ -100,8 +100,6 @@ columns:
         expr: "100 * NORMCDF"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
   - row_count:
       min: 8
       max: 8

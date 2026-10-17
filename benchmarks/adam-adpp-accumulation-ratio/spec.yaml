@@ -144,8 +144,6 @@ rows:
       AVALU: {literal: RATIO}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - assert:
       id: every-subject-has-a-planned-arm-a-or-b
       require: "ARMCD = 'A' OR ARMCD = 'B'"

@@ -84,8 +84,6 @@ columns:
       flag: "EOT_RANK.EOT_SEQ = 1"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, LBSEQ]
   - row_count:
       min: 12
       max: 12

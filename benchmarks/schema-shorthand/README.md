@@ -10,7 +10,7 @@ per subject).
 
 **Variables:**
 
-- `SEX`: the subject's recorded sex.
+- `SEX`: the subject's recorded sex; a subject without one stops the run.
 - `AGE`: the subject's age in years; blank when not collected.
 - `AGE65FL`: `Y` for subjects aged 65 or older; blank otherwise. A
   lone condition needs no explicit yes or no text: it answers `Y`

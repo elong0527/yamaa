@@ -95,8 +95,6 @@ columns:
         missing: UNKNOWN
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 11
       max: 11

@@ -3,8 +3,8 @@
 This file is a profile: it is optional, and it applies to a build whose study
 environment declares `codelists` and to the specifications that bind them
 through `submission.codelist`. A codelist is declared once in the environment,
-every binding names it, and a binding enforces what its list admits. A build
-whose environment declares no codelists is unaffected.
+every binding names it, and a binding enforces the items its list declares. A
+build whose environment declares no codelists is unaffected.
 
 ## Declaring codelists
 
@@ -20,14 +20,14 @@ environment codelist sources. A duplicate codelist `id` or `name`, or a
 binding naming no declared codelist, fails validation.
 
 Fails: `duplicate_define_identifier`, `unknown_codelist`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::global_duplicates_across_sources_have_no_override`, `rust/crates/yamaa-core/tests/project_execution.rs::compiler_projects_unknown_type_and_conflicting_sets_as_static_preflight_causes`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::global_duplicates_across_sources_have_no_override`, `rust/crates/yamaa-core/tests/project_execution.rs::compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes`.
 Replaces: REQ-0926, REQ-0927, REQ-0948, REQ-0953, REQ-1077.
 
 `id` and `name` are separate: `id` is what a specification writes, and `name`
 is what a reader sees. [Submission metadata](submission.md)'s `codelist` names
 a codelist the study document declares; this profile owns that object, the
-values a binding enforces, and its agreement with an `allowed_values`
-verification. A duplicate `id` or `name` fails with
+values a binding enforces, and the redundancy of an `allowed_values`
+verification beside it. A duplicate `id` or `name` fails with
 `duplicate_define_identifier`. A binding naming no declared codelist fails with
 `unknown_codelist`, reporting the column and the identifier.
 
@@ -121,35 +121,48 @@ Evidence: `rust/crates/yamaa-core/tests/project_execution.rs::extensions_require
 Replaces: REQ-0934, REQ-0952.
 
 Adding a value to a list that admits no additions is a contradiction rather
-than an extension.
+than an extension. A sponsor addition is an item like any other, so
+[CT-7](#ct-7) enforces it with the published items, and
+[DEFINE-20](define-xml.md#define-20) marks it `def:ExtendedValue="Yes"`.
 
 ## Bindings
 
 <a id="ct-7"></a>
 
-### CT-7. A bound non-extensible item list restricts a column's non-missing values, and other bindings enforce nothing
+### CT-7. A bound codelist that lists items is the column's value set, and an external dictionary enforces nothing
 
-Binding a non-extensible codelist that declares `items` requires every
-non-missing value of the column to equal one declared `value`. Missing values
-pass, exactly as [Verification](../verification.md)'s
-`allowed_values` treats missing values. The check runs where
-[Verification](../verification.md) runs a column verification, over
-the completed column, and fails the same way. Binding an extensible codelist or
-an `external` codelist enforces nothing.
+Binding a codelist that declares `items`, extensible or not, requires every
+non-missing value of the column to equal one declared `value`, and a sponsor
+addition to an extensible list is declared as an item with `extended: true`.
+Missing values pass. The check runs where [Verification](../verification.md)
+runs a column verification, over the completed column, and fails the same way.
+A value-level binding decides the rows of its test code. Binding an `external`
+codelist enforces nothing.
 
 Fails: `allowed_values_failed`.
-Evidence: `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_codelists_inherit_origins_and_check_completed_discriminators`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_external_and_extensible_bindings_exclude_default_enforcement`, `rust/crates/yamaa-core/tests/project_execution.rs::owned_checked_environment_executes_fixed_codelists_before_later_cells_in_both_plan_forms`.
+Evidence: `negative-epoch-outside-extensible-list`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_codelists_inherit_origins_and_check_completed_discriminators`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_extensible_lists_are_enforced_on_their_rows_and_dictionaries_replace_the_default`, `rust/crates/yamaa-core/tests/project_execution.rs::owned_checked_environment_executes_fixed_codelists_before_later_cells_in_both_plan_forms`.
 Replaces: REQ-0937, REQ-0938, REQ-0939, REQ-0940, REQ-0957.
 
-A column that also prohibits absence declares `not_missing`. The enforcement is
-the same check `allowed_values` performs, arriving from the terminology rather
-than from a second list beside it. An extensible list states what is expected
-and admits a value outside the list, so a check would reject what the
-declaration permits. The admitted values of an `external` codelist live in the
-dictionary, and this language does not read the dictionary. A non-missing value
-outside a bound non-extensible codelist fails where
-[Verification](../verification.md) fails a column verification,
-reporting the column, the row's key and the value.
+Missing values pass exactly as [Verification](../verification.md)'s
+`allowed_values` treats them; a column that also prohibits absence resolves
+`mandatory` to true ([SUB-11](submission.md#sub-11)). The enforcement is the
+same check `allowed_values` performs, arriving from the terminology rather than
+from a second list beside it ([CT-9](#ct-9)).
+
+An extensible list's declared items, the sponsor's `extended: true` additions
+included, are the whole value set a study admits: the published list's
+openness is what lets the sponsor declare an addition, and an undeclared value
+fails like any other. The admitted values of an `external` codelist live in the
+dictionary, and this language does not read the dictionary.
+
+A value-level binding ([SUB-12](submission.md#sub-12)) replaces the column's
+binding on the rows whose completed `<DOMAIN>TESTCD` is its test code: those
+rows are checked against the value-level list alone, or against nothing when
+it is an `external` codelist, and every other row against the column's list.
+
+A non-missing value outside a bound list fails where
+[Verification](../verification.md) fails a column verification, reporting the
+column, the codelist, the row's key and the value.
 
 <a id="ct-8"></a>
 
@@ -161,7 +174,7 @@ a `float` codelist to a `float` column. A binding whose codelist `data_type` the
 column's declared type does not admit fails validation.
 
 Fails: `codelist_type_mismatch`.
-Evidence: `rust/crates/yamaa-core/tests/project_execution.rs::compiler_projects_unknown_type_and_conflicting_sets_as_static_preflight_causes`, `rust/crates/yamaa-core/tests/project_execution.rs::binding_checks_exact_column_type_and_item_sets`, `rust/crates/yamaa-adapters/tests/file_resources.rs::integer_terminology_items_admit_equal_float_published_values`.
+Evidence: `rust/crates/yamaa-core/tests/project_execution.rs::compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes`, `rust/crates/yamaa-core/tests/project_execution.rs::binding_checks_exact_column_type_and_rejects_restated_item_sets`, `rust/crates/yamaa-adapters/tests/file_resources.rs::integer_terminology_items_admit_equal_float_published_values`.
 Replaces: REQ-0941, REQ-0954.
 
 A coded value a column could never hold is a defect in the specification rather
@@ -169,22 +182,25 @@ than a constraint that never fires.
 
 <a id="ct-9"></a>
 
-### CT-9. A codelist binding and an `allowed_values` verification on one column state the same value set
+### CT-9. An `allowed_values` verification beside a column's codelist of items is redundant
 
-A column may declare both a `codelist` binding and an `allowed_values`
-verification. When the bound codelist declares `items`, the two value sets must
-be equal: the same values, no more and no fewer, compared under the equality of
-[CT-4](#ct-4). Beside an extensible or `external` codelist the verification is
-accepted and stands alone, and `allowed_values` without a `codelist` binding
-remains an ordinary verification. Value sets that differ where they must be
-equal fail validation.
+A column-level codelist binding that declares `items` already states the
+column's value set ([CT-7](#ct-7)), so an `allowed_values` verification on the
+same column restates it and fails validation, whether or not the two sets
+agree. Beside an `external` codelist the verification stands alone, and
+`allowed_values` without a `codelist` binding remains an ordinary verification.
+A value-level binding governs only its own rows and leaves the column's
+verification standing.
 
-Fails: `codelist_values_conflict`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-core/tests/project_execution.rs::extensible_catalogue_does_not_replace_the_ordinary_allowed_values_check`.
+Fails: `redundant_declaration`.
+Evidence: `negative-allowed-values-beside-codelist`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-core/tests/project_execution.rs::extensible_catalogue_is_enforced_and_states_the_value_set_once`.
 Replaces: REQ-0942, REQ-0944, REQ-0945, REQ-0955.
 
-The failure reports the column and both sets. Not every constrained column
-carries published terminology.
+The failure reports the verification's path and, in `stated_by`, the binding's
+path, with the column and the codelist. A binding's items are known where an
+environment supplies the codelists: a domain build with an environment and a
+composed document check the redundancy, and a build without one does not read
+the binding. Not every constrained column carries published terminology.
 
 ## Documents and inventories
 
@@ -218,5 +234,6 @@ Replaces: REQ-1156.
 The admitted values are the study's dataset inventory, which no static list can
 enumerate; that distinguishes this vocabulary from a codelist, whose values
 [CT-3](#ct-3) requires be listed or deferred to a dictionary. A column that
-also prohibits absence declares `not_missing`. The ADaM `SRCDOM` column, whose
+also prohibits absence resolves `mandatory` to true
+([SUB-11](submission.md#sub-11)). The ADaM `SRCDOM` column, whose
 values name the source SDTM domain or ADaM dataset, binds this vocabulary.

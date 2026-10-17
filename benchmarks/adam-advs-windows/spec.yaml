@@ -190,8 +190,6 @@ rows:
           expr: "PRIOR_MAX.VSSEQ + EXPECTED_ORDER"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]
   # Pins the 19-row fixture: the 14 original collected rows, the new
   # subject's collected baseline record, and the four expected records
   # (one uncovered screening window and one subject missing screening,

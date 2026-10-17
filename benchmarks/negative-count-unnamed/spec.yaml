@@ -40,7 +40,6 @@ columns:
     derivation: ADLB_RAW.ABLFL
 
 verifications:
-  - unique: [STUDYID, USUBJID, PARAMCD, ADT]
   # Exactly one baseline per subject and parameter, but this grouped count
   # has no id naming that rule.
   - row_count:

@@ -794,7 +794,7 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
                 "unique",
                 T::map(vec![
                     ("id", T::text("")),
-                    ("columns", T::List(vec![T::text("ID")])),
+                    ("columns", T::List(vec![T::text("V")])),
                 ]),
             )])]),
             "invalid_declaration",
@@ -822,14 +822,14 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
                     "unique",
                     T::map(vec![
                         ("id", T::text("same")),
-                        ("columns", T::List(vec![T::text("ID")])),
+                        ("columns", T::List(vec![T::text("V")])),
                     ]),
                 )]),
                 T::map(vec![(
                     "unique",
                     T::map(vec![
                         ("id", T::text("same")),
-                        ("columns", T::List(vec![T::text("ID")])),
+                        ("columns", T::List(vec![T::text("V")])),
                     ]),
                 )]),
             ]),

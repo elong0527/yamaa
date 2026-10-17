@@ -261,22 +261,6 @@ fn admit_value_fields(
             ));
         }
     }
-    if effective_field(d, entry, base, "mandatory")
-        .is_some_and(|id| d.nodes()[id] == N::Boolean(true))
-    {
-        let keys = sequence(d, field(d, d.root(), "keys")?)?;
-        if !keys
-            .iter()
-            .any(|&id| text(d, id).is_ok_and(|key| key == name))
-            && checks(d, column, "not_missing").is_empty()
-        {
-            result.push(finding(
-                C::SubmissionMandatoryUnenforced,
-                path,
-                &[("column", s(name))],
-            ));
-        }
-    }
     // An explicit verification binds the entire column once. Only authored
     // value overrides without such a verification introduce a scoped check.
     if kind == "str" && maxima.is_empty() {
@@ -581,10 +565,6 @@ pub(super) fn admit(
         .iter()
         .map(|&id| text(d, id))
         .collect::<Result<BTreeSet<_>, _>>()?;
-    let keys = sequence(d, field(d, root, "keys")?)?
-        .iter()
-        .map(|&id| text(d, id))
-        .collect::<Result<BTreeSet<_>, _>>()?;
     let rows = present_field(d, root, "rows")
         .map(|id| sequence(d, id))
         .transpose()?
@@ -750,17 +730,6 @@ pub(super) fn admit(
                     &[("column", s(name)), ("reason", s("core_missing"))],
                 ));
             }
-        }
-        if d.field(submission, "mandatory")
-            .is_some_and(|id| d.nodes()[id] == N::Boolean(true))
-            && !keys.contains(name)
-            && checks(d, column, "not_missing").is_empty()
-        {
-            result.push(finding(
-                C::SubmissionMandatoryUnenforced,
-                &path,
-                &[("column", s(name))],
-            ));
         }
         let Some(origin) = origins(d, submission, name, None, &path, false, result) else {
             continue;

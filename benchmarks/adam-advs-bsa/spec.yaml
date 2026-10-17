@@ -85,8 +85,6 @@ rows:
       DTYPE: {literal: CALCULATION}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VISIT, PARAMCD]
   # 13 collected records plus one BSA record for each of the 4
   # subject-visits that have both a height and a weight result.
   - row_count:

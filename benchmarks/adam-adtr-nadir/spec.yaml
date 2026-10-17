@@ -87,8 +87,6 @@ columns:
         key: [STUDYID, USUBJID]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AVISIT]
   - row_count:
       min: 14
       max: 14

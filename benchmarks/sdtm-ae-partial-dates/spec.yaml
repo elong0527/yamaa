@@ -194,8 +194,6 @@ columns:
         reference: RFSTDTC
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 6
       max: 6

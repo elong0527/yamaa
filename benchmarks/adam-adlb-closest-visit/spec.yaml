@@ -99,8 +99,6 @@ columns:
       flag: "ARNK = 1"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, LBSEQ]
   - row_count:
       min: 11
       max: 11

@@ -93,7 +93,3 @@ rows:
       AVAL:
         aggregate:
           expr: "MIN(LB.LBSTRESN)"
-
-verifications:
-  - unique:
-      columns: [USUBJID, VISIT, PARAMCD]

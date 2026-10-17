@@ -43,8 +43,6 @@ columns:
         values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, ADT]
   # Exactly one record flagged Y per subject and parameter: a combination
   # with no flagged record fails min just as two flagged records fail max.
   - row_count:
