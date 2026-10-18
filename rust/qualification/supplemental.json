@@ -1040,7 +1040,9 @@
         "R/yamaa/tests/public_grammar.R",
         "R/yamaa/tests/public_file_resources.R",
         "python/tests/installed/installed_read_odm.py",
-        "R/yamaa/tests/read_odm.R"
+        "R/yamaa/tests/read_odm.R",
+        "python/tests/installed/installed_plan_reuse.py",
+        "R/yamaa/tests/plan_reuse.R"
       ]
     },
     {

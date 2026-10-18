@@ -3,6 +3,7 @@
 extendr_module! {
     mod api_entry;
     fn spec_check;
+    fn plans;
     fn spec_run;
     fn spec_resolve;
     fn read_odm;

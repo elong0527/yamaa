@@ -151,7 +151,9 @@ exact head, and says so in the PR. The gate builds the Python and R packages
 from the checkout and installs both outside it. On each host it runs public
 benchmark conformance: every active benchmark must reproduce its expected
 bytes, and every negative benchmark its first diagnostic's phase, condition,
-requirement and specification paths. On the same installs it then runs the
+requirement and specification paths. A repeat pass runs each entry's spec
+object a second time, reusing what the first run compiled, and requires the
+same issues, tables and saved bytes. On the same installs it then runs the
 installed Python suites and `R CMD check`, which carry the cross-host
 diagnostic parity truth and the host-fixture families. `make probe-executor`
 times one specification at 10,000, 100,000 and 1,000,000 rows, with and

@@ -153,9 +153,7 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     platform=R.version$platform, package_form=Sys.getenv("PUBLIC_CONFORMANCE_PACKAGE_FORM", "installed"),
     evidence=paste0(Sys.getenv("GITHUB_SERVER_URL"), "/", Sys.getenv("GITHUB_REPOSITORY"), "/actions/runs/", Sys.getenv("GITHUB_RUN_ID")),
     table_encoding="str:utf8-hex,float:ieee754-be,int:decimal,date:epoch-days,datetime:epoch-seconds"))
-  build_one <- function(case, specification, environment) {
-    spec <- open_spec(case, specification, environment)
-    built <- spec$run()
+  observe <- function(spec, built) {
     issues <- issue_rows(built$issues)
     output <- built$output
     types <- if (is.null(output)) NULL else declared_types(spec, names(output))
@@ -166,9 +164,29 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
       report=public_table(built$report, report_types))
     # A refused save signals yamaa_error; the record keeps the run's issues.
     saved <- if(length(issues)) FALSE else tryCatch({built$save(); TRUE}, yamaa_error=function(error) FALSE)
-    issues <- issue_rows(built$issues)
-    list(specification=specification, environment=environment, issues=issues, tables=tables,
-      saved=saved)
+    list(issues=issue_rows(built$issues), tables=tables, saved=saved)
+  }
+  # The bytes of every regular file in a case; staged links are skipped.
+  case_files <- function(case) {
+    paths <- sort(list.files(case, recursive=TRUE, all.files=TRUE, no..=TRUE))
+    paths <- paths[!nzchar(Sys.readlink(file.path(case, paths)))]
+    setNames(lapply(paths, function(path) {
+      file <- file.path(case, path)
+      readBin(file, "raw", n=file.info(file)$size)
+    }), paths)
+  }
+  build_one <- function(case, specification, environment, repeat_run=FALSE) {
+    spec <- open_spec(case, specification, environment)
+    record <- c(list(specification=specification, environment=environment), observe(spec, spec$run()))
+    if (repeat_run) {
+      # The repeat pass (#2821): a second run of the same object reuses what
+      # the first compiled and must equal it, saving the same bytes.
+      before <- case_files(case)
+      again <- observe(spec, spec$run())
+      again$same_files <- identical(case_files(case), before)
+      record[["repeat"]] <- again
+    }
+    record
   }
   for (name in unique(plan$example)) {
     all_rows <- plan[plan$example == name, , drop=FALSE]
@@ -182,7 +200,8 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
         for (index in seq_len(nrow(entries))) {
           entry <- entries[index, , drop=FALSE]
           environment <- if(nzchar(entry$environment[[1L]])) entry$environment[[1L]] else NULL
-          record$builds[[length(record$builds)+1L]] <- build_one(case, entry$specification[[1L]], environment)
+          record$builds[[length(record$builds)+1L]] <- build_one(case, entry$specification[[1L]],
+            environment, repeat_run=TRUE)
         }
         variant_case <- case
         if (nrow(variant_rows)) {
