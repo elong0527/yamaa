@@ -1,8 +1,8 @@
 # yamaa <img src="https://raw.githubusercontent.com/elong0527/yamaa/main/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
 [![CI](https://github.com/elong0527/yamaa/actions/workflows/ci.yml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
-[![Regular build](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&event=schedule&label=regular%20build)](https://github.com/elong0527/yamaa/actions/workflows/native.yml)
-[![R CMD check](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml)
+[![Native qualification](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&label=native%20qualification)](https://github.com/elong0527/yamaa/actions/workflows/native.yml)
+[![R CMD check](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml/badge.svg?branch=main)](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml)
 [![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
 [![PyPI version](https://img.shields.io/pypi/v/yamaa)](https://pypi.org/project/yamaa/)
 [![rustc](https://img.shields.io/badge/rustc-1.90%2B-orange?logo=rust)](https://www.rust-lang.org)
@@ -42,7 +42,7 @@ engine, and benchmark.
 The engine reads ODM XML extracted from the EDC system and transforms it into
 one long-form clinical-item table. Each row represents one recorded item and
 retains the item's study, event, form, and item-group context. A yamaa
-specification reads the transformed data
+specification, run from either package, reads the transformed data
 ([example](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-basic.html))
 and derives SDTM and ADaM datasets.
 

@@ -62,9 +62,17 @@ Run `make help` at the repository root for prerequisites, configuration variable
 and supported targets. Its inventory is the command reference. Set
 `CARGO_TARGET_DIR` when separate worktrees need independent Rust build output.
 
+Before a push, run `make quick` and the tests nearest the change. It runs lint
+and the repository checks, leaving out only the R binding's Clippy, and no test
+suite, so it needs no R. Pull request CI runs the complete `make check`; when a
+job fails, reproduce it with that job's own target below. Run `make setup` again
+after changing `rust/` or `python/src/` before Python tests, which import the
+installed package.
+
 | Command | Purpose |
 | --- | --- |
 | `make setup` | Install the locked development environment. |
+| `make quick` | Run lint without the R binding and the repository checks, before a push. |
 | `make check` | Run the checks required by ordinary CI. |
 | `make check-lint` | Check formatting and lint across Python and Rust. |
 | `make check-repository` | Check authored specifications, layout, rules, references and the site. |
@@ -102,8 +110,8 @@ Repository orchestration imports the installed development tools package.
 Standalone installed suites use copied fixtures and readers; they must not
 import repository packages.
 
-For rule or schema changes, follow their area guides and run the corresponding
-AGENTS recipe. Repository Python checks source syntax, physical schema includes,
+For rule or schema changes, follow their area guides; `make quick` runs the
+repository checks. Repository Python checks source syntax, physical schema includes,
 fixture metadata, grammar documents, layout and editorial rules without
 importing an installed engine. Its complete-corpus test refuses imports of
 yamaa, Polars and PyArrow. Shared Rust tests own schema admission, inheritance,
@@ -123,16 +131,24 @@ qualification.
 The ordinary CI workflow runs the same check targets listed above for each PR,
 every two hours on main, and on each push to a `release/**` branch. Merges to
 main do not start workflows other than the documentation site deployment; main
-is checked on those schedules instead. While a workflow's latest main run
-fails, the `Main health` workflow keeps a `main-red` issue open for it and
-closes the issue when a later main run succeeds. A PR that changes `.github/`
+is checked on those schedules instead. While the newest main run of CI or the
+documentation deployment fails, the `Main health` workflow keeps a `main-red`
+issue open for it and closes the issue when a later main run succeeds. A PR that changes `.github/`
 also runs actionlint over every workflow.
+
+PRs and the main schedule run only development checks: lint, repository
+checks, the Rust workspace, and the Python and R hosts on Linux. Release lanes
+check support claims and run on each `release/**` push and on dispatch: the
+minimum supported saved artifact readers in CI, the optional format feature
+selections and the macOS, Windows and R-devel package checks. Dependency
+graphs, native qualification, Harbor and coverage run on dispatch (native
+qualification also on a `qualification/issue-*` push). Dispatch any of them on
+a branch to check a change that needs them before merging.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
-`.github/workflows/dependency-graphs.yml` also resolves minimum and newest
-compatible graphs nightly, on dispatch, and on each PR that changes a
-dependency manifest or lock. Run a lane locally with R and the normal
+`.github/workflows/dependency-graphs.yml` resolves minimum and newest
+compatible graphs on dispatch. Run a lane locally with R and the normal
 development prerequisites installed:
 
 ```sh
@@ -218,8 +234,8 @@ new matching batch heads and fresh completed reviews. Batch metadata belongs
 in the PR body, not a committed evidence ledger.
 
 Native qualification is separate: `.github/workflows/native.yml` builds and
-installs the supported Python wheel/source and R source combinations every two
-hours on main, on dispatch, or on a `qualification/issue-*` push. It checks public
+installs the supported Python wheel/source and R source combinations on
+dispatch or on a `qualification/issue-*` push. It checks public
 benchmark conformance, installed host suites, packaging, optimized Rust behavior
 and portable math. Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including strict R package
@@ -239,7 +255,9 @@ Edit `README.md` for the site home and `rules/README.md` for the rules index.
 MkDocs reads those canonical files through its configured hook, resolves their
 repository-relative links and preserves their edit targets. Do not create
 copies under `docs/`. Other site pages live there; the navigation links directly
-to this contributor guide.
+to this contributor guide. A site page links a repository file outside `docs/`
+by relative path, such as `../rules/storage/csv.md`: the site points it at the
+file on main, and a copy read at a release tag names that tag's file.
 
 Requirement and schema-field references are generated from `rules/` and `yaml/`
 on every build. Edit the owning contract or schema, not a generated page.

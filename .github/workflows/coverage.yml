@@ -1,12 +1,9 @@
 name: Coverage
 
-# Measures Rust and Python coverage on main and uploads both reports to
-# Codecov, which backs the coverage badge in README.md. Pull requests are
-# covered by the CI workflow; this one runs nightly on main (and on demand)
-# so the badge reflects the default branch.
+# Measures Rust and Python coverage and uploads both reports to Codecov,
+# which backs the coverage badge in README.md. Coverage is a report, not a
+# development check: dispatch it on main to refresh the badge.
 on:
-  schedule:
-    - cron: '41 4 * * *'
   workflow_dispatch:
 
 permissions:

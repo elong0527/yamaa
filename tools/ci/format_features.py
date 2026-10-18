@@ -14,6 +14,7 @@ FORMATS = {
     "parquet": ["parquet"],
     "readstat": ["readstat"],
     "odm": ["odm"],
+    "yaml-parquet": ["yaml", "parquet"],
     "all": ["yaml", "parquet", "readstat", "odm"],
 }
 

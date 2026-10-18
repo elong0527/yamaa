@@ -1,6 +1,6 @@
 # yamaa for R <img src="https://raw.githubusercontent.com/elong0527/yamaa/main/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
-[![R CMD check](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml)
+[![R CMD check](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml/badge.svg?branch=main)](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
 
 ## Overview
@@ -47,7 +47,10 @@ install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
 
 Installation compiles the Rust engine, so it needs R 4.6.1, Rust 1.90.0 with
 Cargo, a C compiler and GNU make. On Windows, also install Rtools45 and the
-`x86_64-pc-windows-gnu` Rust target. Cargo downloads the locked Rust
+`x86_64-pc-windows-gnu` target on Rust 1.90.0, the toolchain that the
+package's `rust-toolchain.toml` selects under rustup:
+`rustup toolchain install 1.90.0 --target x86_64-pc-windows-gnu`. A target
+added to another toolchain is not used. Cargo downloads the locked Rust
 dependencies that are not already in its cache. The
 [release guidance](../../docs/release.md#supported-platforms) lists the
 supported platforms.
