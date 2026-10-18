@@ -655,45 +655,45 @@ mod relations {
         }
 
         #[test]
-        fn secondary_driver_record_coordinates_hidden_in_compute_and_flag_reads_are_rejected() {
+        fn primary_record_coordinates_hidden_in_compute_and_flag_reads_are_rejected() {
             // The intermediate matches on shared output values, but its filter's
-            // current field reads a record coordinate. `validate_named_read` permits
-            // it here because the current field names the template driver's own
-            // source (1); only the primary-coordinate guard in `current_record_read`
-            // separates the direct form from the bound forms, so the Compute and
-            // Flag arms must inspect their intermediate bindings like the fixed
-            // Function/Case arms (issue #2430).
-            let relation = item(Some(filter(
-                "DVR.V",
-                CurrentRead::Record {
-                    source: 1,
-                    column: 1,
-                },
-            )));
+            // current field reads a record coordinate. A primary coordinate (0)
+            // cannot be borrowed by the secondary driver, and the Compute and
+            // Flag forms refuse it like the direct form (issue #2430).
             let mode = RowMode::Driver {
                 source: 1,
                 mode: Box::new(RowMode::Records),
             };
+            let plan = |source, expression| {
+                make(
+                    vec![item(Some(filter(
+                        "DVR.V",
+                        CurrentRead::Record { source, column: 1 },
+                    )))],
+                    vec![
+                        assignment(0, Expression::Source(0)),
+                        assignment(1, Expression::Literal(Value::Int(2))),
+                        assignment(2, expression),
+                    ],
+                    mode.clone(),
+                )
+            };
+            let direct = || Expression::Intermediate {
+                index: 0,
+                column: 1,
+            };
             for expression in [
-                Expression::Intermediate {
-                    index: 0,
-                    column: 1,
-                },
+                direct(),
                 bound_intermediate_compute(),
                 bound_intermediate_flag(),
             ] {
-                assert_eq!(
-                    make(
-                        vec![relation.clone()],
-                        vec![
-                            assignment(0, Expression::Source(0)),
-                            assignment(1, Expression::Literal(Value::Int(2))),
-                            assignment(2, expression),
-                        ],
-                        mode.clone(),
-                    ),
-                    Err(PlanError::InvalidIntermediate)
-                );
+                assert_eq!(plan(0, expression), Err(PlanError::InvalidIntermediate));
+            }
+            // The template driver's own source (1) reads that driver's records.
+            // A row template's flag reads no input-backed selection at all.
+            for expression in [direct(), bound_intermediate_compute()] {
+                let plan = plan(1, expression);
+                assert!(plan.is_ok(), "{plan:?}");
             }
             // Shared output matching without any record coordinate remains admitted
             // through the same bound form.

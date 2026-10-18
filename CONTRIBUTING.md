@@ -166,8 +166,8 @@ RUSTFLAGS='-D warnings' cargo +1.90.0 test --manifest-path rust/tests/embedder/C
 `.github/workflows/dependency-graphs.yml` also resolves minimum and newest
 compatible graphs nightly, on dispatch, on each push to a release branch, and
 on each PR into main that changes a dependency manifest or lock, or the
-advisory policy in `rust/deny.toml`. Run a lane locally with R and the normal
-development prerequisites installed:
+advisory policy in `rust/deny.toml` or `osv-scanner.toml`. Run a lane locally
+with R and the normal development prerequisites installed:
 
 ```sh
 uv run --project python --no-sync python -m tools.ci.dependency_graphs \

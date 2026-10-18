@@ -10,7 +10,8 @@ or solution, or what a solver did with one. Nothing here reads `expected/`::
     python -m evaluations.harbor.packet benchmarks/<case> --out <dir>
 
 writes `<dir>/sources/` (mounted at `/app/sources` in a writing task) and
-`<dir>/input/` (mounted at `/app/input`).
+`<dir>/input/` (mounted at `/app/input`), replacing earlier ones and leaving
+anything else in `<dir>` alone.
 """
 
 from __future__ import annotations
@@ -207,10 +208,14 @@ def check_data(benchmark: Path) -> dict:
 
 def write(benchmark: Path, out: Path) -> Path:
     """Write the writer's sources and inputs under `out`; the benchmark's
-    files are the only thing that shapes them."""
+    files are the only thing that shapes them. An earlier `sources/` and
+    `input/` there are replaced, and nothing else in `out` is touched."""
     sources = out / "sources"
-    if out.exists():
-        shutil.rmtree(out)
+    for written in (sources, out / "input"):
+        if written.is_dir() and not written.is_symlink():
+            shutil.rmtree(written)
+        else:
+            written.unlink(missing_ok=True)
     (sources / "specification").mkdir(parents=True)
     shutil.copyfile(benchmark / "README.md", sources / "README.md")
     for name, spec in specifications(benchmark).items():

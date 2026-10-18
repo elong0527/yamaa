@@ -1,0 +1,41 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  ADAE_RAW: {path: input/adae_raw.csv, types: {AESEQ: int, ASTDT: date}}
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, ASTDT, AOCCSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADAE_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADAE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: ADAE_RAW.AESEQ
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: ADAE_RAW.ASTDT
+
+  # Each subject's events numbered earliest first. The grouping names the
+  # subject twice, so the specification is rejected before any data is read.
+  - name: AOCCSEQ
+    type: int
+    label: Subject Occurrence Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID, USUBJID]
+          order_by: [ASTDT, AESEQ]
