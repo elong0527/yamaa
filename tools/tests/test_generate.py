@@ -930,7 +930,10 @@ class DashboardTests(unittest.TestCase):
             ]
         ).decode("ascii")
         self.assertIn("| Group | Count | Purpose |", text)
-        self.assertIn("| `adam-*` | 2 | Assess SDTM to ADaM derivations |", text)
+        self.assertIn(
+            "| `adam-*` | 2 | Assess SDTM to ADaM and ADaM to results derivations |",
+            text,
+        )
         self.assertIn("| `negative-*` | 1 | Assess yamaa error handling |", text)
         # A group with no benchmarks does not get an empty row.
         self.assertNotIn("`sdtm-*`", text)

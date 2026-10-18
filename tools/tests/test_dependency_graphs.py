@@ -23,7 +23,7 @@ class DependencyGraphsTests(unittest.TestCase):
         for value, expected in [
             ("1.0.228", "=1.0.228"),
             (">=0.9.8, <2", "=0.9.8"),
-            ("=60.0.0", "=60.0.0"),
+            ("=57.3.0", "=57.3.0"),
         ]:
             with self.subTest(value=value):
                 self.assertEqual(minimum_cargo(value), expected)
@@ -101,7 +101,7 @@ class DependencyGraphsTests(unittest.TestCase):
                 (stage / "rust/crates/yamaa-adapters/Cargo.toml").read_text()
             )["dependencies"]
             self.assertEqual(adapters["toml"]["version"], "=0.9.8")
-            self.assertEqual(adapters["arrow-array"]["version"], "=60.0.0")
+            self.assertEqual(adapters["arrow-array"]["version"], "=57.3.0")
             self.assertEqual(adapters["saphyr-parser"]["version"], ">=0.0.11")
             core = tomllib.loads(
                 (stage / "rust/crates/yamaa-core/Cargo.toml").read_text()
@@ -112,7 +112,7 @@ class DependencyGraphsTests(unittest.TestCase):
                 (stage / "python/uv.lock").read_bytes(), locks["python/uv.lock"]
             )
             requirements = (stage / "requirements.in").read_text().splitlines()
-            self.assertIn("polars==1.43.2", requirements)
+            self.assertIn("polars==1.35.2", requirements)
             self.assertIn("pyarrow==23.0.1", requirements)
             self.assertIn("pydantic==2.12.4", requirements)
         self.assertEqual(locks, {name: (ROOT / name).read_bytes() for name in locks})
@@ -129,7 +129,7 @@ class DependencyGraphsTests(unittest.TestCase):
                     (stage / path).read_bytes(), (ROOT / path).read_bytes()
                 )
             requirements = (stage / "requirements.in").read_text().splitlines()
-            self.assertIn("polars>=1.43.2", requirements)
+            self.assertIn("polars>=1.35.2", requirements)
             self.assertIn("pyarrow>=23.0.1", requirements)
             self.assertFalse((stage / "rust/Cargo.lock").exists())
 

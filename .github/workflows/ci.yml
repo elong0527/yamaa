@@ -1,9 +1,15 @@
 name: CI
 
+# Pull requests are the gate. Main is checked on a schedule rather than after
+# every merge; the scheduled runs also save the Rust caches that pull requests
+# restore. Odd hours keep clear of the even-hour native and R CMD check runs.
+# Schedules only check main, so release branches are checked on each push.
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: ['release/**']
+  schedule:
+    - cron: '37 1-23/2 * * *'
   workflow_dispatch:
 
 permissions:
@@ -18,7 +24,7 @@ defaults:
     shell: bash
 
 jobs:
-  lint:
+  repository:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -28,16 +34,11 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           r: runtime
-      - run: make check-lint
-  repository:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: make check-repository
+      - id: lint
+        run: make check-lint
+      # Report repository findings even when lint fails.
+      - if: success() || steps.lint.outcome == 'failure'
+        run: make check-repository
   rust:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -60,10 +61,17 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: make test-python
-      - name: Test the minimum supported Python saved artifact readers
-        run: |
-          uv pip install --python python/.venv/bin/python 'polars==1.43.2' 'pyarrow==23.0.1' 'lxml==6.1.0'
-          make test-python
+  python-minimum:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install the minimum supported Python saved artifact readers
+        run: uv pip install --python python/.venv/bin/python 'polars==1.35.2' 'pyarrow==23.0.1' 'lxml==6.1.0'
+      - run: make test-python
   r:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
