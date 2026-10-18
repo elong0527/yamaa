@@ -88,7 +88,7 @@ is scalar only when the exact variable appears in the enclosing
 source variable with a scalar `source` fails.
 
 Fails: `ungrouped_driver_field`.
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
 Replaces: REQ-0085, REQ-0086, REQ-0087, REQ-0107.
 
 The driver is an input dataset or an eligible named intermediate under
@@ -97,7 +97,8 @@ variable absent from the `group_by` of the grouped row template that builds
 the row it reads fails. A column-level derivation reads every constructed row,
 so there a qualified reference to a row template's driver is scalar only when
 every grouped row template driven by that dataset has the exact variable in
-its `group_by`. A grouped row reduces non-key variables with an aggregate
+its `group_by`; otherwise it fails, naming the variable and that driver. A
+grouped row reduces non-key variables with an aggregate
 expression, as [Expressions](expressions.md) and
 [Formulas](formulas.md) define.
 

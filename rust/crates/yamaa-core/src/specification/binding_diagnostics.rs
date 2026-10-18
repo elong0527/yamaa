@@ -136,6 +136,13 @@ impl BindFinding {
                 row,
                 finding,
             } => {
+                // Scope raises a grouping finding only for a read qualified
+                // by the driver whose groups lack the variable, so the
+                // qualifier names that driver: the grouped row template's
+                // own `dataset`. The specification's driver is the input
+                // behind the first row template, which a later template need
+                // not share (ROW-5, NAME-4).
+                let driver = || name.split_once('.').map(|(driver, _)| text(driver));
                 let (code, values) = match finding {
                     reference_scope::Finding::UnknownField => (
                         C::SourceUnknownReference,
@@ -146,12 +153,12 @@ impl BindFinding {
                         context([
                             ("identifier", text(name)),
                             ("row", row.as_deref().map_or(V::Null, text)),
-                            ("dataset", text(&source.name)),
+                            ("dataset", driver()?),
                         ]),
                     ),
                     reference_scope::Finding::ColumnGroup => (
                         C::GroupedColumnReference,
-                        context([("identifier", text(name)), ("dataset", text(&source.name))]),
+                        context([("identifier", text(name)), ("dataset", driver()?)]),
                     ),
                     _ => return None,
                 };
